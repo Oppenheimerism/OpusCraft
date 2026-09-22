@@ -4,6 +4,7 @@ import '../world/blocks';
 import { ChunkGenerator } from '../world/gen/generator';
 import { initMesher, meshSection, MeshInput } from '../render/mesher';
 import type { SpriteRect } from '../world/models';
+import { computeChunkLight } from '../world/lightlocal';
 
 let gen: ChunkGenerator | null = null;
 
@@ -29,6 +30,10 @@ ctx.onmessage = (e: MessageEvent) => {
         { type: 'gen', id: m.id, cx: m.cx, cz: m.cz, blocks: out.blocks, light: out.light, biomes: out.biomes, pending: out.pending, ms },
         [out.blocks.buffer, out.light.buffer, out.biomes.buffer],
       );
+    } else if ((m as unknown as { type: string }).type === 'light') {
+      const lm = m as unknown as { id: number; blocks: Uint16Array };
+      const light = computeChunkLight(lm.blocks);
+      ctx.postMessage({ type: 'light', id: lm.id, light }, [light.buffer]);
     } else if (m.type === 'mesh') {
       const out = meshSection(m.input);
       const transfer: Transferable[] = [];

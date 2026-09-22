@@ -1,5 +1,6 @@
 // Level: the running game world (blocks + entities + time + weather).
 
+import { DEFAULT_GAME_RULES, GameRules } from './gameRules';
 import { World } from '../world/world';
 import type { Entity } from '../entity/entity';
 import type { Player } from '../entity/player';
@@ -53,6 +54,7 @@ export class Level {
   /** scheduled block ticks: key → due game time */
   private readonly scheduled = new Map<string, number>();
   simulationDistance = 8;
+  gameRules: GameRules = { ...DEFAULT_GAME_RULES };
 
   constructor(world: World, seed: string) {
     this.fluids = new FluidTicker(this);
@@ -70,7 +72,8 @@ export class Level {
   tick(): void {
     this.gameTime++;
     if (this.doDaylightCycle) this.dayTime++;
-    this.tickWeather();
+    if (this.gameRules.doWeatherCycle) this.tickWeather();
+    else this.tickWeatherLevels();
     for (let i = 0; i < this.entities.length; i++) {
       const e = this.entities[i];
       if (e.removed) continue;
@@ -152,6 +155,10 @@ export class Level {
         if (this.rainTime === 0) this.raining = !this.raining;
       } else this.rainTime = this.raining ? 12000 + this.random.nextInt(12000) : 12000 + this.random.nextInt(168000);
     }
+    this.tickWeatherLevels();
+  }
+
+  private tickWeatherLevels(): void {
     this.rainO = this.rain;
     this.rain = Math.max(0, Math.min(1, this.rain + (this.raining ? 0.01 : -0.01)));
     this.thunderO = this.thunder;

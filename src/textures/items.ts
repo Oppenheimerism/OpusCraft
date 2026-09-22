@@ -1,0 +1,24 @@
+// Procedural item textures (16x16 hand-pixeled sprites in the style of the
+// vanilla Java Edition item atlas). Every sprite is drawn in code; nothing is
+// loaded from image files. Alpha is strictly 0 or 255.
+
+import { TexImage } from './tex';
+import { TOOL_ITEMS } from './itemlib/tools';
+import { MATERIAL_ITEMS } from './itemlib/materials';
+import { FOOD_ITEMS } from './itemlib/food';
+import { MISC_ITEMS } from './itemlib/misc';
+import { ARMOR_ITEMS } from './itemlib/armor';
+import { DYE_ITEMS } from './itemlib/dyes';
+import { VARIANT_ITEMS } from './itemlib/variants';
+import { EXTRA_ITEMS } from './itemlib/extras';
+
+export const ITEM_TEXTURES: Record<string, () => TexImage> = {
+  ...TOOL_ITEMS,
+  ...MATERIAL_ITEMS,
+  ...FOOD_ITEMS,
+  ...MISC_ITEMS,
+  ...ARMOR_ITEMS,
+  ...DYE_ITEMS,
+  ...VARIANT_ITEMS,
+  ...EXTRA_ITEMS,
+};

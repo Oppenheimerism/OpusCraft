@@ -227,7 +227,10 @@ export class Player extends LivingEntity {
   }
 
   override hurt(amount: number, source: string, attacker?: Entity): boolean {
-    if (this.invulnerable && source !== 'void' && source !== 'kill') return false;
+    if (this.invulnerable && source !== 'void' && source !== 'genericKill') return false;
+    const rules = this.level.gameRules;
+    if ((source === 'fall' && !rules.fallDamage) || (source === 'drown' && !rules.drowningDamage)) return false;
+    if ((source === 'lava' || source === 'inFire' || source === 'onFire') && !rules.fireDamage) return false;
     this.lastDamageSource = source;
     const ok = super.hurt(amount, source, attacker);
     if (ok) this.food.addExhaustion(0.1);

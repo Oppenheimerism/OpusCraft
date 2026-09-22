@@ -15,7 +15,14 @@ export interface MeshJob {
   input: MeshInput;
   done: (r: { layers: (ArrayBuffer | null)[]; quads: number[]; centers: Float32Array | null }) => void;
 }
-export type Job = GenJob | MeshJob;
+export interface LightJob {
+  type: 'light';
+  cx: number;
+  cz: number;
+  blocks: Uint16Array;
+  done: (light: Uint8Array) => void;
+}
+export type Job = GenJob | MeshJob | LightJob;
 
 interface W {
   worker: Worker;
@@ -88,6 +95,8 @@ export class WorkerPool {
     } else if (job.type === 'mesh' && d.type === 'mesh') {
       this.stats.mesh++;
       job.done(d);
+    } else if (job.type === 'light' && d.type === 'light') {
+      job.done(d.light);
     }
     this.pump();
   }
@@ -109,7 +118,10 @@ export class WorkerPool {
     this.pending.set(id, job);
     w.inflight++;
     if (job.type === 'gen') w.worker.postMessage({ type: 'gen', id, cx: job.cx, cz: job.cz });
-    else {
+    else if (job.type === 'light') {
+      const copy = new Uint16Array(job.blocks);
+      w.worker.postMessage({ type: 'light', id, blocks: copy }, [copy.buffer]);
+    } else {
       const inp = job.input;
       w.worker.postMessage({ type: 'mesh', id, input: inp }, [inp.blocks.buffer, inp.light.buffer, inp.grass.buffer, inp.foliage.buffer, inp.water.buffer]);
     }

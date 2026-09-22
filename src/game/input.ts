@@ -19,6 +19,21 @@ export const KEYS = {
   fullscreen: 'F11',
   swapHands: 'KeyF',
   playerList: 'Tab',
+  hotbar1: 'Digit1',
+  hotbar2: 'Digit2',
+  hotbar3: 'Digit3',
+  hotbar4: 'Digit4',
+  hotbar5: 'Digit5',
+  hotbar6: 'Digit6',
+  hotbar7: 'Digit7',
+  hotbar8: 'Digit8',
+  hotbar9: 'Digit9',
+  loadToolbar: 'KeyX',
+  saveToolbar: 'KeyC',
+  advancements: 'KeyL',
+  socialInteractions: 'KeyP',
+  cinematic: '',
+  spectatorOutlines: '',
 };
 
 export class Input {
@@ -36,6 +51,8 @@ export class Input {
     return this.realLocked || this.forceLocked;
   }
   onLockChange: ((locked: boolean) => void) | null = null;
+  /** requestPointerLock was refused (e.g. no recent user gesture) */
+  onLockError: (() => void) | null = null;
   /** raw key events for text input (chat, fields) */
   onKey: ((e: KeyboardEvent) => boolean) | null = null;
   onChar: ((ch: string) => void) | null = null;
@@ -92,6 +109,7 @@ export class Input {
       },
       { passive: false },
     );
+    document.addEventListener('pointerlockerror', () => this.onLockError?.());
     document.addEventListener('pointerlockchange', () => {
       this.realLocked = document.pointerLockElement === this.target;
       if (!this.locked) {
@@ -104,7 +122,12 @@ export class Input {
   lock(): void {
     if (!this.locked) {
       const p = this.target.requestPointerLock?.({ unadjustedMovement: true } as never) as unknown as Promise<void> | undefined;
-      if (p && typeof p.catch === 'function') p.catch(() => this.target.requestPointerLock?.());
+      if (p && typeof p.catch === 'function')
+        p.catch(() => {
+          // raw input unsupported: retry plain, and report a refusal
+          const p2 = this.target.requestPointerLock?.() as unknown as Promise<void> | undefined;
+          if (p2 && typeof p2.catch === 'function') p2.catch(() => this.onLockError?.());
+        });
     }
   }
 

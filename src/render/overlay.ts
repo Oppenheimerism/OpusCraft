@@ -57,7 +57,72 @@ void main() {
   o = vec4(mix(vec3(0.5), c.rgb, c.a), 1.0);
 }`;
 
+const VIG_VS = `#version 300 es
+const vec2 P[4] = vec2[4](vec2(-1.0, -1.0), vec2(1.0, -1.0), vec2(-1.0, 1.0), vec2(1.0, 1.0));
+out vec2 v_uv;
+void main() {
+  vec2 p = P[gl_VertexID];
+  v_uv = vec2(p.x * 0.5 + 0.5, 0.5 - p.y * 0.5);
+  gl_Position = vec4(p, 0.0, 1.0);
+}`;
+
+// vanilla Gui.renderVignette: blend ZERO/ONE_MINUS_SRC_COLOR with the vignette tinted by brightness.
+// Our sprite is stored multiply-style (white centre), so darkening = 1 - tex.
+const VIG_FS = `#version 300 es
+precision highp float;
+uniform sampler2D u_tex;
+uniform float u_amount;
+in vec2 v_uv;
+out vec4 o;
+void main() {
+  float d = (1.0 - texture(u_tex, v_uv).r) * u_amount;
+  o = vec4(vec3(1.0 - d), 1.0);
+}`;
+
 export class Overlay {
+  private vigShader: Shader | null = null;
+  private vigTex: WebGLTexture | null = null;
+  private vigSrc: HTMLCanvasElement | null = null;
+  private vigVao: WebGLVertexArrayObject | null = null;
+
+  /** darken screen edges by `amount` (0..1), drawn over the world before the GUI */
+  renderVignette(src: HTMLCanvasElement | null, amount: number, width: number, height: number): void {
+    if (!src || amount <= 0.001) return;
+    const gl = this.gl;
+    if (!this.vigShader) {
+      this.vigShader = new Shader(gl, VIG_VS, VIG_FS, 'vignette');
+      this.vigVao = gl.createVertexArray();
+    }
+    if (this.vigSrc !== src) {
+      if (this.vigTex) gl.deleteTexture(this.vigTex);
+      this.vigTex = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, this.vigTex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, src);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      this.vigSrc = src;
+    }
+    gl.viewport(0, 0, width, height);
+    gl.disable(gl.DEPTH_TEST);
+    gl.depthMask(false);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.ZERO, gl.SRC_COLOR);
+    const s = this.vigShader.use();
+    s.i('u_tex', 0);
+    s.f('u_amount', Math.min(1, amount));
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, this.vigTex);
+    gl.bindVertexArray(this.vigVao);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    gl.bindVertexArray(null);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    gl.disable(gl.BLEND);
+    gl.depthMask(true);
+    gl.enable(gl.DEPTH_TEST);
+  }
+
   private readonly lineShader: Shader;
   private readonly lineVao: WebGLVertexArrayObject;
   private readonly lineVbo: WebGLBuffer;
@@ -266,7 +331,7 @@ export function debugLines(game: Game): string[] {
   return [
     `Minecraft 1.21.8 (vanilla)`,
     `${game.fps} fps T: inf vsync fancy-clouds B: 2`,
-    `C: ${r.drawn}/${r.sections} (s) D: ${game.opts.renderDistance}, pC: 000, pU: 00, aB: ${game.pool.busy()}`,
+    `C: ${r.drawn}/${r.sections} (s) D: ${game.opts.renderDistance}, pC: 000, pU: 00, aB: ${game.pool?.busy() ?? 0}`,
     `E: ${game.level.entities.length}/${game.level.entities.length}, SD: 12`,
     ``,
     `XYZ: ${p.x.toFixed(3)} / ${p.y.toFixed(5)} / ${p.z.toFixed(3)}`,

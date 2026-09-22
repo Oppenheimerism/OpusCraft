@@ -18,8 +18,9 @@ export class ChunkManager {
   private genQueueDirty = true;
   private meshList: Chunk[] = [];
   private meshListIdx = 0;
-  /** loaded chunks from storage waiting to be inserted (key → data) */
-  loader: ((cx: number, cz: number) => Promise<Uint8Array | null>) | null = null;
+  /** loads a saved chunk (blocks + biomes) or null if never saved */
+  savedLoader: ((cx: number, cz: number) => Promise<{ blocks: Uint16Array; biomes: Uint8Array } | null>) | null = null;
+  private readonly lightQueue: { cx: number; cz: number; blocks: Uint16Array; biomes: Uint8Array }[] = [];
   onChunkLoaded: ((c: Chunk) => void) | null = null;
   onChunkUnloaded: ((c: Chunk) => void) | null = null;
   stats = { genMs: 0, gens: 0, meshes: 0 };
@@ -40,6 +41,12 @@ export class ChunkManager {
       this.genQueueDirty = true;
       this.unloadFar();
     }
+  }
+
+  /** re-evaluate loading/unloading after a render distance change */
+  refreshRadius(): void {
+    this.genQueueDirty = true;
+    this.unloadFar();
   }
 
   get loadRadius(): number {
@@ -99,6 +106,23 @@ export class ChunkManager {
   }
 
   private nextJob(): Job | null {
+    // saved chunks waiting for lighting first
+    const lj = this.lightQueue.shift();
+    if (lj) {
+      const key = Chunk.key(lj.cx, lj.cz);
+      return {
+        type: 'light',
+        cx: lj.cx,
+        cz: lj.cz,
+        blocks: lj.blocks,
+        done: (light) => {
+          this.requested.delete(key);
+          if (this.world.chunks.has(key)) return;
+          const c = this.world.addChunk({ cx: lj.cx, cz: lj.cz, blocks: lj.blocks, light, biomes: lj.biomes, pending: [] });
+          this.onChunkLoaded?.(c);
+        },
+      };
+    }
     // prefer meshing nearby sections; interleave with generation
     const mesh = this.nextMeshJob();
     if (mesh) return mesh;
@@ -111,6 +135,29 @@ export class ChunkManager {
       const key = Chunk.key(cx, cz);
       if (this.world.chunks.has(key) || this.requested.has(key)) continue;
       this.requested.add(key);
+      if (this.savedLoader) {
+        // check storage first; fall back to generation
+        void this.savedLoader(cx, cz).then((saved) => {
+          if (saved) {
+            this.lightQueue.push({ cx, cz, blocks: saved.blocks, biomes: saved.biomes });
+            this.pool.pump();
+          } else {
+            this.genFallback.push([cx, cz]);
+            this.pool.pump();
+          }
+        });
+        continue;
+      }
+      return this.genJob(cx, cz, key);
+    }
+    const fb = this.genFallback.shift();
+    if (fb) return this.genJob(fb[0], fb[1], Chunk.key(fb[0], fb[1]));
+    return null;
+  }
+
+  private readonly genFallback: [number, number][] = [];
+
+  private genJob(cx: number, cz: number, key: number): Job {
       return {
         type: 'gen',
         cx,
@@ -127,8 +174,6 @@ export class ChunkManager {
           this.onChunkLoaded?.(c);
         },
       };
-    }
-    return null;
   }
 
   private nextMeshJob(): Job | null {
