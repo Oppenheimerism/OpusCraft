@@ -5,6 +5,7 @@ import { LivingEntity } from './living';
 import type { Entity } from './entity';
 import { FLUID_WATER } from '../world/fluids';
 import type { Level } from '../game/level';
+import type { ItemStack } from '../item/item';
 import { Inventory } from '../item/inventory';
 import { FoodData } from './food';
 
@@ -63,6 +64,8 @@ export class Player extends LivingEntity {
   onHurtSound: ((p: Player, source: string) => void) | null = null;
   onFall: ((p: Player, dmg: number, dist: number) => void) | null = null;
   onDeath: ((p: Player, source: string) => void) | null = null;
+  /** spawns an item entity from the player (set by the game shell) */
+  dropHandler: ((s: ItemStack, thrown: boolean) => void) | null = null;
   lastDamageSource = '';
 
   constructor(level: Level) {
@@ -259,6 +262,36 @@ export class Player extends LivingEntity {
     this.deathTime++;
     // players are not removed; death screen handles respawn
   }
+
+  /** vanilla Player.drop: `thrown` flings it like the drop key, otherwise it falls at the feet */
+  dropItem(s: ItemStack, thrown: boolean): void {
+    if (s.count <= 0) return;
+    this.dropHandler?.(s, thrown);
+  }
+
+  /** vanilla Player.giveExperiencePoints */
+  giveExperiencePoints(n: number): void {
+    const need = (l: number) => (l >= 30 ? 112 + (l - 30) * 9 : l >= 15 ? 37 + (l - 15) * 5 : 7 + l * 2);
+    this.xpProgress += n / need(this.xpLevel);
+    this.xpTotal = Math.max(0, Math.min(2147483647, this.xpTotal + n));
+    while (this.xpProgress < 0) {
+      const f = this.xpProgress * need(this.xpLevel);
+      if (this.xpLevel > 0) {
+        this.xpLevel--;
+        this.xpProgress = 1 + f / need(this.xpLevel);
+      } else {
+        this.xpLevel = 0;
+        this.xpProgress = 0;
+      }
+    }
+    while (this.xpProgress >= 1) {
+      this.xpProgress = (this.xpProgress - 1) * need(this.xpLevel);
+      this.xpLevel++;
+      this.xpProgress /= need(this.xpLevel);
+      if (this.xpLevel % 5 === 0) this.onLevelUp?.(this);
+    }
+  }
+  onLevelUp: ((p: Player) => void) | null = null;
 
   attackStrengthDelay(): number {
     const it = this.inventory.selectedItem?.item;

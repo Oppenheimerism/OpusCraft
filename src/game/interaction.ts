@@ -120,7 +120,8 @@ export class Interaction {
     this.destroyProgress += destroyProgress(st, item, p.eyeFluid === FLUID_WATER, p.onGround);
     const b = BLOCKS[STATE_BLOCK[st]];
     if (this.destroyTicks % 4 === 0) {
-      this.level.sound.play(`block.${b.sound}.hit`, h.x + 0.5, h.y + 0.5, h.z + 0.5, 0.25 * 1, 0.5);
+      // vanilla plays hits at pitch 0.5; the synthesized block.*.hit takes already bake that in
+      this.level.sound.play(`block.${b.sound}.hit`, h.x + 0.5, h.y + 0.5, h.z + 0.5, 0.25, 1);
     }
     this.destroyTicks++;
     this.level.particles.blockHit(h.x, h.y, h.z, st, h.face);
@@ -168,6 +169,8 @@ export class Interaction {
   }
 
   /** Use button pressed or held (vanilla repeats every 4 ticks). */
+  onOpenContainer: ((kind: string, x: number, y: number, z: number) => void) | null = null;
+
   use(pressed: boolean, held: boolean): void {
     if (this.rightClickDelay > 0) this.rightClickDelay--;
     if (!(pressed || (held && this.rightClickDelay === 0))) return;
@@ -175,6 +178,15 @@ export class Interaction {
     const p = this.player;
     const stack = p.inventory.selectedItem;
     const h = this.hit;
+    // blocks with a menu (vanilla Block.useWithoutItem), skipped when sneaking with an item
+    if (h && !(p.crouching && stack) && p.gameMode !== 'spectator') {
+      const name = BLOCKS[STATE_BLOCK[this.level.getState(h.x, h.y, h.z)]].name;
+      if ((name === 'crafting_table' || name === 'furnace' || name === 'chest') && this.onOpenContainer) {
+        this.onOpenContainer(name, h.x, h.y, h.z);
+        p.swing();
+        return;
+      }
+    }
     if (h && stack) {
       if (this.placeBlock(h, stack)) {
         p.swing();

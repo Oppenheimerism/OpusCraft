@@ -6,6 +6,7 @@ import { BLOCKS, STATE_BLOCK, BLOCK_BY_NAME } from '../world/block';
 import { BIOMES, BIOME_ID } from '../world/gen/biomes';
 import type { Chunk } from '../world/chunk';
 import { SECTIONS } from '../world/constants';
+import type { SavedBlockEntity } from '../world/blockEntity';
 
 export interface WorldMeta {
   id: string;
@@ -46,6 +47,7 @@ export interface WorldMeta {
 
 export interface SavedChunk {
   key: string;
+  blockEntities?: SavedBlockEntity[];
   sections: ({ palette: string[]; data: Uint8Array | Uint16Array } | null)[];
   biomes: string[];
   biomeData: Uint8Array;
@@ -149,7 +151,7 @@ export function stateFromString(s: string): number {
   return st;
 }
 
-export function serializeChunk(worldId: string, c: Chunk): SavedChunk {
+export function serializeChunk(worldId: string, c: Chunk, blockEntities: SavedBlockEntity[] = []): SavedChunk {
   const sections: SavedChunk['sections'] = [];
   for (let si = 0; si < SECTIONS; si++) {
     const b = c.blocks[si];
@@ -185,11 +187,11 @@ export function serializeChunk(worldId: string, c: Chunk): SavedChunk {
     }
     bd[i] = pi;
   }
-  return { key: chunkKey(worldId, c.cx, c.cz), sections, biomes: biomeNames, biomeData: bd };
+  return { key: chunkKey(worldId, c.cx, c.cz), sections, biomes: biomeNames, biomeData: bd, blockEntities };
 }
 
 /** Returns a full-column blocks array + biomes. */
-export function deserializeChunk(s: SavedChunk): { blocks: Uint16Array; biomes: Uint8Array } {
+export function deserializeChunk(s: SavedChunk): { blocks: Uint16Array; biomes: Uint8Array; blockEntities: SavedBlockEntity[] } {
   const blocks = new Uint16Array(SECTIONS * 4096);
   s.sections.forEach((sec, si) => {
     if (!sec) return;
@@ -200,7 +202,7 @@ export function deserializeChunk(s: SavedChunk): { blocks: Uint16Array; biomes: 
   const biomes = new Uint8Array(256);
   const bids = s.biomes.map((n) => BIOME_ID[n] ?? 1);
   for (let i = 0; i < 256; i++) biomes[i] = bids[s.biomeData[i]];
-  return { blocks, biomes };
+  return { blocks, biomes, blockEntities: s.blockEntities ?? [] };
 }
 
 export async function saveChunks(list: SavedChunk[]): Promise<void> {

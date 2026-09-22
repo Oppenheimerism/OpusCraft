@@ -4,6 +4,9 @@ import type { Game } from '../../game/game';
 import { TitleScreen } from './menus';
 import { PauseScreen, DeathScreen, LevelLoadingScreen, ChatScreen } from './ingame';
 import { executeCommand } from '../../game/commands';
+import { InventoryScreen, CraftingScreen, FurnaceScreen, ChestScreen } from './container';
+import { CreativeInventoryScreen } from './creative';
+import { InventoryMenu, CraftingMenu, FurnaceMenu, ChestMenu } from '../../inventory/menus';
 
 export function installScreens(game: Game): void {
   game.titleScreenFactory = () => new TitleScreen(game, false);
@@ -12,4 +15,15 @@ export function installScreens(game: Game): void {
   game.loadingScreenFactory = () => new LevelLoadingScreen(game);
   game.chatScreenFactory = (initial) => new ChatScreen(game, initial);
   game.onCommand = (cmd) => executeCommand(game, cmd);
+  game.inventoryScreenFactory = () => {
+    const p = game.player;
+    if (p.gameMode === 'creative') return new CreativeInventoryScreen(game);
+    return new InventoryScreen(game, new InventoryMenu(p));
+  };
+  game.containerScreenFactory = (menu) => {
+    if (menu instanceof CraftingMenu) return new CraftingScreen(game, menu);
+    if (menu instanceof FurnaceMenu) return new FurnaceScreen(game, menu);
+    if (menu instanceof ChestMenu) return new ChestScreen(game, menu);
+    return new InventoryScreen(game, menu as InventoryMenu);
+  };
 }

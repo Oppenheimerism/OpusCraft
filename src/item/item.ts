@@ -268,6 +268,15 @@ export class ItemStack {
   copy(): ItemStack {
     return new ItemStack(this.item, this.count, this.damage);
   }
+  copyWithCount(n: number): ItemStack {
+    return new ItemStack(this.item, n, this.damage);
+  }
+  /** remove up to n from this stack and return them as a new stack */
+  split(n: number): ItemStack {
+    const k = Math.min(n, this.count);
+    this.count -= k;
+    return new ItemStack(this.item, k, this.damage);
+  }
   isEmpty(): boolean {
     return this.count <= 0;
   }

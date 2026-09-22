@@ -61,6 +61,8 @@ export class Input {
 
   constructor(private readonly target: HTMLElement) {
     window.addEventListener('keydown', (e) => {
+      // held-key state is tracked even while a screen consumes the event (shift-click etc.)
+      if (!e.repeat) this.down.add(e.code);
       if (this.onKey && this.onKey(e)) {
         e.preventDefault();
         return;

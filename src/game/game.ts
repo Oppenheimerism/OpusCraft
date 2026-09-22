@@ -34,6 +34,9 @@ import { timeOfDay, skyDarkenInt } from '../render/environment';
 import { GameOptions, loadOptions, saveOptions } from './options';
 import { DEFAULT_GAME_RULES } from './gameRules';
 import { ItemEntity } from '../entity/itemEntity';
+import { GuiEntityRenderer } from '../render/guiEntity';
+import { InventoryMenu, CraftingMenu, FurnaceMenu, ChestMenu } from '../inventory/menus';
+import { ChestBlockEntity, FurnaceBlockEntity } from '../world/blockEntity';
 
 export type { GameOptions } from './options';
 
@@ -250,7 +253,6 @@ export class Game {
     if (s) {
       s.initScreen(this.gui.width, this.gui.height);
       this.input.unlock();
-      this.input.down.clear();
     } else if (this.inWorld) {
       this.input.lock();
     }
@@ -275,7 +277,7 @@ export class Game {
     this.chunks.savedLoader = (cx, cz) => this.loadSavedChunk(cx, cz);
     this.chunks.onChunkUnloaded = (c) => {
       if (c.modified && this.meta && !this.meta.transient) {
-        const sc = serializeChunk(this.meta.id, c);
+        const sc = serializeChunk(this.meta.id, c, this.world.chunkBlockEntities(c.cx, c.cz).map((b) => b.save()));
         this.savedKeys.add(sc.key);
         void saveChunks([sc]);
       }
@@ -304,6 +306,8 @@ export class Game {
     this.level.player = this.player;
     this.level.addEntity(this.player);
     this.interaction = new Interaction(this.level, this.player);
+    this.interaction.onOpenContainer = (kind, x, y, z) => this.openContainer(kind, x, y, z);
+    this.player.dropHandler = (s) => this.interaction.throwItem(s);
     this.applyGameRules();
     const world = this.world;
     const particles = new ParticleEngine(this.atlas, world, (x, _y, z, st) => {
@@ -369,7 +373,7 @@ export class Game {
     this.sound.stopMusic();
   }
 
-  private async loadSavedChunk(cx: number, cz: number): Promise<{ blocks: Uint16Array; biomes: Uint8Array } | null> {
+  private async loadSavedChunk(cx: number, cz: number): Promise<ReturnType<typeof deserializeChunk> | null> {
     if (!this.meta) return null;
     const key = chunkKey(this.meta.id, cx, cz);
     if (!this.savedKeys.has(key)) return null;
@@ -405,7 +409,7 @@ export class Game {
     const list = [];
     for (const c of this.world.chunks.values()) {
       if (!c.modified) continue;
-      const sc = serializeChunk(m.id, c);
+      const sc = serializeChunk(m.id, c, this.world.chunkBlockEntities(c.cx, c.cz).map((b) => b.save()));
       this.savedKeys.add(sc.key);
       list.push(sc);
       c.modified = false;
@@ -463,6 +467,47 @@ export class Game {
       }
       if (this.deathScreenFactory && this.inWorld) this.setScreen(this.deathScreenFactory());
     };
+  }
+
+  containerScreenFactory: ((menu: InventoryMenu | CraftingMenu | FurnaceMenu | ChestMenu) => Screen) | null = null;
+
+  /** right-clicked a block with a menu */
+  openContainer(kind: string, x: number, y: number, z: number): void {
+    if (!this.containerScreenFactory) return;
+    const p = this.player;
+    if (kind === 'crafting_table') this.setScreen(this.containerScreenFactory(new CraftingMenu(p, [x, y, z])));
+    else if (kind === 'furnace') {
+      const be = this.world.getBlockEntity(x, y, z);
+      if (be instanceof FurnaceBlockEntity) this.setScreen(this.containerScreenFactory(new FurnaceMenu(p, be)));
+    } else if (kind === 'chest') {
+      const be = this.world.getBlockEntity(x, y, z);
+      if (!(be instanceof ChestBlockEntity)) return;
+      // a solid block above keeps the lid shut (vanilla ChestBlock.isChestBlockedAt)
+      if (FLAGS[this.world.getState(x, y + 1, z)] & F_OPAQUE) return;
+      this.setScreen(this.containerScreenFactory(new ChestMenu(p, be)));
+      if (be.openCount++ === 0) this.sound.play('block.chest.open', x + 0.5, y + 0.5, z + 0.5, 0.5, Math.random() * 0.1 + 0.9);
+    }
+  }
+
+  /** chest closed (called by the chest screen) */
+  chestClosed(be: ChestBlockEntity): void {
+    be.openCount = Math.max(0, be.openCount - 1);
+    if (be.openCount === 0) this.sound.play('block.chest.close', be.x + 0.5, be.y + 0.5, be.z + 0.5, 0.5, Math.random() * 0.1 + 0.9);
+  }
+
+  private guiEntity: GuiEntityRenderer | null = null;
+
+  /** vanilla InventoryScreen.renderEntityInInventoryFollowsMouse */
+  renderEntityInInventory(g: GuiGraphics, x1: number, y1: number, x2: number, y2: number, scale: number, yOffset: number, mx: number, my: number): void {
+    this.guiEntity ??= new GuiEntityRenderer(this.gl, this.renderer.batch, this.renderer.hand.skinTexture);
+    const c = this.guiEntity.render(this.player, this.opts, g.scale, x1, y1, x2, y2, scale, yOffset, mx, my, this.ticks);
+    const ctx = g.ctx;
+    ctx.save();
+    ctx.imageSmoothingEnabled = false;
+    const t = ctx.getTransform();
+    ctx.setTransform(1, 0, 0, 1, t.e, t.f);
+    ctx.drawImage(c, Math.round(x1 * g.scale), Math.round(y1 * g.scale));
+    ctx.restore();
   }
 
   /** vanilla combat tracker death messages */

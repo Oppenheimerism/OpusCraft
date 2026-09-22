@@ -1,6 +1,8 @@
 // Level: the running game world (blocks + entities + time + weather).
 
 import { DEFAULT_GAME_RULES, GameRules } from './gameRules';
+import { FurnaceBlockEntity } from '../world/blockEntity';
+import type { ItemStack } from '../item/item';
 import { World } from '../world/world';
 import type { Entity } from '../entity/entity';
 import type { Player } from '../entity/player';
@@ -88,6 +90,16 @@ export class Level {
     if (this.skyFlash > 0) this.skyFlash--;
     this.runScheduledTicks();
     if (this.player) this.randomTicks.tick(this.player.x, this.player.z, this.simulationDistance);
+    // block entities (furnaces)
+    for (const be of this.world.blockEntities.values()) {
+      if (be.removed || !(be instanceof FurnaceBlockEntity)) continue;
+      const lit = be.isLit, cook = be.cookingProgress;
+      be.tick(this);
+      if (lit || cook || be.isLit) {
+        const c = this.world.getChunk(be.x >> 4, be.z >> 4);
+        if (c) c.modified = true;
+      }
+    }
   }
 
   scheduleTick(x: number, y: number, z: number, delay: number): void {
@@ -193,6 +205,10 @@ export class Level {
     return this.world.getState(x, y, z);
   }
 
+  getBlockName(x: number, y: number, z: number): string {
+    return BLOCKS[STATE_BLOCK[this.world.getState(x, y, z)]].name;
+  }
+
   /** place/remove a block with the usual side effects */
   setBlock(x: number, y: number, z: number, state: number, notify = true): number {
     const old = this.world.setState(x, y, z, state);
@@ -210,6 +226,9 @@ export class Level {
       this.sound.play(`block.${b.sound}.break`, x + 0.5, y + 0.5, z + 0.5, 1, 0.8);
     }
     const replacement = FLAGS[st] & F_WATERLOGGED ? S('water') : 0;
+    // containers spill their contents (vanilla Containers.dropContents)
+    const be = this.world.getBlockEntity(x, y, z);
+    if (be) for (const s of be.container.removeAll()) this.dropStackAt(x, y, z, s);
     this.world.setState(x, y, z, replacement);
     // double-height plants: remove the other half
     if (b.propIndex('half') >= 0 && !b.name.endsWith('_stairs') && !b.name.endsWith('_slab')) {
@@ -223,6 +242,22 @@ export class Level {
     }
     this.updateNeighbors(x, y, z);
     return true;
+  }
+
+  /** vanilla Containers.dropItemStack: random chunks of 10-30 with a small random kick */
+  dropStackAt(x: number, y: number, z: number, stack: ItemStack): void {
+    const w = 0.25;
+    const px = x + Math.random() * (1 - w) + w / 2, py = y + Math.random() * (1 - w), pz = z + Math.random() * (1 - w) + w / 2;
+    const tri = (m: number, d: number) => m + d * (Math.random() - Math.random());
+    while (stack.count > 0) {
+      const part = stack.split(10 + Math.floor(Math.random() * 21));
+      const e = new ItemEntity(this, part);
+      e.moveTo(px, py, pz);
+      e.dx = tri(0, 0.11485000171139836);
+      e.dy = tri(0.2, 0.11485000171139836);
+      e.dz = tri(0, 0.11485000171139836);
+      this.addEntity(e);
+    }
   }
 
   /** vanilla-style neighbour checks: blocks that lost support pop off. */

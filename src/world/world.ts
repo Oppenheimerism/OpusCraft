@@ -6,7 +6,8 @@ import { MIN_Y, MAX_Y, SECTIONS } from './constants';
 import { BIOMES } from './gen/biomes';
 import { ruleAllows, PendingWrites } from './gen/context';
 import { MeshInput, PS, PAD, PADDED_VOLUME } from '../render/mesher';
-import { OPACITY } from './block';
+import { OPACITY, BLOCKS, STATE_BLOCK } from './block';
+import { BlockEntity, SavedBlockEntity, blockEntityKey, createBlockEntity, loadBlockEntity } from './blockEntity';
 
 export interface GenResult {
   cx: number;
@@ -15,6 +16,7 @@ export interface GenResult {
   light: Uint8Array;
   biomes: Uint8Array;
   pending: PendingWrites[];
+  blockEntities?: SavedBlockEntity[];
 }
 
 export class World {
@@ -26,6 +28,7 @@ export class World {
   /** called when a section's mesh became stale */
   onDirty: ((c: Chunk, section: number) => void) | null = null;
   private lastChunk: Chunk | null = null;
+  readonly blockEntities = new Map<string, BlockEntity>();
 
   constructor() {
     this.light = new LightEngine(this);
@@ -79,6 +82,7 @@ export class World {
     const lx = x & 15, lz = z & 15;
     const old = c.setState(lx, y, lz, state);
     if (old === state) return old;
+    if (STATE_BLOCK[old] !== STATE_BLOCK[state]) this.blockChangedType(x, y, z, state, c);
     // heightmap
     const hi = (lz << 4) | lx;
     const h = c.heightmap[hi];
@@ -90,6 +94,34 @@ export class World {
     if (OPACITY[old] !== OPACITY[state] || this.emissionDiffers(old, state) || newH !== h || true) this.light.blockChanged(x, y, z);
     this.markBlockDirty(x, y, z);
     return old;
+  }
+
+  getBlockEntity(x: number, y: number, z: number): BlockEntity | null {
+    return this.blockEntities.get(blockEntityKey(x, y, z)) ?? null;
+  }
+
+  private addBlockEntity(be: BlockEntity, c: Chunk): void {
+    be.container.onChange = () => (c.modified = true);
+    this.blockEntities.set(be.key, be);
+  }
+
+  /** a block was replaced by a different block: drop/create its block entity */
+  private blockChangedType(x: number, y: number, z: number, state: number, c: Chunk): void {
+    const key = blockEntityKey(x, y, z);
+    const old = this.blockEntities.get(key);
+    if (old) {
+      old.removed = true;
+      this.blockEntities.delete(key);
+    }
+    const be = createBlockEntity(BLOCKS[STATE_BLOCK[state]].name, x, y, z);
+    if (be) this.addBlockEntity(be, c);
+  }
+
+  /** saved block entities inside a chunk */
+  chunkBlockEntities(cx: number, cz: number): BlockEntity[] {
+    const out: BlockEntity[] = [];
+    for (const be of this.blockEntities.values()) if (be.x >> 4 === cx && be.z >> 4 === cz) out.push(be);
+    return out;
   }
 
   private emissionDiffers(a: number, b: number): boolean {
@@ -149,6 +181,11 @@ export class World {
     this.light.mergeChunk(c);
     if (pend) this.applyWrites(c, pend);
     c.lightMerged = true;
+    if (r.blockEntities)
+      for (const d of r.blockEntities) {
+        const be = loadBlockEntity(d);
+        if (be) this.addBlockEntity(be, c);
+      }
     return c;
   }
 
@@ -168,6 +205,10 @@ export class World {
     if (c) {
       this.chunks.delete(key);
       this.lastChunk = null;
+      for (const be of this.chunkBlockEntities(cx, cz)) {
+        be.removed = true;
+        this.blockEntities.delete(be.key);
+      }
     }
     return c;
   }
