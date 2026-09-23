@@ -1075,6 +1075,9 @@ export class Game {
       if (eyeFluid === FLUID_WATER) hf *= 0.85714287;
       this.renderer.hand.render(this.renderer.batch, p, partial, this.canvas.width, this.canvas.height, hf, handBob, (l & 15) * 16, (l >> 4) * 16, this.renderer.viewRot);
     }
+    if (this.thirdPerson === 0 && p.isOnFire() && p.gameMode !== 'spectator') {
+      this.renderer.entities.renderScreenFire(this.renderer.batch, this.canvas.width, this.canvas.height, 70, this.level.gameTime);
+    }
     if (this.opts.fancy && !this.hideGui) this.overlay.renderVignette(this.gui.sprites.get('vignette'), this.hud.vignetteBrightness, this.canvas.width, this.canvas.height);
   }
 
@@ -1124,8 +1127,11 @@ export class Game {
     if (f < 0) return;
     f /= p.hurtDuration;
     f = Math.sin(f * f * f * f * Math.PI);
-    rotateY(m, m, 0);
-    rotateZ(m, m, -f * 14 * DEG);
+    // vanilla bobHurt: tilt away from the damage direction
+    const d = p.hurtDir;
+    rotateY(m, m, -d * DEG);
+    rotateZ(m, m, -f * 14 * this.opts.damageTiltStrength * DEG);
+    rotateY(m, m, d * DEG);
   }
 
   takeScreenshot(): void {

@@ -16,6 +16,7 @@ import { Animal } from '../entity/animals';
 import { Creeper, bowPower } from '../entity/monsters';
 import { Arrow } from '../entity/arrow';
 import { PrimedTnt } from '../entity/tnt';
+import { ThrownItem, ThrownKind } from '../entity/throwable';
 import { createMob } from './spawner';
 import { playerAttack } from './combat';
 
@@ -392,6 +393,18 @@ export class Interaction {
     }
     if (it.id === 'milk_bucket') {
       p.startUsingItem(stack, 32);
+      return;
+    }
+    // vanilla EggItem / SnowballItem / EnderpearlItem.use
+    if (it.id === 'egg' || it.id === 'snowball' || it.id === 'ender_pearl') {
+      if (it.id === 'ender_pearl' && p.cooldowns.get('ender_pearl')) return;
+      const t = new ThrownItem(this.level, it.id as ThrownKind, p);
+      t.shootFromRotation(p, p.pitch, p.yaw, 0, 1.5, 1);
+      this.level.addEntity(t);
+      this.level.sound.play('entity.arrow.shoot', p.x, p.y, p.z, 0.5, 0.4 / (Math.random() * 0.4 + 0.8));
+      if (it.id === 'ender_pearl') p.cooldowns.set('ender_pearl', 20);
+      if (p.gameMode !== 'creative') p.inventory.consumeSelected(1);
+      p.swing();
       return;
     }
     // vanilla BowItem.use: needs arrows unless creative

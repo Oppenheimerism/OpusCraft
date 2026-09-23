@@ -49,6 +49,8 @@ export abstract class LivingEntity extends Entity {
   absorption = 0;
   noActionTime = 0;
   lastHurtByPlayerTime = 0;
+  /** vanilla hurtDir: yaw of the damage source relative to facing (camera tilt) */
+  hurtDir = 0;
   /** vanilla lastHurtByMob (cleared after 100 ticks) */
   lastHurtByMob: LivingEntity | null = null;
   lastHurtByMobTimestamp = 0;
@@ -411,6 +413,7 @@ export abstract class LivingEntity extends Entity {
       }
     }
     if (fresh) {
+      this.hurtDir = 0;
       if (!NO_KNOCKBACK.has(source) && (attacker || direct)) {
         let kx: number, kz: number;
         if (direct && direct !== attacker) {
@@ -421,6 +424,8 @@ export abstract class LivingEntity extends Entity {
           kz = attacker!.z - this.z;
         }
         this.knockback(0.4, kx, kz);
+        // vanilla indicateDamage
+        this.hurtDir = (Math.atan2(kz, kx) * 180) / Math.PI - this.yaw;
       }
       this.onHurt(source);
     }

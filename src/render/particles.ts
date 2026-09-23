@@ -355,13 +355,19 @@ export class ParticleEngine {
         this.addSprite(p);
         break;
       }
-      case 'item_slime': {
-        // vanilla BreakingItemParticle with the slime ball sprite
+      case 'item_slime':
+      case 'item_snowball':
+      case 'item_egg': {
+        // vanilla BreakingItemParticle: a random quarter of the item sprite
         const p = this.base(kind, x, y, z);
         this.withSpeed(p, 0, 0, 0);
+        p.dx = p.dx * 0.1 + xd;
+        p.dy = p.dy * 0.1 + yd;
+        p.dz = p.dz * 0.1 + zd;
+        if (kind === 'item_slime') this.withSpeed(p, 0, 0, 0);
         p.gravity = 1;
         p.size /= 2;
-        p.frames = ['item_slime_ball'];
+        p.frames = [kind === 'item_slime' ? 'item_slime_ball' : kind];
         p.frame = 0;
         const uo = Math.random() * 3, vo = Math.random() * 3;
         p.sub = [uo / 4, vo / 4, (uo + 1) / 4, (vo + 1) / 4];

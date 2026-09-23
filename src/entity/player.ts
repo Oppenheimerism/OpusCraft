@@ -60,6 +60,9 @@ export class Player extends LivingEntity {
   usingItemTicks = 0;
   /** vanilla takeXpDelay: one orb every 2 ticks */
   takeXpDelay = 0;
+  /** vanilla ItemCooldowns: item id → ticks left (ender pearls) */
+  readonly cooldowns = new Map<string, number>();
+  cooldownTotals = new Map<string, number>();
   /** item being used (eating, drinking, drawing a bow) and ticks left (vanilla useItemRemaining) */
   useItem: ItemStack | null = null;
   useItemRemaining = 0;
@@ -168,6 +171,10 @@ export class Player extends LivingEntity {
     this.food.tick(this);
     this.tickAir();
     if (this.takeXpDelay > 0) this.takeXpDelay--;
+    for (const [k, v] of this.cooldowns) {
+      if (v <= 1) this.cooldowns.delete(k);
+      else this.cooldowns.set(k, v - 1);
+    }
     // vanilla Player.aiStep touch(): orbs and arrows within the inflated box
     if (this.health > 0 && this.gameMode !== 'spectator') {
       for (const e of this.level.getEntities(this.bb.inflate(1, 0.5, 1), undefined, this)) {

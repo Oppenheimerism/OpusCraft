@@ -69,6 +69,13 @@ export class Hud {
       const x = cx - 90 + i * 20 + 2, y = H - 16 - 3;
       g.item(s.item.id, x, y);
       g.itemDecorations(s.count, s.damage, s.item.maxDamage, x, y);
+      // vanilla item cooldown overlay (ender pearls)
+      const cd = p.cooldowns.get(s.item.id);
+      if (cd) {
+        const f = Math.max(0, Math.min(1, (cd - partial) / 20));
+        const i1 = y + Math.floor(16 * (1 - f));
+        g.fill(x, i1, x + 16, i1 + Math.ceil(16 * f), 0x7fffffff);
+      }
     }
     const survival = p.gameMode === 'survival' || p.gameMode === 'adventure';
     if (survival) {

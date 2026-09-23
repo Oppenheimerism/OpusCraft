@@ -25,6 +25,7 @@ import { FallingBlockEntity } from '../entity/fallingBlock';
 import { Sheep, Chicken, sheepFurColor } from '../entity/animals';
 import { Zombie, Skeleton, Creeper, Enderman, Slime } from '../entity/monsters';
 import { Squid } from '../entity/water';
+import { ThrownItem } from '../entity/throwable';
 import type { Player } from '../entity/player';
 import { MOB_TEXTURES, FIRE_TEXTURES } from '../textures/mobs';
 import { FLAGS, F_FULL_COLLISION, F_AIR, OUTLINE, S } from '../world/block';
@@ -166,6 +167,7 @@ export class EntityRenderDispatcher {
     else if (e instanceof ExperienceOrb) this.renderOrb(b, level, e, x, y, z, dx, dy, dz, p, cam);
     else if (e instanceof PrimedTnt) this.renderTnt(b, e, dx, dy, dz, p);
     else if (e instanceof FallingBlockEntity) this.renderFalling(b, e, dx, dy, dz);
+    else if (e instanceof ThrownItem) this.renderThrown(b, e, dx, dy, dz, cam);
     if (e.isOnFire() && !(e instanceof ItemEntity) && !(e instanceof ExperienceOrb)) this.renderFlame(b, e, dx, dy, dz, cam, level.gameTime);
   }
 
@@ -557,6 +559,18 @@ export class EntityRenderDispatcher {
     b.setOverlay(0, 0, 0, 0);
   }
 
+  /** vanilla ThrownItemRenderer: the item sprite facing the camera */
+  private renderThrown(b: EntityBatch, e: ThrownItem, dx: number, dy: number, dz: number, cam: Camera): void {
+    if (e.tickCount < 2 && dx * dx + dy * dy + dz * dz < 12.25) return;
+    b.setOverlay(0, 0, 0, 0);
+    const pose = this.pose;
+    pose.reset();
+    pose.translate(dx, dy, dz);
+    pose.rotY(180 - cam.yaw);
+    pose.rotX(-cam.pitch);
+    this.items.render(b, pose, e.stack, 'ground');
+  }
+
   private renderFalling(b: EntityBatch, e: FallingBlockEntity, dx: number, dy: number, dz: number): void {
     b.setOverlay(0, 0, 0, 0);
     const pose = this.pose;
@@ -597,6 +611,39 @@ export class EntityRenderDispatcher {
     b.flush();
     b.lightB = lb;
     b.lightS = ls;
+  }
+
+  /** vanilla ScreenEffectRenderer.renderFire: two flame sheets over the lower screen */
+  renderScreenFire(b: EntityBatch, width: number, height: number, fovDeg: number, time: number): void {
+    const t = this.fire();
+    if (!t) return;
+    const gl = this.gl;
+    const proj = new Float32Array(16);
+    const f = 1 / Math.tan((fovDeg * Math.PI) / 360), near = 0.05, far = 100;
+    proj[0] = f / (width / height);
+    proj[5] = f;
+    proj[10] = (far + near) / (near - far);
+    proj[11] = -1;
+    proj[14] = (2 * far * near) / (near - far);
+    b.proj = proj;
+    b.view = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+    b.fog = [0, 0];
+    b.setOverlay(0, 0, 0, 0);
+    b.lightB = b.lightS = 240;
+    gl.depthFunc(gl.ALWAYS);
+    b.begin(this.state(t, { blend: true, cutoff: 0.01, lit: false, useLightmap: false, depthWrite: false }));
+    const frame = time % this.fireFrames;
+    const vh = 1 / this.fireFrames;
+    const u0 = 0.5, u1 = 1, v0 = frame * vh, v1 = v0 + vh;
+    const pose = this.pose;
+    for (let i = 0; i < 2; i++) {
+      pose.reset();
+      pose.translate(-(i * 2 - 1) * 0.24, -0.3, 0);
+      pose.rotY((i * 2 - 1) * 10);
+      b.quad(pose, [-0.5, -0.5, -0.5, 0.5, -0.5, -0.5, 0.5, 0.5, -0.5, -0.5, 0.5, -0.5], [u1, v1, u0, v1, u0, v0, u1, v0], 0, 0, 1, 1, 1, 1, 0.9);
+    }
+    b.flush();
+    gl.depthFunc(gl.LEQUAL);
   }
 
   // -------------------------------------------------------------------------

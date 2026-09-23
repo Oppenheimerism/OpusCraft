@@ -10,6 +10,8 @@ export function buildParticleAtlas(gl: GL): { texture: WebGLTexture; rects: Reco
   const src: Record<string, () => { w: number; h: number; data: Uint8ClampedArray }> = { ...MOB_PARTICLE_TEXTURES };
   // item crumb particles (vanilla ItemParticleOption)
   if (ITEM_TEXTURES['slime_ball']) src['item_slime_ball'] = ITEM_TEXTURES['slime_ball'];
+  if (ITEM_TEXTURES['egg']) src['item_egg'] = ITEM_TEXTURES['egg'];
+  if (ITEM_TEXTURES['snowball']) src['item_snowball'] = ITEM_TEXTURES['snowball'];
   const names = Object.keys(src);
   const cell = 16;
   const cols = 8;
