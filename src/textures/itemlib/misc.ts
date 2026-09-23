@@ -39,10 +39,17 @@ function rod(pal: { o: number; a: number; b: number; c: number }, knots: [number
   return t;
 }
 M['stick'] = () => rod({ o: 0x28190a, a: 0x896727, b: 0x684e1e, c: 0x4f3a17 }, [[8, 8], [5, 11], [11, 5]]);
+/** blaze rod: a stick's shape in glowing yellow and orange, a hot pale highlight along its upper edge, outlined in scorched orange-brown */
 M['blaze_rod'] = () => {
-  const t = rod({ o: 0x7a3606, a: 0xfff07a, b: 0xf5b52a, c: 0xd87a10 }, [[7, 9], [10, 6], [4, 12], [12, 4]]);
-  // glowing highlight flecks
-  for (const [x, y] of [[6, 9], [9, 6], [12, 3]] as [number, number][]) if (getA(t, x, y)) plot(t, x, y, 0xffffc8);
+  const t = blank();
+  // the rod's two diagonals (the upper edge x + y = 15, the lower x + y = 16), from the bottom-left end up
+  const UPPER = 'yhhWhyhhWh', LOWER = 'doooDoodoo';
+  const ink: Record<string, number> = { W: 0xffffe0, h: 0xfff39a, y: 0xffd43c, o: 0xf5a01e, d: 0xe07c12, D: 0xc4600c };
+  for (let i = 0; i < 10; i++) {
+    plot(t, 3 + i, 12 - i, ink[UPPER[i]]);
+    plot(t, 4 + i, 12 - i, ink[LOWER[i]]);
+  }
+  outline4(t, 0x8a3c06);
   return t;
 };
 
@@ -138,6 +145,38 @@ M['gunpowder'] = () => pile([0x3a3a3a, 0x4e4e4e, 0x646464, 0x7a7a7a, 0x969696], 
 M['sugar'] = () => pile([0xb8c0c8, 0xd0d6dc, 0xe4e8ec, 0xf2f4f6, 0xffffff], 0x7c8490, 'sugar', [0xffffff, 0xc8ced6]);
 M['bone_meal'] = () => pile([0xb4b0a4, 0xccc8bc, 0xe0ddd2, 0xefede6, 0xfcfbf8], 0x74705f, 'bone_meal', [0xffffff, 0xc2beb0]);
 M['glowstone_dust'] = () => pile([0x9c7418, 0xc49826, 0xe6bf3c, 0xfadc5e, 0xfff4a0], 0x5c420c, 'glowstone_dust', [0xffffd0, 0xd8a830, 0xfff08a]);
+
+// prettier-ignore
+const SMALL_PILE = [
+  '................',
+  '................',
+  '................',
+  '................',
+  '................',
+  '................',
+  '................',
+  '.......XX.......',
+  '......XXXX......',
+  '.....XXXXXX.....',
+  '....XXXXXXXX....',
+  '...XXXXXXXXXX...',
+  '...XXXXXXXXXX...',
+  '....XXXXXXXX....',
+  '................',
+  '................',
+];
+/** blaze powder: a small heap of bright orange and yellow powder, low in the middle, giving off a few sparks */
+M['blaze_powder'] = () => {
+  const t = autoShade(SMALL_PILE, [0xc24a08, 0xe26c0e, 0xf4921a, 0xfcbc30, 0xffe060, 0xfff6a8], 0x7a2804, {
+    seed: 'blaze_powder', edge: 1.2, relief: 3, cluster: 0.25, cell: 3,
+  });
+  const r = rng('blaze_powder');
+  paint(t, (x, y, c) => (c !== 0x7a2804 && r.chance(0.18) ? [0xfff6a8, 0xf4921a, 0xffe060][r.nextInt(3)] : undefined));
+  // sparks drifting up off the heap, and one in it
+  for (const [x, y, c] of [[3, 7, 0xffe060], [12, 6, 0xfff6a8], [8, 4, 0xfcbc30], [14, 9, 0xffe060], [1, 10, 0xfcbc30], [9, 10, 0xffffe0]] as [number, number, number][])
+    plot(t, x, y, c);
+  return t;
+};
 
 // ---------------------------------------------------------------------------
 // Leather

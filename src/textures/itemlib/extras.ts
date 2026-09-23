@@ -493,32 +493,7 @@ E['turtle_scute'] = () =>
     '................',
   ], { '#': 0x1a3a12, g: 0x3a7a2a, G: 0x52a03a, l: 0x8ad06a }, 'turtle_scute');
 E['scute'] = E['turtle_scute'];
-
-// Blaze powder / other powders
-// prettier-ignore
-const POWDER = [
-  '................',
-  '................',
-  '................',
-  '................',
-  '........XX......',
-  '......XXXXX.....',
-  '.....XXXXXXX....',
-  '....XXXXXXXXXX..',
-  '...XXXXXXXXXXX..',
-  '..XXXXXXXXXXXXX.',
-  '.XXXXXXXXXXXXXX.',
-  '.XXXXXXXXXXXXXX.',
-  '..XXXXXXXXXXXX..',
-  '................',
-  '................',
-  '................',
-];
-E['blaze_powder'] = () => {
-  const t = autoShade(POWDER, [0xb05a08, 0xd87a10, 0xf09a1e, 0xfcc040, 0xfff08a], 0x5a2a04, { seed: 'blaze_powder', edge: 1.2, relief: 3, cluster: 0.25, cell: 3 });
-  for (const [x, y] of [[3, 6], [13, 5], [1, 14], [14, 14], [11, 3]] as [number, number][]) plot(t, x, y, 0xf09a1e);
-  return t;
-};
+// (blaze powder is with the other powder piles, in misc.ts)
 
 // Glow ink sac (recoloured ink sac shape)
 // prettier-ignore
