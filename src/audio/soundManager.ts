@@ -54,7 +54,7 @@ const ALIASES: [RegExp, string][] = [
   [/^block\.(cobweb)\./, 'block.stone.'],
   [/^block\.(hard_crop)\./, 'block.wood.'],
   // the nether wart crop (vanilla SoundType.NETHER_WART): stone steps, its planting sound on place
-  [/^block\.nether_wart\.(?=step|hit|fall)/, 'block.stone.'],
+  [/^block\.nether_wart\.(?=step|hit)/, 'block.stone.'],
   [/^block\.nether_wart\.place$/, 'item.nether_wart.plant'],
 ];
 

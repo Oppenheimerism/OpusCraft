@@ -446,13 +446,13 @@ function sproutsSound(c: Ctx, brk: boolean): Float32Array {
       grain: 0.0005,
       heavy: 2.2,
       bands: [
-        { f: 3300, q: 1.2, g: 1, spread: 0.35 },
-        { f: 1900, q: 1.4, g: 0.65, spread: 0.3 },
-        { f: 5400, q: 1.4, g: 0.22, spread: 0.2 },
+        { f: 2900, q: 1.2, g: 1, spread: 0.35 },
+        { f: 1650, q: 1.4, g: 0.7, spread: 0.3 },
+        { f: 4700, q: 1.4, g: 0.2, spread: 0.2 },
       ],
     }),
   );
-  layer(out, 0.4, (b) => ticks(b, sr, rng, { dur: d * 0.7, rate: 90, energy: en, f: [2300, 5200], t60: [0.002, 0.006], heavy: 2, click: 0.45 }));
+  layer(out, 0.4, (b) => ticks(b, sr, rng, { dur: d * 0.7, rate: 90, energy: en, f: [2000, 4600], t60: [0.002, 0.006], heavy: 2, click: 0.45 }));
   return out;
 }
 

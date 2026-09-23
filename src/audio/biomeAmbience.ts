@@ -44,6 +44,7 @@ export class BiomeAmbience {
   private readonly loops = new Map<number, Loop>();
   private biome = -1;
   private world: unknown = null;
+  private dim: unknown = null;
   private moodiness = 0;
 
   constructor(private readonly sound: SoundManager) {}
@@ -55,13 +56,15 @@ export class BiomeAmbience {
   tick(game: Game): boolean {
     const w = game.world;
     const p = game.player;
-    if (w !== this.world) {
-      // a new world or dimension: vanilla starts a fresh handler with the new player
+    if (w !== this.world || w.dim !== this.dim) {
+      // a new world or dimension (the World object is reused across dimensions): vanilla starts a
+      // fresh handler with the new player, and the old dimension's loops stop with the level change
       for (const l of this.loops.values()) l.sound.stop();
       this.loops.clear();
       this.biome = -1;
       this.moodiness = 0;
       this.world = w;
+      this.dim = w.dim;
     }
     for (const [id, l] of this.loops) if (l.sound.stopped) this.loops.delete(id);
     // vanilla uses the (noise) biome at the player's position
@@ -120,11 +123,16 @@ export class BiomeAmbience {
     return true;
   }
 
-  /** the music event of the biome at the player's feet (vanilla Biome.getBackgroundMusic), or null */
+  /**
+   * The music event of the biome at the player's feet (vanilla Biome.getBackgroundMusic), or null
+   * for the overworld's own music. In the Nether every biome has one; a column that isn't loaded
+   * yet still gets the Nether's rather than the Overworld's.
+   */
   music(game: Game): string | null {
     const p = game.player;
-    const id = game.world.getBiome3(Math.floor(p.x), Math.floor(p.y), Math.floor(p.z));
-    return BIOMES[id]?.ambient?.music ?? null;
+    const w = game.world;
+    const id = w.getBiome3(Math.floor(p.x), Math.floor(p.y), Math.floor(p.z));
+    return BIOMES[id]?.ambient?.music ?? (w.dim.id === 'the_nether' ? 'music.nether.nether_wastes' : null);
   }
 
   /** the moodiness accumulator 0..1 (vanilla getMoodiness) */
