@@ -3,7 +3,7 @@
 import type { Level } from './level';
 import type { Player } from '../entity/player';
 import { raycast, BlockHit } from './raycast';
-import { destroyProgress, placementState, canReplace, canSurvive, isCorrectTool, blockExperience } from './blockRules';
+import { destroyProgress, placementState, canReplace, canSurvive, isCorrectTool, blockExperience, hasVacantFace } from './blockRules';
 import { BLOCKS, STATE_BLOCK, FLAGS, F_AIR, F_WATER, F_OPAQUE, F_REPLACEABLE, COLLISION, FACE_OCC, OUTLINE, getBlock, S } from '../world/block';
 import { updateShape, hasShapeUpdates } from './shapeUpdates';
 import { DX, DY, DZ, DIR_NAMES, dirFromYaw } from '../world/dir';
@@ -338,7 +338,9 @@ export class Interaction {
     let x = h.x, y = h.y, z = h.z;
     const clicked = world.getState(x, y, z);
     const clickedBlock = BLOCKS[STATE_BLOCK[clicked]];
-    const replaceClicked = FLAGS[clicked] & F_REPLACEABLE && clickedBlock !== block && !(clickedBlock.name === 'water' && block.name !== 'water');
+    const replaceClicked =
+      (FLAGS[clicked] & F_REPLACEABLE && clickedBlock !== block && !(clickedBlock.name === 'water' && block.name !== 'water')) ||
+      (clickedBlock === block && block.name === 'glow_lichen' && hasVacantFace(clicked));
     // slab merging into a double slab
     if (clickedBlock === block && block.name.endsWith('_slab')) {
       const type = block.get(clicked, 'type');
@@ -367,7 +369,7 @@ export class Interaction {
       return false;
     }
     let st = placementState(block, {
-      world, x, y, z, face: replaceClicked ? 1 : h.face, hitY: h.hy - h.y, hitX: h.hx - x, hitZ: h.hz - z, yaw: p.yaw, pitch: p.pitch, sneaking: p.crouching, clickedState: clicked,
+      world, x, y, z, face: replaceClicked ? 1 : h.face, hitY: h.hy - h.y, hitX: h.hx - x, hitZ: h.hz - z, yaw: p.yaw, pitch: p.pitch, sneaking: p.crouching, clickedState: clicked, replaceClicked: !!replaceClicked,
     });
     if (st === null) return false;
     if (!canSurvive(world, x, y, z, st)) return false;

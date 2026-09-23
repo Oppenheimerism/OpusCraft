@@ -279,6 +279,10 @@ for (const b of BLOCKS) {
     if (n.endsWith('_bed')) it.maxStack = 1;
   }
   if (n === 'glass_pane') it.texture = 'block:glass';
+  if (n === 'glow_lichen') {
+    it.texture = 'block:glow_lichen';
+    it.creativeTab = 'natural';
+  }
   if (n === 'rail') {
     it.texture = 'block:rail';
     it.creativeTab = 'tools';

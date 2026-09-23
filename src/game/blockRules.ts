@@ -15,6 +15,17 @@ function isSturdyFace(st: number, face: number): boolean {
 
 const PLANT_SOIL = new Set(['grass_block', 'dirt', 'coarse_dirt', 'podzol', 'rooted_dirt', 'mycelium', 'moss_block', 'farmland', 'mud']);
 
+/** multiface blocks (glow lichen): each face, the neighbour it hangs on and that neighbour's face */
+export const MULTIFACE: [string, number, number, number, number][] = [
+  ['down', 0, -1, 0, UP], ['up', 0, 1, 0, DOWN], ['north', 0, 0, -1, SOUTH], ['south', 0, 0, 1, NORTH], ['west', -1, 0, 0, EAST], ['east', 1, 0, 0, WEST],
+];
+
+/** vanilla MultifaceBlock.canAttachTo: the neighbour's touching face is full */
+export function multifaceSupported(world: World, x: number, y: number, z: number, face: string): boolean {
+  const m = MULTIFACE.find((f) => f[0] === face)!;
+  return isSturdyFace(world.getState(x + m[1], y + m[2], z + m[3]), m[4]);
+}
+
 /** Can the block `state` stay at (x,y,z)? */
 export function canSurvive(world: World, x: number, y: number, z: number, state: number): boolean {
   const b = blk(state);
@@ -33,6 +44,7 @@ export function canSurvive(world: World, x: number, y: number, z: number, state:
     return isSturdyFace(below, UP);
   }
   if (n.endsWith('_carpet')) return !(FLAGS[below] & F_AIR);
+  if (n === 'glow_lichen') return MULTIFACE.some(([d]) => b.get(state, d) && multifaceSupported(world, x, y, z, d));
   if (n === 'rail') {
     // vanilla BaseRailBlock.canSurvive + shouldBeRemoved: a rigid block below, and one under the high end of a slope
     if (!isSturdyFace(below, UP)) return false;
@@ -116,6 +128,27 @@ export interface PlaceContext {
   pitch: number;
   sneaking: boolean;
   clickedState: number;
+  /** the clicked block itself is being replaced (or added to) rather than placed against */
+  replaceClicked?: boolean;
+}
+
+/** vanilla Direction.orderedByNearest: all six directions, nearest to where the player looks first */
+export function lookingDirections(yaw: number, pitch: number): number[] {
+  const f = (pitch * Math.PI) / 180, f1 = (-yaw * Math.PI) / 180;
+  const f2 = Math.sin(f), f3 = Math.cos(f), f4 = Math.sin(f1), f5 = Math.cos(f1);
+  const east = f4 > 0, up = f2 < 0, south = f5 > 0;
+  const f6 = east ? f4 : -f4, f7 = up ? -f2 : f2, f8 = south ? f5 : -f5;
+  const f9 = f6 * f3, f10 = f8 * f3;
+  const h = east ? EAST : WEST, v = up ? UP : DOWN, d = south ? SOUTH : NORTH;
+  const arr = (a: number, b: number, c: number) => [a, b, c, c ^ 1, b ^ 1, a ^ 1];
+  if (f6 > f8) return f7 > f9 ? arr(v, h, d) : f10 > f7 ? arr(h, d, v) : arr(h, v, d);
+  return f7 > f10 ? arr(v, d, h) : f9 > f7 ? arr(d, h, v) : arr(d, v, h);
+}
+
+/** vanilla MultifaceBlock.hasAnyVacantFace */
+export function hasVacantFace(state: number): boolean {
+  const b = blk(state);
+  return MULTIFACE.some(([d]) => !b.get(state, d));
 }
 
 const OPP_NAME = ['up', 'down', 'south', 'north', 'east', 'west'];
@@ -128,6 +161,19 @@ export function placementState(block: Block, ctx: PlaceContext): number | null {
   if (block.propIndex('axis') >= 0) {
     const axis = ctx.face === DOWN || ctx.face === UP ? 'y' : ctx.face === NORTH || ctx.face === SOUTH ? 'z' : 'x';
     st = block.with(st, 'axis', axis);
+  }
+  // vanilla MultifaceBlock.getStateForPlacement: the first face, towards the clicked block and then
+  // in the order the player looks, that is still free and can hang on its neighbour
+  if (n === 'glow_lichen') {
+    const cur = ctx.world.getState(ctx.x, ctx.y, ctx.z);
+    const base = blk(cur) === block ? cur : blk(cur).name === 'water' && blk(cur).get(cur, 'level') === 0 ? block.with(st, 'waterlogged', true) : st;
+    const looking = lookingDirections(ctx.yaw, ctx.pitch);
+    const dirs = ctx.replaceClicked ? looking : [ctx.face ^ 1, ...looking.filter((d) => d !== (ctx.face ^ 1))];
+    for (const d of dirs) {
+      const face = DIR_NAMES[d];
+      if (!block.get(base, face) && multifaceSupported(ctx.world, ctx.x, ctx.y, ctx.z, face)) return block.with(base, face, true);
+    }
+    return null;
   }
   // vanilla BaseRailBlock.getStateForPlacement (connections are made once placed)
   if (n === 'rail') st = block.with(st, 'shape', facingH === 'east' || facingH === 'west' ? 'east_west' : 'north_south');
@@ -205,7 +251,8 @@ export function canReplace(target: number, block: Block): boolean {
   if (f & F_AIR) return true;
   if (f & F_REPLACEABLE) {
     const tb = blk(target);
-    if (tb === block) return false;
+    // (more glow lichen adds a face to the lichen already there)
+    if (tb === block) return block.name === 'glow_lichen' && hasVacantFace(target);
     return true;
   }
   return false;
@@ -322,6 +369,8 @@ export function blockDrops(state: number, tool: Item | null, r: Rand, silk = fal
     case 'dead_bush': return shears ? stacks('dead_bush', 1) : stacks('stick', r.nextInt(3));
     case 'cobweb': return shears ? stacks('cobweb', 1) : stacks('string', 1);
     case 'vine': case 'seagrass': case 'tall_seagrass': return shears ? stacks(n === 'tall_seagrass' ? 'seagrass' : n, 1) : [];
+    // vanilla glow_lichen loot: one per face, shears only
+    case 'glow_lichen': return shears ? stacks(n, MULTIFACE.filter(([d]) => b.get(state, d)).length) : [];
     case 'wall_torch': return stacks('torch', 1);
     case 'kelp_plant': return stacks('kelp', 1);
     case 'sweet_berry_bush': {

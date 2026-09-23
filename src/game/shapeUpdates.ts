@@ -7,6 +7,7 @@ import { BLOCKS, STATE_BLOCK, FLAGS, FACE_OCC, COLLISION, F_AIR, F_OPAQUE, Block
 import { DOWN, UP, NORTH, SOUTH, WEST, EAST } from '../world/dir';
 import type { World } from '../world/world';
 import { fireCanSurvive, fireStateAt } from './fire';
+import { MULTIFACE, multifaceSupported } from './blockRules';
 
 const blk = (st: number): Block => BLOCKS[STATE_BLOCK[st]];
 
@@ -152,6 +153,16 @@ export function updateShape(world: World, x: number, y: number, z: number, st: n
   const b = blk(st);
   const n = b.name;
   if (n.endsWith('_stairs')) return b.with(st, 'shape', stairsShape(world, x, y, z, st));
+  // vanilla MultifaceBlock.updateShape: faces that lost their support go; with none left the block goes
+  if (n === 'glow_lichen') {
+    let s = st, any = false;
+    for (const [d] of MULTIFACE) {
+      if (!b.get(s, d)) continue;
+      if (multifaceSupported(world, x, y, z, d)) any = true;
+      else s = b.with(s, d, false);
+    }
+    return any ? s : 0;
+  }
   if (n.endsWith('_fence')) {
     let s = st;
     for (const [d, dx, dz] of HDIRS) s = b.with(s, d, fenceConnects(b, world.getState(x + dx, y, z + dz), d));
@@ -218,7 +229,7 @@ export function updateShape(world: World, x: number, y: number, z: number, st: n
 /** blocks whose state depends on neighbours (skip the work for everything else) */
 export function hasShapeUpdates(st: number): boolean {
   const n = blk(st).name;
-  return n.endsWith('_stairs') || n.endsWith('_fence') || n.endsWith('_pane') || n === 'iron_bars' || n.endsWith('_wall') || n.endsWith('_fence_gate') || n.endsWith('_door') || n.endsWith('_bed') || n === 'grass_block' || n === 'podzol' || n === 'mycelium' || n.startsWith('attached_') || n === 'fire';
+  return n === 'glow_lichen' || n.endsWith('_stairs') || n.endsWith('_fence') || n.endsWith('_pane') || n === 'iron_bars' || n.endsWith('_wall') || n.endsWith('_fence_gate') || n.endsWith('_door') || n.endsWith('_bed') || n === 'grass_block' || n === 'podzol' || n === 'mycelium' || n.startsWith('attached_') || n === 'fire';
 }
 
 export { F_OPAQUE };

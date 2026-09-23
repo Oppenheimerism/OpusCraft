@@ -639,6 +639,33 @@ export function registerExtraBlocks(): void {
       model: (s) => MODELS[s.get('shape') as string],
     });
   }
+  // -------------------------------------------------------------------------
+  // Glow lichen (vanilla GlowLichenBlock / MultifaceBlock: one plane per attached face, 0.1 px out)
+  {
+    const e = 0.1;
+    const PLANES: Record<string, ElementDef> = {
+      down: { from: [0, e, 0], to: [16, e, 16], shade: false, faces: { up: f('glow_lichen', [0, 0, 16, 16]), down: f('glow_lichen', [0, 16, 16, 0]) } },
+      up: { from: [0, 16 - e, 0], to: [16, 16 - e, 16], shade: false, faces: { up: f('glow_lichen', [0, 0, 16, 16]), down: f('glow_lichen', [0, 16, 16, 0]) } },
+      north: { from: [0, 0, e], to: [16, 16, e], shade: false, faces: { north: f('glow_lichen', [16, 0, 0, 16]), south: f('glow_lichen', [0, 0, 16, 16]) } },
+      south: { from: [0, 0, 16 - e], to: [16, 16, 16 - e], shade: false, faces: { north: f('glow_lichen', [16, 0, 0, 16]), south: f('glow_lichen', [0, 0, 16, 16]) } },
+      west: { from: [e, 0, 0], to: [e, 16, 16], shade: false, faces: { west: f('glow_lichen', [0, 0, 16, 16]), east: f('glow_lichen', [16, 0, 0, 16]) } },
+      east: { from: [16 - e, 0, 0], to: [16 - e, 16, 16], shade: false, faces: { west: f('glow_lichen', [16, 0, 0, 16]), east: f('glow_lichen', [0, 0, 16, 16]) } },
+    };
+    const OUT: Record<string, Box> = {
+      down: bx(0, 0, 0, 16, 1, 16), up: bx(0, 15, 0, 16, 16, 16), north: bx(0, 0, 0, 16, 16, 1),
+      south: bx(0, 0, 15, 16, 16, 16), west: bx(0, 0, 0, 1, 16, 16), east: bx(15, 0, 0, 16, 16, 16),
+    };
+    const FACES = ['down', 'up', 'north', 'south', 'west', 'east'];
+    registerBlock('glow_lichen', {
+      props: [boolProp('down'), P.up, P.north, P.south, P.west, P.east, P.waterlogged],
+      hardness: 0.2, sound: 'vine', tool: 'axe', collision: 'none', layer: Layer.CUTOUT, opaque: false, aoCaster: false, opacity: 0, replaceable: true, light: 7,
+      outline: (s) => {
+        const out = FACES.filter((d) => s.get(d)).map((d) => OUT[d]);
+        return out.length ? out : 'full';
+      },
+      model: (s) => ({ model: { ao: false, particle: 'glow_lichen', elements: FACES.filter((d) => s.get(d)).map((d) => PLANES[d]) } }),
+    });
+  }
   void intProp;
 }
 

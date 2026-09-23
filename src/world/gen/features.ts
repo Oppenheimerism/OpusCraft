@@ -7,6 +7,7 @@ import { placeTree, TreeKind } from './trees';
 import { B, BIOMES } from './biomes';
 import { MIN_Y, SEA_LEVEL } from '../constants';
 import { NormalNoise } from './noise';
+import { UP, NORTH, SOUTH, WEST, EAST, DX, DY, DZ, DIR_NAMES } from '../dir';
 
 // ---------------------------------------------------------------------------
 // Ores
@@ -270,6 +271,8 @@ export class Decorator {
     // --- springs (vanilla FLUID_SPRINGS step)
     this.springs(ctx, new Rand(hash2(ctx.cx, ctx.cz, this.seed ^ 0x5b41), 3));
     ctx.computeHeightmaps();
+    // --- glow lichen, the first of the vanilla VEGETAL_DECORATION features
+    this.glowLichen(ctx, new Rand(hash2(ctx.cx, ctx.cz, this.seed ^ 0x611c), 6));
     // --- vegetation: pick sample biomes per quadrant so mixed chunks decorate with each biome
     for (let q = 0; q < 4; q++) {
       const qx = (q & 1) * 8, qz = (q >> 1) * 8;
@@ -462,6 +465,98 @@ export class Decorator {
       const l = lo + r.nextInt(Math.max(1, k - 1 - lo + 1));
       const y = lo + r.nextInt(Math.max(1, l - 1 + inner - lo + 1));
       place(x, y, z, LAVA, LAVA_OK);
+    }
+  }
+
+  /**
+   * vanilla glow_lichen: 104-157 tries a chunk, from the bottom up to y 256 and
+   * at least 13 under the ocean floor, of MultifaceGrowthFeature - a face on a
+   * stone-like ceiling or wall beside cave air or water, which half the time
+   * spreads on to one neighbouring face (MultifaceSpreader).
+   */
+  private glowLichen(ctx: GenContext, r: Rand): void {
+    const LICHEN = getBlock('glow_lichen'), WATER = getBlock('water');
+    const PLACE_ON = /^(stone|andesite|diorite|granite|dripstone_block|calcite|tuff|deepslate)$/;
+    // MultifaceGrowthConfiguration.validDirections: the ceiling, then the walls (never the floor)
+    const VALID = [UP, NORTH, EAST, SOUTH, WEST];
+    const shuffled = (dirs: number[]) => {
+      const a = dirs.slice();
+      for (let i = a.length; i > 1; i--) {
+        const k = r.nextInt(i);
+        [a[i - 1], a[k]] = [a[k], a[i - 1]];
+      }
+      return a;
+    };
+    const isAir = (st: number) => st >= 0 && (st === 0 || (FLAGS[st] & F_AIR) !== 0);
+    const isWaterSource = (st: number) => st >= 0 && blockOf(st) === WATER && WATER.get(st, 'level') === 0;
+    const hasFace = (st: number, d: number) => blockOf(st) === LICHEN && LICHEN.get<boolean>(st, DIR_NAMES[d]);
+    // MultifaceBlock.canAttachTo: the neighbour's touching face is full (not yet generated counts as no)
+    const canAttach = (x: number, y: number, z: number, d: number) => {
+      const n = ctx.get(x + DX[d], y + DY[d], z + DZ[d]);
+      return n >= 0 && ((FACE_OCC[n] >> (d ^ 1)) & 1) === 1;
+    };
+    // MultifaceBlock.getStateForPlacement (-1 when the face can't be added)
+    const stateFor = (cur: number, x: number, y: number, z: number, d: number): number => {
+      if (hasFace(cur, d) || !canAttach(x, y, z, d)) return -1;
+      const base = blockOf(cur) === LICHEN ? cur : isWaterSource(cur) ? LICHEN.with(LICHEN.defaultState, 'waterlogged', true) : LICHEN.defaultState;
+      return LICHEN.with(base, DIR_NAMES[d], true);
+    };
+    const put = (x: number, y: number, z: number, st: number) => {
+      if (!ctx.set(x, y, z, st)) return false;
+      ctx.markForPostprocessing(x, y, z);
+      return true;
+    };
+    // MultifaceSpreader.spreadFromFaceTowardRandomDirection: round an inner corner, along the
+    // same wall, or round an outer corner, into air, lichen or still water
+    const spread = (st: number, x: number, y: number, z: number, face: number) => {
+      for (const d of shuffled([0, 1, 2, 3, 4, 5])) {
+        if (d >> 1 === face >> 1 || !hasFace(st, face) || hasFace(st, d)) continue;
+        const targets: [number, number, number, number][] = [
+          [x, y, z, d],
+          [x + DX[d], y + DY[d], z + DZ[d], face],
+          [x + DX[d] + DX[face], y + DY[d] + DY[face], z + DZ[d] + DZ[face], d ^ 1],
+        ];
+        for (const [tx, ty, tz, tf] of targets) {
+          const cur = ctx.get(tx, ty, tz);
+          if (!isAir(cur) && !(cur >= 0 && blockOf(cur) === LICHEN) && !isWaterSource(cur)) continue;
+          const next = stateFor(cur, tx, ty, tz, tf);
+          if (next < 0) continue;
+          if (put(tx, ty, tz, next)) return;
+          break;
+        }
+      }
+    };
+    // MultifaceGrowthFeature.placeGrowthIfPossible
+    const tryPlace = (x: number, y: number, z: number, cur: number, dirs: number[]) => {
+      for (const d of dirs) {
+        const n = ctx.get(x + DX[d], y + DY[d], z + DZ[d]);
+        if (n < 0 || !PLACE_ON.test(blockOf(n).name)) continue;
+        const st = stateFor(cur, x, y, z, d);
+        if (st < 0 || !put(x, y, z, st)) return false;
+        if (r.nextFloat() < 0.5) spread(st, x, y, z, d);
+        return true;
+      }
+      return false;
+    };
+    const airOrWater = (st: number) => isAir(st) || (st >= 0 && blockOf(st) === WATER);
+    const count = 104 + r.nextInt(54);
+    for (let i = 0; i < count; i++) {
+      const y = MIN_Y + r.nextInt(256 - MIN_Y + 1);
+      const x = ctx.x0 + r.nextInt(16), z = ctx.z0 + r.nextInt(16);
+      if (y > ctx.heightOceanFloor(x, z) - 13) continue;
+      const here = ctx.get(x, y, z);
+      if (!airOrWater(here)) continue;
+      const dirs = shuffled(VALID);
+      if (tryPlace(x, y, z, here, dirs)) continue;
+      // otherwise one of the neighbours (vanilla's search loop re-offsets from the
+      // origin each step, so of its 20-block range only the adjacent block is tried)
+      for (const d of dirs) {
+        const others = shuffled(VALID.filter((v) => v !== (d ^ 1)));
+        const nx = x + DX[d], ny = y + DY[d], nz = z + DZ[d];
+        const st = ctx.get(nx, ny, nz);
+        if (!airOrWater(st) && !(st >= 0 && blockOf(st) === LICHEN)) continue;
+        if (tryPlace(nx, ny, nz, st, others)) break;
+      }
     }
   }
 
