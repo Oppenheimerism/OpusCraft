@@ -668,6 +668,87 @@ function slime(): TexImage {
 }
 
 // ---------------------------------------------------------------------------
+// Zombified piglin (64x64, vanilla PiglinModel): a piglin gone to rot. Pink, blotchy, greying skin; the skull
+// showing through on one side of the face, an empty socket; ribs through a hole in the chest; one forearm
+// picked down to the bone; a leather loincloth; dark hooves.
+
+function zombifiedPiglin(): TexImage {
+  const t = img(64, 64);
+  const r = new Rand(0x2b1c);
+  const SK = [0xa9645a, 0xba7266, 0xc98174, 0xd69183, 0xe0a091, 0xe9ae9f];
+  const SKW = [1, 2, 4, 5, 3, 1];
+  const ROT = [0x7c7a52, 0x8b8a5e, 0x9a996b];
+  const BONE = [0xc9c2aa, 0xd8d2bb, 0xe6e0ca];
+  const GORE = [0x4e1a1a, 0x632423, 0x762e2a];
+  const HIDE = [0x4f3520, 0x5e4128, 0x6d4d30, 0x7b5838];
+  const HOOF = [0x2e211d, 0x3a2b25, 0x46342c];
+  const rot = (o: NoiseOpts['mask']) => (f: Face) => noiseFace(t, f, r, ROT, { mask: o, cell: 1 });
+  const blotch = rot((x, y) => r.chance(0.07) || ((x * 7 + y * 13) % 17 === 0 && r.chance(0.6)));
+  const skinBox = (b: Box) => {
+    noiseBox(t, b, r, SK, { w: SKW });
+    for (const k of FACES) blotch(b[k]);
+  };
+  const head = boxFaces(0, 0, 10, 8, 8);
+  const snout = boxFaces(31, 1, 4, 4, 1);
+  const tuskA = boxFaces(2, 4, 1, 2, 1), tuskB = boxFaces(2, 0, 1, 2, 1);
+  const earL = boxFaces(51, 6, 1, 5, 4), earR = boxFaces(39, 6, 1, 5, 4);
+  const body = boxFaces(16, 16, 8, 12, 4);
+  const armR = boxFaces(40, 16, 4, 12, 4), armL = boxFaces(32, 48, 4, 12, 4);
+  const legR = boxFaces(0, 16, 4, 12, 4), legL = boxFaces(16, 48, 4, 12, 4);
+  for (const b of [head, snout, earL, earR, body, armR, armL, legR, legL]) skinBox(b);
+
+  // the face: the skull bared round the right eye (an empty socket), the left eye beady and pale
+  drawFace(t, head.front, [
+    '..........',
+    '.BB.......',
+    'BbbB......',
+    'BKKb..wE..',
+    'BKKB......',
+    '.bB.......',
+    '..........',
+    '..........',
+  ], { B: BONE, b: BONE[0], K: 0x140c0a, w: 0xe6dcc4, E: 0x1e1410 }, r);
+  // the bone carries on round the side of the head
+  drawFace(t, head.right, ['........', '......BB', '.....BbB', '......BB', '.......B', '........', '........', '........'], { B: BONE, b: BONE[0] }, r);
+  // the snout: paler, with two dark nostrils
+  noiseBox(t, snout, r, [0xd9998a, 0xe4a898, 0xecb6a6], { cell: 1 });
+  drawFace(t, snout.front, ['....', 'K..K', 'K..K', '....'], { K: 0x4a2622 }, r);
+  // tusks
+  for (const tb of [tuskA, tuskB]) noiseBox(t, tb, r, [0xd8cfa8, 0xe8e0bc]);
+  // ears: flesh, one of them torn ragged at the tip
+  for (const k of FACES) paintFace(t, earL[k], (x, y, _c, w, h) => (k !== 'top' && y >= h - 2 && (x + y) % 2 === 0 ? null : undefined));
+  // body: ribs through a hole in the chest, then the loincloth's belt
+  const hide = () => pick(r, HIDE, [1, 3, 3, 1]);
+  drawFace(t, body.front, [
+    '........',
+    '..gggg..',
+    '.gbBBbg.',
+    '.gggBgg.',
+    '.gbBBbg.',
+    '.gggBgg.',
+    '.gbBBbg.',
+    '..ggBg..',
+    '........',
+    'HHHHHHHH',
+    'HhHHHHhH',
+    'HHHHHHHH',
+  ], { g: GORE, b: BONE[0], B: BONE, H: hide, h: 0x3c2816 }, r);
+  for (const k of ['back', 'right', 'left'] as FaceName[]) {
+    const [, , w] = body[k];
+    drawFace(t, body[k], Array.from({ length: 12 }, (_, y) => (y >= 9 ? 'H'.repeat(w) : '.'.repeat(w))), { H: hide }, r);
+  }
+  // the left forearm is bare bone below the elbow (dark gaps between the two bones)
+  for (const k of SIDES) paintFace(t, armL[k], (x, y) => (y >= 6 ? (x === 1 || x === 2) && y < 11 ? pick(r, GORE) : pick(r, BONE) : undefined));
+  paintFace(t, armL.bottom, () => pick(r, BONE));
+  // legs: the loincloth's flaps over the thighs, hooves at the bottom
+  for (const leg of [legR, legL]) {
+    for (const k of SIDES) paintFace(t, leg[k], (x, y) => (y < 3 && (k === 'front' || k === 'back' || y < 2) ? hide() : y >= 10 ? pick(r, HOOF) : undefined));
+    noiseFace(t, leg.bottom, r, HOOF);
+  }
+  return t;
+}
+
+// ---------------------------------------------------------------------------
 // Magma cube (64x32, vanilla LavaSlimeModel): eight 8x1x8 slices whose side strips sit at rows 8-15 (u 0) and,
 // for the eyes' rows 2 and 3, at rows 18 and 27 (u 24); their tops and bottoms overlap one another, as in
 // vanilla's sheet. A dark, cooled crust veined with glowing lava, round a molten core.
@@ -1200,6 +1281,7 @@ export const MOB_TEXTURES: Record<string, () => TexImage> = {
   squid,
   slime,
   magma_cube: magmaCube,
+  zombified_piglin: zombifiedPiglin,
   bat,
   minecart,
   arrow,
@@ -1319,6 +1401,7 @@ const EGGS: [string, number, number][] = [
   ['squid', 0x223b4d, 0x708899],
   ['slime', 0x51a03e, 0x7ebf6e],
   ['magma_cube', 0x340000, 0xfcfc00],
+  ['zombified_piglin', 0xea9393, 0x4c7129],
 ];
 
 export const SPAWN_EGG_TEXTURES: Record<string, () => TexImage> = {};

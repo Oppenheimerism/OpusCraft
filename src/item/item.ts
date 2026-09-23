@@ -277,7 +277,7 @@ for (const c of ['white', 'orange', 'magenta', 'light_blue', 'yellow', 'lime', '
   reg({ id: `${c}_dye`, texture: `${c}_dye` });
 }
 // spawn eggs (creative tab order is alphabetical, like vanilla)
-for (const m of ['bat', 'cave_spider', 'chicken', 'cow', 'creeper', 'enderman', 'magma_cube', 'pig', 'sheep', 'skeleton', 'slime', 'spider', 'squid', 'zombie']) {
+for (const m of ['bat', 'cave_spider', 'chicken', 'cow', 'creeper', 'enderman', 'magma_cube', 'pig', 'sheep', 'skeleton', 'slime', 'spider', 'squid', 'zombie', 'zombified_piglin']) {
   reg({ id: `${m}_spawn_egg`, texture: `${m}_spawn_egg`, creativeTab: 'spawn_eggs' });
 }
 // sugar cane item places the block

@@ -200,8 +200,9 @@ export abstract class Entity {
     return false;
   }
 
+  /** vanilla Entity.isOnFire: the fireproof never burn (nor show flames) */
   isOnFire(): boolean {
-    return this.remainingFireTicks > 0;
+    return !this.fireImmune() && this.remainingFireTicks > 0;
   }
 
   igniteForSeconds(s: number): void {

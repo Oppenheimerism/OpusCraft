@@ -160,8 +160,12 @@ export class Zombie extends Monster {
     const x = super.experienceReward();
     return this.baby ? Math.floor(x * 2.5) : x;
   }
+  /** vanilla Zombie.isSunSensitive */
+  protected isSunSensitive(): boolean {
+    return true;
+  }
   override aiStep(): void {
-    if (this.isAlive && this.isSunBurnTick()) this.igniteForSeconds(8);
+    if (this.isAlive && this.isSunSensitive() && this.isSunBurnTick()) this.igniteForSeconds(8);
     super.aiStep();
   }
   override doHurtTarget(target: Entity): boolean {
@@ -210,6 +214,183 @@ export class Zombie extends Monster {
 // ---------------------------------------------------------------------------
 
 /** vanilla BowItem.getPowerForTime */
+// ---------------------------------------------------------------------------
+// Zombified piglin (vanilla ZombifiedPiglin extends Zombie, NeutralMob): left alone it wanders; strike one and it,
+// and every zombified piglin about with nothing to fight, turns on you and stays angry for 20-39 s once it loses you
+
+/** vanilla HurtByTargetGoal.setAlertOthers */
+class ZombifiedPiglinHurtByTargetGoal extends HurtByTargetGoal {
+  constructor(readonly zp: ZombifiedPiglin) {
+    super(zp);
+  }
+  override start(): void {
+    super.start();
+    this.zp.alertOthers(this.zp.target);
+  }
+}
+
+/** vanilla NearestAttackableTargetGoal(Player, 10, true, false, this::isAngryAt) */
+class AngryAtPlayerGoal extends NearestAttackablePlayerGoal {
+  constructor(readonly zp: ZombifiedPiglin) {
+    super(zp, true);
+  }
+  protected override extraCondition(): boolean {
+    const p = this.zp.level.player;
+    return !!p && this.zp.isAngryAt(p);
+  }
+}
+
+export class ZombifiedPiglin extends Zombie {
+  override readonly type: string = 'zombified_piglin';
+  /** vanilla NeutralMob: ticks of anger left, and at whom */
+  angerTime = 0;
+  angerTarget: Entity | null = null;
+  private playFirstAngerSoundIn = 0;
+  private ticksUntilNextAlert = 0;
+  constructor(level: Level) {
+    super(level);
+    this.attackDamage = 5;
+  }
+  protected override registerGoals(): void {
+    this.goalSelector.addGoal(8, new LookAtPlayerGoal(this, 8));
+    this.goalSelector.addGoal(8, new RandomLookAroundGoal(this));
+    this.goalSelector.addGoal(2, new ZombieAttackGoal(this, 1.0, false));
+    this.goalSelector.addGoal(7, new WaterAvoidingRandomStrollGoal(this, 1.0));
+    this.targetSelector.addGoal(1, new ZombifiedPiglinHurtByTargetGoal(this));
+    this.targetSelector.addGoal(2, new AngryAtPlayerGoal(this));
+  }
+  override get eyeHeight(): number {
+    return this.baby ? 0.895 : 1.79;
+  }
+  override fireImmune(): boolean {
+    return true;
+  }
+  protected override isSunSensitive(): boolean {
+    return false;
+  }
+  isAngry(): boolean {
+    return this.angerTime > 0;
+  }
+  /** vanilla NeutralMob.isAngryAt (universal anger off) */
+  isAngryAt(e: Entity): boolean {
+    return e instanceof LivingEntity && this.canAttack(e) && e === this.angerTarget;
+  }
+  override isPreventingPlayerRest(p: Entity): boolean {
+    return this.isAngryAt(p);
+  }
+  /** vanilla startPersistentAngerTimer: TimeUtil.rangeOfSeconds(20, 39) */
+  private startAngerTimer(): void {
+    this.angerTime = 400 + this.random.nextInt(381);
+  }
+  stopBeingAngry(): void {
+    this.lastHurtByMob = null;
+    this.angerTarget = null;
+    this.setTarget(null);
+    this.angerTime = 0;
+  }
+  /** vanilla ZombifiedPiglin.setTarget: the first sight of a foe sets off the anger sound and the alerts */
+  override setTarget(t: LivingEntity | null): void {
+    if (!this.target && t) {
+      this.playFirstAngerSoundIn = this.random.nextInt(21);
+      this.ticksUntilNextAlert = 80 + this.random.nextInt(41);
+    }
+    if (t?.type === 'player') {
+      this.lastHurtByPlayer = t;
+      this.lastHurtByPlayerTime = 100;
+    }
+    super.setTarget(t);
+  }
+  /** every zombified piglin within its follow range (10 up and down) that has nothing to fight joins in */
+  alertOthers(t: LivingEntity | null): void {
+    if (!t) return;
+    const r = this.followRange;
+    for (const e of this.level.entities) {
+      if (e === this || !(e instanceof ZombifiedPiglin) || e.removed || e.target) continue;
+      if (Math.abs(e.x - this.x) > r + 1 || Math.abs(e.z - this.z) > r + 1 || Math.abs(e.y - this.y) > 11) continue;
+      e.setTarget(t);
+    }
+  }
+  /** vanilla ZombifiedPiglin.customServerAiStep and NeutralMob.updatePersistentAnger */
+  protected override customServerAiStep(): void {
+    const angry = this.isAngry();
+    this.moveSpeedAttr = this.baby ? 0.23 * 1.5 : 0.23 + (angry ? 0.05 : 0);
+    if (angry && this.playFirstAngerSoundIn > 0 && --this.playFirstAngerSoundIn === 0) {
+      this.playSound('entity.zombified_piglin.angry', this.soundVolume() * 2, this.voicePitch() * 1.8);
+    }
+    const t = this.target;
+    if ((!t || !t.isAlive) && this.angerTarget && this.angerTarget.type !== 'player') this.stopBeingAngry();
+    else {
+      if (t && t !== this.angerTarget) {
+        this.angerTarget = t;
+        this.startAngerTimer();
+      }
+      if (this.angerTime > 0 && (!t || t.type !== 'player') && --this.angerTime === 0) this.stopBeingAngry();
+    }
+    if (this.target) {
+      if (this.ticksUntilNextAlert > 0) this.ticksUntilNextAlert--;
+      else {
+        if (this.sensing.hasLineOfSight(this.target)) this.alertOthers(this.target);
+        this.ticksUntilNextAlert = 80 + this.random.nextInt(41);
+      }
+    }
+    if (this.isAngry()) this.lastHurtByPlayerTime = Math.max(this.lastHurtByPlayerTime, this.lastHurtByPlayer ? 100 : 0);
+    super.customServerAiStep();
+  }
+  /** vanilla populateDefaultEquipmentSlots: always a golden sword */
+  override finalizeSpawn(): void {
+    if (this.random.nextFloat() < 0.05) this.setBaby(true);
+    const it = ITEMS.get('golden_sword');
+    if (it) this.mainHand = new ItemStack(it, 1);
+  }
+  override ambientSound(): string {
+    return this.isAngry() ? 'entity.zombified_piglin.angry' : 'entity.zombified_piglin.ambient';
+  }
+  override hurtSound(): string {
+    return 'entity.zombified_piglin.hurt';
+  }
+  override deathSound(): string {
+    return 'entity.zombified_piglin.death';
+  }
+  /** vanilla entities/zombified_piglin */
+  override lootTable(): LootEntry[] {
+    return [
+      { item: 'rotten_flesh', min: 0, max: 1 },
+      { item: 'gold_nugget', min: 0, max: 1 },
+      { item: 'gold_ingot', min: 1, max: 1, player: true, chance: 0.025, lootingChance: [0.035, 0.01], noLooting: true },
+    ];
+  }
+  protected override saveData(): Record<string, number | string | boolean> {
+    return { ...super.saveData(), anger: this.angerTime };
+  }
+  protected override loadData(d: Record<string, number | string | boolean>): void {
+    super.loadData(d);
+    // vanilla readPersistentAngerSaveData (the one it's angry at can only be the player)
+    this.angerTime = Number(d.anger ?? 0);
+    if (this.angerTime > 0) this.angerTarget = this.level.player ?? null;
+  }
+  /**
+   * vanilla NetherPortalBlock.randomTick: in a natural dimension a portal now and then (difficulty in 2000 random
+   * ticks of each portal block) lets a zombified piglin out onto its floor
+   */
+  static portalRandomTick(level: Level, x: number, y: number, z: number): void {
+    if (!level.world.dim.natural || !level.gameRules.doMobSpawning) return;
+    if (level.random.nextInt(2000) >= (DIFFICULTY_ID[level.difficulty] ?? 2)) return;
+    const w = level.world;
+    let yy = y;
+    while (BLOCKS[STATE_BLOCK[w.getState(x, yy, z)]].name === 'nether_portal') yy--;
+    if (!validSpawnBlock(level, x, yy, z, true)) return;
+    const m = new ZombifiedPiglin(level);
+    m.moveTo(x + 0.5, yy + 1, z + 0.5, level.random.nextFloat() * 360, 0);
+    m.finalizeSpawn();
+    m.portalCooldown = 300;
+    level.addEntity(m);
+  }
+  /** vanilla checkZombifiedPiglinSpawnRules: any light, just not on nether wart blocks (or in peaceful) */
+  static checkZombifiedPiglinSpawn(level: Level, x: number, y: number, z: number): boolean {
+    return level.difficulty !== 'peaceful' && BLOCKS[STATE_BLOCK[level.world.getState(x, y - 1, z)]].name !== 'nether_wart_block';
+  }
+}
+
 export function bowPower(ticks: number): number {
   let f = ticks / 20;
   f = (f * f + f * 2) / 3;

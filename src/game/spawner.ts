@@ -7,7 +7,7 @@ import { Mob, MobCategory, SavedEntity } from '../entity/mob';
 import { ItemEntity } from '../entity/itemEntity';
 import { ItemStack, ITEMS, cloneTag } from '../item/item';
 import { Pig, Cow, Sheep, Chicken, Animal } from '../entity/animals';
-import { Zombie, Skeleton, Creeper, Spider, CaveSpider, Enderman, Slime, MagmaCube, Monster, validSpawnBlock } from '../entity/monsters';
+import { Zombie, ZombifiedPiglin, Skeleton, Creeper, Spider, CaveSpider, Enderman, Slime, MagmaCube, Monster, validSpawnBlock } from '../entity/monsters';
 import { Squid, WaterAnimal } from '../entity/water';
 import { AbstractMinecart, createMinecart, MINECART_TYPES } from '../entity/minecart';
 import { Bat } from '../entity/bat';
@@ -33,6 +33,7 @@ export const MOB_TYPES: Record<string, (l: Level) => Mob> = {
   enderman: (l) => new Enderman(l),
   slime: (l) => new Slime(l),
   magma_cube: (l) => new MagmaCube(l),
+  zombified_piglin: (l) => new ZombifiedPiglin(l),
   squid: (l) => new Squid(l),
   bat: (l) => new Bat(l),
 };
@@ -115,7 +116,7 @@ export function isChunkSaved(e: Entity): boolean {
 
 const ENTITY_NAMES: Record<string, string> = {
   pig: 'Pig', cow: 'Cow', sheep: 'Sheep', chicken: 'Chicken', zombie: 'Zombie', skeleton: 'Skeleton', creeper: 'Creeper', spider: 'Spider',
-  cave_spider: 'Cave Spider', enderman: 'Enderman', slime: 'Slime', magma_cube: 'Magma Cube', squid: 'Squid', bat: 'Bat',
+  cave_spider: 'Cave Spider', enderman: 'Enderman', slime: 'Slime', magma_cube: 'Magma Cube', zombified_piglin: 'Zombified Piglin', squid: 'Squid', bat: 'Bat',
   arrow: 'Arrow', tnt: 'Primed TNT', item: 'Item', experience_orb: 'Experience Orb', falling_block: 'Falling Block', player: 'Player',
   egg: 'Thrown Egg', snowball: 'Snowball', ender_pearl: 'Thrown Ender Pearl',
   minecart: 'Minecart', chest_minecart: 'Minecart with Chest', boat: 'Boat', chest_boat: 'Boat with Chest',
@@ -433,6 +434,8 @@ export class NaturalSpawner {
       }
       case 'magma_cube':
         return MagmaCube.checkMagmaCubeSpawn(lvl);
+      case 'zombified_piglin':
+        return ZombifiedPiglin.checkZombifiedPiglinSpawn(lvl, x, y, z);
       case 'pig':
       case 'cow':
       case 'sheep':

@@ -98,6 +98,7 @@ export class EntityRenderDispatcher {
       slime: M.slimeInnerModel(),
       slime_outer: M.slimeOuterModel(),
       magma_cube: M.magmaCubeModel(),
+      zombified_piglin: M.piglinModel(),
       minecart: M.minecartModel(),
       bat: M.batModel(),
     };
@@ -392,6 +393,11 @@ export class EntityRenderDispatcher {
       }
       case 'zombie':
         M.animateHumanoidMob(def.root, a.limbSwing, a.limbAmount, a.age, a.headYaw, a.headPitch, attack, 'empty', !!e.vehicle);
+        M.animateZombieArms(def.root, (e as Zombie).aggressive, attack, a.age);
+        break;
+      case 'zombified_piglin':
+        M.animateHumanoidMob(def.root, a.limbSwing, a.limbAmount, a.age, a.headYaw, a.headPitch, attack, 'empty', !!e.vehicle);
+        M.animatePiglinEars(def.root, a.limbSwing, a.limbAmount, a.age);
         M.animateZombieArms(def.root, (e as Zombie).aggressive, attack, a.age);
         break;
       case 'skeleton': {
@@ -973,6 +979,7 @@ function shadowRadius(e: Entity): number {
       r = 0.25 * (e as Slime).size;
       break;
     case 'zombie':
+    case 'zombified_piglin':
     case 'skeleton':
     case 'creeper':
     case 'player':

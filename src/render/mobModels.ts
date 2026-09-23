@@ -123,6 +123,36 @@ export function zombieModel(): MobModelDef {
   return { root, texW: 64, texH: 64, baby: { headParts: ['head'], scaleHead: true, yHead: 16, zHead: 0, headScale: 2, bodyScale: 2, bodyY: 24 } };
 }
 
+/**
+ * vanilla PiglinModel.createMesh: PlayerModel's body and limbs (wide arms; the jacket, sleeve and trouser layers
+ * are left out) under the broad piglin head, with its snout, two tusks and floppy ears
+ */
+export function piglinModel(): MobModelDef {
+  const root = new ModelPart();
+  const head = root.add('head', part([
+    { x: -5, y: -8, z: -4, w: 10, h: 8, d: 8, u: 0, v: 0 },
+    { x: -2, y: -4, z: -5, w: 4, h: 4, d: 1, u: 31, v: 1 },
+    { x: 2, y: -2, z: -5, w: 1, h: 2, d: 1, u: 2, v: 4 },
+    { x: -3, y: -2, z: -5, w: 1, h: 2, d: 1, u: 2, v: 0 },
+  ]));
+  head.add('left_ear', part([{ x: 0, y: 0, z: -2, w: 1, h: 5, d: 4, u: 51, v: 6 }], [4.5, -6, 0], [0, 0, -PI / 6]));
+  head.add('right_ear', part([{ x: -1, y: 0, z: -2, w: 1, h: 5, d: 4, u: 39, v: 6 }], [-4.5, -6, 0], [0, 0, PI / 6]));
+  root.add('body', part([{ x: -4, y: 0, z: -2, w: 8, h: 12, d: 4, u: 16, v: 16 }]));
+  root.add('right_arm', part([{ x: -3, y: -2, z: -2, w: 4, h: 12, d: 4, u: 40, v: 16 }], [-5, 2, 0]));
+  root.add('left_arm', part([{ x: -1, y: -2, z: -2, w: 4, h: 12, d: 4, u: 32, v: 48 }], [5, 2, 0]));
+  root.add('right_leg', part([{ x: -2, y: 0, z: -2, w: 4, h: 12, d: 4, u: 0, v: 16 }], [-1.9, 12, 0]));
+  root.add('left_leg', part([{ x: -2, y: 0, z: -2, w: 4, h: 12, d: 4, u: 16, v: 48 }], [1.9, 12, 0]));
+  return { root, texW: 64, texH: 64, baby: { headParts: ['head'], scaleHead: true, yHead: 16, zHead: 0, headScale: 2, bodyScale: 2, bodyY: 24 } };
+}
+
+/** vanilla PiglinModel.setupAnim: the ears flap with every step and a slow idle sway */
+export function animatePiglinEars(root: ModelPart, limbSwing: number, limbAmount: number, age: number): void {
+  const g = age * 0.1 + limbSwing * 0.5, h = 0.08 + limbAmount * 0.4;
+  const head = root.child('head');
+  head.child('left_ear').zRot = -PI / 6 - Math.cos(g * 1.2) * h;
+  head.child('right_ear').zRot = PI / 6 + Math.cos(g) * h;
+}
+
 export function skeletonModel(): MobModelDef {
   const root = new ModelPart();
   const head = root.add('head', part([{ x: -4, y: -8, z: -4, w: 8, h: 8, d: 8, u: 0, v: 0 }]));

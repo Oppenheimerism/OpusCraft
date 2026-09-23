@@ -6,6 +6,7 @@ import { MIN_Y, SECTIONS } from '../world/constants';
 import { placeTree, TreeKind } from '../world/gen/trees';
 import { canSurvive } from './blockRules';
 import { lavaRandomTick } from './fire';
+import { ZombifiedPiglin } from '../entity/monsters';
 import { DX, DY, DZ, DIR_NAMES } from '../world/dir';
 
 const SAPLING_TREE: Record<string, TreeKind> = {
@@ -55,6 +56,10 @@ export class RandomTicker {
     const n = b.name;
     if (n === 'lava') {
       lavaRandomTick(lvl, x, y, z);
+      return;
+    }
+    if (n === 'nether_portal') {
+      ZombifiedPiglin.portalRandomTick(lvl, x, y, z);
       return;
     }
     if (n === 'fire') {
