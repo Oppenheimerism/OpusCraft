@@ -1,10 +1,10 @@
-// Nether mob vocalisations and foley: zombified piglin, ghast, strider (formant synthesis,
+// Nether mob vocalisations and foley: zombified piglin, ghast, strider, hoglin (formant synthesis,
 // swept noise and cavernous reverb, in the style of mobs.ts).
 
 import type { SoundGen } from '../synth';
 import { TAU, alloc, envAD, envBump, envExpPts, envPts, highpass, layer, lowpass, smooth } from './dsp';
 import { type Ctx, sound } from './registry';
-import { bubble, burst, creak, fireCrackles, phisem, sweep, thump, ticks } from './texture';
+import { bubble, burst, creak, fireCrackles, impact, phisem, sweep, thump, ticks, twoBump } from './texture';
 import { voice, vowelGlide } from './voice';
 import { reverbHalf } from './world';
 
@@ -764,6 +764,243 @@ function saddle(c: Ctx): Float32Array {
   return out;
 }
 
+// ------------------------------------------------------------------ hoglin
+
+/** A huge boar: deep, rough and breathy, with little nasal honk. */
+const HOGLIN: Throat = { fs: 0.7, rough: 0.55, sub: 0.12, breath: 0.45, oq: 0.4, growl: [22, 30, 0.45], jitter: 0.06, shimmer: 0.25, nasal: 0.25 };
+/** The same throat pushed hard: more pressed, rougher and breathier. */
+const HOGLIN_ROAR: Throat = { ...HOGLIN, rough: 0.6, oq: 0.34, breath: 0.5, growl: [26, 34, 0.5] };
+
+/** A pained squeal-grunt: the pitch jumps up by `jump` and falls back past where it started. */
+function yelpInto(b: Float32Array, c: Ctx, t0: number, d: number, f: number, jump: number, fs: number, rough: number, a = 1): void {
+  const { sr, rng } = c;
+  const F = vowelGlide(rng.pick(['ae', 'a']), 'uh', d * 0.2, d, fs);
+  voice(b, sr, rng, {
+    t: t0,
+    dur: d,
+    f0: (t) => {
+      const x = t / d;
+      return f * (x < 0.2 ? 1 + jump * smooth(x / 0.2) : 1 + jump - (jump + 0.2) * smooth((x - 0.2) / 0.8));
+    },
+    amp: (t) => envAD(t, 0.012, d * 0.45),
+    formants: [
+      { f: F[0], bw: 150, g: 1 },
+      { f: 1000 * fs * 1.15, bw: 90, g: 0.3 },
+      { f: F[1], bw: 190, g: 0.7 },
+      { f: F[2], bw: 280, g: 0.3 },
+      { f: 3400 * fs, bw: 400, g: 0.1 },
+    ],
+    jitter: 0.05,
+    shimmer: 0.22,
+    rough,
+    sub: 0.08,
+    breath: 0.35,
+    oq: 0.38,
+    growl: [rng.range(28, 34), 0.3],
+    gain: a,
+  });
+}
+
+/** Hoglin idle: deep, aggressive boar grunts and heavy snorts. */
+function hoglinAmbient(c: Ctx): Float32Array {
+  const { sr, rng, v } = c;
+  const out = alloc(1, sr);
+  const base = rng.range(60, 72);
+  const gs: Grunt[] = [];
+  const snorts: [number, number, boolean][] = []; // [start, length, inhale]
+  switch (v) {
+    case 0: // one deep "HRUNGH"
+      snorts.push([0, 0.07, false]);
+      gs.push({ t: 0.04, d: 0.3, f0: (x) => base * (1.15 + 0.1 * Math.sin(Math.PI * x) - 0.3 * x), open: 0.6 });
+      break;
+    case 1: // two sniffing snorts, then a grunt
+      snorts.push([0, 0.1, true], [0.16, 0.1, true]);
+      gs.push({ t: 0.34, d: 0.26, f0: (x) => base * (1.1 - 0.2 * x), open: 0.5 });
+      break;
+    case 2: // "hrm-HRMPH"
+      gs.push({ t: 0, d: 0.16, f0: (x) => base * (1 - 0.1 * x), open: 0.3, a: 0.7 });
+      gs.push({ t: 0.22, d: 0.3, f0: (x) => base * (1.25 - 0.35 * x), open: 0.8 });
+      break;
+    case 3: // a long, rumbling grunt that sinks
+      gs.push({ t: 0, d: 0.58, f0: (x) => base * (1.1 + 0.12 * Math.sin(Math.PI * Math.min(1, 1.5 * x)) - 0.35 * x), open: 0.55 });
+      break;
+    default: // a grunt, then a huffing snort out
+      gs.push({ t: 0, d: 0.24, f0: (x) => base * (1.2 - 0.25 * x), open: 0.7 });
+      snorts.push([0.28, 0.18, false]);
+  }
+  layer(out, 1, (b) => {
+    for (const g of gs) gruntInto(b, c, HOGLIN, g);
+  });
+  if (snorts.length) {
+    layer(out, 0.6, (b) => {
+      for (const [t, d, inhale] of snorts) snortInto(b, c, t, d, rng.range(650, 900), inhale);
+    });
+  }
+  layer(out, 0.12, (b) => {
+    for (const g of gs) snortInto(b, c, g.t, Math.min(0.08, g.d * 0.4), 900);
+  });
+  lowpass(out, 3200, sr);
+  return out;
+}
+
+/** Hoglin angry: a loud, snorting roar that swells and breaks. */
+function hoglinAngry(c: Ctx): Float32Array {
+  const { sr, rng, v } = c;
+  const out = alloc(1.2, sr);
+  const base = rng.range(72, 85);
+  const gs: Grunt[] = [];
+  let sn = -1;
+  switch (v) {
+    case 0: // a snort, then the roar
+      sn = 0;
+      gs.push({ t: 0.12, d: 0.7, f0: (x) => base * envExpPts(x, [0, 1, 0.35, 1.7, 1, 1.15]), open: 1 });
+      break;
+    case 1: // a long roar with two swells
+      gs.push({ t: 0, d: 0.9, f0: (x) => base * (1.3 + 0.35 * Math.sin(Math.PI * x) + 0.15 * Math.sin(TAU * 2 * x)), open: 0.9 });
+      break;
+    case 2: // a grunt, then the roar
+      gs.push({ t: 0, d: 0.16, f0: (x) => base * (1.1 - 0.1 * x), open: 0.5, a: 0.7 });
+      gs.push({ t: 0.2, d: 0.65, f0: (x) => base * envExpPts(x, [0, 1.2, 0.3, 1.9, 1, 1.2]), open: 1 });
+      break;
+    default: // two short roars
+      gs.push({ t: 0, d: 0.36, f0: (x) => base * envExpPts(x, [0, 1.1, 0.4, 1.6, 1, 1.2]), open: 0.9, a: 0.85 });
+      gs.push({ t: 0.42, d: 0.5, f0: (x) => base * envExpPts(x, [0, 1.2, 0.35, 1.85, 1, 1.25]), open: 1 });
+  }
+  layer(out, 1, (b) => {
+    for (const g of gs) gruntInto(b, c, HOGLIN_ROAR, g);
+  });
+  // the breath of the roar
+  layer(out, 0.3, (b) => {
+    for (const g of gs) {
+      const d = g.d;
+      sweep(b, sr, rng, { t: g.t, dur: d, f: (t) => 800 + 500 * Math.sin((Math.PI * t) / d), q: 1.2, amp: (t) => envBump(t, d * 0.2, d * 0.8), color: 'pink' });
+    }
+  });
+  if (sn >= 0) layer(out, 0.7, (b) => snortInto(b, c, sn, 0.12, 750, true));
+  lowpass(out, 4000, sr);
+  return out;
+}
+
+/** Hoglin attack: the heavy grunt of a headbutt, with the thud of the toss. */
+function hoglinAttack(c: Ctx): Float32Array {
+  const { sr, rng, v } = c;
+  const out = alloc(0.45, sr);
+  const base = rng.range(80, 95) * (v === 0 ? 1 : 0.9);
+  const d = v === 0 ? rng.range(0.2, 0.24) : rng.range(0.26, 0.3);
+  layer(out, 1, (b) => gruntInto(b, c, HOGLIN_ROAR, { t: 0, d, f0: (x) => base * envExpPts(x, [0, 1.2, 0.25, 1.35, 1, 0.9]), open: 0.9 }));
+  layer(out, 0.55, (b) => thump(b, sr, { t: 0.02, f0: 105, f1: 48, tau: 0.06, attack: 0.003 }));
+  layer(out, 0.35, (b) => snortInto(b, c, d * 0.8, 0.14, 800));
+  lowpass(out, 3800, sr);
+  return out;
+}
+
+/** Hoglin hurt: a deep, pained squeal-grunt. */
+function hoglinHurt(c: Ctx): Float32Array {
+  const { sr, rng, v } = c;
+  const d = rng.range(0.26, 0.34);
+  const out = alloc(d + 0.2, sr);
+  layer(out, 1, (b) => {
+    yelpInto(b, c, 0, d, rng.range(120, 140) * (1 + 0.08 * v), 0.6 + 0.1 * v, 0.8, 0.5);
+    gruntInto(b, c, HOGLIN, { t: d * 0.7, d: 0.16, f0: (x) => 70 * (1 - 0.15 * x), a: 0.5 });
+  });
+  layer(out, 0.3, (b) => snortInto(b, c, 0, 0.06, 900));
+  lowpass(out, 4200, sr);
+  return out;
+}
+
+/** Hoglin death: a long, groaning squeal that sinks into a rattling grunt. */
+function hoglinDeath(c: Ctx): Float32Array {
+  const { sr, rng, v } = c;
+  const d = [0.9, 1.05, 0.8][v % 3];
+  const f = rng.range(150, 175);
+  const peak = [1.3, 1.45, 1.2][v % 3];
+  const out = alloc(d + 0.25, sr);
+  layer(out, 1, (b) => {
+    const F = vowelGlide(rng.pick(['a', 'ae']), 'uh', 0, d, 0.78);
+    voice(b, sr, rng, {
+      dur: d,
+      f0: (t) => f * envExpPts(t / d, [0, 1, 0.15, peak, 0.5, 0.9, 1, 0.4]),
+      amp: (t) => envPts(t / d, [0, 0, 0.05, 1, 0.45, 0.8, 1, 0]),
+      formants: [
+        { f: F[0], bw: 140, g: 1 },
+        { f: 900, bw: 90, g: 0.2 },
+        { f: F[1], bw: 180, g: 0.65 },
+        { f: F[2], bw: 270, g: 0.25 },
+      ],
+      jitter: 0.06,
+      shimmer: 0.28,
+      rough: 0.55,
+      sub: 0.12,
+      breath: 0.4,
+      oq: 0.4,
+      growl: [rng.range(18, 24), 0.5],
+    });
+  });
+  layer(out, 0.3, (b) => snortInto(b, c, d * 0.8, 0.22, 700));
+  lowpass(out, 3800, sr);
+  return out;
+}
+
+/** Hoglin step: a heavy cloven hoof coming down hard, with a gritty scrape. */
+function hoglinStep(c: Ctx): Float32Array {
+  const { sr, rng } = c;
+  const out = alloc(0.3, sr);
+  const f = rng.range(95, 130);
+  layer(out, 1, (b) =>
+    impact(b, sr, rng, {
+      modes: [f, 1, 0.07, f * 2.2, 0.5, 0.05, f * 3.9, 0.25, 0.03, 900, 0.12, 0.012],
+      jitter: 0.05,
+      noise: 0.5,
+      noiseTau: 0.004,
+      noiseBp: [1200, 0.8],
+    }),
+  );
+  layer(out, 0.8, (b) => thump(b, sr, { f0: 110, f1: 50, tau: 0.045, attack: 0.002 }));
+  layer(out, 0.4, (b) =>
+    phisem(b, sr, rng, {
+      dur: 0.2,
+      rate: 5000,
+      energy: twoBump(0.004, 0.025, rng.range(0.03, 0.05), 0.4, 0.008, 0.03),
+      grain: 0.0007,
+      heavy: 2.5,
+      bands: [
+        { f: 2600, q: 1.2, g: 1, spread: 0.35 },
+        { f: 1300, q: 1.2, g: 0.6, spread: 0.3 },
+      ],
+    }),
+  );
+  lowpass(out, 5000, sr);
+  return out;
+}
+
+/** Hoglin retreat (repelled by warped fungus): a startled snort and a reluctant, squealing grunt. */
+function hoglinRetreat(c: Ctx): Float32Array {
+  const { sr, rng, v } = c;
+  const out = alloc(0.7, sr);
+  layer(out, 0.7, (b) => snortInto(b, c, 0, 0.12, 800, v === 1));
+  layer(out, 1, (b) => yelpInto(b, c, 0.1, rng.range(0.3, 0.38), rng.range(135, 160), 0.5 + 0.15 * v, 0.8, 0.45));
+  lowpass(out, 4200, sr);
+  return out;
+}
+
+/**
+ * A pig-family mob turning zombified: a choking, straining groan in its own throat that
+ * rots into the zombified piglin's wet gurgle.
+ */
+function converted(c: Ctx, th: Throat, base: number): Float32Array {
+  const { sr, v } = c;
+  const out = alloc(1.3, sr);
+  const rise = [1.6, 1.9, 1.4][v % 3];
+  const d1 = [0.55, 0.45, 0.65][v % 3];
+  layer(out, 1, (b) => {
+    gruntInto(b, c, th, { t: 0, d: d1, f0: (x) => base * envExpPts(x, [0, 1, 0.5, rise, 1, rise * 0.8]), open: 0.8 });
+    gruntInto(b, c, ZPIG, { t: d1 - 0.05, d: 0.55, f0: (x) => base * rise * 0.8 * Math.pow(0.6, x), open: 0.4, a: 0.8 });
+  });
+  layer(out, 0.4, (b) => gurgleInto(b, c, d1 - 0.1, 0.6, 50));
+  lowpass(out, 3500, sr);
+  return out;
+}
+
 // ------------------------------------------------------------------ registry
 
 export function netherMobSounds(): Record<string, SoundGen> {
@@ -789,5 +1026,14 @@ export function netherMobSounds(): Record<string, SoundGen> {
     'entity.strider.step_lava': sound('entity.strider.step_lava', 5, striderStepLava),
     'entity.strider.eat': sound('entity.strider.eat', 3, striderEat),
     'entity.strider.saddle': sound('entity.strider.saddle', 1, saddle),
+
+    'entity.hoglin.ambient': sound('entity.hoglin.ambient', 5, hoglinAmbient),
+    'entity.hoglin.angry': sound('entity.hoglin.angry', 4, hoglinAngry),
+    'entity.hoglin.attack': sound('entity.hoglin.attack', 2, hoglinAttack),
+    'entity.hoglin.hurt': sound('entity.hoglin.hurt', 3, hoglinHurt),
+    'entity.hoglin.death': sound('entity.hoglin.death', 3, hoglinDeath),
+    'entity.hoglin.step': sound('entity.hoglin.step', 4, hoglinStep),
+    'entity.hoglin.retreat': sound('entity.hoglin.retreat', 3, hoglinRetreat),
+    'entity.hoglin.converted_to_zombified': sound('entity.hoglin.converted_to_zombified', 3, (c) => converted(c, HOGLIN_ROAR, c.rng.range(75, 88))),
   };
 }
