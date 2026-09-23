@@ -535,6 +535,27 @@ export function obsidian(seed = 'obsidian'): TexImage {
   return paint(tones, pal);
 }
 
+/**
+ * crying obsidian: obsidian weeping glowing purple, tears welling in a few spots and running down in streaks that
+ * thin and dim as they go
+ */
+export function cryingObsidian(): TexImage {
+  const t = obsidian('crying_obsidian');
+  const r = rng('crying_obsidian_tears');
+  const TEAR = [0x36105e, 0x521889, 0x6f22b4, 0x8f33dc, 0xb257f5, 0xd894ff];
+  for (let k = 0; k < 7; k++) {
+    const x = r.nextInt(N), y0 = r.nextInt(N), len = 2 + r.nextInt(5);
+    // the well: a bright pool a pixel or two wide
+    setPx(t, x, y0, TEAR[5]);
+    if (r.chance(0.6)) setPx(t, wrap(x + (r.nextBool() ? 1 : -1)), y0, TEAR[4]);
+    for (let i = 1; i <= len; i++) {
+      const tone = Math.max(0, 4 - Math.floor((i * 4) / (len + 1)) - (r.chance(0.25) ? 1 : 0));
+      setPx(t, x, wrap(y0 + i), TEAR[tone]);
+    }
+  }
+  return t;
+}
+
 export function mud(seed = 'mud'): TexImage {
   return speckled(seed, [0x27221f, 0x2f2926, 0x36302c, 0x3c3633, 0x433c39, 0x4b4441, 0x554e4b], {
     oct: [[4, 4, 0.4], [2, 2, 0.4]], white: 0.45, weights: [0, 0.8, 2.5, 5, 2.5, 0.8, 0], mode: 1,

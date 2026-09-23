@@ -64,7 +64,7 @@ interface SpriteParticle {
   /** vanilla bounding-box width: the position is the box's bottom centre (drips, bubbles, dust) */
   bbw?: number;
   /** vanilla getLightColor overrides: flames brighten as they age, lava glows */
-  lightMode?: 'flame' | 'lava' | 'enchant';
+  lightMode?: 'flame' | 'lava' | 'enchant' | 'glow';
   /** vanilla getQuadSize curves */
   sizeCurve?: 'flame' | 'lava';
   /** DripParticle stage: hangs, falls, then lands/splashes */
@@ -557,6 +557,37 @@ export class ParticleEngine {
         this.addSprite(p);
         break;
       }
+      case 'dripping_obsidian_tear':
+      case 'falling_obsidian_tear':
+      case 'landing_obsidian_tear': {
+        // vanilla DripParticle.createObsidianTear{Hang,Fall,Land}Particle: glowing purple, a long hang, a slow fall
+        const p = this.base(kind, x, y, z);
+        p.bbw = 0.01;
+        p.gravity = 0.06;
+        p.friction = 0.98;
+        p.r = 0.51171875;
+        p.g = 0.03125;
+        p.b = 0.890625;
+        p.lightMode = 'glow';
+        if (kind.startsWith('dripping')) {
+          p.gravity *= 0.01;
+          p.lifetime = 100;
+          p.frames = ['drip_hang'];
+          p.drip = { stage: 'hang', fluid: null, next: 'falling_obsidian_tear', cooling: false };
+        } else if (kind.startsWith('falling')) {
+          p.gravity = 0.01;
+          p.lifetime = Math.floor(64 / (Math.random() * 0.8 + 0.2));
+          p.frames = ['drip_fall'];
+          p.drip = { stage: 'fall', fluid: null, next: 'landing_obsidian_tear', cooling: false };
+        } else {
+          p.lifetime = Math.floor(28 / (Math.random() * 0.8 + 0.2));
+          p.frames = ['drip_land'];
+          p.drip = { stage: 'land', fluid: null, next: null, cooling: false };
+        }
+        p.frame = 0;
+        this.addSprite(p);
+        break;
+      }
       case 'falling_spore_blossom': {
         // vanilla DripParticle.createSporeBlossomFallParticle: a green speck drifting down, gone when it lands
         const p = this.base(kind, x, y, z);
@@ -1038,6 +1069,11 @@ export class ParticleEngine {
       batch.lightS = (l >> 4) * 16;
       // vanilla FlameParticle / LavaParticle.getLightColor
       if (p.lightMode === 'lava') batch.lightB = 240;
+      // vanilla DripParticle.isGlowing: getLightColor 240
+      else if (p.lightMode === 'glow') {
+        batch.lightB = 240;
+        batch.lightS = 0;
+      }
       else if (p.lightMode === 'flame') batch.lightB = Math.min(240, batch.lightB + Math.floor(Math.max(0, Math.min(1, (p.age + partial) / p.lifetime)) * 15 * 16));
       else if (p.lightMode === 'enchant') {
         // vanilla EnchantmentTableParticle.getLightColor: brightens (sky part) as it nears the table

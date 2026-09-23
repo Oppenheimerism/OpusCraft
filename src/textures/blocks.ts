@@ -88,6 +88,7 @@ T['dripstone_block'] = () => TR.rockTex('dripstone_block', [0x5b463b, 0x695246, 
 });
 T['bedrock'] = () => TR.bedrock();
 T['obsidian'] = () => TR.obsidian();
+T['crying_obsidian'] = () => TR.cryingObsidian();
 T['clay'] = () => TR.clay();
 T['moss_block'] = () => TR.speckled('moss_block', [0x3e5120, 0x485e25, 0x526a2a, 0x5b7530, 0x648035, 0x6f8c3d, 0x7c9a47], {
   oct: [[4, 4, 0.35], [2, 2, 0.4]], white: 0.55, weights: [0, 1, 2.5, 4, 2.5, 1, 0], dark: 8, darkSize: [1, 2], light: 8, lightSize: [1, 2],

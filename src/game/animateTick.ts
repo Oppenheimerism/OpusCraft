@@ -8,7 +8,7 @@
 import { mcPosSeed } from '../core/rng';
 import { BLOCKS, STATE_BLOCK, FLAGS, COLLISION, FACE_OCC, F_AIR, F_OPAQUE, F_REPLACEABLE, F_WATER, F_LAVA, F_FULL_COLLISION } from '../world/block';
 import { BIOMES } from '../world/gen/biomes';
-import { DOWN, UP } from '../world/dir';
+import { DOWN, UP, DX, DY, DZ, OPPOSITE } from '../world/dir';
 import { fluidStateOf } from './fluidTicks';
 import { canBurn } from './fire';
 import type { Level } from './level';
@@ -26,6 +26,7 @@ const enum K {
   ENCHANTING_TABLE,
   SPORE_BLOSSOM,
   PORTAL,
+  CRYING_OBSIDIAN,
 }
 
 let KIND: Uint8Array | null = null;
@@ -48,6 +49,7 @@ function kindOf(st: number): number {
         : n === 'enchanting_table' ? K.ENCHANTING_TABLE
         : n === 'spore_blossom' ? K.SPORE_BLOSSOM
         : n === 'nether_portal' ? K.PORTAL
+        : n === 'crying_obsidian' ? K.CRYING_OBSIDIAN
         : K.NONE;
     });
   }
@@ -194,9 +196,24 @@ export class AmbientTicker {
       case K.PORTAL:
         this.portal(x, y, z, st);
         break;
+      case K.CRYING_OBSIDIAN:
+        this.cryingObsidian(x, y, z);
+        break;
     }
     const f = FLAGS[st];
     if (f & (F_WATER | F_LAVA)) this.fluid(x, y, z, st);
+  }
+
+  /** vanilla CryingObsidianBlock.animateTick: now and then a tear wells up on a side (or underneath) left open */
+  private cryingObsidian(x: number, y: number, z: number): void {
+    const r = Math.random;
+    if (Math.floor(r() * 5) !== 0) return;
+    const d = Math.floor(r() * 6);
+    if (d === UP) return;
+    const sx = DX[d], sy = DY[d], sz = DZ[d];
+    if ((FACE_OCC[this.level.world.getState(x + sx, y + sy, z + sz)] >> OPPOSITE[d]) & 1) return;
+    const at = (s: number) => (s === 0 ? r() : 0.5 + s * 0.6);
+    this.level.particles.spawn?.('dripping_obsidian_tear', x + at(sx), y + at(sy), z + at(sz), 0, 0, 0);
   }
 
   /** vanilla NetherPortalBlock.animateTick: its hum now and then, and motes drifting in and out of it */

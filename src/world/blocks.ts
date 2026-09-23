@@ -71,6 +71,7 @@ stoneLike('chiseled_stone_bricks', 1.5, 6);
 registerBlock('smooth_stone', { hardness: 2, resistance: 6, sound: 'stone', tool: 'pickaxe', requiresTool: true, model: one(cubeColumn('smooth_stone', 'smooth_stone')) });
 stoneLike('bricks', 2, 6);
 stoneLike('obsidian', 50, 1200, 'obsidian', { tier: 3 });
+stoneLike('crying_obsidian', 50, 1200, 'crying_obsidian', { tier: 3, light: 10 });
 registerBlock('bedrock', { hardness: -1, resistance: 3600000, sound: 'stone', model: () => randRot(cubeAll('bedrock')) });
 
 {
