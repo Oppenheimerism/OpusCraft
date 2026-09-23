@@ -247,6 +247,15 @@ function drink(c: Ctx): Float32Array {
 
 // ------------------------------------------------------------------ water
 
+/** a belly-flop: the big splash with a heavier body of water behind it */
+function heavySplash(c: Ctx): Float32Array {
+  const base = splash(c, true);
+  const out = new Float32Array(base.length);
+  layer(out, 1, (b) => b.set(base));
+  layer(out, 0.8, (b) => burst(b, c.sr, c.rng, { dur: 0.7, attack: 0.002, tau: 0.22, lp: 260, color: 'brown' }));
+  return out;
+}
+
 function splash(c: Ctx, big: boolean): Float32Array {
   const { sr, rng } = c;
   const d = big ? 1.4 : 1.0;
@@ -861,6 +870,8 @@ export function playerSounds(): Record<string, SoundGen> {
     'entity.generic.drink': sound('entity.generic.drink', 1, drink),
     'entity.generic.splash': sound('entity.generic.splash', 1, (c) => splash(c, false)),
     'entity.player.splash': sound('entity.player.splash', 2, (c) => splash(c, true)),
+    'entity.player.splash.high_speed': sound('entity.player.splash.high_speed', 2, heavySplash),
+    'entity.hostile.splash': sound('entity.hostile.splash', 1, (c) => splash(c, false)),
     'entity.player.swim': sound('entity.player.swim', 4, swim),
     'entity.player.big_fall': sound('entity.player.big_fall', 1, (c) => fall(c, true)),
     'entity.player.small_fall': sound('entity.player.small_fall', 1, (c) => fall(c, false)),

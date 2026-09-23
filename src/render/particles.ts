@@ -158,6 +158,23 @@ export class ParticleEngine {
     }
   }
 
+  /** vanilla TerrainParticle(level, x, y, z, xd, yd, zd, state): sprint dust, landing bursts */
+  blockParticle(x: number, y: number, z: number, xd: number, yd: number, zd: number, state: number, bx: number, by: number, bz: number): void {
+    if (FLAGS[state] & F_AIR) return;
+    const p = this.terrain(x, y, z, 0, 0, 0, state, bx, by, bz);
+    if (!p) return;
+    let mx = xd + (Math.random() * 2 - 1) * 0.4, my = yd + (Math.random() * 2 - 1) * 0.4, mz = zd + (Math.random() * 2 - 1) * 0.4;
+    const sp = (Math.random() + Math.random() + 1) * 0.15;
+    const len = Math.sqrt(mx * mx + my * my + mz * mz) || 1;
+    mx = (mx / len) * sp * 0.4;
+    my = (my / len) * sp * 0.4 + 0.1;
+    mz = (mz / len) * sp * 0.4;
+    p.dx = mx;
+    p.dy = my;
+    p.dz = mz;
+    this.add(p);
+  }
+
   /** vanilla ParticleEngine.crack: one particle on the hit face */
   blockHit(x: number, y: number, z: number, state: number, face: number): void {
     if (FLAGS[state] & F_AIR) return;

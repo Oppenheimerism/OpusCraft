@@ -25,6 +25,14 @@ import { reducedTickDelay } from './ai/goal';
 const DIFFICULTY_ID: Record<string, number> = { peaceful: 0, easy: 1, normal: 2, hard: 3 };
 
 export abstract class Monster extends Mob {
+  protected override swimSplashSound(): string {
+    return 'entity.hostile.splash';
+  }
+
+  protected override swimHighSpeedSplashSound(): string {
+    return 'entity.hostile.splash';
+  }
+
   /** vanilla Monster.isPreventingPlayerRest: hostile mobs nearby stop you sleeping */
   isPreventingPlayerRest(_p: Entity): boolean {
     return this.isAlive;

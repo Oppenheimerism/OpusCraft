@@ -39,6 +39,8 @@ export interface ParticleSink {
   emitAround?(kind: 'crit' | 'enchanted_hit', e: Entity): void;
   /** vanilla FallingDustParticle tinted with a block's dust colour */
   fallingDust?(x: number, y: number, z: number, color: number): void;
+  /** vanilla BLOCK particle (TerrainParticle with a starting speed) for the block at bx, by, bz */
+  blockParticle?(x: number, y: number, z: number, xd: number, yd: number, zd: number, state: number, bx: number, by: number, bz: number): void;
 }
 
 const NULL_SOUND: SoundSink = { play() {}, playUI() {} };

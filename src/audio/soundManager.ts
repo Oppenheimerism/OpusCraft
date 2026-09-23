@@ -232,13 +232,6 @@ export class SoundManager {
         this.moodiness = 0;
       }
     }
-    // rain
-    const rain = game.level.rainLevel(1);
-    if (rain > 0 && Math.random() < rain * 0.15) {
-      const rx = bx + Math.floor(Math.random() * 21) - 10, rz = bz + Math.floor(Math.random() * 21) - 10;
-      const ry = w.heightAt(rx, rz);
-      if (ry <= by + 10) this.play(ry > by + 1 ? 'weather.rain.above' : 'weather.rain', rx + 0.5, ry, rz + 0.5, 0.1 + rain * 0.1, ry > by + 1 ? 0.5 : 1);
-    }
   }
 
   private async playMusic(index: number, menu = false): Promise<void> {

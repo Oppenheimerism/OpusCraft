@@ -54,7 +54,46 @@ function shapeMaxY(st: number): number {
 }
 
 export class AmbientTicker {
+  private rainSoundTime = 0;
   constructor(private readonly level: Level) {}
+
+  /**
+   * vanilla LevelRenderer.tickRain: raindrops splash on the ground around the
+   * camera (smoke on lava), and the patter of rain plays from where they land.
+   */
+  tickRain(camX: number, camY: number, camZ: number, fancy: boolean): void {
+    const lvl = this.level, w = lvl.world;
+    const f = lvl.rainLevel(1) / (fancy ? 1 : 2);
+    if (f <= 0) return;
+    const cx = Math.floor(camX), cy = Math.floor(camY), cz = Math.floor(camZ);
+    const n = Math.floor(100 * f * f);
+    let hit: [number, number, number] | null = null;
+    for (let j = 0; j < n; j++) {
+      const x = cx + Math.floor(Math.random() * 21) - 10, z = cz + Math.floor(Math.random() * 21) - 10;
+      const top = w.heightAt(x, z);
+      if (top <= -64 || top > cy + 10 || top < cy - 10) continue;
+      if (!lvl.isRainingAt(x, top, z)) continue;
+      const y = top - 1;
+      hit = [x, y, z];
+      const d0 = Math.random(), d1 = Math.random();
+      const st = w.getState(x, y, z);
+      let h = 0;
+      const boxes = COLLISION[st];
+      if (boxes) for (const b of boxes) if (d0 >= b[0] && d0 <= b[3] && d1 >= b[2] && d1 <= b[5]) h = Math.max(h, b[4]);
+      const fs = fluidStateOf(st);
+      if (fs.type !== 0) h = Math.max(h, (FLAGS[w.getState(x, y + 1, z)] & (F_WATER | F_LAVA)) ? 1 : fs.amount / 9);
+      const n2 = BLOCKS[STATE_BLOCK[st]].name;
+      const smoke = FLAGS[st] & F_LAVA || n2 === 'magma_block' || (n2 === 'campfire' && BLOCKS[STATE_BLOCK[st]].get(st, 'lit'));
+      lvl.particles.spawn?.(smoke ? 'smoke' : 'rain', x + d0, y + h, z + d1, 0, 0, 0);
+    }
+    if (hit && Math.floor(Math.random() * 3) < this.rainSoundTime++) {
+      this.rainSoundTime = 0;
+      const [x, y, z] = hit;
+      // under cover the rain sounds distant and muffled from above
+      if (y > cy + 1 && w.heightAt(cx, cz) > cy) lvl.sound.play('weather.rain.above', x + 0.5, y + 0.5, z + 0.5, 0.1, 0.5);
+      else lvl.sound.play('weather.rain', x + 0.5, y + 0.5, z + 0.5, 0.2, 1);
+    }
+  }
 
   tick(px: number, py: number, pz: number): void {
     const cx = Math.floor(px), cy = Math.floor(py), cz = Math.floor(pz);

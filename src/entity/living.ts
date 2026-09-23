@@ -3,7 +3,7 @@
 import { Entity } from './entity';
 import { FLUID_WATER } from '../world/fluids';
 import { wrapDegrees } from '../core/math';
-import { FLAGS, F_OPAQUE, F_FULL_COLLISION, BLOCKS, STATE_BLOCK } from '../world/block';
+import { FLAGS, F_AIR, F_OPAQUE, F_FULL_COLLISION, BLOCKS, STATE_BLOCK } from '../world/block';
 import { clipBlocks } from '../game/raycast';
 
 /** damage sources that ignore armor (vanilla #bypasses_armor) */
@@ -382,6 +382,21 @@ export abstract class LivingEntity extends Entity {
 
   knockbackResistance(): number {
     return 0;
+  }
+
+  /** vanilla LivingEntity.checkFallDamage: a hard landing kicks up a burst of the block below */
+  protected override checkFallDamage(dy: number, onGround: boolean): void {
+    if (onGround && this.fallDistance > 3 && !this.inWater) {
+      const bx = Math.floor(this.x), by = Math.floor(this.y - 0.2), bz = Math.floor(this.z);
+      const st = this.level.world.getState(bx, by, bz);
+      if (!(FLAGS[st] & F_AIR)) {
+        const f = Math.ceil(this.fallDistance - 3);
+        const count = Math.floor(150 * Math.min(0.2 + f / 15, 2.5));
+        const gauss = () => Math.sqrt(-2 * Math.log(1 - Math.random())) * Math.cos(2 * Math.PI * Math.random());
+        for (let i = 0; i < count; i++) this.level.particles.blockParticle?.(this.x, this.y, this.z, gauss() * 0.15, gauss() * 0.15, gauss() * 0.15, st, bx, by, bz);
+      }
+    }
+    super.checkFallDamage(dy, onGround);
   }
 
   /** vanilla SweetBerryBushBlock.entityInside: slows, and pricks anything that moves in a grown bush */

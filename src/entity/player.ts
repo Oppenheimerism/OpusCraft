@@ -245,6 +245,7 @@ export class Player extends LivingEntity {
     }
     // vanilla LivingEntity.tick: the bed was broken under you
     if (this.sleepingPos && !this.bedOrientation()) this.stopSleeping();
+    if (this.sprinting && !this.inWater && !this.inLava && !this.crouching && this.gameMode !== 'spectator' && this.health > 0) this.spawnSprintParticle();
     super.tick();
     // bob
     let f = 0;
@@ -269,11 +270,35 @@ export class Player extends LivingEntity {
     if (this.flying) this.fallDistance = 0;
   }
 
+  /** vanilla Entity.spawnSprintParticle: running kicks up bits of the ground */
+  private spawnSprintParticle(): void {
+    const bx = Math.floor(this.x), by = Math.floor(this.y - 0.2), bz = Math.floor(this.z);
+    const st = this.level.world.getState(bx, by, bz);
+    if (!st) return;
+    let px = this.x + (Math.random() - 0.5) * this.width, pz = this.z + (Math.random() - 0.5) * this.width;
+    if (Math.floor(this.x) !== bx) px = Math.max(bx, Math.min(bx + 1, px));
+    if (Math.floor(this.z) !== bz) pz = Math.max(bz, Math.min(bz + 1, pz));
+    this.level.particles.blockParticle?.(px, this.y + 0.1, pz, this.dx * -4, 1.5, this.dz * -4, st, bx, by, bz);
+  }
+
+  protected override swimSplashSound(): string {
+    return 'entity.player.splash';
+  }
+
+  protected override swimHighSpeedSplashSound(): string {
+    return 'entity.player.splash.high_speed';
+  }
+
   private tickAir(): void {
     if (this.eyeFluid === FLUID_WATER && !this.invulnerable) {
       this.air--;
       if (this.air === -20) {
         this.air = 0;
+        // vanilla LivingEntity.baseTick: a burst of bubbles as you take drowning damage
+        for (let i = 0; i < 8; i++) {
+          const r = () => Math.random() - Math.random();
+          this.level.particles.spawn?.('bubble', this.x + r(), this.y + r(), this.z + r(), this.dx, this.dy, this.dz);
+        }
         this.hurt(2, 'drown');
       }
     } else if (this.air < 300) {

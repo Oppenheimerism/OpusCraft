@@ -64,6 +64,7 @@ const VOLUMES: Record<string, number> = {
   'entity.player.burp': 0.5,
   'entity.player.swim': 0.35,
   'entity.player.splash': 0.4,
+  'entity.player.splash.high_speed': 0.4,
   'weather.rain': 0.2,
   'weather.rain.above': 0.1,
   'ambient.cave': 0.7,

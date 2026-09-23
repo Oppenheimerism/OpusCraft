@@ -353,6 +353,7 @@ export class Game {
       spawn: (k, x, y, z, dx, dy, dz) => particles.spawn(k, x, y, z, dx, dy, dz),
       emitAround: (k, e) => particles.emitAround(k, e),
       fallingDust: (x, y, z, c) => particles.fallingDust(x, y, z, c),
+      blockParticle: (x, y, z, xd, yd, zd, st, bx, by, bz) => particles.blockParticle(x, y, z, xd, yd, zd, st, bx, by, bz),
     };
     this.spawner = new NaturalSpawner(this.level, hashString(meta.seed));
     this.ambient = new AmbientTicker(this.level);
@@ -929,6 +930,7 @@ export class Game {
     this.level.tick();
     this.spawner?.tick();
     this.ambient?.tick(p.x, p.y, p.z);
+    this.ambient?.tickRain(p.x, p.y + p.eyeHeight, p.z, this.opts.graphics >= 1);
     if (this.freezeTime) this.level.dayTime--;
     if (p.y < MIN_Y - 64 && p.health > 0) p.hurt(4, 'void');
     this.atlas.tick();

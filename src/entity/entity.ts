@@ -457,6 +457,7 @@ export abstract class Entity {
     this.wasInWater = this.inWater;
     const w = this.fluidPush(FLUID_WATER, 0.014);
     this.inWater = w;
+    if (this.inWater && !this.wasInWater && this.tickCount > 1) this.doWaterSplashEffect();
     if (this.inWater) this.fallDistance = 0;
     this.inLava = this.fluidPush(FLUID_LAVA, 0.0023333333333333335);
     // eye fluid
@@ -469,6 +470,32 @@ export abstract class Entity {
       const h = eyi + fluidHeight(this.level.world, ex, eyi, ez, ft);
       if (h > ey) this.eyeFluid = ft;
     }
+  }
+
+  /** vanilla Entity.doWaterSplashEffect: splash sound, bubbles and droplets where you hit the water */
+  protected doWaterSplashEffect(): void {
+    const vx = this.dx, vy = this.dy, vz = this.dz;
+    const f1 = Math.min(1, Math.sqrt(vx * vx * 0.2 + vy * vy + vz * vz * 0.2) * 0.2);
+    this.level.sound.play(f1 < 0.25 ? this.swimSplashSound() : this.swimHighSpeedSplashSound(), this.x, this.y, this.z, f1, 1 + (Math.random() - Math.random()) * 0.4);
+    const y = Math.floor(this.y) + 1;
+    const n = 1 + this.width * 20;
+    const ps = this.level.particles;
+    for (let i = 0; i < n; i++) {
+      const ox = (Math.random() * 2 - 1) * this.width, oz = (Math.random() * 2 - 1) * this.width;
+      ps.spawn?.('bubble', this.x + ox, y, this.z + oz, vx, vy - Math.random() * 0.2, vz);
+    }
+    for (let i = 0; i < n; i++) {
+      const ox = (Math.random() * 2 - 1) * this.width, oz = (Math.random() * 2 - 1) * this.width;
+      ps.spawn?.('splash', this.x + ox, y, this.z + oz, vx, vy, vz);
+    }
+  }
+
+  protected swimSplashSound(): string {
+    return 'entity.generic.splash';
+  }
+
+  protected swimHighSpeedSplashSound(): string {
+    return 'entity.generic.splash';
   }
 
   private fluidPush(type: number, scale: number): boolean {
