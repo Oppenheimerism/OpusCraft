@@ -12,6 +12,7 @@ import { enchantingSounds } from './gen/enchanting';
 import { boatSounds } from './gen/boat';
 import { netherBlockSounds } from './gen/netherBlocks';
 import { netherSounds } from './gen/nether';
+import { netherMobSounds } from './gen/netherMobs';
 import { NETHER_MUSIC_POOLS, renderNetherMusic } from './gen/netherMusic';
 
 export const SAMPLE_RATE = 44100;
@@ -33,6 +34,7 @@ export const SOUNDS: Record<string, SoundGen> = {
   ...boatSounds(),
   ...netherBlockSounds(),
   ...netherSounds(),
+  ...netherMobSounds(),
 };
 
 /** Number of in-game (overworld) music tracks. */
