@@ -4,7 +4,7 @@ import type { Level } from './level';
 import type { Player } from '../entity/player';
 import { raycast, BlockHit } from './raycast';
 import { destroyProgress, placementState, canReplace, canSurvive, isCorrectTool, blockExperience, hasVacantFace } from './blockRules';
-import { BLOCKS, STATE_BLOCK, FLAGS, F_AIR, F_WATER, F_LAVA, F_OPAQUE, F_REPLACEABLE, COLLISION, FACE_OCC, OUTLINE, getBlock, S } from '../world/block';
+import { BLOCKS, BLOCK_BY_NAME, STATE_BLOCK, FLAGS, F_AIR, F_WATER, F_LAVA, F_OPAQUE, F_REPLACEABLE, COLLISION, FACE_OCC, OUTLINE, getBlock, S } from '../world/block';
 import { growHugeFungus, nyliumBoneMeal } from '../world/gen/netherFeatures';
 import type { BlockAccess } from '../world/gen/patches';
 import { updateShape, hasShapeUpdates } from './shapeUpdates';
@@ -517,6 +517,14 @@ export class Interaction {
         p.swing();
         return true;
       }
+    }
+    // vanilla AxeItem.useOn: strip a log, wood, stem or hyphae block, keeping its axis
+    if (stack.item.tool?.type === 'axe' && /^(?!stripped_).+_(log|wood|stem|hyphae)$/.test(n) && BLOCK_BY_NAME.has('stripped_' + n)) {
+      lvl.setBlock(h.x, h.y, h.z, S('stripped_' + n, { axis: b.get(st, 'axis') }));
+      lvl.sound.play('item.axe.strip', h.x + 0.5, h.y + 0.5, h.z + 0.5, 1, 1);
+      if (p.gameMode !== 'creative') this.damageHeld(1);
+      p.swing();
+      return true;
     }
     // vanilla BoneMealItem.useOn
     if (id === 'bone_meal' && this.boneMeal(h.x, h.y, h.z, st)) {

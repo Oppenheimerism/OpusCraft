@@ -830,6 +830,42 @@ function hoeTill(c: Ctx): Float32Array {
   return out;
 }
 
+/**
+ * An axe stripping a log: the blade bites in with a woody knock, then the bark tears away along the grain in a
+ * fibrous, crackling scrape that fades as the strip comes free.
+ */
+function axeStrip(c: Ctx): Float32Array {
+  const { sr, rng } = c;
+  const d = rng.range(0.42, 0.55);
+  const out = alloc(d + 0.05, sr);
+  // the bite: a short knock with the log's hollow woody ring
+  const f = rng.range(420, 560);
+  layer(out, 0.55, (b) => impact(b, sr, rng, { modes: [f, 1, 0.06, f * 2.3, 0.5, 0.04, f * 4.1, 0.25, 0.02], jitter: 0.03, noise: 0.8, noiseTau: 0.004, noiseBp: [2200, 0.8] }));
+  // the tear: dense, grainy scraping, loudest just after the bite
+  const pk = rng.range(0.12, 0.2), wob = rng.range(55, 75);
+  layer(out, 1, (b) =>
+    phisem(b, sr, rng, {
+      t: 0.01,
+      dur: d,
+      rate: 9000,
+      energy: (t) => envBump(t, d * pk, d * (1 - pk)) * (0.75 + 0.25 * Math.sin(t * wob)),
+      grain: 0.0008,
+      heavy: 2.2,
+      bands: [
+        { f: 1400, q: 1.2, g: 1, spread: 0.35 },
+        { f: 3100, q: 1.6, g: 0.55, spread: 0.3 },
+        { f: 700, q: 1.4, g: 0.6, spread: 0.3 },
+      ],
+    }),
+  );
+  // fibres snapping as the bark lifts
+  layer(out, 0.45, (b) =>
+    ticks(b, sr, rng, { t: 0.03, dur: d * 0.8, rate: 70, energy: (t) => Math.exp(-t / (d * 0.45)), f: [450, 1500], t60: [0.008, 0.025], ratios: [1, 2.1, 3.4], weights: [1, 0.45, 0.2], click: 0.4 }),
+  );
+  layer(out, 0.3, (b) => burst(b, sr, rng, { dur: 0.15, attack: 0.003, tau: 0.035, lp: 450 }));
+  return out;
+}
+
 /** Bone meal: a soft dusty sprinkle with a faint magical twinkle. */
 function boneMeal(c: Ctx): Float32Array {
   const { sr, rng } = c;
@@ -940,6 +976,7 @@ export function playerSounds(): Record<string, SoundGen> {
     'item.dye.use': sound('item.dye.use', 2, dyeUse),
     'entity.item.break': sound('entity.item.break', 1, itemBreak),
     'item.hoe.till': sound('item.hoe.till', 4, hoeTill),
+    'item.axe.strip': sound('item.axe.strip', 4, axeStrip),
     'item.bone_meal.use': sound('item.bone_meal.use', 5, boneMeal),
   };
 }
