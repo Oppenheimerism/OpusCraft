@@ -33,6 +33,14 @@ export function canSurvive(world: World, x: number, y: number, z: number, state:
     return isSturdyFace(below, UP);
   }
   if (n.endsWith('_carpet')) return !(FLAGS[below] & F_AIR);
+  if (n === 'rail') {
+    // vanilla BaseRailBlock.canSurvive + shouldBeRemoved: a rigid block below, and one under the high end of a slope
+    if (!isSturdyFace(below, UP)) return false;
+    const shape = String(b.get(state, 'shape'));
+    const up: Record<string, [number, number]> = { ascending_east: [1, 0], ascending_west: [-1, 0], ascending_north: [0, -1], ascending_south: [0, 1] };
+    const hi = up[shape];
+    return !hi || isSturdyFace(world.getState(x + hi[0], y, z + hi[1]), UP);
+  }
   if (n === 'lantern') {
     if (b.get(state, 'hanging')) {
       const above = world.getState(x, y + 1, z);
@@ -121,6 +129,8 @@ export function placementState(block: Block, ctx: PlaceContext): number | null {
     const axis = ctx.face === DOWN || ctx.face === UP ? 'y' : ctx.face === NORTH || ctx.face === SOUTH ? 'z' : 'x';
     st = block.with(st, 'axis', axis);
   }
+  // vanilla BaseRailBlock.getStateForPlacement (connections are made once placed)
+  if (n === 'rail') st = block.with(st, 'shape', facingH === 'east' || facingH === 'west' ? 'east_west' : 'north_south');
   if (n.endsWith('_stairs')) {
     st = block.with(st, 'facing', facingH);
     const top = ctx.face === DOWN || (ctx.face !== UP && ctx.hitY > 0.5);

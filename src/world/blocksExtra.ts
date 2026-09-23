@@ -612,8 +612,38 @@ export function registerExtraBlocks(): void {
       },
     });
   }
+  // -------------------------------------------------------------------------
+  // Rails (vanilla RailBlock; template_rail_flat / template_rail_raised_ne / _sw)
+  {
+    const flat = (tex: string): ModelDef => ({
+      ao: false, particle: tex,
+      elements: [{ from: [0, 1, 0], to: [16, 1, 16], faces: { down: f(tex, [0, 16, 16, 0]), up: f(tex, [0, 0, 16, 16]) } }],
+    });
+    const raised = (tex: string, angle: number): ModelDef => ({
+      ao: false, particle: tex,
+      elements: [{
+        from: [0, 9, 0], to: [16, 9, 16], rot: { origin: [8, 9, 8], axis: 'x', angle, rescale: true },
+        faces: { down: f(tex, [0, 16, 16, 0]), up: f(tex, [0, 0, 16, 16]) },
+      }],
+    });
+    const straight = flat('rail'), corner = flat('rail_corner'), ne = raised('rail', 45), sw = raised('rail', -45);
+    const MODELS: Record<string, ModelChoice> = {
+      north_south: { model: straight }, east_west: { model: straight, y: 90 },
+      ascending_north: { model: ne }, ascending_east: { model: ne, y: 90 }, ascending_south: { model: sw }, ascending_west: { model: sw, y: 90 },
+      south_east: { model: corner }, south_west: { model: corner, y: 90 }, north_west: { model: corner, y: 180 }, north_east: { model: corner, y: 270 },
+    };
+    registerBlock('rail', {
+      props: [enumProp('shape', RAIL_SHAPES), P.waterlogged], defaults: { shape: 'north_south' },
+      hardness: 0.7, sound: 'metal', tool: 'pickaxe', collision: 'none', layer: Layer.CUTOUT, opaque: false, aoCaster: false, opacity: 0,
+      outline: (s) => [String(s.get('shape')).startsWith('ascending') ? bx(0, 0, 0, 16, 8, 16) : bx(0, 0, 0, 16, 2, 16)],
+      model: (s) => MODELS[s.get('shape') as string],
+    });
+  }
   void intProp;
 }
+
+/** vanilla RailShape */
+export const RAIL_SHAPES = ['north_south', 'east_west', 'ascending_east', 'ascending_west', 'ascending_north', 'ascending_south', 'south_east', 'south_west', 'north_west', 'north_east'];
 
 export { HOR_ROT };
 export type { ModelChoice };

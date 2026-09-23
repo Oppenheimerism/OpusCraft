@@ -17,6 +17,7 @@ import * as UT from './blocklib/utility';
 import * as DR from './blocklib/doors';
 import * as DC from './blocklib/decor';
 import * as CR from './blocklib/crops';
+import * as RL from './blocklib/rails';
 import * as IB from './blocklib/iconblocks';
 import { FIRE_TEXTURES } from './mobs';
 
@@ -335,6 +336,8 @@ T['chest_lid_side'] = () => UT.chestFace('lid_side');
 T['chest_lid_front'] = () => UT.chestFace('lid_front');
 T['chest_latch'] = () => UT.chestLatch();
 T['spawner'] = () => UT.spawner();
+T['rail'] = () => RL.rail();
+T['rail_corner'] = () => RL.railCorner();
 
 // ---------------------------------------------------------------------------
 // Doors & trapdoors (window pixels are fully transparent; cutout layer)
