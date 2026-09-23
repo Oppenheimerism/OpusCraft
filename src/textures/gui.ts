@@ -17,7 +17,7 @@
 //  - widgets are meant to be nine-sliced with a 3 px border (text fields 1 px).
 //  - the hotbar is translucent like vanilla and relies on alpha blending.
 
-import { TexImage, img, plot, rect, clear, getA, getPx, mixC, mulC, gray, packRGB, rgbOf, valueNoise, whiteNoise, combine, equalize, Rand } from './tex';
+import { TexImage, img, plot, rect, clear, getA, getPx, mixC, mulC, gray, packRGB, rgbOf, valueNoise, whiteNoise, combine, equalize, paletteMap, tintC, blit, Rand } from './tex';
 import { hashString } from '../core/rng';
 import { FONT } from './font';
 import { BLOCK_TEXTURES } from './blocks';
@@ -1305,3 +1305,589 @@ function recipeBook(highlighted: boolean): TexImage {
 }
 G['recipe_book_button'] = () => recipeBook(false);
 G['recipe_book_button_highlighted'] = () => recipeBook(true);
+
+// ===========================================================================
+// Shared helpers for the recipe book, toasts and the advancements screen
+
+interface BoxStyle {
+  outline: number;
+  hi: number;
+  lo: number;
+  face: number;
+  /** bevel width in px (default 1) */
+  bevel?: number;
+  /** corner cut: 1 = single pixel, 2 = two-step round corner like panels (default 1) */
+  cut?: number;
+}
+
+/** Bevelled box at (x0, y0): outline with cut corners, light top/left and dark bottom/right bevel. */
+function box(t: TexImage, x0: number, y0: number, w: number, h: number, s: BoxStyle): void {
+  const bev = s.bevel ?? 1, cut = s.cut ?? 1;
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) {
+      const left = x <= w - 1 - x, top = y <= h - 1 - y;
+      const dx = left ? x : w - 1 - x, dy = top ? y : h - 1 - y;
+      if (dx + dy < cut) continue;
+      let c = s.face;
+      if (dx === 0 || dy === 0 || dx + dy === cut) c = s.outline;
+      else if (dx <= bev && dy <= bev) {
+        if (top && left) c = s.hi;
+        else if (!top && !left) c = s.lo;
+        else if (dy < dx) c = top ? s.hi : s.lo;
+        else if (dx < dy) c = left ? s.hi : s.lo;
+      } else if (dy <= bev) c = top ? s.hi : s.lo;
+      else if (dx <= bev) c = left ? s.hi : s.lo;
+      plot(t, x0 + x, y0 + y, c);
+    }
+}
+
+/**
+ * Fill the pixels where `inside` holds with a 1 px outline and a `bevel` px
+ * rim lit from direction (lx, ly) (default: top-left). Depth is counted in
+ * 4-neighbour steps from the shape's edge, so any silhouette gets a bevel.
+ */
+function shapeBox(t: TexImage, inside: (x: number, y: number) => boolean, s: BoxStyle, lx = -1, ly = -1): void {
+  const { w, h } = t;
+  const bev = s.bevel ?? 1, deep = bev + 2;
+  const D = new Uint8Array(w * h);
+  const at = (x: number, y: number) => (x < 0 || y < 0 || x >= w || y >= h ? 0 : D[y * w + x]);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (inside(x, y)) D[y * w + x] = deep;
+  for (let k = 1; k < deep; k++) {
+    const ring: number[] = [];
+    for (let y = 0; y < h; y++)
+      for (let x = 0; x < w; x++)
+        if (D[y * w + x] === deep && [at(x - 1, y), at(x + 1, y), at(x, y - 1), at(x, y + 1)].includes(k - 1)) ring.push(y * w + x);
+    for (const i of ring) D[i] = k;
+  }
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) {
+      const d = D[y * w + x];
+      if (!d) continue;
+      let c = s.face;
+      if (d === 1) c = s.outline;
+      else if (d <= bev + 1) {
+        const lit = -((at(x + 1, y) - at(x - 1, y)) * lx + (at(x, y + 1) - at(x, y - 1)) * ly);
+        if (lit > 0) c = s.hi;
+        else if (lit < 0) c = s.lo;
+      }
+      plot(t, x, y, c);
+    }
+}
+
+/** Red-tinted version of a gray (recipes you lack the ingredients for). */
+function redden(c: number): number {
+  const [r, g, b] = rgbOf(c);
+  return packRGB(r * 1.08 + 8, g * 0.6, b * 0.6);
+}
+
+/** A 16x16 block texture by name, or null if it is missing or animated. */
+function blockTex(name: string): TexImage | null {
+  const gen = BLOCK_TEXTURES[name];
+  if (!gen) return null;
+  const t = gen();
+  return 'data' in t ? t : null;
+}
+
+/** 1 px outline of colour `c` around the opaque pixels (4-neighbourhood). */
+function outlineShape(t: TexImage, c: number): void {
+  const pts: number[] = [];
+  for (let y = 0; y < t.h; y++)
+    for (let x = 0; x < t.w; x++)
+      if (!getA(t, x, y) && (getA(t, x - 1, y) || getA(t, x + 1, y) || getA(t, x, y - 1) || getA(t, x, y + 1))) pts.push(x, y);
+  for (let i = 0; i < pts.length; i += 2) plot(t, pts[i], pts[i + 1], c);
+}
+
+// ===========================================================================
+// Recipe book (RecipeBookComponent), drawn left of the inventory, crafting
+// table and furnace screens. The 147x166 panel is plain: the engine draws the
+// search box (25,13 81x14), the filter toggle (110,12), the 5x4 recipe grid
+// (11,31, 25 px pitch) and the page arrows (38,137) / (93,137) on top.
+
+G['recipe_book_background'] = () => panel(147, 166);
+
+// Recipe buttons, 25x25 with the result item at (+4,+4). One recipe = a
+// raised 24x24 tile (row/column 24 stay empty so neighbours get a 1 px gap);
+// several = a 22x22 tile with a second one peeking out 2 px to the bottom-
+// right (vanilla then draws the item at +3,+3 and a copy behind at +5,+5).
+const RB_SLOT: BoxStyle = { outline: BLACK, hi: 0xb5b5b5, lo: 0x5b5b5b, face: 0x8b8b8b, bevel: 1, cut: 1 };
+const RB_SLOT_RED: BoxStyle = { outline: BLACK, hi: 0xe08a8a, lo: 0x7c2626, face: 0xb54646, bevel: 1, cut: 1 };
+
+function recipeSlot(s: BoxStyle, many: boolean): TexImage {
+  const t = img(25, 25);
+  if (!many) {
+    box(t, 0, 0, 24, 24, s);
+    return t;
+  }
+  box(t, 2, 2, 22, 22, { ...s, face: mulC(s.face, 0.78), hi: mulC(s.hi, 0.78), lo: mulC(s.lo, 0.78) });
+  box(t, 0, 0, 22, 22, s);
+  return t;
+}
+G['recipe_book_slot_craftable'] = () => recipeSlot(RB_SLOT, false);
+G['recipe_book_slot_uncraftable'] = () => recipeSlot(RB_SLOT_RED, false);
+G['recipe_book_slot_many_craftable'] = () => recipeSlot(RB_SLOT, true);
+G['recipe_book_slot_many_uncraftable'] = () => recipeSlot(RB_SLOT_RED, true);
+
+// Category tabs (35x27) drawn after the panel at (panelX - 30, panelY + 3 +
+// 27 * i); the selected tab is drawn 2 px further left. Item icons go at
+// (9,5) in sprite space for both. An unselected tab is darker and its right
+// 5 columns repeat the panel's left edge, so it looks tucked behind the book;
+// the selected tab is panel coloured and its right 3 columns replace the
+// panel's outline and bevel, merging the two.
+function recipeTab(selected: boolean): TexImage {
+  const W = 35, H = 27;
+  const t = img(W, H);
+  const face = selected ? PANEL : TAB_UNSEL.face;
+  const hi = selected ? WHITE : TAB_UNSEL.hi;
+  const lo = selected ? PANEL_SHADOW : TAB_UNSEL.lo;
+  const join = selected ? 32 : 30; // sprite column over the panel's outline
+  for (let y = 0; y < H; y++)
+    for (let x = 0; x < W; x++) {
+      const top = y <= H - 1 - y, dy = top ? y : H - 1 - y;
+      let c: number;
+      if (x >= join) {
+        const px = x - join; // panel column: 0 outline, 1-2 bevel, 3+ face
+        if (!selected) c = px === 0 ? BLACK : px <= 2 ? WHITE : PANEL;
+        else if (dy === 0) c = px === 0 ? BLACK : WHITE;
+        else if (dy <= 2) c = top ? hi : lo;
+        else c = PANEL;
+      } else {
+        const dx = x;
+        if (dx + dy < 2) continue;
+        if (dx === 0 || dy === 0 || dx + dy === 2) c = BLACK;
+        else if (dx <= 2 && dy <= 2) c = top ? hi : dy < dx ? lo : dx < dy ? hi : face;
+        else if (dy <= 2) c = top ? hi : lo;
+        else if (dx <= 2) c = hi;
+        else c = face;
+      }
+      plot(t, x, y, c);
+    }
+  return t;
+}
+G['recipe_book_tab'] = () => recipeTab(false);
+G['recipe_book_tab_selected'] = () => recipeTab(true);
+
+// "Showing craftable / showing all" toggle (26x16) with a tiny 3x3 crafting
+// grid. Enabled (craftable only) = pressed button with glowing orange cells.
+function filterButton(enabled: boolean, highlighted: boolean): TexImage {
+  const W = 26, H = 16;
+  let t: TexImage;
+  let gx = 8, gy = 2;
+  if (!enabled) t = buttonBox(W, H, highlighted ? BTN_HI : BTN);
+  else {
+    // pressed: dark top/left inner edge, light bottom/right edge, darker face
+    t = img(W, H);
+    for (let y = 0; y < H; y++)
+      for (let x = 0; x < W; x++) {
+        let c = highlighted ? 0x565656 : 0x4a4a4a;
+        if (x === 0 || y === 0 || x === W - 1 || y === H - 1) c = highlighted ? WHITE : BLACK;
+        else if (x === 1 || y === 1) c = 0x262626;
+        else if (x === W - 2 || y === H - 2) c = highlighted ? 0x8c8c8c : 0x7a7a7a;
+        plot(t, x, y, c);
+      }
+    gx++;
+    gy++;
+  }
+  // 3x3 cells of 2x2 px between 1 px lines (10x10)
+  const line = enabled ? 0x5c2e00 : 0x2e2e2e;
+  for (let y = 0; y < 10; y++)
+    for (let x = 0; x < 10; x++) {
+      const shine = x % 3 === 1 && y % 3 === 1;
+      let c: number;
+      if (x % 3 === 0 || y % 3 === 0) c = line;
+      else if (enabled) c = shine ? 0xffe98f : 0xffa62b;
+      else c = shine ? 0xd6d6d6 : 0xa9a9a9;
+      plot(t, gx + x, gy + y, c);
+    }
+  if (enabled)
+    for (let y = -1; y <= 10; y++)
+      for (let x = -1; x <= 10; x++) {
+        const outX = x < 0 || x > 9, outY = y < 0 || y > 9;
+        if (outX === outY) continue; // interior, or a corner of the glow ring
+        plot(t, gx + x, gy + y, mixC(getPx(t, gx + x, gy + y), 0xff9d1f, 0.4));
+      }
+  return t;
+}
+G['recipe_book_filter_enabled'] = () => filterButton(true, false);
+G['recipe_book_filter_disabled'] = () => filterButton(false, false);
+G['recipe_book_filter_enabled_highlighted'] = () => filterButton(true, true);
+G['recipe_book_filter_disabled_highlighted'] = () => filterButton(false, true);
+
+// Page arrows (12x17): a flat light triangle with a dark outline.
+const PAGE_ARROW_HALF = [8, 7, 6, 6, 5, 4, 4, 3, 2, 2, 1, 0];
+function pageArrow(forward: boolean, highlighted: boolean): TexImage {
+  const t = img(12, 17);
+  const inside = (x: number, y: number) => Math.abs(y - 8) <= PAGE_ARROW_HALF[forward ? x : 11 - x];
+  const s: BoxStyle = highlighted
+    ? { outline: BLACK, hi: WHITE, face: WHITE, lo: 0xcfcfcf }
+    : { outline: BLACK, hi: 0xf2f2f2, face: 0xd2d2d2, lo: 0x939393 };
+  shapeBox(t, inside, s, 0, -1);
+  return t;
+}
+G['recipe_book_page_forward'] = () => pageArrow(true, false);
+G['recipe_book_page_forward_highlighted'] = () => pageArrow(true, true);
+G['recipe_book_page_backward'] = () => pageArrow(false, false);
+G['recipe_book_page_backward_highlighted'] = () => pageArrow(false, true);
+
+// Popup listing a recipe's alternatives: a dark box, nine-sliced (4 px border).
+G['recipe_book_overlay_recipe'] = () => {
+  const t = img(32, 32);
+  box(t, 0, 0, 32, 32, { outline: BLACK, hi: 0x7c7c7c, lo: 0x5e5e5e, face: 0x3a3a3a, bevel: 1, cut: 2 });
+  return t;
+};
+
+// Buttons inside that popup (24x24). Ingredients are drawn at 3/8 scale
+// (6x6) on cells whose top-left corners are (2 + 7i, 2 + 7j). The furnace
+// variant has a single input cell at (2,2), a flame below it and an arrow.
+interface OverlayPal { outline: number; hi: number; face: number; lo: number; cell: number; cellLo: number; cellHi: number; mark: number }
+const OVERLAY_BTN: OverlayPal = {
+  outline: BLACK, hi: 0xc6c6c6, face: 0x9d9d9d, lo: 0x5e5e5e, cell: 0x8e8e8e, cellLo: 0x767676, cellHi: 0xafafaf, mark: 0x7a7a7a,
+};
+const OVERLAY_BTN_HI: OverlayPal = {
+  outline: WHITE, hi: 0xe4e4e4, face: 0xb3b3b3, lo: 0x6c6c6c, cell: 0xa2a2a2, cellLo: 0x888888, cellHi: 0xc6c6c6, mark: 0x8c8c8c,
+};
+const MINI_FLAME = [
+  '..#...',
+  '..##..',
+  '.###.#',
+  '.#####',
+  '######',
+  '######',
+  '.####.',
+];
+
+function overlayButton(furnace: boolean, disabled: boolean, highlighted: boolean): TexImage {
+  const p: OverlayPal = { ...(highlighted ? OVERLAY_BTN_HI : OVERLAY_BTN) };
+  if (disabled) for (const k of ['hi', 'face', 'lo', 'cell', 'cellLo', 'cellHi', 'mark'] as const) p[k] = redden(p[k]);
+  const t = img(24, 24);
+  box(t, 0, 0, 24, 24, { outline: p.outline, hi: p.hi, lo: p.lo, face: p.face, bevel: 1, cut: 1 });
+  const cell = (x: number, y: number) => {
+    rect(t, x, y, 6, 6, p.cell);
+    for (let i = 0; i < 5; i++) {
+      plot(t, x + i, y, p.cellLo);
+      plot(t, x, y + i, p.cellLo);
+      plot(t, x + 1 + i, y + 5, p.cellHi);
+      plot(t, x + 5, y + 1 + i, p.cellHi);
+    }
+  };
+  if (!furnace) {
+    for (let j = 0; j < 3; j++) for (let i = 0; i < 3; i++) cell(2 + 7 * i, 2 + 7 * j);
+    return t;
+  }
+  cell(2, 2);
+  drawMask(t, 10, 6, arrowMask(9, 7, 3), p.mark);
+  const m = MINI_FLAME.map((r) => [...r].map((ch) => ch === '#'));
+  const inF = (x: number, y: number) => y >= 0 && y < m.length && x >= 0 && x < 6 && m[y][x];
+  const flame = disabled ? [0x9c2a14, 0xd0561c, 0xe88a3c] : [0xc63a00, 0xff7d00, 0xffc000];
+  for (let y = 0; y < m.length; y++)
+    for (let x = 0; x < 6; x++) {
+      if (!m[y][x]) continue;
+      const edge = !inF(x - 1, y) || !inF(x + 1, y) || !inF(x, y - 1) || !inF(x, y + 1);
+      const core = !edge && y >= 4 && x >= 2 && x <= 3;
+      plot(t, 2 + x, 10 + y, core ? flame[2] : edge ? flame[0] : flame[1]);
+    }
+  return t;
+}
+for (const kind of ['crafting', 'furnace'] as const) {
+  const f = kind === 'furnace';
+  G[`recipe_book_${kind}_overlay`] = () => overlayButton(f, false, false);
+  G[`recipe_book_${kind}_overlay_highlighted`] = () => overlayButton(f, false, true);
+  G[`recipe_book_${kind}_overlay_disabled`] = () => overlayButton(f, true, false);
+  G[`recipe_book_${kind}_overlay_disabled_highlighted`] = () => overlayButton(f, true, true);
+}
+
+// ===========================================================================
+// Toasts (160x32) sliding in at the top right. Advancement and system toasts
+// are dark (yellow title, white text); recipe and tutorial toasts are light
+// (dark text). Icons: 16x16 items at (8,8), tutorial icons (20x20) at (6,6);
+// text starts at x = 30, so the left 30 px carry no decoration. The system
+// toast's frame is uniform so it can be stretched for long messages.
+
+G['toast_advancement'] = () => {
+  const t = img(160, 32);
+  box(t, 0, 0, 160, 32, { outline: BLACK, hi: 0xa6a6a6, lo: 0x6a6a6a, face: 0x202020, bevel: 1, cut: 2 });
+  return t;
+};
+G['toast_system'] = () => {
+  const t = img(160, 32);
+  box(t, 0, 0, 160, 32, { outline: BLACK, hi: 0x575757, lo: 0x575757, face: 0x1c1c1c, bevel: 1, cut: 2 });
+  return t;
+};
+function lightToast(): TexImage {
+  const t = img(160, 32);
+  box(t, 0, 0, 160, 32, { outline: 0x1e1e1e, hi: WHITE, lo: 0xa9a9a9, face: 0xeaeaea, bevel: 1, cut: 2 });
+  return t;
+}
+G['toast_recipe'] = lightToast;
+G['toast_tutorial'] = lightToast;
+
+// ---------------------------------------------------------------------------
+// Tutorial toast icons (20x20)
+
+const KEY_GLYPHS: Record<string, string[]> = {
+  W: ['#.#', '#.#', '###', '###', '#.#'],
+  A: ['.#.', '#.#', '###', '#.#', '#.#'],
+  S: ['.##', '#..', '.#.', '..#', '##.'],
+  D: ['##.', '#.#', '#.#', '#.#', '##.'],
+};
+// 7x9 keycaps; neighbouring keys share their side outline.
+const KEYCAP = [
+  '.OOOOO.',
+  'OhhhhhO',
+  'OfffffO',
+  'OfffffO',
+  'OfffffO',
+  'OfffffO',
+  'OfffffO',
+  'OsssssO',
+  '.OOOOO.',
+];
+function keycap(t: TexImage, x0: number, y0: number, ch: string): void {
+  pat(t, x0, y0, KEYCAP, { O: 0x262626, h: WHITE, f: 0xdedede, s: 0x9c9c9c });
+  pat(t, x0 + 2, y0 + 2, KEY_GLYPHS[ch], { '#': 0x484848 });
+}
+G['toast_movement_keys'] = () => {
+  const t = img(20, 20);
+  keycap(t, 7, 1, 'W');
+  keycap(t, 1, 11, 'A');
+  keycap(t, 7, 11, 'S');
+  keycap(t, 13, 11, 'D');
+  return t;
+};
+
+// Computer mouse: 11 px wide body (x 4-14, y 3-18) with split buttons and a cord.
+const MOUSE_HALF = [3, 4, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 4, 3];
+function mouseIcon(rightDown: boolean): TexImage {
+  const t = img(20, 20);
+  const inM = (x: number, y: number) => y >= 3 && y < 3 + MOUSE_HALF.length && Math.abs(x - 9) <= MOUSE_HALF[y - 3];
+  for (let y = 0; y < 20; y++)
+    for (let x = 0; x < 20; x++) {
+      if (!inM(x, y)) continue;
+      let c = 0xdcdcdc;
+      if (!inM(x - 1, y) || !inM(x + 1, y) || !inM(x, y - 1) || !inM(x, y + 1)) c = 0x262626;
+      else if ((x === 9 && y <= 8) || y === 9) c = 0x6e6e6e; // button split
+      else if (rightDown && x > 9 && y < 9) c = !inM(x, y - 2) || x === 10 ? 0x3e3e3e : 0x555555;
+      else if (!inM(x - 2, y) || !inM(x, y - 2)) c = 0xf8f8f8;
+      else if (!inM(x + 2, y) || !inM(x, y + 2)) c = 0xa9a9a9;
+      plot(t, x, y, c);
+    }
+  pat(t, 6, 0, ['##..', '..#.', '...#'], { '#': 0x3a3a3a }); // cord
+  if (rightDown) pat(t, 14, 0, ['#..#', '#.#.', '....', '..##'], { '#': 0x3a3a3a }); // click marks
+  return t;
+}
+G['toast_mouse'] = () => mouseIcon(false);
+G['toast_right_click'] = () => mouseIcon(true);
+
+// A tiny oak: leaf crown from the (grayscale) oak leaves tinted green, a
+// trunk from the oak log bark, with a dark outline.
+G['toast_tree'] = () => {
+  const t = img(20, 20);
+  const leaves = blockTex('oak_leaves'), log = blockTex('oak_log');
+  const r = R('toast_tree');
+  for (let y = 0; y < 20; y++)
+    for (let x = 0; x < 20; x++) {
+      const ex = (x + 0.5 - 10) / 8, ey = (y + 0.5 - 7) / 6.3;
+      if (ex * ex + ey * ey <= 1) {
+        let v = leaves && getA(leaves, x & 15, y & 15) ? getPx(leaves, x & 15, y & 15) & 255 : -1;
+        if (!leaves) v = 110 + r.nextInt(90);
+        let c = v < 0 ? 0x1f5a12 : tintC(gray(v), 0x5dbb33);
+        const lightness = -(ex + ey) * 0.18; // lit from the top-left
+        c = lightness > 0 ? mixC(c, 0xd8ff9a, lightness * 0.6) : mixC(c, 0x0a2004, -lightness);
+        plot(t, x, y, c);
+      } else if (x >= 8 && x <= 11 && y >= 12 && y <= 18) {
+        let c = log ? getPx(log, x + 3, y) : [0x6b5132, 0x5a4428, 0x6b5132, 0x4a3820][x - 8];
+        if (x === 8) c = mixC(c, 0xffffff, 0.12);
+        if (x === 11 || y === 12) c = mixC(c, 0x000000, 0.25);
+        plot(t, x, y, c);
+      }
+    }
+  outlineShape(t, 0x1b1b12);
+  return t;
+};
+
+G['toast_recipe_book'] = () => {
+  const t = img(20, 20);
+  blit(t, recipeBook(false), 0, 1);
+  return t;
+};
+
+// Oak planks block face (16x16) with a dark outline and a soft bevel.
+G['toast_wooden_planks'] = () => {
+  const t = img(20, 20);
+  const planks = blockTex('oak_planks');
+  box(t, 1, 1, 18, 18, { outline: 0x2b1d0e, hi: 0xc29d62, lo: 0x6b5030, face: 0xa2824e, bevel: 0, cut: 1 });
+  if (planks)
+    for (let y = 0; y < 16; y++)
+      for (let x = 0; x < 16; x++) {
+        let c = getPx(planks, x, y);
+        if (x === 0 || y === 0) c = mixC(c, 0xffffff, 0.2);
+        else if (x === 15 || y === 15) c = mixC(c, 0x000000, 0.22);
+        plot(t, 2 + x, 2 + y, c);
+      }
+  return t;
+};
+
+// Two blocky players (hair, eyes, shoulders), the one in front lighter.
+const PERSON = [
+  '..OOOOOOOO..',
+  '..OkkkkkkO..',
+  '..OkffffkO..',
+  '..OfeffefO..',
+  '..OffffffO..',
+  '..OffffffO..',
+  '..OssssssO..',
+  'OOOOOOOOOOOO',
+  'ObbbbbbbbbdO',
+  'ObbbbbbbbbdO',
+  'ObbbbbbbbbdO',
+  'ObbbbbbbbbdO',
+  'ObbbbbbbbbdO',
+  'ObbbbbbbbbdO',
+];
+G['toast_social_interactions'] = () => {
+  const t = img(20, 20);
+  pat(t, 0, 0, PERSON, { O: 0x262626, k: 0x4c4c4c, f: 0xa6a6a6, e: 0x262626, s: 0x8a8a8a, b: 0x787878, d: 0x626262 });
+  pat(t, 8, 6, PERSON, { O: 0x262626, k: 0x6a6a6a, f: 0xeaeaea, e: 0x262626, s: 0xc4c4c4, b: 0xc8c8c8, d: 0xa6a6a6 });
+  return t;
+};
+
+// ===========================================================================
+// Advancements screen (L). The 252x140 window frame has a transparent
+// 234x113 view at (9,18) (the tab background and the advancement tree are
+// drawn underneath it); its title goes at (8,6).
+
+G['advancements_window'] = () => {
+  const t = panel(252, 140);
+  inset(t, 8, 17, 236, 115);
+  for (let y = 18; y < 131; y++) for (let x = 9; x < 243; x++) clear(t, x, y);
+  return t;
+};
+
+// Advancement frames (26x26, the item icon is drawn at 5,5 over a plain
+// centre): task = square plate, goal = rounded plate, challenge = spiky plate.
+const ADV_OBTAINED: BoxStyle = { outline: BLACK, hi: 0xfff2a6, face: 0xfcd64a, lo: 0xc98a1a, bevel: 2 };
+const ADV_UNOBTAINED: BoxStyle = { outline: BLACK, hi: WHITE, face: 0xe8e8e8, lo: 0x9a9a9a, bevel: 2 };
+
+function advFrame(kind: 'task' | 'goal' | 'challenge', s: BoxStyle): TexImage {
+  const t = img(26, 26);
+  const u = (x: number) => Math.abs(x + 0.5 - 13);
+  if (kind === 'task') box(t, 0, 0, 26, 26, { ...s, cut: 2 });
+  else if (kind === 'goal') shapeBox(t, (x, y) => u(x) ** 3 + u(y) ** 3 <= 12.95 ** 3, s);
+  else
+    shapeBox(t, (x, y) => {
+      const a = u(x), b = u(y);
+      return Math.max(a, b) <= 11 || (a + b >= 22 && Math.abs(a - b) <= 1) || a + b <= 13.5;
+    }, s);
+  return t;
+}
+for (const kind of ['task', 'goal', 'challenge'] as const) {
+  G[`advancements_${kind}_frame_obtained`] = () => advFrame(kind, ADV_OBTAINED);
+  G[`advancements_${kind}_frame_unobtained`] = () => advFrame(kind, ADV_UNOBTAINED);
+}
+
+// Title bar shown when hovering an advancement (200x26, nine-sliced, 3 px border).
+G['advancements_box_obtained'] = () => {
+  const t = img(200, 26);
+  box(t, 0, 0, 200, 26, { outline: 0x3a2a05, hi: 0xe6bf45, face: 0xc79b1f, lo: 0x94700f, bevel: 2, cut: 2 });
+  return t;
+};
+G['advancements_box_unobtained'] = () => {
+  const t = img(200, 26);
+  box(t, 0, 0, 200, 26, { outline: 0x05263a, hi: 0x4a9fd0, face: 0x1f7fb5, lo: 0x0b5e8e, bevel: 2, cut: 2 });
+  return t;
+};
+// Description panel under the hovered title bar (200x26, nine-sliced with a
+// 10 px border): the dark toast look, charcoal with a light bevelled frame.
+G['advancements_title_box'] = () => {
+  const t = img(200, 26);
+  box(t, 0, 0, 200, 26, { outline: BLACK, hi: 0x8b8b8b, lo: 0x5a5a5a, face: 0x212121, bevel: 1, cut: 2 });
+  return t;
+};
+
+// Tabs above the window (28x32), drawn after it at (windowX + 32 * i,
+// windowY - 28), so the bottom 4 rows overlap the window's top edge. "left"
+// is the first tab (its left edge on the window's), "right" the eighth (its
+// right edge on the window's). Unselected tabs are darker, 2 px shorter and
+// their bottom rows repeat the window edge (tucked behind it); selected tabs
+// merge into the window. Item icons go at (6,9).
+function advTab(pos: 'left' | 'middle' | 'right', selected: boolean): TexImage {
+  const W = 28, H = 32, top = selected ? 0 : 2, win0 = 28;
+  const face = selected ? PANEL : TAB_UNSEL.face;
+  const hi = selected ? WHITE : TAB_UNSEL.hi;
+  const lo = selected ? PANEL_SHADOW : TAB_UNSEL.lo;
+  const t = img(W, H);
+  // the tab body, open at the bottom
+  const body = (x: number, y: number): number | null => {
+    const left = x <= W - 1 - x;
+    const dx = left ? x : W - 1 - x, dy = y - top;
+    if (dx + dy < 2) return null;
+    if (dx === 0 || dy === 0 || dx + dy === 2) return BLACK;
+    if (dx <= 2 && dy <= 2) return left ? hi : dy < dx ? hi : dx < dy ? lo : face;
+    if (dy <= 2) return hi;
+    if (dx <= 2) return left ? hi : lo;
+    return face;
+  };
+  for (let y = top; y < win0; y++)
+    for (let x = 0; x < W; x++) {
+      const c = body(x, y);
+      if (c !== null) plot(t, x, y, c);
+    }
+  const win = panel(252, 140);
+  const wx0 = pos === 'left' ? 0 : pos === 'right' ? 252 - W : 32;
+  for (let k = 0; k < H - win0; k++)
+    for (let x = 0; x < W; x++) {
+      const y = win0 + k;
+      let c: number | null;
+      if (!selected) c = getA(win, wx0 + x, k) ? getPx(win, wx0 + x, k) : body(x, y); // tab shows through the window's cut corner
+      else if ((pos === 'left' && x === 0) || (pos === 'right' && x === W - 1)) c = BLACK;
+      else if (pos === 'left' && x <= 2) c = WHITE;
+      else if (pos === 'right' && x >= W - 3) c = PANEL_SHADOW;
+      else if (x === 0 || x === W - 1) c = k === 0 ? BLACK : k < 3 ? WHITE : PANEL;
+      else if (x <= 2) c = k < 3 ? WHITE : PANEL;
+      else if (x >= W - 3) c = k < 3 ? PANEL_SHADOW : PANEL;
+      else c = PANEL;
+      if (c !== null) plot(t, x, y, c);
+    }
+  return t;
+}
+for (const pos of ['left', 'middle', 'right'] as const) {
+  G[`advancements_tab_above_${pos}`] = () => advTab(pos, false);
+  G[`advancements_tab_above_${pos}_selected`] = () => advTab(pos, true);
+}
+
+// Tab backgrounds (16x16), tiled across the 234x113 view. Stone, netherrack
+// and end stone come from the block textures (with procedural stand-ins for
+// blocks the registry does not have); adventure and husbandry are their own.
+function noiseTile(seed: string, layers: (r: Rand) => Float32Array[], wts: number[], pal: number[], cover: number[]): TexImage {
+  const t = img(16, 16);
+  paletteMap(t, combine(layers(R(seed)), wts), pal, cover);
+  return t;
+}
+function blockTile(name: string, fallback: () => TexImage): TexImage {
+  return blockTex(name) ?? fallback();
+}
+const STD_LAYERS = (r: Rand) => [valueNoise(r, 16, 16, 8), valueNoise(r, 16, 16, 4), valueNoise(r, 16, 16, 2), whiteNoise(r, 16, 16)];
+
+G['advancements_bg_stone'] = () =>
+  blockTile('stone', () => noiseTile('adv_stone', STD_LAYERS, [0.2, 0.3, 0.2, 0.3], [0x6b6b6b, 0x767676, 0x7f7f7f, 0x888888, 0x939393], [1, 3, 4, 3, 1]));
+G['advancements_bg_nether'] = () =>
+  blockTile('netherrack', () =>
+    noiseTile('adv_netherrack', (r) => [valueNoise(r, 16, 16, 4), valueNoise(r, 16, 16, 2), whiteNoise(r, 16, 16)], [0.25, 0.35, 0.4],
+      [0x3d1010, 0x521818, 0x622121, 0x702929, 0x7f3434, 0x8f4343, 0xa45656], [1, 2, 3, 4, 3, 2, 1]));
+G['advancements_bg_end'] = () =>
+  blockTile('end_stone', () => {
+    const t = noiseTile('adv_end_stone', STD_LAYERS, [0.15, 0.3, 0.25, 0.3], [0xbcba80, 0xcacb90, 0xd5d79c, 0xdddfa6, 0xe5e7b1, 0xededbf], [1, 2, 4, 5, 3, 1]);
+    const r = R('adv_end_pits');
+    for (let i = 0; i < 6; i++) {
+      const x = r.nextInt(16), y = r.nextInt(16);
+      plot(t, x, y, 0xa9a770);
+      plot(t, (x + 1) & 15, y, 0xb8b67d);
+      plot(t, x, (y + 1) & 15, 0xf1f2c6);
+    }
+    return t;
+  });
+G['advancements_bg_adventure'] = () =>
+  noiseTile('adv_adventure', (r) => [valueNoise(r, 16, 16, 16, 3), valueNoise(r, 16, 16, 4), whiteNoise(r, 16, 16)], [0.35, 0.3, 0.35],
+    [0x55281a, 0x64301f, 0x723924, 0x7e412a, 0x8a4a30, 0x985538], [1, 2, 4, 4, 3, 1]);
+G['advancements_bg_husbandry'] = () =>
+  noiseTile('adv_husbandry', (r) => [valueNoise(r, 16, 16, 1, 8), valueNoise(r, 16, 16, 4), whiteNoise(r, 16, 16)], [0.45, 0.25, 0.3],
+    [0xa38a50, 0xb39a5c, 0xc2a868, 0xceb474, 0xd9c083, 0xe4cc92], [1, 2, 4, 4, 3, 2]);

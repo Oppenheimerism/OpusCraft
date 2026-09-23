@@ -144,6 +144,8 @@ export class Interaction {
     const p = this.player;
     if (this.missTime > 0) this.missTime--;
     if (!held) {
+      // vanilla stopDestroyBlock: the tutorial counts abandoned attempts
+      if (this.destroying) this.onDestroyProgress?.(this.level.getBlockName(this.dX, this.dY, this.dZ), -1);
       this.destroying = false;
       this.destroyProgress = 0;
       return;
@@ -176,6 +178,7 @@ export class Interaction {
     const item = p.inventory.selectedItem?.item ?? null;
     this.destroyProgress += destroyProgress(st, item, p.eyeFluid === FLUID_WATER, p.onGround);
     const b = BLOCKS[STATE_BLOCK[st]];
+    this.onDestroyProgress?.(b.name, Math.min(1, this.destroyProgress));
     if (this.destroyTicks % 4 === 0) {
       // vanilla plays hits at pitch 0.5; the synthesized block.*.hit takes already bake that in
       this.level.sound.play(`block.${b.sound}.hit`, h.x + 0.5, h.y + 0.5, h.z + 0.5, 0.25, 1);
@@ -464,6 +467,12 @@ export class Interaction {
   }
 
   onUseBed: ((x: number, y: number, z: number) => void) | null = null;
+  /** a block was placed by the player (advancements: planted seeds) */
+  onPlaced: ((name: string) => void) | null = null;
+  /** food or a drink was finished */
+  onConsumed: ((id: string) => void) | null = null;
+  /** mining progress on the targeted block (tutorial) */
+  onDestroyProgress: ((name: string, progress: number) => void) | null = null;
 
   /** vanilla BoneMealItem.addGrowthParticles */
   private growthParticles(x: number, y: number, z: number): void {
@@ -537,6 +546,7 @@ export class Interaction {
   private commitPlace(x: number, y: number, z: number, st: number, stack: ItemStack, sound: string): boolean {
     const p = this.player;
     this.level.setBlock(x, y, z, st);
+    this.onPlaced?.(BLOCKS[STATE_BLOCK[st]].name);
     const isBucket = stack.item.id.endsWith('_bucket');
     if (isBucket) this.level.sound.play(stack.item.id === 'lava_bucket' ? 'item.bucket.empty_lava' : 'item.bucket.empty', x + 0.5, y + 0.5, z + 0.5, 1, 1);
     else this.level.sound.play(`block.${sound}.place`, x + 0.5, y + 0.5, z + 0.5, 1, 0.8);
@@ -637,6 +647,7 @@ export class Interaction {
     const s = p.useItem!;
     p.stopUsingItem();
     const it = s.item;
+    if (it.food || it.id === 'milk_bucket') this.onConsumed?.(it.id);
     if (it.food) {
       this.itemUseEffects(s);
       p.food.eat(it.food.nutrition, it.food.saturation);

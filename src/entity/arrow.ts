@@ -185,6 +185,7 @@ export class Arrow extends Entity {
     const fire = e.remainingFireTicks;
     if (this.isOnFire() && e.type !== 'enderman') e.igniteForSeconds(5);
     if (e.hurt(dmg, 'arrow', owner ?? this, this)) {
+      if (owner && owner === this.level.player) this.level.onPlayerArrowHit?.(e);
       if (e.type === 'enderman') return;
       this.level.sound.play('entity.arrow.hit', this.x, this.y, this.z, 1, 1.2 / (this.rnd() * 0.2 + 0.9));
       this.remove();

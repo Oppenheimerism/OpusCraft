@@ -17,7 +17,7 @@ import { BLOCKS, STATE_BLOCK, FLAGS, F_WATER, F_LAVA, F_OPAQUE, F_COLLIDE } from
 import { FLUID_WATER, FLUID_LAVA, fluidHeight } from '../world/fluids';
 import { BIOMES } from '../world/gen/biomes';
 import { ItemStack, ITEMS } from '../item/item';
-import { MIN_Y } from '../world/constants';
+import { MIN_Y, MAX_Y } from '../world/constants';
 import { Overlay } from '../render/overlay';
 import { isAnim, TexImage } from '../textures/tex';
 import { ParticleEngine } from '../render/particles';
@@ -44,6 +44,13 @@ import { InventoryMenu, CraftingMenu, FurnaceMenu, ChestMenu } from '../inventor
 import { ChestBlockEntity, FurnaceBlockEntity } from '../world/blockEntity';
 import { useBed, findRespawn, BED_YROT, MSG, SleepHost } from './sleep';
 import { AmbientTicker } from './animateTick';
+import { ToastComponent, AdvancementToast, RecipeToast } from '../gui/toasts';
+import { PlayerAdvancements, announcement, AdvancementDef } from './advancements';
+import { PlayerRecipeBook, BookRecipe } from '../inventory/recipeBook';
+import { Tutorial, TutorialStep } from './tutorial';
+import { keyDisplayName } from './input';
+import { LivingEntity } from '../entity/living';
+import { Monster } from '../entity/monsters';
 
 export type { GameOptions } from './options';
 
@@ -64,6 +71,25 @@ export class Game {
   icons!: ItemIcons;
   hud = new Hud();
   sound = new SoundManager();
+  /** vanilla ToastComponent */
+  readonly toasts = new ToastComponent((name, v, pitch) => this.sound.playUI(name, v, pitch));
+  advancements = new PlayerAdvancements();
+  recipeBook = new PlayerRecipeBook();
+  readonly tutorial = new Tutorial({
+    toasts: this.toasts,
+    isSurvival: () => this.player?.gameMode === 'survival' || this.player?.gameMode === 'adventure',
+    inventoryItems: () => this.inventoryItemIds(),
+    keyName: (a) => keyDisplayName(this.opts.keys[a] ?? ''),
+    getStep: () => this.opts.tutorialStep as TutorialStep,
+    setStepOption: (st) => {
+      this.opts.tutorialStep = st;
+      this.saveOptions();
+    },
+  });
+  advancementsScreenFactory: (() => Screen) | null = null;
+  private lastInvVersion = -1;
+  /** highest point of the current fall (vanilla fall_from_world_height) */
+  private fallStartY: number | null = null;
   panorama: Panorama | null = null;
   screen: Screen | null = null;
   inWorld = false;
@@ -238,6 +264,11 @@ export class Game {
         }
         if (e.code === KEYS.inventory && !e.repeat) {
           if (this.inventoryScreenFactory) this.setScreen(this.inventoryScreenFactory());
+          this.tutorial.onOpenInventory();
+          return true;
+        }
+        if (e.code === KEYS.advancements && !e.repeat && this.advancementsScreenFactory) {
+          this.setScreen(this.advancementsScreenFactory());
           return true;
         }
       }
@@ -364,8 +395,14 @@ export class Game {
     };
     this.hookPlayerSounds();
     this.hud = new Hud();
+    this.toasts.clear();
+    this.advancements = new PlayerAdvancements();
+    this.recipeBook = new PlayerRecipeBook();
+    this.hookProgress();
     // player data
     const pd = meta.player;
+    this.advancements.load(pd?.advancements);
+    this.recipeBook.load(pd?.recipeBook);
     if (pd) {
       this.player.moveTo(pd.x, pd.y, pd.z, pd.yaw, pd.pitch);
       this.player.health = pd.health;
@@ -441,6 +478,8 @@ export class Game {
       inventory: p.inventory.main.map(st), armor: p.inventory.armor.map(st),
       spawn: [p.spawnX, p.spawnY, p.spawnZ],
       respawn: p.respawnPos ? [...p.respawnPos, p.respawnForced ? 1 : 0] : null,
+      advancements: this.advancements.save(),
+      recipeBook: this.recipeBook.save(),
       dead: p.health <= 0,
     };
     const list = [];
@@ -466,6 +505,16 @@ export class Game {
   /** a chunk became available: restore its saved entities or run chunk-generation spawning */
   private chunkEntitiesLoaded(c: Chunk): void {
     if (!this.meta || !this.level) return;
+    // springs and other generated fluids start flowing (vanilla post-processing)
+    if (c.fluidTicks) {
+      const t = c.fluidTicks;
+      c.fluidTicks = null;
+      for (let i = 0; i < t.length; i += 3) {
+        const x = c.cx * 16 + t[i], y = t[i + 1], z = c.cz * 16 + t[i + 2];
+        const f = FLAGS[this.world.getState(x, y, z)];
+        if (f & (F_WATER | F_LAVA)) this.level.scheduleTick(x, y, z, f & F_LAVA ? 30 : 5);
+      }
+    }
     const key = this.entityChunkKey(c.cx, c.cz);
     const lvl = this.level;
     if (this.entityKeys.has(key)) {
@@ -527,6 +576,8 @@ export class Game {
   async leaveWorld(): Promise<void> {
     if (this.player.isSleeping()) this.player.stopSleepInBed(true);
     await this.saveWorld();
+    this.tutorial.stop();
+    this.toasts.clear();
     this.level.entities.length = 0;
     this.inWorld = false;
     this.spawned = false;
@@ -857,6 +908,7 @@ export class Game {
       const k = s * s * s * 8;
       this.player.yaw += mx * k * 0.15;
       this.player.pitch = clamp(this.player.pitch + my * k * 0.15 * (this.opts.invertMouse ? -1 : 1), -90, 90);
+      if (mx || my) this.tutorial.onMouse(mx * k, my * k);
     }
     if (this.spawned) {
       const p = this.player;
@@ -875,6 +927,7 @@ export class Game {
       }
       if (this.chunks.isReady(this.player.x, this.player.z, 2)) {
         this.spawned = true;
+        this.tutorial.start();
         if (this.screen) this.setScreen(null);
         this.input.lock();
       } else return;
@@ -929,6 +982,7 @@ export class Game {
     this.fovMod += (target - this.fovMod) * 0.5;
     this.level.tick();
     this.spawner?.tick();
+    this.tickProgress();
     this.ambient?.tick(p.x, p.y, p.z);
     this.ambient?.tickRain(p.x, p.y + p.eyeHeight, p.z, this.opts.graphics >= 1);
     if (this.freezeTime) this.level.dayTime--;
@@ -1008,12 +1062,15 @@ export class Game {
         gl.clear(gl.COLOR_BUFFER_BIT);
       }
       if (this.screen) this.screen.render(g, this.mouseX, this.mouseY, partial);
+      this.toasts.render(g);
       this.applyBlur();
       return;
     }
     this.renderWorld(partial);
     if (!this.hideGui) this.hud.render(g, this, partial, !!this.screen && (this.screen as { isChat?: boolean }).isChat === true);
     if (this.screen) this.screen.render(g, this.mouseX, this.mouseY, partial);
+    // vanilla GameRenderer: toasts over everything, hidden with F1
+    if (!this.hideGui) this.toasts.render(g);
     this.applyBlur();
   }
 
@@ -1196,8 +1253,92 @@ export class Game {
     this.hud.addChat(msg, this.ticks);
   }
 
+  inventoryItemIds(): Set<string> {
+    const inv = this.player.inventory;
+    const out = new Set<string>();
+    for (const s of [...inv.main, ...inv.armor, inv.offhand]) if (s && s.count > 0) out.add(s.item.id);
+    return out;
+  }
+
+  /** vanilla ClientAdvancements: toast + chat announcement for a finished advancement */
+  private onAdvancement(a: AdvancementDef): void {
+    if (a.toast !== false) this.toasts.add(new AdvancementToast(a.title, a.frame, a.icon));
+    if (a.announce !== false && this.level.gameRules.announceAdvancements) this.chat(announcement(this.playerName, a));
+  }
+
+  /** vanilla RecipeToast.addOrUpdate for each newly unlocked recipe */
+  private onRecipesUnlocked(rs: BookRecipe[]): void {
+    for (const r of rs) {
+      const symbol = r.type === 'furnace' ? 'furnace' : 'crafting_table';
+      const t = this.toasts.get<RecipeToast>('recipe');
+      if (t) t.addItem(r.result, symbol);
+      else this.toasts.add(new RecipeToast(r.result, symbol));
+    }
+  }
+
+  /** wire player progress (advancements, recipes, tutorial) to world events */
+  private hookProgress(): void {
+    this.advancements.onAward = (a) => this.onAdvancement(a);
+    this.recipeBook.onUnlock = (rs) => this.onRecipesUnlocked(rs);
+    this.lastInvVersion = -1;
+    const lvl = this.level;
+    lvl.onEntityDied = (victim, source, attacker) => {
+      const p = this.player;
+      if (victim === p) {
+        if (p.killer instanceof LivingEntity && p.killer !== p) this.advancements.trigger('killed_by');
+        return;
+      }
+      // vanilla getKillCredit: whoever hurt it last (the player, within 100 ticks)
+      const credit = victim.lastHurtByPlayer === p || attacker === p;
+      if (!credit || !(victim instanceof LivingEntity)) return;
+      const killed = { type: victim.type, hostile: victim instanceof Monster, distance: Math.sqrt(p.distanceToSqr(victim.x, victim.y, victim.z)), byArrow: source === 'arrow' };
+      this.advancements.trigger('kill', { killed });
+      this.advancements.trigger('sniper', { killed });
+    };
+    lvl.onBred = (child, cause) => {
+      if (cause === this.player) this.advancements.trigger('breed', { breed: child.type });
+    };
+    lvl.onPlayerArrowHit = () => this.advancements.trigger('shoot_arrow');
+    this.interaction.onPlaced = (name) => this.advancements.trigger('place', { place: name });
+    this.interaction.onConsumed = (id) => this.advancements.trigger('consume', { consume: id });
+    this.interaction.onDestroyProgress = (name, progress) => this.tutorial.onDestroyBlock(name, progress);
+  }
+
+  /** per-tick progress checks: inventory contents, location, tutorial */
+  private tickProgress(): void {
+    const p = this.player;
+    const inv = p.inventory;
+    if (inv.version !== this.lastInvVersion) {
+      this.lastInvVersion = inv.version;
+      const ids = this.inventoryItemIds();
+      this.recipeBook.checkInventory([...inv.main, ...inv.armor, inv.offhand]);
+      this.advancements.trigger('inventory', { inventory: ids });
+      this.tutorial.onGetItem(ids);
+    }
+    if (this.ticks % 20 === 0) {
+      const b = BIOMES[this.world.getBiome(Math.floor(p.x), Math.floor(p.z))];
+      if (b) this.advancements.trigger('biome', { biome: b.name });
+    }
+    // vanilla fall_from_world_height: from the build limit to the bottom, alive
+    if (!p.onGround && !p.flying && p.y >= MAX_Y - 1) this.fallStartY = p.y;
+    if (p.onGround || p.flying || p.inWater) {
+      if (this.fallStartY !== null && p.y <= MIN_Y + 5 && p.health > 0) this.advancements.trigger('fall_from_height');
+      this.fallStartY = null;
+    }
+    this.tutorial.onInput(p.input.forward || p.input.back || p.input.left || p.input.right || p.input.jump);
+    const hit = this.interaction.hit;
+    if (hit) this.tutorial.onLookAt(BLOCKS[STATE_BLOCK[hit.state]].name);
+    this.tutorial.tick();
+  }
+
   sleepHost(): SleepHost {
-    return { level: this.level, player: this.player, overlay: (m) => this.hud.setOverlayMessage(m), chat: (m) => this.chat(m) };
+    return {
+      level: this.level,
+      player: this.player,
+      overlay: (m) => this.hud.setOverlayMessage(m),
+      chat: (m) => this.chat(m),
+      onSlept: () => this.advancements.trigger('slept'),
+    };
   }
 
   /** the in-bed screen's Leave Bed button / Escape (vanilla sendWakeUp) */

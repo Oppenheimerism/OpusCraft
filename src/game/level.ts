@@ -6,6 +6,7 @@ import type { ItemStack } from '../item/item';
 import { World } from '../world/world';
 import type { Entity } from '../entity/entity';
 import type { Player } from '../entity/player';
+import type { LivingEntity } from '../entity/living';
 import { Rand } from '../core/rng';
 import { BLOCKS, STATE_BLOCK, FLAGS, F_AIR, F_WATERLOGGED, S } from '../world/block';
 import { canSurvive, blockDrops } from './blockRules';
@@ -159,6 +160,12 @@ export class Level {
 
   /** called for every entity tick (spawner despawn checks etc.) */
   onEntityTick: ((e: Entity) => void) | null = null;
+  /** a living entity died (advancements: kills, deaths) */
+  onEntityDied: ((victim: LivingEntity, source: string, attacker: Entity | null) => void) | null = null;
+  /** animals bred (the child, and who fed them) */
+  onBred: ((child: Entity, cause: Entity | null) => void) | null = null;
+  /** an arrow the player shot hurt something (vanilla "Take Aim") */
+  onPlayerArrowHit: ((target: Entity) => void) | null = null;
 
   /** vanilla: entities tick only inside the simulation distance (and in loaded chunks) */
   isEntityTicking(x: number, z: number): boolean {

@@ -73,7 +73,7 @@ interface CraftingLike {
   slotsChanged(): void;
 }
 
-abstract class CraftingMenuBase extends ContainerMenu implements CraftingLike {
+export abstract class CraftingMenuBase extends ContainerMenu implements CraftingLike {
   readonly craft: SimpleContainer;
   readonly result = new SimpleContainer(1);
   suppressUpdate = false;

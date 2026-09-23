@@ -1,6 +1,7 @@
 // Texture registry: generates every texture referenced by block models.
 
 import { BLOCK_TEXTURES } from './blocks';
+import { iconCubeTextures } from '../gui/iconCubes';
 import { TexDef, AnimTex, img, isAnim, TexImage } from './tex';
 import { BLOCKS, STATE_VIEWS } from '../world/block';
 import { modelTextures, ModelChoice, Variant } from '../world/models';
@@ -35,6 +36,8 @@ export function collectBlockTextureNames(): Set<string> {
       }
     }
   }
+  // inventory icons of blocks that aren't placeable yet (advancement icons)
+  for (const n of iconCubeTextures()) if (BLOCK_TEXTURES[n]) names.add(n);
   return names;
 }
 

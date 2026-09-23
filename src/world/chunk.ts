@@ -24,6 +24,8 @@ export class Chunk {
   meshing = 0;
   /** modified since load/save */
   modified = false;
+  /** generated fluids waiting to be ticked by the level (packed lx, y, lz) */
+  fluidTicks: number[] | null = null;
   inhabitedTime = 0;
   constructor(readonly cx: number, readonly cz: number) {}
 

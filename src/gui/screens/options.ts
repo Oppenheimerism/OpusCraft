@@ -6,7 +6,7 @@ import { OptionsList, ScrollList } from '../list';
 import type { GuiGraphics } from '../guiGraphics';
 import { autoGuiScale } from '../guiGraphics';
 import { boolOption, enumOption, intSlider, fracSlider, volumeSlider, pct } from './optionWidgets';
-import { KEYS } from '../../game/input';
+import { KEYS, keyDisplayName } from '../../game/input';
 import { DEFAULT_KEYS, applyKeys } from '../../game/options';
 import { saveWorldMeta } from '../../storage/worldStore';
 
@@ -453,19 +453,7 @@ const BIND_CATEGORIES: [string, Bind[]][] = [
 ];
 
 export function keyName(code: string): string {
-  if (!code) return 'Not Bound';
-  if (code.startsWith('Key')) return code.slice(3);
-  if (code.startsWith('Digit')) return code.slice(5);
-  if (code.startsWith('Numpad')) return 'Keypad ' + code.slice(6);
-  const map: Record<string, string> = {
-    Space: 'Space', ShiftLeft: 'Left Shift', ShiftRight: 'Right Shift', ControlLeft: 'Left Control', ControlRight: 'Right Control',
-    AltLeft: 'Left Alt', AltRight: 'Right Alt', MetaLeft: 'Left Win', MetaRight: 'Right Win', Tab: 'Tab', Enter: 'Enter',
-    Backspace: 'Backspace', Escape: 'Escape', CapsLock: 'Caps Lock', Slash: '/', Backslash: '\\', Period: '.', Comma: ',',
-    Semicolon: ';', Quote: "'", BracketLeft: '[', BracketRight: ']', Minus: '-', Equal: '=', Backquote: '`',
-    ArrowUp: 'Up Arrow', ArrowDown: 'Down Arrow', ArrowLeft: 'Left Arrow', ArrowRight: 'Right Arrow',
-    Insert: 'Insert', Delete: 'Delete', Home: 'Home', End: 'End', PageUp: 'Page Up', PageDown: 'Page Down',
-  };
-  return map[code] ?? code;
+  return keyDisplayName(code);
 }
 
 type BindRow = { category: string } | { bind: Bind; change: Button; reset: Button };

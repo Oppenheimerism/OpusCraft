@@ -36,7 +36,10 @@ const TAGS: Record<string, string[]> = {
 };
 for (const w of WOODS) TAGS[`${w}_logs`] = [`${w}_log`, `${w}_wood`, `stripped_${w}_log`, `stripped_${w}_wood`];
 
-function expand(ing: Ing): Set<string> {
+export type Ingredient = Ing;
+
+/** every item id an ingredient accepts (tags expanded) */
+export function expand(ing: Ing): Set<string> {
   const out = new Set<string>();
   for (const i of Array.isArray(ing) ? ing : [ing]) {
     if (i.startsWith('#')) for (const t of TAGS[i.slice(1)] ?? []) out.add(t);
@@ -341,8 +344,15 @@ interface Smelt {
   xp: number;
 }
 const SMELT = new Map<string, Smelt>();
+/** smelting recipes as written (one per vanilla recipe: a list of accepted inputs) */
+export const SMELTING: { inputs: string[]; result: string; xp: number }[] = [];
 function smelt(inputs: string[], result: string, xp: number): void {
-  for (const i of inputs) if (ITEMS.has(i) && ITEMS.has(result)) SMELT.set(i, { result, xp });
+  const ok = inputs.filter((i) => ITEMS.has(i));
+  if (!ok.length || !ITEMS.has(result)) return;
+  for (const i of ok) SMELT.set(i, { result, xp });
+  // vanilla has one recipe per ore block/raw item, but a single tag recipe for logs and sand
+  if (result === 'charcoal' || result === 'glass') SMELTING.push({ inputs: ok, result, xp });
+  else for (const i of ok) SMELTING.push({ inputs: [i], result, xp });
 }
 smelt(['iron_ore', 'deepslate_iron_ore', 'raw_iron'], 'iron_ingot', 0.7);
 smelt(['gold_ore', 'deepslate_gold_ore', 'raw_gold'], 'gold_ingot', 1.0);

@@ -3,9 +3,11 @@
 
 import type { Renderer } from '../render/renderer';
 import { PoseStack } from '../render/entityRenderer';
-import { ITEM_LIST, Item, ItemStack } from '../item/item';
+import { ITEM_LIST, ITEMS, Item, ItemStack } from '../item/item';
 import { ortho, mat4 } from '../core/math';
-import { getStateModels } from '../render/mesher';
+import { getStateModels, bakeChoice } from '../render/mesher';
+import { cube } from '../world/models';
+import { ICON_CUBES } from './iconCubes';
 import { LAYER, Layer } from '../world/block';
 import type { IconSource } from './guiGraphics';
 import type { TexImage } from '../textures/tex';
@@ -49,15 +51,30 @@ export class ItemIcons implements IconSource {
     return c;
   }
 
+  private spriteCanvas(name: string): HTMLCanvasElement | null {
+    let c = this.flat.get(name);
+    if (c) return c;
+    const img = this.renderer.items.itemSprites.get(name)?.img;
+    if (!img) return null;
+    c = document.createElement('canvas');
+    c.width = img.w;
+    c.height = img.h;
+    c.getContext('2d')!.putImageData(new ImageData(new Uint8ClampedArray(img.data), img.w, img.h), 0, 0);
+    this.flat.set(name, c);
+    return c;
+  }
+
   /** Render all block-model item icons at `scale` px per GUI pixel. */
   build(scale: number): void {
     const r = this.renderer;
     const gl = r.gl;
     const items = ITEM_LIST.filter((it) => r.items.isBlockModel(it));
+    const cubes = Object.entries(ICON_CUBES).filter(([id]) => !ITEMS.has(id));
     const S = 16 * scale;
     this.cell = S;
-    const cols = Math.ceil(Math.sqrt(items.length));
-    const rows = Math.ceil(items.length / cols);
+    const total = items.length + cubes.length;
+    const cols = Math.ceil(Math.sqrt(total));
+    const rows = Math.ceil(total / cols);
     const W = cols * S, H = rows * S;
     const tex = gl.createTexture()!;
     gl.bindTexture(gl.TEXTURE_2D, tex);
@@ -109,6 +126,28 @@ export class ItemIcons implements IconSource {
         }
       batch.flush();
     });
+    // cube icons for blocks without items yet (vanilla block/cube_all style)
+    cubes.forEach(([id, c], k) => {
+      const i = items.length + k;
+      const cx = i % cols, cy = Math.floor(i / cols);
+      this.pos.set(id, [cx * S, cy * S]);
+      gl.viewport(cx * S, H - (cy + 1) * S, S, S);
+      ortho(proj, -8, 8, -8, 8, -100, 100);
+      batch.proj = proj;
+      pose.reset();
+      pose.scale(16, 16, 16);
+      pose.rotX(30);
+      pose.rotY(225);
+      pose.scale(0.625, 0.625, 0.625);
+      pose.translate(-0.5, -0.5, -0.5);
+      const model = bakeChoice({ model: cube({ down: c.down ?? c.up, up: c.up, north: c.north ?? c.side, south: c.side, west: c.side, east: c.side }) });
+      batch.begin({ texture: r.atlas.texture!, cutoff: c.translucent ? 0.1 : -1, blend: !!c.translucent, cull: true, lit: false, useLightmap: false });
+      for (const q of model.variants[0].quads) {
+        const sh = q.shade ? FACE_SHADE[q.dir] : 1;
+        batch.quad(pose, Array.from(q.pos), Array.from(q.uv), 0, 1, 0, sh, sh, sh, 1);
+      }
+      batch.flush();
+    });
     const pixels = new Uint8Array(W * H * 4);
     gl.readPixels(0, 0, W, H, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
@@ -135,8 +174,8 @@ export class ItemIcons implements IconSource {
       return true;
     }
     const it = ITEM_LIST.find((i) => i.id === id);
-    if (!it) return false;
-    const fc = this.flatCanvas(it);
+    // icons of items the game doesn't have yet (advancements): their sprite by name
+    const fc = it ? this.flatCanvas(it) : this.spriteCanvas(id);
     if (!fc) return false;
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(fc, 0, 0, fc.width, fc.height, px, py, size, size);

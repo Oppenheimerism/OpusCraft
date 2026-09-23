@@ -99,13 +99,16 @@ export class BitmapFont {
 
   width(s: string): number {
     let w = 0;
+    let bold = false;
     for (let i = 0; i < s.length; i++) {
       const ch = s[i];
       if (ch === '§' && i + 1 < s.length) {
-        i++;
+        const code = s[++i].toLowerCase();
+        if (code === 'l') bold = true;
+        else if (code === 'r' || COLOR_CODES[code] !== undefined) bold = false;
         continue;
       }
-      w += this.charWidth(ch);
+      w += this.charWidth(ch) + (bold ? 1 : 0);
     }
     return w;
   }
@@ -114,14 +117,22 @@ export class BitmapFont {
   draw(ctx: CanvasRenderingContext2D, s: string, x: number, y: number, color: number, scale: number, alpha = 1): void {
     let cx = x;
     let col = color;
+    let bold = false;
     const prevAlpha = ctx.globalAlpha;
     ctx.globalAlpha = prevAlpha * alpha;
     for (let i = 0; i < s.length; i++) {
       const ch = s[i];
       if (ch === '§' && i + 1 < s.length) {
         const code = s[++i].toLowerCase();
-        if (COLOR_CODES[code] !== undefined) col = (color >> 24) & 0xff ? COLOR_CODES[code] : COLOR_CODES[code];
-        else if (code === 'r') col = color;
+        // vanilla: a colour code also resets formatting; §l is bold, §r resets everything
+        if (COLOR_CODES[code] !== undefined) {
+          col = COLOR_CODES[code];
+          bold = false;
+        } else if (code === 'l') bold = true;
+        else if (code === 'r') {
+          col = color;
+          bold = false;
+        }
         continue;
       }
       const g = this.glyphs.get(ch) ?? this.glyphs.get('?');
@@ -132,8 +143,10 @@ export class BitmapFont {
       if (g.w > 0 && ch !== ' ') {
         const src = this.tint(col & 0xffffff);
         ctx.drawImage(src, g.x, 0, g.w, 8, Math.round(cx * scale), Math.round((y - 0) * scale), g.w * scale, 8 * scale);
+        // vanilla bold: the glyph again one pixel to the right
+        if (bold) ctx.drawImage(src, g.x, 0, g.w, 8, Math.round((cx + 1) * scale), Math.round((y - 0) * scale), g.w * scale, 8 * scale);
       }
-      cx += g.w + 1;
+      cx += g.w + 1 + (bold ? 1 : 0);
     }
     ctx.globalAlpha = prevAlpha;
   }

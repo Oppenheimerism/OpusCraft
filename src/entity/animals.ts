@@ -153,6 +153,7 @@ export abstract class Animal extends Mob {
     this.inLove = 0;
     partner.inLove = 0;
     const cause = this.loveCause ?? partner.loveCause;
+    this.level.onBred?.(baby, cause ?? null);
     if (cause && this.level.gameRules.doMobLoot) this.level.awardExperience(this.x, this.y, this.z, this.random.nextInt(7) + 1);
   }
 

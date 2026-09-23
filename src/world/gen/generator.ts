@@ -7,6 +7,7 @@ import { Aquifer, FLUID_WATER, FLUID_LAVA } from './aquifer';
 import { pickSurfaceBiome, B, BIOMES, pickCaveBiome } from './biomes';
 import { GenContext, PendingWrites } from './context';
 import { Decorator } from './features';
+import { Carvers } from './carvers';
 import { S, getBlock } from '../block';
 import { MIN_Y, MAX_Y, SEA_LEVEL, COLUMN_VOLUME, colIndex } from '../constants';
 import { hash3, hash2, hashFloat, hash32, Rand, hashString } from '../../core/rng';
@@ -20,6 +21,8 @@ export interface GenOutput {
   light: Uint8Array;
   biomes: Uint8Array;
   pending: PendingWrites[];
+  /** generated fluids to tick once loaded (packed lx, y, lz) */
+  fluidTicks: number[];
 }
 
 const CELL_W = 4, CELL_H = 8;
@@ -30,6 +33,7 @@ export class ChunkGenerator {
   readonly router: OverworldRouter;
   readonly seeds: SeedSource;
   private readonly decorator: Decorator;
+  private readonly carvers: Carvers;
   private readonly seedHash: number;
   private readonly clayBands: number[];
   private readonly surfaceNoise: NormalNoise;
@@ -40,6 +44,7 @@ export class ChunkGenerator {
     this.router = new OverworldRouter(this.seeds);
     this.seedHash = hash32(this.seeds.lo ^ this.seeds.hi);
     this.decorator = new Decorator(this.seedHash, this.router.n.patch, this.router.n.temperature_variation);
+    this.carvers = new Carvers(this.seedHash);
     this.surfaceNoise = this.router.n.surface;
     this.surfaceSecondary = this.router.n.surface_secondary;
     this.clayBands = makeClayBands(new Rand(this.seedHash ^ 0xba4d, 3));
@@ -183,9 +188,10 @@ export class ChunkGenerator {
     const ctx = new GenContext(cx, cz, blocks, biomes);
     ctx.computeHeightmaps();
     this.buildSurface(ctx, cols, colAt);
+    this.carvers.carve(ctx, aquifer);
     this.decorator.decorate(ctx);
     const light = computeChunkLight(blocks);
-    return { cx, cz, blocks, light, biomes, pending: ctx.pendingWrites() };
+    return { cx, cz, blocks, light, biomes, pending: ctx.pendingWrites(), fluidTicks: ctx.fluidTicks };
   }
 
   private zoomBiome(x: number, z: number, cx: number, cz: number, quartBiome: Int16Array): number {

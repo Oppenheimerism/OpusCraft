@@ -56,6 +56,8 @@ export interface SoundHint {
 const LOOPS = new Set(['weather.rain', 'weather.rain.above', 'block.fire.ambient', 'block.lava.ambient', 'block.water.ambient', 'block.portal.ambient']);
 const VOLUMES: Record<string, number> = {
   'ui.button.click': 0.25,
+  'ui.toast.in': 0.4,
+  'ui.toast.out': 0.4,
   'entity.item.pickup': 0.2,
   'entity.experience_orb.pickup': 0.1,
   'entity.player.levelup': 0.75,

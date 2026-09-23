@@ -241,6 +241,8 @@ export class Decorator {
   decorate(ctx: GenContext): void {
     const r = new Rand(hash2(ctx.cx, ctx.cz, this.seed ^ 0x5eed), 1);
     ctx.computeHeightmaps();
+    // --- lakes (vanilla LAKES step)
+    this.lavaLakes(ctx, new Rand(hash2(ctx.cx, ctx.cz, this.seed ^ 0x1a4e), 2));
     // biome of the chunk center decides most decoration (vanilla decorates per biome present;
     // we use a few sample columns so borders mix naturally)
     // --- ores
@@ -260,6 +262,8 @@ export class Decorator {
     if (DECO[centerBiome]?.disks || centerBiome === B.swamp || centerBiome === B.beach || centerBiome === B.plains || centerBiome === B.forest) {
       this.disks(ctx, r);
     }
+    // --- springs (vanilla FLUID_SPRINGS step)
+    this.springs(ctx, new Rand(hash2(ctx.cx, ctx.cz, this.seed ^ 0x5b41), 3));
     ctx.computeHeightmaps();
     // --- vegetation: pick sample biomes per quadrant so mixed chunks decorate with each biome
     for (let q = 0; q < 4; q++) {
@@ -271,6 +275,125 @@ export class Decorator {
     }
     ctx.computeHeightmaps();
     this.freeze(ctx);
+  }
+
+  /**
+   * vanilla LakeFeature for lake_lava_underground (1 in 9 chunks, anywhere from
+   * y 0 up, sitting on whatever is below, at least 5 under the surface) and
+   * lake_lava_surface (1 in 200). The 16x8x16 box is kept inside this chunk.
+   */
+  private lavaLakes(ctx: GenContext, r: Rand): void {
+    const tryLake = (surface: boolean) => {
+      const x = ctx.x0 + r.nextInt(16), z = ctx.z0 + r.nextInt(16);
+      let y: number;
+      if (surface) y = ctx.heightSurface(x, z);
+      else {
+        y = r.nextInt(Math.max(1, ctx.heightSurface(x, z)) + 1);
+        // vanilla EnvironmentScanPlacement: down to something that isn't air (max 32)
+        let n = 0;
+        while (n < 32 && y > MIN_Y + 5 && ctx.getOrAir(x, y, z) === 0) {
+          y--;
+          n++;
+        }
+        if (ctx.getOrAir(x, y, z) === 0) return;
+        if (y > ctx.heightOceanFloor(x, z) - 5) return;
+      }
+      this.lake(ctx, r, ctx.x0, y - 4, ctx.z0, S('lava'), S('stone'));
+    };
+    if (r.nextInt(9) === 0) tryLake(false);
+    if (r.nextInt(200) === 0) tryLake(true);
+  }
+
+  private lake(ctx: GenContext, r: Rand, ox: number, oy: number, oz: number, fluid: number, barrier: number): void {
+    if (oy <= MIN_Y + 4) return;
+    const shape = new Uint8Array(2048);
+    const n = r.nextInt(4) + 4;
+    for (let j = 0; j < n; j++) {
+      const d0 = r.nextDouble() * 6 + 3, d1 = r.nextDouble() * 4 + 2, d2 = r.nextDouble() * 6 + 3;
+      const d3 = r.nextDouble() * (16 - d0 - 2) + 1 + d0 / 2;
+      const d4 = r.nextDouble() * (8 - d1 - 4) + 2 + d1 / 2;
+      const d5 = r.nextDouble() * (16 - d2 - 2) + 1 + d2 / 2;
+      for (let l = 1; l < 15; l++)
+        for (let i1 = 1; i1 < 15; i1++)
+          for (let j1 = 1; j1 < 7; j1++) {
+            const d6 = (l - d3) / (d0 / 2), d7 = (j1 - d4) / (d1 / 2), d8 = (i1 - d5) / (d2 / 2);
+            if (d6 * d6 + d7 * d7 + d8 * d8 < 1) shape[(l * 16 + i1) * 8 + j1] = 1;
+          }
+    }
+    const at = (a: number, b: number, c: number) => shape[(a * 16 + b) * 8 + c] === 1;
+    const edge = (a: number, b: number, c: number) =>
+      !at(a, b, c) && ((a < 15 && at(a + 1, b, c)) || (a > 0 && at(a - 1, b, c)) || (b < 15 && at(a, b + 1, c)) || (b > 0 && at(a, b - 1, c)) || (c < 7 && at(a, b, c + 1)) || (c > 0 && at(a, b, c - 1)));
+    const isFluid = (st: number) => (FLAGS[st] & F_WATER) !== 0 || blockOf(st).name === 'lava';
+    const solid = (st: number) => (FLAGS[st] & F_COLLIDE) !== 0 && !isFluid(st);
+    // vanilla: the rim must be solid below the surface line and dry above it
+    for (let a = 0; a < 16; a++)
+      for (let b = 0; b < 16; b++)
+        for (let c = 0; c < 8; c++) {
+          if (!edge(a, b, c)) continue;
+          const st = ctx.getOrAir(ox + a, oy + c, oz + b);
+          if (c >= 4 && isFluid(st)) return;
+          if (c < 4 && !solid(st) && st !== fluid) return;
+        }
+    for (let a = 0; a < 16; a++)
+      for (let b = 0; b < 16; b++)
+        for (let c = 0; c < 8; c++) {
+          if (!at(a, b, c)) continue;
+          const x = ox + a, y = oy + c, z = oz + b;
+          if (blockOf(ctx.getOrAir(x, y, z)).name === 'bedrock') continue;
+          ctx.set(x, y, z, c >= 4 ? 0 : fluid);
+          if (c < 4) ctx.scheduleFluid(x, y, z);
+        }
+    // stone rim so the lava doesn't leak into caves (vanilla barrier)
+    for (let a = 0; a < 16; a++)
+      for (let b = 0; b < 16; b++)
+        for (let c = 0; c < 8; c++) {
+          if (!edge(a, b, c) || !(c < 4 || r.nextInt(2) !== 0)) continue;
+          const x = ox + a, y = oy + c, z = oz + b;
+          const st = ctx.getOrAir(x, y, z);
+          const n2 = blockOf(st).name;
+          if (solid(st) && n2 !== 'bedrock' && !n2.endsWith('_ore') && n2 !== 'chest' && n2 !== 'spawner') ctx.set(x, y, z, barrier);
+        }
+  }
+
+  /**
+   * vanilla SpringFeature: a fluid source set into a wall with exactly one
+   * opening, so it pours out (spring_water: 25 tries up to y 192; spring_lava:
+   * 20 tries biased to the bottom of the world).
+   */
+  private springs(ctx: GenContext, r: Rand): void {
+    const WATER_OK = /^(stone|granite|diorite|andesite|deepslate|tuff|calcite|dirt|snow_block|powder_snow|packed_ice)$/;
+    const LAVA_OK = /^(stone|granite|diorite|andesite|deepslate|tuff|calcite)$/;
+    const place = (x: number, y: number, z: number, state: number, ok: RegExp) => {
+      const valid = (st: number) => st >= 0 && ok.test(blockOf(st).name);
+      if (!valid(ctx.get(x, y + 1, z)) || !valid(ctx.get(x, y - 1, z))) return;
+      const here = ctx.get(x, y, z);
+      if (here < 0 || (here !== 0 && !valid(here))) return;
+      let rock = 0, hole = 0;
+      for (const [dx, dy, dz] of [[-1, 0, 0], [1, 0, 0], [0, 0, -1], [0, 0, 1], [0, -1, 0]]) {
+        const st = ctx.get(x + dx, y + dy, z + dz);
+        if (valid(st)) rock++;
+        if (st === 0) hole++;
+      }
+      if (rock === 4 && hole === 1) {
+        ctx.set(x, y, z, state);
+        ctx.scheduleFluid(x, y, z);
+      }
+    };
+    const WATER = S('water'), LAVA = S('lava');
+    for (let i = 0; i < 25; i++) {
+      const x = ctx.x0 + r.nextInt(16), z = ctx.z0 + r.nextInt(16);
+      const y = MIN_Y + r.nextInt(192 - MIN_Y + 1);
+      place(x, y, z, WATER, WATER_OK);
+    }
+    for (let i = 0; i < 20; i++) {
+      const x = ctx.x0 + r.nextInt(16), z = ctx.z0 + r.nextInt(16);
+      // vanilla VeryBiasedToBottomHeight(bottom, top - 8, inner 8)
+      const lo = MIN_Y, hi = 320 - 8, inner = 8;
+      const k = lo + inner + r.nextInt(hi - (lo + inner) + 1);
+      const l = lo + r.nextInt(Math.max(1, k - 1 - lo + 1));
+      const y = lo + r.nextInt(Math.max(1, l - 1 + inner - lo + 1));
+      place(x, y, z, LAVA, LAVA_OK);
+    }
   }
 
   private rndIn(r: Rand, ctx: GenContext, qx: number, qz: number): [number, number] {

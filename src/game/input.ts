@@ -36,6 +36,23 @@ export const KEYS = {
   spectatorOutlines: '',
 };
 
+/** vanilla key names as shown in controls and hints */
+export function keyDisplayName(code: string): string {
+  if (!code) return 'Not Bound';
+  if (code.startsWith('Key')) return code.slice(3);
+  if (code.startsWith('Digit')) return code.slice(5);
+  if (code.startsWith('Numpad')) return 'Keypad ' + code.slice(6);
+  const map: Record<string, string> = {
+    Space: 'Space', ShiftLeft: 'Left Shift', ShiftRight: 'Right Shift', ControlLeft: 'Left Control', ControlRight: 'Right Control',
+    AltLeft: 'Left Alt', AltRight: 'Right Alt', MetaLeft: 'Left Win', MetaRight: 'Right Win', Tab: 'Tab', Enter: 'Enter',
+    Backspace: 'Backspace', Escape: 'Escape', CapsLock: 'Caps Lock', Slash: '/', Backslash: '\\', Period: '.', Comma: ',',
+    Semicolon: ';', Quote: "'", BracketLeft: '[', BracketRight: ']', Minus: '-', Equal: '=', Backquote: '`',
+    ArrowUp: 'Up Arrow', ArrowDown: 'Down Arrow', ArrowLeft: 'Left Arrow', ArrowRight: 'Right Arrow',
+    Insert: 'Insert', Delete: 'Delete', Home: 'Home', End: 'End', PageUp: 'Page Up', PageDown: 'Page Down',
+  };
+  return map[code] ?? code;
+}
+
 export class Input {
   readonly down = new Set<string>();
   private readonly pressedQueue: string[] = [];

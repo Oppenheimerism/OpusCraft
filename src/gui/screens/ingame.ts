@@ -22,7 +22,7 @@ export class PauseScreen extends Screen {
     const col = (c: number) => gx + c * 106 + 4;
     const row = (r: number) => (r === 0 ? gy + 50 : gy + 70 + (r - 1) * 24 + 4);
     this.add(new Button(col(0), row(0), 204, 20, 'Back to Game', () => g.setScreen(null)));
-    this.add(new Button(col(0), row(1), 98, 20, 'Advancements', () => {})).active = false;
+    this.add(new Button(col(0), row(1), 98, 20, 'Advancements', () => g.advancementsScreenFactory && g.setScreen(g.advancementsScreenFactory())));
     this.add(new Button(col(1), row(1), 98, 20, 'Statistics', () => {})).active = false;
     this.add(new Button(col(0), row(2), 98, 20, 'Give Feedback', () => {})).active = false;
     this.add(new Button(col(1), row(2), 98, 20, 'Report Bugs', () => {})).active = false;

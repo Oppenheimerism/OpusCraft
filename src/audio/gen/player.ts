@@ -44,6 +44,43 @@ export function click(c: Ctx): Float32Array {
   return out;
 }
 
+/** Toast sliding in/out: a soft paper-like swish that rises (in) or falls (out). */
+function toastSwish(c: Ctx, rising: boolean): Float32Array {
+  const { sr, rng } = c;
+  const d = 0.32;
+  const out = alloc(d + 0.05, sr);
+  const f0 = rising ? 900 : 2600, f1 = rising ? 2600 : 900;
+  layer(out, 1, (b) =>
+    sweep(b, sr, rng, {
+      dur: d,
+      f: (t) => f0 * Math.pow(f1 / f0, t / d),
+      q: 1.4,
+      amp: (t) => envBump(t / d, 0.45, 0.55),
+      color: 'pink',
+    }),
+  );
+  layer(out, 0.25, (b) => sweep(b, sr, rng, { dur: d, f: (t) => (f0 + (f1 - f0) * (t / d)) * 2.2, q: 2.5, amp: (t) => envBump(t / d, 0.5, 0.5) }));
+  return out;
+}
+
+/** Challenge complete: a bright little fanfare arpeggio ending on a held chord. */
+function challengeFanfare(c: Ctx): Float32Array {
+  const { sr } = c;
+  const out = alloc(2.2, sr);
+  const note = (midi: number) => 440 * Math.pow(2, (midi - 69) / 12);
+  // C major: G4 C5 E5 G5 then a C major chord
+  const seq: [number, number, number][] = [[67, 0, 0.14], [72, 0.12, 0.14], [76, 0.24, 0.14], [79, 0.36, 0.14]];
+  for (const [m, t0, dur] of seq) {
+    layer(out, 0.55, (b) => addOsc(b, sr, t0, dur + 0.2, () => note(m), (t) => envAD(t, 0.006, 0.12)));
+    layer(out, 0.18, (b) => addOsc(b, sr, t0, dur + 0.2, () => note(m) * 2, (t) => envAD(t, 0.004, 0.08)));
+  }
+  for (const m of [72, 76, 79, 84]) {
+    layer(out, 0.32, (b) => addOsc(b, sr, 0.5, 1.6, (t) => note(m) * (1 + 0.003 * Math.sin(TAU * 5 * t)), (t) => envAHD(t, 0.02, 0.35, 0.45)));
+    layer(out, 0.08, (b) => addOsc(b, sr, 0.5, 1.4, () => note(m) * 3, (t) => envAHD(t, 0.02, 0.2, 0.3)));
+  }
+  return softClip(out, 1.2);
+}
+
 /** Item pickup: short bright "plip" with a rising pitch. */
 function pop(c: Ctx): Float32Array {
   const { sr, rng } = c;
@@ -859,6 +896,9 @@ export function playerSounds(): Record<string, SoundGen> {
   const hurt = sound('entity.player.hurt', 3, (c) => grunt(c, false));
   return {
     'ui.button.click': clickS,
+    'ui.toast.in': sound('ui.toast.in', 1, (c) => toastSwish(c, true)),
+    'ui.toast.out': sound('ui.toast.out', 1, (c) => toastSwish(c, false)),
+    'ui.toast.challenge_complete': sound('ui.toast.challenge_complete', 1, challengeFanfare),
     'block.stone_button.click_on': pitched(clickS, 0.6),
     'block.stone_button.click_off': pitched(clickS, 0.5),
     'block.lever.click': pitched(clickS, 0.6),

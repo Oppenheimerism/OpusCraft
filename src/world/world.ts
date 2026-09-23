@@ -17,6 +17,8 @@ export interface GenResult {
   biomes: Uint8Array;
   pending: PendingWrites[];
   blockEntities?: SavedBlockEntity[];
+  /** freshly generated fluids that should start flowing (packed lx, y, lz) */
+  fluidTicks?: number[];
 }
 
 export class World {
@@ -166,6 +168,7 @@ export class World {
   addChunk(r: GenResult): Chunk {
     const c = new Chunk(r.cx, r.cz);
     c.loadColumn(r.blocks, r.light, r.biomes);
+    if (r.fluidTicks?.length) c.fluidTicks = r.fluidTicks;
     this.chunks.set(c.key, c);
     this.lastChunk = null;
     // pending writes into this chunk from earlier neighbours

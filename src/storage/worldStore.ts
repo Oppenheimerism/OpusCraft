@@ -36,6 +36,9 @@ export interface WorldMeta {
     spawn: [number, number, number];
     /** bed / spawnpoint: x, y, z, forced (1/0) */
     respawn?: [number, number, number, number] | null;
+    /** advancement id → criteria obtained */
+    advancements?: Record<string, string[]>;
+    recipeBook?: import('../inventory/recipeBook').RecipeBookSave;
     dead?: boolean;
   } | null;
   version: number;

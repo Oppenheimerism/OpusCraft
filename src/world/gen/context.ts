@@ -62,6 +62,8 @@ export class GenContext {
   /** ocean floor: highest solid (non-fluid, collidable) y+1 */
   readonly oceanFloor: Int16Array;
   private pending = new Map<number, PendingWrites>();
+  /** fluids placed by features that must start flowing when the chunk loads (packed lx, y, lz) */
+  readonly fluidTicks: number[] = [];
 
   constructor(readonly cx: number, readonly cz: number, blocks: Uint16Array, biomes: Uint8Array) {
     this.x0 = cx * 16;
@@ -114,6 +116,13 @@ export class GenContext {
     const f = FLAGS[state];
     if ((f & (F_COLLIDE | F_WATER)) && y + 1 > this.motion[ci]) this.motion[ci] = y + 1;
     return true;
+  }
+
+  /** vanilla scheduleTick / markPosForPostprocessing for a generated fluid */
+  scheduleFluid(x: number, y: number, z: number): void {
+    const lx = x - this.x0, lz = z - this.z0;
+    if (lx < 0 || lz < 0 || lx > 15 || lz > 15) return;
+    this.fluidTicks.push(lx, y, lz);
   }
 
   pendingWrites(): PendingWrites[] {

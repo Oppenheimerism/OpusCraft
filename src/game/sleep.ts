@@ -122,6 +122,8 @@ export interface SleepHost {
   overlay(msg: string): void;
   /** system chat message */
   chat(msg: string): void;
+  /** vanilla SLEPT_IN_BED trigger */
+  onSlept?(): void;
 }
 
 /** vanilla ServerPlayer.setRespawnPosition (with the "Respawn point set" message) */
@@ -181,6 +183,7 @@ function startSleepInBed(host: SleepHost, x: number, y: number, z: number, st: n
     if (monsters) return MSG.notSafe;
   }
   p.startSleeping(x, y, z);
+  host.onSlept?.();
   return null;
 }
 

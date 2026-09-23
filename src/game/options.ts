@@ -96,6 +96,8 @@ export interface GameOptions {
   allowServerListing: boolean;
   username: string;
   keys: Record<string, string>;
+  /** vanilla tutorialStep: first-time hints still to show */
+  tutorialStep: string;
 }
 
 export const DEFAULT_KEYS: Record<string, string> = { ...KEYS };
@@ -185,6 +187,7 @@ export const DEFAULT_OPTIONS: GameOptions = {
   allowServerListing: true,
   username: 'Player',
   keys: { ...DEFAULT_KEYS },
+  tutorialStep: 'movement',
 };
 
 export function loadOptions(): GameOptions {

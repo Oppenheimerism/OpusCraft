@@ -8,6 +8,7 @@ import { ContainerMenu, Slot, canItemQuickReplace, quickCraftPlaceCount, quickcr
 import { InventoryMenu, CraftingMenu, FurnaceMenu, ChestMenu } from '../../inventory/menus';
 import type { ItemStack } from '../../item/item';
 import { KEYS } from '../../game/input';
+import { RecipeBookComponent } from '../recipeBookComponent';
 
 const LABEL = 0x404040;
 
@@ -52,15 +53,27 @@ export abstract class AbstractContainerScreen<M extends ContainerMenu> extends S
   private lastClickButton = -1;
   private lastQuickMoved: ItemStack | null = null;
   private quickCraftStart: Slot | null = null;
+  /** the recipe book beside crafting grids and furnaces */
+  protected book: RecipeBookComponent | null = null;
 
   constructor(game: Game, public menu: M, title: string) {
     super(game, title);
   }
 
   init(): void {
-    this.leftPos = Math.floor((this.width - this.imageWidth) / 2);
+    this.book?.init(this.width, this.height);
+    this.leftPos = this.book ? this.book.leftPos(this.imageWidth) : Math.floor((this.width - this.imageWidth) / 2);
     this.topPos = Math.floor((this.height - this.imageHeight) / 2);
     this.inventoryLabelY = this.imageHeight - 94;
+  }
+
+  /** the green book button: open/close the recipe book and slide the container */
+  protected addRecipeBookButton(dx: number, y: number): void {
+    const b = this.add(new RecipeBookButton(this.leftPos + dx, y, () => {
+      this.book?.toggle();
+      this.leftPos = this.book ? this.book.leftPos(this.imageWidth) : this.leftPos;
+      b.x = this.leftPos + dx;
+    }));
   }
 
   override isPauseScreen(): boolean {
@@ -80,9 +93,18 @@ export abstract class AbstractContainerScreen<M extends ContainerMenu> extends S
 
   override tick(): void {
     if (!this.menu.stillValid(this.game.player) || this.game.player.health <= 0) this.onClose();
+    this.book?.tick();
   }
 
   override render(g: GuiGraphics, mx: number, my: number, partial: number): void {
+    // vanilla: on narrow screens the open recipe book replaces the container
+    if (this.book?.visible && this.book.widthTooNarrow) {
+      this.renderBackground(g);
+      this.renderBg(g, mx, my, partial);
+      this.book.render(g, mx, my, partial);
+      this.book.renderTooltip(g, mx, my);
+      return;
+    }
     this.renderBackground(g);
     this.renderBg(g, mx, my, partial);
     for (const w of this.widgets) if (w.visible) w.render(g, mx, my);
@@ -113,7 +135,11 @@ export abstract class AbstractContainerScreen<M extends ContainerMenu> extends S
       else g.itemDecorations(carried.count, carried.damage, carried.item.maxDamage, x, y);
     }
     g.popTransform();
-    this.renderTooltip(g, mx, my);
+    if (this.book) {
+      this.book.render(g, mx, my, partial);
+      this.book.renderGhost(g, L, T);
+    }
+    if (!this.book?.renderTooltip(g, mx, my)) this.renderTooltip(g, mx, my);
   }
 
   override renderTooltip(g: GuiGraphics, mx: number, my: number): void {
@@ -164,6 +190,7 @@ export abstract class AbstractContainerScreen<M extends ContainerMenu> extends S
   }
 
   protected isHovering(slot: Slot, mx: number, my: number): boolean {
+    if (this.book?.visible && this.book.widthTooNarrow) return false;
     const x = mx - this.leftPos, y = my - this.topPos;
     return x >= slot.x - 1 && x < slot.x + 16 + 1 && y >= slot.y - 1 && y < slot.y + 16 + 1;
   }
@@ -174,12 +201,14 @@ export abstract class AbstractContainerScreen<M extends ContainerMenu> extends S
   }
 
   protected hasClickedOutside(mx: number, my: number): boolean {
+    if (this.book?.isOverBook(mx, my)) return false;
     return mx < this.leftPos || my < this.topPos || mx >= this.leftPos + this.imageWidth || my >= this.topPos + this.imageHeight;
   }
 
   protected slotClicked(slot: Slot | null, slotId: number, button: number, type: ClickType): void {
     if (slot) slotId = slot.index;
     this.menu.clicked(slotId, button, type);
+    this.book?.slotClicked(slot);
   }
 
   private recalculateQuickCraftRemaining(): void {
@@ -203,7 +232,9 @@ export abstract class AbstractContainerScreen<M extends ContainerMenu> extends S
   }
 
   override mouseClicked(mx: number, my: number, button: number): boolean {
+    if (this.book?.mouseClicked(mx, my, button)) return true;
     if (super.mouseClicked(mx, my, button)) return true;
+    if (this.book?.visible && this.book.widthTooNarrow) return true;
     const creative = this.game.player.gameMode === 'creative';
     // browser buttons (0 left, 1 middle, 2 right) → vanilla (0 left, 1 right, 2 middle)
     const btn = button === 0 ? 0 : button === 2 ? 1 : 2;
@@ -303,6 +334,7 @@ export abstract class AbstractContainerScreen<M extends ContainerMenu> extends S
   }
 
   override keyPressed(e: KeyboardEvent): boolean {
+    if (this.book?.keyPressed(e)) return true;
     if (e.key === 'Escape' || e.code === KEYS.inventory) {
       this.onClose();
       return true;
@@ -326,8 +358,8 @@ export abstract class AbstractContainerScreen<M extends ContainerMenu> extends S
     return super.keyPressed(e);
   }
 
-  override charTyped(_ch: string): boolean {
-    return false;
+  override charTyped(ch: string): boolean {
+    return this.book?.charTyped(ch) ?? false;
   }
 
   override onClose(): void {
@@ -347,9 +379,9 @@ export class InventoryScreen extends AbstractContainerScreen<InventoryMenu> {
     this.titleLabelX = 97;
   }
   override init(): void {
+    this.book ??= new RecipeBookComponent(this.game, 'crafting', this.menu);
     super.init();
-    const b = this.add(new RecipeBookButton(this.leftPos + 104, Math.floor(this.height / 2) - 22));
-    void b;
+    this.addRecipeBookButton(104, Math.floor(this.height / 2) - 22);
   }
   override renderLabels(g: GuiGraphics): void {
     g.text(this.title, this.titleLabelX, this.titleLabelY, LABEL, false);
@@ -361,8 +393,8 @@ export class InventoryScreen extends AbstractContainerScreen<InventoryMenu> {
 }
 
 class RecipeBookButton extends Button {
-  constructor(x: number, y: number) {
-    super(x, y, 20, 18, '', () => {});
+  constructor(x: number, y: number, onPress: () => void) {
+    super(x, y, 20, 18, '', onPress);
   }
   override render(g: GuiGraphics, mx: number, my: number): void {
     g.sprite(this.isMouseOver(mx, my) ? 'recipe_book_button_highlighted' : 'recipe_book_button', this.x, this.y, 20, 18);
@@ -375,8 +407,9 @@ export class CraftingScreen extends AbstractContainerScreen<CraftingMenu> {
     this.titleLabelX = 29;
   }
   override init(): void {
+    this.book ??= new RecipeBookComponent(this.game, 'crafting', this.menu);
     super.init();
-    this.add(new RecipeBookButton(this.leftPos + 5, Math.floor(this.height / 2) - 49));
+    this.addRecipeBookButton(5, Math.floor(this.height / 2) - 49);
   }
   renderBg(g: GuiGraphics): void {
     g.sprite('container_crafting_table', this.leftPos, this.topPos);
@@ -389,8 +422,9 @@ export class FurnaceScreen extends AbstractContainerScreen<FurnaceMenu> {
     this.titleLabelX = Math.floor((176 - 0) / 2);
   }
   override init(): void {
+    this.book ??= new RecipeBookComponent(this.game, 'furnace', this.menu);
     super.init();
-    this.add(new RecipeBookButton(this.leftPos + 20, Math.floor(this.height / 2) - 49));
+    this.addRecipeBookButton(20, Math.floor(this.height / 2) - 49);
   }
   override renderLabels(g: GuiGraphics): void {
     g.text(this.title, Math.floor((this.imageWidth - g.textWidth(this.title)) / 2), this.titleLabelY, LABEL, false);

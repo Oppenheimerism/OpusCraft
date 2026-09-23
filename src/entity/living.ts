@@ -497,10 +497,11 @@ export abstract class LivingEntity extends Entity {
     this.dy = this.onGround ? Math.min(0.4, this.dy / 2 + strength) : this.dy;
   }
 
-  die(_source: string, _attacker: Entity | null = null): void {
+  die(source: string, attacker: Entity | null = null): void {
     if (this.dead) return;
     this.dead = true;
     this.deathTime = 0;
+    this.level.onEntityDied?.(this, source, attacker);
   }
 
   heal(amount: number): void {
