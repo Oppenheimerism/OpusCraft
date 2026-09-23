@@ -477,7 +477,9 @@ export class Interaction {
       }
       lvl.setBlock(h.x, h.y, h.z, ns);
       const open = b.get(ns, 'open');
-      const kind = n.endsWith('_door') ? 'wooden_door' : n.endsWith('_trapdoor') ? 'wooden_trapdoor' : 'fence_gate';
+      // (vanilla BlockSetType / WoodType: crimson and warped doors sound of nether wood, cherry ones of cherry wood)
+      const wood = /^(crimson|warped)_/.test(n) ? 'nether_wood_' : n.startsWith('cherry_') ? 'cherry_wood_' : '';
+      const kind = n.endsWith('_door') ? `${wood || 'wooden_'}door` : n.endsWith('_trapdoor') ? `${wood || 'wooden_'}trapdoor` : `${wood}fence_gate`;
       lvl.sound.play(`block.${kind}.${open ? 'open' : 'close'}`, h.x + 0.5, h.y + 0.5, h.z + 0.5, 1, Math.random() * 0.1 + 0.9);
       p.swing();
       return true;

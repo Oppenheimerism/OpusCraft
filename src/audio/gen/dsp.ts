@@ -608,9 +608,10 @@ export function resample(src: Float32Array, rate: number): Float32Array {
   let s = src;
   if (rate > 1) {
     s = src.slice();
-    const fc = 0.45 / rate;
-    new Biquad().lowpass(fc, 0.7071, 1).run(s);
-    new Biquad().lowpass(fc, 0.7071, 1).run(s);
+    // (in a nominal 1 kHz rather than cycles per sample: Biquad clamps the cutoff to at least 1 Hz)
+    const fc = 450 / rate;
+    new Biquad().lowpass(fc, 0.7071, 1000).run(s);
+    new Biquad().lowpass(fc, 0.7071, 1000).run(s);
   }
   const n = Math.max(1, Math.floor((s.length - 1) / rate));
   const out = new Float32Array(n);

@@ -19,6 +19,7 @@ import {
   nsamp,
   peakEq,
   pink,
+  resample,
   reverb,
   reverse,
   smooth,
@@ -872,6 +873,13 @@ function cave(c: Ctx): Float32Array {
   return o;
 }
 
+/**
+ * Vanilla BlockSetType.CRIMSON / WARPED and CHERRY (and their WoodTypes' fence gates) have doors of their own: the
+ * same latch and swing in a softer fungal wood (lower and duller) or in cherry's light boards (higher and brighter)
+ */
+const netherWood = (gen: (c: Ctx) => Float32Array) => (c: Ctx): Float32Array => lowpass(resample(gen(c), 0.86), 2300, c.sr);
+const cherryWood = (gen: (c: Ctx) => Float32Array) => (c: Ctx): Float32Array => resample(gen(c), 1.13);
+
 // ------------------------------------------------------------------ registry
 
 export function worldSounds(): Record<string, SoundGen> {
@@ -889,6 +897,18 @@ export function worldSounds(): Record<string, SoundGen> {
     'block.iron_trapdoor.close': sound('block.iron_trapdoor.close', 4, (c) => ironClose(c, true)),
     'block.fence_gate.open': sound('block.fence_gate.open', 2, gateOpen),
     'block.fence_gate.close': sound('block.fence_gate.close', 3, gateClose),
+    'block.nether_wood_door.open': sound('block.nether_wood_door.open', 2, netherWood(doorOpen)),
+    'block.nether_wood_door.close': sound('block.nether_wood_door.close', 2, netherWood(doorClose)),
+    'block.nether_wood_trapdoor.open': sound('block.nether_wood_trapdoor.open', 3, netherWood(trapdoorOpen)),
+    'block.nether_wood_trapdoor.close': sound('block.nether_wood_trapdoor.close', 3, netherWood(trapdoorClose)),
+    'block.nether_wood_fence_gate.open': sound('block.nether_wood_fence_gate.open', 2, netherWood(gateOpen)),
+    'block.nether_wood_fence_gate.close': sound('block.nether_wood_fence_gate.close', 3, netherWood(gateClose)),
+    'block.cherry_wood_door.open': sound('block.cherry_wood_door.open', 2, cherryWood(doorOpen)),
+    'block.cherry_wood_door.close': sound('block.cherry_wood_door.close', 2, cherryWood(doorClose)),
+    'block.cherry_wood_trapdoor.open': sound('block.cherry_wood_trapdoor.open', 3, cherryWood(trapdoorOpen)),
+    'block.cherry_wood_trapdoor.close': sound('block.cherry_wood_trapdoor.close', 3, cherryWood(trapdoorClose)),
+    'block.cherry_wood_fence_gate.open': sound('block.cherry_wood_fence_gate.open', 2, cherryWood(gateOpen)),
+    'block.cherry_wood_fence_gate.close': sound('block.cherry_wood_fence_gate.close', 3, cherryWood(gateClose)),
     'block.furnace.fire_crackle': sound('block.furnace.fire_crackle', 5, furnaceCrackle),
     'block.fire.ambient': sound('block.fire.ambient', 1, fireAmbient, loop),
     'block.fire.extinguish': sound('block.fire.extinguish', 1, fizz),
