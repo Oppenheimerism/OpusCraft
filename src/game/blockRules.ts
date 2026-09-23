@@ -7,6 +7,7 @@ import { Item, ItemStack, getItem, ITEMS, itemForBlock } from '../item/item';
 import type { World } from '../world/world';
 import type { Level } from './level';
 import { Rand } from '../core/rng';
+import { oreDrops, uniformBonus, tableBonus } from '../item/enchantHelper';
 
 const blk = (st: number): Block => BLOCKS[STATE_BLOCK[st]];
 
@@ -266,6 +267,13 @@ export function placementState(block: Block, ctx: PlaceContext): number | null {
     st = block.state({ vertical_direction: dir, thickness: dripstoneThickness(ctx.world, ctx.x, ctx.y, ctx.z, dir, !ctx.sneaking) });
   } else if (AMETHYST_BUD.test(n)) {
     st = block.with(st, 'facing', DIR_NAMES[ctx.face]);
+  } else if (n.endsWith('anvil')) {
+    // vanilla AnvilBlock.getStateForPlacement: the player's facing turned clockwise
+    st = block.with(st, 'facing', { north: 'east', east: 'south', south: 'west', west: 'north' }[facingH as string]!);
+  } else if (n === 'grindstone') {
+    // vanilla FaceAttachedHorizontalDirectionalBlock (a grindstone survives anywhere): the nearest looking direction
+    const d = lookingDirections(ctx.yaw, ctx.pitch)[0];
+    st = d === UP || d === DOWN ? block.state({ face: d === UP ? 'ceiling' : 'floor', facing: facingH }) : block.state({ face: 'wall', facing: OPP_NAME[d] });
   } else if (block.propIndex('facing') >= 0) {
     st = block.with(st, 'facing', oppositeH);
   }
@@ -339,13 +347,19 @@ export function isCorrectTool(item: Item | null, block: Block): boolean {
   return item.tool.type === block.tool && item.tool.tier >= block.tier;
 }
 
-/** vanilla getDestroyProgress per tick; `effectMul` = haste / mining fatigue (LivingEntity.digSpeedEffectFactor) */
-export function destroyProgress(state: number, item: Item | null, underwater: boolean, onGround: boolean, effectMul = 1): number {
+/**
+ * vanilla getDestroyProgress per tick; `effectMul` = haste / mining fatigue (LivingEntity.digSpeedEffectFactor),
+ * `efficiency` = the MINING_EFFICIENCY attribute (added to a tool faster than bare hands), `submerged` =
+ * SUBMERGED_MINING_SPEED (0.2, or 1 with aqua affinity)
+ */
+export function destroyProgress(state: number, item: Item | null, underwater: boolean, onGround: boolean, effectMul = 1, efficiency = 0, submerged = 0.2): number {
   const b = blk(state);
   const hardness = b.hardness;
   if (hardness < 0) return 0;
-  let speed = toolSpeed(item, b) * effectMul;
-  if (underwater) speed /= 5;
+  let speed = toolSpeed(item, b);
+  if (speed > 1) speed += efficiency;
+  speed *= effectMul;
+  if (underwater) speed *= submerged;
   if (!onGround) speed /= 5;
   const div = isCorrectTool(item, b) ? 30 : 100;
   if (hardness === 0) return 1;
@@ -369,7 +383,8 @@ function fortuneless(r: Rand, min: number, max: number): number {
  */
 export function blockExperience(state: number, tool: Item | null, r: Rand, silk = false): number {
   const b = blk(state);
-  if (silk || (b.requiresTool && !isCorrectTool(tool, b))) return 0;
+  // (silk touch's block_experience effect: the ores check it, the spawner doesn't)
+  if ((silk && b.name !== 'spawner') || (b.requiresTool && !isCorrectTool(tool, b))) return 0;
   const uniform = (lo: number, hi: number) => lo + r.nextInt(hi - lo + 1);
   switch (b.name.replace(/^deepslate_/, '')) {
     case 'coal_ore': return uniform(0, 2);
@@ -382,16 +397,24 @@ export function blockExperience(state: number, tool: Item | null, r: Rand, silk 
   return 0;
 }
 
-export function blockDrops(state: number, tool: Item | null, r: Rand, silk = false): ItemStack[] {
+/** vanilla loot tables with a silk touch branch (the block itself); the rest ignore silk touch */
+const SILK_TABLES = new Set(['stone', 'deepslate', 'grass_block', 'mycelium', 'podzol', 'gravel', 'clay', 'glowstone', 'melon', 'bookshelf', 'snow_block', 'snow', 'cobweb', 'glass', 'ice', 'packed_ice', 'blue_ice', 'amethyst_cluster', 'small_amethyst_bud', 'medium_amethyst_bud', 'large_amethyst_bud']);
+const SAPLING_CHANCES = [0.05, 0.0625, 0.083333336, 0.1];
+const JUNGLE_SAPLING_CHANCES = [0.025, 0.027777778, 0.03125, 0.041666668, 0.1];
+const STICK_CHANCES = [0.02, 0.022222223, 0.025, 0.033333335, 0.1];
+const APPLE_CHANCES = [0.005, 0.0055555557, 0.00625, 0.008333334, 0.025];
+
+/** a block's loot; `silk` / `fortune` = the breaking tool's silk touch and fortune levels */
+export function blockDrops(state: number, tool: Item | null, r: Rand, silk = false, fortune = 0): ItemStack[] {
   const b = blk(state);
   const n = b.name;
   if (b.requiresTool && !isCorrectTool(tool, b)) return [];
   const shears = tool?.tool?.type === 'shears';
-  if (silk) {
+  if (silk && (SILK_TABLES.has(n) || n.endsWith('_ore') || b.s.isLeaves || b.s.noDrop)) {
     // (vanilla loot tables that drop nothing even with silk touch)
     if (n === 'budding_amethyst' || n === 'spawner') return [];
     const it = itemForBlock(n);
-    return it ? [new ItemStack(it, 1)] : [];
+    return it ? [new ItemStack(it, n === 'snow' ? b.get<number>(state, 'layers') : 1)] : [];
   }
   // (glass and the like drop only with silk touch)
   if (b.s.noDrop) return [];
@@ -399,25 +422,26 @@ export function blockDrops(state: number, tool: Item | null, r: Rand, silk = fal
     case 'stone': return stacks('cobblestone', 1);
     case 'deepslate': return stacks('cobbled_deepslate', 1);
     case 'grass_block': case 'mycelium': case 'podzol': case 'dirt_path': case 'farmland': return stacks('dirt', 1);
-    case 'coal_ore': case 'deepslate_coal_ore': return stacks('coal', 1);
-    case 'iron_ore': case 'deepslate_iron_ore': return stacks('raw_iron', 1);
-    case 'copper_ore': case 'deepslate_copper_ore': return stacks('raw_copper', fortuneless(r, 2, 5));
-    case 'gold_ore': case 'deepslate_gold_ore': return stacks('raw_gold', 1);
-    case 'redstone_ore': case 'deepslate_redstone_ore': return stacks('redstone', fortuneless(r, 4, 5));
-    case 'lapis_ore': case 'deepslate_lapis_ore': return stacks('lapis_lazuli', fortuneless(r, 4, 9));
-    case 'diamond_ore': case 'deepslate_diamond_ore': return stacks('diamond', 1);
-    case 'emerald_ore': case 'deepslate_emerald_ore': return stacks('emerald', 1);
-    case 'gravel': return r.nextInt(10) === 0 ? stacks('flint', 1) : stacks('gravel', 1);
+    // (fortune: ore_drops on the ores, uniform_bonus_count on redstone, glowstone and melons)
+    case 'coal_ore': case 'deepslate_coal_ore': return stacks('coal', oreDrops(r, 1, fortune));
+    case 'iron_ore': case 'deepslate_iron_ore': return stacks('raw_iron', oreDrops(r, 1, fortune));
+    case 'copper_ore': case 'deepslate_copper_ore': return stacks('raw_copper', oreDrops(r, fortuneless(r, 2, 5), fortune));
+    case 'gold_ore': case 'deepslate_gold_ore': return stacks('raw_gold', oreDrops(r, 1, fortune));
+    case 'redstone_ore': case 'deepslate_redstone_ore': return stacks('redstone', uniformBonus(r, fortuneless(r, 4, 5), 1, fortune));
+    case 'lapis_ore': case 'deepslate_lapis_ore': return stacks('lapis_lazuli', oreDrops(r, fortuneless(r, 4, 9), fortune));
+    case 'diamond_ore': case 'deepslate_diamond_ore': return stacks('diamond', oreDrops(r, 1, fortune));
+    case 'emerald_ore': case 'deepslate_emerald_ore': return stacks('emerald', oreDrops(r, 1, fortune));
+    case 'gravel': return tableBonus(r, [0.1, 0.14285715, 0.25, 1], fortune) ? stacks('flint', 1) : stacks('gravel', 1);
     case 'clay': return stacks('clay_ball', 4);
-    case 'glowstone': return stacks('glowstone_dust', fortuneless(r, 2, 4));
-    case 'melon': return stacks('melon_slice', fortuneless(r, 3, 7));
+    case 'glowstone': return stacks('glowstone_dust', Math.max(1, Math.min(4, uniformBonus(r, fortuneless(r, 2, 4), 1, fortune))));
+    case 'melon': return stacks('melon_slice', Math.min(9, uniformBonus(r, fortuneless(r, 3, 7), 1, fortune)));
     case 'bookshelf': return stacks('book', 3);
     case 'snow_block': return stacks('snowball', 4);
     case 'snow': return stacks('snowball', b.get<number>(state, 'layers'));
-    case 'glass': case 'ice': case 'powder_snow': case 'spawner': return [];
+    case 'glass': case 'ice': case 'packed_ice': case 'blue_ice': case 'powder_snow': case 'spawner': return [];
     case 'short_grass': case 'fern':
       if (shears) return stacks(n, 1);
-      return r.nextInt(8) === 0 ? stacks('wheat_seeds', 1) : [];
+      return r.nextInt(8) === 0 ? stacks('wheat_seeds', uniformBonus(r, 1, 2, fortune)) : [];
     case 'tall_grass': case 'large_fern':
       if (shears) return stacks(n === 'tall_grass' ? 'short_grass' : 'fern', 2);
       return b.get(state, 'half') === 'lower' && r.nextInt(8) === 0 ? stacks('wheat_seeds', 1) : [];
@@ -427,17 +451,17 @@ export function blockDrops(state: number, tool: Item | null, r: Rand, silk = fal
     // vanilla glow_lichen loot: one per face, shears only
     case 'glow_lichen': return shears ? stacks(n, MULTIFACE.filter(([d]) => b.get(state, d)).length) : [];
     // vanilla amethyst_cluster loot: 4 shards mined with a pickaxe (#cluster_max_harvestables), else 2; buds need silk touch
-    case 'amethyst_cluster': return stacks('amethyst_shard', tool?.tool?.type === 'pickaxe' ? 4 : 2);
+    case 'amethyst_cluster': return stacks('amethyst_shard', tool?.tool?.type === 'pickaxe' ? oreDrops(r, 4, fortune) : 2);
     case 'small_amethyst_bud': case 'medium_amethyst_bud': case 'large_amethyst_bud': return [];
     case 'wall_torch': return stacks('torch', 1);
     case 'kelp_plant': return stacks('kelp', 1);
     case 'sweet_berry_bush': {
       const age = b.get<number>(state, 'age');
-      return age >= 2 ? stacks('sweet_berries', age === 3 ? fortuneless(r, 2, 3) : fortuneless(r, 1, 2)) : [];
+      return age >= 2 ? stacks('sweet_berries', uniformBonus(r, age === 3 ? fortuneless(r, 2, 3) : fortuneless(r, 1, 2), 1, fortune)) : [];
     }
     case 'wheat': {
       const age = b.get<number>(state, 'age');
-      if (age === 7) return [...stacks('wheat', 1), ...stacks('wheat_seeds', 1 + binom(r, 3, 0.5714286))];
+      if (age === 7) return [...stacks('wheat', 1), ...stacks('wheat_seeds', 1 + binom(r, 3 + fortune, 0.5714286))];
       return stacks('wheat_seeds', 1);
     }
     case 'sunflower': case 'lilac': case 'rose_bush': case 'peony':
@@ -446,14 +470,14 @@ export function blockDrops(state: number, tool: Item | null, r: Rand, silk = fal
       const item = n === 'carrots' ? 'carrot' : 'potato';
       const age = b.get<number>(state, 'age');
       if (age < 7) return stacks(item, 1);
-      const out = stacks(item, 1 + binom(r, 3, 0.5714286));
+      const out = stacks(item, 1 + binom(r, 3 + fortune, 0.5714286));
       if (n === 'potatoes' && r.next() < 0.02) out.push(...stacks('poisonous_potato', 1));
       return out;
     }
     case 'beetroots': {
       const age = b.get<number>(state, 'age');
       if (age < 3) return stacks('beetroot_seeds', 1);
-      return [...stacks('beetroot', 1), ...stacks('beetroot_seeds', 1 + binom(r, 3, 0.5714286))];
+      return [...stacks('beetroot', 1), ...stacks('beetroot_seeds', 1 + binom(r, 3 + fortune, 0.5714286))];
     }
     case 'pumpkin_stem': case 'melon_stem': case 'attached_pumpkin_stem': case 'attached_melon_stem': {
       // vanilla stem loot: seeds, binomial by age (attached = age 7)
@@ -468,10 +492,10 @@ export function blockDrops(state: number, tool: Item | null, r: Rand, silk = fal
     if (shears) return stacks(n, 1);
     const out: ItemStack[] = [];
     const wood = n.replace('_leaves', '');
-    const saplingChance = wood === 'jungle' ? 1 / 40 : 1 / 20;
-    if (r.next() < saplingChance && ITEMS.has(wood + '_sapling')) out.push(ItemStack.of(wood + '_sapling', 1));
-    if (r.next() < 0.02) out.push(ItemStack.of('stick', 1 + r.nextInt(2)));
-    if ((wood === 'oak' || wood === 'dark_oak') && r.next() < 0.005) out.push(ItemStack.of('apple', 1));
+    // (vanilla table_bonus chances per fortune level)
+    if (tableBonus(r, wood === 'jungle' ? JUNGLE_SAPLING_CHANCES : SAPLING_CHANCES, fortune) && ITEMS.has(wood + '_sapling')) out.push(ItemStack.of(wood + '_sapling', 1));
+    if (tableBonus(r, STICK_CHANCES, fortune)) out.push(ItemStack.of('stick', 1 + r.nextInt(2)));
+    if ((wood === 'oak' || wood === 'dark_oak') && tableBonus(r, APPLE_CHANCES, fortune)) out.push(ItemStack.of('apple', 1));
     return out;
   }
   if (n.endsWith('_slab') && b.get(state, 'type') === 'double') return stacks(n, 2);

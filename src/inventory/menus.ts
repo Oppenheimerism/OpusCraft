@@ -6,6 +6,7 @@ import { ItemStack } from '../item/item';
 import type { Player } from '../entity/player';
 import { findRecipe, craftingRemainder, smeltingResult, fuelTime, CraftingRecipe } from './recipes';
 import type { ChestBlockEntity, FurnaceBlockEntity } from '../world/blockEntity';
+import { hasBinding } from '../item/enchantHelper';
 
 const ARMOR_ICONS = ['slot_boots', 'slot_leggings', 'slot_chestplate', 'slot_helmet'];
 const ARMOR_SLOT_OF: Record<string, number> = { feet: 0, legs: 1, chest: 2, head: 3 };
@@ -22,6 +23,11 @@ export class ArmorSlot extends Slot {
   }
   override noItemIcon(): string {
     return ARMOR_ICONS[this.armorIndex];
+  }
+  /** vanilla: curse of binding (prevent_armor_change) keeps the piece on, except in creative */
+  override mayPickup(p: Player): boolean {
+    const it = this.item;
+    return it && p.gameMode !== 'creative' && hasBinding(it) ? false : super.mayPickup(p);
   }
 }
 

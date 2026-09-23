@@ -561,7 +561,7 @@ export class Sheep extends Animal {
   }
   override lootTable(): LootEntry[] {
     const l: LootEntry[] = [{ item: 'mutton', min: 1, max: 2, cooked: 'cooked_mutton' }];
-    if (!this.sheared) l.unshift({ item: `${DYE_COLORS[this.color]}_wool`, min: 1, max: 1 });
+    if (!this.sheared) l.unshift({ item: `${DYE_COLORS[this.color]}_wool`, min: 1, max: 1, noLooting: true });
     return l;
   }
   override interact(p: Player, stack: ItemStack | null): boolean {

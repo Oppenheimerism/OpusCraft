@@ -6,7 +6,8 @@ import type { Player } from '../entity/player';
 
 export const isEmpty = (s: ItemStack | null | undefined): s is null | undefined => !s || s.count <= 0;
 const norm = (s: ItemStack | null): ItemStack | null => (isEmpty(s) ? null : s);
-const same = (a: ItemStack | null, b: ItemStack | null): boolean => !!a && !!b && a.item === b.item && a.damage === b.damage;
+/** vanilla isSameItemSameComponents (enchantments, names and repair costs must match to stack or merge) */
+const same = (a: ItemStack | null, b: ItemStack | null): boolean => !!a && !!b && a.sameItem(b);
 
 export interface Container {
   readonly size: number;

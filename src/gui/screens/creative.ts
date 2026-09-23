@@ -7,7 +7,9 @@ import type { GuiGraphics } from '../guiGraphics';
 import { AbstractContainerScreen, itemTooltip } from './container';
 import { ContainerMenu, Slot, SimpleContainer, ClickType } from '../../inventory/container';
 import { CreativeMenu, InventoryMenu } from '../../inventory/menus';
-import { ITEM_LIST, ItemStack, Item } from '../../item/item';
+import { ITEM_LIST, ItemStack, Item, getItem } from '../../item/item';
+import { ENCHANTMENTS, enchantmentLine, tooltipOrder } from '../../item/enchantments';
+import { craftingEnchants } from '../../item/enchantHelper';
 import { KEYS } from '../../game/input';
 
 interface Tab {
@@ -19,6 +21,40 @@ interface Tab {
   right?: boolean;
   type?: 'search' | 'inventory' | 'hotbar';
   items: Item[];
+  /** stacks listed after the items (the ingredients tab's enchanted books) */
+  extra?: ItemStack[];
+}
+
+/**
+ * vanilla CreativeModeTabs.generateEnchantmentBookTypesOnlyMaxLevel / AllLevels: an enchanted book for each
+ * enchantment in registry order (ids, alphabetically, for the data-driven registry), at its maximum level or at
+ * every level
+ */
+function enchantedBooks(allLevels: boolean): ItemStack[] {
+  const out: ItemStack[] = [];
+  for (const id of [...ENCHANTMENTS.keys()].sort()) {
+    const max = ENCHANTMENTS.get(id)!.maxLevel;
+    for (let l = allLevels ? 1 : max; l <= max; l++) out.push(new ItemStack(getItem('enchanted_book'), 1, 0, { stored: { [id]: l } }));
+  }
+  return out;
+}
+
+/** the search tab's stacks: every item, with the books of every level among the ingredients (before the spawn eggs) */
+let SEARCH: ItemStack[] | null = null;
+function searchStacks(): ItemStack[] {
+  if (SEARCH) return SEARCH;
+  const items = tabs().find((t) => t.id === 'search')!.items;
+  const stacks = items.map((it) => new ItemStack(it, 1));
+  const i = items.findIndex((it) => it.creativeTab === 'spawn_eggs');
+  stacks.splice(i < 0 ? stacks.length : i, 0, ...enchantedBooks(true));
+  return (SEARCH = stacks);
+}
+
+/** the tooltip's enchantment lines, which the search also matches */
+function enchantText(s: ItemStack): string {
+  return tooltipOrder(craftingEnchants(s))
+    .map(([id, l]) => enchantmentLine(id, l).text.toLowerCase())
+    .join('\n');
 }
 
 const REDSTONE = new Set(['redstone', 'redstone_block', 'tnt']);
@@ -75,8 +111,11 @@ function tabs(): Tab[] {
     { id: 'inventory', name: 'Survival Inventory', icon: 'chest', top: false, col: 6, right: true, type: 'inventory', items: [] },
   ];
   const byId = new Map(t.map((x) => [x.id, x]));
-  for (const it of ITEM_LIST) byId.get(tabOf(it))?.items.push(it);
-  byId.get('search')!.items = ITEM_LIST.slice();
+  // (no bare enchanted book: vanilla lists one per enchantment instead)
+  const listed = ITEM_LIST.filter((it) => it.id !== 'enchanted_book');
+  for (const it of listed) byId.get(tabOf(it))?.items.push(it);
+  byId.get('ingredients')!.extra = enchantedBooks(false);
+  byId.get('search')!.items = listed;
   TABS = t;
   return t;
 }
@@ -151,7 +190,7 @@ export class CreativeInventoryScreen extends AbstractContainerScreen<ContainerMe
     this.menu = t.type === 'inventory' ? this.invMenu : this.picker;
     this.menu.carried = carried;
     if (t.type !== 'inventory') {
-      this.picker.items = t.type === 'search' ? this.filtered() : t.items.map((it) => new ItemStack(it, 1));
+      this.picker.items = t.type === 'search' ? this.filtered() : [...t.items.map((it) => new ItemStack(it, 1)), ...(t.extra ?? []).map((x) => x.copy())];
       this.picker.scrollTo(0);
     }
     if (this.search) {
@@ -162,10 +201,9 @@ export class CreativeInventoryScreen extends AbstractContainerScreen<ContainerMe
 
   private filtered(): ItemStack[] {
     const q = this.searchText.toLowerCase();
-    return tabs()
-      .find((t) => t.id === 'search')!
-      .items.filter((it) => !q || it.name.toLowerCase().includes(q) || it.id.includes(q.replace(/ /g, '_')))
-      .map((it) => new ItemStack(it, 1));
+    return searchStacks()
+      .filter((x) => !q || x.item.name.toLowerCase().includes(q) || x.item.id.includes(q.replace(/ /g, '_')) || enchantText(x).includes(q))
+      .map((x) => x.copy());
   }
 
   private refreshSearch(): void {
@@ -359,7 +397,7 @@ export class CreativeInventoryScreen extends AbstractContainerScreen<ContainerMe
         if (inSlot) p.dropItem(inSlot.copyWithCount(button === 0 ? 1 : inSlot.maxStack), true);
         return;
       }
-      if (carried && inSlot && carried.item === inSlot.item) {
+      if (carried && inSlot && carried.sameItem(inSlot)) {
         if (button === 0) {
           if (shift) carried.count = carried.maxStack;
           else if (carried.count < carried.maxStack) carried.count++;

@@ -16,6 +16,8 @@ import { Rand } from '../core/rng';
 import { BLOCKS, STATE_BLOCK, FLAGS, F_WATER } from '../world/block';
 import { FLUID_WATER } from '../world/fluids';
 import type { SavedEffect } from './effects';
+import { damageBonus, entityLevel, hasVanishing, levelOf, lootingBonus } from '../item/enchantHelper';
+import { doPostAttackEffects } from '../game/enchantEffects';
 
 export type MobCategory = 'monster' | 'creature' | 'ambient' | 'water_creature' | 'misc';
 
@@ -67,6 +69,10 @@ export interface LootEntry {
   chance?: number;
   /** smelted variant when the mob died burning */
   cooked?: string;
+  /** no looting bonus on the count (vanilla entries without enchanted_count_increase) */
+  noLooting?: boolean;
+  /** vanilla random_chance_with_enchanted_bonus: the chance with looting, [level I, per level above] */
+  lootingChance?: [number, number];
 }
 
 export abstract class Mob extends LivingEntity {
@@ -324,17 +330,20 @@ export abstract class Mob extends LivingEntity {
     return this.attackBoundingBox().intersects(e.bb);
   }
 
-  /** vanilla Mob.doHurtTarget */
+  /** vanilla Mob.doHurtTarget (the weapon's damage and knockback enchantments, then the post-attack effects) */
   doHurtTarget(target: Entity): boolean {
-    const dmg = this.attackDamage;
+    const dmg = this.attackDamage + damageBonus(this.mainHand, target);
     const ok = target.hurt(dmg, 'mob', this);
     if (ok) {
-      if (this.attackKnockback > 0 && target instanceof LivingEntity) {
+      const kb = this.attackKnockback + levelOf(this.mainHand, 'knockback');
+      if (kb > 0 && target instanceof LivingEntity) {
         const r = (this.yaw * Math.PI) / 180;
-        target.knockback(this.attackKnockback * 0.5, Math.sin(r), -Math.cos(r));
+        target.knockback(kb * 0.5, Math.sin(r), -Math.cos(r));
         this.dx *= 0.6;
         this.dz *= 0.6;
       }
+      // the target's thorns, the weapon's fire aspect
+      doPostAttackEffects(target, this, this.mainHand, true);
       if (target instanceof LivingEntity) this.lastHurtMob = target;
     }
     return ok;
@@ -439,9 +448,14 @@ export abstract class Mob extends LivingEntity {
     super.die(source, attacker);
     this.navigation.stop();
     const byPlayer = this.lastHurtByPlayerTime > 0;
+    // the killer's looting (vanilla ATTACKING_ENTITY: the shooter for arrows)
+    const looting = attacker instanceof LivingEntity ? entityLevel(attacker, 'looting') : 0;
     if (this.level.gameRules.doMobLoot) {
-      this.dropLoot(byPlayer);
-      if (this.mainHand && this.random.nextFloat() < this.handDropChance + (byPlayer ? 0 : 0)) {
+      this.dropLoot(byPlayer, looting);
+      // vanilla dropCustomDeathLoot: looting's equipment_drops (+1% per level, player kills only); curse of
+      // vanishing items never drop
+      const chance = this.handDropChance + (attacker?.type === 'player' ? 0.01 * looting : 0);
+      if (this.mainHand && !hasVanishing(this.mainHand) && this.random.nextFloat() < chance) {
         const s = this.mainHand;
         if (s.item.maxDamage) s.damage = s.item.maxDamage - 1 - this.random.nextInt(Math.max(1, s.item.maxDamage - 3));
         this.spawnAtLocation(s);
@@ -451,11 +465,14 @@ export abstract class Mob extends LivingEntity {
     }
   }
 
-  protected dropLoot(byPlayer: boolean): void {
+  /** the loot table; `looting` = the killer's level (vanilla enchanted_count_increase: + round(L × U(0, 1))) */
+  protected dropLoot(byPlayer: boolean, looting = 0): void {
     for (const e of this.lootTable()) {
       if (e.player && !byPlayer) continue;
-      if (e.chance !== undefined && this.random.nextFloat() >= e.chance) continue;
-      const n = e.min + this.random.nextInt(e.max - e.min + 1);
+      const chance = looting > 0 && e.lootingChance ? e.lootingChance[0] + e.lootingChance[1] * (looting - 1) : e.chance;
+      if (chance !== undefined && this.random.nextFloat() >= chance) continue;
+      let n = e.min + this.random.nextInt(e.max - e.min + 1);
+      if (!e.noLooting) n += lootingBonus(looting, () => this.random.nextFloat());
       if (n <= 0) continue;
       const id = e.cooked && this.isOnFire() ? e.cooked : e.item;
       const it = ITEMS.get(id);

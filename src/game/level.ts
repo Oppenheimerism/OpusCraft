@@ -21,6 +21,7 @@ import type { Item } from '../item/item';
 import { FluidTicker, fluidStateOf } from './fluidTicks';
 import { RandomTicker } from './randomTicks';
 import { FallingBlockEntity } from '../entity/fallingBlock';
+import { levelOf } from '../item/enchantHelper';
 import { F_WATER, F_LAVA, F_REPLACEABLE } from '../world/block';
 import { skyDarkenInt, timeOfDay } from '../render/environment';
 import { BIOMES } from '../world/gen/biomes';
@@ -206,14 +207,17 @@ export class Level {
     if (this.skyFlash > 0) this.skyFlash--;
     this.runScheduledTicks();
     if (this.player) this.randomTicks.tick(this.player.x, this.player.z, this.simulationDistance);
-    // block entities (furnaces, spawners)
+    // block entities (furnaces, spawners, the enchanting table's book)
     for (const be of this.world.blockEntities.values()) {
       if (be.removed) continue;
       if (be instanceof SpawnerBlockEntity) {
         if (this.isEntityTicking(be.x, be.z)) tickSpawner(be, this);
         continue;
       }
-      if (!(be instanceof FurnaceBlockEntity)) continue;
+      if (!(be instanceof FurnaceBlockEntity)) {
+        be.tick(this);
+        continue;
+      }
       const lit = be.isLit, cook = be.cookingProgress;
       be.tick(this);
       if (lit || cook || be.isLit) {
@@ -355,8 +359,8 @@ export class Level {
     return old;
   }
 
-  /** Destroy a block: effects, drops, neighbour updates. */
-  destroyBlock(x: number, y: number, z: number, drop: boolean, tool: Item | null = null, effects = true): boolean {
+  /** Destroy a block: effects, drops, neighbour updates. `stack` = the breaking tool (silk touch, fortune). */
+  destroyBlock(x: number, y: number, z: number, drop: boolean, tool: Item | null = null, effects = true, stack: ItemStack | null = null): boolean {
     const st = this.world.getState(x, y, z);
     if (FLAGS[st] & F_AIR) return false;
     const b = BLOCKS[STATE_BLOCK[st]];
@@ -399,7 +403,7 @@ export class Level {
       }
     }
     if (drop) {
-      for (const stack of blockDrops(dropState, tool, this.random)) ItemEntity.drop(this, x, y, z, stack);
+      for (const s of blockDrops(dropState, tool, this.random, levelOf(stack, 'silk_touch') > 0, levelOf(stack, 'fortune'))) ItemEntity.drop(this, x, y, z, s);
     }
     this.updateNeighbors(x, y, z, st);
     if (other) this.updateNeighbors(other[0], other[1], other[2]);
@@ -488,5 +492,5 @@ function fireId(): number {
 
 function isGravityBlock(st: number): boolean {
   const n = BLOCKS[STATE_BLOCK[st]].name;
-  return n === 'sand' || n === 'red_sand' || n === 'gravel' || n.endsWith('concrete_powder');
+  return n === 'sand' || n === 'red_sand' || n === 'gravel' || n.endsWith('concrete_powder') || n.endsWith('anvil');
 }

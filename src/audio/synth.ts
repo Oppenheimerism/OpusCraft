@@ -8,6 +8,7 @@ import { MUSIC_TRACKS, MUSIC_TRACK_NAMES, renderMenuMusic, renderMusicTrack } fr
 import { playerSounds } from './gen/player';
 import { worldSounds } from './gen/world';
 import { minecartSounds } from './gen/minecart';
+import { enchantingSounds } from './gen/enchanting';
 
 export const SAMPLE_RATE = 44100;
 
@@ -24,6 +25,7 @@ export const SOUNDS: Record<string, SoundGen> = {
   ...worldSounds(),
   ...mobSounds(),
   ...minecartSounds(),
+  ...enchantingSounds(),
 };
 
 /** Number of in-game (overworld) music tracks. */
@@ -136,6 +138,8 @@ const VOLUMES: Record<string, number> = {
   'item.hoe.till': 1,
   'item.bone_meal.use': 1,
   'entity.player.teleport': 1,
+  // anvil level events (vanilla LevelRenderer.levelEvent 1029-1031)
+  'block.anvil.land': 0.3,
 };
 
 /**

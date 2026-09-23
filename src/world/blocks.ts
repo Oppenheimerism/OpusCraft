@@ -8,6 +8,7 @@ import {
   torchModel, wallTorchModel, flatPlane, facePlane, slabBottom, slabTop, stairsModel, box, cube, ElementDef,
 } from './models';
 import { registerExtraBlocks } from './blocksExtra';
+import { registerEnchantingBlocks } from './blocksEnchanting';
 
 const px = (v: number) => v / 16;
 const bx = (x0: number, y0: number, z0: number, x1: number, y1: number, z1: number): Box => [px(x0), px(y0), px(z0), px(x1), px(y1), px(z1)];
@@ -594,6 +595,7 @@ registerBlock('spawner', { hardness: 5, sound: 'metal', tool: 'pickaxe', require
 registerBlock('magma_block', { hardness: 0.5, sound: 'stone', tool: 'pickaxe', requiresTool: true, light: 3, model: one(cubeAll('magma')) });
 
 registerExtraBlocks();
+registerEnchantingBlocks();
 
 finalizeBlocks();
 

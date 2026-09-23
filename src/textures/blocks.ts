@@ -21,6 +21,7 @@ import * as RL from './blocklib/rails';
 import * as CV from './blocklib/caves';
 import * as IB from './blocklib/iconblocks';
 import { FIRE_TEXTURES } from './mobs';
+import { registerEnchantingTextures } from './blocklib/enchanting';
 
 type Gen = () => TexDef;
 export const BLOCK_TEXTURES: Record<string, Gen> = {};
@@ -321,6 +322,7 @@ T['furnace_top'] = () => UT.furnaceTop();
 T['furnace_front'] = () => UT.furnaceFront(false);
 T['furnace_front_on'] = () => UT.furnaceFront(true);
 T['bookshelf'] = () => UT.bookshelf();
+registerEnchantingTextures(T);
 T['glowstone'] = () => UT.glowstone();
 T['sea_lantern'] = () => UT.seaLantern();
 T['sponge'] = () => UT.sponge();

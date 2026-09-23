@@ -1,5 +1,5 @@
 // Arrows (vanilla AbstractArrow / Arrow): flight, sticking into blocks,
-// entity hits with velocity-scaled damage, critical arrows, pickup.
+// entity hits with velocity-scaled damage, critical arrows, the bow's enchantments, pickup.
 
 import { Entity } from './entity';
 import type { Level } from '../game/level';
@@ -11,6 +11,8 @@ import { COLLISION } from '../world/block';
 import { ItemStack, ITEMS } from '../item/item';
 import type { Player } from './player';
 import { ItemEntity } from './itemEntity';
+import { damageBonus, levelOf } from '../item/enchantHelper';
+import { doPostAttackEffects } from '../game/enchantEffects';
 
 const RAD = 180 / Math.PI;
 
@@ -28,6 +30,8 @@ export class Arrow extends Entity {
   baseDamage = 2;
   crit = false;
   pickup: Pickup = 'disallowed';
+  /** vanilla firedFromWeapon: the bow it was shot from (power, punch) */
+  weapon: ItemStack | null = null;
   private readonly rnd = Math.random;
 
   constructor(level: Level, owner?: LivingEntity | null) {
@@ -182,7 +186,11 @@ export class Arrow extends Entity {
 
   private onHitEntity(e: Entity): void {
     const speed = Math.sqrt(this.dx * this.dx + this.dy * this.dy + this.dz * this.dz);
-    let dmg = Math.ceil(Math.max(0, speed * this.baseDamage));
+    // vanilla EnchantmentHelper.modifyDamage with the bow: power (+0.5·L + 0.5 for arrows) and any damage enchantment
+    let base = this.baseDamage;
+    const power = levelOf(this.weapon, 'power');
+    if (this.weapon) base += damageBonus(this.weapon, e) + (power > 0 ? 0.5 * power + 0.5 : 0);
+    let dmg = Math.ceil(Math.max(0, speed * base));
     if (this.crit) dmg = Math.min(dmg + Math.floor(this.rnd() * (Math.floor(dmg / 2) + 2)), 2147483647);
     const owner = this.owner;
     if (owner instanceof LivingEntity && e instanceof LivingEntity) owner.lastHurtMob = e;
@@ -191,6 +199,11 @@ export class Arrow extends Entity {
     if (e.hurt(dmg, 'arrow', owner ?? this, this)) {
       if (owner && owner === this.level.player) this.level.onPlayerArrowHit?.(e);
       if (e.type === 'enderman') return;
+      if (e instanceof LivingEntity) {
+        this.doKnockback(e);
+        // the victim's thorns hurt the shooter
+        doPostAttackEffects(e, owner, this.weapon, false);
+      }
       this.level.sound.play('entity.arrow.hit', this.x, this.y, this.z, 1, 1.2 / (this.rnd() * 0.2 + 0.9));
       this.remove();
     } else {
@@ -206,6 +219,15 @@ export class Arrow extends Entity {
         this.remove();
       }
     }
+  }
+
+  /** vanilla AbstractArrow.doKnockback: punch pushes along the flight, 0.6 per level, less knockback resistance */
+  private doKnockback(e: LivingEntity): void {
+    const f = levelOf(this.weapon, 'punch');
+    if (f <= 0) return;
+    const d1 = Math.max(0, 1 - e.knockbackResistance());
+    const h = Math.sqrt(this.dx * this.dx + this.dz * this.dz);
+    if (h > 0 && d1 > 0) e.push((this.dx / h) * f * 0.6 * d1, 0.1, (this.dz / h) * f * 0.6 * d1);
   }
 
   private dropAsItem(): void {

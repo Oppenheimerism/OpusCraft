@@ -8,6 +8,8 @@ import { InventoryScreen, CraftingScreen, FurnaceScreen, ChestScreen } from './c
 import { CreativeInventoryScreen } from './creative';
 import { AdvancementsScreen } from './advancements';
 import { InventoryMenu, CraftingMenu, FurnaceMenu, ChestMenu } from '../../inventory/menus';
+import { EnchantmentMenu, AnvilMenu, GrindstoneMenu } from '../../inventory/enchantMenus';
+import { EnchantmentScreen, AnvilScreen, GrindstoneScreen } from './enchanting';
 
 export function installScreens(game: Game): void {
   game.titleScreenFactory = () => new TitleScreen(game, false);
@@ -27,6 +29,9 @@ export function installScreens(game: Game): void {
     if (menu instanceof CraftingMenu) return new CraftingScreen(game, menu);
     if (menu instanceof FurnaceMenu) return new FurnaceScreen(game, menu);
     if (menu instanceof ChestMenu) return new ChestScreen(game, menu);
+    if (menu instanceof EnchantmentMenu) return new EnchantmentScreen(game, menu);
+    if (menu instanceof AnvilMenu) return new AnvilScreen(game, menu);
+    if (menu instanceof GrindstoneMenu) return new GrindstoneScreen(game, menu);
     return new InventoryScreen(game, menu as InventoryMenu);
   };
 }

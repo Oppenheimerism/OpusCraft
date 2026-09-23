@@ -4,7 +4,7 @@ import type { Level } from './level';
 import type { Player } from '../entity/player';
 import { raycast, BlockHit } from './raycast';
 import { destroyProgress, placementState, canReplace, canSurvive, isCorrectTool, blockExperience, hasVacantFace } from './blockRules';
-import { BLOCKS, STATE_BLOCK, FLAGS, F_AIR, F_WATER, F_OPAQUE, F_REPLACEABLE, COLLISION, FACE_OCC, OUTLINE, getBlock, S } from '../world/block';
+import { BLOCKS, STATE_BLOCK, FLAGS, F_AIR, F_WATER, F_LAVA, F_OPAQUE, F_REPLACEABLE, COLLISION, FACE_OCC, OUTLINE, getBlock, S } from '../world/block';
 import { updateShape, hasShapeUpdates } from './shapeUpdates';
 import { DX, DY, DZ, DIR_NAMES, dirFromYaw } from '../world/dir';
 import { blockForItem, itemForBlock, ItemStack, getItem } from '../item/item';
@@ -25,6 +25,7 @@ import { canPlaceFire, fireStateAt, placeFire } from './fire';
 import { Minecart, MinecartChest, createMinecart } from '../entity/minecart';
 import { isRail, railShape, isAscending } from './rails';
 import { MobEffectInstance, MOB_EFFECTS } from '../entity/effects';
+import { levelOf, miningEfficiency, submergedMiningSpeed, hurtAndBreak } from '../item/enchantHelper';
 
 export class Interaction {
   hit: BlockHit | null = null;
@@ -127,7 +128,7 @@ export class Interaction {
     }
     if (!this.destroying || !this.same(h)) {
       const held = p.inventory.selectedItem?.item ?? null;
-      const prog = destroyProgress(h.state, held, p.eyeFluid === FLUID_WATER, p.onGround, p.digSpeedEffectFactor());
+      const prog = destroyProgress(h.state, held, p.eyeFluid === FLUID_WATER, p.onGround, p.digSpeedEffectFactor(), miningEfficiency(p), submergedMiningSpeed(p));
       if (prog >= 1) {
         this.destroyBlock(h.x, h.y, h.z);
       } else {
@@ -182,7 +183,7 @@ export class Interaction {
       return;
     }
     const item = p.inventory.selectedItem?.item ?? null;
-    this.destroyProgress += destroyProgress(st, item, p.eyeFluid === FLUID_WATER, p.onGround, p.digSpeedEffectFactor());
+    this.destroyProgress += destroyProgress(st, item, p.eyeFluid === FLUID_WATER, p.onGround, p.digSpeedEffectFactor(), miningEfficiency(p), submergedMiningSpeed(p));
     const b = BLOCKS[STATE_BLOCK[st]];
     this.onDestroyProgress?.(b.name, Math.min(1, this.destroyProgress));
     if (this.destroyTicks % 4 === 0) {
@@ -213,10 +214,16 @@ export class Interaction {
     const survival = p.gameMode === 'survival' || p.gameMode === 'adventure';
     // vanilla BaseFireBlock.playerWillDestroy: punching out fire fizzes
     if (b.name === 'fire') this.level.sound.play('block.fire.extinguish', x + 0.5, y + 0.5, z + 0.5, 0.5, 2.6 + (Math.random() - Math.random()) * 0.8);
-    this.level.destroyBlock(x, y, z, survival, held?.item ?? null);
+    const silk = levelOf(held, 'silk_touch') > 0;
+    this.level.destroyBlock(x, y, z, survival, held?.item ?? null, true, held);
     if (survival && this.level.gameRules.doTileDrops) {
-      const xp = blockExperience(st, held?.item ?? null, this.level.random);
+      const xp = blockExperience(st, held?.item ?? null, this.level.random, silk);
       if (xp > 0) this.level.awardExperience(x + 0.5, y + 0.5, z + 0.5, xp);
+    }
+    // vanilla IceBlock.playerDestroy: without silk touch (#prevents_ice_melting) ice over something solid or liquid melts
+    if (survival && b.name === 'ice' && !silk) {
+      const below = this.level.world.getState(x, y - 1, z);
+      if (COLLISION[below]?.length || FLAGS[below] & (F_WATER | F_LAVA)) this.level.setBlock(x, y, z, S('water'));
     }
     if (survival) {
       p.food.addExhaustion(0.005);
@@ -228,12 +235,12 @@ export class Interaction {
     void isCorrectTool;
   }
 
+  /** vanilla ItemStack.hurtAndBreak on the held item (unbreaking may cancel each point) */
   damageHeld(n: number): void {
     const p = this.player;
     const s = p.inventory.selectedItem;
     if (!s || !s.item.maxDamage) return;
-    s.damage += n;
-    if (s.damage >= s.item.maxDamage) {
+    if (hurtAndBreak(s, n)) {
       p.inventory.setSelectedItem(null);
       this.level.sound.play('entity.item.break', p.x, p.y, p.z, 0.8, 0.8 + Math.random() * 0.4);
     }
@@ -291,7 +298,7 @@ export class Interaction {
     // blocks with a menu (vanilla Block.useWithoutItem), skipped when sneaking with an item
     if (h && !(p.crouching && stack) && p.gameMode !== 'spectator') {
       const name = BLOCKS[STATE_BLOCK[this.level.getState(h.x, h.y, h.z)]].name;
-      if ((name === 'crafting_table' || name === 'furnace' || name === 'chest') && this.onOpenContainer) {
+      if ((name === 'crafting_table' || name === 'furnace' || name === 'chest' || name === 'enchanting_table' || name === 'grindstone' || name.endsWith('anvil')) && this.onOpenContainer) {
         this.onOpenContainer(name, h.x, h.y, h.z);
         p.swing();
         return;
@@ -731,14 +738,20 @@ export class Interaction {
     if (slot < 0 && !creative) return;
     const f = bowPower(used);
     if (f < 0.1) return;
-    if (!creative && slot >= 0) {
+    // vanilla useAmmo: creative and infinity (ammo_use 0 for plain arrows) keep the arrow, and the shot one
+    // can't be picked up (INTANGIBLE_PROJECTILE)
+    const free = creative || levelOf(s, 'infinity') > 0;
+    if (!free && slot >= 0) {
       const a = p.inventory.main[slot]!;
       a.count--;
       if (a.count <= 0) p.inventory.main[slot] = null;
       p.inventory.version++;
     }
     const arrow = new Arrow(this.level, p);
-    arrow.pickup = creative ? 'creative_only' : 'allowed';
+    arrow.pickup = free ? 'creative_only' : 'allowed';
+    // the bow's power and punch act when the arrow hits; flame (projectile_spawned) sets it alight for 100 s
+    arrow.weapon = s.copy();
+    if (levelOf(s, 'flame') > 0) arrow.igniteForSeconds(100);
     arrow.shootFromRotation(p, p.pitch, p.yaw, 0, f * 3, 1);
     arrow.crit = f === 1;
     this.level.addEntity(arrow);

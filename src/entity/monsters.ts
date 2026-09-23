@@ -191,7 +191,7 @@ export class Zombie extends Monster {
     const rare = ['iron_ingot', 'carrot', 'potato'][this.random.nextInt(3)];
     return [
       { item: 'rotten_flesh', min: 0, max: 2 },
-      { item: rare, min: 1, max: 1, player: true, chance: 0.025 },
+      { item: rare, min: 1, max: 1, player: true, chance: 0.025, lootingChance: [0.035, 0.01], noLooting: true },
     ];
   }
   protected override saveData(): Record<string, number | string | boolean> {
@@ -866,8 +866,8 @@ export class Enderman extends Monster {
   override lootTable(): LootEntry[] {
     return [{ item: 'ender_pearl', min: 0, max: 1 }];
   }
-  protected override dropLoot(byPlayer: boolean): void {
-    super.dropLoot(byPlayer);
+  protected override dropLoot(byPlayer: boolean, looting = 0): void {
+    super.dropLoot(byPlayer, looting);
     if (this.carried) {
       const it = ITEMS.get(BLOCKS[STATE_BLOCK[this.carried]].name);
       if (it) this.spawnAtLocation(new ItemStack(it, 1));

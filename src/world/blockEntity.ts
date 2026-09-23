@@ -199,8 +199,64 @@ export class SpawnerBlockEntity extends BlockEntity {
   }
 }
 
+/**
+ * vanilla EnchantingTableBlockEntity: the floating book (bookAnimationTick, client side) opens and turns toward a
+ * player within 3 blocks, idly spins otherwise, and flips pages now and then
+ */
+export class EnchantingTableBlockEntity extends BlockEntity {
+  readonly id = 'enchanting_table';
+  time = 0;
+  flip = 0;
+  oFlip = 0;
+  flipT = 0;
+  flipA = 0;
+  open = 0;
+  oOpen = 0;
+  rot = 0;
+  oRot = 0;
+  tRot = 0;
+  constructor(x: number, y: number, z: number) {
+    super(x, y, z, 0);
+  }
+  override tick(level: Level): void {
+    this.oOpen = this.open;
+    this.oRot = this.rot;
+    const cx = this.x + 0.5, cy = this.y + 0.5, cz = this.z + 0.5;
+    const p = level.player;
+    const near = p && p.gameMode !== 'spectator' && p.distanceToSqr(cx, cy, cz) < 9 ? p : null;
+    if (near) {
+      this.tRot = Math.atan2(near.z - cz, near.x - cx);
+      this.open += 0.1;
+      if (this.open < 0.5 || Math.floor(Math.random() * 40) === 0) {
+        const f1 = this.flipT;
+        do this.flipT += Math.floor(Math.random() * 4) - Math.floor(Math.random() * 4);
+        while (f1 === this.flipT);
+      }
+    } else {
+      this.tRot += 0.02;
+      this.open -= 0.1;
+    }
+    const PI = Math.PI;
+    while (this.rot >= PI) this.rot -= PI * 2;
+    while (this.rot < -PI) this.rot += PI * 2;
+    while (this.tRot >= PI) this.tRot -= PI * 2;
+    while (this.tRot < -PI) this.tRot += PI * 2;
+    let f2 = this.tRot - this.rot;
+    while (f2 >= PI) f2 -= PI * 2;
+    while (f2 < -PI) f2 += PI * 2;
+    this.rot += f2 * 0.4;
+    this.open = Math.max(0, Math.min(1, this.open));
+    this.time++;
+    this.oFlip = this.flip;
+    const f = Math.max(-0.2, Math.min(0.2, (this.flipT - this.flip) * 0.4));
+    this.flipA += (f - this.flipA) * 0.9;
+    this.flip += this.flipA;
+  }
+}
+
 export function createBlockEntity(name: string, x: number, y: number, z: number): BlockEntity | null {
   if (name === 'chest') return new ChestBlockEntity(x, y, z);
+  if (name === 'enchanting_table') return new EnchantingTableBlockEntity(x, y, z);
   if (name === 'furnace') return new FurnaceBlockEntity(x, y, z);
   if (name === 'spawner') return new SpawnerBlockEntity(x, y, z);
   return null;

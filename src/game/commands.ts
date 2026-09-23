@@ -17,6 +17,8 @@ import { Arrow } from '../entity/arrow';
 import { createMob, entityDisplayName, summonableTypes } from './spawner';
 import { createMinecart, MINECART_TYPES } from '../entity/minecart';
 import { MOB_EFFECTS, MobEffect, MobEffectInstance, mobEffect } from '../entity/effects';
+import { ENCHANTMENTS, areCompatible, canEnchant, enchantmentLine } from '../item/enchantments';
+import { craftingEnchants, setCraftingEnchants, weaponOf } from '../item/enchantHelper';
 
 class CommandError extends Error {
   constructor(msg: string, readonly pos = -1) {
@@ -264,6 +266,56 @@ function effectCommand(c: Ctx): void {
   } else badArg(c, 0);
 }
 
+/** vanilla EnchantCommand: add an enchantment to each target's main-hand item */
+function enchantCommand(c: Ctx): void {
+  needArg(c, 0);
+  const targets = selectEntities(c, 0);
+  if (!targets.length) throw new CommandError('No entity was found');
+  const raw = needArg(c, 1);
+  const id = raw.replace(/^minecraft:/, '');
+  const def = ENCHANTMENTS.get(id);
+  if (!def) throw new CommandError(`Can't find element '${raw.includes(':') ? raw : 'minecraft:' + raw}' of type 'minecraft:enchantment'`, c.args[1].pos);
+  const level = c.args[2] ? parseIntArg(c, 2, 0) : 1;
+  if (level > def.maxLevel) throw new CommandError(`${level} is higher than the maximum level of ${def.maxLevel} supported by that enchantment`);
+  const one = targets.length === 1;
+  let n = 0;
+  for (const t of targets) {
+    if (!(t instanceof LivingEntity)) {
+      if (one) throw new CommandError(`${targetName(c, t)} is not a valid entity for this command`);
+      continue;
+    }
+    const held = weaponOf(t);
+    if (!held) {
+      if (one) throw new CommandError(`${targetName(c, t)} is not holding any item`);
+      continue;
+    }
+    const cur = craftingEnchants(held);
+    if (canEnchant(def, held.item) && Object.keys(cur).every((k) => areCompatible(k, id))) {
+      // (ItemEnchantments.Mutable.upgrade: keeps the higher level)
+      if (level > 0) setCraftingEnchants(held, { ...cur, [id]: Math.max(cur[id] ?? 0, level) });
+      n++;
+    } else if (one) throw new CommandError(`${held.displayName()} cannot support that enchantment`);
+  }
+  if (!n) throw new CommandError('Nothing changed. Targets either have no item in their hands or the enchantment could not be applied');
+  c.game.player.inventory.version++;
+  const l = enchantmentLine(id, level);
+  const full = `${l.curse ? '§c' : '§7'}${l.text}§r`;
+  c.ok(one ? `Applied enchantment ${full} to ${targetName(c, targets[0])}'s item` : `Applied enchantment ${full} to ${targets.length} entities`);
+}
+
+/** the enchantments / stored_enchantments components of an item argument (vanilla ItemParser), e.g. [enchantments={levels:{sharpness:5}}] */
+function itemComponents(raw: string, stack: ItemStack): void {
+  const re = /(?:minecraft:)?(stored_enchantments|enchantments)=\{\s*levels\s*:\s*\{([^}]*)\}/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(raw))) {
+    const levels: Record<string, number> = {};
+    for (const e of m[2].matchAll(/["']?(?:minecraft:)?([a-z_]+)["']?\s*:\s*(\d+)/g)) if (ENCHANTMENTS.has(e[1]) && +e[2] > 0) levels[e[1]] = Math.min(255, +e[2]);
+    const tag = stack.tag ?? {};
+    tag[m[1] === 'stored_enchantments' ? 'stored' : 'enchantments'] = levels;
+    stack.tag = tag;
+  }
+}
+
 const coordSuggest = (i: number) => ['~', '~ ~', '~ ~ ~'].slice(0, 3 - (i % 3));
 
 export const COMMANDS: Record<string, CommandDef> = {
@@ -335,6 +387,11 @@ export const COMMANDS: Record<string, CommandDef> = {
     suggest: (_g, prev, i) =>
       i === 0 ? ['clear', 'give'] : i === 1 ? TARGETS : i === 2 ? effectIds() : prev[0] === 'give' && i === 3 ? ['infinite'] : prev[0] === 'give' && i === 5 ? ['false', 'true'] : [],
     run: (c) => effectCommand(c),
+  },
+  enchant: {
+    usage: ['/enchant <targets> <enchantment> [<level>]'],
+    suggest: (_g, _p, i) => (i === 0 ? TARGETS : i === 1 ? [...ENCHANTMENTS.keys()].sort().map((k) => 'minecraft:' + k) : []),
+    run: (c) => enchantCommand(c),
   },
   experience: {
     usage: ['/experience (add|query|set) ...'],
@@ -424,9 +481,10 @@ export const COMMANDS: Record<string, CommandDef> = {
         const n = Math.min(item.maxStack, left);
         left -= n;
         const stack = new ItemStack(item, n);
+        itemComponents(c.args[1].s, stack);
         const rest = p.inventory.add(stack);
         if (rest > 0) {
-          const e = new ItemEntity(c.game.level, new ItemStack(item, rest));
+          const e = new ItemEntity(c.game.level, stack.copyWithCount(rest));
           e.moveTo(p.x, p.y + 0.5, p.z);
           e.pickupDelay = 0;
           c.game.level.addEntity(e);

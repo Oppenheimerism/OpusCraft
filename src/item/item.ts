@@ -138,7 +138,7 @@ export function getItem(id: string): Item {
 const BLOCK_TAB: [RegExp, string][] = [
   [/_(ore)$|^(stone|granite|diorite|andesite|deepslate|tuff|calcite|dirt|coarse_dirt|podzol|mycelium|grass_block|sand|red_sand|gravel|clay|bedrock|obsidian|snow_block|ice|packed_ice|blue_ice|mud|rooted_dirt|moss_block|dripstone_block|magma_block|powder_snow|raw_.*_block)$/, 'natural'],
   [/_log$|_wood$|_leaves$|_sapling$|^(short_grass|fern|dead_bush|tall_grass|large_fern|dandelion|poppy|blue_orchid|allium|azure_bluet|.*_tulip|oxeye_daisy|cornflower|lily_of_the_valley|sunflower|lilac|rose_bush|peony|brown_mushroom|red_mushroom|sugar_cane|cactus|pumpkin|melon|lily_pad|vine|seagrass|kelp|sweet_berry_bush|cobweb|carved_pumpkin|jack_o_lantern|hay_block)$/, 'natural'],
-  [/^(crafting_table|furnace|chest|bookshelf|ladder|torch|glowstone|sea_lantern|spawner|tnt|sponge|lantern|chain)$|_bed$/, 'functional'],
+  [/^(crafting_table|furnace|chest|bookshelf|ladder|torch|glowstone|sea_lantern|spawner|tnt|sponge|lantern|chain|enchanting_table|grindstone|(chipped_|damaged_)?anvil)$|_bed$/, 'functional'],
   [/_carpet$|_stained_glass$|_stained_glass_pane$/, 'colored'],
 ];
 
@@ -339,6 +339,10 @@ export interface ItemTag {
   enchantments?: Record<string, number>;
   /** minecraft:stored_enchantments (enchanted books) */
   stored?: Record<string, number>;
+  /** minecraft:custom_name (anvil renames) */
+  customName?: string;
+  /** minecraft:repair_cost: the anvil's prior work penalty */
+  repairCost?: number;
 }
 
 export function cloneTag(t: ItemTag | null): ItemTag | null {
@@ -346,6 +350,8 @@ export function cloneTag(t: ItemTag | null): ItemTag | null {
   const o: ItemTag = {};
   if (t.enchantments) o.enchantments = { ...t.enchantments };
   if (t.stored) o.stored = { ...t.stored };
+  if (t.customName !== undefined) o.customName = t.customName;
+  if (t.repairCost) o.repairCost = t.repairCost;
   return o;
 }
 
@@ -379,7 +385,12 @@ export class ItemStack {
   /** vanilla isSameItemSameComponents */
   sameItem(o: ItemStack | null): boolean {
     if (!o || o.item !== this.item || o.damage !== this.damage) return false;
-    return sameEnchants(this.tag?.enchantments, o.tag?.enchantments) && sameEnchants(this.tag?.stored, o.tag?.stored);
+    const a = this.tag, b = o.tag;
+    return sameEnchants(a?.enchantments, b?.enchantments) && sameEnchants(a?.stored, b?.stored) && a?.customName === b?.customName && (a?.repairCost ?? 0) === (b?.repairCost ?? 0);
+  }
+  /** vanilla getHoverName: the custom name, or the item's name */
+  displayName(): string {
+    return this.tag?.customName ?? this.item.name;
   }
   get maxStack(): number {
     return this.item.maxStack;

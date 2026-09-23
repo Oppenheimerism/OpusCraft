@@ -4,10 +4,13 @@ import type { GL } from './gl';
 import { createTexture } from './gl';
 import { MOB_PARTICLE_TEXTURES } from '../textures/mobs';
 import { ITEM_TEXTURES } from '../textures/items';
+import { sgaParticleTextures } from '../textures/sga';
 import type { SpriteRectUV } from './particles';
 
 export function buildParticleAtlas(gl: GL): { texture: WebGLTexture; rects: Record<string, SpriteRectUV> } {
   const src: Record<string, () => { w: number; h: number; data: Uint8ClampedArray }> = { ...MOB_PARTICLE_TEXTURES };
+  // enchanting table runes (vanilla particle/sga_a..sga_z)
+  Object.assign(src, sgaParticleTextures());
   // item crumb particles (vanilla ItemParticleOption)
   if (ITEM_TEXTURES['slime_ball']) src['item_slime_ball'] = ITEM_TEXTURES['slime_ball'];
   if (ITEM_TEXTURES['egg']) src['item_egg'] = ITEM_TEXTURES['egg'];

@@ -31,6 +31,8 @@ export interface WorldMeta {
     x: number; y: number; z: number; yaw: number; pitch: number;
     health: number; food: number; saturation: number; exhaustion: number;
     xpLevel: number; xpProgress: number; xpTotal: number;
+    /** vanilla XpSeed: the enchanting table's offer seed */
+    xpSeed?: number;
     gameMode: string; flying: boolean; selected: number;
     inventory: (SavedStack | null)[];
     armor: (SavedStack | null)[];

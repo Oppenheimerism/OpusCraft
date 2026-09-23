@@ -5,6 +5,7 @@ import { Entity } from './entity';
 import type { Level } from '../game/level';
 import type { Player } from './player';
 import { FLUID_WATER } from '../world/fluids';
+import { repairWithXp } from '../item/enchantHelper';
 
 const VALUES = [2477, 1237, 617, 307, 149, 73, 37, 17, 7, 3, 1];
 
@@ -107,11 +108,13 @@ export class ExperienceOrb extends Entity {
     return true;
   }
 
-  /** vanilla playerTouch: one orb per 2 ticks */
+  /** vanilla playerTouch: one orb per 2 ticks; mending soaks up what it needs first (repairPlayerItems) */
   playerTouch(p: Player): boolean {
     if (p.takeXpDelay > 0) return false;
     p.takeXpDelay = 2;
-    p.giveExperiencePoints(this.value);
+    const left = repairWithXp(p, this.value);
+    if (left !== this.value) p.inventory.version++;
+    if (left > 0) p.giveExperiencePoints(left);
     this.level.sound.playUI?.('entity.experience_orb.pickup', 0.1, 0.5 * ((Math.random() - Math.random()) * 0.7 + 1.8));
     if (--this.count === 0) this.remove();
     return true;

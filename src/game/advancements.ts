@@ -18,6 +18,7 @@ export type Criterion =
   | { t: 'biome'; biome: string }
   | { t: 'sniper' }
   | { t: 'fall_from_height' }
+  | { t: 'enchanted_item' }
   | { t: 'impossible' };
 
 export interface AdvancementDef {
@@ -103,7 +104,7 @@ const A: AdvancementDef[] = [
     criteria: { diamond_helmet: inv('diamond_helmet'), diamond_chestplate: inv('diamond_chestplate'), diamond_leggings: inv('diamond_leggings'), diamond_boots: inv('diamond_boots') },
     requirements: [['diamond_helmet', 'diamond_chestplate', 'diamond_leggings', 'diamond_boots']],
   },
-  { id: 'story/enchant_item', parent: 'story/mine_diamond', title: 'Enchanter', description: 'Enchant an item at an Enchanting Table', icon: 'enchanted_book', frame: 'task', criteria: one(never) },
+  { id: 'story/enchant_item', parent: 'story/mine_diamond', title: 'Enchanter', description: 'Enchant an item at an Enchanting Table', icon: 'enchanted_book', frame: 'task', criteria: { enchanted_item: { t: 'enchanted_item' } } },
   { id: 'story/cure_zombie_villager', parent: 'story/enter_the_nether', title: 'Zombie Doctor', description: 'Weaken and then cure a Zombie Villager', icon: 'golden_apple', frame: 'goal', criteria: one(never) },
   { id: 'story/follow_ender_eye', parent: 'story/enter_the_nether', title: 'Eye Spy', description: 'Follow an Eye of Ender', icon: 'ender_eye', frame: 'task', criteria: one(never) },
   { id: 'story/enter_the_end', parent: 'story/follow_ender_eye', title: 'The End?', description: 'Enter the End Portal', icon: 'end_stone', frame: 'task', criteria: one(never) },
@@ -468,6 +469,7 @@ function matches(c: Criterion, p: TriggerPayload): boolean {
     case 'slept':
     case 'shoot_arrow':
     case 'fall_from_height':
+    case 'enchanted_item':
       return true;
     default:
       return false;
