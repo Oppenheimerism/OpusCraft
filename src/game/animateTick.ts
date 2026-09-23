@@ -22,6 +22,7 @@ const enum K {
   FALLING,
   DRIPSTONE,
   SPORE_BLOSSOM,
+  PORTAL,
 }
 
 let KIND: Uint8Array | null = null;
@@ -42,6 +43,7 @@ function kindOf(st: number): number {
         : n in DUST || n.endsWith('_concrete_powder') ? K.FALLING
         : n === 'pointed_dripstone' ? K.DRIPSTONE
         : n === 'spore_blossom' ? K.SPORE_BLOSSOM
+        : n === 'nether_portal' ? K.PORTAL
         : K.NONE;
     });
   }
@@ -157,9 +159,34 @@ export class AmbientTicker {
       case K.SPORE_BLOSSOM:
         this.sporeBlossom(x, y, z);
         break;
+      case K.PORTAL:
+        this.portal(x, y, z, st);
+        break;
     }
     const f = FLAGS[st];
     if (f & (F_WATER | F_LAVA)) this.fluid(x, y, z, st);
+  }
+
+  /** vanilla NetherPortalBlock.animateTick: its hum now and then, and motes drifting in and out of it */
+  private portal(x: number, y: number, z: number, st: number): void {
+    const r = Math.random, lvl = this.level, w = lvl.world;
+    if (Math.floor(r() * 100) === 0) lvl.sound.play('block.portal.ambient', x + 0.5, y + 0.5, z + 0.5, 0.5, r() * 0.4 + 0.8);
+    const along = STATE_BLOCK[w.getState(x - 1, y, z)] === STATE_BLOCK[st] || STATE_BLOCK[w.getState(x + 1, y, z)] === STATE_BLOCK[st];
+    for (let i = 0; i < 4; i++) {
+      let px = x + r(), pz = z + r();
+      const py = y + r();
+      let dx = (r() - 0.5) * 0.5, dz = (r() - 0.5) * 0.5;
+      const dy = (r() - 0.5) * 0.5;
+      const j = Math.floor(r() * 2) * 2 - 1;
+      if (!along) {
+        px = x + 0.5 + 0.25 * j;
+        dx = r() * 2 * j;
+      } else {
+        pz = z + 0.5 + 0.25 * j;
+        dz = r() * 2 * j;
+      }
+      lvl.particles.spawn?.('portal', px, py, pz, dx, dy, dz);
+    }
   }
 
   /** vanilla SporeBlossomBlock.animateTick: a spore falls from the flower, and spores hang in the air all round it */

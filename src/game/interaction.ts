@@ -392,7 +392,7 @@ export class Interaction {
       y += DY[h.face];
       z += DZ[h.face];
     }
-    if (y < -64 || y >= 320) return false;
+    if (y < world.dim.minY || y >= world.dim.maxY) return false;
     const target = world.getState(x, y, z);
     const targetBlock = BLOCKS[STATE_BLOCK[target]];
     if (!(canReplace(target, block) || (targetBlock.name === 'water' && block.name !== 'water'))) {
@@ -529,7 +529,7 @@ export class Interaction {
     // vanilla FlintAndSteelItem.useOn: light a fire on the clicked face
     if (id === 'flint_and_steel' || id === 'fire_charge') {
       const fx = h.x + DX[h.face], fy = h.y + DY[h.face], fz = h.z + DZ[h.face];
-      if (canPlaceFire(lvl.world, fx, fy, fz)) {
+      if (canPlaceFire(lvl.world, fx, fy, fz, DIR_NAMES[dirFromYaw(p.yaw)])) {
         placeFire(lvl, fx, fy, fz, fireStateAt(lvl.world, fx, fy, fz));
         if (id === 'flint_and_steel') {
           lvl.sound.play('item.flintandsteel.use', fx + 0.5, fy + 0.5, fz + 0.5, 1, Math.random() * 0.4 + 0.8);
@@ -689,6 +689,14 @@ export class Interaction {
 
   private commitPlace(x: number, y: number, z: number, st: number, stack: ItemStack, sound: string): boolean {
     const p = this.player;
+    if (stack.item.id === 'water_bucket' && this.level.world.dim.ultraWarm) {
+      // vanilla BucketItem.emptyContents: in the Nether the water boils away with a hiss
+      const r = Math.random;
+      this.level.sound.play('block.fire.extinguish', x + 0.5, y + 0.5, z + 0.5, 0.5, 2.6 + (r() - r()) * 0.8);
+      for (let i = 0; i < 8; i++) this.level.particles.spawn?.('large_smoke', x + r(), y + r(), z + r(), 0, 0, 0);
+      if (p.gameMode !== 'creative') p.inventory.setSelectedItem(ItemStack.of('bucket'));
+      return true;
+    }
     this.level.setBlock(x, y, z, st);
     this.onPlaced?.(BLOCKS[STATE_BLOCK[st]].name);
     const isBucket = stack.item.id.endsWith('_bucket');

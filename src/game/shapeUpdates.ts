@@ -8,6 +8,7 @@ import { DOWN, UP, NORTH, SOUTH, WEST, EAST } from '../world/dir';
 import type { World } from '../world/world';
 import { fireCanSurvive, fireStateAt } from './fire';
 import { MULTIFACE, multifaceSupported, dripstoneSupported, dripstoneThickness } from './blockRules';
+import { portalStillStands } from './portal';
 
 const blk = (st: number): Block => BLOCKS[STATE_BLOCK[st]];
 
@@ -153,6 +154,8 @@ export function updateShape(world: World, x: number, y: number, z: number, st: n
   const b = blk(st);
   const n = b.name;
   if (n.endsWith('_stairs')) return b.with(st, 'shape', stairsShape(world, x, y, z, st));
+  // vanilla NetherPortalBlock.updateShape: a portal whose frame was broken goes out
+  if (n === 'nether_portal') return portalStillStands(world, x, y, z, st, world.dim.minY) ? st : 0;
   // vanilla MultifaceBlock.updateShape: faces that lost their support go; with none left the block goes
   if (n === 'glow_lichen') {
     let s = st, any = false;
@@ -253,7 +256,7 @@ function plantOf(name: string): Block {
 /** blocks whose state depends on neighbours (skip the work for everything else) */
 export function hasShapeUpdates(st: number): boolean {
   const n = blk(st).name;
-  return n === 'glow_lichen' || n === 'pointed_dripstone' || n === 'cave_vines' || n === 'cave_vines_plant' || n === 'big_dripleaf' || n.endsWith('_stairs') || n.endsWith('_fence') || n.endsWith('_pane') || n === 'iron_bars' || n.endsWith('_wall') || n.endsWith('_fence_gate') || n.endsWith('_door') || n.endsWith('_bed') || n === 'grass_block' || n === 'podzol' || n === 'mycelium' || n.startsWith('attached_') || n === 'fire';
+  return n === 'glow_lichen' || n === 'pointed_dripstone' || n === 'cave_vines' || n === 'cave_vines_plant' || n === 'big_dripleaf' || n.endsWith('_stairs') || n.endsWith('_fence') || n.endsWith('_pane') || n === 'iron_bars' || n.endsWith('_wall') || n.endsWith('_fence_gate') || n.endsWith('_door') || n.endsWith('_bed') || n === 'grass_block' || n === 'podzol' || n === 'mycelium' || n.startsWith('attached_') || n === 'fire' || n === 'nether_portal';
 }
 
 export { F_OPAQUE };

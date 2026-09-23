@@ -25,6 +25,8 @@ export const DEFAULT_GAME_RULES: GameRules = {
   maxEntityCramming: 24,
   mobGriefing: true,
   naturalRegeneration: true,
+  playersNetherPortalCreativeDelay: 1,
+  playersNetherPortalDefaultDelay: 80,
   playersSleepingPercentage: 100,
   randomTickSpeed: 3,
   sendCommandFeedback: true,

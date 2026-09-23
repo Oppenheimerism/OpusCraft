@@ -47,7 +47,11 @@ export interface WorldMeta {
     vehicle?: SavedEntity | null;
     /** vanilla active_effects */
     effects?: import('../entity/effects').SavedEffect[];
+    /** the dimension the player is in (absent: the overworld) */
+    dimension?: string;
   } | null;
+  /** nether portal blocks per dimension (vanilla POI records), as x, y, z triples */
+  portals?: Record<string, number[]>;
   version: number;
   /** quick-test worlds are never written to storage */
   transient?: boolean;
@@ -68,7 +72,7 @@ export interface SavedChunk {
   caveBiomes?: string[];
   caveBiomeData?: Uint8Array;
   /** the chunk's generation writes into its neighbours, packed (packGenWrites; states as indices into genPalette) */
-  genWrites?: { cx: number; cz: number; data: Int32Array; ops?: Int32Array }[];
+  genWrites?: { cx: number; cz: number; data: Int32Array; ops?: Int32Array; feats?: Int32Array }[];
   genPalette?: string[];
   /** neighbours whose generation writes the blocks already have */
   baked?: number;
@@ -158,8 +162,9 @@ export async function savedChunkKeys(worldId: string): Promise<Set<string>> {
   return new Set(keys.map((k) => String(k)));
 }
 
-export function chunkKey(worldId: string, cx: number, cz: number): string {
-  return `${worldId}/${cx},${cz}`;
+/** `prefix`: the dimension's storage prefix ('' for the overworld, 'nether/' for the Nether) */
+export function chunkKey(worldId: string, cx: number, cz: number, prefix = ''): string {
+  return `${worldId}/${prefix}${cx},${cz}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -197,7 +202,7 @@ export function stateFromString(s: string): number {
   return st;
 }
 
-export function serializeChunk(worldId: string, c: Chunk, blockEntities: SavedBlockEntity[] = []): SavedChunk {
+export function serializeChunk(worldId: string, c: Chunk, blockEntities: SavedBlockEntity[] = [], prefix = ''): SavedChunk {
   const sections: SavedChunk['sections'] = [];
   for (let si = 0; si < SECTIONS; si++) {
     const b = c.blocks[si];
@@ -233,7 +238,7 @@ export function serializeChunk(worldId: string, c: Chunk, blockEntities: SavedBl
     }
     bd[i] = pi;
   }
-  const out: SavedChunk = { key: chunkKey(worldId, c.cx, c.cz), sections, biomes: biomeNames, biomeData: bd, blockEntities };
+  const out: SavedChunk = { key: chunkKey(worldId, c.cx, c.cz, prefix), sections, biomes: biomeNames, biomeData: bd, blockEntities };
   if (c.caveBiomes) {
     const names: string[] = [];
     const cmap = new Map<number, number>();
@@ -265,7 +270,7 @@ export function serializeChunk(worldId: string, c: Chunk, blockEntities: SavedBl
       // one int per write: lx, lz, y + 64, state, rule
       const data = new Int32Array(p.data.length / 5);
       for (let i = 0, k = 0; i < p.data.length; i += 5, k++) data[k] = p.data[i] | (p.data[i + 2] << 4) | ((p.data[i + 1] + 64) << 8) | (pal(p.data[i + 3]) << 17) | (p.data[i + 4] << 27);
-      return { cx: p.cx, cz: p.cz, data, ops: p.ops && packOps(p.ops, pal) };
+      return { cx: p.cx, cz: p.cz, data, ops: p.ops && packOps(p.ops, pal), feats: p.feats && Int32Array.from(p.feats) };
     });
     out.genPalette = palette;
   }
@@ -322,7 +327,7 @@ export function deserializeChunk(s: SavedChunk): { blocks: Uint16Array; biomes: 
   const genWrites: PendingWrites[] = (s.genWrites ?? []).map((p) => {
     const data: number[] = [];
     for (const v of p.data) data.push(v & 15, ((v >> 8) & 511) - 64, (v >> 4) & 15, gp[(v >> 17) & 1023], (v >> 27) & 15);
-    return { cx: p.cx, cz: p.cz, data, ops: p.ops && unpackOps(p.ops, (i) => gp[i]) };
+    return { cx: p.cx, cz: p.cz, data, ops: p.ops && unpackOps(p.ops, (i) => gp[i]), feats: p.feats && Array.from(p.feats) };
   });
   // (saves from before this was kept: the neighbours' writes were in, as far as can be known)
   return { blocks, biomes, caveBiomes, blockEntities: s.blockEntities ?? [], genWrites, baked: s.baked ?? 0x1ef };

@@ -12,6 +12,7 @@ layout(location=3) in vec4 a_color;
 uniform mat4 u_proj;
 uniform mat4 u_view;
 uniform vec3 u_offset;
+uniform float u_fogShape;
 out vec2 v_uv;
 out vec4 v_color;
 out vec2 v_lm;
@@ -22,7 +23,7 @@ void main() {
   v_uv = a_uv;
   v_color = a_color;
   v_lm = clamp(a_light / 256.0, vec2(0.5 / 16.0), vec2(15.5 / 16.0));
-  v_dist = max(length(p.xz), abs(p.y));
+  v_dist = u_fogShape > 0.5 ? max(length(p.xz), abs(p.y)) : length(p);
 }`;
 
 export const TERRAIN_FS = `#version 300 es
@@ -84,6 +85,8 @@ export interface TerrainParams {
   fogColor: [number, number, number];
   fogStart: number;
   fogEnd: number;
+  /** vanilla FogShape: 0 sphere, 1 cylinder (default) */
+  fogShape?: number;
   atlas: WebGLTexture;
   lightmap: WebGLTexture;
   frustum: Frustum;
@@ -222,6 +225,7 @@ export class WorldRenderer {
     s.mat4('u_view', p.view);
     s.vec4('u_fogColor', p.fogColor[0], p.fogColor[1], p.fogColor[2], 1);
     s.vec2('u_fog', p.fogStart, p.fogEnd);
+    s.f('u_fogShape', p.fogShape ?? 1);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, p.atlas);
     s.i('u_atlas', 0);

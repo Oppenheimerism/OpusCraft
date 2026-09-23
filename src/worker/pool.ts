@@ -3,9 +3,11 @@
 import type { SpriteRect } from '../world/models';
 import type { MeshInput } from '../render/mesher';
 import type { GenResult } from '../world/world';
+import type { DimensionId } from '../world/dimension';
 
 export interface GenJob {
   type: 'gen';
+  dim: DimensionId;
   cx: number;
   cz: number;
   done: (r: GenResult & { ms: number }) => void;
@@ -20,6 +22,8 @@ export interface LightJob {
   cx: number;
   cz: number;
   blocks: Uint16Array;
+  /** the dimension has sky light */
+  sky: boolean;
   done: (light: Uint8Array) => void;
 }
 export type Job = GenJob | MeshJob | LightJob;
@@ -117,10 +121,10 @@ export class WorkerPool {
     const id = this.nextId++;
     this.pending.set(id, job);
     w.inflight++;
-    if (job.type === 'gen') w.worker.postMessage({ type: 'gen', id, cx: job.cx, cz: job.cz });
+    if (job.type === 'gen') w.worker.postMessage({ type: 'gen', id, dim: job.dim, cx: job.cx, cz: job.cz });
     else if (job.type === 'light') {
       const copy = new Uint16Array(job.blocks);
-      w.worker.postMessage({ type: 'light', id, blocks: copy }, [copy.buffer]);
+      w.worker.postMessage({ type: 'light', id, blocks: copy, sky: job.sky }, [copy.buffer]);
     } else {
       const inp = job.input;
       w.worker.postMessage({ type: 'mesh', id, input: inp }, [inp.blocks.buffer, inp.light.buffer, inp.grass.buffer, inp.foliage.buffer, inp.water.buffer]);

@@ -2,9 +2,11 @@
 
 import type { GL } from './gl';
 
-function brightness(level: number): number {
+/** vanilla LightTexture.getBrightness: the curve lifted by the dimension's ambient light */
+function brightness(level: number, ambient: number): number {
   const f = level / 15;
-  return f / (4 - 3 * f);
+  const b = f / (4 - 3 * f);
+  return b + (1 - b) * ambient;
 }
 
 function notGamma(v: number): number {
@@ -37,8 +39,9 @@ export class Lightmap {
    * @param flash lightning flash active
    * @param gamma brightness option (0 moody .. 1 bright), default 0.5
    * @param nightVision 0..1
+   * @param ambient the dimension's ambient light (0.1 in the Nether)
    */
-  update(skyDarken: number, flash: boolean, gamma: number, nightVision: number): void {
+  update(skyDarken: number, flash: boolean, gamma: number, nightVision: number, ambient = 0): void {
     const f1 = flash ? 1 : skyDarken * 0.95 + 0.05;
     // skyVec = (f, f, 1) lerp (1,1,1) 0.35
     const sv0 = skyDarken + (1 - skyDarken) * 0.35;
@@ -47,8 +50,8 @@ export class Lightmap {
     const d = this.data;
     for (let i = 0; i < 16; i++) {
       for (let j = 0; j < 16; j++) {
-        const skyB = brightness(i) * f1;
-        const br = brightness(j) * flick;
+        const skyB = brightness(i, ambient) * f1;
+        const br = brightness(j, ambient) * flick;
         const bg = br * ((br * 0.6 + 0.4) * 0.6 + 0.4);
         const bb = br * (br * br * 0.6 + 0.4);
         let r = br + sv0 * skyB;

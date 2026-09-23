@@ -1,13 +1,15 @@
 // Main-thread world: chunk storage, block access, light, tints, mesh inputs.
 
-import { Chunk, LIGHT_DEFAULT, blocksSky } from './chunk';
+import { Chunk, blocksSky } from './chunk';
 import { LightEngine } from './light';
 import { MIN_Y, MAX_Y, SECTIONS, caveBiomeIndex, NO_CAVE_BIOME, CAVE_BIOME_LEVELS } from './constants';
 import { BIOMES } from './gen/biomes';
 import { ruleAllows, PendingWrites, W_HANGING } from './gen/context';
 import { runPatchColumn, type BlockAccess } from './gen/patches';
+import { replayNetherFeature, FEATURE_OP_SIZE } from './gen/netherFeatures';
 import { MeshInput, PS, PAD, PADDED_VOLUME } from '../render/mesher';
 import { OPACITY, BLOCKS, STATE_BLOCK } from './block';
+import { OVERWORLD, type DimensionType } from './dimension';
 import { BlockEntity, SavedBlockEntity, blockEntityKey, createBlockEntity, loadBlockEntity } from './blockEntity';
 import type { SavedEntity } from '../entity/mob';
 
@@ -36,6 +38,10 @@ export const nbBit = (dx: number, dz: number): number => 1 << ((dx + 1) * 3 + (d
 export class World {
   readonly chunks = new Map<number, Chunk>();
   readonly light: LightEngine;
+  /** the dimension these chunks belong to */
+  dim: DimensionType = OVERWORLD;
+  /** a nether portal block appeared or went (vanilla PoiManager: portals are found through their POI records) */
+  onPortalChanged: ((x: number, y: number, z: number, present: boolean) => void) | null = null;
   biomeBlend = 2;
   /** called when a section's mesh became stale */
   onDirty: ((c: Chunk, section: number) => void) | null = null;
@@ -44,6 +50,21 @@ export class World {
 
   constructor() {
     this.light = new LightEngine(this);
+  }
+
+  /** drop every chunk and switch to another dimension (the caller saved what it wanted first) */
+  reset(dim: DimensionType): void {
+    for (const be of this.blockEntities.values()) be.removed = true;
+    this.blockEntities.clear();
+    this.chunks.clear();
+    this.lastChunk = null;
+    this.dim = dim;
+    this.light.reset();
+  }
+
+  /** light where there's no light data: full sky light where the dimension has it */
+  get lightDefault(): number {
+    return this.dim.lightDefault;
   }
 
   getChunk(cx: number, cz: number): Chunk | null {
@@ -67,10 +88,10 @@ export class World {
 
   /** packed light sky<<4|block */
   getLight(x: number, y: number, z: number): number {
-    if (y >= MAX_Y) return LIGHT_DEFAULT;
+    if (y >= MAX_Y) return this.dim.lightDefault;
     if (y < MIN_Y) return 0;
     const c = this.getChunk(x >> 4, z >> 4);
-    if (!c) return LIGHT_DEFAULT;
+    if (!c) return this.dim.lightDefault;
     return c.getLight(x & 15, y, z & 15);
   }
 
@@ -105,7 +126,11 @@ export class World {
     const lx = x & 15, lz = z & 15;
     const old = c.setState(lx, y, lz, state);
     if (old === state) return old;
-    if (STATE_BLOCK[old] !== STATE_BLOCK[state]) this.blockChangedType(x, y, z, state, c);
+    if (STATE_BLOCK[old] !== STATE_BLOCK[state]) {
+      this.blockChangedType(x, y, z, state, c);
+      const pid = portalId();
+      if (STATE_BLOCK[old] === pid || STATE_BLOCK[state] === pid) this.onPortalChanged?.(x, y, z, STATE_BLOCK[state] === pid);
+    }
     // heightmap
     const hi = (lz << 4) | lx;
     const h = c.heightmap[hi];
@@ -187,7 +212,7 @@ export class World {
   // Chunk lifecycle
 
   addChunk(r: GenResult): Chunk {
-    const c = new Chunk(r.cx, r.cz);
+    const c = new Chunk(r.cx, r.cz, this.dim.lightDefault);
     c.loadColumn(r.blocks, r.light, r.biomes);
     if (r.fluidTicks?.length) c.fluidTicks = r.fluidTicks;
     if (r.entities?.length) c.genEntities = r.entities;
@@ -238,6 +263,7 @@ export class World {
       this.setState(c.cx * 16 + lx, y, c.cz * 16 + lz, st);
     }
     if (p.ops) for (const op of p.ops) runPatchColumn(this.access, op);
+    if (p.feats) for (let i = 0; i < p.feats.length; i += FEATURE_OP_SIZE) replayNetherFeature(this.access, c.cx, c.cz, p.feats, i);
     c.modified = was;
   }
 
@@ -379,6 +405,7 @@ export class World {
     const light = new Uint8Array(PADDED_VOLUME);
     const grass = new Uint32Array(PS * PS), foliage = new Uint32Array(PS * PS), water = new Uint32Array(PS * PS);
     const y0 = MIN_Y + si * 16;
+    const lightDefault = this.dim.lightDefault;
     for (let pz = -PAD; pz < 16 + PAD; pz++) {
       const czo = pz < 0 ? -1 : pz > 15 ? 1 : 0;
       const lz = pz & 15;
@@ -401,7 +428,7 @@ export class World {
           }
           if (y >= MAX_Y) {
             blocks[pi] = 0;
-            light[pi] = LIGHT_DEFAULT;
+            light[pi] = lightDefault;
             continue;
           }
           const s = (y - MIN_Y) >> 4;
@@ -409,7 +436,7 @@ export class World {
           const bs = c.blocks[s];
           blocks[pi] = bs ? bs[idx] : 0;
           const ls = c.light[s];
-          light[pi] = ls ? ls[idx] : LIGHT_DEFAULT;
+          light[pi] = ls ? ls[idx] : lightDefault;
         }
       }
     }
@@ -430,7 +457,7 @@ export class World {
           }
       tint3 = { q0, grass: g3, foliage: f3, water: w3 };
     }
-    return { blocks, light, grass, foliage, water, tint3, ox: cx * 16, oy: y0, oz: cz * 16, smooth, fancy };
+    return { blocks, light, grass, foliage, water, tint3, ox: cx * 16, oy: y0, oz: cz * 16, smooth, fancy, flatShade: this.dim.effects.constantAmbientLight };
   }
 }
 
@@ -446,4 +473,10 @@ function swampNoise(x: number, z: number): number {
   const sx = fx * fx * (3 - 2 * fx), sz = fz * fz * (3 - 2 * fz);
   const a = h(ix, iz), b = h(ix + 1, iz), c = h(ix, iz + 1), d = h(ix + 1, iz + 1);
   return (a + (b - a) * sx) * (1 - sz) + (c + (d - c) * sx) * sz;
+}
+
+let PORTAL_ID = -1;
+function portalId(): number {
+  if (PORTAL_ID < 0) PORTAL_ID = BLOCKS.findIndex((b) => b.name === 'nether_portal');
+  return PORTAL_ID;
 }
