@@ -1557,9 +1557,10 @@ export class Game {
       // vanilla getKillCredit: whoever hurt it last (the player, within 100 ticks)
       const credit = victim.lastHurtByPlayer === p || attacker === p;
       if (!credit || !(victim instanceof LivingEntity)) return;
-      const killed = { type: victim.type, hostile: victim instanceof Monster, distance: Math.sqrt(p.distanceToSqr(victim.x, victim.y, victim.z)), byArrow: source === 'arrow' };
+      const killed = { type: victim.type, hostile: victim instanceof Monster, distance: Math.sqrt(p.distanceToSqr(victim.x, victim.y, victim.z)), byArrow: source === 'arrow', byFireball: source === 'fireball' };
       this.advancements.trigger('kill', { killed });
       this.advancements.trigger('sniper', { killed });
+      this.advancements.trigger('return_to_sender', { killed });
     };
     lvl.onBred = (child, cause) => {
       if (cause === this.player) this.advancements.trigger('breed', { breed: child.type });

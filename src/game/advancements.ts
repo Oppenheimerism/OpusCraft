@@ -17,6 +17,8 @@ export type Criterion =
   | { t: 'shoot_arrow' }
   | { t: 'biome'; biome: string }
   | { t: 'sniper' }
+  /** vanilla player_killed_entity: a ghast, the killing blow a fireball */
+  | { t: 'return_to_sender' }
   | { t: 'fall_from_height' }
   | { t: 'enchanted_item' }
   | { t: 'changed_dimension'; from?: string; to?: string }
@@ -116,7 +118,7 @@ const A: AdvancementDef[] = [
 
   // --- Nether
   { id: 'nether/root', parent: null, title: 'Nether', description: 'Bring summer clothes', icon: 'red_nether_bricks', frame: 'task', toast: false, announce: false, criteria: { entered_nether: toNether } },
-  { id: 'nether/return_to_sender', parent: 'nether/root', title: 'Return to Sender', description: 'Destroy a Ghast with a fireball', icon: 'fire_charge', frame: 'challenge', criteria: one(never) },
+  { id: 'nether/return_to_sender', parent: 'nether/root', title: 'Return to Sender', description: 'Destroy a Ghast with a fireball', icon: 'fire_charge', frame: 'challenge', criteria: one({ t: 'return_to_sender' }) },
   { id: 'nether/find_bastion', parent: 'nether/root', title: 'Those Were the Days', description: 'Enter a Bastion Remnant', icon: 'polished_blackstone_bricks', frame: 'task', criteria: one(never) },
   { id: 'nether/obtain_ancient_debris', parent: 'nether/root', title: 'Hidden in the Depths', description: 'Obtain Ancient Debris', icon: 'ancient_debris', frame: 'task', criteria: { ancient_debris: inv('ancient_debris') } },
   { id: 'nether/fast_travel', parent: 'nether/root', title: 'Subspace Bubble', description: 'Use the Nether to travel 7 km in the Overworld', icon: 'map', frame: 'challenge', criteria: { travelled: { t: 'nether_travel', distance: 7000 } } },
@@ -382,7 +384,7 @@ export type AdvancementSave = Record<string, string[]>;
 
 export interface TriggerPayload {
   inventory?: Set<string>;
-  killed?: { type: string; hostile: boolean; distance: number; byArrow: boolean };
+  killed?: { type: string; hostile: boolean; distance: number; byArrow: boolean; byFireball?: boolean };
   place?: string;
   consume?: string;
   breed?: string;
@@ -494,6 +496,8 @@ function matches(c: Criterion, p: TriggerPayload): boolean {
       return c.type === '*' || (c.type === 'hostile' ? p.killed.hostile : p.killed.type === c.type);
     case 'sniper':
       return !!p.killed && p.killed.type === 'skeleton' && p.killed.byArrow && p.killed.distance >= 50;
+    case 'return_to_sender':
+      return !!p.killed && p.killed.type === 'ghast' && !!p.killed.byFireball;
     case 'place':
       return !!p.place && c.blocks.includes(p.place);
     case 'consume':
