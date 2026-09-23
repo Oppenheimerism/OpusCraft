@@ -110,13 +110,13 @@ function gurgleInto(b: Float32Array, c: Ctx, t0: number, d: number, density: num
 // ------------------------------------------------------------------ zombified piglin
 
 /** Low, rotten and phlegmy: deeper than a pig, with a slow, wet flutter. */
-const ZPIG: Throat = { fs: 0.8, rough: 0.6, sub: 0.15, breath: 0.4, oq: 0.45, growl: [17, 26, 0.55], jitter: 0.07, shimmer: 0.3, nasal: 0.35 };
+const ZPIG: Throat = { fs: 0.8, rough: 0.6, sub: 0.12, breath: 0.4, oq: 0.45, growl: [17, 26, 0.55], jitter: 0.07, shimmer: 0.3, nasal: 0.35 };
 
 /** Zombified piglin idle: one to three wet, throaty grunts and snorts; each take has its own rhythm. */
 function zpigAmbient(c: Ctx): Float32Array {
   const { sr, rng, v } = c;
   const out = alloc(1, sr);
-  const base = rng.range(78, 92);
+  const base = rng.range(84, 98);
   const gs: Grunt[] = [];
   let snort = -1;
   switch (v) {
@@ -236,7 +236,7 @@ function zpigHurt(c: Ctx): Float32Array {
         const x = t / d;
         return f * (x < 0.2 ? 1 + jump * smooth(x / 0.2) : 1 + jump - (jump + 0.2) * smooth((x - 0.2) / 0.8));
       },
-      amp: (t) => envAD(t, 0.012, d * 0.45),
+      amp: (t) => envAD(t, 0.012, d * 0.45) * Math.min(1, (d - t) / 0.03),
       formants: [
         { f: F[0], bw: 150, g: 1 },
         { f: F[1], bw: 190, g: 0.7 },
@@ -350,7 +350,8 @@ function cryInto(b: Float32Array, c: Ctx, o: Cry): void {
     f0: (t) => o.f0(t / d) * (1 + (va + ((vb - va) * t) / d) * smooth(t / 0.25) * Math.sin(TAU * vr * t + ph)),
     amp: (t) => o.amp(t / d),
     formants: [
-      { f: F[0], bw: 130, g: 1 },
+      // F1 rides just above the fundamental once the cry climbs past it (formant tuning)
+      { f: (t) => Math.max(F[0](t), 1.1 * o.f0(t / d)), bw: 130, g: 1 },
       { f: F[1], bw: 170, g: 0.6 },
       { f: F[2], bw: 280, g: 0.3 },
       { f: F[3], bw: 420, g: 0.12 },
@@ -558,7 +559,7 @@ function trillInto(b: Float32Array, c: Ctx, o: Trill): void {
     f0: (t) => o.f0(t / d) * (1 + o.depth * trill(t)),
     amp: (t) => env(t / d) * (0.62 + 0.38 * trill(t)),
     formants: [
-      { f: F[0], bw: 90, g: 1 },
+      { f: (t) => Math.max(F[0](t), 1.1 * o.f0(t / d)), bw: 90, g: 1 },
       { f: F[1], bw: 140, g: 0.45 + 0.3 * br },
       { f: F[2], bw: 240, g: 0.15 + 0.15 * br },
     ],
@@ -644,13 +645,23 @@ function striderRetreat(c: Ctx): Float32Array {
   return trills(c, ts, 300);
 }
 
-/** Strider hurt: a sharp, squawking warble. */
+/** Strider hurt: a sharp, squawking warble; four different squawks. */
 function striderHurt(c: Ctx): Float32Array {
   const { rng, v } = c;
-  const f = rng.range(400, 460) * (1 + 0.06 * v);
+  const f = rng.range(400, 460);
   const r = rng.range(30, 36);
   const env = (x: number) => envPts(x, [0, 0, 0.06, 1, 0.5, 0.7, 1, 0]);
-  return trills(c, [{ d: rng.range(0.22, 0.3), f0: (x) => f * envExpPts(x, [0, 1.25, 0.15, 1.45, 1, 0.8]), rate: () => r, depth: 0.06, bright: 0.7, rough: 0.35, env }], 200);
+  const q = (t: number, d: number, shape: number[], a = 1, rate = r): Trill => ({ t, d, f0: (x) => f * envExpPts(x, shape), rate: () => rate, depth: 0.06, bright: 0.7, rough: 0.35, env, a });
+  switch (v) {
+    case 0: // a sharp, falling squawk
+      return trills(c, [q(0, rng.range(0.22, 0.28), [0, 1.25, 0.15, 1.45, 1, 0.8])], 200);
+    case 1: // a double squawk
+      return trills(c, [q(0, 0.12, [0, 1.2, 0.3, 1.45, 1, 1.1]), q(0.15, 0.16, [0, 1.3, 0.25, 1.5, 1, 0.95], 0.85)], 200);
+    case 2: // a yelp cut short on its way up
+      return trills(c, [q(0, 0.17, [0, 1, 0.6, 1.55, 1, 1.35])], 200);
+    default: // a longer, wobbling squawk with a slower trill
+      return trills(c, [q(0, 0.34, [0, 1.35, 0.2, 1.4, 1, 0.75], 1, r * 0.65)], 200);
+  }
 }
 
 /** Strider death: a long warble that sinks, its trill slowing, and fades out. */
@@ -658,7 +669,11 @@ function striderDeath(c: Ctx): Float32Array {
   const { rng, v } = c;
   const f = rng.range(340, 380);
   const env = (x: number) => envPts(x, [0, 0, 0.05, 1, 0.5, 0.7, 1, 0]);
-  return trills(c, [{ d: v === 0 ? 0.95 : 1.1, f0: (x) => f * envExpPts(x, [0, 1.2, 0.2, 1.1, 1, 0.42]), rate: (x) => 26 - 16 * x, depth: 0.07, bright: 0.4, rough: 0.2, env }], 120);
+  const sink: Trill = { d: 0.95, f0: (x) => f * envExpPts(x, [0, 1.2, 0.2, 1.1, 1, 0.42]), rate: (x) => 26 - 16 * x, depth: 0.07, bright: 0.4, rough: 0.2, env };
+  if (v === 0) return trills(c, [sink], 120);
+  // a last squawk, then the long sinking warble
+  const squawk: Trill = { d: 0.16, f0: (x) => f * 1.2 * envExpPts(x, [0, 1, 0.3, 1.3, 1, 1]), rate: () => 32, depth: 0.05, bright: 0.7, rough: 0.35, env };
+  return trills(c, [squawk, { ...sink, t: 0.22, d: 1.05, f0: (x) => f * envExpPts(x, [0, 1.1, 0.25, 1, 1, 0.38]) }], 120);
 }
 
 /** Strider step: a soft, squishy footfall — a wet squelch over a dull thud. */
@@ -666,7 +681,7 @@ function striderStep(c: Ctx): Float32Array {
   const { sr, rng } = c;
   const out = alloc(0.3, sr);
   const p = rng.range(0.85, 1.2);
-  layer(out, 1, (b) => sweep(b, sr, rng, { dur: 0.16, f: (t) => 700 * p * Math.pow(0.45, t / 0.16), q: 2.4, amp: (t) => envAD(t, 0.008, 0.045) }));
+  layer(out, 1, (b) => sweep(b, sr, rng, { dur: 0.24, f: (t) => 700 * p * Math.pow(0.45, t / 0.16), q: 2.4, amp: (t) => envAD(t, 0.008, 0.045) }));
   layer(out, 0.7, (b) => thump(b, sr, { f0: 110 * p, f1: 65, tau: 0.03, attack: 0.004 }));
   layer(out, 0.3, (b) => {
     const n = 2 + rng.int(2);
@@ -681,7 +696,7 @@ function striderStepLava(c: Ctx): Float32Array {
   const { sr, rng } = c;
   const out = alloc(0.45, sr);
   const p = rng.range(0.85, 1.2);
-  layer(out, 0.8, (b) => sweep(b, sr, rng, { dur: 0.22, f: (t) => 480 * p * Math.pow(0.5, t / 0.22), q: 1.8, amp: (t) => envAD(t, 0.015, 0.06) }));
+  layer(out, 0.8, (b) => sweep(b, sr, rng, { dur: 0.32, f: (t) => 480 * p * Math.pow(0.5, t / 0.22), q: 1.8, amp: (t) => envAD(t, 0.015, 0.06) }));
   layer(out, 0.45, (b) => thump(b, sr, { f0: 90 * p, f1: 55, tau: 0.035, attack: 0.008 }));
   layer(out, 0.7, (b) =>
     phisem(b, sr, rng, {
@@ -730,7 +745,7 @@ function striderEat(c: Ctx): Float32Array {
     }),
   );
   layer(out, 0.5, (b) => {
-    for (const a of at) sweep(b, sr, rng, { t: a, dur: 0.09, f: (t) => 900 * Math.pow(0.5, t / 0.09), q: 2, amp: (t) => envAD(t, 0.01, 0.03) });
+    for (const a of at) sweep(b, sr, rng, { t: a, dur: 0.16, f: (t) => 900 * Math.pow(0.5, t / 0.09), q: 2, amp: (t) => envAD(t, 0.01, 0.03) });
   });
   layer(out, 0.45, (b) => {
     for (const a of at) thump(b, sr, { t: a, f0: 150, f1: 90, tau: 0.02 });
@@ -782,7 +797,7 @@ function yelpInto(b: Float32Array, c: Ctx, t0: number, d: number, f: number, jum
       const x = t / d;
       return f * (x < 0.2 ? 1 + jump * smooth(x / 0.2) : 1 + jump - (jump + 0.2) * smooth((x - 0.2) / 0.8));
     },
-    amp: (t) => envAD(t, 0.012, d * 0.45),
+    amp: (t) => envAD(t, 0.012, d * 0.45) * Math.min(1, (d - t) / 0.03),
     formants: [
       { f: F[0], bw: 150, g: 1 },
       { f: 1000 * fs * 1.15, bw: 90, g: 0.3 },
@@ -894,14 +909,25 @@ function hoglinAttack(c: Ctx): Float32Array {
   return out;
 }
 
-/** Hoglin hurt: a deep, pained squeal-grunt. */
+/** Hoglin hurt: a deep, pained squeal-grunt; three different shapes. */
 function hoglinHurt(c: Ctx): Float32Array {
   const { sr, rng, v } = c;
   const d = rng.range(0.26, 0.34);
-  const out = alloc(d + 0.2, sr);
+  const out = alloc(d + 0.3, sr);
+  const f = rng.range(120, 140);
   layer(out, 1, (b) => {
-    yelpInto(b, c, 0, d, rng.range(120, 140) * (1 + 0.08 * v), 0.6 + 0.1 * v, 0.8, 0.5);
-    gruntInto(b, c, HOGLIN, { t: d * 0.7, d: 0.16, f0: (x) => 70 * (1 - 0.15 * x), a: 0.5 });
+    if (v === 0) {
+      // a squeal that sinks into a grunt
+      yelpInto(b, c, 0, d, f, 0.6, 0.8, 0.5);
+      gruntInto(b, c, HOGLIN, { t: d * 0.7, d: 0.16, f0: (x) => 70 * (1 - 0.15 * x), a: 0.5 });
+    } else if (v === 1) {
+      // "hrk-EEGH": a caught grunt, then the squeal
+      gruntInto(b, c, HOGLIN_ROAR, { t: 0, d: 0.1, f0: (x) => 85 * (1 + 0.1 * x), open: 0.7, a: 0.8 });
+      yelpInto(b, c, 0.09, d, f * 1.1, 0.75, 0.8, 0.5);
+    } else {
+      // a short, sharp yelp
+      yelpInto(b, c, 0, d * 0.7, f * 1.18, 0.5, 0.8, 0.55);
+    }
   });
   layer(out, 0.3, (b) => snortInto(b, c, 0, 0.06, 900));
   lowpass(out, 4200, sr);
@@ -1199,15 +1225,25 @@ function piglinRetreat(c: Ctx): Float32Array {
   return out;
 }
 
-/** Piglin hurt: a pained, nasal grunt-squeal. */
+/** Piglin hurt: a pained, nasal grunt-squeal; three different shapes. */
 function piglinHurt(c: Ctx): Float32Array {
   const { sr, rng, v } = c;
   const d = rng.range(0.2, 0.28);
-  const out = alloc(d + 0.2, sr);
-  const f = rng.range(165, 195) * (1 + 0.06 * v);
+  const out = alloc(d + 0.3, sr);
+  const f = rng.range(165, 195);
   layer(out, 1, (b) => {
-    yelpInto(b, c, 0, d, f, 0.55 + 0.1 * v, 0.95, 0.4);
-    gruntInto(b, c, PIGLIN, { t: d * 0.7, d: 0.12, f0: (x) => f * 0.6 * (1 - 0.1 * x), a: 0.4 });
+    if (v === 0) {
+      // a squeal that drops into a grunt
+      yelpInto(b, c, 0, d, f, 0.55, 0.95, 0.4);
+      gruntInto(b, c, PIGLIN, { t: d * 0.7, d: 0.12, f0: (x) => f * 0.6 * (1 - 0.1 * x), a: 0.4 });
+    } else if (v === 1) {
+      // two quick yelps, "hng-HENGH"
+      yelpInto(b, c, 0, 0.11, f * 0.9, 0.35, 0.95, 0.4, 0.7);
+      yelpInto(b, c, 0.13, d, f * 1.08, 0.65, 0.95, 0.4);
+    } else {
+      // a higher, sharper yelp
+      yelpInto(b, c, 0, d * 0.8, f * 1.2, 0.75, 1, 0.35);
+    }
   });
   layer(out, 0.25, (b) => snortInto(b, c, 0, 0.05, 1500));
   lowpass(out, 4500, sr);
