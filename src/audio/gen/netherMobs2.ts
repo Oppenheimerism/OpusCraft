@@ -1,7 +1,7 @@
-// Nether mob vocalisations and foley, second batch: blaze (breath through hot metal pipes), wither
-// skeleton (deep, hollow bony rattles), piglin brute (the piglin's throat, bigger and angrier) and
-// zoglin (the hoglin's, rotten and wet), in the style of netherMobs.ts, whose pig-family throats and
-// grunts they share; plus the respawn anchor's deep, magical hums.
+// Nether mob vocalisations and foley, second batch (in the style of netherMobs.ts): blaze (breath
+// through hot metal pipes), wither skeleton (deep, hollow bony rattles), piglin brute and zoglin (the
+// piglin's and hoglin's throats from netherMobs.ts, made bigger and angrier / rotten and wet), and the
+// respawn anchor's deep, magical hums.
 
 import type { SoundGen } from '../synth';
 import { type Rng, SVF, TAU, addOsc, alloc, clamp, echo, envAD, envBump, envExpPts, envPts, highpass, layer, lowpass, reverb, smooth, upsample2 } from './dsp';
@@ -246,7 +246,9 @@ function blazeBreaths(c: Ctx, bs: Breath[], o: BlazeVoice): Float32Array {
 /** Blaze idle: raspy, hollow, mechanical breathing through a hot metal pipe; each take breathes differently. */
 function blazeAmbient(c: Ctx): Float32Array {
   const { rng, v } = c;
-  const r = rng.range(32, 44);
+  // each take has its own pipe and rattle, not just its own rhythm
+  const p = [200, 178, 226, 190][v] * rng.range(0.96, 1.04);
+  const r = [38, 33, 44, 36][v] * rng.range(0.95, 1.05);
   const bs: Breath[] = [];
   switch (v) {
     case 0: // in, then a long, rattling out
@@ -266,8 +268,7 @@ function blazeAmbient(c: Ctx): Float32Array {
       bs.push({ t: 0, d: 0.55, kind: 'out', rasp: 0.55, rate: r });
       bs.push({ t: 0.66, d: 0.52, kind: 'in', a: 0.7, rasp: 0.5, rate: r * 1.15, slow: -0.2 });
   }
-  const p = rng.range(170, 230);
-  return blazeBreaths(c, bs, { pipe: p, fb: 0.7, fc: rng.range(800, 1000), rod: rng.range(950, 1200), ring: rng.range(1100, 1400) });
+  return blazeBreaths(c, bs, { pipe: p, fb: 0.7, fc: p * 4.5 * rng.range(0.95, 1.05), rod: rng.range(950, 1200), ring: rng.range(1100, 1400) });
 }
 
 /** A hot rod struck: a short, bright clang (the modes of a free bar) with a tink of contact noise. */
@@ -289,7 +290,7 @@ function blazeHurt(c: Ctx): Float32Array {
   const { sr, rng, v } = c;
   const bs: Breath[] = [];
   const clangs: [number, number, number][] = []; // [start, frequency, level]
-  const f = rng.range(620, 760);
+  const f = [700, 640, 760, 600][v] * rng.range(0.96, 1.04);
   switch (v) {
     case 0: // one sharp "KHH"
       bs.push({ t: 0.004, d: 0.3, kind: 'hit', rasp: 0.8, rate: 52 });
@@ -300,16 +301,16 @@ function blazeHurt(c: Ctx): Float32Array {
       bs.push({ t: 0.14, d: 0.28, kind: 'hit', rasp: 0.85, rate: 48 });
       clangs.push([0, f * 1.12, 0.6], [0.136, f, 1]);
       break;
-    case 2: // a sharp gasp in, cut off by the clang
+    case 2: // the rods jolt, a sharp gasp in, then the huff and the clang
       bs.push({ t: 0, d: 0.2, kind: 'in', a: 0.8, rasp: 0.6, rate: 58, slow: -0.3 });
       bs.push({ t: 0.2, d: 0.2, kind: 'hit', a: 0.9, rasp: 0.8, rate: 50 });
-      clangs.push([0.196, f * 0.9, 1]);
+      clangs.push([0, f * 1.25, 0.4], [0.196, f * 0.9, 1]);
       break;
     default: // a lower clang and a longer, rasping huff
       bs.push({ t: 0.004, d: 0.42, kind: 'hit', rasp: 0.9, rate: 42, slow: 0.4 });
       clangs.push([0, f * 0.78, 1]);
   }
-  const body = blazeBreaths(c, bs, { pipe: rng.range(250, 310), fb: 0.78, fc: rng.range(950, 1100), rod: rng.range(1100, 1400), ring: rng.range(1350, 1650), ringMix: 0.4, rattleMix: 0.45, room: [0.5, 0.16], lp: 7000 });
+  const body = blazeBreaths(c, bs, { pipe: [280, 300, 265, 250][v] * rng.range(0.96, 1.04), fb: 0.78, fc: rng.range(950, 1100), rod: rng.range(1100, 1400), ring: rng.range(1350, 1650), ringMix: 0.4, rattleMix: 0.45, room: [0.5, 0.16], lp: 7000 });
   const out = alloc(body.length / sr, sr);
   layer(out, 1, (b) => b.set(body));
   layer(out, 0.55, (b) => {
