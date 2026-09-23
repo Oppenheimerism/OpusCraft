@@ -150,6 +150,8 @@ interface MobSettings {
   water: SpawnerData[];
   ambient: SpawnerData[];
   creatureProbability: number;
+  /** vanilla MobSpawnSettings.mobSpawnCosts: type → [charge, energy budget] */
+  costs?: Record<string, [number, number]>;
 }
 
 const farmAnimals = (): SpawnerData[] => [
@@ -178,12 +180,15 @@ const STRIDERS = [S_('strider', 60, 1, 2)];
  * magma cubes, striders) is picked as often as vanilla picks it and then simply doesn't appear, so the rest come
  * as rarely as they should
  */
-const NETHER_SPAWNS: Record<string, { monster: SpawnerData[]; creature: SpawnerData[] }> = {
+const NETHER_SPAWNS: Record<string, { monster: SpawnerData[]; creature: SpawnerData[]; costs?: Record<string, [number, number]> }> = {
   nether_wastes: { monster: [S_('ghast', 50, 4, 4), S_('zombified_piglin', 100, 4, 4), S_('magma_cube', 2, 4, 4), S_('enderman', 1, 4, 4), S_('piglin', 15, 4, 4)], creature: STRIDERS },
-  soul_sand_valley: { monster: [S_('skeleton', 20, 5, 5), S_('ghast', 50, 4, 4), S_('enderman', 1, 4, 4)], creature: STRIDERS },
+  soul_sand_valley: {
+    monster: [S_('skeleton', 20, 5, 5), S_('ghast', 50, 4, 4), S_('enderman', 1, 4, 4)], creature: STRIDERS,
+    costs: { skeleton: [0.7, 0.15], ghast: [0.7, 0.15], enderman: [0.7, 0.15], strider: [0.7, 0.15] },
+  },
   basalt_deltas: { monster: [S_('ghast', 40, 1, 1), S_('magma_cube', 100, 2, 5)], creature: STRIDERS },
   crimson_forest: { monster: [S_('zombified_piglin', 1, 2, 4), S_('hoglin', 9, 3, 4), S_('piglin', 5, 3, 4)], creature: STRIDERS },
-  warped_forest: { monster: [S_('enderman', 1, 4, 4)], creature: STRIDERS },
+  warped_forest: { monster: [S_('enderman', 1, 4, 4)], creature: STRIDERS, costs: { enderman: [1, 0.12], strider: [1, 0.12] } },
 };
 
 function settingsFor(name: string): MobSettings {
@@ -354,6 +359,7 @@ export class NaturalSpawner {
         if (d2 > 128 * 128) continue;
         const placeOk = data.type === 'squid' ? this.isInWaterPositionOk(x, y, z) : this.isSpawnPositionOk(x, y, z);
         if (!placeOk || !this.checkSpawnRules(data.type, x, y, z)) continue;
+        if (!this.withinSpawnBudget(data.type, x, y, z)) continue;
         const mob = createMob(data.type, lvl);
         if (!mob) return spawned;
         mob.moveTo(x + 0.5, y, z + 0.5, r.nextFloat() * 360, 0);
@@ -387,6 +393,28 @@ export class NaturalSpawner {
   /** vanilla WorldgenRandom.seedSlimeChunk(...).nextInt(10) == 0 (hash-based here) */
   isSlimeChunk(cx: number, cz: number): boolean {
     return hash2(cx, cz, this.worldSeed ^ 987234911) % 10 === 0;
+  }
+
+  /**
+   * vanilla NaturalSpawner.SpawnState.canSpawn (PotentialCalculator): in a biome that charges for this kind of mob,
+   * every mob already about that its own biome charges for repels it (charge over distance), and it spawns only
+   * while the total stays in the budget; it keeps the soul sand valleys' and warped forests' crowds thin
+   */
+  private withinSpawnBudget(type: string, x: number, y: number, z: number): boolean {
+    const w = this.level.world;
+    const cost = biomeSettings(w.getBiome3(x, y, z)).costs?.[type];
+    if (!cost) return true;
+    let energy = 0;
+    for (const e of this.level.entities) {
+      // (vanilla leaves out mobs that never despawn)
+      if (e.removed || !(e instanceof Mob) || e.persistenceRequired || e.requiresCustomPersistence()) continue;
+      const c = biomeSettings(w.getBiome3(Math.floor(e.x), Math.floor(e.y), Math.floor(e.z))).costs?.[e.type];
+      if (!c) continue;
+      const d2 = (Math.floor(e.x) - x) ** 2 + (Math.floor(e.y) - y) ** 2 + (Math.floor(e.z) - z) ** 2;
+      if (d2 === 0) return false;
+      energy += c[0] / Math.sqrt(d2);
+    }
+    return energy * cost[0] <= cost[1];
   }
 
   private checkSpawnRules(type: string, x: number, y: number, z: number): boolean {
