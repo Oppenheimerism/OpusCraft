@@ -1,10 +1,10 @@
-// Nether mob vocalisations and foley, second batch: blaze (breath through hot metal pipes), in the
-// style of netherMobs.ts.
+// Nether mob vocalisations and foley, second batch: blaze (breath through hot metal pipes) and wither
+// skeleton (deep, hollow bony rattles), in the style of netherMobs.ts.
 
 import type { SoundGen } from '../synth';
-import { type Rng, SVF, TAU, alloc, clamp, envAD, envExpPts, envPts, highpass, layer, lowpass, smooth } from './dsp';
+import { type Rng, SVF, TAU, alloc, clamp, envAD, envBump, envExpPts, envPts, highpass, layer, lowpass, smooth } from './dsp';
 import { type Ctx, sound } from './registry';
-import { burst, creak, fireCrackles, impact, sweep, thump } from './texture';
+import { burst, creak, fireCrackles, impact, sweep, thump, ticks } from './texture';
 import { reverbHalf, worldSounds } from './world';
 
 // ------------------------------------------------------------------ blaze
@@ -361,6 +361,166 @@ function blazeShoot(c: Ctx): Float32Array {
   return reverbHalf(out, sr, { t60: 0.9, wet: 0.25, size: 1.2, pre: 0.015, hf: 0.4, lowcut: 150, tail: 0.5 });
 }
 
+// ------------------------------------------------------------------ wither skeleton
+
+/** Partial ratios of a wither skeleton's heavy, charred bones: a skeleton's (mobs.ts), a touch duller. */
+const BONE = [1, 2.6, 4.9];
+
+/** A deep, hollow bony rattle: the skeleton's rattle made lower, heavier and slower, its bones ringing a little longer. */
+function boneRattleInto(b: Float32Array, c: Ctx, t0: number, d: number, rate: number, lo = 420, hi = 1800): void {
+  ticks(b, c.sr, c.rng, {
+    t: t0,
+    dur: d,
+    rate,
+    energy: (t) => envBump(t, d * 0.25, d * 0.75),
+    f: [lo, hi],
+    t60: [0.012, 0.04],
+    ratios: BONE,
+    weights: [1, 0.45, 0.2],
+    heavy: 1.6,
+    click: 0.5,
+  });
+}
+
+/** The jaw chattering: `n` clacks at a steady `rate` (Hz), each a knock of the hollow skull. */
+function chatterInto(b: Float32Array, c: Ctx, t0: number, n: number, rate: number, f: number, a = 1): void {
+  const { sr, rng } = c;
+  for (let k = 0; k < n; k++) {
+    const t = t0 + (k + 0.12 * rng.bi()) / rate;
+    const g = a * (0.6 + 0.4 * rng.next()) * (k === 0 ? 1 : 0.85);
+    const fk = f * (1 + 0.06 * rng.bi());
+    impact(b, sr, rng, { t: Math.max(0, t), modes: [fk, g, 0.035, fk * 1.93, g * 0.5, 0.025, fk * 3.4, g * 0.25, 0.015], noise: g * 0.8, noiseTau: 0.0012, noiseBp: [2000, 0.9] });
+  }
+}
+
+/** A heavy bone knocking on stone (or on other bones): a dull, low clonk. */
+function knockInto(b: Float32Array, c: Ctx, t0: number, f: number, a = 1): void {
+  const { sr, rng } = c;
+  impact(b, sr, rng, { t: t0, modes: [f, a, 0.06, f * 2.6, a * 0.45, 0.035, f * 4.9, a * 0.2, 0.02], jitter: 0.04, noise: a * 0.5, noiseTau: 0.002, noiseBp: [1500, 0.8] });
+  thump(b, sr, { t: t0, f0: f * 0.6, f1: f * 0.35, tau: 0.03, amp: a * 0.5 });
+}
+
+/** The hollow of the skull and ribcage: a short, lightly ringing pipe. */
+function hollow(x: Float32Array, sr: number, rng: Rng, f: number, fb = 0.5): Float32Array {
+  return pipe(x, sr, rng, { f, fb, damp: 2500, wob: 0.01 });
+}
+
+/** Wither skeleton idle: a deep, hollow rattling of charred bones, the jaw chattering; three different takes. */
+function witherAmbient(c: Ctx): Float32Array {
+  const { sr, rng, v } = c;
+  const out = alloc(0.9, sr);
+  const f = rng.range(430, 520);
+  layer(out, 1, (b) => {
+    switch (v) {
+      case 0: // the jaw chatters, then the bones settle with a rattle
+        chatterInto(b, c, 0, 6, rng.range(12, 15), f);
+        boneRattleInto(b, c, 0.44, 0.22, rng.range(55, 75));
+        break;
+      case 1: // one long, rolling rattle with a knock at its heart
+        boneRattleInto(b, c, 0, 0.55, rng.range(70, 90));
+        knockInto(b, c, rng.range(0.15, 0.25), f * 0.6, 0.7);
+        break;
+      default: // a clack, then three short rattles, each lower
+        chatterInto(b, c, 0, 2, 14, f, 0.7);
+        for (let k = 0; k < 3; k++) boneRattleInto(b, c, 0.16 + k * 0.22, rng.range(0.12, 0.16), rng.range(60, 90), 420 * (1 - 0.12 * k), 1800 * (1 - 0.15 * k));
+    }
+  });
+  const h = hollow(out, sr, rng, rng.range(260, 320));
+  lowpass(h, 7000, sr);
+  return h;
+}
+
+/** A heavy bone cracking: a sharp, bright-edged crack over a low, hollow body. */
+function crackInto(b: Float32Array, c: Ctx, t0: number, f: number, a = 1): void {
+  const { sr, rng } = c;
+  impact(b, sr, rng, {
+    t: t0,
+    modes: [f, a, 0.04, f * 2.6, a * 0.55, 0.025, f * 4.9, a * 0.35, 0.015, f * 0.45, a * 0.45, 0.06],
+    noise: a * 1.3,
+    noiseTau: 0.0022,
+    noiseBp: [3200, 0.7],
+  });
+}
+
+/** Wither skeleton hurt: a sharp crack of a heavy bone and a jolted rattle; four different shapes. */
+function witherHurt(c: Ctx): Float32Array {
+  const { sr, rng, v } = c;
+  const out = alloc(0.45, sr);
+  const f = rng.range(850, 1100);
+  let rt = 0.02;
+  layer(out, 1, (b) => {
+    switch (v) {
+      case 0: // one sharp crack
+        crackInto(b, c, 0, f);
+        break;
+      case 1: // a double crack
+        crackInto(b, c, 0, f * 1.1, 0.7);
+        crackInto(b, c, 0.06, f * 0.92);
+        rt = 0.07;
+        break;
+      case 2: // a crack and a jolt of the jaw
+        crackInto(b, c, 0, f);
+        chatterInto(b, c, 0.07, 3, 20, f * 0.6, 0.55);
+        rt = 0.12;
+        break;
+      default: // a lower, heavier crack
+        crackInto(b, c, 0, f * 0.75);
+        knockInto(b, c, 0.004, f * 0.32, 0.6);
+    }
+  });
+  layer(out, 0.6, (b) => boneRattleInto(b, c, rt, rng.range(0.18, 0.28), rng.range(100, 140), 500, 2200));
+  layer(out, 0.25, (b) => thump(b, sr, { f0: 160, f1: 80, tau: 0.03 }));
+  const h = hollow(out, sr, rng, rng.range(280, 340), 0.45);
+  lowpass(h, 8000, sr);
+  return h;
+}
+
+/** Wither skeleton death: a long collapse of heavy bones, tumbling and bouncing, with the skull landing last. */
+function witherDeath(c: Ctx): Float32Array {
+  const { sr, rng, v } = c;
+  const D = v === 0 ? 1.3 : 1.6;
+  const out = alloc(D + 0.2, sr);
+  // the clatter of the bones coming apart, thinning out as they settle
+  layer(out, 1, (b) =>
+    ticks(b, sr, rng, { dur: D, rate: 80, energy: (t) => Math.exp(-t / (D * 0.3)), f: [320, 1700], t60: [0.012, 0.045], ratios: BONE, weights: [1, 0.45, 0.2], heavy: 1.8, click: 0.4 }),
+  );
+  // the heavier bones hitting the ground, each with a smaller bounce, and the skull landing last
+  layer(out, 0.8, (b) => {
+    const n = 6 + 2 * v;
+    for (let k = 0; k < n; k++) {
+      const t = D * 0.7 * Math.pow(rng.next(), 1.6);
+      const fq = rng.range(250, 560);
+      const a = rng.range(0.5, 1);
+      knockInto(b, c, t, fq, a);
+      knockInto(b, c, t + rng.range(0.05, 0.09), fq * rng.range(1, 1.1), a * 0.35);
+    }
+    const ts = D * rng.range(0.72, 0.8);
+    const fs = rng.range(200, 240);
+    knockInto(b, c, ts, fs, 1);
+    knockInto(b, c, ts + 0.11, fs * 1.05, 0.4);
+    knockInto(b, c, ts + 0.18, fs * 1.08, 0.18);
+  });
+  const h = hollow(out, sr, rng, rng.range(250, 300), 0.45);
+  lowpass(h, 6500, sr);
+  return h;
+}
+
+/** Wither skeleton step: a heavy, bony clack on stone. */
+function witherStep(c: Ctx): Float32Array {
+  const { sr, rng } = c;
+  const out = alloc(0.25, sr);
+  layer(out, 1, (b) => {
+    const n = 2 + rng.int(2);
+    for (let k = 0; k < n; k++) {
+      const f = rng.range(550, 1100);
+      impact(b, sr, rng, { t: k * rng.range(0.018, 0.04), modes: [f, 1 - 0.3 * k, 0.03, f * 2.6, 0.4, 0.018, f * 4.9, 0.18, 0.01], noise: 0.6, noiseTau: 0.0015, noiseBp: [2600, 1] });
+    }
+  });
+  layer(out, 0.6, (b) => thump(b, sr, { f0: 130, f1: 75, tau: 0.028 }));
+  lowpass(out, 8000, sr);
+  return out;
+}
+
 // ------------------------------------------------------------------ registry
 
 export function netherMobSounds2(): Record<string, SoundGen> {
@@ -372,5 +532,10 @@ export function netherMobSounds2(): Record<string, SoundGen> {
     'entity.blaze.death': sound('entity.blaze.death', 1, blazeDeath),
     'entity.blaze.shoot': sound('entity.blaze.shoot', 1, blazeShoot),
     'entity.blaze.burn': sound('entity.blaze.burn', 1, (c) => fire.generate(0, c.sr), { fadeIn: 0.02, fadeOut: 0.15 }),
+
+    'entity.wither_skeleton.ambient': sound('entity.wither_skeleton.ambient', 3, witherAmbient),
+    'entity.wither_skeleton.hurt': sound('entity.wither_skeleton.hurt', 4, witherHurt),
+    'entity.wither_skeleton.death': sound('entity.wither_skeleton.death', 2, witherDeath),
+    'entity.wither_skeleton.step': sound('entity.wither_skeleton.step', 4, witherStep),
   };
 }
