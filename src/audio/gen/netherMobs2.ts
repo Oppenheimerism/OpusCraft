@@ -1,10 +1,12 @@
-// Nether mob vocalisations and foley, second batch: blaze (breath through hot metal pipes) and wither
-// skeleton (deep, hollow bony rattles), in the style of netherMobs.ts.
+// Nether mob vocalisations and foley, second batch: blaze (breath through hot metal pipes), wither
+// skeleton (deep, hollow bony rattles) and piglin brute (the piglin's throat, bigger and angrier), in
+// the style of netherMobs.ts, whose pig-family throats and grunts they share.
 
 import type { SoundGen } from '../synth';
 import { type Rng, SVF, TAU, alloc, clamp, envAD, envBump, envExpPts, envPts, highpass, layer, lowpass, smooth } from './dsp';
 import { type Ctx, sound } from './registry';
-import { burst, creak, fireCrackles, impact, sweep, thump, ticks } from './texture';
+import { type Grunt, type Throat, converted, deathGroan, gruntInto, snortInto, yelpInto } from './netherMobs';
+import { burst, creak, fireCrackles, impact, phisem, sweep, thump, ticks, twoBump } from './texture';
 import { reverbHalf, worldSounds } from './world';
 
 // ------------------------------------------------------------------ blaze
@@ -521,6 +523,156 @@ function witherStep(c: Ctx): Float32Array {
   return out;
 }
 
+// ------------------------------------------------------------------ piglin brute
+
+/** The piglin's throat on a much bigger body: a fourth lower in formants, gruffer, less nasal and never curious. */
+const BRUTE: Throat = { fs: 0.84, rough: 0.5, sub: 0.1, breath: 0.38, oq: 0.42, growl: [24, 32, 0.45], jitter: 0.06, shimmer: 0.25, nasal: 0.6 };
+/** Bellowing: pressed hard, rough and breathy. */
+const BRUTE_SHOUT: Throat = { ...BRUTE, rough: 0.58, sub: 0.12, breath: 0.42, oq: 0.33, growl: [26, 34, 0.5] };
+/** A low, menacing growl: slow and heavy flutter. */
+const BRUTE_GROWL: Throat = { ...BRUTE, rough: 0.6, sub: 0.14, oq: 0.4, growl: [17, 23, 0.6] };
+
+/** Piglin brute idle: gruff, territorial grunts and snorts, a menacing growl; five different takes. */
+function bruteAmbient(c: Ctx): Float32Array {
+  const { sr, rng, v } = c;
+  const out = alloc(0.9, sr);
+  const base = rng.range(88, 104);
+  const gs: Grunt[] = [];
+  const snorts: [number, number, boolean][] = []; // [start, length, inhale]
+  let th = BRUTE;
+  switch (v) {
+    case 0: // a gruff, falling "HRMPH"
+      gs.push({ t: 0, d: 0.26, f0: (x) => base * (1.2 - 0.3 * x), open: 0.6 });
+      break;
+    case 1: // "hrr-HRM": a low mutter, then a harder grunt
+      gs.push({ t: 0, d: 0.14, f0: (x) => base * (1 - 0.08 * x), open: 0.3, a: 0.7 });
+      gs.push({ t: 0.2, d: 0.24, f0: (x) => base * (1.18 - 0.25 * x), open: 0.7 });
+      break;
+    case 2: // a heavy snort out, then a grunt
+      snorts.push([0, 0.12, false]);
+      gs.push({ t: 0.17, d: 0.24, f0: (x) => base * (1.1 - 0.2 * x), open: 0.5 });
+      break;
+    case 3: // a long, menacing growl
+      th = BRUTE_GROWL;
+      gs.push({ t: 0, d: 0.55, f0: (x) => base * 0.92 * (1 + 0.1 * Math.sin(Math.PI * x) - 0.08 * x), open: 0.3 });
+      break;
+    default: // two sniffs, then a grunt
+      snorts.push([0, 0.08, true], [0.12, 0.08, true]);
+      gs.push({ t: 0.28, d: 0.22, f0: (x) => base * (1.15 - 0.22 * x), open: 0.55 });
+  }
+  layer(out, 1, (b) => {
+    for (const g of gs) gruntInto(b, c, th, g);
+  });
+  layer(out, 0.16, (b) => {
+    for (const g of gs) snortInto(b, c, g.t, Math.min(0.07, g.d * 0.4), 1250);
+  });
+  if (snorts.length) {
+    layer(out, 0.55, (b) => {
+      for (const [t, d, inhale] of snorts) snortInto(b, c, t, d, rng.range(1000, 1300), inhale);
+    });
+  }
+  lowpass(out, 3600, sr);
+  return out;
+}
+
+/** Piglin brute angry: bellowed, roaring war cries, deeper and harder than a piglin's. */
+function bruteAngry(c: Ctx): Float32Array {
+  const { sr, rng, v } = c;
+  const out = alloc(1, sr);
+  const base = rng.range(108, 125);
+  const gs: Grunt[] = [];
+  let sn = -1;
+  switch (v) {
+    case 0: // a snort, then "HRRAAH!"
+      sn = 0;
+      gs.push({ t: 0.1, d: 0.36, f0: (x) => base * envExpPts(x, [0, 1, 0.3, 1.4, 1, 1.05]), open: 1 });
+      break;
+    case 1: // "HRAH-HRAAH!"
+      gs.push({ t: 0, d: 0.22, f0: (x) => base * envExpPts(x, [0, 1, 0.3, 1.3, 1, 1.05]), open: 1, a: 0.85 });
+      gs.push({ t: 0.28, d: 0.32, f0: (x) => base * envExpPts(x, [0, 1.1, 0.3, 1.5, 1, 1.1]), open: 1 });
+      break;
+    case 2: // a long, roaring "HRRRAAGH"
+      gs.push({ t: 0, d: 0.62, f0: (x) => base * envExpPts(x, [0, 0.95, 0.25, 1.45, 0.7, 1.35, 1, 0.95]), open: 0.95 });
+      break;
+    default: // a growl that bursts into a roar
+      gs.push({ t: 0, d: 0.2, f0: (x) => base * 0.75 * (1 + 0.05 * x), open: 0.3, a: 0.7 });
+      gs.push({ t: 0.2, d: 0.4, f0: (x) => base * envExpPts(x, [0, 1.05, 0.35, 1.55, 1, 1.15]), open: 1 });
+  }
+  layer(out, 1, (b) => {
+    for (const g of gs) gruntInto(b, c, g.open === 0.3 ? BRUTE_GROWL : BRUTE_SHOUT, g);
+  });
+  // the breath of the roar
+  layer(out, 0.3, (b) => {
+    for (const g of gs) {
+      const d = g.d;
+      sweep(b, sr, rng, { t: g.t, dur: d, f: (t) => 950 + 550 * Math.sin((Math.PI * t) / d), q: 1.2, amp: (t) => envBump(t, d * 0.2, d * 0.8), color: 'pink' });
+    }
+  });
+  if (sn >= 0) layer(out, 0.7, (b) => snortInto(b, c, sn, 0.1, 1000));
+  lowpass(out, 4200, sr);
+  return out;
+}
+
+/** Piglin brute hurt: a deep, angry grunt-squeal; four different shapes. */
+function bruteHurt(c: Ctx): Float32Array {
+  const { sr, rng, v } = c;
+  const d = rng.range(0.22, 0.3);
+  const out = alloc(d + 0.3, sr);
+  const f = rng.range(128, 150);
+  layer(out, 1, (b) => {
+    switch (v) {
+      case 0: // a squeal-grunt that drops into a growl
+        yelpInto(b, c, 0, d, f, 0.55, 0.85, 0.5);
+        gruntInto(b, c, BRUTE, { t: d * 0.7, d: 0.14, f0: (x) => f * 0.62 * (1 - 0.1 * x), a: 0.5 });
+        break;
+      case 1: // "hk-HENGH": a caught grunt, then the squeal
+        gruntInto(b, c, BRUTE_SHOUT, { t: 0, d: 0.09, f0: (x) => f * 0.7 * (1 + 0.1 * x), open: 0.7, a: 0.8 });
+        yelpInto(b, c, 0.08, d, f * 1.08, 0.65, 0.85, 0.5);
+        break;
+      case 2: // a short, angry yelp
+        yelpInto(b, c, 0, d * 0.75, f * 1.15, 0.5, 0.85, 0.55);
+        break;
+      default: // a pained grunt through gritted teeth
+        gruntInto(b, c, BRUTE_SHOUT, { t: 0, d: d * 1.1, f0: (x) => f * envExpPts(x, [0, 1, 0.2, 1.35, 1, 0.8]), open: 0.8 });
+    }
+  });
+  layer(out, 0.25, (b) => snortInto(b, c, 0, 0.05, 1300));
+  lowpass(out, 4300, sr);
+  return out;
+}
+
+/** Piglin brute step: a heavy hoof coming down hard, with a gritty scrape. */
+function bruteStep(c: Ctx): Float32Array {
+  const { sr, rng } = c;
+  const out = alloc(0.26, sr);
+  const f = rng.range(125, 170);
+  layer(out, 1, (b) =>
+    impact(b, sr, rng, {
+      modes: [f, 1, 0.055, f * 2.25, 0.5, 0.04, f * 4, 0.25, 0.025, 1100, 0.1, 0.012],
+      jitter: 0.05,
+      noise: 0.55,
+      noiseTau: 0.0035,
+      noiseBp: [1400, 0.8],
+    }),
+  );
+  layer(out, 0.65, (b) => thump(b, sr, { f0: 120, f1: 60, tau: 0.035, attack: 0.002 }));
+  layer(out, 0.5, (b) =>
+    phisem(b, sr, rng, {
+      dur: 0.18,
+      rate: 5000,
+      energy: twoBump(0.004, 0.022, rng.range(0.03, 0.05), 0.4, 0.007, 0.028),
+      grain: 0.0007,
+      heavy: 2.5,
+      bands: [
+        { f: 2800, q: 1.2, g: 1, spread: 0.35 },
+        { f: 1400, q: 1.2, g: 0.6, spread: 0.3 },
+      ],
+    }),
+  );
+  lowpass(out, 5500, sr);
+  return out;
+}
+
 // ------------------------------------------------------------------ registry
 
 export function netherMobSounds2(): Record<string, SoundGen> {
@@ -537,5 +689,12 @@ export function netherMobSounds2(): Record<string, SoundGen> {
     'entity.wither_skeleton.hurt': sound('entity.wither_skeleton.hurt', 4, witherHurt),
     'entity.wither_skeleton.death': sound('entity.wither_skeleton.death', 2, witherDeath),
     'entity.wither_skeleton.step': sound('entity.wither_skeleton.step', 4, witherStep),
+
+    'entity.piglin_brute.ambient': sound('entity.piglin_brute.ambient', 5, bruteAmbient),
+    'entity.piglin_brute.angry': sound('entity.piglin_brute.angry', 4, bruteAngry),
+    'entity.piglin_brute.hurt': sound('entity.piglin_brute.hurt', 4, bruteHurt),
+    'entity.piglin_brute.death': sound('entity.piglin_brute.death', 3, (c) => deathGroan(c, c.rng.range(170, 195), 0.86, [0.85, 1, 0.75][c.v % 3], [1.3, 1.4, 1.25][c.v % 3], 950)),
+    'entity.piglin_brute.step': sound('entity.piglin_brute.step', 4, bruteStep),
+    'entity.piglin_brute.converted_to_zombified': sound('entity.piglin_brute.converted_to_zombified', 3, (c) => converted(c, BRUTE_SHOUT, c.rng.range(92, 104)), { trimStartDb: -26 }),
   };
 }
