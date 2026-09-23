@@ -531,6 +531,28 @@ export function registerExtraBlocks(): void {
       },
     });
   }
+  // vanilla SoulFireBlock (blockstates/soul_fire.json): no age and no sides to choose, always the floor and all four
+  // sides; burns only on soul sand and soul soil, and never spreads
+  {
+    const floor = [fireFloor('soul_fire_0'), fireFloor('soul_fire_1')];
+    const side = [fireSide('soul_fire_0', false), fireSide('soul_fire_1', false), fireSide('soul_fire_0', true), fireSide('soul_fire_1', true)];
+    const parts: (Variant | Variant[])[] = [floor.map((model) => ({ model })), ...[0, 90, 180, 270].map((y) => side.map((model) => ({ model, y })))];
+    registerBlock('soul_fire', {
+      hardness: 0, sound: 'wool', collision: 'none', layer: Layer.CUTOUT, opaque: false, aoCaster: false, opacity: 0, light: 10, replaceable: true,
+      item: false, noDrop: true, outline: [bx(0, 0, 0, 16, 1, 16)], model: () => ({ parts }),
+    });
+  }
+  // vanilla NetherWartBlock: on soul sand, four ages drawn as three looks (crop model)
+  {
+    const models = [0, 1, 2].map((i) => cropModel(`nether_wart_stage${i}`));
+    const heights = [5, 8, 11, 14];
+    registerBlock('nether_wart', {
+      props: [P.age3], hardness: 0, sound: 'nether_wart', collision: 'none', layer: Layer.CUTOUT, opaque: false, randomTicks: true,
+      aoCaster: false, opacity: 0, item: false,
+      outline: (s) => [bx(0, 0, 0, 16, heights[s.get('age') as number], 16)],
+      model: (s) => ({ model: models[[0, 1, 1, 2][s.get('age') as number]] }),
+    });
+  }
   // crops
   for (const [name, tex, maxAge, stages] of [
     ['carrots', 'carrots', 7, [0, 0, 1, 1, 2, 2, 2, 3]],

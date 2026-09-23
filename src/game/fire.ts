@@ -115,11 +115,21 @@ function fireBlock(): Block {
   return (FIRE ??= BLOCK_BY_NAME.get('fire')!);
 }
 
-/** vanilla FireBlock.getStateForPlacement: floor fire, or sides that touch something burnable */
+/** vanilla SoulFireBlock.canSurviveOnBlock: #soul_fire_base_blocks */
+export function isSoulFireBase(st: number): boolean {
+  const n = BLOCKS[STATE_BLOCK[st]].name;
+  return n === 'soul_sand' || n === 'soul_soil';
+}
+
+/**
+ * vanilla BaseFireBlock.getState / FireBlock.getStateWithAge: soul fire over soul sand and soul soil; else floor
+ * fire, or sides that touch something burnable
+ */
 export function fireStateAt(world: World, x: number, y: number, z: number, age = 0): number {
+  const below = world.getState(x, y - 1, z);
+  if (isSoulFireBase(below)) return BLOCK_BY_NAME.get('soul_fire')!.defaultState;
   const fire = fireBlock();
   let st = fire.with(fire.defaultState, 'age', age);
-  const below = world.getState(x, y - 1, z);
   if (!canBurn(below) && !sturdyTop(below)) {
     for (const [p, dx, dy, dz] of SIDES) st = fire.with(st, p, canBurn(world.getState(x + dx, y + dy, z + dz)));
   }
@@ -143,6 +153,7 @@ export function fireCanSurvive(world: World, x: number, y: number, z: number): b
  */
 export function canPlaceFire(world: World, x: number, y: number, z: number, facing?: string): boolean {
   if (!(FLAGS[world.getState(x, y, z)] & F_AIR)) return false;
+  if (isSoulFireBase(world.getState(x, y - 1, z))) return true;
   return fireCanSurvive(world, x, y, z) || (facing !== undefined && fireCouldOpenPortal(world, world.dim, x, y, z, facing, Math.random));
 }
 

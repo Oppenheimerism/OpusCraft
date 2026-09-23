@@ -1074,7 +1074,11 @@ interface FireOpts {
  * lifetimes are shorter than the loop, so frame 31 flows seamlessly into frame
  * 0. Horizontal distances wrap so the texture tiles side by side.
  */
-function fire(seed: number, o: FireOpts): AnimTex {
+const FIRE_PAL = [0xa8300c, 0xd45416, 0xec801e, 0xf7ab30, 0xfbd04a, 0xfff0a0];
+/** soul fire: the same flames in cold turquoise */
+const SOUL_FIRE_PAL = [0x0a5a66, 0x0b8792, 0x17b1ba, 0x3fd3d9, 0x86eaee, 0xd9fdfe];
+
+function fire(seed: number, o: FireOpts, PAL = FIRE_PAL): AnimTex {
   const W = 16, H = 16, N = 32;
   const r = new Rand(seed);
   const streak = valueNoise(r, W, 64, 2, 4); // internal streaks drifting up 2 px/frame
@@ -1084,7 +1088,6 @@ function fire(seed: number, o: FireOpts): AnimTex {
       e: r.next() * N, x: r.next() * W, v: o.v[0] + r.next() * (o.v[1] - o.v[0]), rx: o.rx[0] + r.next() * (o.rx[1] - o.rx[0]),
       life: o.life[0] + r.next() * (o.life[1] - o.life[0]), ph: r.next() * 6.28, sw: 0.2 + r.next() * 0.6, heat: 0.75 + r.next() * 0.5,
     });
-  const PAL = [0xa8300c, 0xd45416, 0xec801e, 0xf7ab30, 0xfbd04a, 0xfff0a0];
   const CUT = [0.32, 0.45, 0.64, 0.92, 1.35, 1.95];
   const frames: Uint8ClampedArray[] = [];
   const field = new Float32Array(W * H);
@@ -1265,4 +1268,6 @@ for (const [name, base, spot] of EGGS) SPAWN_EGG_TEXTURES[name + '_spawn_egg'] =
 export const FIRE_TEXTURES: Record<string, () => AnimTex> = {
   fire_0: () => fire(0xf14e2, { rate: 2.6, v: [0.7, 1.2], rx: [1.8, 3.6], life: [12, 22], stretch: 2.3 }),
   fire_1: () => fire(0xf14e4, { rate: 2.4, v: [0.8, 1.3], rx: [2.0, 3.4], life: [11, 20], stretch: 2.6 }),
+  soul_fire_0: () => fire(0x50f14e2, { rate: 2.6, v: [0.7, 1.2], rx: [1.8, 3.6], life: [12, 22], stretch: 2.3 }, SOUL_FIRE_PAL),
+  soul_fire_1: () => fire(0x50f14e4, { rate: 2.4, v: [0.8, 1.3], rx: [2.0, 3.4], life: [11, 20], stretch: 2.6 }, SOUL_FIRE_PAL),
 };

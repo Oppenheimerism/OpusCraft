@@ -5,6 +5,8 @@ import type { Player } from '../entity/player';
 import { raycast, BlockHit } from './raycast';
 import { destroyProgress, placementState, canReplace, canSurvive, isCorrectTool, blockExperience, hasVacantFace } from './blockRules';
 import { BLOCKS, STATE_BLOCK, FLAGS, F_AIR, F_WATER, F_LAVA, F_OPAQUE, F_REPLACEABLE, COLLISION, FACE_OCC, OUTLINE, getBlock, S } from '../world/block';
+import { growHugeFungus, nyliumBoneMeal } from '../world/gen/netherFeatures';
+import type { BlockAccess } from '../world/gen/patches';
 import { updateShape, hasShapeUpdates } from './shapeUpdates';
 import { DX, DY, DZ, DIR_NAMES, dirFromYaw } from '../world/dir';
 import { blockForItem, itemForBlock, ItemStack, getItem } from '../item/item';
@@ -670,6 +672,52 @@ export class Interaction {
       lvl.setBlock(x, by + Math.max(0, fit - 1), z, getBlock('big_dripleaf').state({ facing, waterlogged: inWater(by + Math.max(0, fit - 1)) }));
       return true;
     }
+    // the nether: nylium sprouts its undergrowth, netherrack next to nylium turns into it, a fungus on its nylium may
+    // grow huge, and vines grow on a few blocks
+    if (n === 'crimson_nylium' || n === 'warped_nylium') {
+      if (!(FLAGS[lvl.getState(x, y + 1, z)] & F_AIR)) return false;
+      nyliumBoneMeal(this.liveAccess(), x, y, z, n === 'crimson_nylium', (Math.random() * 0x100000000) >>> 0);
+      return true;
+    }
+    if (n === 'netherrack') {
+      let crimson = false, warped = false;
+      for (let dx = -1; dx <= 1; dx++)
+        for (let dy = -1; dy <= 1; dy++)
+          for (let dz = -1; dz <= 1; dz++) {
+            const nn = BLOCKS[STATE_BLOCK[lvl.getState(x + dx, y + dy, z + dz)]].name;
+            if (nn === 'crimson_nylium') crimson = true;
+            if (nn === 'warped_nylium') warped = true;
+          }
+      if (!crimson && !warped) return false;
+      const above = lvl.getState(x, y + 1, z);
+      if (FLAGS[above] & F_OPAQUE) return false;
+      lvl.setBlock(x, y, z, S(crimson && warped ? (Math.random() < 0.5 ? 'warped_nylium' : 'crimson_nylium') : warped ? 'warped_nylium' : 'crimson_nylium'));
+      return true;
+    }
+    if (n === 'crimson_fungus' || n === 'warped_fungus') {
+      const crimson = n === 'crimson_fungus';
+      if (BLOCKS[STATE_BLOCK[lvl.getState(x, y - 1, z)]].name !== (crimson ? 'crimson_nylium' : 'warped_nylium')) return false;
+      if (Math.random() < 0.4) growHugeFungus(this.liveAccess(), x, y, z, crimson, (Math.random() * 0x100000000) >>> 0);
+      return true;
+    }
+    if (/^(weeping|twisting)_vines(_plant)?$/.test(n)) {
+      // (on a piece of the plant, the head at its end grows)
+      const head = n.replace('_plant', ''), dy = head === 'weeping_vines' ? -1 : 1;
+      let hy = y;
+      while (BLOCKS[STATE_BLOCK[lvl.getState(x, hy, z)]].name === head + '_plant') hy += dy;
+      const hs = lvl.getState(x, hy, z);
+      const hb = BLOCKS[STATE_BLOCK[hs]];
+      if (hb.name !== head || !(FLAGS[lvl.getState(x, hy + dy, z)] & F_AIR)) return false;
+      // vanilla NetherVines.getBlocksToGrowWhenBonemealed
+      let count = 0;
+      for (let p = 1; Math.random() < p; p *= 0.826) count++;
+      let age = Math.min(hb.get<number>(hs, 'age') + 1, 25);
+      for (let k = 0, ny = hy + dy; k < count && FLAGS[lvl.getState(x, ny, z)] & F_AIR; k++, ny += dy) {
+        lvl.setBlock(x, ny, z, hb.with(hs, 'age', age));
+        age = Math.min(age + 1, 25);
+      }
+      return true;
+    }
     if (n === 'grass_block') {
       // scatter grass and flowers on nearby grass blocks
       for (let i = 0; i < 128; i++) {
@@ -692,6 +740,12 @@ export class Interaction {
       return true;
     }
     return false;
+  }
+
+  /** the level as a feature sees it (for what bone meal grows) */
+  private liveAccess(): BlockAccess {
+    const lvl = this.level;
+    return { get: (x, y, z) => lvl.getState(x, y, z), set: (x, y, z, st) => lvl.setBlock(x, y, z, st) };
   }
 
   private commitPlace(x: number, y: number, z: number, st: number, stack: ItemStack, sound: string): boolean {

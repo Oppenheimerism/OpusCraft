@@ -13,11 +13,12 @@ import { Rand, hash32 } from '../../core/rng';
 
 export const F_GLOWSTONE = 1, F_FIRE = 2, F_BROWN_MUSHROOM = 3, F_RED_MUSHROOM = 4, F_DELTA = 5, F_SMALL_COLUMNS = 6, F_LARGE_COLUMNS = 7, F_PILLAR = 8;
 export const F_CRIMSON_FUNGUS = 9, F_WARPED_FUNGUS = 10, F_CRIMSON_VEGETATION = 11, F_WARPED_VEGETATION = 12, F_NETHER_SPROUTS = 13, F_WEEPING_VINES = 14, F_TWISTING_VINES = 15;
+export const F_SOUL_FIRE = 16;
 
 /** how far from its origin each feature can write */
 const REACH: Record<number, number> = {
   [F_GLOWSTONE]: 7, [F_FIRE]: 7, [F_BROWN_MUSHROOM]: 7, [F_RED_MUSHROOM]: 7, [F_DELTA]: 9, [F_SMALL_COLUMNS]: 10, [F_LARGE_COLUMNS]: 12, [F_PILLAR]: 3,
-  [F_CRIMSON_FUNGUS]: 4, [F_WARPED_FUNGUS]: 4, [F_CRIMSON_VEGETATION]: 7, [F_WARPED_VEGETATION]: 7, [F_NETHER_SPROUTS]: 7, [F_WEEPING_VINES]: 7, [F_TWISTING_VINES]: 8,
+  [F_CRIMSON_FUNGUS]: 4, [F_WARPED_FUNGUS]: 4, [F_CRIMSON_VEGETATION]: 7, [F_WARPED_VEGETATION]: 7, [F_NETHER_SPROUTS]: 7, [F_WEEPING_VINES]: 7, [F_TWISTING_VINES]: 8, [F_SOUL_FIRE]: 7,
 };
 
 export const NETHER_SEA_LEVEL = 32;
@@ -122,6 +123,7 @@ function run(f: number, w: FeatureWorld, seed: number, x: number, y: number, z: 
   switch (f) {
     case F_GLOWSTONE: return ok(glowstone(w, r, x, y, z, again));
     case F_FIRE: return ok(patch(w, r, x, y, z, K.FIRE, (st) => st === K.NETHERRACK));
+    case F_SOUL_FIRE: return ok(patch(w, r, x, y, z, S('soul_fire'), (st) => st === S('soul_sand') || st === S('soul_soil')));
     case F_BROWN_MUSHROOM: return ok(patch(w, r, x, y, z, K.BROWN_MUSHROOM, mushroomGround));
     case F_RED_MUSHROOM: return ok(patch(w, r, x, y, z, K.RED_MUSHROOM, mushroomGround));
     case F_DELTA: return ok(delta(w, r, x, y, z));
@@ -369,13 +371,15 @@ function fungusReplaceable(w: FeatureWorld, x: number, y: number, z: number, con
  * (now and then twice that; a few are three wide), under a hat of wart block studded with shroomlight, and
  * (crimson) weeping vines hanging from the hat's rim
  */
-function hugeFungus(w: FeatureWorld, r: Rand, seed: number, x: number, y: number, z: number, crimson: boolean, replay: boolean): boolean {
+function hugeFungus(w: FeatureWorld, r: Rand, seed: number, x: number, y: number, z: number, crimson: boolean, replay: boolean, planted = false): boolean {
   const K = flora();
   if (!replay && w.get(x, y - 1, z) !== (crimson ? K.CRIMSON_NYLIUM : K.WARPED_NYLIUM)) return false;
   let height = 4 + r.nextInt(10);
   if (r.nextInt(12) === 0) height *= 2;
-  if (y + height + 1 >= 128) return false;
-  const huge = r.nextFloat() < 0.06;
+  // (grown from a fungus there's no generation ceiling, and never the three-wide kind)
+  if (!planted && y + height + 1 >= 128) return false;
+  if (planted && y + height + 1 >= 256) return false;
+  const huge = !planted && r.nextFloat() < 0.06;
   const stem = crimson ? K.CRIMSON_STEM : K.WARPED_STEM, hat = crimson ? K.WART : K.WARPED_WART;
   w.set(x, y, z, 0);
   // stem
@@ -457,8 +461,8 @@ const WARPED_VEGETATION: Vegetation = { states: [['warped_roots', 85], ['crimson
 const SPROUTS: Vegetation = { states: [['nether_sprouts', 1]] };
 const FLORA_SOIL = new Set(['crimson_nylium', 'warped_nylium', 'soul_soil', 'grass_block', 'dirt', 'coarse_dirt', 'podzol', 'rooted_dirt', 'mycelium', 'moss_block', 'farmland', 'mud']);
 
-/** vanilla NetherForestVegetationFeature: 64 tries within 7 across and 3 up or down, from a nylium floor */
-function forestVegetation(w: FeatureWorld, r: Rand, x: number, y: number, z: number, v: Vegetation, replay: boolean): boolean {
+/** vanilla NetherForestVegetationFeature: `spread`² tries (64: within 7 across and 3 up or down), from a nylium floor */
+function forestVegetation(w: FeatureWorld, r: Rand, x: number, y: number, z: number, v: Vegetation, replay: boolean, spread = 8, spreadY = 4): boolean {
   if (!replay) {
     const below = w.get(x, y - 1, z);
     if (below < 0 || !/_nylium$/.test(nameOf(below))) return false;
@@ -466,8 +470,8 @@ function forestVegetation(w: FeatureWorld, r: Rand, x: number, y: number, z: num
   if (y < 1 || y + 1 >= 256) return false;
   const total = v.states.reduce((a, [, n]) => a + n, 0);
   let placed = 0;
-  for (let k = 0; k < 64; k++) {
-    const px = x + r.nextInt(8) - r.nextInt(8), py = y + r.nextInt(4) - r.nextInt(4), pz = z + r.nextInt(8) - r.nextInt(8);
+  for (let k = 0; k < spread * spread; k++) {
+    const px = x + r.nextInt(spread) - r.nextInt(spread), py = y + r.nextInt(spreadY) - r.nextInt(spreadY), pz = z + r.nextInt(spread) - r.nextInt(spread);
     let pick = v.states.length > 1 ? r.nextInt(total) : 0;
     let name = v.states[0][0];
     for (const [n, wgt] of v.states) {
@@ -515,8 +519,8 @@ function weepingVines(w: FeatureWorld, r: Rand, x: number, y: number, z: number,
   return true;
 }
 
-/** vanilla TwistingVinesFeature: 64 vines rising from the netherrack, warped nylium and warped wart round the spot */
-function twistingVines(w: FeatureWorld, r: Rand, x: number, y: number, z: number, replay: boolean): boolean {
+/** vanilla TwistingVinesFeature: `spread`² vines rising from the netherrack, warped nylium and warped wart round the spot */
+function twistingVines(w: FeatureWorld, r: Rand, x: number, y: number, z: number, replay: boolean, spread = 8, spreadY = 4, maxHeight = 8): boolean {
   const K = flora(), NR = netherBlocks().NETHERRACK;
   const invalid = (px: number, py: number, pz: number) => {
     if (!w.isEmpty(px, py, pz)) return true;
@@ -524,9 +528,9 @@ function twistingVines(w: FeatureWorld, r: Rand, x: number, y: number, z: number
     return b !== NR && b !== K.WARPED_NYLIUM && b !== K.WARPED_WART;
   };
   if (!replay && invalid(x, y, z)) return false;
-  for (let i = 0; i < 64; i++) {
-    let px = x + r.nextInt(17) - 8, py = y + r.nextInt(9) - 4, pz = z + r.nextInt(17) - 8;
-    let len = 1 + r.nextInt(8);
+  for (let i = 0; i < spread * spread; i++) {
+    let px = x + r.nextInt(spread * 2 + 1) - spread, py = y + r.nextInt(spreadY * 2 + 1) - spreadY, pz = z + r.nextInt(spread * 2 + 1) - spread;
+    let len = 1 + r.nextInt(maxHeight);
     if (r.nextInt(6) === 0) len *= 2;
     if (r.nextInt(5) === 0) len = 1;
     const age = 17 + r.nextInt(9);
@@ -555,4 +559,42 @@ function twistingVines(w: FeatureWorld, r: Rand, x: number, y: number, z: number
     px = px | 0;
   }
   return true;
+}
+
+// ---------------------------------------------------------------------------
+// Bone meal (vanilla NyliumBlock / FungusBlock.performBonemeal): the same features, planted in the loaded world
+
+/** a feature working straight on the level */
+class LiveWorld extends FeatureWorld {
+  constructor(private readonly acc: BlockAccess, ox: number, oz: number) {
+    super(ox, oz);
+  }
+  protected read(x: number, y: number, z: number): number {
+    return this.acc.get(x, y, z);
+  }
+  protected write(x: number, y: number, z: number, st: number): void {
+    this.acc.set(x, y, z, st);
+  }
+  guessSolid(): boolean {
+    return true;
+  }
+}
+
+/** a fungus on its own nylium grows into a huge one (the caller has rolled the 40%) */
+export function growHugeFungus(acc: BlockAccess, x: number, y: number, z: number, crimson: boolean, seed: number): boolean {
+  return hugeFungus(new LiveWorld(acc, x, z), new Rand(seed, 7), seed, x, y, z, crimson, false, true);
+}
+
+/** bone meal on nylium: its undergrowth within 2 blocks (warped: sprouts too, and one time in eight twisting vines) */
+export function nyliumBoneMeal(acc: BlockAccess, x: number, y: number, z: number, crimson: boolean, seed: number): void {
+  const r = new Rand(seed, 7);
+  const w = new LiveWorld(acc, x, z);
+  const oy = y + 1;
+  if (crimson) {
+    forestVegetation(w, r, x, oy, z, CRIMSON_VEGETATION, false, 3, 1);
+    return;
+  }
+  forestVegetation(w, r, x, oy, z, WARPED_VEGETATION, false, 3, 1);
+  forestVegetation(w, r, x, oy, z, SPROUTS, false, 3, 1);
+  if (r.nextInt(8) === 0) twistingVines(w, r, x, oy, z, false, 3, 1, 2);
 }

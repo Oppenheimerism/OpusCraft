@@ -17,7 +17,7 @@ import type { GenOutput } from './generator';
 import { placeOre, sampleHeight, type OreSpec } from './features';
 import {
   placeNetherFeature, F_GLOWSTONE, F_FIRE, F_BROWN_MUSHROOM, F_RED_MUSHROOM, F_DELTA, F_SMALL_COLUMNS, F_LARGE_COLUMNS, F_PILLAR,
-  F_CRIMSON_FUNGUS, F_WARPED_FUNGUS, F_CRIMSON_VEGETATION, F_WARPED_VEGETATION, F_NETHER_SPROUTS, F_WEEPING_VINES, F_TWISTING_VINES,
+  F_CRIMSON_FUNGUS, F_WARPED_FUNGUS, F_CRIMSON_VEGETATION, F_WARPED_VEGETATION, F_NETHER_SPROUTS, F_WEEPING_VINES, F_TWISTING_VINES, F_SOUL_FIRE,
 } from './netherFeatures';
 
 const CELL_W = 4, CELL_H = 8;
@@ -329,8 +329,7 @@ export class NetherGenerator {
     step([BD], (r) => this.count(ctx, r, 16, 4, 123, [BD], (_r, x, y, z) => spring(ctx, x, y, z, DELTA_SPRING_ROCK, true, 4, 1)));
     step([W, SV, CF, WF], (r) => this.count(ctx, r, 8, 4, 123, [W, SV, CF, WF], (_r, x, y, z) => spring(ctx, x, y, z, NETHERRACK_ONLY, false, 4, 1)));
     step([W, SV, CF, BD], (r) => this.count(ctx, r, [0, 5], 4, 123, [W, SV, CF, BD], feature(F_FIRE)));
-    // (patch_soul_fire waits for soul fire)
-    i++;
+    step([W, SV, WF, BD], (r) => this.count(ctx, r, [0, 5], 4, 123, [W, SV, WF, BD], feature(F_SOUL_FIRE)));
     step(ALL, (r) => this.count(ctx, r, 'glowstone_extra', 4, 123, ALL, feature(F_GLOWSTONE)));
     step(ALL, (r) => this.count(ctx, r, 10, 0, TOP, ALL, feature(F_GLOWSTONE)));
     // (patch_crimson_roots waits for the roots)

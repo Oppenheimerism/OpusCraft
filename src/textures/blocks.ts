@@ -428,6 +428,8 @@ T['lantern'] = () => DC.lantern();
 T['chain'] = () => DC.chain();
 T['fire_0'] = FIRE_TEXTURES.fire_0;
 T['fire_1'] = FIRE_TEXTURES.fire_1;
+T['soul_fire_0'] = FIRE_TEXTURES.soul_fire_0;
+T['soul_fire_1'] = FIRE_TEXTURES.soul_fire_1;
 T['campfire_log'] = () => DC.campfireLog(false);
 T['campfire_log_lit'] = () => DC.campfireLog(true);
 T['campfire_fire'] = () => DC.campfireFire();
@@ -507,6 +509,7 @@ T['weeping_vines_plant'] = () => NF.weepingVinesPlant();
 T['twisting_vines'] = () => NF.twistingVines();
 T['twisting_vines_plant'] = () => NF.twistingVinesPlant();
 T['shroomlight'] = () => NF.shroomlight();
+for (const i of [0, 1, 2] as const) T[`nether_wart_stage${i}`] = () => NF.netherWartStage(i);
 
 // Missing texture (vanilla's magenta/black checkerboard)
 T['missing'] = () => {
