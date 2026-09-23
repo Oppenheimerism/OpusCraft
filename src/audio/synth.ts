@@ -13,6 +13,7 @@ import { boatSounds } from './gen/boat';
 import { netherBlockSounds } from './gen/netherBlocks';
 import { netherSounds } from './gen/nether';
 import { netherMobSounds } from './gen/netherMobs';
+import { netherMobSounds2 } from './gen/netherMobs2';
 import { NETHER_MUSIC_POOLS, renderNetherMusic } from './gen/netherMusic';
 
 export const SAMPLE_RATE = 44100;
@@ -35,6 +36,7 @@ export const SOUNDS: Record<string, SoundGen> = {
   ...netherBlockSounds(),
   ...netherSounds(),
   ...netherMobSounds(),
+  ...netherMobSounds2(),
 };
 
 /** Number of in-game (overworld) music tracks. */
@@ -184,6 +186,8 @@ const VOLUMES: Record<string, number> = {
   'entity.ghast.shoot': 10,
   // zombified piglin anger plays at twice the voice volume (and 1.8x the voice pitch)
   'entity.zombified_piglin.angry': 2,
+  // blaze fireballs: level event 1018 plays the shoot sound at 2, once per fireball
+  'entity.blaze.shoot': 2,
 };
 
 /**
