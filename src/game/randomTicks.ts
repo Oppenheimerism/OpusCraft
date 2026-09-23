@@ -62,6 +62,12 @@ export class RandomTicker {
       lvl.scheduleTick(x, y, z, 30 + lvl.random.nextInt(10));
       return;
     }
+    if (n === 'crimson_nylium' || n === 'warped_nylium') {
+      // vanilla NyliumBlock.randomTick: smothered under a block that lets no light through, it's netherrack again
+      const above = lvl.getState(x, y + 1, z);
+      if (OPACITY[above] >= 15 && FLAGS[above] & F_OPAQUE) lvl.setBlock(x, y, z, S('netherrack'));
+      return;
+    }
     if (n === 'grass_block' || n === 'mycelium') {
       // vanilla SpreadingSnowyDirtBlock
       const above = lvl.getState(x, y + 1, z);
