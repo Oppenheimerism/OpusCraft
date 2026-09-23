@@ -45,7 +45,7 @@ export class Inventory {
       for (let i = 0; i < 36 && remaining > 0; i++) {
         if (this.main[i]) continue;
         const n = Math.min(remaining, stack.maxStack);
-        this.main[i] = new ItemStack(stack.item, n, stack.damage);
+        this.main[i] = stack.copyWithCount(n);
         remaining -= n;
       }
     }

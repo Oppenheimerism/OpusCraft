@@ -5,7 +5,7 @@ import type { Level } from './level';
 import type { Entity } from '../entity/entity';
 import { Mob, MobCategory, SavedEntity } from '../entity/mob';
 import { ItemEntity } from '../entity/itemEntity';
-import { ItemStack, ITEMS } from '../item/item';
+import { ItemStack, ITEMS, cloneTag } from '../item/item';
 import { Pig, Cow, Sheep, Chicken, Animal } from '../entity/animals';
 import { Zombie, Skeleton, Creeper, Spider, Enderman, Slime, Monster, validSpawnBlock } from '../entity/monsters';
 import { Squid, WaterAnimal } from '../entity/water';
@@ -42,7 +42,7 @@ export function saveEntity(e: Entity): SavedEntity | null {
     const s = e.stack;
     return {
       id: 'item', x: e.x, y: e.y, z: e.z, yaw: e.yaw, pitch: 0, dx: e.dx, dy: e.dy, dz: e.dz, health: 5, fire: 0,
-      data: { item: s.item.id, count: s.count, damage: s.damage, age: e.age, pickupDelay: e.pickupDelay },
+      data: { item: s.item.id, count: s.count, damage: s.damage, age: e.age, pickupDelay: e.pickupDelay, ...(s.tag ? { tag: JSON.stringify(s.tag) } : {}) },
     };
   }
   return null;
@@ -52,7 +52,8 @@ export function loadEntity(d: SavedEntity, level: Level): Entity | null {
   if (d.id === 'item') {
     const it = ITEMS.get(String(d.data?.item));
     if (!it) return null;
-    const e = new ItemEntity(level, new ItemStack(it, Number(d.data?.count ?? 1), Number(d.data?.damage ?? 0)));
+    const tag = typeof d.data?.tag === 'string' ? cloneTag(JSON.parse(d.data.tag)) : null;
+    const e = new ItemEntity(level, new ItemStack(it, Number(d.data?.count ?? 1), Number(d.data?.damage ?? 0), tag));
     e.moveTo(d.x, d.y, d.z, d.yaw, 0);
     e.dx = d.dx;
     e.dy = d.dy;

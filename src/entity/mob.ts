@@ -9,7 +9,7 @@ import { LookControl, MoveControl, JumpControl, BodyRotationControl, eyeY } from
 import { PathNavigation } from './ai/navigation';
 import { PathType, DEFAULT_MALUS } from './ai/pathfinder';
 import { clipBlocks } from '../game/raycast';
-import { ItemStack, ITEMS } from '../item/item';
+import { ItemStack, ITEMS, SavedStack, saveStack, loadStack } from '../item/item';
 import { ItemEntity } from './itemEntity';
 import { AABB } from '../core/aabb';
 import { Rand } from '../core/rng';
@@ -31,7 +31,7 @@ export interface SavedEntity {
   health: number;
   fire: number;
   persistent?: boolean;
-  hand?: [string, number, number] | null;
+  hand?: SavedStack | null;
   data?: Record<string, number | string | boolean>;
 }
 
@@ -465,7 +465,7 @@ export abstract class Mob extends LivingEntity {
   // --- spawning -------------------------------------------------------------
 
   /** random per-spawn setup (sheep color, baby zombies...) */
-  finalizeSpawn(_reason: 'natural' | 'chunk' | 'egg' | 'command' | 'breeding'): void {}
+  finalizeSpawn(_reason: 'natural' | 'chunk' | 'egg' | 'command' | 'breeding' | 'spawner'): void {}
 
   /** vanilla Mob.checkSpawnRules: walk target value must be non-negative */
   checkSpawnRules(): boolean {
@@ -493,7 +493,7 @@ export abstract class Mob extends LivingEntity {
       health: this.health,
       fire: this.remainingFireTicks,
       persistent: this.persistenceRequired || undefined,
-      hand: this.mainHand ? [this.mainHand.item.id, this.mainHand.count, this.mainHand.damage] : null,
+      hand: this.mainHand ? saveStack(this.mainHand) : null,
       data: this.saveData(),
     };
   }
@@ -507,7 +507,7 @@ export abstract class Mob extends LivingEntity {
     this.health = d.health;
     this.remainingFireTicks = d.fire;
     this.persistenceRequired = !!d.persistent;
-    this.mainHand = d.hand && ITEMS.get(d.hand[0]) ? new ItemStack(ITEMS.get(d.hand[0])!, d.hand[1], d.hand[2]) : null;
+    this.mainHand = loadStack(d.hand);
     if (d.data) this.loadData(d.data);
   }
 

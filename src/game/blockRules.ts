@@ -254,6 +254,25 @@ function fortuneless(r: Rand, min: number, max: number): number {
   return min + r.nextInt(max - min + 1);
 }
 
+/**
+ * vanilla DropExperienceBlock / RedStoneOreBlock / SpawnerBlock spawnAfterBreak: experience from
+ * a block a player broke with a tool that harvests it (silk touch drops none)
+ */
+export function blockExperience(state: number, tool: Item | null, r: Rand, silk = false): number {
+  const b = blk(state);
+  if (silk || (b.requiresTool && !isCorrectTool(tool, b))) return 0;
+  const uniform = (lo: number, hi: number) => lo + r.nextInt(hi - lo + 1);
+  switch (b.name.replace(/^deepslate_/, '')) {
+    case 'coal_ore': return uniform(0, 2);
+    case 'diamond_ore': case 'emerald_ore': return uniform(3, 7);
+    case 'lapis_ore': case 'nether_quartz_ore': return uniform(2, 5);
+    case 'nether_gold_ore': return uniform(0, 1);
+    case 'redstone_ore': return 1 + r.nextInt(5);
+    case 'spawner': return 15 + r.nextInt(15) + r.nextInt(15);
+  }
+  return 0;
+}
+
 export function blockDrops(state: number, tool: Item | null, r: Rand, silk = false): ItemStack[] {
   const b = blk(state);
   const n = b.name;

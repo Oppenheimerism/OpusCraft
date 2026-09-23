@@ -3,6 +3,7 @@
 
 import { MIN_Y, MAX_Y, colIndex } from '../constants';
 import { FLAGS, F_AIR, F_REPLACEABLE, F_LEAVES, STATE_BLOCK, BLOCKS, F_WATER, F_OPAQUE, F_COLLIDE } from '../block';
+import type { SavedBlockEntity } from '../blockEntity';
 
 /** Write rules (applied at write time against the current target block). */
 export const W_ANY = 0, // unconditional
@@ -64,6 +65,8 @@ export class GenContext {
   private pending = new Map<number, PendingWrites>();
   /** fluids placed by features that must start flowing when the chunk loads (packed lx, y, lz) */
   readonly fluidTicks: number[] = [];
+  /** block entities placed by features (dungeon chests and spawners) */
+  readonly blockEntities: SavedBlockEntity[] = [];
 
   constructor(readonly cx: number, readonly cz: number, blocks: Uint16Array, biomes: Uint8Array) {
     this.x0 = cx * 16;

@@ -161,6 +161,8 @@ export interface DrawState {
   additive?: boolean;
   /** default true */
   depthWrite?: boolean;
+  /** only where the depth already equals this geometry's (vanilla glint EQUAL_DEPTH_TEST) */
+  depthEqual?: boolean;
 }
 
 /** Accumulates quads for one texture/state, then flushes. */
@@ -280,11 +282,13 @@ export class EntityBatch {
     if (st.cull) gl.enable(gl.CULL_FACE);
     else gl.disable(gl.CULL_FACE);
     if (st.depthWrite === false) gl.depthMask(false);
+    if (st.depthEqual) gl.depthFunc(gl.EQUAL);
     gl.drawArrays(gl.TRIANGLES, 0, this.n);
     gl.bindVertexArray(null);
     gl.enable(gl.CULL_FACE);
     gl.disable(gl.BLEND);
     if (st.depthWrite === false) gl.depthMask(true);
+    if (st.depthEqual) gl.depthFunc(gl.LEQUAL);
     this.n = 0;
   }
 
@@ -297,5 +301,5 @@ export class EntityBatch {
 }
 
 function sameState(a: DrawState, b: DrawState): boolean {
-  return a.texture === b.texture && a.cutoff === b.cutoff && a.blend === b.blend && a.cull === b.cull && a.lit === b.lit && a.useLightmap === b.useLightmap && !!a.additive === !!b.additive && (a.depthWrite !== false) === (b.depthWrite !== false);
+  return a.texture === b.texture && a.cutoff === b.cutoff && a.blend === b.blend && a.cull === b.cull && a.lit === b.lit && a.useLightmap === b.useLightmap && !!a.additive === !!b.additive && (a.depthWrite !== false) === (b.depthWrite !== false) && !!a.depthEqual === !!b.depthEqual;
 }

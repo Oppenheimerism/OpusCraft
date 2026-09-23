@@ -17,6 +17,7 @@ import * as UT from './blocklib/utility';
 import * as DR from './blocklib/doors';
 import * as DC from './blocklib/decor';
 import * as CR from './blocklib/crops';
+import * as IB from './blocklib/iconblocks';
 import { FIRE_TEXTURES } from './mobs';
 
 type Gen = () => TexDef;
@@ -401,6 +402,32 @@ for (const [c, col] of Object.entries(DYE)) {
   T[`${c}_concrete`] = () => BL.tintBase(BL.concreteBase, col.concrete, 222, 0.6);
 }
 T['terracotta'] = () => BL.tintBase(BL.terracottaBase, 0x985e43, 222, 0.8);
+
+// ---------------------------------------------------------------------------
+// Blocks shown as advancement cube icons (gui/iconCubes.ts)
+
+T['end_stone'] = () => IB.endStone();
+T['note_block'] = () => IB.noteBlock();
+T['jukebox_top'] = () => IB.jukeboxTop();
+T['jukebox_side'] = () => IB.jukeboxSide();
+T['target_top'] = () => IB.targetTop();
+T['target_side'] = () => IB.targetSide();
+T['honey_block_top'] = () => IB.honeyBlockTop();
+T['honey_block_side'] = () => IB.honeyBlockSide();
+T['bee_nest_top'] = () => IB.beeNestTop();
+T['bee_nest_side'] = () => IB.beeNestSide();
+T['bee_nest_front'] = () => IB.beeNestFront();
+T['chiseled_bookshelf_top'] = () => IB.chiseledBookshelfTop();
+T['chiseled_bookshelf_side'] = () => IB.chiseledBookshelfSide();
+T['chiseled_bookshelf_occupied'] = () => IB.chiseledBookshelfOccupied();
+T['crafter_top'] = () => IB.crafterTop();
+T['crafter_side'] = () => IB.crafterSide();
+T['crafter_north'] = () => IB.crafterNorth();
+T['chiseled_tuff'] = () => IB.chiseledTuff();
+T['chiseled_tuff_top'] = () => IB.chiseledTuffTop();
+T['oxidized_copper_bulb'] = () => IB.oxidizedCopperBulb();
+T['verdant_froglight_top'] = () => IB.verdantFroglightTop();
+T['verdant_froglight_side'] = () => IB.verdantFroglightSide();
 
 // Missing texture (vanilla's magenta/black checkerboard)
 T['missing'] = () => {

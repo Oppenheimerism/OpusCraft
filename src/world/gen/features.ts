@@ -243,6 +243,8 @@ export class Decorator {
     ctx.computeHeightmaps();
     // --- lakes (vanilla LAKES step)
     this.lavaLakes(ctx, new Rand(hash2(ctx.cx, ctx.cz, this.seed ^ 0x1a4e), 2));
+    // --- monster rooms (vanilla UNDERGROUND_STRUCTURES step)
+    this.monsterRooms(ctx, new Rand(hash2(ctx.cx, ctx.cz, this.seed ^ 0xd06e), 4));
     // biome of the chunk center decides most decoration (vanilla decorates per biome present;
     // we use a few sample columns so borders mix naturally)
     // --- ores
@@ -356,13 +358,76 @@ export class Decorator {
   }
 
   /**
+   * vanilla MonsterRoomFeature (monster_room: 10 tries from y 0 up; monster_room_deep: 4 tries from
+   * y -58 to -1): where the floor and ceiling are solid and 1-5 gaps open into caves, a cobblestone
+   * room (mossy floor) with a spawner and up to two loot chests against a wall. Rooms are kept inside
+   * the chunk, since neighbouring chunks aren't generated yet.
+   */
+  private monsterRooms(ctx: GenContext, r: Rand): void {
+    const solid = (st: number) => st > 0 && (FLAGS[st] & F_COLLIDE) !== 0 && !(FLAGS[st] & F_WATER) && blockOf(st).name !== 'lava';
+    const replaceable = (st: number) => {
+      const n = blockOf(st).name;
+      return n !== 'bedrock' && n !== 'spawner' && n !== 'chest';
+    };
+    const COBBLE = S('cobblestone'), MOSSY = S('mossy_cobblestone'), CHEST = getBlock('chest'), SPAWNER = S('spawner');
+    const MOBS = ['skeleton', 'zombie', 'zombie', 'spider'];
+    const tryRoom = (y: number) => {
+      const xr = r.nextInt(2) + 2, zr = r.nextInt(2) + 2;
+      const ox = ctx.x0 + xr + 1 + r.nextInt(16 - 2 * (xr + 1)), oz = ctx.z0 + zr + 1 + r.nextInt(16 - 2 * (zr + 1));
+      if (y - 1 <= MIN_Y) return;
+      const minX = -xr - 1, maxX = xr + 1, minZ = -zr - 1, maxZ = zr + 1;
+      let holes = 0;
+      for (let dx = minX; dx <= maxX; dx++)
+        for (let dy = -1; dy <= 4; dy++)
+          for (let dz = minZ; dz <= maxZ; dz++) {
+            const x = ox + dx, yy = y + dy, z = oz + dz;
+            const st = ctx.getOrAir(x, yy, z);
+            if ((dy === -1 || dy === 4) && !solid(st)) return;
+            if ((dx === minX || dx === maxX || dz === minZ || dz === maxZ) && dy === 0 && st === 0 && ctx.getOrAir(x, yy + 1, z) === 0) holes++;
+          }
+      if (holes < 1 || holes > 5) return;
+      for (let dx = minX; dx <= maxX; dx++)
+        for (let dy = 3; dy >= -1; dy--)
+          for (let dz = minZ; dz <= maxZ; dz++) {
+            const x = ox + dx, yy = y + dy, z = oz + dz;
+            const st = ctx.getOrAir(x, yy, z);
+            if (dx !== minX && dy !== -1 && dz !== minZ && dx !== maxX && dz !== maxZ) {
+              if (replaceable(st)) ctx.set(x, yy, z, 0);
+            } else if (yy >= MIN_Y && !solid(ctx.getOrAir(x, yy - 1, z))) {
+              ctx.set(x, yy, z, 0);
+            } else if (solid(st) && blockOf(st).name !== 'chest' && replaceable(st)) {
+              ctx.set(x, yy, z, dy === -1 && r.nextInt(4) !== 0 ? MOSSY : COBBLE);
+            }
+          }
+      // two chests, each tried at 3 spots that touch exactly one wall
+      const H: [number, number, string][] = [[0, -1, 'north'], [0, 1, 'south'], [-1, 0, 'west'], [1, 0, 'east']];
+      const OPP: Record<string, string> = { north: 'south', south: 'north', west: 'east', east: 'west' };
+      for (let k = 0; k < 2; k++)
+        for (let j = 0; j < 3; j++) {
+          const x = ox + r.nextInt(xr * 2 + 1) - xr, z = oz + r.nextInt(zr * 2 + 1) - zr;
+          if (ctx.getOrAir(x, y, z) !== 0) continue;
+          const walls = H.filter(([hx, hz]) => solid(ctx.getOrAir(x + hx, y, z + hz)));
+          if (walls.length !== 1) continue;
+          // vanilla StructurePiece.reorient: face away from the wall
+          ctx.set(x, y, z, CHEST.with(CHEST.defaultState, 'facing', OPP[walls[0][2]]));
+          ctx.blockEntities.push({ id: 'chest', x, y, z, items: [], data: { lootTable: 'chests/simple_dungeon', lootSeed: r.nextU32() } });
+          break;
+        }
+      ctx.set(ox, y, oz, SPAWNER);
+      ctx.blockEntities.push({ id: 'spawner', x: ox, y, z: oz, items: [], data: { entity: MOBS[r.nextInt(MOBS.length)], delay: 20 } });
+    };
+    for (let i = 0; i < 10; i++) tryRoom(r.nextInt(320));
+    for (let i = 0; i < 4; i++) tryRoom(-58 + r.nextInt(58));
+  }
+
+  /**
    * vanilla SpringFeature: a fluid source set into a wall with exactly one
    * opening, so it pours out (spring_water: 25 tries up to y 192; spring_lava:
    * 20 tries biased to the bottom of the world).
    */
   private springs(ctx: GenContext, r: Rand): void {
     const WATER_OK = /^(stone|granite|diorite|andesite|deepslate|tuff|calcite|dirt|snow_block|powder_snow|packed_ice)$/;
-    const LAVA_OK = /^(stone|granite|diorite|andesite|deepslate|tuff|calcite)$/;
+    const LAVA_OK = /^(stone|granite|diorite|andesite|deepslate|tuff|calcite|dirt)$/;
     const place = (x: number, y: number, z: number, state: number, ok: RegExp) => {
       const valid = (st: number) => st >= 0 && ok.test(blockOf(st).name);
       if (!valid(ctx.get(x, y + 1, z)) || !valid(ctx.get(x, y - 1, z))) return;
@@ -371,7 +436,8 @@ export class Decorator {
       let rock = 0, hole = 0;
       for (const [dx, dy, dz] of [[-1, 0, 0], [1, 0, 0], [0, 0, -1], [0, 0, 1], [0, -1, 0]]) {
         const st = ctx.get(x + dx, y + dy, z + dz);
-        if (valid(st)) rock++;
+        // a neighbour in the next chunk isn't generated yet: underground it's almost always rock
+        if (st === -1 || valid(st)) rock++;
         if (st === 0) hole++;
       }
       if (rock === 4 && hole === 1) {

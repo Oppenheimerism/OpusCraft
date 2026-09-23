@@ -135,7 +135,10 @@ export function explode(level: Level, source: Entity | null, x: number, y: numbe
         }
       }
       const be = w.getBlockEntity(bx, by, bz);
-      if (be) for (const s of be.container.removeAll()) level.dropStackAt(bx, by, bz, s);
+      if (be) {
+        be.unpackLoot();
+        for (const s of be.container.removeAll()) level.dropStackAt(bx, by, bz, s);
+      }
       level.world.setState(bx, by, bz, 0);
     }
     for (const [bx, by, bz] of list) level.updateNeighbors(bx, by, bz);

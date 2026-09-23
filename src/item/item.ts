@@ -33,7 +33,17 @@ export interface Item {
   fuel?: number; // furnace burn ticks
   maxDamage: number;
   creativeTab: string;
+  /** vanilla Rarity: tooltip/name colour */
+  rarity?: Rarity;
+  /** vanilla enchantment_glint_override */
+  glint?: boolean;
+  /** extra gray tooltip lines (music disc descriptions...) */
+  lore?: string[];
 }
+
+export type Rarity = 'common' | 'uncommon' | 'rare' | 'epic';
+/** vanilla Rarity colours (white, yellow, aqua, light purple) */
+export const RARITY_COLOR: Record<Rarity, string> = { common: 'f', uncommon: 'e', rare: 'b', epic: 'd' };
 
 export const ITEMS = new Map<string, Item>();
 export const ITEM_LIST: Item[] = [];
@@ -219,6 +229,8 @@ const FOOD: [string, number, number, Partial<FoodInfo>?][] = [
 for (const [id, n, s, extra] of FOOD) {
   reg({ id, texture: id, creativeTab: 'food', maxStack: extra?.remainder ? 1 : 64, food: { nutrition: n, saturation: s, ...(extra ?? {}) } });
 }
+ITEMS.get('golden_apple')!.rarity = 'rare';
+reg({ id: 'enchanted_golden_apple', texture: 'enchanted_golden_apple', creativeTab: 'food', rarity: 'epic', glint: true, food: { nutrition: 4, saturation: 1.2, alwaysEat: true } });
 
 // Materials & misc
 const MISC: [string, number?, number?][] = [
@@ -233,6 +245,13 @@ const MISC: [string, number?, number?][] = [
 for (const [id, stack, fuel] of MISC) {
   if (ITEMS.has(id)) continue;
   reg({ id, texture: id, maxStack: stack ?? 64, fuel });
+}
+Object.assign(ITEMS.get('experience_bottle')!, { rarity: 'uncommon', glint: true });
+reg({ id: 'enchanted_book', texture: 'enchanted_book', maxStack: 1, rarity: 'uncommon', glint: true });
+for (const m of ['iron', 'golden', 'diamond']) reg({ id: `${m}_horse_armor`, texture: `${m}_horse_armor`, maxStack: 1, creativeTab: 'combat' });
+// vanilla 1.21 jukebox songs: disc name + "C418 - title" description
+for (const [id, desc, rarity] of [['music_disc_13', 'C418 - 13', 'uncommon'], ['music_disc_cat', 'C418 - cat', 'uncommon'], ['music_disc_otherside', 'Lena Raine - otherside', 'rare']] as [string, string, Rarity][]) {
+  reg({ id, name: 'Music Disc', texture: id, maxStack: 1, creativeTab: 'tools', rarity, lore: [desc] });
 }
 for (const c of ['white', 'orange', 'magenta', 'light_blue', 'yellow', 'lime', 'pink', 'gray', 'light_gray', 'cyan', 'purple', 'blue', 'brown', 'green', 'red', 'black']) {
   reg({ id: `${c}_dye`, texture: `${c}_dye` });
@@ -287,30 +306,81 @@ export function blockForItem(it: Item): Block | undefined {
   return it.block;
 }
 
+/** per-stack data (vanilla data components) */
+export interface ItemTag {
+  /** minecraft:enchantments, id → level in the order they were applied */
+  enchantments?: Record<string, number>;
+  /** minecraft:stored_enchantments (enchanted books) */
+  stored?: Record<string, number>;
+}
+
+export function cloneTag(t: ItemTag | null): ItemTag | null {
+  if (!t) return null;
+  const o: ItemTag = {};
+  if (t.enchantments) o.enchantments = { ...t.enchantments };
+  if (t.stored) o.stored = { ...t.stored };
+  return o;
+}
+
+function sameEnchants(a: Record<string, number> | undefined, b: Record<string, number> | undefined): boolean {
+  const ka = a ? Object.keys(a) : [], kb = b ? Object.keys(b) : [];
+  if (ka.length !== kb.length) return false;
+  for (const k of ka) if (a![k] !== b?.[k]) return false;
+  return true;
+}
+
 export class ItemStack {
-  constructor(public item: Item, public count = 1, public damage = 0) {}
+  constructor(public item: Item, public count = 1, public damage = 0, public tag: ItemTag | null = null) {}
   static of(id: string, count = 1): ItemStack {
     return new ItemStack(getItem(id), count);
   }
   copy(): ItemStack {
-    return new ItemStack(this.item, this.count, this.damage);
+    return new ItemStack(this.item, this.count, this.damage, cloneTag(this.tag));
   }
   copyWithCount(n: number): ItemStack {
-    return new ItemStack(this.item, n, this.damage);
+    return new ItemStack(this.item, n, this.damage, cloneTag(this.tag));
   }
   /** remove up to n from this stack and return them as a new stack */
   split(n: number): ItemStack {
     const k = Math.min(n, this.count);
     this.count -= k;
-    return new ItemStack(this.item, k, this.damage);
+    return new ItemStack(this.item, k, this.damage, cloneTag(this.tag));
   }
   isEmpty(): boolean {
     return this.count <= 0;
   }
+  /** vanilla isSameItemSameComponents */
   sameItem(o: ItemStack | null): boolean {
-    return !!o && o.item === this.item && o.damage === this.damage;
+    if (!o || o.item !== this.item || o.damage !== this.damage) return false;
+    return sameEnchants(this.tag?.enchantments, o.tag?.enchantments) && sameEnchants(this.tag?.stored, o.tag?.stored);
   }
   get maxStack(): number {
     return this.item.maxStack;
   }
+  isEnchanted(): boolean {
+    return !!this.tag?.enchantments && Object.keys(this.tag.enchantments).length > 0;
+  }
+  /** vanilla ItemStack.hasFoil */
+  hasGlint(): boolean {
+    return !!this.item.glint || this.isEnchanted();
+  }
+  /** vanilla ItemStack.getRarity: enchanting bumps common/uncommon to rare and rare to epic */
+  rarity(): Rarity {
+    const r = this.item.rarity ?? 'common';
+    if (!this.isEnchanted()) return r;
+    return r === 'common' || r === 'uncommon' ? 'rare' : 'epic';
+  }
+}
+
+/** compact save form: [id, count, damage, tag?] */
+export type SavedStack = [string, number, number, ItemTag?];
+
+export function saveStack(s: ItemStack): SavedStack {
+  return s.tag ? [s.item.id, s.count, s.damage, cloneTag(s.tag)!] : [s.item.id, s.count, s.damage];
+}
+
+export function loadStack(d: SavedStack | null | undefined): ItemStack | null {
+  if (!d) return null;
+  const it = ITEMS.get(d[0]);
+  return it ? new ItemStack(it, d[1], d[2], cloneTag(d[3] ?? null)) : null;
 }

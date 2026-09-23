@@ -1,7 +1,8 @@
 // Level: the running game world (blocks + entities + time + weather).
 
 import { DEFAULT_GAME_RULES, GameRules } from './gameRules';
-import { FurnaceBlockEntity } from '../world/blockEntity';
+import { FurnaceBlockEntity, SpawnerBlockEntity } from '../world/blockEntity';
+import { tickSpawner } from './baseSpawner';
 import type { ItemStack } from '../item/item';
 import { World } from '../world/world';
 import type { Entity } from '../entity/entity';
@@ -199,9 +200,14 @@ export class Level {
     if (this.skyFlash > 0) this.skyFlash--;
     this.runScheduledTicks();
     if (this.player) this.randomTicks.tick(this.player.x, this.player.z, this.simulationDistance);
-    // block entities (furnaces)
+    // block entities (furnaces, spawners)
     for (const be of this.world.blockEntities.values()) {
-      if (be.removed || !(be instanceof FurnaceBlockEntity)) continue;
+      if (be.removed) continue;
+      if (be instanceof SpawnerBlockEntity) {
+        if (this.isEntityTicking(be.x, be.z)) tickSpawner(be, this);
+        continue;
+      }
+      if (!(be instanceof FurnaceBlockEntity)) continue;
       const lit = be.isLit, cook = be.cookingProgress;
       be.tick(this);
       if (lit || cook || be.isLit) {
@@ -339,7 +345,10 @@ export class Level {
     const replacement = FLAGS[st] & F_WATERLOGGED ? S('water') : 0;
     // containers spill their contents (vanilla Containers.dropContents)
     const be = this.world.getBlockEntity(x, y, z);
-    if (be) for (const s of be.container.removeAll()) this.dropStackAt(x, y, z, s);
+    if (be) {
+      be.unpackLoot();
+      for (const s of be.container.removeAll()) this.dropStackAt(x, y, z, s);
+    }
     this.world.setState(x, y, z, replacement);
     // two-block blocks (tall plants, doors, beds): remove the other part; loot comes from the lower half / bed head
     let dropState = st;

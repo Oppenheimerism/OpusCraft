@@ -11,6 +11,7 @@ import { ICON_CUBES } from './iconCubes';
 import { LAYER, Layer } from '../world/block';
 import type { IconSource } from './guiGraphics';
 import type { TexImage } from '../textures/tex';
+import { glintTexture, glintOffset, GLINT_SIZE } from '../textures/glint';
 
 const FACE_SHADE = [0.5, 1.0, 0.6, 0.8, 0.8, 0.8]; // down, up, north(right), south, west, east(left)
 
@@ -159,6 +160,12 @@ export class ItemIcons implements IconSource {
     c.width = W;
     c.height = H;
     const ctx = c.getContext('2d')!;
+    // blending into the cleared framebuffer leaves colour multiplied by alpha; ImageData wants it straight
+    for (let i = 0; i < pixels.length; i += 4) {
+      const a = pixels[i + 3];
+      if (a === 0 || a === 255) continue;
+      for (let c = 0; c < 3; c++) pixels[i + c] = Math.min(255, Math.round((pixels[i + c] * 255) / a));
+    }
     const id = ctx.createImageData(W, H);
     for (let y = 0; y < H; y++) id.data.set(pixels.subarray((H - 1 - y) * W * 4, (H - y) * W * 4), y * W * 4);
     ctx.putImageData(id, 0, 0);
@@ -180,6 +187,45 @@ export class ItemIcons implements IconSource {
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(fc, 0, 0, fc.width, fc.height, px, py, size, size);
     return true;
+  }
+
+  private glintPattern: CanvasPattern | null = null;
+  private glintScratch: HTMLCanvasElement | null = null;
+
+  /**
+   * vanilla glint render type over a GUI item: the scrolling glint texture,
+   * masked to the icon and added on top (the texture is pre-squared for GL_SRC_COLOR, GL_ONE).
+   */
+  drawGlint(ctx: CanvasRenderingContext2D, id: string, px: number, py: number, size: number): void {
+    let sc = this.glintScratch;
+    if (!sc) {
+      sc = this.glintScratch = document.createElement('canvas');
+      const t = glintTexture();
+      const gc = document.createElement('canvas');
+      gc.width = t.w;
+      gc.height = t.h;
+      gc.getContext('2d')!.putImageData(new ImageData(new Uint8ClampedArray(t.data), t.w, t.h), 0, 0);
+      this.glintPattern = sc.getContext('2d')!.createPattern(gc, 'repeat');
+    }
+    if (sc.width < size || sc.height < size) {
+      sc.width = Math.max(sc.width, size);
+      sc.height = Math.max(sc.height, size);
+    }
+    const sctx = sc.getContext('2d')!;
+    sctx.globalCompositeOperation = 'source-over';
+    sctx.clearRect(0, 0, size, size);
+    if (!this.drawIcon(sctx, id, 0, 0, size) || !this.glintPattern) return;
+    // icon pixel l → glint texel g = R(10°)·(8/size · l) + (-f, f1)·64, so the pattern maps g → size/8 · R(-10°)·(g - t)
+    const [f, f1] = glintOffset(performance.now());
+    this.glintPattern.setTransform(new DOMMatrix().scale(size / 8).rotate(-10).translate(f * GLINT_SIZE, -f1 * GLINT_SIZE));
+    sctx.globalCompositeOperation = 'source-in';
+    sctx.fillStyle = this.glintPattern;
+    sctx.fillRect(0, 0, size, size);
+    sctx.globalCompositeOperation = 'source-over';
+    const prev = ctx.globalCompositeOperation;
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.drawImage(sc, 0, 0, size, size, px, py, size, size);
+    ctx.globalCompositeOperation = prev;
   }
 
   drawStack(ctx: CanvasRenderingContext2D, s: ItemStack, px: number, py: number, size: number): boolean {

@@ -3,6 +3,7 @@
 
 import type { TexImage } from '../textures/tex';
 import type { FontData } from '../textures/font';
+import type { ItemStack } from '../item/item';
 
 export const COLOR_CODES: Record<string, number> = {
   '0': 0x000000, '1': 0x0000aa, '2': 0x00aa00, '3': 0x00aaaa, '4': 0xaa0000, '5': 0xaa00aa, '6': 0xffaa00, '7': 0xaaaaaa,
@@ -155,6 +156,8 @@ export class BitmapFont {
 export interface IconSource {
   /** draws an item icon for `id` into ctx at pixel coords (already scaled) */
   drawIcon(ctx: CanvasRenderingContext2D, id: string, px: number, py: number, size: number): boolean;
+  /** adds the enchantment glint over the icon drawn at the same spot */
+  drawGlint?(ctx: CanvasRenderingContext2D, id: string, px: number, py: number, size: number): void;
 }
 
 export class GuiGraphics {
@@ -354,6 +357,13 @@ export class GuiGraphics {
   item(id: string, x: number, y: number): boolean {
     if (!this.icons) return false;
     return this.icons.drawIcon(this.ctx, id, Math.round(x * this.scale), Math.round(y * this.scale), 16 * this.scale);
+  }
+
+  /** an item stack's icon, with the enchantment glint when it has one (vanilla renderItem + foil) */
+  stack(s: ItemStack, x: number, y: number): boolean {
+    const ok = this.item(s.item.id, x, y);
+    if (ok && s.hasGlint()) this.icons?.drawGlint?.(this.ctx, s.item.id, Math.round(x * this.scale), Math.round(y * this.scale), 16 * this.scale);
+    return ok;
   }
 
   /** stack count / durability decorations (vanilla renderItemDecorations) */

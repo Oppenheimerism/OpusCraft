@@ -6,16 +6,25 @@ import { Screen, Button } from '../screen';
 import type { GuiGraphics } from '../guiGraphics';
 import { ContainerMenu, Slot, canItemQuickReplace, quickCraftPlaceCount, quickcraftMask, ClickType } from '../../inventory/container';
 import { InventoryMenu, CraftingMenu, FurnaceMenu, ChestMenu } from '../../inventory/menus';
-import type { ItemStack } from '../../item/item';
+import { ItemStack, RARITY_COLOR } from '../../item/item';
+import { enchantmentLine } from '../../item/enchantments';
 import { KEYS } from '../../game/input';
 import { RecipeBookComponent } from '../recipeBookComponent';
 
 const LABEL = 0x404040;
 
-/** vanilla item tooltip lines (name + attribute modifiers) */
+/** vanilla ItemStack.getTooltipLines: name in its rarity colour, component lines, attribute modifiers */
 export function itemTooltip(s: ItemStack): string[] {
   const it = s.item;
-  const lines = [it.name];
+  const rarity = s.rarity();
+  const lines = [rarity === 'common' ? it.name : `§${RARITY_COLOR[rarity]}${it.name}`];
+  if (it.lore) for (const l of it.lore) lines.push(`§7${l}`);
+  for (const ench of [s.tag?.stored, s.tag?.enchantments])
+    if (ench)
+      for (const [id, lvl] of Object.entries(ench)) {
+        const e = enchantmentLine(id, lvl);
+        lines.push((e.curse ? '§c' : '§7') + e.text);
+      }
   const fmt = (v: number) => (Math.round(v * 100) / 100).toString();
   if (it.tool || it.attackDamage !== 1 || it.attackSpeed !== 4) {
     if (it.tool || it.attackDamage > 1) {
@@ -130,7 +139,7 @@ export abstract class AbstractContainerScreen<M extends ContainerMenu> extends S
         if (carried.count <= 0) countText = '§e0';
       }
       const x = mx - L - 8, y = my - T - 8;
-      g.item(carried.item.id, x, y);
+      g.stack(carried, x, y);
       if (countText) g.text(countText, x + 17 - g.textWidth(countText), y + 9, 0xffffff, true);
       else g.itemDecorations(carried.count, carried.damage, carried.item.maxDamage, x, y);
     }
@@ -184,7 +193,7 @@ export abstract class AbstractContainerScreen<M extends ContainerMenu> extends S
   private drawStack(g: GuiGraphics, _slot: Slot, stack: ItemStack | null, countText: string | null, _drag: boolean): void {
     if (!stack) return;
     const x = _slot.x, y = _slot.y;
-    g.item(stack.item.id, x, y);
+    g.stack(stack, x, y);
     if (countText) g.text(countText, x + 17 - g.textWidth(countText), y + 9, 0xffffff, true);
     else g.itemDecorations(stack.count, stack.damage, stack.item.maxDamage, x, y);
   }

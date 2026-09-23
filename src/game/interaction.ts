@@ -3,7 +3,7 @@
 import type { Level } from './level';
 import type { Player } from '../entity/player';
 import { raycast, BlockHit } from './raycast';
-import { destroyProgress, placementState, canReplace, canSurvive, isCorrectTool } from './blockRules';
+import { destroyProgress, placementState, canReplace, canSurvive, isCorrectTool, blockExperience } from './blockRules';
 import { BLOCKS, STATE_BLOCK, FLAGS, F_AIR, F_WATER, F_OPAQUE, F_REPLACEABLE, COLLISION, FACE_OCC, OUTLINE, getBlock, S } from '../world/block';
 import { updateShape, hasShapeUpdates } from './shapeUpdates';
 import { DX, DY, DZ, DIR_NAMES, dirFromYaw } from '../world/dir';
@@ -19,6 +19,7 @@ import { Arrow } from '../entity/arrow';
 import { PrimedTnt } from '../entity/tnt';
 import { ThrownItem, ThrownKind } from '../entity/throwable';
 import { createMob } from './spawner';
+import { SpawnerBlockEntity } from '../world/blockEntity';
 import { playerAttack } from './combat';
 import { canPlaceFire, fireStateAt, placeFire } from './fire';
 
@@ -208,6 +209,10 @@ export class Interaction {
     // vanilla BaseFireBlock.playerWillDestroy: punching out fire fizzes
     if (b.name === 'fire') this.level.sound.play('block.fire.extinguish', x + 0.5, y + 0.5, z + 0.5, 0.5, 2.6 + (Math.random() - Math.random()) * 0.8);
     this.level.destroyBlock(x, y, z, survival, held?.item ?? null);
+    if (survival && this.level.gameRules.doTileDrops) {
+      const xp = blockExperience(st, held?.item ?? null, this.level.random);
+      if (xp > 0) this.level.awardExperience(x + 0.5, y + 0.5, z + 0.5, xp);
+    }
     if (survival) {
       p.food.addExhaustion(0.005);
       if (held && held.item.tool && b.hardness > 0) this.damageHeld(1);
@@ -290,6 +295,15 @@ export class Interaction {
     }
     // vanilla SpawnEggItem.useOn
     if (h && stack && stack.item.id.endsWith('_spawn_egg') && p.gameMode !== 'spectator') {
+      // on a spawner: it spawns this mob from now on
+      const be = this.level.world.getBlockEntity(h.x, h.y, h.z);
+      if (be instanceof SpawnerBlockEntity) {
+        be.setEntityId(stack.item.id.slice(0, -10));
+        this.level.world.getChunk(h.x >> 4, h.z >> 4)!.modified = true;
+        if (p.gameMode !== 'creative') p.inventory.consumeSelected(1);
+        p.swing();
+        return;
+      }
       const replace = FLAGS[h.state] & F_REPLACEABLE || COLLISION[h.state]?.length === 0;
       const x = replace ? h.x : h.x + DX[h.face], y = replace ? h.y : h.y + DY[h.face], z = replace ? h.z : h.z + DZ[h.face];
       const mob = createMob(stack.item.id.slice(0, -10), this.level);
@@ -739,7 +753,7 @@ export class Interaction {
     const s = p.inventory.selectedItem;
     if (!s) return;
     const n = all ? s.count : 1;
-    const out = new ItemStack(s.item, n, s.damage);
+    const out = s.copyWithCount(n);
     p.inventory.consumeSelected(n);
     this.throwItem(out);
     p.swing();

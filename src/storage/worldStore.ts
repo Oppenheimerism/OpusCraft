@@ -8,6 +8,7 @@ import type { Chunk } from '../world/chunk';
 import { SECTIONS } from '../world/constants';
 import type { SavedBlockEntity } from '../world/blockEntity';
 import type { SavedEntity } from '../entity/mob';
+import type { SavedStack } from '../item/item';
 
 export interface WorldMeta {
   id: string;
@@ -31,8 +32,8 @@ export interface WorldMeta {
     health: number; food: number; saturation: number; exhaustion: number;
     xpLevel: number; xpProgress: number; xpTotal: number;
     gameMode: string; flying: boolean; selected: number;
-    inventory: ([string, number, number] | null)[];
-    armor: ([string, number, number] | null)[];
+    inventory: (SavedStack | null)[];
+    armor: (SavedStack | null)[];
     spawn: [number, number, number];
     /** bed / spawnpoint: x, y, z, forced (1/0) */
     respawn?: [number, number, number, number] | null;

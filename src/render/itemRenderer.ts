@@ -9,6 +9,7 @@ import { getStateModels } from './mesher';
 import type { Item, ItemStack } from '../item/item';
 import { BLOCKS, LAYER, Layer } from '../world/block';
 import type { TexImage } from '../textures/tex';
+import { glintTexture, glintOffset, glintUV } from '../textures/glint';
 
 export type DisplayContext = 'gui' | 'ground' | 'fixed' | 'firstperson_righthand' | 'thirdperson_righthand' | 'head';
 
@@ -224,9 +225,37 @@ export class ItemRenderer {
         for (const qd of model.quads) {
           batch.quad(pose, Array.from(qd.subarray(0, 12)), Array.from(qd.subarray(12, 20)), qd[20], qd[21], qd[22], tr, tg, tb, 1);
         }
+        if (stack.hasGlint()) this.renderGlint(batch, pose, model, src);
       }
     }
     pose.pop();
+  }
+
+  private glintTex: WebGLTexture | null = null;
+
+  /** vanilla glint render type: the model again with the scrolling glint texture, added on top, unlit */
+  private renderGlint(batch: EntityBatch, pose: PoseStack, model: FlatModel, src: { u0: number; v0: number; u1: number; v1: number }): void {
+    if (!this.glintTex) {
+      const t = glintTexture();
+      this.glintTex = createTexture(this.gl, t.w, t.h, t.data, { nearest: false, clamp: false });
+    }
+    const off = glintOffset(performance.now());
+    const du = src.u1 - src.u0, dv = src.v1 - src.v0;
+    const fog = batch.fogColor;
+    // fog fades an additive layer towards black (adds nothing), not towards the fog colour
+    batch.fogColor = [0, 0, 0];
+    batch.begin({ texture: this.glintTex, cutoff: -1, blend: true, additive: true, depthWrite: false, depthEqual: true, cull: true, lit: false, useLightmap: false });
+    const uv: number[] = new Array(8);
+    for (const qd of model.quads) {
+      for (let k = 0; k < 4; k++) {
+        const g = glintUV((qd[12 + k * 2] - src.u0) / du, (qd[13 + k * 2] - src.v0) / dv, off);
+        uv[k * 2] = g[0];
+        uv[k * 2 + 1] = g[1];
+      }
+      batch.quad(pose, Array.from(qd.subarray(0, 12)), uv, qd[20], qd[21], qd[22]);
+    }
+    batch.flush();
+    batch.fogColor = fog;
   }
 }
 

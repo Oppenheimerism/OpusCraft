@@ -2,18 +2,19 @@
 // AbstractFurnaceBlockEntity), with persistence to saved chunks.
 
 import { SimpleContainer, isEmpty } from '../inventory/container';
-import { ItemStack, ITEMS } from '../item/item';
+import { ItemStack, ITEMS, ItemTag, cloneTag } from '../item/item';
 import { smeltingResult, fuelTime } from '../inventory/recipes';
 import { BLOCKS, STATE_BLOCK } from './block';
 import type { Level } from '../game/level';
+import { fillContainer } from '../game/loot';
 
 export interface SavedBlockEntity {
   id: string;
   x: number;
   y: number;
   z: number;
-  items: [number, string, number, number][];
-  data?: Record<string, number>;
+  items: [number, string, number, number, ItemTag?][];
+  data?: Record<string, number | string>;
 }
 
 export abstract class BlockEntity {
@@ -27,24 +28,26 @@ export abstract class BlockEntity {
     return blockEntityKey(this.x, this.y, this.z);
   }
   tick(_level: Level): void {}
+  /** vanilla RandomizableContainer.unpackLootTable: roll a pending loot table into the container */
+  unpackLoot(): void {}
   save(): SavedBlockEntity {
     const items: SavedBlockEntity['items'] = [];
     this.container.items.forEach((s, i) => {
-      if (s) items.push([i, s.item.id, s.count, s.damage]);
+      if (s) items.push(s.tag ? [i, s.item.id, s.count, s.damage, cloneTag(s.tag)!] : [i, s.item.id, s.count, s.damage]);
     });
     return { id: this.id, x: this.x, y: this.y, z: this.z, items, data: this.saveData() };
   }
   load(d: SavedBlockEntity): void {
-    for (const [i, id, n, dmg] of d.items) {
+    for (const [i, id, n, dmg, tag] of d.items) {
       const it = ITEMS.get(id);
-      if (it && i < this.container.size) this.container.items[i] = new ItemStack(it, n, dmg);
+      if (it && i < this.container.size) this.container.items[i] = new ItemStack(it, n, dmg, cloneTag(tag ?? null));
     }
     if (d.data) this.loadData(d.data);
   }
-  protected saveData(): Record<string, number> | undefined {
+  protected saveData(): Record<string, number | string> | undefined {
     return undefined;
   }
-  protected loadData(_d: Record<string, number>): void {}
+  protected loadData(_d: Record<string, number | string>): void {}
 }
 
 export function blockEntityKey(x: number, y: number, z: number): string {
@@ -54,8 +57,26 @@ export function blockEntityKey(x: number, y: number, z: number): string {
 export class ChestBlockEntity extends BlockEntity {
   readonly id = 'chest';
   openCount = 0;
+  /** vanilla LootTable / LootTableSeed: rolled when first opened or broken */
+  lootTable: string | null = null;
+  lootSeed = 0;
   constructor(x: number, y: number, z: number) {
     super(x, y, z, 27);
+  }
+  override unpackLoot(): void {
+    if (!this.lootTable) return;
+    const table = this.lootTable;
+    this.lootTable = null;
+    fillContainer(this.container, table, this.lootSeed);
+  }
+  protected override saveData(): Record<string, number | string> | undefined {
+    return this.lootTable ? { lootTable: this.lootTable, lootSeed: this.lootSeed } : undefined;
+  }
+  protected override loadData(d: Record<string, number | string>): void {
+    if (typeof d.lootTable === 'string') {
+      this.lootTable = d.lootTable;
+      this.lootSeed = Number(d.lootSeed ?? 0);
+    }
   }
 }
 
@@ -75,12 +96,12 @@ export class FurnaceBlockEntity extends BlockEntity {
   protected override saveData(): Record<string, number> {
     return { litTime: this.litTime, litDuration: this.litDuration, cook: this.cookingProgress, cookTotal: this.cookingTotalTime, xp: this.storedXp };
   }
-  protected override loadData(d: Record<string, number>): void {
-    this.litTime = d.litTime ?? 0;
-    this.litDuration = d.litDuration ?? 0;
-    this.cookingProgress = d.cook ?? 0;
-    this.cookingTotalTime = d.cookTotal ?? 200;
-    this.storedXp = d.xp ?? 0;
+  protected override loadData(d: Record<string, number | string>): void {
+    this.litTime = Number(d.litTime ?? 0);
+    this.litDuration = Number(d.litDuration ?? 0);
+    this.cookingProgress = Number(d.cook ?? 0);
+    this.cookingTotalTime = Number(d.cookTotal ?? 200);
+    this.storedXp = Number(d.xp ?? 0);
   }
 
   private canBurn(): boolean {
@@ -150,9 +171,38 @@ export class FurnaceBlockEntity extends BlockEntity {
   }
 }
 
+/** vanilla SpawnerBlockEntity + BaseSpawner state (the logic lives in game/baseSpawner) */
+export class SpawnerBlockEntity extends BlockEntity {
+  readonly id = 'spawner';
+  /** vanilla SpawnData entity id */
+  entityId: string | null = null;
+  spawnDelay = 20;
+  /** the client copy's countdown (reset to the minimum delay on every spawn); it drives the spin speed */
+  clientDelay = 20;
+  spin = 0;
+  oSpin = 0;
+  /** mob drawn spinning in the cage (render only, never added to the level) */
+  display: unknown = null;
+  constructor(x: number, y: number, z: number) {
+    super(x, y, z, 0);
+  }
+  setEntityId(id: string): void {
+    this.entityId = id;
+    this.display = null;
+  }
+  protected override saveData(): Record<string, number | string> {
+    return { entity: this.entityId ?? '', delay: this.spawnDelay };
+  }
+  protected override loadData(d: Record<string, number | string>): void {
+    this.entityId = typeof d.entity === 'string' && d.entity ? d.entity : null;
+    this.spawnDelay = Number(d.delay ?? 20);
+  }
+}
+
 export function createBlockEntity(name: string, x: number, y: number, z: number): BlockEntity | null {
   if (name === 'chest') return new ChestBlockEntity(x, y, z);
   if (name === 'furnace') return new FurnaceBlockEntity(x, y, z);
+  if (name === 'spawner') return new SpawnerBlockEntity(x, y, z);
   return null;
 }
 

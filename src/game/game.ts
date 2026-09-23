@@ -16,7 +16,7 @@ import { mat4, translate, rotateX, rotateZ, rotateY, DEG, clamp } from '../core/
 import { BLOCKS, STATE_BLOCK, FLAGS, F_WATER, F_LAVA, F_OPAQUE, F_COLLIDE } from '../world/block';
 import { FLUID_WATER, FLUID_LAVA, fluidHeight } from '../world/fluids';
 import { BIOMES } from '../world/gen/biomes';
-import { ItemStack, ITEMS } from '../item/item';
+import { ItemStack, ITEMS, saveStack, loadStack } from '../item/item';
 import { MIN_Y, MAX_Y } from '../world/constants';
 import { Overlay } from '../render/overlay';
 import { isAnim, TexImage } from '../textures/tex';
@@ -416,10 +416,10 @@ export class Game {
       this.player.flying = pd.flying && this.player.mayFly;
       this.player.inventory.selected = pd.selected;
       pd.inventory.forEach((s, i) => {
-        if (s && ITEMS.has(s[0])) this.player.inventory.main[i] = new ItemStack(ITEMS.get(s[0])!, s[1], s[2]);
+        this.player.inventory.main[i] = loadStack(s);
       });
       pd.armor.forEach((s, i) => {
-        if (s && ITEMS.has(s[0])) this.player.inventory.armor[i] = new ItemStack(ITEMS.get(s[0])!, s[1], s[2]);
+        this.player.inventory.armor[i] = loadStack(s);
       });
       [this.player.spawnX, this.player.spawnY, this.player.spawnZ] = pd.spawn;
       if (pd.respawn) {
@@ -469,7 +469,7 @@ export class Game {
     m.clearWeatherTime = this.level.clearWeatherTime;
     m.gameRules = { ...this.level.gameRules };
     if (this.worldSpawn) m.worldSpawn = this.worldSpawn;
-    const st = (s: ItemStack | null): [string, number, number] | null => (s ? [s.item.id, s.count, s.damage] : null);
+    const st = (s: ItemStack | null) => (s ? saveStack(s) : null);
     m.player = {
       x: p.x, y: p.y, z: p.z, yaw: p.yaw, pitch: p.pitch,
       health: p.health, food: p.food.level, saturation: p.food.saturation, exhaustion: p.food.exhaustion,
@@ -644,6 +644,7 @@ export class Game {
       if (!(be instanceof ChestBlockEntity)) return;
       // a solid block above keeps the lid shut (vanilla ChestBlock.isChestBlockedAt)
       if (FLAGS[this.world.getState(x, y + 1, z)] & F_OPAQUE) return;
+      be.unpackLoot();
       this.setScreen(this.containerScreenFactory(new ChestMenu(p, be)));
       if (be.openCount++ === 0) this.sound.play('block.chest.open', x + 0.5, y + 0.5, z + 0.5, 0.5, Math.random() * 0.1 + 0.9);
     }

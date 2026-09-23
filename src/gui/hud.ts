@@ -5,6 +5,7 @@ import { LivingEntity } from '../entity/living';
 import type { Game } from '../game/game';
 import { debugLines } from '../render/overlay';
 import { FLUID_WATER } from '../world/fluids';
+import { RARITY_COLOR } from '../item/item';
 
 export class Hud {
   private tickCount = 0;
@@ -72,7 +73,7 @@ export class Hud {
       const s = p.inventory.main[i];
       if (!s) continue;
       const x = cx - 90 + i * 20 + 2, y = H - 16 - 3;
-      g.item(s.item.id, x, y);
+      g.stack(s, x, y);
       g.itemDecorations(s.count, s.damage, s.item.maxDamage, x, y);
       // vanilla item cooldown overlay (ender pearls)
       const cd = p.cooldowns.get(s.item.id);
@@ -89,7 +90,9 @@ export class Hud {
     }
     // selected item name
     if (this.toolHighlightTimer > 0 && p.inventory.selectedItem) {
-      const name = p.inventory.selectedItem.item.name;
+      // vanilla Gui.renderSelectedItemName: coloured by rarity
+      const sel = p.inventory.selectedItem, rarity = sel.rarity();
+      const name = rarity === 'common' ? sel.item.name : `§${RARITY_COLOR[rarity]}${sel.item.name}`;
       const alpha = Math.min(255, Math.floor((this.toolHighlightTimer * 256) / 10)) / 255;
       const w = g.textWidth(name);
       const x = Math.floor((W - w) / 2);

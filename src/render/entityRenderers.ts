@@ -30,6 +30,8 @@ import type { Player } from '../entity/player';
 import { MOB_TEXTURES, FIRE_TEXTURES } from '../textures/mobs';
 import { FLAGS, F_FULL_COLLISION, F_AIR, OUTLINE, S } from '../world/block';
 import type { ItemStack } from '../item/item';
+import { SpawnerBlockEntity } from '../world/blockEntity';
+import { createMob } from '../game/spawner';
 
 export interface EntityRenderOptions {
   shadows: boolean;
@@ -68,6 +70,9 @@ export class EntityRenderDispatcher {
   private readonly shadows: ShadowJob[] = [];
   /** entities drawn last frame (F3 "E:") */
   rendered = 0;
+  /** model matrix living renderers start from instead of identity (mobs drawn inside spawners) */
+  private base: Float32Array | null = null;
+  private readonly spawnerPose = new PoseStack();
 
   constructor(private readonly gl: GL, private readonly items: ItemRenderer, private readonly skin: WebGLTexture) {
     this.models = {
@@ -151,9 +156,43 @@ export class EntityRenderDispatcher {
       }
     }
     this.rendered = drawn;
+    this.renderSpawners(b, level, cam, partial, frustum);
     b.setOverlay(0, 0, 0, 0);
     b.flush();
     if (this.shadows.length) this.renderShadows(b, level, cam);
+  }
+
+  /** vanilla SpawnerRenderer (block entity view distance 64): the spawner's mob spinning in the cage */
+  private renderSpawners(b: EntityBatch, level: Level, cam: Camera, partial: number, frustum: Frustum): void {
+    for (const be of level.world.blockEntities.values()) {
+      if (!(be instanceof SpawnerBlockEntity) || be.removed || !be.entityId) continue;
+      const dx = be.x - cam.x, dy = be.y - cam.y, dz = be.z - cam.z;
+      if ((dx + 0.5) ** 2 + (dy + 0.5) ** 2 + (dz + 0.5) ** 2 > 64 * 64) continue;
+      if (!frustum.testBox(dx - 0.5, dy, dz - 0.5, dx + 1.5, dy + 1.5, dz + 1.5)) continue;
+      let mob = be.display as Mob | null;
+      if (!mob || mob.type !== be.entityId) {
+        mob = createMob(be.entityId, level);
+        be.display = mob;
+        if (!mob) continue;
+      }
+      // vanilla SpawnerRenderer.renderEntityInSpawner
+      let f = 0.53125;
+      const size = Math.max(mob.width, mob.height);
+      if (size > 1) f /= size;
+      const ps = this.spawnerPose;
+      ps.reset();
+      ps.translate(dx + 0.5, dy + 0.4, dz + 0.5);
+      ps.rotY((be.oSpin + (be.spin - be.oSpin) * partial) * 10);
+      ps.translate(0, -0.2, 0);
+      ps.rotX(-30);
+      ps.scale(f, f, f);
+      this.base = ps.m;
+      const l = level.world.getLight(be.x, be.y, be.z);
+      b.lightS = (l >> 4) * 16;
+      b.lightB = (l & 15) * 16;
+      this.renderMob(b, mob, 0, 0, 0, partial);
+      this.base = null;
+    }
   }
 
   private setLight(b: EntityBatch, level: Level, e: Entity, x: number, y: number, z: number): void {
@@ -181,7 +220,7 @@ export class EntityRenderDispatcher {
   /** vanilla LivingEntityRenderer.render up to the model draw; returns false if the texture is missing */
   private setupLiving(e: LivingEntity, dx: number, dy: number, dz: number, p: number, flip = 90, scale?: (pose: PoseStack) => void): { limbSwing: number; limbAmount: number; age: number; headYaw: number; headPitch: number } {
     const pose = this.pose;
-    pose.reset();
+    pose.reset(this.base ?? undefined);
     pose.translate(dx, dy, dz);
     const bodyYaw = rotLerp(p, e.bodyYawO, e.bodyYaw);
     const headYaw = rotLerp(p, e.headYawO, e.headYaw);
@@ -381,7 +420,7 @@ export class EntityRenderDispatcher {
   /** vanilla SquidRenderer (custom body rotations, tentacle bob) */
   private renderSquid(b: EntityBatch, e: Squid, dx: number, dy: number, dz: number, p: number, def: MobModelDef, tex: WebGLTexture): void {
     const pose = this.pose;
-    pose.reset();
+    pose.reset(this.base ?? undefined);
     pose.translate(dx, dy, dz);
     const bodyYaw = rotLerp(p, e.bodyYawO, e.bodyYaw);
     const xr = e.xBodyRotO + (e.xBodyRot - e.xBodyRotO) * p;
