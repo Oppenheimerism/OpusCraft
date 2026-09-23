@@ -554,6 +554,21 @@ export class Game {
     return chunkKey(this.meta!.id, cx, cz, this.world.dim.storage);
   }
 
+  /** vanilla LevelChunk.postProcessGeneration: blocks marked by structures take the shape their neighbours give them */
+  private postProcessChunk(c: Chunk): void {
+    if (!c.postProcess) return;
+    for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (!this.world.getChunk(c.cx + dx, c.cz + dz)) return;
+    const t = c.postProcess;
+    c.postProcess = null;
+    for (let i = 0; i < t.length; i += 3) {
+      const x = c.cx * 16 + t[i], y = t[i + 1], z = c.cz * 16 + t[i + 2];
+      const st = this.world.getState(x, y, z);
+      if (!hasShapeUpdates(st)) continue;
+      const nu = updateShape(this.world, x, y, z, st);
+      if (nu && nu !== st) this.world.setState(x, y, z, nu);
+    }
+  }
+
   /** a chunk became available: restore its saved entities or run chunk-generation spawning */
   private chunkEntitiesLoaded(c: Chunk): void {
     if (!this.meta || !this.level) return;
@@ -567,17 +582,12 @@ export class Game {
         if (f & (F_WATER | F_LAVA)) this.level.scheduleTick(x, y, z, f & F_LAVA ? (this.world.dim.ultraWarm ? 10 : 30) : 5);
       }
     }
-    // structure fences connect to what's around them (vanilla ChunkAccess.postProcessGeneration)
-    if (c.postProcess) {
-      const t = c.postProcess;
-      c.postProcess = null;
-      for (let i = 0; i < t.length; i += 3) {
-        const x = c.cx * 16 + t[i], y = t[i + 1], z = c.cz * 16 + t[i + 2];
-        const st = this.world.getState(x, y, z);
-        if (!hasShapeUpdates(st)) continue;
-        const nu = updateShape(this.world, x, y, z, st);
-        if (nu && nu !== st) this.world.setState(x, y, z, nu);
-      }
+    // structure fences connect to what's around them, once the chunks around are there too (vanilla
+    // postProcessGeneration runs as a chunk starts ticking, with its neighbours loaded)
+    this.postProcessChunk(c);
+    for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const n = this.world.getChunk(c.cx + dx, c.cz + dz);
+      if (n?.postProcess) this.postProcessChunk(n);
     }
     const key = this.entityChunkKey(c.cx, c.cz);
     const lvl = this.level;

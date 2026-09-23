@@ -21,8 +21,8 @@ export class ChunkManager {
   private meshList: Chunk[] = [];
   private meshListIdx = 0;
   /** loads a saved chunk (blocks + biomes) or null if never saved */
-  savedLoader: ((cx: number, cz: number) => Promise<{ blocks: Uint16Array; biomes: Uint8Array; caveBiomes: Uint8Array | null; blockEntities?: SavedBlockEntity[]; genWrites: PendingWrites[]; baked: number } | null>) | null = null;
-  private readonly lightQueue: { cx: number; cz: number; blocks: Uint16Array; biomes: Uint8Array; caveBiomes: Uint8Array | null; blockEntities?: SavedBlockEntity[]; genWrites: PendingWrites[]; baked: number }[] = [];
+  savedLoader: ((cx: number, cz: number) => Promise<{ blocks: Uint16Array; biomes: Uint8Array; caveBiomes: Uint8Array | null; blockEntities?: SavedBlockEntity[]; genWrites: PendingWrites[]; baked: number; postProcess?: number[] } | null>) | null = null;
+  private readonly lightQueue: { cx: number; cz: number; blocks: Uint16Array; biomes: Uint8Array; caveBiomes: Uint8Array | null; blockEntities?: SavedBlockEntity[]; genWrites: PendingWrites[]; baked: number; postProcess?: number[] }[] = [];
   onChunkLoaded: ((c: Chunk) => void) | null = null;
   onChunkUnloaded: ((c: Chunk) => void) | null = null;
   stats = { genMs: 0, gens: 0, meshes: 0 };
@@ -138,7 +138,7 @@ export class ChunkManager {
           if (epoch !== this.epoch) return;
           this.requested.delete(key);
           if (this.world.chunks.has(key)) return;
-          const c = this.world.addChunk({ cx: lj.cx, cz: lj.cz, blocks: lj.blocks, light, biomes: lj.biomes, caveBiomes: lj.caveBiomes, pending: lj.genWrites, baked: lj.baked, blockEntities: lj.blockEntities });
+          const c = this.world.addChunk({ cx: lj.cx, cz: lj.cz, blocks: lj.blocks, light, biomes: lj.biomes, caveBiomes: lj.caveBiomes, pending: lj.genWrites, baked: lj.baked, blockEntities: lj.blockEntities, postProcess: lj.postProcess });
           this.onChunkLoaded?.(c);
         },
       };
@@ -161,7 +161,7 @@ export class ChunkManager {
         void this.savedLoader(cx, cz).then((saved) => {
           if (epoch !== this.epoch) return;
           if (saved) {
-            this.lightQueue.push({ cx, cz, blocks: saved.blocks, biomes: saved.biomes, caveBiomes: saved.caveBiomes, blockEntities: saved.blockEntities, genWrites: saved.genWrites, baked: saved.baked });
+            this.lightQueue.push({ cx, cz, blocks: saved.blocks, biomes: saved.biomes, caveBiomes: saved.caveBiomes, blockEntities: saved.blockEntities, genWrites: saved.genWrites, baked: saved.baked, postProcess: saved.postProcess });
             this.pool.pump();
           } else {
             this.genFallback.push([cx, cz]);

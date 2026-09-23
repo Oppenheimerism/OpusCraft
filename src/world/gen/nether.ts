@@ -13,6 +13,7 @@ import { COLUMN_VOLUME, colIndex } from '../constants';
 import { Rand, hash2, hash3, hashFloat, hash32 } from '../../core/rng';
 import { clampedMap } from '../../core/math';
 import { computeChunkLight } from '../lightlocal';
+import { NetherFortresses } from './fortress';
 import type { GenOutput } from './generator';
 import { placeOre, sampleHeight, type OreSpec } from './features';
 import {
@@ -68,6 +69,8 @@ export class NetherGenerator {
   private readonly netherrackNoise: NormalNoise;
   private readonly netherWart: NormalNoise;
   private readonly stateSelector: NormalNoise;
+  /** the world's fortresses (vanilla nether_complexes structure set) */
+  readonly fortresses: NetherFortresses;
 
   constructor(seed: string | number | bigint) {
     this.seeds = SeedSource.fromWorldSeed(typeof seed === 'string' ? seed : BigInt(seed)).sub('minecraft:the_nether');
@@ -85,6 +88,7 @@ export class NetherGenerator {
     this.netherrackNoise = new NormalNoise(s.sub('minecraft:netherrack'), { firstOctave: -3, amplitudes: [1, 0, 0, 0.35] });
     this.netherWart = new NormalNoise(s.sub('minecraft:nether_wart'), { firstOctave: -3, amplitudes: [1, 0, 0, 0.9] });
     this.stateSelector = new NormalNoise(s.sub('minecraft:nether_state_selector'), { firstOctave: -4, amplitudes: [1] });
+    this.fortresses = new NetherFortresses(this.seedHash, (x, z) => BIOMES[this.biomeAt(x, z)].name);
   }
 
   // -------------------------------------------------------------------------
@@ -322,7 +326,8 @@ export class NetherGenerator {
     step([BD], (r) => this.everyLayer(ctx, r, 40, [BD], (r2, x, y, z) => feature(F_DELTA)(r2, x, y - 1, z)));
     step([BD], (r) => this.everyLayer(ctx, r, 4, [BD], feature(F_SMALL_COLUMNS)));
     step([BD], (r) => this.everyLayer(ctx, r, 2, [BD], feature(F_LARGE_COLUMNS)));
-    // UNDERGROUND_DECORATION
+    // UNDERGROUND_DECORATION: the step's structures (fortresses) go in before its features
+    this.fortresses.place(ctx, new Rand(hash2(ctx.cx, ctx.cz, this.seedHash ^ 0x46727473), 7));
     step([BD], (r) => this.count(ctx, r, 75, 0, TOP, [BD], (r2, x, y, z) => replaceBlob(ctx, r2, x, y, z, K.BASALT)));
     step([BD], (r) => this.count(ctx, r, 25, 0, TOP, [BD], (r2, x, y, z) => replaceBlob(ctx, r2, x, y, z, K.BLACKSTONE)));
     // lava breaking out of the walls

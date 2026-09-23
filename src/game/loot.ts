@@ -57,6 +57,17 @@ export const LOOT_TABLES: Record<string, LootPool[]> = {
     },
     { rolls: 3, entries: [e('rail', 20, [4, 8]), e('powered_rail', 5, [1, 4]), e('detector_rail', 5, [1, 4]), e('activator_rail', 5, [1, 4]), e('torch', 15, [1, 16])] },
   ],
+  'chests/nether_bridge': [
+    {
+      rolls: [2, 4],
+      entries: [
+        e('diamond', 5, [1, 3]), e('iron_ingot', 5, [1, 5]), e('gold_ingot', 15, [1, 3]), e('golden_sword', 5), e('golden_chestplate', 5),
+        e('flint_and_steel', 5), e('nether_wart', 5, [3, 7]), e('saddle', 10), e('golden_horse_armor', 8), e('iron_horse_armor', 5),
+        e('diamond_horse_armor', 3), e('obsidian', 2, [2, 4]),
+      ],
+    },
+    { rolls: 1, entries: [e('', 14), e('rib_armor_trim_smithing_template', 1)] },
+  ],
 };
 
 /** vanilla Mth.nextInt(random, lo, hi) */

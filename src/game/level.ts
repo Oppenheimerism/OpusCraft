@@ -27,6 +27,8 @@ import { skyDarkenInt, timeOfDay } from '../render/environment';
 import { BIOMES } from '../world/gen/biomes';
 import type { AABB } from '../core/aabb';
 import type { DimensionType } from '../world/dimension';
+import { NetherGenerator } from '../world/gen/nether';
+import type { NetherFortresses } from '../world/gen/fortress';
 
 export interface SoundSink {
   play(name: string, x: number, y: number, z: number, volume?: number, pitch?: number): void;
@@ -75,6 +77,7 @@ export class Level {
   sound: SoundSink = NULL_SOUND;
   particles: ParticleSink = NULL_PARTICLES;
   readonly random = new Rand(1234);
+  private netherFortresses: NetherFortresses | null = null;
   readonly fluids: FluidTicker;
   readonly randomTicks: RandomTicker;
   /** scheduled block ticks: key → due game time */
@@ -89,6 +92,11 @@ export class Level {
     this.seed = seed;
     this.rainTime = 12000 + this.random.nextInt(168000);
     this.thunderTime = 12000 + this.random.nextInt(168000);
+  }
+
+  /** the Nether's fortresses, laid out just as the chunk workers build them */
+  fortresses(): NetherFortresses {
+    return (this.netherFortresses ??= new NetherGenerator(this.seed).fortresses);
   }
 
   addEntity(e: Entity): void {

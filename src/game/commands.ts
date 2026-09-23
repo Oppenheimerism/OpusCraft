@@ -36,6 +36,16 @@ const TARGETS = ['@a', '@e', '@p', '@r', '@s'];
 /** commands available without cheats (vanilla permission level 0) */
 const PUBLIC = new Set(['help', 'list', 'me', 'msg', 'tell', 'w', 'trigger', 'random']);
 
+/** vanilla's structure ids (for /locate; the ones not in the game are never found) */
+const STRUCTURES = new Set(
+  [
+    'ancient_city', 'bastion_remnant', 'buried_treasure', 'desert_pyramid', 'end_city', 'fortress', 'igloo', 'jungle_pyramid', 'mansion', 'mineshaft',
+    'mineshaft_mesa', 'monument', 'nether_fossil', 'ocean_ruin_cold', 'ocean_ruin_warm', 'pillager_outpost', 'ruined_portal', 'ruined_portal_desert',
+    'ruined_portal_jungle', 'ruined_portal_mountain', 'ruined_portal_nether', 'ruined_portal_ocean', 'ruined_portal_swamp', 'shipwreck', 'shipwreck_beached',
+    'stronghold', 'swamp_hut', 'trail_ruins', 'trial_chambers', 'village_desert', 'village_plains', 'village_savanna', 'village_snowy', 'village_taiga',
+  ].map((n) => 'minecraft:' + n),
+);
+
 interface Tok {
   s: string;
   pos: number;
@@ -580,6 +590,23 @@ export const COMMANDS: Record<string, CommandDef> = {
   list: {
     usage: ['/list'],
     run: (c) => c.ok(`There are 1 of a max of 8 players online: ${c.game.playerName}`),
+  },
+  locate: {
+    usage: ['/locate structure <structure>', '/locate biome <biome>', '/locate poi <poi>'],
+    suggest: (_g, prev, i) => (i === 0 ? ['biome', 'poi', 'structure'] : i === 1 && prev[0] === 'structure' ? [...STRUCTURES].sort() : []),
+    run: (c) => {
+      // (only structures so far)
+      if (needArg(c, 0) !== 'structure') badArg(c, 0);
+      const id = needArg(c, 1);
+      const name = id.includes(':') ? id : 'minecraft:' + id;
+      if (!STRUCTURES.has(name)) throw new CommandError(`There is no structure with type "${id}"`);
+      const dim = c.dim ?? c.game.world.dim;
+      const p = c.game.player;
+      const x = Math.floor(p.x), z = Math.floor(p.z);
+      const found = name === 'minecraft:fortress' && dim.id === 'the_nether' ? c.game.level.fortresses().nearest(x, z) : null;
+      if (!found) throw new CommandError(`Could not find a structure of type "${name}" nearby`);
+      c.ok(`The nearest ${name} is at §a[${found[0]}, ~, ${found[1]}]§r (${Math.floor(Math.hypot(found[0] - x, found[1] - z))} blocks away)`);
+    },
   },
   me: {
     usage: ['/me <action>'],
