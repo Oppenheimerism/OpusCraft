@@ -147,6 +147,7 @@ shaped('rail', 16, ['X X', 'X#X', 'X X'], { X: 'iron_ingot', '#': 'stick' });
 shaped('iron_door', 3, ['##', '##', '##'], { '#': 'iron_ingot' });
 shaped('glass_bottle', 3, ['# #', ' # '], { '#': 'glass' });
 shaped('lead', 2, ['~~ ', '~O ', '  ~'], { '~': 'string', O: 'slime_ball' });
+shaped('magma_block', 1, ['##', '##'], { '#': 'magma_cream' });
 
 // ---------------------------------------------------------------------------
 // Food

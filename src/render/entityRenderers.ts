@@ -23,7 +23,7 @@ import { ExperienceOrb } from '../entity/xpOrb';
 import { PrimedTnt } from '../entity/tnt';
 import { FallingBlockEntity } from '../entity/fallingBlock';
 import { Sheep, Chicken, sheepFurColor } from '../entity/animals';
-import { Zombie, Skeleton, Creeper, Enderman, Slime } from '../entity/monsters';
+import { Zombie, Skeleton, Creeper, Enderman, Slime, MagmaCube } from '../entity/monsters';
 import { Squid } from '../entity/water';
 import { ThrownItem } from '../entity/throwable';
 import { AbstractMinecart } from '../entity/minecart';
@@ -97,6 +97,7 @@ export class EntityRenderDispatcher {
       squid: M.squidModel(),
       slime: M.slimeInnerModel(),
       slime_outer: M.slimeOuterModel(),
+      magma_cube: M.magmaCubeModel(),
       minecart: M.minecartModel(),
       bat: M.batModel(),
     };
@@ -230,7 +231,8 @@ export class EntityRenderDispatcher {
   private setLight(b: EntityBatch, level: Level, e: Entity, x: number, y: number, z: number): void {
     const l = level.world.getLight(Math.floor(x), Math.floor(y + e.eyeHeight), Math.floor(z));
     b.lightS = (l >> 4) * 16;
-    b.lightB = (e.isOnFire() ? 15 : l & 15) * 16;
+    // (vanilla MagmaCubeRenderer.getBlockLightLevel: a magma cube glows by its own light)
+    b.lightB = (e.isOnFire() || e instanceof MagmaCube ? 15 : l & 15) * 16;
   }
 
   private renderEntity(b: EntityBatch, level: Level, e: Entity, x: number, y: number, z: number, dx: number, dy: number, dz: number, p: number, cam: Camera): void {
@@ -343,9 +345,13 @@ export class EntityRenderDispatcher {
       const f = e.size;
       const f1 = (e.oSquish + (e.squish - e.oSquish) * p) / (f * 0.5 + 1);
       const f2 = 1 / (f1 + 1);
+      // (vanilla MagmaCubeRenderer.scale skips the slime's hair of shrink)
+      const magma = e instanceof MagmaCube;
       scale = (pose) => {
-        pose.scale(0.999, 0.999, 0.999);
-        pose.translate(0, 0.001, 0);
+        if (!magma) {
+          pose.scale(0.999, 0.999, 0.999);
+          pose.translate(0, 0.001, 0);
+        }
         pose.scale(f2 * f, (1 / f2) * f, f2 * f);
       };
     }
@@ -407,6 +413,11 @@ export class EntityRenderDispatcher {
         M.animateEnderman(def.root, a.limbSwing, a.limbAmount, a.age, a.headYaw, a.headPitch, attack, en.carried !== 0, en.creepy);
         break;
       }
+      case 'magma_cube': {
+        const mc = e as MagmaCube;
+        M.animateMagmaCube(def.root, mc.oSquish + (mc.squish - mc.oSquish) * p);
+        break;
+      }
       case 'bat': {
         // vanilla AnimationState: seconds since each loop started (a tick is 50 ms)
         const bat = e as Bat;
@@ -433,7 +444,7 @@ export class EntityRenderDispatcher {
       this.drawEyes(b, def, 'enderman_eyes', false);
       if (e.carried) this.drawCarriedBlock(b, e.carried);
     }
-    if (e instanceof Slime && !e.isInvisible()) {
+    if (e instanceof Slime && !(e instanceof MagmaCube) && !e.isInvisible()) {
       const outer = this.models.slime_outer;
       if (outer) {
         this.overlay(b, e);
@@ -958,6 +969,7 @@ function shadowRadius(e: Entity): number {
       r = 0.5;
       break;
     case 'slime':
+    case 'magma_cube':
       r = 0.25 * (e as Slime).size;
       break;
     case 'zombie':

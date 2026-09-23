@@ -22,7 +22,7 @@ import {
 } from './dsp';
 import { bowShoot } from './player';
 import { type Ctx, sound } from './registry';
-import { bubble, burst, impact, phisem, sweep, thump, ticks, twoBump } from './texture';
+import { bubble, burst, fireCrackles, impact, phisem, sweep, thump, ticks, twoBump } from './texture';
 import { type Formant, voice, vowelGlide } from './voice';
 
 // ------------------------------------------------------------------ shared foley
@@ -983,6 +983,33 @@ function slimeDeath(c: Ctx, p: number, ts: number): Float32Array {
   return out;
 }
 
+/**
+ * Magma cube squish: the slime's splat made heavy and hot, a deeper, fuller slap of molten flesh with a hiss and a
+ * few spits of lava as it lands.
+ */
+function magmaSquish(c: Ctx, p: number, ts: number): Float32Array {
+  const { sr, rng } = c;
+  const body = slimeSquish(c, p * 0.62, ts * 1.25);
+  const out = alloc(body.length / sr + 0.15, sr);
+  layer(out, 1, (b) => mixInto(b, body));
+  layer(out, 0.5, (b) => thump(b, sr, { f0: 90 * p, f1: 55 * p, tau: 0.05 * ts }));
+  layer(out, 0.22, (b) => burst(b, sr, rng, { t: 0.01, dur: 0.25 * ts, attack: 0.01, tau: 0.07 * ts, hp: 2500 }));
+  layer(out, 0.2, (b) => fireCrackles(b, sr, rng, 0.02, 0.2 * ts, 30));
+  return out;
+}
+
+/** Magma cube jump: a heavy, low spring off the ground, the slices smacking apart. */
+function magmaJump(c: Ctx): Float32Array {
+  const { sr, rng } = c;
+  const body = slimeJump(c, 0.7, 1.2);
+  const out = alloc(body.length / sr + 0.1, sr);
+  layer(out, 1, (b) => mixInto(b, body));
+  const f = rng.range(180, 240);
+  layer(out, 0.35, (b) => impact(b, sr, rng, { modes: [f, 1, 0.05, f * 2.2, 0.4, 0.03], noise: 0.6, noiseTau: 0.004, noiseBp: [900, 0.8] }));
+  layer(out, 0.15, (b) => burst(b, sr, rng, { dur: 0.15, attack: 0.005, tau: 0.04, hp: 3000 }));
+  return out;
+}
+
 /** Slime attack: a sharp wet slap. */
 function slimeAttack(c: Ctx): Float32Array {
   const { sr, rng } = c;
@@ -1240,6 +1267,14 @@ export function mobSounds(): Record<string, SoundGen> {
     'entity.slime.jump_small': sound('entity.slime.jump_small', 5, (c) => slimeJump(c, SMALL_P, SMALL_T)),
     'entity.slime.hurt_small': sound('entity.slime.hurt_small', 5, (c) => slimeHurt(c, SMALL_P, SMALL_T)),
     'entity.slime.death_small': sound('entity.slime.death_small', 5, (c) => slimeDeath(c, SMALL_P, SMALL_T)),
+    // vanilla magma cubes hurt and die with the slime's voice; they squish and jump with their own
+    'entity.magma_cube.squish': sound('entity.magma_cube.squish', 4, (c) => magmaSquish(c, 1, 1)),
+    'entity.magma_cube.squish_small': sound('entity.magma_cube.squish_small', 5, (c) => magmaSquish(c, SMALL_P, SMALL_T)),
+    'entity.magma_cube.jump': sound('entity.magma_cube.jump', 4, magmaJump),
+    'entity.magma_cube.hurt': sound('entity.magma_cube.hurt', 4, (c) => slimeHurt(c, 1, 1)),
+    'entity.magma_cube.hurt_small': sound('entity.magma_cube.hurt_small', 5, (c) => slimeHurt(c, SMALL_P, SMALL_T)),
+    'entity.magma_cube.death': sound('entity.magma_cube.death', 4, (c) => slimeDeath(c, 1, 1)),
+    'entity.magma_cube.death_small': sound('entity.magma_cube.death_small', 5, (c) => slimeDeath(c, SMALL_P, SMALL_T)),
     'entity.bat.ambient': sound('entity.bat.ambient', 4, batSqueak),
     'entity.bat.hurt': sound('entity.bat.hurt', 4, batHurt),
     'entity.bat.death': sound('entity.bat.death', 1, batDeath),

@@ -83,13 +83,16 @@ export abstract class Monster extends Mob {
   }
 }
 
-/** vanilla BlockState.isValidSpawn for ordinary monsters: sturdy top face, not glass/leaves/ice/bedrock */
-export function validSpawnBlock(level: Level, x: number, y: number, z: number): boolean {
+/**
+ * vanilla BlockState.isValidSpawn for ordinary monsters: sturdy top face, not glass/leaves/ice/bedrock (magma blocks
+ * only for the fireproof, MagmaBlock.isValidSpawn)
+ */
+export function validSpawnBlock(level: Level, x: number, y: number, z: number, fireImmune = false): boolean {
   const st = level.world.getState(x, y, z);
   const f = FLAGS[st];
   if (!(f & F_OPAQUE) || !(f & F_FULL_COLLISION)) return false;
   const n = BLOCKS[STATE_BLOCK[st]].name;
-  if (n === 'bedrock' || n === 'barrier' || n.endsWith('ice') || n === 'magma_block' || n.endsWith('glass')) return false;
+  if (n === 'bedrock' || n === 'barrier' || n.endsWith('ice') || (n === 'magma_block' && !fireImmune) || n.endsWith('glass')) return false;
   return true;
 }
 
@@ -921,7 +924,7 @@ class SlimeMoveControl extends MoveControl {
         this.jumpDelay = m.jumpDelay();
         if (this.aggressive) this.jumpDelay = Math.floor(this.jumpDelay / 3);
         m.jumpControl.jump();
-        m.playSound(m.size === 1 ? 'entity.slime.jump_small' : 'entity.slime.jump', m.soundVolume(), ((m.random.nextFloat() - m.random.nextFloat()) * 0.2 + 1) * 0.8);
+        m.playSound(m.jumpSound(), m.soundVolume(), ((m.random.nextFloat() - m.random.nextFloat()) * 0.2 + 1) * 0.8);
       } else {
         m.xxa = 0;
         m.zza = 0;
@@ -1014,7 +1017,7 @@ export class Slime extends Monster {
   override isPreventingPlayerRest(_p: Entity): boolean {
     return false;
   }
-  readonly type = 'slime';
+  readonly type: string = 'slime';
   size = 1;
   squish = 0;
   oSquish = 0;
@@ -1034,6 +1037,22 @@ export class Slime extends Monster {
     this.attackDamage = i;
     if (resetHealth) this.health = this.maxHealth;
     this.xpReward = i;
+  }
+  /** a slime of the same kind (vanilla getType().create: what a big one splits into) */
+  protected createChild(): Slime {
+    return new Slime(this.level);
+  }
+  protected landingParticle(): string {
+    return 'item_slime';
+  }
+  protected squishSound(): string {
+    return this.size === 1 ? 'entity.slime.squish_small' : 'entity.slime.squish';
+  }
+  jumpSound(): string {
+    return this.size === 1 ? 'entity.slime.jump_small' : 'entity.slime.jump';
+  }
+  protected decreaseSquish(): void {
+    this.targetSquish *= 0.6;
   }
   protected registerGoals(): void {
     this.goalSelector.addGoal(1, new SlimeFloatGoal(this));
@@ -1066,13 +1085,13 @@ export class Slime extends Monster {
       const f = this.width * 2, f1 = f / 2;
       for (let i = 0; i < f * 16; i++) {
         const a = this.random.nextFloat() * Math.PI * 2, r = this.random.nextFloat() * 0.5 + 0.5;
-        this.level.particles.spawn?.('item_slime', this.x + Math.sin(a) * f1 * r, this.y, this.z + Math.cos(a) * f1 * r, 0, 0, 0);
+        this.level.particles.spawn?.(this.landingParticle(), this.x + Math.sin(a) * f1 * r, this.y, this.z + Math.cos(a) * f1 * r, 0, 0, 0);
       }
-      this.playSound(this.size === 1 ? 'entity.slime.squish_small' : 'entity.slime.squish', this.soundVolume(), ((this.random.nextFloat() - this.random.nextFloat()) * 0.2 + 1) / 0.8);
+      this.playSound(this.squishSound(), this.soundVolume(), ((this.random.nextFloat() - this.random.nextFloat()) * 0.2 + 1) / 0.8);
       this.targetSquish = -0.5;
     } else if (!this.onGround && this.wasOnGround) this.targetSquish = 1;
     this.wasOnGround = this.onGround;
-    this.targetSquish *= 0.6;
+    this.decreaseSquish();
   }
   /** vanilla Slime.playerTouch → dealDamage */
   touchPlayer(p: Player): void {
@@ -1102,7 +1121,7 @@ export class Slime extends Monster {
       const f1 = this.width / 2, j = this.size / 2, k = 2 + this.random.nextInt(3);
       for (let l = 0; l < k; l++) {
         const f2 = ((l % 2) - 0.5) * f1, f3 = (Math.floor(l / 2) - 0.5) * f1;
-        const s = new Slime(this.level);
+        const s = this.createChild();
         s.setSlimeSize(j, true);
         s.persistenceRequired = this.persistenceRequired;
         s.moveTo(this.x + f2, this.y + 0.5, this.z + f3, this.random.nextFloat() * 360, 0);
@@ -1123,5 +1142,69 @@ export class Slime extends Monster {
     if (swamp && y > 50 && y < 70 && rand() < 0.5 && rand() < moon && level.rawBrightness(x, y, z) <= Math.floor(rand() * 8)) return validSpawnBlock(level, x, y - 1, z);
     if (Math.floor(rand() * 10) === 0 && slimeChunk && y < 40) return validSpawnBlock(level, x, y - 1, z);
     return false;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Magma cube (vanilla MagmaCube extends Slime): the Nether's slime, fireproof and armoured, jumping higher and less
+// often, hurting even at its smallest, and swimming up through lava
+
+export class MagmaCube extends Slime {
+  override readonly type: string = 'magma_cube';
+  override setSlimeSize(size: number, resetHealth: boolean): void {
+    super.setSlimeSize(size, resetHealth);
+    this.baseArmor = this.size * 3;
+    this.attackDamage = this.size + 2;
+  }
+  protected override createChild(): Slime {
+    return new MagmaCube(this.level);
+  }
+  override fireImmune(): boolean {
+    return true;
+  }
+  override isOnFire(): boolean {
+    return false;
+  }
+  /** vanilla MagmaCube.causeFallDamage: it lands from its big jumps unhurt */
+  protected override causeFallDamage(_dist: number): void {}
+  protected override landingParticle(): string {
+    return 'flame';
+  }
+  override jumpDelay(): number {
+    return super.jumpDelay() * 4;
+  }
+  protected override decreaseSquish(): void {
+    this.targetSquish *= 0.9;
+  }
+  override jumpFromGround(): void {
+    this.dy = this.jumpPower() + this.size * 0.1;
+  }
+  /** vanilla jumpInLiquid(LAVA): a push up out of the lava (in water it paddles like any mob) */
+  protected override jumpInLiquid(): void {
+    if (this.inLava) this.dy = 0.22 + this.size * 0.05;
+    else super.jumpInLiquid();
+  }
+  override dealsDamage(): boolean {
+    return true;
+  }
+  protected override squishSound(): string {
+    return this.size === 1 ? 'entity.magma_cube.squish_small' : 'entity.magma_cube.squish';
+  }
+  override jumpSound(): string {
+    return 'entity.magma_cube.jump';
+  }
+  override hurtSound(): string {
+    return this.size === 1 ? 'entity.magma_cube.hurt_small' : 'entity.magma_cube.hurt';
+  }
+  override deathSound(): string {
+    return this.size === 1 ? 'entity.magma_cube.death_small' : 'entity.magma_cube.death';
+  }
+  /** vanilla entities/magma_cube: the bigger ones drop a magma cream one time in four (looting adds to it) */
+  override lootTable(): LootEntry[] {
+    return this.size > 1 ? [{ item: 'magma_cream', min: -2, max: 1 }] : [];
+  }
+  /** vanilla checkMagmaCubeSpawnRules: anywhere, in any light, but not in peaceful */
+  static checkMagmaCubeSpawn(level: Level): boolean {
+    return level.difficulty !== 'peaceful';
   }
 }

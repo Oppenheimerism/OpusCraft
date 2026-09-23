@@ -136,6 +136,13 @@ const VOLUMES: Record<string, number> = {
   'entity.slime.jump_small': 0.4,
   'entity.slime.hurt_small': 0.4,
   'entity.slime.death_small': 0.4,
+  'entity.magma_cube.squish': 0.8,
+  'entity.magma_cube.jump': 0.8,
+  'entity.magma_cube.hurt': 0.8,
+  'entity.magma_cube.death': 0.8,
+  'entity.magma_cube.squish_small': 0.4,
+  'entity.magma_cube.hurt_small': 0.4,
+  'entity.magma_cube.death_small': 0.4,
   // doors, trapdoors, gates
   'block.wooden_trapdoor.open': 1,
   'block.wooden_trapdoor.close': 1,

@@ -251,7 +251,7 @@ const MISC: [string, number?, number?][] = [
   ['stick', 64, 100], ['coal', 64, 1600], ['charcoal', 64, 1600], ['diamond'], ['emerald'], ['lapis_lazuli'], ['redstone'], ['quartz'],
   ['iron_ingot'], ['gold_ingot'], ['copper_ingot'], ['netherite_ingot'], ['iron_nugget'], ['gold_nugget'], ['raw_iron'], ['raw_gold'],
   ['raw_copper'], ['wheat'], ['wheat_seeds'], ['beetroot_seeds'], ['nether_wart'], ['pumpkin_seeds'], ['melon_seeds'], ['bone'], ['bone_meal'], ['string'], ['feather'], ['gunpowder'], ['leather'], ['flint'],
-  ['clay_ball'], ['brick'], ['paper'], ['book'], ['sugar'], ['egg', 16], ['snowball', 16], ['slime_ball'], ['ender_pearl', 16],
+  ['clay_ball'], ['brick'], ['paper'], ['book'], ['sugar'], ['egg', 16], ['snowball', 16], ['slime_ball'], ['magma_cream'], ['ender_pearl', 16],
   ['blaze_rod', 64, 2400], ['glowstone_dust'], ['bowl', 64, 100], ['glass_bottle'], ['experience_bottle'], ['saddle', 1],
   ['name_tag'], ['lead'], ['painting'], ['item_frame'], ['minecart', 1], ['chest_minecart', 1], ['oak_boat', 1], ['oak_sign', 16], ['oak_door'], ['iron_door'],
   ['red_bed', 1], ['filled_map'], ['ink_sac'], ['cocoa_beans'], ['amethyst_shard'],
@@ -277,7 +277,7 @@ for (const c of ['white', 'orange', 'magenta', 'light_blue', 'yellow', 'lime', '
   reg({ id: `${c}_dye`, texture: `${c}_dye` });
 }
 // spawn eggs (creative tab order is alphabetical, like vanilla)
-for (const m of ['bat', 'cave_spider', 'chicken', 'cow', 'creeper', 'enderman', 'pig', 'sheep', 'skeleton', 'slime', 'spider', 'squid', 'zombie']) {
+for (const m of ['bat', 'cave_spider', 'chicken', 'cow', 'creeper', 'enderman', 'magma_cube', 'pig', 'sheep', 'skeleton', 'slime', 'spider', 'squid', 'zombie']) {
   reg({ id: `${m}_spawn_egg`, texture: `${m}_spawn_egg`, creativeTab: 'spawn_eggs' });
 }
 // sugar cane item places the block

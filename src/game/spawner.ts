@@ -7,7 +7,7 @@ import { Mob, MobCategory, SavedEntity } from '../entity/mob';
 import { ItemEntity } from '../entity/itemEntity';
 import { ItemStack, ITEMS, cloneTag } from '../item/item';
 import { Pig, Cow, Sheep, Chicken, Animal } from '../entity/animals';
-import { Zombie, Skeleton, Creeper, Spider, CaveSpider, Enderman, Slime, Monster, validSpawnBlock } from '../entity/monsters';
+import { Zombie, Skeleton, Creeper, Spider, CaveSpider, Enderman, Slime, MagmaCube, Monster, validSpawnBlock } from '../entity/monsters';
 import { Squid, WaterAnimal } from '../entity/water';
 import { AbstractMinecart, createMinecart, MINECART_TYPES } from '../entity/minecart';
 import { Bat } from '../entity/bat';
@@ -32,6 +32,7 @@ export const MOB_TYPES: Record<string, (l: Level) => Mob> = {
   cave_spider: (l) => new CaveSpider(l),
   enderman: (l) => new Enderman(l),
   slime: (l) => new Slime(l),
+  magma_cube: (l) => new MagmaCube(l),
   squid: (l) => new Squid(l),
   bat: (l) => new Bat(l),
 };
@@ -114,7 +115,7 @@ export function isChunkSaved(e: Entity): boolean {
 
 const ENTITY_NAMES: Record<string, string> = {
   pig: 'Pig', cow: 'Cow', sheep: 'Sheep', chicken: 'Chicken', zombie: 'Zombie', skeleton: 'Skeleton', creeper: 'Creeper', spider: 'Spider',
-  cave_spider: 'Cave Spider', enderman: 'Enderman', slime: 'Slime', squid: 'Squid', bat: 'Bat',
+  cave_spider: 'Cave Spider', enderman: 'Enderman', slime: 'Slime', magma_cube: 'Magma Cube', squid: 'Squid', bat: 'Bat',
   arrow: 'Arrow', tnt: 'Primed TNT', item: 'Item', experience_orb: 'Experience Orb', falling_block: 'Falling Block', player: 'Player',
   egg: 'Thrown Egg', snowball: 'Snowball', ender_pearl: 'Thrown Ender Pearl',
   minecart: 'Minecart', chest_minecart: 'Minecart with Chest', boat: 'Boat', chest_boat: 'Boat with Chest',
@@ -175,6 +176,8 @@ const SQUID = (w: number, max = 4): SpawnerData[] => [{ type: 'squid', weight: w
 
 const S_ = (type: string, weight: number, min: number, max: number): SpawnerData => ({ type, weight, min, max });
 const STRIDERS = [S_('strider', 60, 1, 2)];
+/** vanilla EntityType.fireImmune(): these may be spawned standing on magma blocks */
+const FIRE_IMMUNE = new Set(['magma_cube', 'zombified_piglin', 'ghast', 'strider', 'blaze', 'wither_skeleton']);
 /**
  * vanilla NetherBiomes spawn settings (no bats, no water mobs); what isn't in the game yet (ghasts, piglins, hoglins,
  * magma cubes, striders) is picked as often as vanilla picks it and then simply doesn't appear, so the rest come
@@ -357,7 +360,7 @@ export class NaturalSpawner {
           tries = data.min + r.nextInt(1 + data.max - data.min);
         }
         if (d2 > 128 * 128) continue;
-        const placeOk = data.type === 'squid' ? this.isInWaterPositionOk(x, y, z) : this.isSpawnPositionOk(x, y, z);
+        const placeOk = data.type === 'squid' ? this.isInWaterPositionOk(x, y, z) : this.isSpawnPositionOk(x, y, z, FIRE_IMMUNE.has(data.type));
         if (!placeOk || !this.checkSpawnRules(data.type, x, y, z)) continue;
         if (!this.withinSpawnBudget(data.type, x, y, z)) continue;
         const mob = createMob(data.type, lvl);
@@ -378,9 +381,9 @@ export class NaturalSpawner {
   }
 
   /** vanilla SpawnPlacements ON_GROUND: valid floor, two empty blocks */
-  private isSpawnPositionOk(x: number, y: number, z: number): boolean {
+  private isSpawnPositionOk(x: number, y: number, z: number, fireImmune = false): boolean {
     const w = this.level.world;
-    return validSpawnBlock(this.level, x, y - 1, z) && emptySpawnBlock(w.getState(x, y, z)) && emptySpawnBlock(w.getState(x, y + 1, z));
+    return validSpawnBlock(this.level, x, y - 1, z, fireImmune) && emptySpawnBlock(w.getState(x, y, z)) && emptySpawnBlock(w.getState(x, y + 1, z));
   }
 
   /** vanilla SpawnPlacementTypes.IN_WATER */
@@ -428,6 +431,8 @@ export class NaturalSpawner {
         const biome = BIOMES[lvl.world.getBiome3(x, y, z)]?.name ?? '';
         return Slime.checkSlimeSpawn(lvl, x, y, z, () => this.rand.nextFloat(), this.isSlimeChunk(x >> 4, z >> 4), SURFACE_SLIMES.has(biome), MOON_BRIGHTNESS[moonPhase(lvl.dayTime)]);
       }
+      case 'magma_cube':
+        return MagmaCube.checkMagmaCubeSpawn(lvl);
       case 'pig':
       case 'cow':
       case 'sheep':

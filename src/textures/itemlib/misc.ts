@@ -207,6 +207,14 @@ M['slime_ball'] = () => {
   plot(t, 10, 9, 0x4fa83a);
   return t;
 };
+/** magma cream: a glossy blob of molten orange, hot yellow at the heart, flecked with darker bits of crust */
+M['magma_cream'] = () => {
+  const t = ball(4.9, [0x7a2204, 0xa8380a, 0xd45a12, 0xf0841e, 0xfbb23a, 0xffe07a], 0x4e1403, 'magma_cream');
+  for (const [x, y] of [[5, 9], [10, 7], [9, 11], [11, 10], [7, 12]] as [number, number][]) if (getA(t, x, y)) plot(t, x, y, 0x8a2a06);
+  plot(t, 6, 6, 0xfff3b8);
+  plot(t, 7, 6, 0xffe07a);
+  return t;
+};
 M['ender_pearl'] = () => {
   const t = ball(5.2, [0x082e26, 0x0c4034, 0x125646, 0x1a705c, 0x238a72, 0x34a88a], 0x041a14, 'pearl');
   over(t, ['................', '................', '................', '................', '................', '................', '......cC........', '.....cCCc.......', '.....cCc........', '......c.........'], { c: 0x3cbfa0, C: 0x7ee8cc });

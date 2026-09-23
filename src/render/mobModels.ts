@@ -403,6 +403,26 @@ export function slimeOuterModel(): MobModelDef {
   return { root, texW: 64, texH: 32 };
 }
 
+/**
+ * vanilla LavaSlimeModel.createBodyLayer: eight 8x1x8 slices round a 4x4x4 core; the slices are textured from
+ * overlapping strips, the eyes' two rows (2 and 3) from their own corner of the sheet
+ */
+export function magmaCubeModel(): MobModelDef {
+  const root = new ModelPart();
+  for (let i = 0; i < 8; i++) {
+    const [u, v] = i === 2 ? [24, 10] : i === 3 ? [24, 19] : [0, i];
+    root.add('cube' + i, part([{ x: -4, y: 16 + i, z: -4, w: 8, h: 1, d: 8, u, v }]));
+  }
+  root.add('inside_cube', part([{ x: -2, y: 18, z: -2, w: 4, h: 4, d: 4, u: 0, v: 16 }]));
+  return { root, texW: 64, texH: 32 };
+}
+
+/** vanilla LavaSlimeModel.prepareMobModel: the slices fan apart while it's stretched in a jump */
+export function animateMagmaCube(root: ModelPart, squish: number): void {
+  const f = Math.max(0, squish);
+  for (let i = 0; i < 8; i++) root.child('cube' + i).y = -(4 - i) * f * 1.7;
+}
+
 // ---------------------------------------------------------------------------
 // minecart (not a mob, but the same kind of layer definition)
 

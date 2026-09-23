@@ -668,6 +668,63 @@ function slime(): TexImage {
 }
 
 // ---------------------------------------------------------------------------
+// Magma cube (64x32, vanilla LavaSlimeModel): eight 8x1x8 slices whose side strips sit at rows 8-15 (u 0) and,
+// for the eyes' rows 2 and 3, at rows 18 and 27 (u 24); their tops and bottoms overlap one another, as in
+// vanilla's sheet. A dark, cooled crust veined with glowing lava, round a molten core.
+
+function magmaCube(): TexImage {
+  const t = img(64, 32);
+  const r = new Rand(0x3a6a);
+  const CRUST = [0x1c0605, 0x260807, 0x320b08, 0x3f0f09, 0x4e150b];
+  const VEIN = [0x8e1f08, 0xc2370c, 0xe85a14, 0xfb8a22, 0xffbe3c];
+  // one 8x8 look per face (a crust with a web of veins), cut into the slices' strips
+  const face = (): number[] => {
+    const px: number[] = [];
+    for (let i = 0; i < 64; i++) px.push(pick(r, CRUST, [2, 3, 3, 2, 1]));
+    // veins: a few short wandering runs, hottest in the middle of each run
+    for (let k = 0; k < 3; k++) {
+      let x = r.nextInt(8), y = r.nextInt(8);
+      const len = 2 + r.nextInt(3);
+      for (let i = 0; i < len; i++) {
+        const heat = Math.min(4, Math.round(2 * Math.sin((Math.PI * (i + 0.5)) / len)) + (r.next() < 0.25 ? 2 : 1));
+        px[y * 8 + x] = VEIN[heat];
+        if (r.next() < 0.5) x = (x + (r.nextBool() ? 1 : 7)) % 8;
+        else y = (y + (r.nextBool() ? 1 : 7)) % 8;
+      }
+    }
+    return px;
+  };
+  const rowY = (i: number) => (i === 2 ? 18 : i === 3 ? 27 : 8 + i);
+  const rowU = (i: number) => (i === 2 || i === 3 ? 24 : 0);
+  // the sides: right, front, left, back
+  for (let s = 0; s < 4; s++) {
+    const f = face();
+    // (the face's two eye rows stay plain crust so the eyes stand out)
+    if (s === 1) for (let i = 16; i < 32; i++) f[i] = pick(r, CRUST, [2, 3, 3, 1, 0]);
+    for (let i = 0; i < 8; i++) for (let x = 0; x < 8; x++) plot(t, rowU(i) + s * 8 + x, rowY(i), f[i * 8 + x]);
+  }
+  // the eyes, on the front of rows 2 and 3: glowing orange with a hot yellow top
+  for (const ex of [1, 5]) {
+    plot(t, 32 + ex, 18, 0xffd24a);
+    plot(t, 33 + ex, 18, 0xffe27a);
+    plot(t, 32 + ex, 27, 0xf36a16);
+    plot(t, 33 + ex, 27, 0xfb8a22);
+  }
+  // tops and bottoms: the cube's top (8,0) and the undersides seen when the slices part
+  const fill = (x0: number, y0: number, w: number, h: number) => {
+    const f = face();
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (!getPx(t, x0 + x, y0 + y)) plot(t, x0 + x, y0 + y, f[(y % 8) * 8 + (x % 8)]);
+  };
+  fill(8, 0, 16, 8);
+  fill(32, 10, 16, 8);
+  fill(32, 19, 16, 8);
+  // the molten core: bright orange going yellow in the middle
+  const core = boxFaces(0, 16, 4, 4, 4);
+  noiseBox(t, core, r, [0xe8580f, 0xf5781c, 0xfb9a2a, 0xffbf45, 0xffdc6e], { w: [1, 2, 3, 2, 1], cell: 1 });
+  return t;
+}
+
+// ---------------------------------------------------------------------------
 // Bat (32x32, the 1.20.3+ BatModel layout): body (0,0) 3x5x2, head (0,7) 4x3x2, and the flat
 // parts with their front rect (the side the face looks to) left of the back rect: ears (1,15) /
 // (8,15), inner wings (12,0) / (12,7), wing tips (16,0) / (16,8), feet (16,16).
@@ -1142,6 +1199,7 @@ export const MOB_TEXTURES: Record<string, () => TexImage> = {
   enderman_eyes: endermanEyes,
   squid,
   slime,
+  magma_cube: magmaCube,
   bat,
   minecart,
   arrow,
@@ -1260,6 +1318,7 @@ const EGGS: [string, number, number][] = [
   ['enderman', 0x161616, 0x000000],
   ['squid', 0x223b4d, 0x708899],
   ['slime', 0x51a03e, 0x7ebf6e],
+  ['magma_cube', 0x340000, 0xfcfc00],
 ];
 
 export const SPAWN_EGG_TEXTURES: Record<string, () => TexImage> = {};
