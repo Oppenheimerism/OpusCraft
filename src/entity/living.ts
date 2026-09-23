@@ -635,6 +635,11 @@ export abstract class LivingEntity extends Entity {
   }
 
   /** damage sources this entity ignores */
+  /** fire damage the fireproof (or fire resistant) ignore (vanilla isInvulnerableTo / the fire resistance check) */
+  protected shrugsOffFire(source: string, _attacker?: Entity | null, _direct?: Entity | null): boolean {
+    return FIRE_SOURCES.has(source) && (this.fireImmune() || this.hasEffect('fire_resistance'));
+  }
+
   isInvulnerableTo(_source: string): boolean {
     return false;
   }
@@ -686,7 +691,7 @@ export abstract class LivingEntity extends Entity {
    */
   override hurt(amount: number, source: string, attacker?: Entity | null, direct?: Entity | null): boolean {
     if (this.isInvulnerableTo(source) || this.removed || this.health <= 0) return false;
-    if (FIRE_SOURCES.has(source) && (this.fireImmune() || this.hasEffect('fire_resistance'))) return false;
+    if (this.shrugsOffFire(source, attacker, direct)) return false;
     this.noActionTime = 0;
     if (amount < 0) amount = 0;
     // falling anvils, blocks and stalactites wear the helmet, which takes a quarter off the hit

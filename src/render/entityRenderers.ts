@@ -24,6 +24,7 @@ import { PrimedTnt } from '../entity/tnt';
 import { FallingBlockEntity } from '../entity/fallingBlock';
 import { Sheep, Chicken, sheepFurColor } from '../entity/animals';
 import { Zombie, Skeleton, Creeper, Enderman, Slime, MagmaCube } from '../entity/monsters';
+import { Ghast, LargeFireball } from '../entity/ghast';
 import { Squid } from '../entity/water';
 import { ThrownItem } from '../entity/throwable';
 import { AbstractMinecart } from '../entity/minecart';
@@ -99,6 +100,7 @@ export class EntityRenderDispatcher {
       slime_outer: M.slimeOuterModel(),
       magma_cube: M.magmaCubeModel(),
       zombified_piglin: M.piglinModel(),
+      ghast: M.ghastModel(),
       minecart: M.minecartModel(),
       bat: M.batModel(),
     };
@@ -246,6 +248,7 @@ export class EntityRenderDispatcher {
     else if (e instanceof PrimedTnt) this.renderTnt(b, e, dx, dy, dz, p);
     else if (e instanceof FallingBlockEntity) this.renderFalling(b, e, dx, dy, dz);
     else if (e instanceof ThrownItem) this.renderThrown(b, e, dx, dy, dz, cam);
+    else if (e instanceof LargeFireball) this.renderFireball(b, e, dx, dy, dz, cam);
     else if (e instanceof AbstractMinecart) this.renderMinecart(b, e, x, y, z, dx, dy, dz, p);
     else if (e instanceof Boat) this.renderBoat(b, e, dx, dy, dz, p);
     if (e.isOnFire() && !(e instanceof ItemEntity) && !(e instanceof ExperienceOrb)) this.renderFlame(b, e, dx, dy, dz, cam, level.gameTime);
@@ -327,7 +330,8 @@ export class EntityRenderDispatcher {
   private renderMob(b: EntityBatch, e: Mob, dx: number, dy: number, dz: number, p: number): void {
     const type = e.type;
     const def = this.models[type];
-    const tex = this.tex(type);
+    // (vanilla GhastRenderer.getTextureLocation: its face while charging a shot)
+    const tex = this.tex(e instanceof Ghast && e.charging ? 'ghast_shooting' : type);
     if (!def || !tex) return;
     const baby = e.isBaby();
     let white = 0;
@@ -368,6 +372,8 @@ export class EntityRenderDispatcher {
     }
     // vanilla CaveSpiderRenderer.scale
     if (type === 'cave_spider') scale = (pose) => pose.scale(0.7, 0.7, 0.7);
+    // vanilla GhastRenderer.scale
+    if (type === 'ghast') scale = (pose) => pose.scale(4.5, 4.5, 4.5);
     const spiderLike = type === 'spider' || type === 'cave_spider';
     const a = this.setupLiving(e, dx + jx, dy, dz + jz, p, spiderLike ? 180 : 90, scale);
     const attack = attackAnim(e, p);
@@ -419,6 +425,9 @@ export class EntityRenderDispatcher {
         M.animateEnderman(def.root, a.limbSwing, a.limbAmount, a.age, a.headYaw, a.headPitch, attack, en.carried !== 0, en.creepy);
         break;
       }
+      case 'ghast':
+        M.animateGhast(def.root, a.age);
+        break;
       case 'magma_cube': {
         const mc = e as MagmaCube;
         M.animateMagmaCube(def.root, mc.oSquish + (mc.squish - mc.oSquish) * p);
@@ -692,6 +701,20 @@ export class EntityRenderDispatcher {
   }
 
   /** vanilla ThrownItemRenderer: the item sprite facing the camera */
+  /** vanilla ThrownItemRenderer(3.0, fullBright) for the large fireball: a big fire charge, glowing */
+  private renderFireball(b: EntityBatch, e: LargeFireball, dx: number, dy: number, dz: number, cam: Camera): void {
+    if (e.tickCount < 2 && dx * dx + dy * dy + dz * dz < 12.25) return;
+    b.setOverlay(0, 0, 0, 0);
+    b.lightB = 240;
+    const pose = this.pose;
+    pose.reset();
+    pose.translate(dx, dy + e.height / 2, dz);
+    pose.scale(3, 3, 3);
+    pose.rotY(180 - cam.yaw);
+    pose.rotX(-cam.pitch);
+    this.items.render(b, pose, e.stack, 'ground');
+  }
+
   private renderThrown(b: EntityBatch, e: ThrownItem, dx: number, dy: number, dz: number, cam: Camera): void {
     if (e.tickCount < 2 && dx * dx + dy * dy + dz * dz < 12.25) return;
     b.setOverlay(0, 0, 0, 0);
@@ -973,6 +996,9 @@ function shadowRadius(e: Entity): number {
       break;
     case 'enderman':
       r = 0.5;
+      break;
+    case 'ghast':
+      r = 1.5;
       break;
     case 'slime':
     case 'magma_cube':

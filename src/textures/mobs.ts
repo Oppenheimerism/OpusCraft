@@ -668,6 +668,62 @@ function slime(): TexImage {
 }
 
 // ---------------------------------------------------------------------------
+// Ghast (64x32, vanilla GhastModel): the 16-cube body, and in the top-left corner the strip all nine tentacles
+// share. Pale, faintly blotched; its face weeps grey tears with its eyes shut, and opens them red (and its mouth)
+// while it charges a shot (vanilla ghast_shooting).
+
+function ghast(shooting: boolean): TexImage {
+  const t = img(64, 32);
+  const r = new Rand(0x9a57);
+  const SKIN = [0xc9c9c9, 0xd6d6d6, 0xe1e1e1, 0xeaeaea, 0xf2f2f2, 0xf9f9f9];
+  const body = boxFaces(0, 0, 16, 16, 16);
+  noiseBox(t, body, r, SKIN, { w: [1, 2, 3, 5, 5, 2] });
+  // the tentacles' strip, a shade greyer towards the tips
+  const tent = boxFaces(0, 0, 2, 14, 2);
+  noiseBox(t, tent, r, SKIN.slice(0, 5), { w: [1, 2, 4, 4, 2], cell: 1 });
+  for (const k of SIDES) paintFace(t, tent[k], (_x, y, c) => (y > 9 ? mixC(c, 0xa8a8a8, (y - 9) / 8) : undefined));
+  const G = 0x7c7c7c, g = 0xa2a2a2, K = 0x3a3a3a;
+  drawFace(t, body.front, shooting
+    ? [
+      '................',
+      '................',
+      '................',
+      '................',
+      '..KKKK....KKKK..',
+      '..KRRK....KRRK..',
+      '..KrrK....KrrK..',
+      '...rr......rr...',
+      '...r........r...',
+      '...r........r...',
+      '.....KKKKKK.....',
+      '.....KmmmmK.....',
+      '.....KmMMmK.....',
+      '.....KKKKKK.....',
+      '................',
+      '................',
+    ]
+    : [
+      '................',
+      '................',
+      '................',
+      '................',
+      '................',
+      '..GGGG....GGGG..',
+      '...gg......gg...',
+      '...g........g...',
+      '...g........g...',
+      '...g........g...',
+      '................',
+      '......GGGG......',
+      '.....g....g.....',
+      '................',
+      '................',
+      '................',
+    ], { G, g, K, R: 0xc81010, r: 0x9a1212, m: 0x5a1a1a, M: 0x2a0a0a }, r);
+  return t;
+}
+
+// ---------------------------------------------------------------------------
 // Zombified piglin (64x64, vanilla PiglinModel): a piglin gone to rot. Pink, blotchy, greying skin; the skull
 // showing through on one side of the face, an empty socket; ribs through a hole in the chest; one forearm
 // picked down to the bone; a leather loincloth; dark hooves.
@@ -1282,6 +1338,8 @@ export const MOB_TEXTURES: Record<string, () => TexImage> = {
   slime,
   magma_cube: magmaCube,
   zombified_piglin: zombifiedPiglin,
+  ghast: () => ghast(false),
+  ghast_shooting: () => ghast(true),
   bat,
   minecart,
   arrow,
@@ -1403,6 +1461,7 @@ const EGGS: [string, number, number][] = [
   ['slime', 0x51a03e, 0x7ebf6e],
   ['magma_cube', 0x340000, 0xfcfc00],
   ['zombified_piglin', 0xea9393, 0x4c7129],
+  ['ghast', 0xf9f9f9, 0xbcbcbc],
 ];
 
 export const SPAWN_EGG_TEXTURES: Record<string, () => TexImage> = {};

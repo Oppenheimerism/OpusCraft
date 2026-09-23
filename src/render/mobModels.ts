@@ -124,6 +124,27 @@ export function zombieModel(): MobModelDef {
 }
 
 /**
+ * vanilla GhastModel.createBodyLayer: a 16-block cube of a body and nine 2x2 tentacles under it, their lengths
+ * those RandomSource.create(1660) deals out (nextInt(7) + 8)
+ */
+const GHAST_TENTACLES = [8, 13, 9, 11, 11, 10, 12, 9, 12];
+export function ghastModel(): MobModelDef {
+  const root = new ModelPart();
+  root.add('body', part([{ x: -8, y: -8, z: -8, w: 16, h: 16, d: 16, u: 0, v: 0 }], [0, 17.6, 0]));
+  for (let i = 0; i < 9; i++) {
+    const f = (((i % 3) - (Math.floor(i / 3) % 2) * 0.5 + 0.25) / 2 * 2 - 1) * 5;
+    const g = (Math.floor(i / 3) / 2 * 2 - 1) * 5;
+    root.add('tentacle' + i, part([{ x: -1, y: 0, z: -1, w: 2, h: GHAST_TENTACLES[i], d: 2, u: 0, v: 0 }], [f, 24.6, g]));
+  }
+  return { root, texW: 64, texH: 32 };
+}
+
+/** vanilla GhastModel.setupAnim: the tentacles sway, each a step behind the last */
+export function animateGhast(root: ModelPart, age: number): void {
+  for (let i = 0; i < 9; i++) root.child('tentacle' + i).xRot = 0.2 * Math.sin(age * 0.3 + i) + 0.4;
+}
+
+/**
  * vanilla PiglinModel.createMesh: PlayerModel's body and limbs (wide arms; the jacket, sleeve and trouser layers
  * are left out) under the broad piglin head, with its snout, two tusks and floppy ears
  */

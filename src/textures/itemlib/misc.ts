@@ -215,6 +215,37 @@ M['magma_cream'] = () => {
   plot(t, 7, 6, 0xffe07a);
   return t;
 };
+/** a ghast tear: a drop of pale, glassy blue-white, bright at its heart */
+M['ghast_tear'] = () =>
+  spr(
+    [
+      '................',
+      '................',
+      '.......o........',
+      '......oao.......',
+      '......oao.......',
+      '.....oabao......',
+      '.....oabao......',
+      '....oabcbao.....',
+      '....oabccbao....',
+      '....abcddcba....',
+      '....abcddcba....',
+      '....oabccbao....',
+      '.....oabbao.....',
+      '......oooo......',
+      '................',
+      '................',
+    ].map((row) => row.slice(0, 16)),
+    { o: 0x6e8a96, a: 0xa9c4cc, b: 0xcfe2e6, c: 0xe8f4f6, d: 0xffffff },
+    'ghast_tear',
+  );
+/** a fire charge: a ball of charred black, cracked through with glowing orange */
+M['fire_charge'] = () => {
+  const t = ball(5.2, [0x1c120c, 0x2a1a10, 0x3b2414, 0x4e2e16, 0x663a18, 0x7e4a1c], 0x0e0806, 'fire_charge');
+  for (const [x, y, c] of [[6, 6, 0xffd24a], [7, 7, 0xf59a26], [8, 7, 0xe2641a], [9, 8, 0xf59a26], [5, 9, 0xe2641a], [6, 10, 0xf59a26], [10, 10, 0xffd24a], [11, 11, 0xe2641a], [8, 11, 0xe2641a], [9, 12, 0xf59a26]] as [number, number, number][])
+    if (getA(t, x, y)) plot(t, x, y, c);
+  return t;
+};
 M['ender_pearl'] = () => {
   const t = ball(5.2, [0x082e26, 0x0c4034, 0x125646, 0x1a705c, 0x238a72, 0x34a88a], 0x041a14, 'pearl');
   over(t, ['................', '................', '................', '................', '................', '................', '......cC........', '.....cCCc.......', '.....cCc........', '......c.........'], { c: 0x3cbfa0, C: 0x7ee8cc });
