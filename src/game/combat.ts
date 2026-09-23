@@ -11,7 +11,8 @@ const RAD = Math.PI / 180;
 export function playerAttack(level: Level, p: Player, target: Entity, damageHeld: (n: number) => void): void {
   if (p.gameMode === 'spectator') return;
   const held = p.inventory.selectedItem;
-  let f = held ? held.item.attackDamage : 1;
+  // ATTACK_DAMAGE attribute: the weapon's damage with strength / weakness
+  let f = p.effectAttackDamage(held ? held.item.attackDamage : 1);
   const f2 = p.attackStrengthScale(0.5);
   f *= 0.2 + f2 * f2 * 0.8;
   p.resetAttackStrength();
@@ -22,7 +23,7 @@ export function playerAttack(level: Level, p: Player, target: Entity, damageHeld
     level.sound.play('entity.player.attack.knockback', p.x, p.y, p.z, 1, 1);
     sprintKnock = true;
   }
-  const crit = full && p.fallDistance > 0 && !p.onGround && !p.onClimbable() && !p.inWater && target instanceof LivingEntity && !p.sprinting;
+  const crit = full && p.fallDistance > 0 && !p.onGround && !p.onClimbable() && !p.inWater && !p.hasEffect('blindness') && target instanceof LivingEntity && !p.sprinting;
   if (crit) f *= 1.5;
   let sweep = false;
   if (full && !crit && !sprintKnock && p.onGround) {

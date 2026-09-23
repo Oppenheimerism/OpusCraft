@@ -234,6 +234,11 @@ export class CreativeInventoryScreen extends AbstractContainerScreen<ContainerMe
     super.render(g, mx, my, partial);
   }
 
+  /** vanilla CreativeModeInventoryScreen is an EffectRenderingInventoryScreen too */
+  override canSeeEffects(): boolean {
+    return this.width - (this.leftPos + this.imageWidth + 2) >= 32;
+  }
+
   // ---------------------------------------------------------------------------
   // input
 

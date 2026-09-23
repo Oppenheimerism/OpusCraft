@@ -10,6 +10,7 @@ import { ItemStack, RARITY_COLOR } from '../../item/item';
 import { enchantmentLine } from '../../item/enchantments';
 import { KEYS } from '../../game/input';
 import { RecipeBookComponent } from '../recipeBookComponent';
+import { MobEffectInstance, compareEffects, effectDisplayName, formatEffectDuration } from '../../entity/effects';
 
 const LABEL = 0x404040;
 
@@ -144,11 +145,40 @@ export abstract class AbstractContainerScreen<M extends ContainerMenu> extends S
       else g.itemDecorations(carried.count, carried.damage, carried.item.maxDamage, x, y);
     }
     g.popTransform();
+    this.renderEffects(g, mx, my);
     if (this.book) {
       this.book.render(g, mx, my, partial);
       this.book.renderGhost(g, L, T);
     }
     if (!this.book?.renderTooltip(g, mx, my)) this.renderTooltip(g, mx, my);
+  }
+
+  /** vanilla EffectRenderingInventoryScreen: room right of the panel to list the active effects */
+  canSeeEffects(): boolean {
+    return false;
+  }
+
+  /** vanilla EffectRenderingInventoryScreen.renderEffects (screens that list effects override canSeeEffects) */
+  protected renderEffects(g: GuiGraphics, mx: number, my: number): void {
+    const x = this.leftPos + this.imageWidth + 2;
+    const effects = this.game.player.activeEffects;
+    if (!this.canSeeEffects() || !effects.size) return;
+    // wide enough for names and times, otherwise icons with a tooltip
+    const large = this.width - x >= 120;
+    const list: MobEffectInstance[] = [...effects.values()].sort(compareEffects);
+    const k = list.length > 5 ? Math.floor(132 / (list.length - 1)) : 33;
+    list.forEach((_inst, i) => g.sprite(large ? 'effect_background_large' : 'effect_background_small', x, this.topPos + i * k, large ? 120 : 32, 32));
+    list.forEach((inst, i) => g.sprite('mob_effect_' + inst.id, x + (large ? 6 : 7), this.topPos + i * k + 7, 18, 18));
+    if (large) {
+      list.forEach((inst, i) => {
+        g.text(effectDisplayName(inst), x + 28, this.topPos + i * k + 6, 0xffffff, true);
+        g.text(formatEffectDuration(inst), x + 28, this.topPos + i * k + 16, 0x7f7f7f, true);
+      });
+    } else if (mx >= x && mx <= x + 33) {
+      let h: MobEffectInstance | null = null;
+      for (let i = 0; i < list.length; i++) if (my >= this.topPos + i * k && my <= this.topPos + i * k + k) h = list[i];
+      if (h) g.tooltip([effectDisplayName(h), '§f' + formatEffectDuration(h)], mx, my);
+    }
   }
 
   override renderTooltip(g: GuiGraphics, mx: number, my: number): void {
@@ -394,6 +424,9 @@ export class InventoryScreen extends AbstractContainerScreen<InventoryMenu> {
   }
   override renderLabels(g: GuiGraphics): void {
     g.text(this.title, this.titleLabelX, this.titleLabelY, LABEL, false);
+  }
+  override canSeeEffects(): boolean {
+    return this.width - (this.leftPos + this.imageWidth + 2) >= 32;
   }
   renderBg(g: GuiGraphics, mx: number, my: number): void {
     g.sprite('container_inventory', this.leftPos, this.topPos);

@@ -21,6 +21,7 @@ import { TexImage, img, plot, rect, clear, getA, getPx, mixC, mulC, gray, packRG
 import { hashString } from '../core/rng';
 import { FONT } from './font';
 import { BLOCK_TEXTURES } from './blocks';
+import { MOB_EFFECT_TEXTURES } from './mobEffects';
 
 type Gen = () => TexImage;
 export const GUI_TEXTURES: Record<string, Gen> = {};
@@ -547,6 +548,15 @@ function panel(w: number, h: number, face = PANEL, hi = WHITE, lo = PANEL_SHADOW
     }
   return t;
 }
+
+// Status effects: HUD icon frames (hud/effect_background[_ambient], the beacon one tinted aqua) and
+// the inventory list backgrounds (container/inventory/effect_background_large/small); the 18x18 icons
+// come from mobEffects.ts
+G['effect_background'] = () => panel(24, 24);
+G['effect_background_ambient'] = () => panel(24, 24, 0xb7dfe0, 0xeaffff, 0x4d8f96);
+G['effect_background_large'] = () => panel(120, 32);
+G['effect_background_small'] = () => panel(32, 32);
+Object.assign(G, MOB_EFFECT_TEXTURES);
 
 /** Inset box: dark top/left edge, white bottom/right edge (vanilla slot look). */
 function inset(t: TexImage, x: number, y: number, w: number, h: number, inner = SLOT): void {

@@ -41,6 +41,8 @@ export interface WorldMeta {
     advancements?: Record<string, string[]>;
     recipeBook?: import('../inventory/recipeBook').RecipeBookSave;
     dead?: boolean;
+    /** vanilla active_effects */
+    effects?: import('../entity/effects').SavedEffect[];
   } | null;
   version: number;
   /** quick-test worlds are never written to storage */

@@ -22,6 +22,7 @@ import { createMob } from './spawner';
 import { SpawnerBlockEntity } from '../world/blockEntity';
 import { playerAttack } from './combat';
 import { canPlaceFire, fireStateAt, placeFire } from './fire';
+import { MobEffectInstance, MOB_EFFECTS } from '../entity/effects';
 
 export class Interaction {
   hit: BlockHit | null = null;
@@ -122,7 +123,7 @@ export class Interaction {
     }
     if (!this.destroying || !this.same(h)) {
       const held = p.inventory.selectedItem?.item ?? null;
-      const prog = destroyProgress(h.state, held, p.eyeFluid === FLUID_WATER, p.onGround);
+      const prog = destroyProgress(h.state, held, p.eyeFluid === FLUID_WATER, p.onGround, p.digSpeedEffectFactor());
       if (prog >= 1) {
         this.destroyBlock(h.x, h.y, h.z);
       } else {
@@ -177,7 +178,7 @@ export class Interaction {
       return;
     }
     const item = p.inventory.selectedItem?.item ?? null;
-    this.destroyProgress += destroyProgress(st, item, p.eyeFluid === FLUID_WATER, p.onGround);
+    this.destroyProgress += destroyProgress(st, item, p.eyeFluid === FLUID_WATER, p.onGround, p.digSpeedEffectFactor());
     const b = BLOCKS[STATE_BLOCK[st]];
     this.onDestroyProgress?.(b.name, Math.min(1, this.destroyProgress));
     if (this.destroyTicks % 4 === 0) {
@@ -666,6 +667,11 @@ export class Interaction {
       this.itemUseEffects(s);
       p.food.eat(it.food.nutrition, it.food.saturation);
       this.level.sound.play('entity.player.burp', p.x, p.y, p.z, 0.5, Math.random() * 0.1 + 0.9);
+      // vanilla LivingEntity.addEatEffect: each food effect rolls its probability
+      for (const [id, ticks, amp, chance] of it.food.effects ?? []) {
+        const e = MOB_EFFECTS[id];
+        if (e && Math.random() < chance) p.addEffect(new MobEffectInstance(e, ticks, amp));
+      }
       if (p.gameMode !== 'creative') {
         p.inventory.consumeSelected(1);
         const rem = it.food.remainder;
@@ -677,6 +683,8 @@ export class Interaction {
       }
       p.inventory.version++;
     } else if (it.id === 'milk_bucket') {
+      // vanilla MilkBucketItem.finishUsingItem
+      p.removeAllEffects();
       if (p.gameMode !== 'creative') p.inventory.setSelectedItem(ItemStack.of('bucket'));
     }
   }

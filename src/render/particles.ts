@@ -70,6 +70,8 @@ interface SpriteParticle {
   roll?: number;
   oRoll?: number;
   rotSpeed?: number;
+  /** translucent particles (vanilla PARTICLE_SHEET_TRANSLUCENT with alpha < 1) are drawn blended */
+  alpha?: number;
 }
 
 export interface SpriteRectUV {
@@ -82,6 +84,8 @@ export interface SpriteRectUV {
 const GENERIC = ['generic_0', 'generic_1', 'generic_2', 'generic_3', 'generic_4', 'generic_5', 'generic_6', 'generic_7'];
 const EXPLOSION = Array.from({ length: 16 }, (_, i) => `explosion_${i}`);
 const SWEEP = Array.from({ length: 8 }, (_, i) => `sweep_${i}`);
+/** vanilla particles/entity_effect.json: effect_7 down to effect_0 */
+const EFFECT = Array.from({ length: 8 }, (_, i) => `effect_${7 - i}`);
 
 export class ParticleEngine {
   private readonly list: Particle[] = [];
@@ -541,6 +545,26 @@ export class ParticleEngine {
     }
   }
 
+  /** vanilla SpellParticle.MobEffectProvider (ENTITY_EFFECT): a rising swirl in the effect's colour */
+  entityEffect(x: number, y: number, z: number, color: number, alpha: number): void {
+    const p = this.base('entity_effect', x, y, z);
+    // SpellParticle passes random horizontal speeds to the Particle constructor, keeps the vertical one (1.0)
+    this.withSpeed(p, 0.5 - Math.random(), 1, 0.5 - Math.random());
+    p.friction = 0.96;
+    p.gravity = -0.1;
+    p.speedUpWhenBlocked = true;
+    p.dy *= 0.2;
+    p.size *= 0.75;
+    p.lifetime = Math.floor(8 / (Math.random() * 0.8 + 0.2));
+    p.physics = false;
+    p.frames = EFFECT;
+    p.r = ((color >> 16) & 255) / 255;
+    p.g = ((color >> 8) & 255) / 255;
+    p.b = (color & 255) / 255;
+    if (alpha < 1) p.alpha = alpha;
+    this.addSprite(p);
+  }
+
   /** vanilla FallingDustParticle (dust sifting from under sand and gravel), tinted by the block */
   fallingDust(x: number, y: number, z: number, color: number): void {
     const p = this.base('falling_dust', x, y, z);
@@ -859,79 +883,89 @@ export class ParticleEngine {
     batch.flush();
   }
 
-  /** draw sprite particles (after terrain particles) */
+  /** draw sprite particles (after terrain particles); translucent ones in a second, blended pass */
   renderSprites(batch: EntityBatch, cam: Camera, partial: number): void {
     if (!this.sprites.length || !this.spriteTexture) return;
     batch.begin({ texture: this.spriteTexture, cutoff: 0.1, blend: false, cull: false, lit: false, useLightmap: true });
+    let translucent = false;
+    for (const p of this.sprites) {
+      if (p.alpha !== undefined) translucent = true;
+      else this.renderSprite(batch, p, cam, partial);
+    }
+    batch.flush();
+    if (!translucent) return;
+    batch.begin({ texture: this.spriteTexture, cutoff: 0.01, blend: true, cull: false, lit: false, useLightmap: true, depthWrite: false });
+    for (const p of this.sprites) if (p.alpha !== undefined) this.renderSprite(batch, p, cam, partial);
+    batch.flush();
+  }
+
+  private renderSprite(batch: EntityBatch, p: SpriteParticle, cam: Camera, partial: number): void {
+    if (p.emitter) return;
     const yr = (cam.yaw * Math.PI) / 180, pr = (cam.pitch * Math.PI) / 180;
     const rx = -Math.cos(yr), rz = -Math.sin(yr);
     const ux = -Math.sin(yr) * Math.sin(pr), uy = Math.cos(pr), uz = Math.cos(yr) * Math.sin(pr);
-    for (const p of this.sprites) {
-      if (p.emitter) continue;
-      const name = p.frame >= 0 ? p.frames[p.frame] : p.frames[Math.min(p.frames.length - 1, Math.floor((p.age * (p.frames.length - 1)) / Math.max(1, p.lifetime)))];
-      const r = this.spriteRects[name];
-      if (!r) continue;
-      const x = p.xo + (p.x - p.xo) * partial - cam.x;
-      const y = p.yo + (p.y - p.yo) * partial - cam.y;
-      const z = p.zo + (p.z - p.zo) * partial - cam.z;
-      if (p.fullBright) {
-        batch.lightB = 240;
-        batch.lightS = 240;
-      } else {
-        const l = this.world.getLight(Math.floor(p.x), Math.floor(p.y), Math.floor(p.z));
-        batch.lightB = (l & 15) * 16;
-        batch.lightS = (l >> 4) * 16;
-        // vanilla FlameParticle / LavaParticle.getLightColor
-        if (p.lightMode === 'lava') batch.lightB = 240;
-        else if (p.lightMode === 'flame') batch.lightB = Math.min(240, batch.lightB + Math.floor(Math.max(0, Math.min(1, (p.age + partial) / p.lifetime)) * 15 * 16));
-      }
-      let s = p.size;
-      if (p.grow) s *= Math.max(0, Math.min(1, ((p.age + partial) / p.lifetime) * 32));
-      if (p.sizeCurve) {
-        const f = (p.age + partial) / p.lifetime;
-        s *= p.sizeCurve === 'flame' ? 1 - f * f * 0.5 : 1 - f * f;
-      }
-      if (p.portal) {
-        let f = (p.age + partial) / p.lifetime;
-        f = 1 - f;
-        f *= f;
-        s *= 1 - f;
-      }
-      let ru0 = r.u0, rv0 = r.v0, ru1 = r.u1, rv1 = r.v1;
-      if (p.sub) {
-        const du = r.u1 - r.u0, dv = r.v1 - r.v0;
-        ru0 = r.u0 + du * p.sub[0];
-        rv0 = r.v0 + dv * p.sub[1];
-        ru1 = r.u0 + du * p.sub[2];
-        rv1 = r.v0 + dv * p.sub[3];
-      }
-      let ax = rx * s, az = rz * s, ay = 0;
-      let bx = ux * s, by = uy * s, bz = uz * s;
-      if (p.roll) {
-        // vanilla SingleQuadParticle roll: spin the quad in the view plane
-        const roll = (p.oRoll ?? p.roll) + (p.roll - (p.oRoll ?? p.roll)) * partial;
-        const c = Math.cos(roll), sn = Math.sin(roll);
-        const nax = ax * c + bx * sn, nay = by * sn, naz = az * c + bz * sn;
-        const nbx = -ax * sn + bx * c, nby = by * c, nbz = -az * sn + bz * c;
-        ax = nax;
-        ay = nay;
-        az = naz;
-        bx = nbx;
-        by = nby;
-        bz = nbz;
-      }
-      const v = [
-        [x - ax - bx, y - ay - by, z - az - bz, ru1, rv1],
-        [x - ax + bx, y - ay + by, z - az + bz, ru1, rv0],
-        [x + ax + bx, y + ay + by, z + az + bz, ru0, rv0],
-        [x + ax - bx, y + ay - by, z + az - bz, ru0, rv1],
-      ];
-      for (const k of [0, 1, 2, 0, 2, 3]) {
-        const q = v[k];
-        batch.vertexRaw(q[0], q[1], q[2], q[3], q[4], p.r, p.g, p.b, 1, 0, 1, 0);
-      }
+    const name = p.frame >= 0 ? p.frames[p.frame] : p.frames[Math.min(p.frames.length - 1, Math.floor((p.age * (p.frames.length - 1)) / Math.max(1, p.lifetime)))];
+    const r = this.spriteRects[name];
+    if (!r) return;
+    const x = p.xo + (p.x - p.xo) * partial - cam.x;
+    const y = p.yo + (p.y - p.yo) * partial - cam.y;
+    const z = p.zo + (p.z - p.zo) * partial - cam.z;
+    if (p.fullBright) {
+      batch.lightB = 240;
+      batch.lightS = 240;
+    } else {
+      const l = this.world.getLight(Math.floor(p.x), Math.floor(p.y), Math.floor(p.z));
+      batch.lightB = (l & 15) * 16;
+      batch.lightS = (l >> 4) * 16;
+      // vanilla FlameParticle / LavaParticle.getLightColor
+      if (p.lightMode === 'lava') batch.lightB = 240;
+      else if (p.lightMode === 'flame') batch.lightB = Math.min(240, batch.lightB + Math.floor(Math.max(0, Math.min(1, (p.age + partial) / p.lifetime)) * 15 * 16));
     }
-    batch.flush();
+    let s = p.size;
+    if (p.grow) s *= Math.max(0, Math.min(1, ((p.age + partial) / p.lifetime) * 32));
+    if (p.sizeCurve) {
+      const f = (p.age + partial) / p.lifetime;
+      s *= p.sizeCurve === 'flame' ? 1 - f * f * 0.5 : 1 - f * f;
+    }
+    if (p.portal) {
+      let f = (p.age + partial) / p.lifetime;
+      f = 1 - f;
+      f *= f;
+      s *= 1 - f;
+    }
+    let ru0 = r.u0, rv0 = r.v0, ru1 = r.u1, rv1 = r.v1;
+    if (p.sub) {
+      const du = r.u1 - r.u0, dv = r.v1 - r.v0;
+      ru0 = r.u0 + du * p.sub[0];
+      rv0 = r.v0 + dv * p.sub[1];
+      ru1 = r.u0 + du * p.sub[2];
+      rv1 = r.v0 + dv * p.sub[3];
+    }
+    let ax = rx * s, az = rz * s, ay = 0;
+    let bx = ux * s, by = uy * s, bz = uz * s;
+    if (p.roll) {
+      // vanilla SingleQuadParticle roll: spin the quad in the view plane
+      const roll = (p.oRoll ?? p.roll) + (p.roll - (p.oRoll ?? p.roll)) * partial;
+      const c = Math.cos(roll), sn = Math.sin(roll);
+      const nax = ax * c + bx * sn, nay = by * sn, naz = az * c + bz * sn;
+      const nbx = -ax * sn + bx * c, nby = by * c, nbz = -az * sn + bz * c;
+      ax = nax;
+      ay = nay;
+      az = naz;
+      bx = nbx;
+      by = nby;
+      bz = nbz;
+    }
+    const v = [
+      [x - ax - bx, y - ay - by, z - az - bz, ru1, rv1],
+      [x - ax + bx, y - ay + by, z - az + bz, ru1, rv0],
+      [x + ax + bx, y + ay + by, z + az + bz, ru0, rv0],
+      [x + ax - bx, y + ay - by, z + az - bz, ru0, rv1],
+    ];
+    for (const k of [0, 1, 2, 0, 2, 3]) {
+      const q = v[k];
+      batch.vertexRaw(q[0], q[1], q[2], q[3], q[4], p.r, p.g, p.b, p.alpha ?? 1, 0, 1, 0);
+    }
   }
 
   clear(): void {

@@ -51,6 +51,7 @@ import { Tutorial, TutorialStep } from './tutorial';
 import { keyDisplayName } from './input';
 import { LivingEntity } from '../entity/living';
 import { Monster } from '../entity/monsters';
+import { nightVisionScale, blindnessFog, applyNausea } from '../render/effectVisuals';
 
 export type { GameOptions } from './options';
 
@@ -385,6 +386,7 @@ export class Game {
       emitAround: (k, e) => particles.emitAround(k, e),
       fallingDust: (x, y, z, c) => particles.fallingDust(x, y, z, c),
       blockParticle: (x, y, z, xd, yd, zd, st, bx, by, bz) => particles.blockParticle(x, y, z, xd, yd, zd, st, bx, by, bz),
+      entityEffect: (x, y, z, c, a) => particles.entityEffect(x, y, z, c, a),
     };
     this.spawner = new NaturalSpawner(this.level, hashString(meta.seed));
     this.ambient = new AmbientTicker(this.level);
@@ -405,6 +407,8 @@ export class Game {
     this.recipeBook.load(pd?.recipeBook);
     if (pd) {
       this.player.moveTo(pd.x, pd.y, pd.z, pd.yaw, pd.pitch);
+      // effects before health so health boost holds (a player who died comes back without them)
+      if (!pd.dead && pd.health > 0) this.player.loadEffects(pd.effects);
       this.player.health = pd.health;
       this.player.food.level = pd.food;
       this.player.food.saturation = pd.saturation;
@@ -481,6 +485,7 @@ export class Game {
       advancements: this.advancements.save(),
       recipeBook: this.recipeBook.save(),
       dead: p.health <= 0,
+      effects: p.saveEffects(),
     };
     const list = [];
     for (const c of this.world.chunks.values()) {
@@ -709,6 +714,10 @@ export class Game {
         return `${n} was poked to death by a sweet berry bush`;
       case 'genericKill':
         return `${n} was killed`;
+      case 'magic':
+        return `${n} was killed by magic`;
+      case 'wither':
+        return `${n} withered away`;
       default:
         return `${n} died`;
     }
@@ -749,6 +758,8 @@ export class Game {
 
   respawn(): void {
     const p = this.player;
+    // vanilla respawns a fresh player: no effects carry over
+    p.removeAllEffects();
     p.health = p.maxHealth;
     p.deathTime = 0;
     p.hurtTime = 0;
@@ -785,6 +796,7 @@ export class Game {
   /** hardcore "Spectate World": revive where the player died */
   respawnInPlace(): void {
     const p = this.player;
+    p.removeAllEffects();
     p.health = p.maxHealth;
     p.deathTime = 0;
     p.hurtTime = 0;
@@ -1106,6 +1118,7 @@ export class Game {
     const bob = mat4();
     this.bobHurt(bob, partial);
     if (this.opts.bobView && this.thirdPerson === 0) this.bobView(bob, partial);
+    applyNausea(bob, p, partial, this.ticks, this.opts.screenEffectScale);
     let fov = this.opts.fov * (this.fovModO + (this.fovMod - this.fovModO) * partial);
     const eyeFluid = this.cameraFluid(ex, ey, ez);
     if (eyeFluid === FLUID_WATER) fov *= 0.85714287;
@@ -1142,7 +1155,8 @@ export class Game {
       weather: { rain: this.level.rainLevel(partial), thunder: this.level.thunderLevel(partial), flash: this.level.skyFlash },
       biome,
       gamma: this.opts.gamma,
-      nightVision: 0,
+      nightVision: nightVisionScale(p, partial),
+      blindness: blindnessFog(p, Math.max(this.opts.renderDistance * 16, 32)),
       bob: camOverride ? null : bob,
       underwater: eyeFluid === FLUID_WATER,
       waterFogColor: [((b.waterFog >> 16) & 255) / 255, ((b.waterFog >> 8) & 255) / 255, (b.waterFog & 255) / 255],
