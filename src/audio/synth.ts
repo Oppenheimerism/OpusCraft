@@ -12,6 +12,7 @@ import { enchantingSounds } from './gen/enchanting';
 import { boatSounds } from './gen/boat';
 import { netherBlockSounds } from './gen/netherBlocks';
 import { netherSounds } from './gen/nether';
+import { netherMobSounds } from './gen/netherMobs';
 import { NETHER_MUSIC_POOLS, renderNetherMusic } from './gen/netherMusic';
 
 export const SAMPLE_RATE = 44100;
@@ -33,6 +34,7 @@ export const SOUNDS: Record<string, SoundGen> = {
   ...boatSounds(),
   ...netherBlockSounds(),
   ...netherSounds(),
+  ...netherMobSounds(),
 };
 
 /** Number of in-game (overworld) music tracks. */
@@ -173,6 +175,15 @@ const VOLUMES: Record<string, number> = {
   'block.portal.ambient': 0.5,
   'block.portal.trigger': 0.25,
   'block.portal.travel': 0.25,
+  // ghast: its voice carries far (Ghast.getSoundVolume() is 5; warn / shoot are level events at 10)
+  'entity.ghast.ambient': 5,
+  'entity.ghast.hurt': 5,
+  'entity.ghast.death': 5,
+  'entity.ghast.scream': 5,
+  'entity.ghast.warn': 10,
+  'entity.ghast.shoot': 10,
+  // zombified piglin anger plays at twice the voice volume (and 1.8x the voice pitch)
+  'entity.zombified_piglin.angry': 2,
 };
 
 /**
