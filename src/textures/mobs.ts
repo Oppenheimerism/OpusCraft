@@ -13,6 +13,7 @@
 // rect is the belly edge.
 
 import { TexImage, AnimTex, img, cloneImg, plot, clear, getPx, mixC, mulC, valueNoise, equalize, Rand } from './tex';
+import { BOAT_TEXTURES } from './boats';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -667,6 +668,71 @@ function slime(): TexImage {
 }
 
 // ---------------------------------------------------------------------------
+// Bat (32x32, the 1.20.3+ BatModel layout): body (0,0) 3x5x2, head (0,7) 4x3x2, and the flat
+// parts with their front rect (the side the face looks to) left of the back rect: ears (1,15) /
+// (8,15), inner wings (12,0) / (12,7), wing tips (16,0) / (16,8), feet (16,16).
+
+// one wing seen from the front, columns counted from the body outwards (0-1 = inner wing, 2-7 =
+// tip; the inner wing has 7 rows, the tip 8): 'B' the arm along the leading edge, 'b' finger
+// bones, 'm' membrane, '.' nothing (the scalloped trailing edge)
+const BAT_WING = [
+  'BBBBBBBB',
+  'mmmmbbBB',
+  'mmmbmmbm',
+  'mmmbmmbm',
+  'mmbmmmbm',
+  'mmbmmmbm',
+  'm.bmm.b.',
+  '..b...b.',
+];
+
+function bat(): TexImage {
+  const t = img(32, 32);
+  const r = new Rand(0xba7);
+  const FUR = [0x3a2c21, 0x423226, 0x4a392b, 0x534031];
+  const FW = [1, 3, 3, 1];
+  const body = boxFaces(0, 0, 3, 5, 2);
+  const head = boxFaces(0, 7, 4, 3, 2);
+  noiseBox(t, body, r, FUR, { w: FW, cell: 1 });
+  noiseBox(t, head, r, FUR, { w: FW, cell: 1 });
+  // a lighter chest, a darker back, and a small face: eyes at the edges over a paler muzzle
+  noiseFace(t, body.front, r, [0x584535, 0x614c3b, 0x6a5442], { w: [2, 3, 1], cell: 1 });
+  noiseFace(t, body.back, r, [0x30241b, 0x382a20, 0x403025], { w: [1, 2, 2], cell: 1 });
+  drawFace(t, head.front, ['....', 'EssE', '.nn.'], { E: 0x0c0907, s: [0x5c4838, 0x634d3c], n: 0x231913 }, r);
+  // ears: pinkish-brown inside (front), fur outside, pointed tips
+  const EAR = ['.o.', 'oio', 'oio', 'oio', 'ooo'];
+  const EDGE = [0x33271e, 0x3a2c21];
+  for (const u of [1, 8]) {
+    draw(t, u, 15, EAR, { o: EDGE, i: [0x6a4a3c, 0x735142] }, r);
+    draw(t, u + 3, 15, EAR.map((row) => row.replace(/i/g, 'o')), { o: FUR }, r);
+  }
+  // wings: `o(c)` maps a rect column to the distance from the body; the back (top side in flight) is darker
+  const MEMBRANE = [0x2c231c, 0x30261e, 0x352a21];
+  const wing = (x0: number, y0: number, w: number, h: number, o: (c: number) => number, back: boolean) => {
+    for (let y = 0; y < h; y++)
+      for (let c = 0; c < w; c++) {
+        const ch = BAT_WING[y][o(c)];
+        if (ch === '.') continue;
+        const col = ch === 'B' ? pick(r, [0x4d3d30, 0x544334]) : ch === 'b' ? 0x43352a : pick(r, MEMBRANE);
+        plot(t, x0 + c, y0 + y, back ? mulC(col, 0.86) : col);
+      }
+  };
+  // the right wing's front rect runs from its tip (-X) inwards, the left one's from the body outwards
+  wing(12, 0, 2, 7, (c) => 1 - c, false);
+  wing(14, 0, 2, 7, (c) => c, true);
+  wing(16, 0, 6, 8, (c) => 7 - c, false);
+  wing(22, 0, 6, 8, (c) => 2 + c, true);
+  wing(12, 7, 2, 7, (c) => c, false);
+  wing(14, 7, 2, 7, (c) => 1 - c, true);
+  wing(16, 8, 6, 8, (c) => 2 + c, false);
+  wing(22, 8, 6, 8, (c) => 7 - c, true);
+  // feet: two little clawed legs
+  draw(t, 16, 16, ['k.k', 'k.k'], { k: 0x261c16 }, r);
+  draw(t, 19, 16, ['k.k', 'k.k'], { k: 0x211813 }, r);
+  return t;
+}
+
+// ---------------------------------------------------------------------------
 // Minecart (64x32, vanilla MinecartModel layout): wall box at (0,0) 16x8x2 (front = inside face,
 // back = outside face, top = rim), floor box at (0,10) 20x16x2 rotated flat (back = the floor
 // inside, front = the underside, top/bottom/right/left = the base's edges), inner plate at (44,10).
@@ -1073,9 +1139,11 @@ export const MOB_TEXTURES: Record<string, () => TexImage> = {
   enderman_eyes: endermanEyes,
   squid,
   slime,
+  bat,
   minecart,
   arrow,
   experience_orb: experienceOrb,
+  ...BOAT_TEXTURES,
 };
 
 // the 16 explosion frames are generated together; hand out copies of the cached set
@@ -1176,6 +1244,7 @@ MOB_PARTICLE_TEXTURES['glint'] = () => pixelSprite([
 ], { g: 0x2f8f2f, G: 0x5ad65a, W: 0xc8ffc8 });
 
 const EGGS: [string, number, number][] = [
+  ['bat', 0x4c3e30, 0x0f0f0f],
   ['cave_spider', 0x0c424e, 0xa80e0e],
   ['pig', 0xf0a5a2, 0xdb635f],
   ['cow', 0x443626, 0xa1a1a1],

@@ -23,6 +23,7 @@ import { SpawnerBlockEntity } from '../world/blockEntity';
 import { playerAttack } from './combat';
 import { canPlaceFire, fireStateAt, placeFire } from './fire';
 import { Minecart, MinecartChest, createMinecart } from '../entity/minecart';
+import { Boat, ChestBoat, boatItemInfo, useBoatItem } from '../entity/boat';
 import { isRail, railShape, isAscending } from './rails';
 import { MobEffectInstance, MOB_EFFECTS } from '../entity/effects';
 
@@ -102,6 +103,8 @@ export class Interaction {
     const p = this.player;
     if (this.missTime > 0) return;
     if (p.isUsingItem()) return;
+    // vanilla Minecraft.startAttack: not while rowing
+    if (p.handsBusy) return;
     if (this.entityHit) {
       playerAttack(this.level, p, this.entityHit, (n) => this.damageHeld(n));
       p.swing();
@@ -253,6 +256,8 @@ export class Interaction {
     }
     if (!(pressed || (held && this.rightClickDelay === 0))) return;
     this.rightClickDelay = 4;
+    // vanilla Minecraft.startUseItem: not while rowing
+    if (p.handsBusy) return;
     const stack = p.inventory.selectedItem;
     // entity interaction (vanilla Player.interactOn → Mob.mobInteract)
     const e = this.entityHit;
@@ -275,6 +280,16 @@ export class Interaction {
         this.onOpenEntityContainer?.(e);
         p.swing();
         return;
+      }
+      // vanilla Boat.interact (climb in) / ChestBoat.interact (sneaking or a full seat opens the chest)
+      if (e instanceof Boat) {
+        const r = e.interact(p);
+        if (r === 'mounted') this.onMounted?.();
+        else if (r === 'container' && e instanceof ChestBoat) this.onOpenEntityContainer?.(e);
+        if (r) {
+          p.swing();
+          return;
+        }
       }
       if (stack && stack.item.id.endsWith('_spawn_egg') && e instanceof Animal && e.type === stack.item.id.slice(0, -10)) {
         // spawn egg on a matching animal spawns a baby
@@ -510,8 +525,8 @@ export class Interaction {
   onUseBed: ((x: number, y: number, z: number) => void) | null = null;
   /** the player climbed into a vehicle (vanilla "mount.onboard" hint) */
   onMounted: (() => void) | null = null;
-  /** right-clicked a container entity (a chest minecart) */
-  onOpenEntityContainer: ((e: MinecartChest) => void) | null = null;
+  /** right-clicked a container entity (a chest minecart or chest boat) */
+  onOpenEntityContainer: ((e: MinecartChest | ChestBoat) => void) | null = null;
   /** a block was placed by the player (advancements: planted seeds) */
   onPlaced: ((name: string) => void) | null = null;
   /** food or a drink was finished */
@@ -629,6 +644,14 @@ export class Interaction {
     // vanilla BowItem.use: needs arrows unless creative
     if (it.id === 'bow') {
       if (p.gameMode === 'creative' || p.inventory.findSlot((s) => s.item.id === 'arrow') >= 0) p.startUsingItem(stack, 72000);
+      return;
+    }
+    // vanilla BoatItem.use: a boat (or chest boat) where the eye ray meets a block or any fluid
+    if (boatItemInfo(it.id)) {
+      if (useBoatItem(this.level, p, it.id, this.reach())) {
+        if (p.gameMode !== 'creative') p.inventory.consumeSelected(1);
+        p.swing();
+      }
       return;
     }
     // bucket pickup

@@ -75,7 +75,11 @@ shaped('ladder', 3, ['# #', '###', '# #'], { '#': 'stick' });
 shaped('bowl', 4, ['# #', ' # '], { '#': '#planks' });
 shaped('bookshelf', 1, ['###', 'XXX', '###'], { '#': '#planks', X: 'book' });
 shaped('oak_sign', 3, ['###', '###', ' X '], { '#': 'oak_planks', X: 'stick' });
-shaped('oak_boat', 1, ['# #', '###'], { '#': 'oak_planks' });
+// vanilla boat recipes: planks in a U, and a chest added to a boat
+for (const w of WOODS) {
+  shaped(`${w}_boat`, 1, ['# #', '###'], { '#': `${w}_planks` });
+  shapeless(`${w}_chest_boat`, 1, 'chest', `${w}_boat`);
+}
 shaped('painting', 1, ['###', '#X#', '###'], { '#': 'stick', X: '#wool' });
 shaped('item_frame', 1, ['###', '#X#', '###'], { '#': 'stick', X: 'leather' });
 
@@ -395,6 +399,8 @@ export function fuelTime(s: ItemStack | null): number {
   if (!s) return 0;
   const id = s.item.id;
   if (FUEL[id] !== undefined) return FUEL[id];
+  // vanilla #boats (chest boats included)
+  if (id.endsWith('_boat')) return 1200;
   if (id.endsWith('_wool')) return 100;
   if (id.endsWith('_sapling')) return 100;
   if (TAGS.logs.includes(id) || TAGS.planks.includes(id) || /_(stairs)$/.test(id) && WOODS.some((w) => id.startsWith(w))) return 300;

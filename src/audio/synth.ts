@@ -8,6 +8,7 @@ import { MUSIC_TRACKS, MUSIC_TRACK_NAMES, renderMenuMusic, renderMusicTrack } fr
 import { playerSounds } from './gen/player';
 import { worldSounds } from './gen/world';
 import { minecartSounds } from './gen/minecart';
+import { boatSounds } from './gen/boat';
 
 export const SAMPLE_RATE = 44100;
 
@@ -24,6 +25,7 @@ export const SOUNDS: Record<string, SoundGen> = {
   ...worldSounds(),
   ...mobSounds(),
   ...minecartSounds(),
+  ...boatSounds(),
 };
 
 /** Number of in-game (overworld) music tracks. */
@@ -81,6 +83,7 @@ const VOLUMES: Record<string, number> = {
   'block.stone_button.click_off': 0.3,
   'block.lever.click': 0.3,
   'entity.bat.ambient': 0.1,
+  'entity.bat.takeoff': 0.05,
   // fire, TNT, items
   'entity.tnt.primed': 1,
   'item.flintandsteel.use': 1,

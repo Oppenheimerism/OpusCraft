@@ -3,6 +3,7 @@
 import { OUTLINE, COLLISION, FLAGS, F_AIR, F_WATER, F_LAVA } from '../world/block';
 import type { World } from '../world/world';
 import { AABB } from '../core/aabb';
+import { fluidHeight, fluidType } from '../world/fluids';
 
 export interface BlockHit {
   x: number;
@@ -42,8 +43,8 @@ export function raycast(world: World, ox: number, oy: number, oz: number, dx: nu
         }
       }
       if (fluids && (f & (F_WATER | F_LAVA))) {
-        // fluid surface as a full-block hit (vanilla uses fluid shape height)
-        const box = new AABB(x, y, z, x + 1, y + 0.9, z + 1);
+        // the fluid's shape: its surface height (vanilla FluidState.getShape)
+        const box = new AABB(x, y, z, x + 1, y + fluidHeight(world, x, y, z, fluidType(st)), z + 1);
         const hit = box.clip(ox, oy, oz, ex, ey, ez);
         if (hit && (!best || hit.t * maxDist < best.dist)) {
           best = { x, y, z, face: hit.face, hx: ox + (ex - ox) * hit.t, hy: oy + (ey - oy) * hit.t, hz: oz + (ez - oz) * hit.t, state: st, dist: hit.t * maxDist };

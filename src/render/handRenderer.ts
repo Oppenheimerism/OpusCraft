@@ -53,8 +53,8 @@ export class HandRenderer {
     batch.lightS = lightS;
     const pose = this.pose;
     pose.reset(bob);
-    // view lag sway (vanilla xBob/yBob)
-    const pitch = p.pitch, yaw = p.yaw;
+    // view lag sway (vanilla xBob/yBob, against getViewYRot: lerped while riding)
+    const pitch = p.pitch, yaw = p.vehicle ? p.yawO + (p.yaw - p.yawO) * partial : p.yaw;
     const xb = p.xBobO + (p.xBob - p.xBobO) * partial;
     const yb = p.yBobO + (p.yBob - p.yBobO) * partial;
     pose.rotX((pitch - xb) * 0.1);

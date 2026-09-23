@@ -246,6 +246,9 @@ export class Player extends LivingEntity {
     this.setSize(0.6, h);
   }
 
+  /** vanilla LocalPlayer.handsBusy: rowing a boat, so no attacking or using items */
+  handsBusy = false;
+
   /** vanilla Player.rideTick: the sneak key gets you off; riders don't bob */
   override rideTick(): void {
     if (this.isShiftKeyDown() && this.vehicle) {
@@ -255,12 +258,21 @@ export class Player extends LivingEntity {
     super.rideTick();
     this.bobO = this.bob;
     this.bob = 0;
+    // vanilla LocalPlayer.rideTick: at a boat's helm the movement keys row it
+    this.handsBusy = false;
+    const v = this.vehicle as (Entity & { setInput?(left: boolean, right: boolean, up: boolean, down: boolean): void }) | null;
+    if (v?.setInput && v.passengers[0] === this) {
+      const i = this.input;
+      v.setInput(i.left, i.right, i.forward, i.back);
+      this.handsBusy = i.left || i.right || i.forward || i.back;
+    }
   }
 
-  /** vanilla Player.removeVehicle: players may climb straight back in */
+  /** vanilla Player.removeVehicle: players may climb straight back in (LocalPlayer: hands free again) */
   override removeVehicle(): void {
     super.removeVehicle();
     this.boardingCooldown = 0;
+    this.handsBusy = false;
   }
 
   override tick(): void {
