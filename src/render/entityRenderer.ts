@@ -17,6 +17,7 @@ uniform mat4 u_view;
 uniform vec3 u_light0;
 uniform vec3 u_light1;
 uniform float u_lit;
+uniform float u_fogShape;
 out vec2 v_uv;
 out vec4 v_color;
 out vec2 v_lm;
@@ -34,7 +35,7 @@ void main() {
   v_color = vec4(a_color.rgb * acc, a_color.a);
   v_lm = clamp(a_light / 256.0, vec2(0.5 / 16.0), vec2(15.5 / 16.0));
   v_overlay = a_overlay;
-  v_dist = max(length(a_pos.xz), abs(a_pos.y));
+  v_dist = u_fogShape > 0.5 ? max(length(a_pos.xz), abs(a_pos.y)) : length(a_pos);
 }`;
 
 const FS = `#version 300 es
@@ -183,6 +184,8 @@ export class EntityBatch {
   view: Mat4 = mat4();
   fogColor: [number, number, number] = [0, 0, 0];
   fog: [number, number] = [0, 0];
+  /** vanilla FogShape: 0 sphere, 1 cylinder */
+  fogShape = 1;
   lightmap: WebGLTexture | null = null;
   /** current per-vertex light (block*16, sky*16) and overlay */
   lightB = 240;
@@ -266,6 +269,7 @@ export class EntityBatch {
     s.f('u_useLightmap', st.useLightmap ? 1 : 0);
     s.vec4('u_fogColor', this.fogColor[0], this.fogColor[1], this.fogColor[2], 1);
     s.vec2('u_fog', this.fog[0], this.fog[1]);
+    s.f('u_fogShape', this.fogShape);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, st.texture);
     s.i('u_tex', 0);

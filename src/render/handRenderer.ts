@@ -12,6 +12,8 @@ import type { ItemStack } from '../item/item';
 
 export class HandRenderer {
   private mainHandHeight = 0;
+  /** the dimension lights entities from above and below (the Nether) */
+  netherLighting = false;
   private oMainHandHeight = 0;
   private mainHandItem: ItemStack | null = null;
   readonly skin: WebGLTexture;
@@ -46,7 +48,8 @@ export class HandRenderer {
     batch.view = mat4();
     batch.fog = [0, 0];
     // light directions in view space
-    const l0 = rotateDir(viewRot, 0.2, 1.0, -0.7), l1 = rotateDir(viewRot, -0.2, 1.0, 0.7);
+    // (vanilla Lighting.setupNetherLevel: the second light from below in the Nether)
+    const l0 = rotateDir(viewRot, 0.2, 1.0, -0.7), l1 = rotateDir(viewRot, -0.2, this.netherLighting ? -1.0 : 1.0, 0.7);
     batch.light0 = l0;
     batch.light1 = l1;
     batch.lightB = lightB;

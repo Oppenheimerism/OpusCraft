@@ -49,16 +49,17 @@ const HDIRS: [number, number][] = [[0, -1], [0, 1], [-1, 0], [1, 0]];
 export class FluidTicker {
   constructor(private readonly level: Level) {}
 
+  // (vanilla LavaFluid: in an ultra-warm dimension (the Nether) lava runs as far and nearly as fast as water)
   dropOff(type: number): number {
-    return type === WATER ? 1 : 2;
+    return type === WATER || this.level.world.dim.ultraWarm ? 1 : 2;
   }
 
   tickDelay(type: number): number {
-    return type === WATER ? 5 : 30;
+    return type === WATER ? 5 : this.level.world.dim.ultraWarm ? 10 : 30;
   }
 
   slopeFind(type: number): number {
-    return type === WATER ? 4 : 2;
+    return type === WATER || this.level.world.dim.ultraWarm ? 4 : 2;
   }
 
   private st(x: number, y: number, z: number): number {

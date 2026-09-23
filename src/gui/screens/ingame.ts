@@ -111,6 +111,29 @@ export class DeathScreen extends Screen {
 
 // ---------------------------------------------------------------------------
 
+/** vanilla ReceivingLevelScreen: "Loading terrain..." until the chunks round the player are in (over the portal's swirl after a nether portal) */
+export class ReceivingLevelScreen extends Screen {
+  /** (the mouse stays grabbed: the game carries straight on afterwards) */
+  readonly keepsMouse = true;
+  constructor(game: Game, readonly portal: boolean) {
+    super(game, '');
+  }
+  init(): void {}
+  override isPauseScreen(): boolean {
+    return false;
+  }
+  override shouldCloseOnEsc(): boolean {
+    return false;
+  }
+  override render(g: GuiGraphics, mx: number, my: number, partial: number): void {
+    if (!this.portal) this.renderBackground(g);
+    g.centered('Loading terrain...', Math.floor(this.width / 2), Math.floor(this.height / 2) - 50, 0xffffff, true);
+    void mx;
+    void my;
+    void partial;
+  }
+}
+
 /** vanilla LevelLoadingScreen: chunk status map + percentage */
 export class LevelLoadingScreen extends Screen {
   constructor(game: Game) {

@@ -14,7 +14,7 @@ import { lushCaves } from './lush';
 // ---------------------------------------------------------------------------
 // Ores
 
-interface OreSpec {
+export interface OreSpec {
   stone: string;
   deep?: string;
   size: number;
@@ -58,7 +58,7 @@ const COPPER_LARGE: OreSpec = { ...ORES.find((o) => o.stone === 'copper_ore')!, 
 /** vanilla ore_clay, only in the lush caves */
 const CLAY_ORE: OreSpec = { stone: 'clay', size: 33, count: 46, height: ['uniform', -64, 256], rule: W_BASE_STONE };
 
-function sampleHeight(r: Rand, h: OreSpec['height']): number {
+export function sampleHeight(r: Rand, h: OreSpec['height']): number {
   const [type, lo, hi] = h;
   if (type === 'uniform') return lo + r.nextInt(hi - lo + 1);
   const k = hi - lo;
@@ -67,7 +67,7 @@ function sampleHeight(r: Rand, h: OreSpec['height']): number {
   return lo + r.nextInt(i1 + 1) + r.nextInt(l + 1);
 }
 
-function placeOre(ctx: GenContext, r: Rand, spec: OreSpec, ox: number, oy: number, oz: number): void {
+export function placeOre(ctx: GenContext, r: Rand, spec: OreSpec, ox: number, oy: number, oz: number): void {
   const stoneState = S(spec.stone);
   const deepState = spec.deep ? S(spec.deep) : stoneState;
   const size = spec.size;

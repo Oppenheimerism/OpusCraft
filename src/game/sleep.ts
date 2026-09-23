@@ -6,6 +6,7 @@ import type { World } from '../world/world';
 import type { Level } from './level';
 import type { Player } from '../entity/player';
 import type { Entity } from '../entity/entity';
+import { explode } from './explosion';
 
 const blk = (st: number): Block => BLOCKS[STATE_BLOCK[st]];
 
@@ -146,6 +147,14 @@ export function useBed(host: SleepHost, x: number, y: number, z: number): void {
     z += fz;
     st = w.getState(x, y, z);
     if (blk(st) !== b) return;
+  }
+  if (!host.level.world.dim.bedWorks) {
+    // vanilla BedBlock.useWithoutItem: no sleeping outside the Overworld, the bed blows up ([Intentional Game Design])
+    host.level.setBlock(x, y, z, 0);
+    const [fx, fz] = STEP[b.get<string>(st, 'facing')];
+    if (blk(w.getState(x - fx, y, z - fz)) === b) host.level.setBlock(x - fx, y, z - fz, 0);
+    explode(host.level, null, x + 0.5, y + 0.5, z + 0.5, 5, true, 'block', 'badRespawnPoint');
+    return;
   }
   if (b.get(st, 'occupied')) {
     // nobody (no villagers yet) can be in it unless it's us: clear a stale flag from an interrupted session

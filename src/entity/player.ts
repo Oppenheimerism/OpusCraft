@@ -246,6 +246,22 @@ export class Player extends LivingEntity {
     this.setSize(0.6, h);
   }
 
+  /** vanilla Player.getDimensionChangingDelay: players may step back through a portal soon after */
+  override dimensionChangingDelay(): number {
+    return 10;
+  }
+
+  /** vanilla NetherPortalBlock.getPortalTransitionTime for players (the players_nether_portal_*_delay game rules) */
+  override portalWaitTime(): number {
+    const r = this.level.gameRules as unknown as Record<string, number>;
+    const creative = this.gameMode === 'creative' || this.gameMode === 'spectator';
+    return Math.max(1, creative ? r.playersNetherPortalCreativeDelay ?? 1 : r.playersNetherPortalDefaultDelay ?? 80);
+  }
+
+  override canChangeDimensions(): boolean {
+    return this.health > 0;
+  }
+
   /** vanilla LocalPlayer.handsBusy: rowing a boat, so no attacking or using items */
   handsBusy = false;
 
@@ -290,10 +306,14 @@ export class Player extends LivingEntity {
     }
     this.eyeHeightCamO = this.eyeHeightCam;
     this.eyeHeightCam += (this.eyeHeight - this.eyeHeightCam) * 0.5;
-    // vanilla LocalPlayer.handleConfusionTransitionEffect: nausea fades in over 7.5 s, out in its last 3 s
+    // vanilla LocalPlayer.handleConfusionTransitionEffect: a portal warps the view in over 4 s (with its rising
+    // whoosh), nausea over 7.5 s and out in its last 3 s
     this.oSpinningEffectIntensity = this.spinningEffectIntensity;
     const nausea = this.getEffect('nausea');
-    if (nausea && !nausea.endsWithin(60)) this.spinningEffectIntensity = Math.min(1, this.spinningEffectIntensity + 0.006666667);
+    if (this.portal?.inside) {
+      if (this.spinningEffectIntensity === 0) this.level.sound.playUI('block.portal.trigger', 0.25, Math.random() * 0.4 + 0.8);
+      this.spinningEffectIntensity = Math.min(1, this.spinningEffectIntensity + 0.0125);
+    } else if (nausea && !nausea.endsWithin(60)) this.spinningEffectIntensity = Math.min(1, this.spinningEffectIntensity + 0.006666667);
     else if (this.spinningEffectIntensity > 0) this.spinningEffectIntensity = Math.max(0, this.spinningEffectIntensity - 0.05);
     // vanilla Player.tick: the sleep timer; morning (or a thunderstorm ending) wakes you
     if (this.sleepingPos) {
@@ -461,7 +481,7 @@ export class Player extends LivingEntity {
   override hurt(amount: number, source: string, attacker?: Entity | null, direct?: Entity | null): boolean {
     if (this.isInvulnerableTo(source)) return false;
     // vanilla Player.hurt: damage caused by mobs (and all explosions) scales with difficulty
-    const scales = source === 'explosion' || source === 'playerExplosion' || (attacker && attacker !== this && attacker instanceof LivingEntity && attacker.type !== 'player' && source !== 'thorns');
+    const scales = source === 'explosion' || source === 'playerExplosion' || source === 'badRespawnPoint' || (attacker && attacker !== this && attacker instanceof LivingEntity && attacker.type !== 'player' && source !== 'thorns');
     if (scales) {
       const d = this.level.difficulty;
       if (d === 'peaceful') amount = 0;

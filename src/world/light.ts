@@ -28,6 +28,18 @@ export class LightEngine {
 
   constructor(private readonly world: World) {}
 
+  /** forget cached chunks and queued work (the world dropped its chunks) */
+  reset(): void {
+    this.lastChunk = null;
+    this.incH = this.incT = 0;
+    this.decH = this.decT = 0;
+  }
+
+  /** the light channels this dimension has (no sky light in the Nether) */
+  private get firstChannel(): number {
+    return this.world.dim.hasSkyLight ? SKY : BLK;
+  }
+
   private chunk(x: number, z: number): Chunk | null {
     const cx = x >> 4, cz = z >> 4;
     const lc = this.lastChunk;
@@ -38,7 +50,7 @@ export class LightEngine {
   }
 
   private get(ch: number, x: number, y: number, z: number): number {
-    if (y >= MAX_Y) return ch === SKY ? 15 : 0;
+    if (y >= MAX_Y) return ch === SKY && this.world.dim.hasSkyLight ? 15 : 0;
     if (y < MIN_Y) return 0;
     const c = this.chunk(x, z);
     if (!c) return -1;
@@ -137,6 +149,7 @@ export class LightEngine {
 
   private sourceLevel(ch: number, x: number, y: number, z: number): number {
     if (ch === BLK) return EMISSION[this.state(x, y, z)];
+    if (!this.world.dim.hasSkyLight) return 0;
     const c = this.chunk(x, z);
     if (!c) return 0;
     const st = c.getState(x & 15, y, z & 15);
@@ -165,7 +178,7 @@ export class LightEngine {
 
   /** Call after the block at (x,y,z) changed (heightmap already updated). */
   blockChanged(x: number, y: number, z: number): void {
-    for (let ch = 0; ch < 2; ch++) {
+    for (let ch = this.firstChannel; ch < 2; ch++) {
       const old = this.get(ch, x, y, z);
       if (old < 0) continue;
       const exp = this.expected(ch, x, y, z);
@@ -200,6 +213,7 @@ export class LightEngine {
 
   /** Column sky update when the heightmap drops/rises (block removed/placed at top). */
   skyColumnChanged(x: number, z: number, from: number, to: number): void {
+    if (!this.world.dim.hasSkyLight) return;
     // cells between old and new heightmap need relight
     const lo = Math.min(from, to), hi = Math.max(from, to);
     for (let y = hi - 1; y >= lo; y--) this.blockChangedChannel(SKY, x, y, z);
@@ -236,14 +250,14 @@ export class LightEngine {
       [0, -1, 1, 0, 15],
       [0, 1, 1, 15, 0],
     ];
-    for (let ch = 0; ch < 2; ch++) {
+    for (let ch = this.firstChannel; ch < 2; ch++) {
       for (const [dx, dz, axis, ours, theirs] of sides) {
         const n = this.world.getChunk(c.cx + dx, c.cz + dz);
         if (!n) continue;
         for (let y = MIN_Y; y < MAX_Y; y++) {
           // skip fully-default section pairs quickly
           const si = (y - MIN_Y) >> 4;
-          if (!c.light[si] && !n.light[si] && (y & 15) === 0 && ch === SKY) {
+          if (!c.light[si] && !n.light[si] && (y & 15) === 0) {
             y += 15;
             continue;
           }

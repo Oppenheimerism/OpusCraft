@@ -113,6 +113,7 @@ export abstract class Entity {
     this.pitchO = this.pitch;
     this.walkDistO = this.walkDist;
     this.tickCount++;
+    this.handlePortal();
     this.updateFluids();
     // vanilla Entity.baseTick: burning and lava
     if (this.remainingFireTicks > 0) {
@@ -129,6 +130,59 @@ export abstract class Entity {
     }
     if (this.invulnerableTime > 0) this.invulnerableTime--;
     if (this.boardingCooldown > 0) this.boardingCooldown--;
+  }
+
+  /** vanilla PortalProcessor: the nether portal this is standing in and for how long */
+  portal: { x: number; y: number; z: number; time: number; inside: boolean } | null = null;
+  /** vanilla portalCooldown: after using a portal, ticks until one takes this again (refreshed while still in one) */
+  portalCooldown = 0;
+
+  /** vanilla getDimensionChangingDelay */
+  dimensionChangingDelay(): number {
+    return 300;
+  }
+
+  /** vanilla NetherPortalBlock.getPortalTransitionTime: ticks in a portal before it takes you */
+  portalWaitTime(): number {
+    return 0;
+  }
+
+  /** whether this can go through a portal to another dimension (only players can, here) */
+  canChangeDimensions(): boolean {
+    return false;
+  }
+
+  /** vanilla Entity.setAsInsidePortal (NetherPortalBlock.entityInside, when canUsePortal: not while riding) */
+  private insidePortal(x: number, y: number, z: number): void {
+    if (this.vehicle || this.removed) return;
+    if (this.portalCooldown > 0) {
+      this.portalCooldown = this.dimensionChangingDelay();
+      return;
+    }
+    const p = this.portal;
+    if (p) {
+      p.x = x;
+      p.y = y;
+      p.z = z;
+      p.inside = true;
+    } else this.portal = { x, y, z, time: 0, inside: true };
+  }
+
+  /** vanilla Entity.handlePortal: long enough in a portal takes you through; out of one, the count runs back down */
+  private handlePortal(): void {
+    if (this.portalCooldown > 0) this.portalCooldown--;
+    const p = this.portal;
+    if (!p) return;
+    if (!p.inside) {
+      p.time = Math.max(0, p.time - 4);
+      if (p.time <= 0) this.portal = null;
+      return;
+    }
+    p.inside = false;
+    if (!this.canChangeDimensions() || p.time++ < this.portalWaitTime()) return;
+    this.portalCooldown = this.dimensionChangingDelay();
+    this.portal = null;
+    this.level.onPortal?.(this, p.x, p.y, p.z);
   }
 
   protected lavaHurt(): void {
@@ -493,6 +547,7 @@ export abstract class Entity {
           else if (kind === INSIDE_BERRY_BUSH) this.insideBerryBush(st);
           else if (kind === INSIDE_CACTUS) this.hurt(1, 'cactus');
           else if (kind === INSIDE_DRIPLEAF) this.insideDripleaf(x, y, z, st);
+          else if (kind === INSIDE_PORTAL) this.insidePortal(x, y, z);
           if (this.removed) return fire;
         }
     return fire;
@@ -750,14 +805,14 @@ function solidEntities(level: Level): Entity[] {
   return c.list;
 }
 
-const INSIDE_NONE = 0, INSIDE_FIRE = 1, INSIDE_LAVA = 2, INSIDE_COBWEB = 3, INSIDE_BERRY_BUSH = 4, INSIDE_CACTUS = 5, INSIDE_DRIPLEAF = 6;
+const INSIDE_NONE = 0, INSIDE_FIRE = 1, INSIDE_LAVA = 2, INSIDE_COBWEB = 3, INSIDE_BERRY_BUSH = 4, INSIDE_CACTUS = 5, INSIDE_DRIPLEAF = 6, INSIDE_PORTAL = 7;
 let INSIDE: Uint8Array | null = null;
 
 /** which vanilla entityInside behaviour a block has (lazy per-block table) */
 function insideKind(st: number): number {
   if (!INSIDE) {
     INSIDE = new Uint8Array(BLOCKS.length);
-    const kinds: Record<string, number> = { fire: INSIDE_FIRE, lava: INSIDE_LAVA, cobweb: INSIDE_COBWEB, sweet_berry_bush: INSIDE_BERRY_BUSH, cactus: INSIDE_CACTUS, big_dripleaf: INSIDE_DRIPLEAF };
+    const kinds: Record<string, number> = { fire: INSIDE_FIRE, lava: INSIDE_LAVA, cobweb: INSIDE_COBWEB, sweet_berry_bush: INSIDE_BERRY_BUSH, cactus: INSIDE_CACTUS, big_dripleaf: INSIDE_DRIPLEAF, nether_portal: INSIDE_PORTAL };
     BLOCKS.forEach((b, i) => (INSIDE![i] = kinds[b.name] ?? INSIDE_NONE));
   }
   return INSIDE[STATE_BLOCK[st]];

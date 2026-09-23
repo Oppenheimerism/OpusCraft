@@ -17,7 +17,9 @@ export const W_ANY = 0, // unconditional
   W_BASE_STONE = 6, // any base stone (stone, deepslate, granite...) -> for blobs
   W_WATER_OR_AIR = 7,
   W_ROOT = 8, // vanilla #azalea_root_replaceable (rooted dirt of a root system)
-  W_HANGING = 9; // air under a sturdy face (hanging roots)
+  W_HANGING = 9, // air under a sturdy face (hanging roots)
+  W_NETHERRACK = 10, // netherrack (the nether's ores and blobs)
+  W_NETHER_STONE = 11; // vanilla #base_stone_nether: netherrack, basalt, blackstone (ancient debris)
 
 export interface PendingWrites {
   cx: number;
@@ -26,12 +28,16 @@ export interface PendingWrites {
   data: number[];
   /** vegetation patch columns that fall in this chunk, run once it exists (world coordinates) */
   ops?: PatchColumn[];
+  /** features from the generating chunk that reach into this one, replayed once it exists (netherFeatures FEATURE_OP_SIZE ints each) */
+  feats?: number[];
 }
 
 let BASE_STONE: Set<number> | null = null;
 let ORE_STONE: Set<number> | null = null;
 let ORE_DEEP: Set<number> | null = null;
 let ROOT: Set<number> | null = null;
+let NETHERRACK = -1;
+let NETHER_STONE: Set<number> | null = null;
 
 function blockSets(): void {
   if (BASE_STONE) return;
@@ -42,6 +48,8 @@ function blockSets(): void {
   const TERRACOTTA = ['', 'white_', 'orange_', 'magenta_', 'light_blue_', 'yellow_', 'lime_', 'pink_', 'gray_', 'light_gray_', 'cyan_', 'purple_', 'blue_', 'brown_', 'green_', 'red_', 'black_'].map((c) => c + 'terracotta');
   ROOT = ids(['stone', 'granite', 'diorite', 'andesite', 'deepslate', 'tuff', 'dirt', 'grass_block', 'podzol', 'coarse_dirt', 'mycelium', 'rooted_dirt', 'moss_block', 'mud', 'muddy_mangrove_roots',
     ...TERRACOTTA, 'red_sand', 'clay', 'gravel', 'sand', 'snow_block', 'powder_snow']);
+  NETHERRACK = BLOCKS.findIndex((b) => b.name === 'netherrack');
+  NETHER_STONE = ids(['netherrack', 'basalt', 'blackstone']);
 }
 
 /** may a write with this rule go into `target`? (`above` is the block over it, for W_HANGING) */
@@ -59,6 +67,8 @@ export function ruleAllows(rule: number, target: number, above = 0): boolean {
     case W_WATER_OR_AIR: return (f & F_AIR) !== 0 || (f & F_WATER) !== 0 && (f & F_COLLIDE) === 0;
     case W_ROOT: return ROOT!.has(STATE_BLOCK[target]);
     case W_HANGING: return (f & F_AIR) !== 0 && ((FACE_OCC[above] >> 0) & 1) === 1;
+    case W_NETHERRACK: return STATE_BLOCK[target] === NETHERRACK;
+    case W_NETHER_STONE: return NETHER_STONE!.has(STATE_BLOCK[target]);
   }
   return false;
 }
@@ -169,6 +179,18 @@ export class GenContext {
       this.pending.set(key, p);
     }
     (p.ops ??= []).push(c);
+  }
+
+  /** a feature reaching into a neighbour: replayed there from the same seed once it exists */
+  deferFeature(ncx: number, ncz: number, op: number[]): void {
+    if (Math.abs(ncx - this.cx) > 1 || Math.abs(ncz - this.cz) > 1) return;
+    const key = (ncx - this.cx + 1) * 3 + (ncz - this.cz + 1);
+    let p = this.pending.get(key);
+    if (!p) {
+      p = { cx: ncx, cz: ncz, data: [] };
+      this.pending.set(key, p);
+    }
+    (p.feats ??= []).push(...op);
   }
 
   pendingWrites(): PendingWrites[] {

@@ -79,11 +79,53 @@ void main() {
   o = vec4(vec3(1.0 - d), 1.0);
 }`;
 
+// vanilla Gui.renderPortalOverlay: the portal's (animated) texture stretched over the screen
+const SPRITE_FS = `#version 300 es
+precision highp float;
+uniform sampler2D u_tex;
+uniform vec4 u_rect;
+uniform float u_alpha;
+in vec2 v_uv;
+out vec4 o;
+void main() {
+  vec4 c = texture(u_tex, mix(u_rect.xy, u_rect.zw, v_uv));
+  o = vec4(c.rgb, c.a * u_alpha);
+}`;
+
 export class Overlay {
+  private spriteShader: Shader | null = null;
   private vigShader: Shader | null = null;
   private vigTex: WebGLTexture | null = null;
   private vigSrc: HTMLCanvasElement | null = null;
   private vigVao: WebGLVertexArrayObject | null = null;
+
+  /** a block texture over the whole screen (the nether portal's swirl while standing in one, and behind "Loading terrain...") */
+  renderScreenSprite(name: string, alpha: number, width: number, height: number): void {
+    const r = this.atlas.sprites[name];
+    if (!r || alpha <= 0) return;
+    const gl = this.gl;
+    if (!this.spriteShader) {
+      this.spriteShader = new Shader(gl, VIG_VS, SPRITE_FS, 'screen sprite');
+      this.vigVao ??= gl.createVertexArray();
+    }
+    gl.viewport(0, 0, width, height);
+    gl.disable(gl.DEPTH_TEST);
+    gl.depthMask(false);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    const s = this.spriteShader.use();
+    s.i('u_tex', 0);
+    s.vec4('u_rect', r.u0, r.v0, r.u1, r.v1);
+    s.f('u_alpha', Math.min(1, alpha));
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, this.atlas.texture!);
+    gl.bindVertexArray(this.vigVao);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    gl.bindVertexArray(null);
+    gl.disable(gl.BLEND);
+    gl.depthMask(true);
+    gl.enable(gl.DEPTH_TEST);
+  }
 
   /** darken screen edges by `amount` (0..1), drawn over the world before the GUI */
   renderVignette(src: HTMLCanvasElement | null, amount: number, width: number, height: number): void {

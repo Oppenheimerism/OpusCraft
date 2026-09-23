@@ -41,7 +41,7 @@ export function seenPercent(level: Level, x: number, y: number, z: number, e: En
  * Explode at (x,y,z) with `radius` (TNT 4, creeper 3). `source` is the exploding
  * entity (excluded from damage), attacker credit goes to its owner if any.
  */
-export function explode(level: Level, source: Entity | null, x: number, y: number, z: number, radius: number, fire: boolean, kind: ExplosionKind): void {
+export function explode(level: Level, source: Entity | null, x: number, y: number, z: number, radius: number, fire: boolean, kind: ExplosionKind, damageSource?: string): void {
   const w = level.world;
   const rand = level.random;
   const destroys = kind === 'mob' ? level.gameRules.mobGriefing : true;
@@ -95,7 +95,7 @@ export function explode(level: Level, source: Entity | null, x: number, y: numbe
     const seen = seenPercent(level, x, y, z, e);
     const d1 = (1 - dist) * seen;
     const dmg = ((d1 * d1 + d1) / 2) * 7 * f2 + 1;
-    e.hurt(dmg, attacker && attacker !== source ? 'playerExplosion' : 'explosion', attacker ?? null, source);
+    e.hurt(dmg, damageSource ?? (attacker && attacker !== source ? 'playerExplosion' : 'explosion'), attacker ?? null, source);
     let k = (1 - dist) * seen;
     if (e instanceof LivingEntity) k *= 1 - e.knockbackResistance();
     const p = e as { gameMode?: string; flying?: boolean };

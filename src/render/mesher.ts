@@ -32,6 +32,8 @@ export interface MeshInput {
   oz: number;
   smooth: boolean;
   fancy: boolean;
+  /** the dimension has constant ambient light (flat face shading) */
+  flatShade?: boolean;
 }
 
 export const LAYER_COUNT = 4;
@@ -158,7 +160,12 @@ const writers: LayerWriter[] = [new LayerWriter(4096, false), new LayerWriter(40
 // Lighting helpers
 
 const DX = [0, 0, 0, 0, -1, 1], DY = [-1, 1, 0, 0, 0, 0], DZ = [0, 0, -1, 1, 0, 0];
-const SHADE = [0.5, 1.0, 0.8, 0.8, 0.6, 0.6];
+/** vanilla ClientLevel.getShade per face (down, up, north, south, west, east), and for unshaded quads */
+const SHADE_NORMAL = [0.5, 1.0, 0.8, 0.8, 0.6, 0.6];
+/** in dimensions with constant ambient light (the Nether) tops and bottoms are both 0.9 */
+const SHADE_FLAT = [0.9, 0.9, 0.8, 0.8, 0.6, 0.6];
+let SHADE = SHADE_NORMAL;
+let UNSHADED = 1;
 // in-plane axes per face: [axis1, axis2] (0=x,1=y,2=z)
 const PLANE: [number, number][] = [[0, 2], [0, 2], [0, 1], [0, 1], [2, 1], [2, 1]];
 // which of the two in-plane directions is the "primary" (fallback) corner axis per face
@@ -295,7 +302,7 @@ function emitQuad(
     g = (tint >> 8) & 255;
     b = tint & 255;
   }
-  const shade = q.shade ? SHADE[d] : 1;
+  const shade = q.shade ? SHADE[d] : UNSHADED;
   w.ensure(4);
   const pos = q.pos, uv = q.uv;
   if (useAO && q.aligned) {
@@ -468,7 +475,7 @@ function renderFluid(x: number, y: number, z: number, ox: number, oy: number, oz
       u2 = U(0.5 + (cs + sn)); v2 = V(0.5 + (cs - sn));
       u3 = U(0.5 + (cs - sn)); v3 = V(0.5 + (-cs - sn));
     }
-    const sh = 1.0;
+    const sh = SHADE[1];
     w.ensure(8);
     w.vertex(X, Y + hNW, Z, u0, v0, r * sh, g * sh, b * sh, alpha, blkS, skyS);
     w.vertex(X, Y + hSW, Z + 1, u1, v1, r * sh, g * sh, b * sh, alpha, blkS, skyS);
@@ -487,7 +494,7 @@ function renderFluid(x: number, y: number, z: number, ox: number, oy: number, oz
   if (renderDown) {
     const lD = lightPacked(pidx(x, y - 1, z));
     const sky = (lD >> 8) & 0xff, blk = lD & 0xff;
-    const sh = 0.5;
+    const sh = SHADE[0];
     w.ensure(4);
     w.vertex(X, Y + yDown, Z + 1, still.u0, still.v1, r * sh, g * sh, b * sh, alpha, blk, sky);
     w.vertex(X, Y + yDown, Z, still.u0, still.v0, r * sh, g * sh, b * sh, alpha, blk, sky);
@@ -535,6 +542,8 @@ function renderFluid(x: number, y: number, z: number, ox: number, oy: number, oz
 
 export function meshSection(input: MeshInput): MeshOutput {
   inp = input;
+  SHADE = input.flatShade ? SHADE_FLAT : SHADE_NORMAL;
+  UNSHADED = input.flatShade ? 0.9 : 1;
   for (const w of writers) w.reset();
   const blocks = input.blocks;
   // positions relative to the section origin; world offset is applied by the renderer
