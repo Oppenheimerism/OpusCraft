@@ -236,6 +236,7 @@ export class Decorator {
   private patchNoise: NormalNoise;
   /** structure pieces placed in the UNDERGROUND_STRUCTURES step, before monster rooms */
   mineshafts: { place(ctx: GenContext, r: Rand): void } | null = null;
+  geodes: { place(ctx: GenContext): void } | null = null;
 
   constructor(readonly seed: number, patchNoise: NormalNoise, private readonly tempNoise: NormalNoise) {
     this.patchNoise = patchNoise;
@@ -246,6 +247,8 @@ export class Decorator {
     ctx.computeHeightmaps();
     // --- lakes (vanilla LAKES step)
     this.lavaLakes(ctx, new Rand(hash2(ctx.cx, ctx.cz, this.seed ^ 0x1a4e), 2));
+    // --- amethyst geodes (vanilla LOCAL_MODIFICATIONS step)
+    this.geodes?.place(ctx);
     // --- mineshafts, then monster rooms (vanilla UNDERGROUND_STRUCTURES step)
     this.mineshafts?.place(ctx, new Rand(hash2(ctx.cx, ctx.cz, this.seed ^ 0x51ae), 5));
     this.monsterRooms(ctx, new Rand(hash2(ctx.cx, ctx.cz, this.seed ^ 0xd06e), 4));

@@ -946,3 +946,29 @@ const FRAME = [
 ];
 M['item_frame'] = () =>
   spr(FRAME.map((r) => r.slice(0, 16)), { '#': 0x3a2810, 5: 0xc4a066, 4: 0xa8854f, 3: 0x8c6c3e, 2: 0x6e5430, 1: 0x544024, l: 0x8a4e26, L: 0xa4622e }, 'item_frame');
+
+// ---------------------------------------------------------------------------
+// Amethyst shard: a long crystal with a sharp tip up and to the right and a
+// broken-off base, a pale ridge along its lit upper face
+
+// prettier-ignore
+const AMETHYST_SHARD = [
+  '................',
+  '................',
+  '.............#..',
+  '............#h#.',
+  '...........#hw#.',
+  '..........#hwc#.',
+  '.........#hwcm#.',
+  '........#hwcmd#.',
+  '.......#hwcmd#..',
+  '......#hwcmd#...',
+  '.....#wwcmd#....',
+  '....#wccmd#.....',
+  '...#wccmd#......',
+  '...#ccmd#.......',
+  '...#cmd#........',
+  '....###.........',
+];
+M['amethyst_shard'] = () =>
+  spr(AMETHYST_SHARD, { '#': 0x2e1f4d, h: 0xe9d2ff, w: 0xcfa8f6, c: 0xa27fdc, m: 0x8a68c8, d: 0x684aa8 }, 'amethyst_shard');

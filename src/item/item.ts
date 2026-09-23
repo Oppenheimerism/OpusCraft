@@ -240,7 +240,7 @@ const MISC: [string, number?, number?][] = [
   ['clay_ball'], ['brick'], ['paper'], ['book'], ['sugar'], ['egg', 16], ['snowball', 16], ['slime_ball'], ['ender_pearl', 16],
   ['blaze_rod', 64, 2400], ['glowstone_dust'], ['bowl', 64, 100], ['glass_bottle'], ['experience_bottle'], ['saddle', 1],
   ['name_tag'], ['lead'], ['painting'], ['item_frame'], ['minecart', 1], ['oak_boat', 1], ['oak_sign', 16], ['oak_door'], ['iron_door'],
-  ['red_bed', 1], ['filled_map'], ['ink_sac'], ['cocoa_beans'],
+  ['red_bed', 1], ['filled_map'], ['ink_sac'], ['cocoa_beans'], ['amethyst_shard'],
 ];
 for (const [id, stack, fuel] of MISC) {
   if (ITEMS.has(id)) continue;
@@ -287,6 +287,8 @@ for (const b of BLOCKS) {
     it.texture = 'block:rail';
     it.creativeTab = 'tools';
   }
+  if (/_amethyst_bud$|^amethyst_cluster$/.test(n)) it.texture = 'block:' + n;
+  if (/amethyst/.test(n)) it.creativeTab = 'natural';
   if (n === 'iron_bars') it.texture = 'block:iron_bars';
   if (n.endsWith('_stained_glass_pane')) it.texture = 'block:' + n.replace('_pane', '');
 }

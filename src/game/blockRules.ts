@@ -5,6 +5,7 @@ import { BLOCKS, STATE_BLOCK, FLAGS, FACE_OCC, F_AIR, F_OPAQUE, F_WATER, F_LAVA,
 import { DOWN, UP, NORTH, SOUTH, WEST, EAST, DX, DY, DZ, dirFromYaw, DIR_NAMES } from '../world/dir';
 import { Item, ItemStack, getItem, ITEMS, itemForBlock } from '../item/item';
 import type { World } from '../world/world';
+import type { Level } from './level';
 import { Rand } from '../core/rng';
 
 const blk = (st: number): Block => BLOCKS[STATE_BLOCK[st]];
@@ -12,6 +13,9 @@ const blk = (st: number): Block => BLOCKS[STATE_BLOCK[st]];
 function isSturdyFace(st: number, face: number): boolean {
   return ((FACE_OCC[st] >> face) & 1) === 1;
 }
+
+/** the four amethyst growth stages (vanilla AmethystClusterBlock) */
+export const AMETHYST_BUD = /^(small_amethyst_bud|medium_amethyst_bud|large_amethyst_bud|amethyst_cluster)$/;
 
 const PLANT_SOIL = new Set(['grass_block', 'dirt', 'coarse_dirt', 'podzol', 'rooted_dirt', 'mycelium', 'moss_block', 'farmland', 'mud']);
 
@@ -45,6 +49,11 @@ export function canSurvive(world: World, x: number, y: number, z: number, state:
   }
   if (n.endsWith('_carpet')) return !(FLAGS[below] & F_AIR);
   if (n === 'glow_lichen') return MULTIFACE.some(([d]) => b.get(state, d) && multifaceSupported(world, x, y, z, d));
+  if (AMETHYST_BUD.test(n)) {
+    // vanilla AmethystClusterBlock.canSurvive: the block it grows out of has a full face towards it
+    const d = DIR_NAMES.indexOf(b.get(state, 'facing') as (typeof DIR_NAMES)[number]);
+    return isSturdyFace(world.getState(x - DX[d], y - DY[d], z - DZ[d]), d);
+  }
   if (n === 'rail') {
     // vanilla BaseRailBlock.canSurvive + shouldBeRemoved: a rigid block below, and one under the high end of a slope
     if (!isSturdyFace(below, UP)) return false;
@@ -145,6 +154,14 @@ export function lookingDirections(yaw: number, pitch: number): number[] {
   return f7 > f10 ? arr(v, d, h) : f9 > f7 ? arr(d, h, v) : arr(d, v, h);
 }
 
+/** vanilla Block.onProjectileHit: amethyst (the block and every growth stage) rings when struck */
+export function onProjectileHit(level: Level, x: number, y: number, z: number): void {
+  const n = blk(level.getState(x, y, z)).name;
+  if (n !== 'amethyst_block' && n !== 'budding_amethyst' && !AMETHYST_BUD.test(n)) return;
+  level.sound.play('block.amethyst_block.hit', x + 0.5, y + 0.5, z + 0.5, 1, 0.5 + level.random.nextFloat() * 1.2);
+  level.sound.play('block.amethyst_block.chime', x + 0.5, y + 0.5, z + 0.5, 1, 0.5 + level.random.nextFloat() * 1.2);
+}
+
 /** vanilla MultifaceBlock.hasAnyVacantFace */
 export function hasVacantFace(state: number): boolean {
   const b = blk(state);
@@ -214,6 +231,8 @@ export function placementState(block: Block, ctx: PlaceContext): number | null {
     const hanging = ctx.face === DOWN;
     st = block.with(st, 'hanging', hanging);
     if (!canSurvive(ctx.world, ctx.x, ctx.y, ctx.z, st)) st = block.with(st, 'hanging', !hanging);
+  } else if (AMETHYST_BUD.test(n)) {
+    st = block.with(st, 'facing', DIR_NAMES[ctx.face]);
   } else if (block.propIndex('facing') >= 0) {
     st = block.with(st, 'facing', oppositeH);
   }
@@ -333,13 +352,16 @@ export function blockExperience(state: number, tool: Item | null, r: Rand, silk 
 export function blockDrops(state: number, tool: Item | null, r: Rand, silk = false): ItemStack[] {
   const b = blk(state);
   const n = b.name;
-  if (b.s.noDrop) return [];
   if (b.requiresTool && !isCorrectTool(tool, b)) return [];
   const shears = tool?.tool?.type === 'shears';
   if (silk) {
+    // (vanilla loot tables that drop nothing even with silk touch)
+    if (n === 'budding_amethyst' || n === 'spawner') return [];
     const it = itemForBlock(n);
     return it ? [new ItemStack(it, 1)] : [];
   }
+  // (glass and the like drop only with silk touch)
+  if (b.s.noDrop) return [];
   switch (n) {
     case 'stone': return stacks('cobblestone', 1);
     case 'deepslate': return stacks('cobbled_deepslate', 1);
@@ -371,6 +393,9 @@ export function blockDrops(state: number, tool: Item | null, r: Rand, silk = fal
     case 'vine': case 'seagrass': case 'tall_seagrass': return shears ? stacks(n === 'tall_seagrass' ? 'seagrass' : n, 1) : [];
     // vanilla glow_lichen loot: one per face, shears only
     case 'glow_lichen': return shears ? stacks(n, MULTIFACE.filter(([d]) => b.get(state, d)).length) : [];
+    // vanilla amethyst_cluster loot: 4 shards mined with a pickaxe (#cluster_max_harvestables), else 2; buds need silk touch
+    case 'amethyst_cluster': return stacks('amethyst_shard', tool?.tool?.type === 'pickaxe' ? 4 : 2);
+    case 'small_amethyst_bud': case 'medium_amethyst_bud': case 'large_amethyst_bud': return [];
     case 'wall_torch': return stacks('torch', 1);
     case 'kelp_plant': return stacks('kelp', 1);
     case 'sweet_berry_bush': {

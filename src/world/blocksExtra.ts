@@ -4,7 +4,7 @@
 
 import { registerBlock, P, Layer, StateView, Box, enumProp, boolProp, intProp } from './block';
 import type { ModelDef, ModelChoice, ElementDef, FaceDef, Variant } from './models';
-import { box, cubeAll } from './models';
+import { box, cubeAll, cross } from './models';
 import type { DirName } from './dir';
 
 const px = (v: number) => v / 16;
@@ -664,6 +664,48 @@ export function registerExtraBlocks(): void {
         return out.length ? out : 'full';
       },
       model: (s) => ({ model: { ao: false, particle: 'glow_lichen', elements: FACES.filter((d) => s.get(d)).map((d) => PLANES[d]) } }),
+    });
+  }
+  // -------------------------------------------------------------------------
+  // Amethyst geodes (vanilla AmethystBlock, BuddingAmethystBlock, AmethystClusterBlock)
+  {
+    registerBlock('amethyst_block', { hardness: 1.5, resistance: 1.5, sound: 'amethyst_block', tool: 'pickaxe', requiresTool: true, model: () => ({ model: cubeAll('amethyst_block') }) });
+    registerBlock('budding_amethyst', {
+      hardness: 1.5, resistance: 1.5, sound: 'amethyst_block', tool: 'pickaxe', requiresTool: true, randomTicks: true, noDrop: true,
+      model: () => ({ model: cubeAll('budding_amethyst') }),
+    });
+    // vanilla blockstates: the cross model turned to point away from the block it grows on
+    const TURN: Record<string, { x?: number; y?: number }> = {
+      up: {}, down: { x: 180 }, north: { x: 90 }, south: { x: 90, y: 180 }, east: { x: 90, y: 90 }, west: { x: 90, y: 270 },
+    };
+    const shape = (facing: string, h: number, o: number): Box => {
+      switch (facing) {
+        case 'down': return bx(o, 16 - h, o, 16 - o, 16, 16 - o);
+        case 'north': return bx(o, o, 16 - h, 16 - o, 16 - o, 16);
+        case 'south': return bx(o, o, 0, 16 - o, 16 - o, h);
+        case 'east': return bx(0, o, o, h, 16 - o, 16 - o);
+        case 'west': return bx(16 - h, o, o, 16, 16 - o, 16 - o);
+        default: return bx(o, 0, o, 16 - o, h, 16 - o);
+      }
+    };
+    // [name, height, inset, light]
+    const BUDS: [string, number, number, number][] = [
+      ['small_amethyst_bud', 3, 4, 1], ['medium_amethyst_bud', 4, 3, 2], ['large_amethyst_bud', 5, 3, 4], ['amethyst_cluster', 7, 3, 5],
+    ];
+    for (const [name, h, o, light] of BUDS) {
+      const m = cross(name);
+      registerBlock(name, {
+        props: [P.facing, P.waterlogged], defaults: { facing: 'up' }, hardness: 1.5, sound: name, tool: 'pickaxe', light,
+        layer: Layer.CUTOUT, opaque: false, aoCaster: false, opacity: 0,
+        collision: (s) => [shape(s.get('facing') as string, h, o)],
+        model: (s) => ({ model: m, ...TURN[s.get('facing') as string] }),
+      });
+    }
+    registerBlock('smooth_basalt', { hardness: 1.25, resistance: 4.2, sound: 'basalt', tool: 'pickaxe', requiresTool: true, model: () => ({ model: cubeAll('smooth_basalt') }) });
+    // vanilla TintedGlassBlock: see-through but blocks all light, and drops itself
+    registerBlock('tinted_glass', {
+      hardness: 0.3, sound: 'glass', layer: Layer.TRANSLUCENT, opaque: false, cullSame: true, aoCaster: false, viewBlocking: false, opacity: 15,
+      model: () => ({ model: cubeAll('tinted_glass') }),
     });
   }
   void intProp;

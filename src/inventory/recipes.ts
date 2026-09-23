@@ -231,6 +231,8 @@ shaped('iron_bars', 16, ['###', '###'], { '#': 'iron_ingot' });
 shaped('glass_pane', 16, ['###', '###'], { '#': 'glass' });
 shaped('lantern', 1, ['XXX', 'X#X', 'XXX'], { X: 'iron_nugget', '#': 'torch' });
 shaped('chain', 1, ['N', 'I', 'N'], { N: 'iron_nugget', I: 'iron_ingot' });
+shaped('amethyst_block', 1, ['##', '##'], { '#': 'amethyst_shard' });
+shaped('tinted_glass', 2, [' S ', 'SGS', ' S '], { S: 'amethyst_shard', G: 'glass' });
 shapeless('pumpkin_seeds', 4, 'pumpkin');
 shaped('beetroot_soup', 1, ['OOO', 'OOO', ' B '], { O: 'beetroot', B: 'bowl' });
 shapeless('pumpkin_pie', 1, 'pumpkin', 'sugar', 'egg');

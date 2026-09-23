@@ -5,6 +5,7 @@ import { Entity } from './entity';
 import type { Level } from '../game/level';
 import { LivingEntity } from './living';
 import { clipBlocks } from '../game/raycast';
+import { onProjectileHit } from '../game/blockRules';
 import { AABB } from '../core/aabb';
 import { COLLISION } from '../world/block';
 import { ItemStack, ITEMS } from '../item/item';
@@ -118,7 +119,10 @@ export class Arrow extends Entity {
     }
     const ent = this.findHitEntity(x0, y0, z0, x1, y1, z1);
     if (ent) this.onHitEntity(ent);
-    else if (blockHit) this.onHitBlock(blockHit.px, blockHit.py, blockHit.pz, w.getState(blockHit.x, blockHit.y, blockHit.z));
+    else if (blockHit) {
+      onProjectileHit(this.level, blockHit.x, blockHit.y, blockHit.z);
+      this.onHitBlock(blockHit.px, blockHit.py, blockHit.pz, w.getState(blockHit.x, blockHit.y, blockHit.z));
+    }
     if (this.removed) return;
     const vx = this.dx, vy = this.dy, vz = this.dz;
     if (this.crit) {

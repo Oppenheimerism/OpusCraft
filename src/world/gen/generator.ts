@@ -9,6 +9,7 @@ import { GenContext, PendingWrites } from './context';
 import { Decorator } from './features';
 import { Carvers } from './carvers';
 import { Mineshafts } from './mineshaft';
+import { Geodes, SUB_AIR, SUB_SOLID, SUB_FLUID } from './geode';
 import { S, getBlock } from '../block';
 import { MIN_Y, MAX_Y, SEA_LEVEL, COLUMN_VOLUME, colIndex } from '../constants';
 import { hash3, hash2, hashFloat, hash32, Rand, hashString } from '../../core/rng';
@@ -44,6 +45,8 @@ export class ChunkGenerator {
   private readonly clayBands: number[];
   private readonly surfaceNoise: NormalNoise;
   private readonly surfaceSecondary: NormalNoise;
+  /** aquifer for single-block terrain queries (substanceAt) */
+  private readonly pointAquifer: Aquifer;
 
   constructor(seed: string | number | bigint) {
     this.seeds = SeedSource.fromWorldSeed(typeof seed === 'string' ? seed : BigInt(seed));
@@ -52,9 +55,37 @@ export class ChunkGenerator {
     this.decorator = new Decorator(this.seedHash, this.router.n.patch, this.router.n.temperature_variation);
     this.carvers = new Carvers(this.seedHash);
     this.decorator.mineshafts = new Mineshafts(this.seedHash, (x, z) => BIOMES[this.biomeAt(x, z)].name, (x, z) => this.router.preliminarySurface(this.column(x, z)));
+    this.pointAquifer = new Aquifer(this.router, this.seedHash);
+    this.decorator.geodes = new Geodes(this.seedHash, new NormalNoise(this.seeds.sub('geode'), { firstOctave: -4, amplitudes: [1] }), (x, y, z) => this.substanceAt(x, y, z));
     this.surfaceNoise = this.router.n.surface;
     this.surfaceSecondary = this.router.n.surface_secondary;
     this.clayBands = makeClayBands(new Rand(this.seedHash ^ 0xba4d, 3));
+  }
+
+  /**
+   * The noise terrain at one block, before surface rules and carvers (SUB_AIR / SUB_SOLID / SUB_FLUID),
+   * for features that look at blocks in chunks that aren't generated: the cell's 8 corners
+   * interpolated exactly as generate() does, then the aquifer.
+   */
+  substanceAt(x: number, y: number, z: number): number {
+    const router = this.router;
+    const x0 = Math.floor(x / CELL_W) * CELL_W, z0 = Math.floor(z / CELL_W) * CELL_W;
+    const y0 = MIN_Y + Math.floor((y - MIN_Y) / CELL_H) * CELL_H;
+    const cv = new Float32Array(8 * CHANNELS);
+    const cols = [0, 1, 2, 3].map((i) => router.column(x0 + (i & 1) * CELL_W, z0 + (i >> 1) * CELL_W, newColumn()));
+    for (let n = 0; n < 8; n++) {
+      const di = n & 1, dj = (n >> 1) & 1, dk = (n >> 2) & 1;
+      router.corner(x0 + di * CELL_W, y0 + dj * CELL_H, z0 + dk * CELL_W, cols[di + dk * 2], cv, n * CHANNELS, true);
+    }
+    const tx = (x - x0) / CELL_W, ty = (y - y0) / CELL_H, tz = (z - z0) / CELL_W;
+    let d = squeeze(0.64 * tri(cv, CH_MAIN, tx, ty, tz));
+    if (tri(cv, CH_NTOGGLE, tx, ty, tz) >= 0) {
+      const nd = tri(cv, CH_NTHICK, tx, ty, tz) + 1.5 * Math.max(Math.abs(tri(cv, CH_NRA, tx, ty, tz)), Math.abs(tri(cv, CH_NRB, tx, ty, tz)));
+      if (nd < d) d = nd;
+    }
+    if (d > 0) return SUB_SOLID;
+    const sub = this.pointAquifer.substance(x, y, z, d);
+    return sub === -1 ? SUB_SOLID : sub === FLUID_WATER || sub === FLUID_LAVA ? SUB_FLUID : SUB_AIR;
   }
 
   /** Sample the surface biome at a block position (used for spawn search / F3). */
