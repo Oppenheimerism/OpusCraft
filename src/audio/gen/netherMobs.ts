@@ -11,7 +11,7 @@ import { reverbHalf } from './world';
 // ------------------------------------------------------------------ pig-family throats
 
 /** Pitch-independent voice character of a pig-like Nether mob. */
-interface Throat {
+export interface Throat {
   /** formant scale (smaller = bigger, deeper head) */
   fs: number;
   rough: number;
@@ -28,7 +28,7 @@ interface Throat {
 }
 
 /** One grunt: timing, pitch contour over normalised time, loudness and mouth opening. */
-interface Grunt {
+export interface Grunt {
   t: number;
   d: number;
   f0: (x: number) => number;
@@ -42,7 +42,7 @@ interface Grunt {
  * A pig-family grunt: a rough, period-doubled glottal source through a snouty formant set
  * that opens and closes over the grunt, with an irregular growl flutter on top.
  */
-function gruntInto(b: Float32Array, c: Ctx, th: Throat, g: Grunt): void {
+export function gruntInto(b: Float32Array, c: Ctx, th: Throat, g: Grunt): void {
   const { sr, rng } = c;
   const d = g.d;
   const open = g.open ?? 0.4;
@@ -72,7 +72,7 @@ function gruntInto(b: Float32Array, c: Ctx, th: Throat, g: Grunt): void {
 }
 
 /** Nasal snort: noise through a nostril resonance, fluttering as the soft palate flaps. */
-function snortInto(b: Float32Array, c: Ctx, t0: number, d: number, fc: number, inhale = false, a = 1): void {
+export function snortInto(b: Float32Array, c: Ctx, t0: number, d: number, fc: number, inhale = false, a = 1): void {
   const { sr, rng } = c;
   const flap = rng.range(28, 45);
   const ph = rng.next();
@@ -88,7 +88,7 @@ function snortInto(b: Float32Array, c: Ctx, t0: number, d: number, fc: number, i
 }
 
 /** Phlegm: small low bubbles and a sticky crackle riding on a grunt. */
-function gurgleInto(b: Float32Array, c: Ctx, t0: number, d: number, density: number): void {
+export function gurgleInto(b: Float32Array, c: Ctx, t0: number, d: number, density: number): void {
   const { sr, rng } = c;
   const n = Math.max(1, Math.round(density * d));
   for (let k = 0; k < n; k++) bubble(b, sr, t0 + rng.range(0.05, 0.95) * d, rng.logRange(220, 700), rng.range(0.3, 1), undefined, rng.range(0.2, 0.6));
@@ -110,7 +110,7 @@ function gurgleInto(b: Float32Array, c: Ctx, t0: number, d: number, density: num
 // ------------------------------------------------------------------ zombified piglin
 
 /** Low, rotten and phlegmy: deeper than a pig, with a slow, wet flutter. */
-const ZPIG: Throat = { fs: 0.8, rough: 0.6, sub: 0.12, breath: 0.4, oq: 0.45, growl: [17, 26, 0.55], jitter: 0.07, shimmer: 0.3, nasal: 0.35 };
+export const ZPIG: Throat = { fs: 0.8, rough: 0.6, sub: 0.12, breath: 0.4, oq: 0.45, growl: [17, 26, 0.55], jitter: 0.07, shimmer: 0.3, nasal: 0.35 };
 
 /** Zombified piglin idle: one to three wet, throaty grunts and snorts; each take has its own rhythm. */
 function zpigAmbient(c: Ctx): Float32Array {
@@ -156,7 +156,7 @@ function zpigAmbient(c: Ctx): Float32Array {
 }
 
 /** A snarl that tears upward from a grunt into a harsh squeal, peaking at `peak` (0..1) of its length. */
-function snarlInto(b: Float32Array, c: Ctx, t0: number, d: number, fA: number, fB: number, peak: number, a = 1): void {
+export function snarlInto(b: Float32Array, c: Ctx, t0: number, d: number, fA: number, fB: number, peak: number, a = 1): void {
   const { sr, rng } = c;
   const F = vowelGlide('uh', rng.pick(['ae', 'a']), 0, d * peak, 1.05);
   const k = peak + (1 - peak) * 0.6;
@@ -783,12 +783,12 @@ function saddle(c: Ctx): Float32Array {
 // ------------------------------------------------------------------ hoglin
 
 /** A huge boar: deep, rough and breathy, with little nasal honk. */
-const HOGLIN: Throat = { fs: 0.7, rough: 0.55, sub: 0.12, breath: 0.45, oq: 0.4, growl: [22, 30, 0.45], jitter: 0.06, shimmer: 0.25, nasal: 0.25 };
+export const HOGLIN: Throat = { fs: 0.7, rough: 0.55, sub: 0.12, breath: 0.45, oq: 0.4, growl: [22, 30, 0.45], jitter: 0.06, shimmer: 0.25, nasal: 0.25 };
 /** The same throat pushed hard: more pressed, rougher and breathier. */
-const HOGLIN_ROAR: Throat = { ...HOGLIN, rough: 0.6, oq: 0.34, breath: 0.5, growl: [26, 34, 0.5] };
+export const HOGLIN_ROAR: Throat = { ...HOGLIN, rough: 0.6, oq: 0.34, breath: 0.5, growl: [26, 34, 0.5] };
 
 /** A pained squeal-grunt: the pitch jumps up by `jump` and falls back past where it started. */
-function yelpInto(b: Float32Array, c: Ctx, t0: number, d: number, f: number, jump: number, fs: number, rough: number, a = 1): void {
+export function yelpInto(b: Float32Array, c: Ctx, t0: number, d: number, f: number, jump: number, fs: number, rough: number, a = 1): void {
   const { sr, rng } = c;
   const F = vowelGlide(rng.pick(['ae', 'a']), 'uh', d * 0.2, d, fs);
   voice(b, sr, rng, {
@@ -945,7 +945,7 @@ function hoglinDeath(c: Ctx): Float32Array {
  * A pig-family death: a groaning squeal that lifts to `peak` x its starting pitch, then sinks
  * to less than half of it as the voice gives out, ending on a last snorting breath.
  */
-function deathGroan(c: Ctx, f: number, fs: number, d: number, peak: number, snort: number): Float32Array {
+export function deathGroan(c: Ctx, f: number, fs: number, d: number, peak: number, snort: number): Float32Array {
   const { sr, rng } = c;
   const out = alloc(d + 0.25, sr);
   layer(out, 1, (b) => {
@@ -1025,7 +1025,7 @@ function hoglinRetreat(c: Ctx): Float32Array {
  * A pig-family mob turning zombified: a choking, straining groan in its own throat that
  * rots into the zombified piglin's wet gurgle.
  */
-function converted(c: Ctx, th: Throat, base: number): Float32Array {
+export function converted(c: Ctx, th: Throat, base: number): Float32Array {
   const { sr, v } = c;
   const out = alloc(1.3, sr);
   const rise = [1.6, 1.9, 1.4][v % 3];
