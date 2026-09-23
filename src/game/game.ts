@@ -927,6 +927,8 @@ export class Game {
       this.world.removeChunk(c.cx, c.cz);
       this.renderer.world.disposeChunk(c.cx, c.cz);
     }
+    // (vanilla Minecraft.setLevel stops every sound, the music too; the portal's whoosh comes on arrival)
+    this.sound.stopAll();
     this.world.reset(dim);
     this.chunks.reset();
     this.level.resetForDimension();

@@ -9,6 +9,9 @@ import { playerSounds } from './gen/player';
 import { worldSounds } from './gen/world';
 import { minecartSounds } from './gen/minecart';
 import { boatSounds } from './gen/boat';
+import { netherBlockSounds } from './gen/netherBlocks';
+import { netherSounds } from './gen/nether';
+import { NETHER_MUSIC_POOLS, renderNetherMusic } from './gen/netherMusic';
 
 export const SAMPLE_RATE = 44100;
 
@@ -26,6 +29,8 @@ export const SOUNDS: Record<string, SoundGen> = {
   ...mobSounds(),
   ...minecartSounds(),
   ...boatSounds(),
+  ...netherBlockSounds(),
+  ...netherSounds(),
 };
 
 /** Number of in-game (overworld) music tracks. */
@@ -48,6 +53,17 @@ export function generateMenuMusic(sampleRate: number): Float32Array {
   return renderMenuMusic(sampleRate);
 }
 
+/** Situational music pools (vanilla music.nether.<biome>): event name -> number of tracks in it. */
+export const MUSIC_POOLS: Record<string, number> = Object.fromEntries(Object.entries(NETHER_MUSIC_POOLS).map(([k, v]) => [k, v.length]));
+
+/**
+ * Render track `index` (0..MUSIC_POOLS[pool]-1) of a situational pool: the Nether's dark ambient
+ * pieces, mono, 120–150 s, RMS matched to the overworld tracks, peak <= 0.6; ~2 s in Node.
+ */
+export function generatePoolMusic(pool: string, index: number, sampleRate: number): Float32Array {
+  return renderNetherMusic(pool, index, sampleRate);
+}
+
 // ------------------------------------------------------------------ optional playback hints
 
 export interface SoundHint {
@@ -57,7 +73,10 @@ export interface SoundHint {
   loop?: boolean;
 }
 
-const LOOPS = new Set(['weather.rain', 'weather.rain.above', 'block.fire.ambient', 'block.lava.ambient', 'block.water.ambient', 'block.portal.ambient', 'entity.minecart.riding', 'entity.minecart.inside', 'entity.minecart.inside.underwater']);
+const LOOPS = new Set([
+  'weather.rain', 'weather.rain.above', 'block.fire.ambient', 'block.lava.ambient', 'block.water.ambient', 'entity.minecart.riding', 'entity.minecart.inside', 'entity.minecart.inside.underwater',
+  'ambient.nether_wastes.loop', 'ambient.crimson_forest.loop', 'ambient.warped_forest.loop', 'ambient.soul_sand_valley.loop', 'ambient.basalt_deltas.loop',
+]);
 const VOLUMES: Record<string, number> = {
   'ui.button.click': 0.25,
   'ui.toast.in': 0.4,
@@ -139,6 +158,10 @@ const VOLUMES: Record<string, number> = {
   'item.hoe.till': 1,
   'item.bone_meal.use': 1,
   'entity.player.teleport': 1,
+  // nether portal (ambient: from the block, 1 in 100 animate ticks; trigger / travel: non-positional)
+  'block.portal.ambient': 0.5,
+  'block.portal.trigger': 0.25,
+  'block.portal.travel': 0.25,
 };
 
 /**
