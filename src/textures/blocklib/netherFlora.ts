@@ -103,18 +103,37 @@ const ROOT_PAL: Record<NetherWood, number[]> = {
   warped: [0x0b4d45, 0x0f6358, 0x14786a, 0x1a8c7b, 0x22a08d, 0x2eb39f, 0x45c7b2],
 };
 
-/** a tuft of spindly roots, curling as they rise */
+/**
+ * a clump of roots: a few stalks rising from the ground that fork and curl outwards as they climb, dark at
+ * the foot and bright at the tips (crimson ones end in little knobs)
+ */
 export function roots(kind: NetherWood): TexImage {
-  const t = blades(kind + '_roots', { count: 9, hmin: 7, hmax: 13, pal: ROOT_PAL[kind], curl: 0.45, x0: 2, x1: 13 });
-  // little bulbs on a few tips
-  const r = rng(kind + '_roots_bulbs');
-  for (let k = 0; k < 3; k++) {
-    const x = 3 + r.nextInt(10);
-    for (let y = 0; y < N; y++) {
-      if ((getPx(t, x, y) >>> 24) === 0) continue;
-      plot(t, x, y, ROOT_PAL[kind][6]);
-      if (x + 1 < N) plot(t, x + 1, y, ROOT_PAL[kind][5]);
-      break;
+  const t = img();
+  const r = rng(kind + '_roots', 2);
+  const pal = ROOT_PAL[kind];
+  interface Tip { x: number; y: number; dir: number; len: number; age: number }
+  const tips: Tip[] = [];
+  for (const x0 of kind === 'crimson' ? [5, 8, 11] : [4, 7, 9, 12]) tips.push({ x: x0 + r.nextInt(2), y: 15, dir: x0 < 8 ? -1 : x0 > 9 ? 1 : 0, len: 9 + r.nextInt(5), age: 0 });
+  const ends: [number, number][] = [];
+  while (tips.length) {
+    const p = tips.pop()!;
+    for (; p.age < p.len && p.y >= 1; p.age++, p.y--) {
+      const f = p.age / p.len;
+      plot(t, p.x, p.y, pal[Math.min(6, 1 + Math.floor(f * 5))]);
+      // drift outwards, more as it rises; now and then fork
+      if (r.chance(0.18 + f * 0.35)) p.x += p.dir !== 0 ? p.dir : r.nextBool() ? 1 : -1;
+      p.x = Math.max(0, Math.min(15, p.x));
+      if (p.age > 2 && p.age < p.len - 2 && r.chance(0.16) && tips.length < 8) {
+        tips.push({ x: p.x + (r.nextBool() ? 1 : -1), y: p.y - 1, dir: r.nextBool() ? 1 : -1, len: p.age + 2 + r.nextInt(4), age: p.age + 1 });
+      }
+    }
+    ends.push([p.x, p.y + 1]);
+  }
+  for (const [x, y] of ends) {
+    plot(t, x, y, pal[6]);
+    if (kind === 'crimson' && y > 0) {
+      plot(t, x, y - 1, pal[5]);
+      if (x < 15) plot(t, x + 1, y, pal[5]);
     }
   }
   return t;
