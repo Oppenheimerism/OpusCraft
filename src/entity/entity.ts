@@ -540,9 +540,10 @@ export abstract class Entity {
           const kind = insideKind(st);
           if (kind === INSIDE_NONE) continue;
           if (kind === INSIDE_LAVA) fire = true;
-          else if (kind === INSIDE_FIRE) {
+          else if (kind === INSIDE_FIRE || kind === INSIDE_SOUL_FIRE) {
             fire = true;
-            this.insideFire();
+            // (vanilla SoulFireBlock: twice the burn)
+            this.insideFire(kind === INSIDE_SOUL_FIRE ? 2 : 1);
           } else if (kind === INSIDE_COBWEB) this.insideCobweb();
           else if (kind === INSIDE_BERRY_BUSH) this.insideBerryBush(st);
           else if (kind === INSIDE_CACTUS) this.hurt(1, 'cactus');
@@ -554,12 +555,12 @@ export abstract class Entity {
   }
 
   /** vanilla BaseFireBlock.entityInside */
-  private insideFire(): void {
+  private insideFire(damage: number): void {
     if (!this.fireImmune()) {
       this.remainingFireTicks++;
       if (this.remainingFireTicks === 0) this.igniteForSeconds(8);
     }
-    this.hurt(1, 'inFire');
+    this.hurt(damage, 'inFire');
   }
 
   /** vanilla SweetBerryBushBlock.entityInside (living things only) */
@@ -805,14 +806,14 @@ function solidEntities(level: Level): Entity[] {
   return c.list;
 }
 
-const INSIDE_NONE = 0, INSIDE_FIRE = 1, INSIDE_LAVA = 2, INSIDE_COBWEB = 3, INSIDE_BERRY_BUSH = 4, INSIDE_CACTUS = 5, INSIDE_DRIPLEAF = 6, INSIDE_PORTAL = 7;
+const INSIDE_NONE = 0, INSIDE_FIRE = 1, INSIDE_LAVA = 2, INSIDE_COBWEB = 3, INSIDE_BERRY_BUSH = 4, INSIDE_CACTUS = 5, INSIDE_DRIPLEAF = 6, INSIDE_PORTAL = 7, INSIDE_SOUL_FIRE = 8;
 let INSIDE: Uint8Array | null = null;
 
 /** which vanilla entityInside behaviour a block has (lazy per-block table) */
 function insideKind(st: number): number {
   if (!INSIDE) {
     INSIDE = new Uint8Array(BLOCKS.length);
-    const kinds: Record<string, number> = { fire: INSIDE_FIRE, lava: INSIDE_LAVA, cobweb: INSIDE_COBWEB, sweet_berry_bush: INSIDE_BERRY_BUSH, cactus: INSIDE_CACTUS, big_dripleaf: INSIDE_DRIPLEAF, nether_portal: INSIDE_PORTAL };
+    const kinds: Record<string, number> = { fire: INSIDE_FIRE, soul_fire: INSIDE_SOUL_FIRE, lava: INSIDE_LAVA, cobweb: INSIDE_COBWEB, sweet_berry_bush: INSIDE_BERRY_BUSH, cactus: INSIDE_CACTUS, big_dripleaf: INSIDE_DRIPLEAF, nether_portal: INSIDE_PORTAL };
     BLOCKS.forEach((b, i) => (INSIDE![i] = kinds[b.name] ?? INSIDE_NONE));
   }
   return INSIDE[STATE_BLOCK[st]];

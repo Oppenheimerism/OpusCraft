@@ -13,11 +13,12 @@ import { Rand, hash32 } from '../../core/rng';
 
 export const F_GLOWSTONE = 1, F_FIRE = 2, F_BROWN_MUSHROOM = 3, F_RED_MUSHROOM = 4, F_DELTA = 5, F_SMALL_COLUMNS = 6, F_LARGE_COLUMNS = 7, F_PILLAR = 8;
 export const F_CRIMSON_FUNGUS = 9, F_WARPED_FUNGUS = 10, F_CRIMSON_VEGETATION = 11, F_WARPED_VEGETATION = 12, F_NETHER_SPROUTS = 13, F_WEEPING_VINES = 14, F_TWISTING_VINES = 15;
+export const F_SOUL_FIRE = 16;
 
 /** how far from its origin each feature can write */
 const REACH: Record<number, number> = {
   [F_GLOWSTONE]: 7, [F_FIRE]: 7, [F_BROWN_MUSHROOM]: 7, [F_RED_MUSHROOM]: 7, [F_DELTA]: 9, [F_SMALL_COLUMNS]: 10, [F_LARGE_COLUMNS]: 12, [F_PILLAR]: 3,
-  [F_CRIMSON_FUNGUS]: 4, [F_WARPED_FUNGUS]: 4, [F_CRIMSON_VEGETATION]: 7, [F_WARPED_VEGETATION]: 7, [F_NETHER_SPROUTS]: 7, [F_WEEPING_VINES]: 7, [F_TWISTING_VINES]: 8,
+  [F_CRIMSON_FUNGUS]: 4, [F_WARPED_FUNGUS]: 4, [F_CRIMSON_VEGETATION]: 7, [F_WARPED_VEGETATION]: 7, [F_NETHER_SPROUTS]: 7, [F_WEEPING_VINES]: 7, [F_TWISTING_VINES]: 8, [F_SOUL_FIRE]: 7,
 };
 
 export const NETHER_SEA_LEVEL = 32;
@@ -122,6 +123,7 @@ function run(f: number, w: FeatureWorld, seed: number, x: number, y: number, z: 
   switch (f) {
     case F_GLOWSTONE: return ok(glowstone(w, r, x, y, z, again));
     case F_FIRE: return ok(patch(w, r, x, y, z, K.FIRE, (st) => st === K.NETHERRACK));
+    case F_SOUL_FIRE: return ok(patch(w, r, x, y, z, S('soul_fire'), (st) => st === S('soul_sand') || st === S('soul_soil')));
     case F_BROWN_MUSHROOM: return ok(patch(w, r, x, y, z, K.BROWN_MUSHROOM, mushroomGround));
     case F_RED_MUSHROOM: return ok(patch(w, r, x, y, z, K.RED_MUSHROOM, mushroomGround));
     case F_DELTA: return ok(delta(w, r, x, y, z));

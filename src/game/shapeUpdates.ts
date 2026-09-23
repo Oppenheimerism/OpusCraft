@@ -6,7 +6,7 @@
 import { BLOCKS, STATE_BLOCK, FLAGS, FACE_OCC, COLLISION, F_AIR, F_OPAQUE, Block } from '../world/block';
 import { DOWN, UP, NORTH, SOUTH, WEST, EAST } from '../world/dir';
 import type { World } from '../world/world';
-import { fireCanSurvive, fireStateAt } from './fire';
+import { fireCanSurvive, fireStateAt, isSoulFireBase } from './fire';
 import { MULTIFACE, multifaceSupported, dripstoneSupported, dripstoneThickness } from './blockRules';
 import { portalStillStands } from './portal';
 
@@ -233,6 +233,8 @@ export function updateShape(world: World, x: number, y: number, z: number, st: n
     return st;
   }
   if (n === 'fire') return fireCanSurvive(world, x, y, z) ? fireStateAt(world, x, y, z, b.get<number>(st, 'age')) : 0;
+  // vanilla SoulFireBlock.updateShape: goes out off its soul sand
+  if (n === 'soul_fire') return isSoulFireBase(world.getState(x, y - 1, z)) ? st : 0;
   // vanilla GrowingPlantHeadBlock / GrowingPlantBodyBlock.updateShape: a head with more vine under it becomes
   // a piece of the plant, and a piece left at the bottom a head again (of any age), keeping its berries
   if (n === 'weeping_vines' || n === 'weeping_vines_plant' || n === 'twisting_vines' || n === 'twisting_vines_plant') {
@@ -264,7 +266,7 @@ function plantOf(name: string): Block {
 /** blocks whose state depends on neighbours (skip the work for everything else) */
 export function hasShapeUpdates(st: number): boolean {
   const n = blk(st).name;
-  return n === 'glow_lichen' || n === 'pointed_dripstone' || n === 'cave_vines' || n === 'cave_vines_plant' || n.endsWith('ing_vines') || n.endsWith('ing_vines_plant') || n === 'big_dripleaf' || n.endsWith('_stairs') || n.endsWith('_fence') || n.endsWith('_pane') || n === 'iron_bars' || n.endsWith('_wall') || n.endsWith('_fence_gate') || n.endsWith('_door') || n.endsWith('_bed') || n === 'grass_block' || n === 'podzol' || n === 'mycelium' || n.startsWith('attached_') || n === 'fire' || n === 'nether_portal';
+  return n === 'glow_lichen' || n === 'pointed_dripstone' || n === 'cave_vines' || n === 'cave_vines_plant' || n.endsWith('ing_vines') || n.endsWith('ing_vines_plant') || n === 'big_dripleaf' || n.endsWith('_stairs') || n.endsWith('_fence') || n.endsWith('_pane') || n === 'iron_bars' || n.endsWith('_wall') || n.endsWith('_fence_gate') || n.endsWith('_door') || n.endsWith('_bed') || n === 'grass_block' || n === 'podzol' || n === 'mycelium' || n.startsWith('attached_') || n === 'fire' || n === 'soul_fire' || n === 'nether_portal';
 }
 
 export { F_OPAQUE };

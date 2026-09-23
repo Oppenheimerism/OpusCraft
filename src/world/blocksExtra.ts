@@ -531,6 +531,17 @@ export function registerExtraBlocks(): void {
       },
     });
   }
+  // vanilla SoulFireBlock (blockstates/soul_fire.json): no age and no sides to choose, always the floor and all four
+  // sides; burns only on soul sand and soul soil, and never spreads
+  {
+    const floor = [fireFloor('soul_fire_0'), fireFloor('soul_fire_1')];
+    const side = [fireSide('soul_fire_0', false), fireSide('soul_fire_1', false), fireSide('soul_fire_0', true), fireSide('soul_fire_1', true)];
+    const parts: (Variant | Variant[])[] = [floor.map((model) => ({ model })), ...[0, 90, 180, 270].map((y) => side.map((model) => ({ model, y })))];
+    registerBlock('soul_fire', {
+      hardness: 0, sound: 'wool', collision: 'none', layer: Layer.CUTOUT, opaque: false, aoCaster: false, opacity: 0, light: 10, replaceable: true,
+      item: false, noDrop: true, outline: [bx(0, 0, 0, 16, 1, 16)], model: () => ({ parts }),
+    });
+  }
   // crops
   for (const [name, tex, maxAge, stages] of [
     ['carrots', 'carrots', 7, [0, 0, 1, 1, 2, 2, 2, 3]],
