@@ -513,6 +513,257 @@ function ghastShoot(c: Ctx): Float32Array {
   return reverbHalf(out, sr, { t60: 1.4, wet: 0.35, size: 1.4, pre: 0.02, hf: 0.4, lowcut: 150, tail: 1 });
 }
 
+// ------------------------------------------------------------------ strider
+
+/** One strider trill: pitch contour and trill rate (Hz) over normalised time. */
+interface Trill {
+  t?: number;
+  d: number;
+  f0: (x: number) => number;
+  rate: (x: number) => number;
+  /** FM depth of the trill (fraction) */
+  depth: number;
+  /** 0 = muffled coo .. 1 = bright chirp */
+  bright?: number;
+  rough?: number;
+  a?: number;
+  /** loudness over normalised time (default: a soft bump) */
+  env?: (x: number) => number;
+}
+
+/**
+ * Strider trill: a soft, closed-mouth coo whose pitch and loudness flutter together at a
+ * lip-trill rate ("brrrr"), a warbling purr somewhere between a pigeon and a turkey.
+ */
+function trillInto(b: Float32Array, c: Ctx, o: Trill): void {
+  const { sr, rng } = c;
+  const d = o.d;
+  const br = o.bright ?? 0;
+  const F = vowelGlide(rng.pick(['u', 'oo', 'o']), rng.pick(['u', 'o', 'er']), 0, d, 1.15 + 0.35 * br);
+  // integrate the trill phase at a 400 Hz control rate so the trill rate can glide
+  const K = 400;
+  const N = Math.ceil(d * K) + 2;
+  const ph = new Float64Array(N);
+  ph[0] = rng.next();
+  for (let k = 1; k < N; k++) ph[k] = ph[k - 1] + o.rate(Math.min(1, k / K / d)) / K;
+  const trill = (t: number): number => {
+    const u = Math.min(N - 1.001, t * K);
+    const k = Math.floor(u);
+    return Math.sin(TAU * (ph[k] + (ph[k + 1] - ph[k]) * (u - k)));
+  };
+  const env = o.env ?? ((x: number) => envBump(x, 0.15, 0.85));
+  voice(b, sr, rng, {
+    t: o.t,
+    dur: d,
+    f0: (t) => o.f0(t / d) * (1 + o.depth * trill(t)),
+    amp: (t) => env(t / d) * (0.62 + 0.38 * trill(t)),
+    formants: [
+      { f: F[0], bw: 90, g: 1 },
+      { f: F[1], bw: 140, g: 0.45 + 0.3 * br },
+      { f: F[2], bw: 240, g: 0.15 + 0.15 * br },
+    ],
+    jitter: 0.02,
+    shimmer: 0.08,
+    rough: o.rough ?? 0.1,
+    breath: 0.12,
+    oq: 0.6 - 0.15 * br,
+    gain: o.a ?? 1,
+  });
+}
+
+/** Render a set of trills, high-passed at `hp` Hz (0 = off). */
+function trills(c: Ctx, ts: Trill[], hp: number): Float32Array {
+  const { sr } = c;
+  const len = Math.max(...ts.map((q) => (q.t ?? 0) + q.d)) + 0.05;
+  const out = alloc(len, sr);
+  layer(out, 1, (b) => {
+    for (const q of ts) trillInto(b, c, q);
+  });
+  if (hp) highpass(out, hp, sr);
+  lowpass(out, 4500, sr);
+  return out;
+}
+
+/** Strider idle: gentle, warbling trills and purrs; five different shapes. */
+function striderAmbient(c: Ctx): Float32Array {
+  const { rng, v } = c;
+  const base = rng.range(190, 240);
+  const r = rng.range(19, 25);
+  const ts: Trill[] = [];
+  switch (v) {
+    case 0: // "brrr-rrup": lifts at the end
+      ts.push({ d: 0.55, f0: (x) => base * (1 + 0.25 * x * x), rate: () => r, depth: 0.05 });
+      break;
+    case 1: // a sinking purr that slows as it falls
+      ts.push({ d: 0.7, f0: (x) => base * 1.2 * (1 - 0.25 * x), rate: (x) => r * (1 - 0.25 * x), depth: 0.06 });
+      break;
+    case 2: // two short trills
+      ts.push({ d: 0.25, f0: (x) => base * (1.05 + 0.1 * x), rate: () => r, depth: 0.05 });
+      ts.push({ t: 0.33, d: 0.3, f0: (x) => base * (1.1 - 0.15 * x), rate: () => r * 0.9, depth: 0.05, a: 0.85 });
+      break;
+    case 3: // a slow, rolling warble that rises and falls
+      ts.push({ d: 0.6, f0: (x) => base * (1 + 0.2 * Math.sin(Math.PI * x)), rate: () => r * 0.6, depth: 0.09 });
+      break;
+    default: // a long, low, contented purr
+      ts.push({ d: 0.85, f0: (x) => base * 0.82 * (1 + 0.1 * Math.sin(Math.PI * x)), rate: (x) => r * (1.1 - 0.2 * x), depth: 0.04, rough: 0.18 });
+  }
+  return trills(c, ts, 0);
+}
+
+/** Strider happy (tempted with warped fungus): a bright, chirpy, rising warble. */
+function striderHappy(c: Ctx): Float32Array {
+  const { rng, v } = c;
+  const base = rng.range(380, 450);
+  const r = rng.range(26, 32);
+  const ts: Trill[] = [];
+  switch (v) {
+    case 0: // one rising chirp
+      ts.push({ d: 0.34, f0: (x) => base * (0.9 + 0.45 * x), rate: () => r, depth: 0.05, bright: 1 });
+      break;
+    case 1: // two chirps, the second higher
+      ts.push({ d: 0.18, f0: (x) => base * (0.95 + 0.25 * x), rate: () => r, depth: 0.04, bright: 1 });
+      ts.push({ t: 0.24, d: 0.24, f0: (x) => base * (1.1 + 0.35 * x), rate: () => r, depth: 0.05, bright: 1 });
+      break;
+    case 2: // a warble that trills faster and flicks up
+      ts.push({ d: 0.42, f0: (x) => base * (1 + 0.1 * Math.sin(Math.PI * x) + 0.4 * Math.pow(x, 4)), rate: (x) => r * (1 + 0.3 * x), depth: 0.07, bright: 0.8 });
+      break;
+    default: // "brr-ip!": a quick up-flick
+      ts.push({ d: 0.26, f0: (x) => base * envExpPts(x, [0, 0.85, 0.6, 1.05, 1, 1.5]), rate: () => r * 1.1, depth: 0.05, bright: 1 });
+  }
+  return trills(c, ts, 250);
+}
+
+/** Strider retreat (scared): a short, worried squeak. */
+function striderRetreat(c: Ctx): Float32Array {
+  const { rng, v } = c;
+  const f = rng.range(520, 600);
+  const ts: Trill[] = [];
+  if (v === 2) ts.push({ d: 0.24, f0: (x) => f * 1.1 * envExpPts(x, [0, 1.3, 0.3, 1.45, 1, 0.9]), rate: () => 34, depth: 0.04, bright: 1 });
+  else ts.push({ d: rng.range(0.16, 0.2), f0: (x) => f * envExpPts(x, [0, 1, 0.4, 1.45, 1, 1.1]), rate: () => 30, depth: 0.03, bright: 1 });
+  if (v === 1) ts.push({ t: 0.22, d: 0.14, f0: (x) => f * 1.2 * envExpPts(x, [0, 1, 0.4, 1.3, 1, 1]), rate: () => 30, depth: 0.03, bright: 1, a: 0.75 });
+  return trills(c, ts, 300);
+}
+
+/** Strider hurt: a sharp, squawking warble. */
+function striderHurt(c: Ctx): Float32Array {
+  const { rng, v } = c;
+  const f = rng.range(400, 460) * (1 + 0.06 * v);
+  const r = rng.range(30, 36);
+  const env = (x: number) => envPts(x, [0, 0, 0.06, 1, 0.5, 0.7, 1, 0]);
+  return trills(c, [{ d: rng.range(0.22, 0.3), f0: (x) => f * envExpPts(x, [0, 1.25, 0.15, 1.45, 1, 0.8]), rate: () => r, depth: 0.06, bright: 0.7, rough: 0.35, env }], 200);
+}
+
+/** Strider death: a long warble that sinks, its trill slowing, and fades out. */
+function striderDeath(c: Ctx): Float32Array {
+  const { rng, v } = c;
+  const f = rng.range(340, 380);
+  const env = (x: number) => envPts(x, [0, 0, 0.05, 1, 0.5, 0.7, 1, 0]);
+  return trills(c, [{ d: v === 0 ? 0.95 : 1.1, f0: (x) => f * envExpPts(x, [0, 1.2, 0.2, 1.1, 1, 0.42]), rate: (x) => 26 - 16 * x, depth: 0.07, bright: 0.4, rough: 0.2, env }], 120);
+}
+
+/** Strider step: a soft, squishy footfall — a wet squelch over a dull thud. */
+function striderStep(c: Ctx): Float32Array {
+  const { sr, rng } = c;
+  const out = alloc(0.3, sr);
+  const p = rng.range(0.85, 1.2);
+  layer(out, 1, (b) => sweep(b, sr, rng, { dur: 0.16, f: (t) => 700 * p * Math.pow(0.45, t / 0.16), q: 2.4, amp: (t) => envAD(t, 0.008, 0.045) }));
+  layer(out, 0.7, (b) => thump(b, sr, { f0: 110 * p, f1: 65, tau: 0.03, attack: 0.004 }));
+  layer(out, 0.3, (b) => {
+    const n = 2 + rng.int(2);
+    for (let k = 0; k < n; k++) bubble(b, sr, rng.range(0.01, 0.08), rng.range(350, 800), 1, undefined, 0.5);
+  });
+  lowpass(out, 3000, sr);
+  return out;
+}
+
+/** Strider step on lava: a soft, slurpy press into the lava with a brief sizzle. */
+function striderStepLava(c: Ctx): Float32Array {
+  const { sr, rng } = c;
+  const out = alloc(0.45, sr);
+  const p = rng.range(0.85, 1.2);
+  layer(out, 0.8, (b) => sweep(b, sr, rng, { dur: 0.22, f: (t) => 480 * p * Math.pow(0.5, t / 0.22), q: 1.8, amp: (t) => envAD(t, 0.015, 0.06) }));
+  layer(out, 0.45, (b) => thump(b, sr, { f0: 90 * p, f1: 55, tau: 0.035, attack: 0.008 }));
+  layer(out, 0.7, (b) =>
+    phisem(b, sr, rng, {
+      dur: 0.42,
+      rate: 9000,
+      energy: (t) => envAD(t, 0.02, 0.1),
+      grain: 0.0004,
+      heavy: 2,
+      bands: [
+        { f: 5500, q: 1.2, g: 1, spread: 0.3 },
+        { f: 3200, q: 1.5, g: 0.5, spread: 0.3 },
+      ],
+    }),
+  );
+  layer(out, 0.3, (b) => fireCrackles(b, sr, rng, 0.01, 0.25, 25));
+  layer(out, 0.3, (b) => bubble(b, sr, rng.range(0.03, 0.1), rng.range(160, 280), 1, 0.03, 0.4));
+  return out;
+}
+
+/** Strider eat: slow, soft munching — two or three wet, crunchy chews. */
+function striderEat(c: Ctx): Float32Array {
+  const { sr, rng, v } = c;
+  const n = 2 + (v % 2);
+  const gap = rng.range(0.11, 0.15);
+  const d = n * gap + 0.12;
+  const out = alloc(d, sr);
+  const at: number[] = [];
+  for (let k = 0; k < n; k++) at.push(k * gap + rng.range(0, 0.02));
+  const en = (t: number) => {
+    let e = 0;
+    for (const a of at) e += envAD(t - a, 0.006, 0.03);
+    return Math.min(1, e);
+  };
+  layer(out, 1, (b) =>
+    phisem(b, sr, rng, {
+      dur: d,
+      rate: 3500,
+      energy: en,
+      grain: 0.0012,
+      heavy: 3,
+      bands: [
+        { f: 1500, q: 2, g: 1, spread: 0.4 },
+        { f: 3000, q: 2, g: 0.6, spread: 0.3 },
+        { f: 700, q: 2, g: 0.6, spread: 0.3 },
+      ],
+    }),
+  );
+  layer(out, 0.5, (b) => {
+    for (const a of at) sweep(b, sr, rng, { t: a, dur: 0.09, f: (t) => 900 * Math.pow(0.5, t / 0.09), q: 2, amp: (t) => envAD(t, 0.01, 0.03) });
+  });
+  layer(out, 0.45, (b) => {
+    for (const a of at) thump(b, sr, { t: a, f0: 150, f1: 90, tau: 0.02 });
+  });
+  lowpass(out, 5000, sr);
+  return out;
+}
+
+/** Saddling a strider: the leather saddle flops on (a dull slap and a creak) with a buckle clink. */
+function saddle(c: Ctx): Float32Array {
+  const { sr, rng } = c;
+  const out = alloc(0.6, sr);
+  layer(out, 1, (b) => burst(b, sr, rng, { dur: 0.12, attack: 0.002, tau: 0.02, bp: [900, 0.9] }));
+  layer(out, 0.6, (b) => thump(b, sr, { f0: 160, f1: 90, tau: 0.03 }));
+  layer(out, 0.5, (b) =>
+    creak(b, sr, rng, {
+      t: 0.08,
+      dur: 0.3,
+      rate: (t) => 90 + 150 * t,
+      amp: (t) => envBump(t, 0.08, 0.22),
+      jitter: 0.3,
+      bands: [
+        { f: 700, q: 3, g: 1 },
+        { f: 1800, q: 4, g: 0.5 },
+      ],
+    }),
+  );
+  layer(out, 0.45, (b) =>
+    ticks(b, sr, rng, { t: 0.12, dur: 0.25, rate: 25, energy: (t) => envAD(t, 0.001, 0.08), f: [2600, 4200], t60: [0.05, 0.12], ratios: [1, 2.76, 5.4], weights: [1, 0.5, 0.25], click: 0.3 }),
+  );
+  return out;
+}
+
 // ------------------------------------------------------------------ registry
 
 export function netherMobSounds(): Record<string, SoundGen> {
@@ -528,5 +779,15 @@ export function netherMobSounds(): Record<string, SoundGen> {
     'entity.ghast.death': sound('entity.ghast.death', 1, ghastDeath),
     'entity.ghast.warn': sound('entity.ghast.warn', 1, ghastWarn),
     'entity.ghast.shoot': sound('entity.ghast.shoot', 1, ghastShoot),
+
+    'entity.strider.ambient': sound('entity.strider.ambient', 5, striderAmbient),
+    'entity.strider.happy': sound('entity.strider.happy', 4, striderHappy),
+    'entity.strider.retreat': sound('entity.strider.retreat', 3, striderRetreat),
+    'entity.strider.hurt': sound('entity.strider.hurt', 4, striderHurt),
+    'entity.strider.death': sound('entity.strider.death', 2, striderDeath),
+    'entity.strider.step': sound('entity.strider.step', 4, striderStep),
+    'entity.strider.step_lava': sound('entity.strider.step_lava', 5, striderStepLava),
+    'entity.strider.eat': sound('entity.strider.eat', 3, striderEat),
+    'entity.strider.saddle': sound('entity.strider.saddle', 1, saddle),
   };
 }
