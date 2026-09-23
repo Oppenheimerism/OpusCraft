@@ -43,6 +43,12 @@ export function registerNetherBlocks(): void {
     model: axisModel(cubeColumn('basalt_side', 'basalt_top')),
   });
   registerBlock('blackstone', { hardness: 1.5, resistance: 6, sound: 'stone', tool: 'pickaxe', requiresTool: true, model: () => ({ model: cubeColumn('blackstone', 'blackstone_top') }) });
+  for (const [n, h] of [['polished_blackstone', 2], ['polished_blackstone_bricks', 1.5], ['cracked_polished_blackstone_bricks', 1.5], ['chiseled_polished_blackstone', 1.5]] as [string, number][]) {
+    const m = cubeAll(n);
+    registerBlock(n, { hardness: h, resistance: 6, sound: 'stone', tool: 'pickaxe', requiresTool: true, model: () => ({ model: m }) });
+  }
+  const gilded = cubeAll('gilded_blackstone');
+  registerBlock('gilded_blackstone', { hardness: 1.5, resistance: 6, sound: 'gilded_blackstone', tool: 'pickaxe', requiresTool: true, model: () => ({ model: gilded }) });
   for (const k of ['crimson', 'warped']) {
     // vanilla NyliumBlock: turns back into netherrack when smothered (randomTicks)
     registerBlock(`${k}_nylium`, {

@@ -598,6 +598,9 @@ export function registerExtraBlocks(): void {
   ] as [string, string, number][]) registerWall(name, tex, h);
   registerWall('nether_brick_wall', 'nether_bricks', 2, 'nether_bricks');
   registerWall('red_nether_brick_wall', 'red_nether_bricks', 2, 'nether_bricks');
+  registerWall('blackstone_wall', 'blackstone', 1.5);
+  registerWall('polished_blackstone_wall', 'polished_blackstone', 2);
+  registerWall('polished_blackstone_brick_wall', 'polished_blackstone_bricks', 1.5);
   // lantern & chain
   for (const [L, light] of [['lantern', 15], ['soul_lantern', 10]] as [string, number][]) {
     const lantern = (hanging: boolean): ModelDef => {

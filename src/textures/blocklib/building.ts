@@ -168,8 +168,20 @@ export function bricks(seed = 'bricks', brickCols = CLAY_BRICKS, mortar = CLAY_M
 
 /** cracked nether bricks: the same bricks split by dark cracks, a few of them chipped paler along the break */
 export function crackedNetherBricks(): TexImage {
-  const t = bricks('cracked_nether_bricks', NETHER_BRICKS, NETHER_MORTAR);
-  const d = 0x0b0405, e = 0x5c3238;
+  return crackedBricks('cracked_nether_bricks', NETHER_BRICKS, NETHER_MORTAR, 0x0b0405, 0x5c3238);
+}
+
+/** polished blackstone bricks: near-black stone bricks in a blacker mortar */
+export const BLACKSTONE_BRICKS = [
+  [0x1d191e, 0x252027, 0x2c262e, 0x352e37, 0x413843],
+  [0x1b171c, 0x221e24, 0x2a242b, 0x322b34, 0x3d353f],
+  [0x1f1a20, 0x272229, 0x2f2831, 0x38303a, 0x453c47],
+];
+export const BLACKSTONE_MORTAR = [0x0c0a0d, 0x121013, 0x080709];
+
+/** a bricks texture split by dark cracks, chipped paler along each break */
+export function crackedBricks(seed: string, cols: number[][], mortar: number[], d: number, e: number): TexImage {
+  const t = bricks(seed, cols, mortar);
   const cracks: [number, number][][] = [
     [[3, 0], [3, 1], [4, 2], [4, 4], [5, 5], [5, 6]],
     [[11, 4], [10, 5], [10, 6], [11, 8], [12, 9]],

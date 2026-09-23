@@ -27,8 +27,8 @@ const COLORS = ['white', 'orange', 'magenta', 'light_blue', 'yellow', 'lime', 'p
 const TAGS: Record<string, string[]> = {
   planks: WOODS.map((w) => `${w}_planks`),
   logs: WOODS.flatMap((w) => [`${w}_log`, `${w}_wood`, `stripped_${w}_log`, `stripped_${w}_wood`]),
-  stone_tool_materials: ['cobblestone', 'cobbled_deepslate'],
-  stone_crafting_materials: ['cobblestone', 'cobbled_deepslate'],
+  stone_tool_materials: ['cobblestone', 'blackstone', 'cobbled_deepslate'],
+  stone_crafting_materials: ['cobblestone', 'blackstone', 'cobbled_deepslate'],
   coals: ['coal', 'charcoal'],
   soul_fire_base_blocks: ['soul_sand', 'soul_soil'],
   wool: COLORS.map((c) => `${c}_wool`),
@@ -199,6 +199,9 @@ shaped('nether_bricks', 1, ['##', '##'], { '#': 'nether_brick' });
 shaped('red_nether_bricks', 1, ['NW', 'WN'], { N: 'nether_brick', W: 'nether_wart' });
 shaped('nether_brick_fence', 6, ['#-#', '#-#'], { '#': 'nether_bricks', '-': 'nether_brick' });
 shaped('chiseled_nether_bricks', 1, ['#', '#'], { '#': 'nether_brick_slab' });
+shaped('polished_blackstone', 4, ['##', '##'], { '#': 'blackstone' });
+shaped('polished_blackstone_bricks', 4, ['##', '##'], { '#': 'polished_blackstone' });
+shaped('chiseled_polished_blackstone', 1, ['#', '#'], { '#': 'polished_blackstone_slab' });
 shaped('sandstone', 1, ['##', '##'], { '#': 'sand' });
 shaped('cut_sandstone', 4, ['##', '##'], { '#': 'sandstone' });
 shaped('chiseled_sandstone', 1, ['#', '#'], { '#': 'sandstone_slab' });
@@ -245,6 +248,9 @@ const SLABS: [string, string][] = [
   ['cut_sandstone', 'cut_sandstone'],
   ['nether_brick', 'nether_bricks'],
   ['red_nether_brick', 'red_nether_bricks'],
+  ['blackstone', 'blackstone'],
+  ['polished_blackstone', 'polished_blackstone'],
+  ['polished_blackstone_brick', 'polished_blackstone_bricks'],
 ];
 for (const [n, mat] of SLABS) {
   shaped(`${n}_slab`, 6, ['###'], { '#': mat });
@@ -257,6 +263,7 @@ for (const [wall, mat] of [
   ['andesite_wall', 'andesite'], ['sandstone_wall', 'sandstone'], ['red_sandstone_wall', 'red_sandstone'], ['cobbled_deepslate_wall', 'cobbled_deepslate'],
   ['polished_deepslate_wall', 'polished_deepslate'], ['deepslate_brick_wall', 'deepslate_bricks'], ['deepslate_tile_wall', 'deepslate_tiles'],
   ['nether_brick_wall', 'nether_bricks'], ['red_nether_brick_wall', 'red_nether_bricks'],
+  ['blackstone_wall', 'blackstone'], ['polished_blackstone_wall', 'polished_blackstone'], ['polished_blackstone_brick_wall', 'polished_blackstone_bricks'],
 ]) shaped(wall, 6, ['###', '###'], { '#': mat });
 // doors, trapdoors, fences, gates
 for (const w of WOODS) {
@@ -398,6 +405,7 @@ function smelt(inputs: string[], result: string, xp: number): void {
 smelt(['iron_ore', 'deepslate_iron_ore', 'raw_iron'], 'iron_ingot', 0.7);
 smelt(['netherrack'], 'nether_brick', 0.1);
 smelt(['nether_bricks'], 'cracked_nether_bricks', 0.1);
+smelt(['polished_blackstone_bricks'], 'cracked_polished_blackstone_bricks', 0.1);
 smelt(['gold_ore', 'deepslate_gold_ore', 'raw_gold'], 'gold_ingot', 1.0);
 smelt(['copper_ore', 'deepslate_copper_ore', 'raw_copper'], 'copper_ingot', 0.7);
 smelt(['diamond_ore', 'deepslate_diamond_ore'], 'diamond', 1.0);

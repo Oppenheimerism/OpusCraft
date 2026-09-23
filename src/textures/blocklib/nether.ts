@@ -153,6 +153,58 @@ export function blackstone(): TexImage {
   });
 }
 
+/** polished blackstone: the stone ground smooth, a faint mottle inside a thin bevelled rim */
+export function polishedBlackstone(seed = 'polished_blackstone'): TexImage {
+  const P = BLACKSTONE_PAL;
+  const t = speckled(seed, P, {
+    oct: [[8, 8, 0.5], [4, 4, 0.3]], white: 0.25, weights: [0, 0.6, 3, 5, 2, 0.4, 0], mode: 1,
+    dark: 3, darkSize: [1, 2], light: 2, lightSize: [1, 2], darkTone: 1, lightTone: 4,
+  });
+  for (let i = 0; i < N; i++) {
+    setPx(t, i, 0, P[5]);
+    setPx(t, 0, i, i === 15 ? P[0] : P[5]);
+    setPx(t, i, 15, P[0]);
+    setPx(t, 15, i, i === 0 ? P[5] : P[0]);
+  }
+  return t;
+}
+
+/** chiseled polished blackstone: a piglin's face carved into the polished stone, eyes and snout */
+export function chiseledPolishedBlackstone(): TexImage {
+  const P = BLACKSTONE_PAL;
+  const t = polishedBlackstone('chiseled_polished_blackstone');
+  // the recessed panel
+  for (let i = 2; i < 14; i++) {
+    setPx(t, i, 2, P[0]);
+    setPx(t, 2, i, P[0]);
+    setPx(t, i, 13, P[5]);
+    setPx(t, 13, i, P[5]);
+  }
+  // brows, eyes and the broad snout with its nostrils
+  for (const x of [4, 5, 6, 9, 10, 11]) setPx(t, x, 4, P[5]);
+  for (const x of [5, 6, 9, 10]) setPx(t, x, 5, P[0]);
+  for (let y = 7; y < 11; y++) for (let x = 5; x < 11; x++) setPx(t, x, y, y === 7 ? P[6] : x === 5 ? P[5] : x === 10 || y === 10 ? P[1] : P[4]);
+  setPx(t, 6, 9, P[0]);
+  setPx(t, 9, 9, P[0]);
+  for (const x of [4, 11]) setPx(t, x, 11, P[5]);
+  return t;
+}
+
+/** gilded blackstone: blackstone with nuggets of gold set in it */
+export function gildedBlackstone(): TexImage {
+  const t = blackstone();
+  const r = rng('gilded_blackstone', 5);
+  const GOLD = [0x7a4f0c, 0xb97e17, 0xe6b12e, 0xfde58a];
+  for (let k = 0; k < 8; k++) {
+    const pts = cluster(r, r.nextInt(N), r.nextInt(N), 1 + r.nextInt(4));
+    const top = Math.min(...pts.map(([, y]) => y));
+    for (const [x, y] of pts) setPx(t, x, y, GOLD[y === top ? 3 : 1 + r.nextInt(2)]);
+    const [lx, ly] = pts[pts.length - 1];
+    setPx(t, lx, wrap(ly + 1), GOLD[0]);
+  }
+  return t;
+}
+
 /** blackstone top: the same stone with round lighter pockets */
 export function blackstoneTop(): TexImage {
   const t = blackstone();

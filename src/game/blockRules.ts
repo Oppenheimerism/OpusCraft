@@ -484,7 +484,7 @@ export function blockExperience(state: number, tool: Item | null, r: Rand, silk 
 }
 
 /** vanilla loot tables with a silk touch branch (the block itself); the rest ignore silk touch */
-const SILK_TABLES = new Set(['stone', 'deepslate', 'grass_block', 'mycelium', 'podzol', 'crimson_nylium', 'warped_nylium', 'hanging_roots', 'gravel', 'clay', 'glowstone', 'melon', 'bookshelf', 'snow_block', 'snow', 'cobweb', 'glass', 'ice', 'packed_ice', 'blue_ice', 'amethyst_cluster', 'small_amethyst_bud', 'medium_amethyst_bud', 'large_amethyst_bud']);
+const SILK_TABLES = new Set(['stone', 'deepslate', 'grass_block', 'mycelium', 'podzol', 'crimson_nylium', 'warped_nylium', 'hanging_roots', 'gravel', 'gilded_blackstone', 'clay', 'glowstone', 'melon', 'bookshelf', 'snow_block', 'snow', 'cobweb', 'glass', 'ice', 'packed_ice', 'blue_ice', 'amethyst_cluster', 'small_amethyst_bud', 'medium_amethyst_bud', 'large_amethyst_bud']);
 const SAPLING_CHANCES = [0.05, 0.0625, 0.083333336, 0.1];
 const JUNGLE_SAPLING_CHANCES = [0.025, 0.027777778, 0.03125, 0.041666668, 0.1];
 const STICK_CHANCES = [0.02, 0.022222223, 0.025, 0.033333335, 0.1];
@@ -518,6 +518,8 @@ export function blockDrops(state: number, tool: Item | null, r: Rand, silk = fal
     case 'diamond_ore': case 'deepslate_diamond_ore': return stacks('diamond', oreDrops(r, 1, fortune));
     case 'emerald_ore': case 'deepslate_emerald_ore': return stacks('emerald', oreDrops(r, 1, fortune));
     case 'gravel': return tableBonus(r, [0.1, 0.14285715, 0.25, 1], fortune) ? stacks('flint', 1) : stacks('gravel', 1);
+    // vanilla gilded_blackstone loot: now and then (more often with fortune) 2-5 gold nuggets instead of the block
+    case 'gilded_blackstone': return tableBonus(r, [0.1, 0.14285715, 0.25, 1], fortune) ? stacks('gold_nugget', 2 + r.nextInt(4)) : stacks(n, 1);
     case 'clay': return stacks('clay_ball', 4);
     case 'glowstone': return stacks('glowstone_dust', Math.max(1, Math.min(4, uniformBonus(r, fortuneless(r, 2, 4), 1, fortune))));
     case 'nether_quartz_ore': return stacks('quartz', oreDrops(r, 1, fortune));

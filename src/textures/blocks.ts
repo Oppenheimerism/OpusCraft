@@ -488,6 +488,11 @@ T['basalt_side'] = () => NE.basaltSide();
 T['basalt_top'] = () => NE.basaltTop();
 T['blackstone'] = () => NE.blackstone();
 T['blackstone_top'] = () => NE.blackstoneTop();
+T['polished_blackstone'] = () => NE.polishedBlackstone();
+T['chiseled_polished_blackstone'] = () => NE.chiseledPolishedBlackstone();
+T['gilded_blackstone'] = () => NE.gildedBlackstone();
+T['polished_blackstone_bricks'] = () => BL.bricks('polished_blackstone_bricks', BL.BLACKSTONE_BRICKS, BL.BLACKSTONE_MORTAR);
+T['cracked_polished_blackstone_bricks'] = () => BL.crackedBricks('cracked_polished_blackstone_bricks', BL.BLACKSTONE_BRICKS, BL.BLACKSTONE_MORTAR, 0x050405, 0x4a414c);
 {
   const crimsonTop = memo(() => NE.crimsonNyliumTop());
   const warpedTop = memo(() => NE.warpedNyliumTop());
