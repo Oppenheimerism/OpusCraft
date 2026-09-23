@@ -1,10 +1,10 @@
 // Nether mob vocalisations and foley, second batch: blaze (breath through hot metal pipes), wither
 // skeleton (deep, hollow bony rattles), piglin brute (the piglin's throat, bigger and angrier) and
 // zoglin (the hoglin's, rotten and wet), in the style of netherMobs.ts, whose pig-family throats and
-// grunts they share.
+// grunts they share; plus the respawn anchor's deep, magical hums.
 
 import type { SoundGen } from '../synth';
-import { type Rng, SVF, TAU, alloc, clamp, envAD, envBump, envExpPts, envPts, highpass, layer, lowpass, smooth } from './dsp';
+import { type Rng, SVF, TAU, addOsc, alloc, clamp, echo, envAD, envBump, envExpPts, envPts, highpass, layer, lowpass, reverb, smooth, upsample2 } from './dsp';
 import { type Ctx, sound } from './registry';
 import { type Grunt, HOGLIN, type Throat, converted, deathGroan, gruntInto, gurgleInto, snortInto, yelpInto } from './netherMobs';
 import { bubble, burst, creak, fireCrackles, impact, phisem, sweep, thump, ticks, twoBump } from './texture';
@@ -847,6 +847,170 @@ function zoglinStep(c: Ctx): Float32Array {
   return out;
 }
 
+// ------------------------------------------------------------------ respawn anchor
+
+// The anchor's hums are dark, so they are rendered at half the sample rate (as nether.ts does its portal).
+
+/** Half-rate render -> full rate, with the images above ~10 kHz removed. */
+function up2(x: Float32Array, sr: number): Float32Array {
+  const y = upsample2(x);
+  lowpass(y, 9500, sr);
+  return lowpass(y, 9500, sr);
+}
+
+/** A slow oscillator whose rate glides (rate(x) Hz over normalised time x): returns sin(phase), tabulated at 1 kHz. */
+function glideLfo(rng: Rng, d: number, rate: (x: number) => number): (t: number) => number {
+  const K = 1000;
+  const N = Math.ceil(d * K) + 2;
+  const ph = new Float64Array(N);
+  ph[0] = rng.next();
+  for (let k = 1; k < N; k++) ph[k] = ph[k - 1] + rate(Math.min(1, k / K / d)) / K;
+  return (t) => {
+    const u = clamp(t * K, 0, N - 1.001);
+    const k = u | 0;
+    return Math.sin(TAU * (ph[k] + (ph[k + 1] - ph[k]) * (u - k)));
+  };
+}
+
+/**
+ * A deep, magical hum: `n` harmonics of f(t), each voiced twice a hair apart so they shimmer and
+ * beat, rolled off above bright(t) Hz.
+ */
+function humInto(b: Float32Array, sr: number, t0: number, d: number, f: (t: number) => number, amp: (t: number) => number, n: number, bright: (t: number) => number): void {
+  for (let h = 1; h <= n; h++) {
+    for (const det of [0.9965, 1.0035]) {
+      addOsc(
+        b,
+        sr,
+        t0,
+        d,
+        (t) => f(t) * h * det,
+        (t) => ((0.5 / h) * amp(t)) / (1 + Math.pow((f(t) * h) / bright(t), 2)),
+        h * 1.7,
+      );
+    }
+  }
+}
+
+/** The swirl of power in the anchor: resonant noise bands at `ks` times f(t), circling as they move. */
+function swirlInto(b: Float32Array, sr: number, rng: Rng, d: number, f: (t: number) => number, ks: number[], q: number, amp: (t: number) => number): void {
+  for (const k of ks) {
+    const lf = rng.range(0.5, 1.1);
+    const ph = rng.next() * TAU;
+    sweep(b, sr, rng, { dur: d, f: (t) => f(t) * k * (1 + 0.12 * Math.sin(TAU * lf * t + ph)), q, amp, color: 'pink' });
+  }
+}
+
+/** Respawn anchor charge: a block of glowstone going in, a soft chunk, then a deep, resonant thrum that rises as the anchor fills. */
+function anchorCharge(c: Ctx): Float32Array {
+  const { rng, v } = c;
+  const sr = c.sr / 2;
+  const D = [1.25, 1.1, 1.4][v % 3] * rng.range(0.95, 1.05);
+  const out = alloc(D + 0.05, sr);
+  const f0 = rng.range(50, 58) * [1, 1.12, 0.92][v % 3];
+  const up = [1.7, 1.55, 1.85][v % 3];
+  const rise = (t: number) => smooth(Math.min(1, t / (D * 0.75)));
+  const f = (t: number) => f0 * Math.pow(up, rise(t));
+  const env = (t: number) => smooth(envPts(t / D, [0, 0, 0.1, 0.45, 0.72, 1, 1, 0]));
+  // the thrum pulses faster as the charge builds
+  const thr = glideLfo(rng, D, (x) => 5 + 9 * x);
+  layer(out, 1, (b) => humInto(b, sr, 0, D, f, (t) => env(t) * (0.6 + 0.4 * thr(t)), 8, (t) => 260 + 900 * rise(t)));
+  layer(out, 0.5, (b) => swirlInto(b, sr, rng, D, f, [6, 11, 19], 6, (t) => env(t) * (0.7 + 0.3 * thr(t))));
+  // a breath of air rising through it
+  layer(out, 0.14, (b) => sweep(b, sr, rng, { dur: D, f: (t) => 1200 * Math.pow(2.5, rise(t)), q: 2, amp: (t) => env(t) * rise(t), color: 'pink' }));
+  // the glowstone going in: a soft, crumbly chunk
+  layer(out, 0.45, (b) => {
+    impact(b, sr, rng, { modes: [rng.range(170, 220), 1, 0.07, rng.range(420, 520), 0.45, 0.04], jitter: 0.03, noise: 0.8, noiseTau: 0.004, noiseBp: [1400, 0.8] });
+    phisem(b, sr, rng, {
+      dur: 0.12,
+      rate: 4000,
+      energy: (t) => envAD(t, 0.003, 0.03),
+      grain: 0.0008,
+      heavy: 2,
+      bands: [
+        { f: 2200, q: 1.3, g: 1, spread: 0.3 },
+        { f: 4200, q: 1.5, g: 0.5, spread: 0.3 },
+      ],
+    });
+  });
+  return up2(reverb(out, sr, { t60: 1.4, wet: 0.35, size: 1.3, pre: 0.02, hf: 0.45, lowcut: 120, tail: 0.9 }), c.sr);
+}
+
+/** Respawn anchor deplete: a charge used up, the power draining away in a falling, slowing thrum. */
+function anchorDeplete(c: Ctx): Float32Array {
+  const { rng, v } = c;
+  const sr = c.sr / 2;
+  const D = [1.15, 1.3][v % 2] * rng.range(0.95, 1.05);
+  const out = alloc(D + 0.05, sr);
+  const f0 = rng.range(95, 110) * (v === 0 ? 1 : 0.9);
+  const fall = (t: number) => 1 - Math.exp(-t / (D * 0.35));
+  const f = (t: number) => f0 * Math.pow(0.36, fall(t));
+  const env = (t: number) => (t < 0.03 ? t / 0.03 : Math.exp(-(t - 0.03) / (D * 0.38))) * clamp((D - t) / 0.1, 0, 1);
+  // the thrum slows as the power drains
+  const thr = glideLfo(rng, D, (x) => 13 - 10 * x);
+  layer(out, 1, (b) => humInto(b, sr, 0, D, f, (t) => env(t) * (0.65 + 0.35 * thr(t)), 8, (t) => 160 + 1000 * Math.pow(0.25, fall(t))));
+  layer(out, 0.5, (b) => swirlInto(b, sr, rng, D, f, [6, 11, 19], 5, (t) => env(t) * (0.7 + 0.3 * thr(t))));
+  // the air rushing out of it
+  layer(out, 0.14, (b) => sweep(b, sr, rng, { dur: D, f: (t) => 3000 * Math.pow(0.3, fall(t)), q: 2, amp: env, color: 'pink' }));
+  layer(out, 0.5, (b) => thump(b, sr, { f0: 110, f1: 40, glide: 0.1, tau: 0.18, attack: 0.008 }));
+  return up2(reverb(out, sr, { t60: 1.3, wet: 0.35, size: 1.3, pre: 0.02, hf: 0.45, lowcut: 120, tail: 0.8 }), c.sr);
+}
+
+/** Respawn anchor set spawn: a resonant, echoing, magical swell, a shimmering chord blooming over the deep hum. */
+function anchorSetSpawn(c: Ctx): Float32Array {
+  const { rng, v } = c;
+  const sr = c.sr / 2;
+  const D = 1.8;
+  const out = alloc(D + 0.6, sr);
+  const root = rng.range(52, 58) * [1, 1.06, 0.94][v % 3];
+  // stacked fifths and octaves; the other takes colour it with a ninth or a fourth
+  const chord = [
+    [1, 1.5, 2, 3],
+    [1, 1.5, 2.25, 3],
+    [1, 1.333, 2, 3],
+  ][v % 3];
+  const env = (t: number) => smooth(envPts(t / D, [0, 0, 0.05, 0.5, 0.35, 1, 0.6, 0.8, 1, 0]));
+  const vr = rng.range(4.5, 5.5);
+  // the anchor answering at once: a soft, resonant "bwong" the swell grows out of
+  layer(out, 0.45, (b) => thump(b, sr, { f0: root * 2, f1: root, glide: 0.08, tau: 0.3, attack: 0.012, h2: 0.3 }));
+  // the deep hum
+  layer(out, 0.8, (b) => humInto(b, sr, 0, D, (t) => root * (1 + 0.004 * Math.sin(TAU * vr * t)), env, 5, () => 400));
+  // the chord blooming above it, its voices entering one after another
+  layer(out, 1, (b) => {
+    chord.forEach((r, k) => {
+      const fr = root * 4 * r;
+      const t0 = 0.06 * k;
+      const e = (t: number) => env(t + t0) / Math.sqrt(r);
+      for (const det of [0.996, 1.004]) addOsc(b, sr, t0, D - t0, (t) => fr * det * (1 + 0.005 * Math.sin(TAU * vr * t + k)), e, k);
+      // a faint, glassy upper partial
+      addOsc(b, sr, t0, D - t0, (t) => fr * 2.76, (t) => 0.12 * e(t), k + 1);
+    });
+  });
+  // a rising breath of air through it
+  layer(out, 0.3, (b) => sweep(b, sr, rng, { dur: D, f: (t) => 400 * Math.pow(4, smooth(t / D)), q: 4, amp: env, color: 'pink' }));
+  echo(out, sr, 0.19, 0.35, 0.4, 3000);
+  return up2(reverb(out, sr, { t60: 2.6, wet: 0.7, size: 1.6, pre: 0.03, hf: 0.4, lowcut: 150, tail: 1.6 }), c.sr);
+}
+
+/** Respawn anchor ambient: now and then a charged anchor hums to itself, a low, portal-like swirl and warble. */
+function anchorAmbient(c: Ctx): Float32Array {
+  const { rng, v } = c;
+  const sr = c.sr / 2;
+  const D = [2.6, 3.1, 2.2][v % 3] * rng.range(0.95, 1.05);
+  const out = alloc(D, sr);
+  const env = (t: number) => envBump(t, D * 0.4, D * 0.6);
+  const wob = rng.range(3.5, 5.5);
+  const wph = rng.next() * TAU;
+  const warble = (t: number) => Math.sin(TAU * wob * t + wph);
+  const fb = rng.range(48, 56);
+  // the swirl: resonant noise bands circling round each other, as in the portal but lower and smaller
+  layer(out, 1, (b) => swirlInto(b, sr, rng, D, (t) => fb * (1 + 0.05 * warble(t)), [5, 8.5, 13.5], 7, env));
+  // the deep hum under it
+  layer(out, 0.6, (b) => humInto(b, sr, 0, D, (t) => fb * (1 + 0.012 * warble(t)), env, 6, () => 280));
+  for (let i = 0; i < out.length; i++) out[i] *= 0.75 + 0.25 * warble(i / sr);
+  return up2(out, c.sr);
+}
+
 // ------------------------------------------------------------------ registry
 
 export function netherMobSounds2(): Record<string, SoundGen> {
@@ -877,5 +1041,10 @@ export function netherMobSounds2(): Record<string, SoundGen> {
     'entity.zoglin.hurt': sound('entity.zoglin.hurt', 3, zoglinHurt),
     'entity.zoglin.death': sound('entity.zoglin.death', 3, zoglinDeath),
     'entity.zoglin.step': sound('entity.zoglin.step', 4, zoglinStep),
+
+    'block.respawn_anchor.charge': sound('block.respawn_anchor.charge', 3, anchorCharge),
+    'block.respawn_anchor.deplete': sound('block.respawn_anchor.deplete', 2, anchorDeplete),
+    'block.respawn_anchor.set_spawn': sound('block.respawn_anchor.set_spawn', 3, anchorSetSpawn),
+    'block.respawn_anchor.ambient': sound('block.respawn_anchor.ambient', 3, anchorAmbient),
   };
 }
