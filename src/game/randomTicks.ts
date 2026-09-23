@@ -191,7 +191,8 @@ export class RandomTicker {
       return;
     }
     if (n === 'ice') {
-      if ((this.level.world.getLight(x, y, z) & 15) > 11 - OPACITY[st]) lvl.setBlock(x, y, z, S('water'));
+      // vanilla IceBlock.melt: into water, or into nothing in an ultrawarm dimension
+      if ((this.level.world.getLight(x, y, z) & 15) > 11 - OPACITY[st]) lvl.setBlock(x, y, z, S(this.level.world.dim.ultraWarm ? 'air' : 'water'));
       return;
     }
     if (n === 'snow') {

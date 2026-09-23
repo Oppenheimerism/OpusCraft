@@ -229,7 +229,8 @@ export class Interaction {
       if (xp > 0) this.level.awardExperience(x + 0.5, y + 0.5, z + 0.5, xp);
     }
     // vanilla IceBlock.playerDestroy: without silk touch (#prevents_ice_melting) ice over something solid or liquid melts
-    if (survival && b.name === 'ice' && !silk) {
+    // (in an ultrawarm dimension it just goes)
+    if (survival && b.name === 'ice' && !silk && !this.level.world.dim.ultraWarm) {
       const below = this.level.world.getState(x, y - 1, z);
       if (COLLISION[below]?.length || FLAGS[below] & (F_WATER | F_LAVA)) this.level.setBlock(x, y, z, S('water'));
     }
