@@ -171,7 +171,24 @@ const monsters = (zombie = 95, skeleton = 100): SpawnerData[] => [
 
 const SQUID = (w: number, max = 4): SpawnerData[] => [{ type: 'squid', weight: w, min: 1, max }];
 
+const S_ = (type: string, weight: number, min: number, max: number): SpawnerData => ({ type, weight, min, max });
+const STRIDERS = [S_('strider', 60, 1, 2)];
+/**
+ * vanilla NetherBiomes spawn settings (no bats, no water mobs); what isn't in the game yet (ghasts, piglins, hoglins,
+ * magma cubes, striders) is picked as often as vanilla picks it and then simply doesn't appear, so the rest come
+ * as rarely as they should
+ */
+const NETHER_SPAWNS: Record<string, { monster: SpawnerData[]; creature: SpawnerData[] }> = {
+  nether_wastes: { monster: [S_('ghast', 50, 4, 4), S_('zombified_piglin', 100, 4, 4), S_('magma_cube', 2, 4, 4), S_('enderman', 1, 4, 4), S_('piglin', 15, 4, 4)], creature: STRIDERS },
+  soul_sand_valley: { monster: [S_('skeleton', 20, 5, 5), S_('ghast', 50, 4, 4), S_('enderman', 1, 4, 4)], creature: STRIDERS },
+  basalt_deltas: { monster: [S_('ghast', 40, 1, 1), S_('magma_cube', 100, 2, 5)], creature: STRIDERS },
+  crimson_forest: { monster: [S_('zombified_piglin', 1, 2, 4), S_('hoglin', 9, 3, 4), S_('piglin', 5, 3, 4)], creature: STRIDERS },
+  warped_forest: { monster: [S_('enderman', 1, 4, 4)], creature: STRIDERS },
+};
+
 function settingsFor(name: string): MobSettings {
+  const nether = NETHER_SPAWNS[name];
+  if (nether) return { ...nether, creatureProbability: 0.1, water: [], ambient: [] };
   const base = settingsForLand(name);
   let water: SpawnerData[] = [];
   if (name === 'river' || name === 'frozen_river') water = SQUID(2);
@@ -309,7 +326,8 @@ export class NaturalSpawner {
     const lvl = this.level, w = lvl.world, r = this.rand;
     const x0 = (cx << 4) + r.nextInt(16), z0 = (cz << 4) + r.nextInt(16);
     const top = w.heightAt(x0, z0) + 1;
-    const y = MIN_Y + r.nextInt(top - MIN_Y + 1);
+    const minY = w.dim.minY;
+    const y = minY + r.nextInt(top - minY + 1);
     const st0 = w.getState(x0, y, z0);
     if (FLAGS[st0] & F_OPAQUE && FLAGS[st0] & F_FULL_COLLISION) return 0;
     let spawned = 0;

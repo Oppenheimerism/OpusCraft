@@ -37,6 +37,10 @@ export interface DimensionType {
   };
   /** the packed light (sky << 4 | block) of open space outside any chunk data */
   lightDefault: number;
+  /** vanilla monster_spawn_block_light_limit: monsters spawn only where block light is at most this */
+  monsterSpawnBlockLightLimit: number;
+  /** vanilla monster_spawn_light_level: the brightness they need to be at or under (null: a random 0..7) */
+  monsterSpawnLightLevel: number | null;
   /** chunk/entity storage key prefix within a world ('' for the overworld, so old saves still load) */
   storage: string;
 }
@@ -58,6 +62,8 @@ export const OVERWORLD: DimensionType = {
   fixedTime: null,
   effects: { sky: 'normal', constantAmbientLight: false, foggy: false, clouds: true },
   lightDefault: 0xf0,
+  monsterSpawnBlockLightLimit: 0,
+  monsterSpawnLightLevel: null,
   storage: '',
 };
 
@@ -78,6 +84,8 @@ export const THE_NETHER: DimensionType = {
   fixedTime: 18000,
   effects: { sky: 'none', constantAmbientLight: true, foggy: true, clouds: false },
   lightDefault: 0,
+  monsterSpawnBlockLightLimit: 15,
+  monsterSpawnLightLevel: 7,
   storage: 'nether/',
 };
 

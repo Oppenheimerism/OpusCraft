@@ -64,9 +64,11 @@ export abstract class Monster extends Mob {
   static isDarkEnoughToSpawn(level: Level, x: number, y: number, z: number, rand: () => number): boolean {
     const l = level.world.getLight(x, y, z);
     if (l >> 4 > Math.floor(rand() * 32)) return false;
-    if ((l & 15) > 0) return false;
+    // (the dimension's rules: the Overworld wants no block light at all, the Nether takes any, but no brighter than 7)
+    const dim = level.world.dim;
+    if (dim.monsterSpawnBlockLightLimit < 15 && (l & 15) > dim.monsterSpawnBlockLightLimit) return false;
     const j = level.isThundering() ? level.rawBrightness(x, y, z, 10) : level.rawBrightness(x, y, z);
-    return Math.floor(rand() * 8) >= j;
+    return j <= (dim.monsterSpawnLightLevel ?? Math.floor(rand() * 8));
   }
 
   /** vanilla Monster.checkMonsterSpawnRules (without the light test for spawners/commands) */
