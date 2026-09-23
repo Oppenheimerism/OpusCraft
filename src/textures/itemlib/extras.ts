@@ -246,12 +246,6 @@ E['ender_eye'] = () => {
   plot(t, 5, 6, 0xc8f0d4);
   return t;
 };
-E['fire_charge'] = () => {
-  const t = ballOf(5.2, [0x1a0e08, 0x2a160c, 0x3a2012, 0x4e2c18, 0x6a3a1e, 0x8a4a22], 0x0a0402, 'fire_charge');
-  for (const [x, y, c] of [[6, 6, 0xf8c030], [7, 7, 0xf07a1e], [10, 6, 0xf07a1e], [9, 9, 0xf8c030], [5, 10, 0xd84a10], [8, 11, 0xf07a1e], [11, 9, 0xd84a10]] as [number, number, number][])
-    plot(t, x, y, c);
-  return t;
-};
 E['firework_star'] = () => {
   const t = ballOf(4.6, [0x3a3a3a, 0x505050, 0x686868, 0x808080, 0x9a9a9a, 0xb8b8b8], 0x1e1e1e, 'firework_star');
   for (const [x, y] of [[6, 7], [9, 6], [10, 10], [7, 10]] as [number, number][]) plot(t, x, y, 0x2a2a2a);

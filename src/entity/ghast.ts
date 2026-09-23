@@ -1,22 +1,18 @@
 // The ghast (vanilla Ghast, a FlyingMob): a huge floating jellyfish of the Nether that drifts about at random,
 // turns to face a player it has noticed (from within 4 blocks up or down, up to 100 away), wails a warning and
-// spits a fireball. The large fireball (vanilla LargeFireball) flies straight, speeding up, and bursts where it
-// hits; strike it and it flies off the way you look, yours now, and a ghast it hits is done for.
+// spits a large fireball (fireball.ts); strike that and it flies off the way you look, yours now, and a ghast it
+// hits is done for.
 
 import { LootEntry } from './mob';
 import type { Level } from '../game/level';
 import { Goal, Flag } from './ai/goal';
 import { MoveControl, MoveOp } from './ai/controls';
 import { NearestAttackablePlayerGoal } from './ai/goals';
-import { LivingEntity } from './living';
-import { Entity } from './entity';
-import type { Player } from './player';
+import type { Entity } from './entity';
 import { Monster, validSpawnBlock } from './monsters';
-import { ItemStack, ITEMS } from '../item/item';
+import { LargeFireball } from './fireball';
 import { COLLISION } from '../world/block';
 import { AABB } from '../core/aabb';
-import { explode } from '../game/explosion';
-import { clipBlocks } from '../game/raycast';
 
 const RAD = 180 / Math.PI;
 
@@ -226,86 +222,5 @@ export class Ghast extends Monster {
   /** vanilla checkGhastSpawnRules: one try in twenty, on any floor a fireproof mob may stand on */
   static checkGhastSpawn(level: Level, x: number, y: number, z: number, rand: () => number): boolean {
     return level.difficulty !== 'peaceful' && Math.floor(rand() * 20) === 0 && validSpawnBlock(level, x, y - 1, z, true);
-  }
-}
-
-/** vanilla LargeFireball (AbstractHurtingProjectile): pushed along its heading 0.1 a tick against 5% drag */
-export class LargeFireball extends Entity {
-  readonly type = 'fireball';
-  owner: Entity | null;
-  private leftOwner = false;
-  readonly stack = new ItemStack(ITEMS.get('fire_charge')!, 1);
-  constructor(level: Level, owner: Entity | null, dirX: number, dirY: number, dirZ: number, readonly power: number) {
-    super(level);
-    this.setSize(1, 1);
-    this.owner = owner;
-    const l = Math.sqrt(dirX * dirX + dirY * dirY + dirZ * dirZ) || 1;
-    this.dx = (dirX / l) * 0.1;
-    this.dy = (dirY / l) * 0.1;
-    this.dz = (dirZ / l) * 0.1;
-  }
-  override isPickable(): boolean {
-    return true;
-  }
-  /** vanilla ProjectileDeflection.AIM_DEFLECT: a blow sends it off the way the striker looks, and makes it theirs */
-  override hurt(_amount: number, _source: string, attacker?: Entity | null): boolean {
-    if (!attacker) return false;
-    const yr = attacker.yaw / RAD, pr = attacker.pitch / RAD;
-    this.dx = -Math.sin(yr) * Math.cos(pr);
-    this.dy = -Math.sin(pr);
-    this.dz = Math.cos(yr) * Math.cos(pr);
-    this.owner = attacker;
-    this.leftOwner = false;
-    return true;
-  }
-  override tick(): void {
-    // (vanilla: gone with the one that threw it)
-    if (this.owner?.removed) {
-      this.remove();
-      return;
-    }
-    this.baseTick();
-    const lvl = this.level;
-    const x0 = this.x, y0 = this.y + this.height / 2, z0 = this.z;
-    if (!this.leftOwner) {
-      const o = this.owner;
-      this.leftOwner = !o || !o.bb.intersects(this.bb.expandTowards(this.dx, this.dy, this.dz).inflate(1));
-    }
-    let x1 = x0 + this.dx, y1 = y0 + this.dy, z1 = z0 + this.dz;
-    const bh = clipBlocks(lvl.world, x0, y0, z0, x1, y1, z1);
-    if (bh) {
-      x1 = bh.px;
-      y1 = bh.py;
-      z1 = bh.pz;
-    }
-    let hit: Entity | null = null, best = Infinity;
-    for (const e of lvl.getEntities(this.bb.expandTowards(this.dx, this.dy, this.dz).inflate(1), (e) => e instanceof LivingEntity && e.isPickable(), this)) {
-      if (e === this.owner && !this.leftOwner) continue;
-      if (e.type === 'player' && (e as Player).gameMode === 'spectator') continue;
-      const h = e.bb.inflate(0.3).clip(x0, y0, z0, x1, y1, z1);
-      if (h && h.t < best) {
-        best = h.t;
-        hit = e;
-      }
-    }
-    if (hit || bh) {
-      // vanilla LargeFireball.onHitEntity (6 fireball damage) then onHit: the blast, fire where mobs may grief
-      if (hit) hit.hurt(6, 'fireball', this.owner ?? this, this);
-      explode(lvl, this, this.x, this.y, this.z, this.power, !!lvl.gameRules.mobGriefing, 'mob');
-      this.remove();
-      return;
-    }
-    // speed up along its heading, smoke trailing
-    const v = Math.sqrt(this.dx * this.dx + this.dy * this.dy + this.dz * this.dz) || 1;
-    const f = this.inWater ? 0.8 : 0.95;
-    const nx = this.x + this.dx, ny = this.y + this.dy, nz = this.z + this.dz;
-    this.dx = (this.dx + (this.dx / v) * 0.1) * f;
-    this.dy = (this.dy + (this.dy / v) * 0.1) * f;
-    this.dz = (this.dz + (this.dz / v) * 0.1) * f;
-    lvl.particles.spawn?.('smoke', nx, ny + 0.5, nz, 0, 0, 0);
-    this.setPos(nx, ny, nz);
-  }
-  protected override makesStepSounds(): boolean {
-    return false;
   }
 }

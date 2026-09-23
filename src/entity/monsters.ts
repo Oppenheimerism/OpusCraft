@@ -476,7 +476,7 @@ class RangedBowAttackGoal extends Goal {
 }
 
 export class Skeleton extends Monster {
-  readonly type = 'skeleton';
+  readonly type: string = 'skeleton';
   private bowGoal: RangedBowAttackGoal | null = null;
   private meleeGoal: MeleeAttackGoal | null = null;
   constructor(level: Level) {
@@ -525,9 +525,13 @@ export class Skeleton extends Monster {
     const bow = ITEMS.get('bow');
     if (bow) this.mainHand = new ItemStack(bow, 1);
   }
+  /** vanilla AbstractSkeleton.getArrow */
+  protected getArrow(): Arrow {
+    return new Arrow(this.level, this);
+  }
   /** vanilla AbstractSkeleton.performRangedAttack */
   performRangedAttack(t: LivingEntity, power: number): void {
-    const a = new Arrow(this.level, this);
+    const a = this.getArrow();
     a.setBaseDamageFromMob(power, DIFFICULTY_ID[this.level.difficulty] ?? 2);
     const d0 = t.x - this.x;
     const d1 = t.y + t.height / 3 - a.y;
@@ -553,6 +557,65 @@ export class Skeleton extends Monster {
     return [
       { item: 'arrow', min: 0, max: 2 },
       { item: 'bone', min: 0, max: 2 },
+    ];
+  }
+}
+
+/**
+ * vanilla WitherSkeleton: the fortress's tall, sooty skeleton with a stone sword; what it strikes withers for ten
+ * seconds. It doesn't burn, and nothing withers it
+ */
+export class WitherSkeleton extends Skeleton {
+  override readonly type: string = 'wither_skeleton';
+  constructor(level: Level) {
+    super(level);
+    this.setSize(0.7, 2.4);
+    // (vanilla finalizeSpawn sets the base attack damage to 4)
+    this.attackDamage = 4;
+  }
+  override get eyeHeight(): number {
+    return 2.1;
+  }
+  override fireImmune(): boolean {
+    return true;
+  }
+  override canBeAffected(inst: MobEffectInstance): boolean {
+    return inst.effect !== MOB_EFFECTS.wither && super.canBeAffected(inst);
+  }
+  override finalizeSpawn(): void {
+    const sword = ITEMS.get('stone_sword');
+    if (sword) this.mainHand = new ItemStack(sword, 1);
+    this.attackDamage = 4;
+  }
+  override doHurtTarget(target: Entity): boolean {
+    if (!super.doHurtTarget(target)) return false;
+    if (target instanceof LivingEntity) target.addEffect(new MobEffectInstance(MOB_EFFECTS.wither, 200, 0), this);
+    return true;
+  }
+  /** vanilla WitherSkeleton.getArrow: a bow in its hands shoots flaming arrows */
+  protected override getArrow(): Arrow {
+    const a = super.getArrow();
+    a.igniteForSeconds(100);
+    return a;
+  }
+  override ambientSound(): string {
+    return 'entity.wither_skeleton.ambient';
+  }
+  override hurtSound(): string {
+    return 'entity.wither_skeleton.hurt';
+  }
+  override deathSound(): string {
+    return 'entity.wither_skeleton.death';
+  }
+  override stepSound(): string {
+    return 'entity.wither_skeleton.step';
+  }
+  /** vanilla entities/wither_skeleton */
+  override lootTable(): LootEntry[] {
+    return [
+      { item: 'coal', min: -1, max: 1 },
+      { item: 'bone', min: 0, max: 2 },
+      { item: 'wither_skeleton_skull', min: 1, max: 1, player: true, chance: 0.025, lootingChance: [0.035, 0.01], noLooting: true },
     ];
   }
 }

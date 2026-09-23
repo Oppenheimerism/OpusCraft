@@ -16,6 +16,8 @@ export type Criterion =
   | { t: 'breed'; type: string | '*' }
   | { t: 'shoot_arrow' }
   | { t: 'biome'; biome: string }
+  /** vanilla PlayerTrigger LOCATION with LocationPredicate.inStructure: standing in one of its pieces */
+  | { t: 'structure'; structure: string }
   | { t: 'sniper' }
   /** vanilla player_killed_entity: a ghast, the killing blow a fireball */
   | { t: 'return_to_sender' }
@@ -122,7 +124,7 @@ const A: AdvancementDef[] = [
   { id: 'nether/find_bastion', parent: 'nether/root', title: 'Those Were the Days', description: 'Enter a Bastion Remnant', icon: 'polished_blackstone_bricks', frame: 'task', criteria: one(never) },
   { id: 'nether/obtain_ancient_debris', parent: 'nether/root', title: 'Hidden in the Depths', description: 'Obtain Ancient Debris', icon: 'ancient_debris', frame: 'task', criteria: { ancient_debris: inv('ancient_debris') } },
   { id: 'nether/fast_travel', parent: 'nether/root', title: 'Subspace Bubble', description: 'Use the Nether to travel 7 km in the Overworld', icon: 'map', frame: 'challenge', criteria: { travelled: { t: 'nether_travel', distance: 7000 } } },
-  { id: 'nether/find_fortress', parent: 'nether/root', title: 'A Terrible Fortress', description: 'Break your way into a Nether Fortress', icon: 'nether_bricks', frame: 'task', criteria: one(never) },
+  { id: 'nether/find_fortress', parent: 'nether/root', title: 'A Terrible Fortress', description: 'Break your way into a Nether Fortress', icon: 'nether_bricks', frame: 'task', criteria: { fortress: { t: 'structure', structure: 'fortress' } } },
   { id: 'nether/obtain_crying_obsidian', parent: 'nether/root', title: 'Who is Cutting Onions?', description: 'Obtain Crying Obsidian', icon: 'crying_obsidian', frame: 'task', criteria: { crying_obsidian: inv('crying_obsidian') } },
   { id: 'nether/distract_piglin', parent: 'nether/root', title: 'Oh Shiny', description: 'Distract Piglins with gold', icon: 'gold_ingot', frame: 'task', criteria: one(never) },
   { id: 'nether/ride_strider', parent: 'nether/root', title: 'This Boat Has Legs', description: 'Ride a Strider with a Warped Fungus on a Stick', icon: 'warped_fungus_on_a_stick', frame: 'task', criteria: one(never) },
@@ -389,6 +391,8 @@ export interface TriggerPayload {
   consume?: string;
   breed?: string;
   biome?: string;
+  /** the structures whose pieces the player stands in */
+  structures?: string[];
   dimension?: { from: string; to: string };
   /** horizontal distance travelled through the Nether (vanilla NetherTravelTrigger) */
   netherTravel?: number;
@@ -506,6 +510,8 @@ function matches(c: Criterion, p: TriggerPayload): boolean {
       return !!p.breed && (c.type === '*' || c.type === p.breed);
     case 'biome':
       return p.biome === c.biome;
+    case 'structure':
+      return !!p.structures?.includes(c.structure);
     case 'changed_dimension':
       return !!p.dimension && (!c.from || c.from === p.dimension.from) && (!c.to || c.to === p.dimension.to);
     case 'nether_travel':

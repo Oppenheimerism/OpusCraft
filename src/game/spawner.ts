@@ -8,7 +8,8 @@ import { ItemEntity } from '../entity/itemEntity';
 import { ItemStack, ITEMS, cloneTag } from '../item/item';
 import { Pig, Cow, Sheep, Chicken, Animal } from '../entity/animals';
 import { Ghast } from '../entity/ghast';
-import { Zombie, ZombifiedPiglin, Skeleton, Creeper, Spider, CaveSpider, Enderman, Slime, MagmaCube, Monster, validSpawnBlock } from '../entity/monsters';
+import { Blaze } from '../entity/blaze';
+import { Zombie, ZombifiedPiglin, Skeleton, WitherSkeleton, Creeper, Spider, CaveSpider, Enderman, Slime, MagmaCube, Monster, validSpawnBlock } from '../entity/monsters';
 import { Squid, WaterAnimal } from '../entity/water';
 import { AbstractMinecart, createMinecart, MINECART_TYPES } from '../entity/minecart';
 import { Bat } from '../entity/bat';
@@ -36,6 +37,8 @@ export const MOB_TYPES: Record<string, (l: Level) => Mob> = {
   magma_cube: (l) => new MagmaCube(l),
   zombified_piglin: (l) => new ZombifiedPiglin(l),
   ghast: (l) => new Ghast(l),
+  blaze: (l) => new Blaze(l),
+  wither_skeleton: (l) => new WitherSkeleton(l),
   squid: (l) => new Squid(l),
   bat: (l) => new Bat(l),
 };
@@ -118,7 +121,7 @@ export function isChunkSaved(e: Entity): boolean {
 
 const ENTITY_NAMES: Record<string, string> = {
   pig: 'Pig', cow: 'Cow', sheep: 'Sheep', chicken: 'Chicken', zombie: 'Zombie', skeleton: 'Skeleton', creeper: 'Creeper', spider: 'Spider',
-  cave_spider: 'Cave Spider', enderman: 'Enderman', slime: 'Slime', magma_cube: 'Magma Cube', zombified_piglin: 'Zombified Piglin', ghast: 'Ghast', squid: 'Squid', bat: 'Bat',
+  cave_spider: 'Cave Spider', enderman: 'Enderman', slime: 'Slime', magma_cube: 'Magma Cube', zombified_piglin: 'Zombified Piglin', ghast: 'Ghast', blaze: 'Blaze', wither_skeleton: 'Wither Skeleton', squid: 'Squid', bat: 'Bat',
   arrow: 'Arrow', tnt: 'Primed TNT', item: 'Item', experience_orb: 'Experience Orb', falling_block: 'Falling Block', player: 'Player',
   egg: 'Thrown Egg', snowball: 'Snowball', ender_pearl: 'Thrown Ender Pearl',
   minecart: 'Minecart', chest_minecart: 'Minecart with Chest', boat: 'Boat', chest_boat: 'Boat with Chest',
@@ -196,6 +199,9 @@ const NETHER_SPAWNS: Record<string, { monster: SpawnerData[]; creature: SpawnerD
   crimson_forest: { monster: [S_('zombified_piglin', 1, 2, 4), S_('hoglin', 9, 3, 4), S_('piglin', 5, 3, 4)], creature: STRIDERS },
   warped_forest: { monster: [S_('enderman', 1, 4, 4)], creature: STRIDERS, costs: { enderman: [1, 0.12], strider: [1, 0.12] } },
 };
+
+/** vanilla NetherFortressStructure.FORTRESS_ENEMIES: the monsters of a fortress */
+const FORTRESS_ENEMIES = [S_('blaze', 10, 2, 3), S_('zombified_piglin', 5, 4, 4), S_('wither_skeleton', 8, 5, 5), S_('skeleton', 2, 5, 5), S_('magma_cube', 3, 4, 4)];
 
 function settingsFor(name: string): MobSettings {
   const nether = NETHER_SPAWNS[name];
@@ -356,13 +362,13 @@ export class NaturalSpawner {
         if (this.spawnPos && (this.spawnPos[0] - x - 0.5) ** 2 + (this.spawnPos[1] - y) ** 2 + (this.spawnPos[2] - z - 0.5) ** 2 < 576) continue;
         if (!lvl.isEntityTicking(x, z)) continue;
         if (!data) {
-          const bs = biomeSettings(w.getBiome3(x, y, z));
-          const list = cat === 'monster' ? bs.monster : cat === 'water_creature' ? bs.water : cat === 'ambient' ? bs.ambient : bs.creature;
-          data = pickWeighted(list, r);
+          data = pickWeighted(this.mobsAt(cat, x, y, z), r);
           if (!data) break;
           tries = data.min + r.nextInt(1 + data.max - data.min);
         }
         if (d2 > 128 * 128) continue;
+        // vanilla canSpawnMobAt: the pack's kind must be on the list where each one lands
+        if (!this.mobsAt(cat, x, y, z).includes(data)) continue;
         const placeOk = data.type === 'squid' ? this.isInWaterPositionOk(x, y, z) : this.isSpawnPositionOk(x, y, z, FIRE_IMMUNE.has(data.type));
         if (!placeOk || !this.checkSpawnRules(data.type, x, y, z)) continue;
         if (!this.withinSpawnBudget(data.type, x, y, z)) continue;
@@ -381,6 +387,20 @@ export class NaturalSpawner {
       }
     }
     return spawned;
+  }
+
+  /**
+   * vanilla NaturalSpawner.mobsAt + ChunkGenerator.getMobsAt: the biome's list, but a fortress's own monsters inside
+   * its pieces, and on nether bricks anywhere within its bounds (isInNetherFortressBounds)
+   */
+  private mobsAt(cat: MobCategory, x: number, y: number, z: number): SpawnerData[] {
+    const w = this.level.world;
+    if (cat === 'monster' && w.dim.id === 'the_nether') {
+      const f = this.level.fortresses().at(x, y, z);
+      if (f && (BLOCKS[STATE_BLOCK[w.getState(x, y - 1, z)]].name === 'nether_bricks' || f.pieces.some((p) => p.box.isInside(x, y, z)))) return FORTRESS_ENEMIES;
+    }
+    const bs = biomeSettings(w.getBiome3(x, y, z));
+    return cat === 'monster' ? bs.monster : cat === 'water_creature' ? bs.water : cat === 'ambient' ? bs.ambient : bs.creature;
   }
 
   /** vanilla SpawnPlacements ON_GROUND: valid floor, two empty blocks */
@@ -440,6 +460,9 @@ export class NaturalSpawner {
         return ZombifiedPiglin.checkZombifiedPiglinSpawn(lvl, x, y, z);
       case 'ghast':
         return Ghast.checkGhastSpawn(lvl, x, y, z, () => this.rand.nextFloat());
+      case 'blaze':
+        // vanilla Monster.checkAnyLightMonsterSpawnRules
+        return lvl.difficulty !== 'peaceful';
       case 'pig':
       case 'cow':
       case 'sheep':

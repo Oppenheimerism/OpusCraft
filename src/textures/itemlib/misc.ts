@@ -246,38 +246,6 @@ M['slime_ball'] = () => {
   plot(t, 10, 9, 0x4fa83a);
   return t;
 };
-/** magma cream: a glossy blob of molten orange, hot yellow at the heart, flecked with darker bits of crust */
-M['magma_cream'] = () => {
-  const t = ball(4.9, [0x7a2204, 0xa8380a, 0xd45a12, 0xf0841e, 0xfbb23a, 0xffe07a], 0x4e1403, 'magma_cream');
-  for (const [x, y] of [[5, 9], [10, 7], [9, 11], [11, 10], [7, 12]] as [number, number][]) if (getA(t, x, y)) plot(t, x, y, 0x8a2a06);
-  plot(t, 6, 6, 0xfff3b8);
-  plot(t, 7, 6, 0xffe07a);
-  return t;
-};
-/** a ghast tear: a drop of pale, glassy blue-white, bright at its heart */
-M['ghast_tear'] = () =>
-  spr(
-    [
-      '................',
-      '................',
-      '.......o........',
-      '......oao.......',
-      '......oao.......',
-      '.....oabao......',
-      '.....oabao......',
-      '....oabcbao.....',
-      '....oabccbao....',
-      '....abcddcba....',
-      '....abcddcba....',
-      '....oabccbao....',
-      '.....oabbao.....',
-      '......oooo......',
-      '................',
-      '................',
-    ].map((row) => row.slice(0, 16)),
-    { o: 0x6e8a96, a: 0xa9c4cc, b: 0xcfe2e6, c: 0xe8f4f6, d: 0xffffff },
-    'ghast_tear',
-  );
 /** a fire charge: a ball of charred black, cracked through with glowing orange */
 M['fire_charge'] = () => {
   const t = ball(5.2, [0x1c120c, 0x2a1a10, 0x3b2414, 0x4e2e16, 0x663a18, 0x7e4a1c], 0x0e0806, 'fire_charge');

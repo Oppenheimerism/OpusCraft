@@ -126,9 +126,13 @@ export abstract class Mob extends LivingEntity {
 
   // --- attributes / tunables ------------------------------------------------
 
-  /** ATTACK_DAMAGE attribute value: assign the base, read it with strength / weakness applied */
+  /**
+   * ATTACK_DAMAGE attribute value: assign the base, read it with the held weapon's modifier (its damage over a bare
+   * hand's 1) and strength / weakness applied
+   */
   get attackDamage(): number {
-    return this.effectAttackDamage(this.baseAttackDamage);
+    const weapon = this.mainHand ? this.mainHand.item.attackDamage - 1 : 0;
+    return this.effectAttackDamage(this.baseAttackDamage + weapon);
   }
   set attackDamage(v: number) {
     this.baseAttackDamage = v;

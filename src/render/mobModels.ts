@@ -144,6 +144,37 @@ export function animateGhast(root: ModelPart, age: number): void {
   for (let i = 0; i < 9; i++) root.child('tentacle' + i).xRot = 0.2 * Math.sin(age * 0.3 + i) + 0.4;
 }
 
+/** vanilla BlazeModel: the head, and twelve rods set out in a ring (setupAnim sorts them into three) */
+export function blazeModel(): MobModelDef {
+  const root = new ModelPart();
+  root.add('head', part([{ x: -4, y: -4, z: -4, w: 8, h: 8, d: 8, u: 0, v: 0 }]));
+  for (let i = 0; i < 12; i++) root.add('part' + i, part([{ x: 0, y: 0, z: 0, w: 2, h: 8, d: 2, u: 0, v: 16 }], [Math.cos(i) * 9, -2 + Math.cos(i * 2 * 0.25), Math.sin(i) * 9]));
+  return { root, texW: 64, texH: 32 };
+}
+
+/**
+ * vanilla BlazeModel.setupAnim: three rings of four rods, each ring turning its own way at its own pace (wide at the
+ * top, narrow at the bottom), every rod bobbing; the head follows the look
+ */
+export function animateBlaze(root: ModelPart, age: number, headYaw: number, headPitch: number): void {
+  const ring = (from: number, radius: number, start: number, y: (i: number) => number) => {
+    let f = start;
+    for (let i = from; i < from + 4; i++) {
+      const r = root.child('part' + i);
+      r.y = y(i);
+      r.x = Math.cos(f) * radius;
+      r.z = Math.sin(f) * radius;
+      f += PI / 2;
+    }
+  };
+  ring(0, 9, age * PI * -0.1, (i) => -2 + Math.cos((i * 2 + age) * 0.25));
+  ring(4, 7, PI / 4 + age * PI * 0.03, (i) => 2 + Math.cos((i * 2 + age) * 0.25));
+  ring(8, 5, 0.47123894 + age * PI * -0.05, (i) => 11 + Math.cos((i * 1.5 + age) * 0.5));
+  const head = root.child('head');
+  head.yRot = (headYaw * PI) / 180;
+  head.xRot = (headPitch * PI) / 180;
+}
+
 /**
  * vanilla PiglinModel.createMesh: PlayerModel's body and limbs (wide arms; the jacket, sleeve and trouser layers
  * are left out) under the broad piglin head, with its snout, two tusks and floppy ears

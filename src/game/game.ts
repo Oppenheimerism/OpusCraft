@@ -1595,6 +1595,8 @@ export class Game {
     if (this.ticks % 20 === 0) {
       const b = BIOMES[this.world.getBiome3(Math.floor(p.x), Math.floor(p.y), Math.floor(p.z))];
       if (b) this.advancements.trigger('biome', { biome: b.name });
+      // vanilla LocationPredicate.inStructure: inside one of the structure's pieces
+      if (this.world.dim.id === 'the_nether' && this.level.fortresses().pieceAt(Math.floor(p.x), Math.floor(p.y), Math.floor(p.z))) this.advancements.trigger('structure', { structures: ['fortress'] });
     }
     // vanilla fall_from_world_height: from the build limit to the bottom, alive
     if (!p.onGround && !p.flying && p.y >= MAX_Y - 1) this.fallStartY = p.y;
