@@ -569,3 +569,89 @@ export const SEEDS = [
   '................',
 ];
 F['wheat_seeds'] = () => spr(SEEDS, { '#': 0x1f3a0e, a: 0x8cc85a, b: 0x5a9a30, c: 0x3a6e1e }, 'wheat_seeds');
+
+// ---------------------------------------------------------------------------
+// More crops: beetroots, stem seeds, golden carrot, poisonous potato, pumpkin pie
+
+F['beetroot'] = () => {
+  // round beet at the lower left, a thin tail root, leafy stalks at the upper right
+  const t = autoShade(maskFn(inEllipse(6.5, 9.5, 4.3, 4.1, 0)), [0x3d0a1c, 0x5c1028, 0x7d1a36, 0x9c2644, 0xb83a56, 0xcf5a6e], 0x2a0613, { seed: 'beetroot', edge: 1.2, relief: 3 });
+  over(t, [
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '..#.............',
+    '.#r.............',
+    '................',
+  ], { '#': 0x2a0613, r: 0x7d1a36 });
+  over(t, [
+    '...........#g#..',
+    '.........#glg#..',
+    '........#gllg#.#',
+    '.......#glgg##gg',
+    '......#ggg#.#glg',
+    '.....#sgg#..#gg#',
+    '....#ss##..##g#.',
+    '...#s#....##g#..',
+    '..........#g#...',
+  ], { '#': 0x163d0d, g: 0x2f7d1b, l: 0x5fb535, s: 0x9c2644 }, 0, 0);
+  return t;
+};
+F['beetroot_seeds'] = () => spr(SEEDS, { '#': 0x3a2410, a: 0xd7b98a, b: 0xb08a58, c: 0x7c5a32 }, 'beetroot_seeds');
+F['pumpkin_seeds'] = () => spr(SEEDS, { '#': 0x6e6448, a: 0xfaf6e0, b: 0xe6dcb4, c: 0xc2b68c }, 'pumpkin_seeds');
+F['melon_seeds'] = () => spr(SEEDS, { '#': 0x0c0a08, a: 0x5a4a34, b: 0x3a2e20, c: 0x221a12 }, 'melon_seeds');
+F['golden_carrot'] = () => {
+  const t = carrotSprite([0x7a5a05, 0xa8800c, 0xd0a818, 0xefcb2c, 0xfbe45c, 0xfff6a8], 0x4a3403, 0xa8800c, { q: 0x163d0d, g: 0x2f7d1b, l: 0x5fb535 });
+  for (const [x, y] of [[6, 9], [9, 6], [4, 12]] as [number, number][]) if (getA(t, x, y)) plot(t, x, y, 0xffffff);
+  return t;
+};
+F['poisonous_potato'] = () => {
+  const t = potato([0x55621c, 0x6f7e28, 0x8a9a36, 0xa3b446, 0xbccc5e, 0xd4e07c], 0x333c0e, 0x5c6a1c, 'poisonous_potato');
+  for (const [x, y] of [[7, 6], [11, 9], [5, 10]] as [number, number][]) if (getA(t, x, y)) plot(t, x, y, 0x3e5a12);
+  return t;
+};
+F['pumpkin_pie'] = () =>
+  spr([
+    '................',
+    '................',
+    '................',
+    '................',
+    '.....######.....',
+    '...##oOOOOo##...',
+    '..#oOOYYYYOOo#..',
+    '.#cOOYYYYYYOOc#.',
+    '.#ccOOOOOOOOcc#.',
+    '.#Cccccccccccc#.',
+    '.#CCCccccccCCC#.',
+    '..##CCCCCCCC##..',
+    '....########....',
+    '................',
+    '................',
+    '................',
+  ], { '#': 0x4a2a0e, o: 0xc86a18, O: 0xe08a24, Y: 0xf2aa3c, c: 0xc89454, C: 0x9a6a34 }, 'pumpkin_pie');
+F['beetroot_soup'] = () => {
+  const t = spr(bowlRows(), BOWL_PAL, 'beetroot_soup');
+  over(t, [
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '...rRrrRrrRrr...',
+    '....rrRrrrRr....',
+  ], { r: 0x8c1830, R: 0xb8304a });
+  return t;
+};

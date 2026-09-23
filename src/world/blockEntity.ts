@@ -138,8 +138,6 @@ export class FurnaceBlockEntity extends BlockEntity {
       const b = BLOCKS[STATE_BLOCK[st]];
       if (b.name === 'furnace') level.setBlock(this.x, this.y, this.z, b.with(st, 'lit', this.isLit), false);
     }
-    // FurnaceBlock.animateTick crackle
-    if (this.isLit && Math.random() < 0.002) level.sound.play('block.furnace.fire_crackle', this.x + 0.5, this.y, this.z + 0.5, 1, 1);
   }
 
   litProgress(): number {

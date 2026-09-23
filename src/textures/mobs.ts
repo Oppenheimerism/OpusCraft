@@ -831,6 +831,13 @@ function sweepFrame(i: number): TexImage {
   return t;
 }
 
+/** an 8x8 particle sprite from a pixel pattern */
+function pixelSprite(rows: readonly string[], inks: Record<string, number>): TexImage {
+  const t = img(8, 8);
+  draw(t, 0, 0, rows, inks, new Rand(1));
+  return t;
+}
+
 function flameParticle(): TexImage {
   const t = img(8, 8);
   draw(t, 0, 0, [
@@ -1011,6 +1018,74 @@ MOB_PARTICLE_TEXTURES['damage'] = () => heartParticle(0x000000, 0x5a0000, 0x8c0a
 MOB_PARTICLE_TEXTURES['heart'] = () => heartParticle(0x3c0404, 0xe41c1c, 0xffffff, 0xae0f0f);
 for (let i = 0; i < 8; i++) MOB_PARTICLE_TEXTURES['sweep_' + i] = () => sweepFrame(i);
 MOB_PARTICLE_TEXTURES['flame'] = flameParticle;
+MOB_PARTICLE_TEXTURES['lava'] = () => pixelSprite([
+  '........',
+  '..rrrr..',
+  '.royyor.',
+  '.ryWWyr.',
+  '.ryWyyr.',
+  '.royyor.',
+  '..rrrr..',
+  '........',
+], { r: 0xc0390c, o: 0xe56f19, y: 0xffb32c, W: 0xfff08c });
+// drips are drawn white and tinted per fluid (vanilla DripParticle colours)
+MOB_PARTICLE_TEXTURES['drip_hang'] = () => pixelSprite([
+  '........',
+  '........',
+  '........',
+  '...ww...',
+  '...ww...',
+  '...ss...',
+  '........',
+  '........',
+], { w: 0xffffff, s: 0xd8d8d8 });
+MOB_PARTICLE_TEXTURES['drip_fall'] = () => pixelSprite([
+  '........',
+  '........',
+  '........',
+  '...ww...',
+  '...ss...',
+  '........',
+  '........',
+  '........',
+], { w: 0xffffff, s: 0xd8d8d8 });
+MOB_PARTICLE_TEXTURES['drip_land'] = () => pixelSprite([
+  '........',
+  '........',
+  '........',
+  '........',
+  '..swws..',
+  '........',
+  '........',
+  '........',
+], { w: 0xffffff, s: 0xd8d8d8 });
+// splash / rain droplets (vanilla splash_0..3)
+const SPLASH_INK = { w: 0xe3edff, b: 0x86a6ec, d: 0x4b6cc9 };
+MOB_PARTICLE_TEXTURES['splash_0'] = () => pixelSprite(['........', '........', '...w....', '..wbd...', '...d....', '........', '........', '........'], SPLASH_INK);
+MOB_PARTICLE_TEXTURES['splash_1'] = () => pixelSprite(['........', '........', '........', '...wb...', '...bd...', '........', '........', '........'], SPLASH_INK);
+MOB_PARTICLE_TEXTURES['splash_2'] = () => pixelSprite(['........', '........', '........', '....w...', '....d...', '........', '........', '........'], SPLASH_INK);
+MOB_PARTICLE_TEXTURES['splash_3'] = () => pixelSprite(['........', '........', '........', '...b....', '........', '........', '........', '........'], SPLASH_INK);
+MOB_PARTICLE_TEXTURES['bubble'] = () => pixelSprite([
+  '........',
+  '..bbb...',
+  '.bWw.b..',
+  '.bw..b..',
+  '.b...b..',
+  '..bbb...',
+  '........',
+  '........',
+], { b: 0xa9c6f2, W: 0xffffff, w: 0xdce8ff });
+// happy villager / bone meal sparkle (vanilla glint)
+MOB_PARTICLE_TEXTURES['glint'] = () => pixelSprite([
+  '........',
+  '...g....',
+  '...G....',
+  '.gGWGg..',
+  '...G....',
+  '...g....',
+  '........',
+  '........',
+], { g: 0x2f8f2f, G: 0x5ad65a, W: 0xc8ffc8 });
 
 const EGGS: [string, number, number][] = [
   ['pig', 0xf0a5a2, 0xdb635f],

@@ -25,6 +25,10 @@ import { reducedTickDelay } from './ai/goal';
 const DIFFICULTY_ID: Record<string, number> = { peaceful: 0, easy: 1, normal: 2, hard: 3 };
 
 export abstract class Monster extends Mob {
+  /** vanilla Monster.isPreventingPlayerRest: hostile mobs nearby stop you sleeping */
+  isPreventingPlayerRest(_p: Entity): boolean {
+    return this.isAlive;
+  }
   readonly category: MobCategory = 'monster';
 
   constructor(level: Level) {
@@ -861,7 +865,7 @@ class SlimeMoveControl extends MoveControl {
         this.jumpDelay = m.jumpDelay();
         if (this.aggressive) this.jumpDelay = Math.floor(this.jumpDelay / 3);
         m.jumpControl.jump();
-        m.playSound('entity.slime.squish', m.soundVolume(), ((m.random.nextFloat() - m.random.nextFloat()) * 0.2 + 1) * 0.8);
+        m.playSound(m.size === 1 ? 'entity.slime.jump_small' : 'entity.slime.jump', m.soundVolume(), ((m.random.nextFloat() - m.random.nextFloat()) * 0.2 + 1) * 0.8);
       } else {
         m.xxa = 0;
         m.zza = 0;
@@ -950,6 +954,10 @@ class SlimeKeepOnJumpingGoal extends Goal {
 }
 
 export class Slime extends Monster {
+  /** vanilla Slime is not a Monster: slimes never keep you awake */
+  override isPreventingPlayerRest(_p: Entity): boolean {
+    return false;
+  }
   readonly type = 'slime';
   size = 1;
   squish = 0;
@@ -1004,7 +1012,7 @@ export class Slime extends Monster {
         const a = this.random.nextFloat() * Math.PI * 2, r = this.random.nextFloat() * 0.5 + 0.5;
         this.level.particles.spawn?.('item_slime', this.x + Math.sin(a) * f1 * r, this.y, this.z + Math.cos(a) * f1 * r, 0, 0, 0);
       }
-      this.playSound('entity.slime.squish', this.soundVolume(), ((this.random.nextFloat() - this.random.nextFloat()) * 0.2 + 1) / 0.8);
+      this.playSound(this.size === 1 ? 'entity.slime.squish_small' : 'entity.slime.squish', this.soundVolume(), ((this.random.nextFloat() - this.random.nextFloat()) * 0.2 + 1) / 0.8);
       this.targetSquish = -0.5;
     } else if (!this.onGround && this.wasOnGround) this.targetSquish = 1;
     this.wasOnGround = this.onGround;
@@ -1014,7 +1022,7 @@ export class Slime extends Monster {
   touchPlayer(p: Player): void {
     if (!this.dealsDamage() || !this.isAlive) return;
     if (this.isWithinMeleeAttackRange(p) && this.hasLineOfSight(p)) {
-      if (p.hurt(this.attackDamage, 'mob', this)) this.playSound('entity.slime.squish', 1, (this.random.nextFloat() - this.random.nextFloat()) * 0.2 + 1);
+      if (p.hurt(this.attackDamage, 'mob', this)) this.playSound('entity.slime.attack', 1, (this.random.nextFloat() - this.random.nextFloat()) * 0.2 + 1);
     }
   }
   override finalizeSpawn(): void {
@@ -1024,10 +1032,10 @@ export class Slime extends Monster {
     this.setSlimeSize(1 << i, true);
   }
   override hurtSound(): string {
-    return 'entity.slime.squish';
+    return this.size === 1 ? 'entity.slime.hurt_small' : 'entity.slime.hurt';
   }
   override deathSound(): string {
-    return 'entity.slime.squish';
+    return this.size === 1 ? 'entity.slime.death_small' : 'entity.slime.death';
   }
   override lootTable(): LootEntry[] {
     return this.size === 1 ? [{ item: 'slime_ball', min: 0, max: 2 }] : [];

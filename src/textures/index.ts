@@ -26,7 +26,8 @@ export function collectBlockTextureNames(): Set<string> {
     if (!b.s.model) continue;
     for (let st = b.baseState; st < b.baseState + b.stateCount; st++) {
       const choice: ModelChoice = b.s.model(STATE_VIEWS[st]);
-      const variants: Variant[] = Array.isArray(choice) ? choice : (choice as { parts: Variant[] }).parts ?? [choice as Variant];
+      const parts = (choice as { parts?: (Variant | Variant[])[] }).parts;
+      const variants: Variant[] = Array.isArray(choice) ? choice : parts ? parts.flat() : [choice as Variant];
       for (const v of variants) {
         if (seen.has(v.model)) continue;
         seen.add(v.model);

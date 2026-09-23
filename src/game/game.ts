@@ -42,6 +42,8 @@ import { ItemEntity } from '../entity/itemEntity';
 import { GuiEntityRenderer } from '../render/guiEntity';
 import { InventoryMenu, CraftingMenu, FurnaceMenu, ChestMenu } from '../inventory/menus';
 import { ChestBlockEntity, FurnaceBlockEntity } from '../world/blockEntity';
+import { useBed, findRespawn, BED_YROT, MSG, SleepHost } from './sleep';
+import { AmbientTicker } from './animateTick';
 
 export type { GameOptions } from './options';
 
@@ -91,10 +93,14 @@ export class Game {
   deathScreenFactory: (() => Screen) | null = null;
   loadingScreenFactory: (() => Screen) | null = null;
   chatScreenFactory: ((initial: string) => Screen) | null = null;
+  /** vanilla InBedChatScreen (chat + Leave Bed) */
+  inBedScreenFactory: (() => Screen) | null = null;
   inventoryScreenFactory: (() => Screen) | null = null;
   onCommand: ((cmd: string) => void) | null = null;
   worldSpawn: [number, number, number] | null = null;
   spawner: NaturalSpawner | null = null;
+  /** vanilla ClientLevel.animateTick (torch flames, drips, lava pops...) */
+  ambient: AmbientTicker | null = null;
   /** chunks with a saved entity record / with entities not yet saved / with a record load in flight */
   private entityKeys = new Set<string>();
   private entityDirty = new Set<string>();
@@ -322,6 +328,7 @@ export class Game {
     this.level.addEntity(this.player);
     this.interaction = new Interaction(this.level, this.player);
     this.interaction.onOpenContainer = (kind, x, y, z) => this.openContainer(kind, x, y, z);
+    this.interaction.onUseBed = (x, y, z) => useBed(this.sleepHost(), x, y, z);
     this.player.dropHandler = (s) => this.interaction.throwItem(s);
     this.applyGameRules();
     const world = this.world;
@@ -345,8 +352,10 @@ export class Game {
       poof: (e) => particles.poof(e),
       spawn: (k, x, y, z, dx, dy, dz) => particles.spawn(k, x, y, z, dx, dy, dz),
       emitAround: (k, e) => particles.emitAround(k, e),
+      fallingDust: (x, y, z, c) => particles.fallingDust(x, y, z, c),
     };
     this.spawner = new NaturalSpawner(this.level, hashString(meta.seed));
+    this.ambient = new AmbientTicker(this.level);
     this.renderer.weather.tempAt = (biome, x, y, z) => {
       const b = BIOMES[biome];
       if (y > 80) return b.temperature - ((Math.sin(x * 0.13 + z * 0.07) * 4 + y - 80) * 0.05) / 40;
@@ -375,6 +384,10 @@ export class Game {
         if (s && ITEMS.has(s[0])) this.player.inventory.armor[i] = new ItemStack(ITEMS.get(s[0])!, s[1], s[2]);
       });
       [this.player.spawnX, this.player.spawnY, this.player.spawnZ] = pd.spawn;
+      if (pd.respawn) {
+        this.player.respawnPos = [pd.respawn[0], pd.respawn[1], pd.respawn[2]];
+        this.player.respawnForced = pd.respawn[3] === 1;
+      }
       this.spawnSearch = false;
       if (pd.dead || pd.health <= 0) {
         // died before quitting: come back respawned at spawn
@@ -426,6 +439,7 @@ export class Game {
       gameMode: p.gameMode, flying: p.flying, selected: p.inventory.selected,
       inventory: p.inventory.main.map(st), armor: p.inventory.armor.map(st),
       spawn: [p.spawnX, p.spawnY, p.spawnZ],
+      respawn: p.respawnPos ? [...p.respawnPos, p.respawnForced ? 1 : 0] : null,
       dead: p.health <= 0,
     };
     const list = [];
@@ -510,6 +524,7 @@ export class Game {
   }
 
   async leaveWorld(): Promise<void> {
+    if (this.player.isSleeping()) this.player.stopSleepInBed(true);
     await this.saveWorld();
     this.level.entities.length = 0;
     this.inWorld = false;
@@ -537,7 +552,9 @@ export class Game {
     p.onSwimSound = (pl) => this.sound.play('entity.player.swim', pl.x, pl.y, pl.z, Math.min(1, Math.hypot(pl.dx * 0.44, pl.dy, pl.dz * 0.44) * 0.35), 1 + (Math.random() - Math.random()) * 0.4);
     p.onHurtSound = (pl, src) => {
       if (src === 'fall') return;
-      this.sound.play('entity.player.hurt', pl.x, pl.y, pl.z, 1, (Math.random() - Math.random()) * 0.2 + 1);
+      // vanilla Player.getHurtSound: fire / drowning / freezing variants
+      const name = src === 'onFire' || src === 'inFire' || src === 'lava' ? 'entity.player.hurt_on_fire' : src === 'drown' ? 'entity.player.hurt_drown' : src === 'freeze' ? 'entity.player.hurt_freeze' : src === 'sweetBerryBush' ? 'entity.player.hurt_sweet_berry_bush' : 'entity.player.hurt';
+      this.sound.play(name, pl.x, pl.y, pl.z, 1, (Math.random() - Math.random()) * 0.2 + 1);
     };
     p.onFall = (pl, _dmg, dist) => {
       this.sound.play(dist > 4 + 3 ? 'entity.player.big_fall' : 'entity.player.small_fall', pl.x, pl.y, pl.z, 1, 1);
@@ -635,6 +652,8 @@ export class Game {
         return `${n} suffocated in a wall`;
       case 'cactus':
         return `${n} was pricked to death`;
+      case 'sweetBerryBush':
+        return `${n} was poked to death by a sweet berry bush`;
       case 'genericKill':
         return `${n} was killed`;
       default:
@@ -693,7 +712,19 @@ export class Game {
     p.removed = false;
     p.xpLevel = 0;
     p.xpProgress = 0;
-    this.teleport(p.spawnX + 0.5, p.spawnY, p.spawnZ + 0.5, 0, 0);
+    p.sleepingPos = null;
+    p.sleepCounter = 0;
+    p.setSize(0.6, 1.8);
+    // vanilla PlayerList.respawn: at the bed (facing it) if it's still there and clear
+    const at = findRespawn(this.level, p);
+    if (at) this.teleport(at.x, at.y, at.z, at.yaw, 0);
+    else {
+      if (p.respawnPos) {
+        p.respawnPos = null;
+        this.chat(MSG.noRespawnBlock);
+      }
+      this.teleport(p.spawnX + 0.5, p.spawnY, p.spawnZ + 0.5, 0, 0);
+    }
     if (!this.level.entities.includes(p)) this.level.addEntity(p);
     this.setScreen(null);
   }
@@ -849,6 +880,9 @@ export class Game {
     }
     const inp = this.input;
     const p = this.player;
+    // vanilla Minecraft.tick: asleep → the in-bed chat screen; woken → close it
+    if (!this.screen && p.isSleeping() && p.health > 0 && this.inBedScreenFactory) this.setScreen(this.inBedScreenFactory());
+    else if (this.screen && (this.screen as { inBed?: boolean }).inBed && !p.isSleeping()) (this.screen as unknown as { onPlayerWokeUp(): void }).onPlayerWokeUp();
     this.screen?.tick();
     const noScreen = !this.screen;
     for (const code of inp.pressed()) {
@@ -894,6 +928,7 @@ export class Game {
     this.fovMod += (target - this.fovMod) * 0.5;
     this.level.tick();
     this.spawner?.tick();
+    this.ambient?.tick(p.x, p.y, p.z);
     if (this.freezeTime) this.level.dayTime--;
     if (p.y < MIN_Y - 64 && p.health > 0) p.hurt(4, 'void');
     this.atlas.tick();
@@ -1020,7 +1055,13 @@ export class Game {
     }
     let cx = ex, cy = ey, cz = ez;
     let yaw = p.yaw, pitch = p.pitch;
-    if (this.thirdPerson > 0) {
+    const bed = p.bedOrientation();
+    if (this.thirdPerson === 0 && bed) {
+      // vanilla Camera.setup: asleep, look down the bed from the pillow
+      yaw = BED_YROT[bed] - 180;
+      pitch = 0;
+      cy += 0.3;
+    } else if (this.thirdPerson > 0) {
       if (this.thirdPerson === 2) {
         yaw += 180;
         pitch = -pitch;
@@ -1064,7 +1105,7 @@ export class Game {
   }
 
   private renderHandAndEffects(partial: number, p: Player, ex: number, ey: number, ez: number, eyeFluid: number): void {
-    if (this.thirdPerson === 0 && !this.hideGui && p.gameMode !== 'spectator') {
+    if (this.thirdPerson === 0 && !this.hideGui && p.gameMode !== 'spectator' && !p.isSleeping()) {
       const gl = this.gl;
       gl.clear(gl.DEPTH_BUFFER_BIT);
       const handBob = mat4();
@@ -1151,6 +1192,15 @@ export class Game {
 
   chat(msg: string): void {
     this.hud.addChat(msg, this.ticks);
+  }
+
+  sleepHost(): SleepHost {
+    return { level: this.level, player: this.player, overlay: (m) => this.hud.setOverlayMessage(m), chat: (m) => this.chat(m) };
+  }
+
+  /** the in-bed screen's Leave Bed button / Escape (vanilla sendWakeUp) */
+  leaveBed(): void {
+    if (this.player.isSleeping()) this.player.stopSleepInBed(false);
   }
 
   readonly chatHistory: string[] = [];

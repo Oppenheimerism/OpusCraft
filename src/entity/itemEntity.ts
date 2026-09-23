@@ -9,6 +9,7 @@ export class ItemEntity extends Entity {
   readonly type = 'item';
   pickupDelay = 10;
   age = 0;
+  health = 5;
   bobOffset = Math.random() * Math.PI * 2;
   onPickup: ((e: ItemEntity, p: Player, count: number) => void) | null = null;
 
@@ -81,6 +82,15 @@ export class ItemEntity extends Entity {
       this.remove();
       return;
     }
+  }
+
+  /** vanilla ItemEntity.hurt: fire, lava, cacti and explosions wear the item away */
+  override hurt(amount: number, source: string): boolean {
+    if (this.removed) return false;
+    if (this.stack.item.id === 'nether_star' && (source === 'explosion' || source === 'playerExplosion')) return false;
+    this.health = Math.floor(this.health - amount);
+    if (this.health <= 0) this.remove();
+    return true;
   }
 
   playerTouch(p: Player): void {

@@ -453,7 +453,7 @@ export class Cow extends Animal {
   }
   override interact(p: Player, stack: ItemStack | null): boolean {
     if (stack && stack.item.id === 'bucket' && !this.isBaby()) {
-      this.level.sound.play('item.bucket.fill', this.x, this.y, this.z, 1, 1);
+      this.level.sound.play('entity.cow.milk', this.x, this.y, this.z, 1, 1);
       const milk = new ItemStack(ITEMS.get('milk_bucket')!, 1);
       if (p.gameMode === 'creative') {
         if (!p.inventory.main.some((s) => s?.item.id === 'milk_bucket')) p.inventory.add(milk);

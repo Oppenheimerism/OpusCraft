@@ -25,12 +25,15 @@ const REDSTONE = new Set(['redstone', 'redstone_block', 'tnt']);
 const FUNCTIONAL = new Set(['oak_sign', 'painting', 'item_frame', 'red_bed', 'jack_o_lantern', 'carved_pumpkin']);
 const BUILDING = new Set(['oak_door', 'iron_door']);
 const TOOLS = new Set(['minecart', 'oak_boat', 'saddle', 'lead', 'name_tag', 'filled_map', 'map', 'milk_bucket', 'experience_bottle']);
+/** vanilla lists seeds with the natural blocks */
+const NATURAL = new Set(['wheat_seeds', 'cocoa_beans', 'pumpkin_seeds', 'melon_seeds', 'beetroot_seeds']);
 
 function tabOf(it: Item): string {
   if (REDSTONE.has(it.id)) return 'redstone_blocks';
   if (FUNCTIONAL.has(it.id)) return 'functional_blocks';
   if (BUILDING.has(it.id)) return 'building_blocks';
   if (TOOLS.has(it.id)) return 'tools';
+  if (NATURAL.has(it.id)) return 'natural_blocks';
   switch (it.creativeTab) {
     case 'building':
       return 'building_blocks';

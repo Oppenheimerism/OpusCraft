@@ -7,6 +7,7 @@ import {
   ModelDef, Variant, ModelChoice, cubeAll, cubeColumn, cubeBottomTop, orientable, grassLikeBlock, cross, crop,
   torchModel, wallTorchModel, flatPlane, facePlane, slabBottom, slabTop, stairsModel, box, cube, ElementDef,
 } from './models';
+import { registerExtraBlocks } from './blocksExtra';
 
 const px = (v: number) => v / 16;
 const bx = (x0: number, y0: number, z0: number, x1: number, y1: number, z1: number): Box => [px(x0), px(y0), px(z0), px(x1), px(y1), px(z1)];
@@ -488,20 +489,44 @@ const SLAB_MATERIALS: [string, string, string, string, string, number][] = [
   ['stone_brick', 'stone_bricks', 'stone_bricks', 'stone_bricks', 'stone', 1.5],
   ['sandstone', 'sandstone_top', 'sandstone_top', 'sandstone', 'stone', 0.8],
   ['brick', 'bricks', 'bricks', 'bricks', 'stone', 2],
+  ['jungle', 'jungle_planks', 'jungle_planks', 'jungle_planks', 'wood', 2],
+  ['acacia', 'acacia_planks', 'acacia_planks', 'acacia_planks', 'wood', 2],
+  ['dark_oak', 'dark_oak_planks', 'dark_oak_planks', 'dark_oak_planks', 'wood', 2],
+  ['mangrove', 'mangrove_planks', 'mangrove_planks', 'mangrove_planks', 'wood', 2],
+  ['cherry', 'cherry_planks', 'cherry_planks', 'cherry_planks', 'wood', 2],
+  ['mossy_cobblestone', 'mossy_cobblestone', 'mossy_cobblestone', 'mossy_cobblestone', 'stone', 2],
+  ['mossy_stone_brick', 'mossy_stone_bricks', 'mossy_stone_bricks', 'mossy_stone_bricks', 'stone', 1.5],
+  ['granite', 'granite', 'granite', 'granite', 'stone', 1.5],
+  ['polished_granite', 'polished_granite', 'polished_granite', 'polished_granite', 'stone', 1.5],
+  ['diorite', 'diorite', 'diorite', 'diorite', 'stone', 1.5],
+  ['polished_diorite', 'polished_diorite', 'polished_diorite', 'polished_diorite', 'stone', 1.5],
+  ['andesite', 'andesite', 'andesite', 'andesite', 'stone', 1.5],
+  ['polished_andesite', 'polished_andesite', 'polished_andesite', 'polished_andesite', 'stone', 1.5],
+  ['cobbled_deepslate', 'cobbled_deepslate', 'cobbled_deepslate', 'cobbled_deepslate', 'deepslate', 3.5],
+  ['polished_deepslate', 'polished_deepslate', 'polished_deepslate', 'polished_deepslate', 'polished_deepslate', 3.5],
+  ['deepslate_brick', 'deepslate_bricks', 'deepslate_bricks', 'deepslate_bricks', 'deepslate_bricks', 3.5],
+  ['deepslate_tile', 'deepslate_tiles', 'deepslate_tiles', 'deepslate_tiles', 'deepslate_tiles', 3.5],
+  ['red_sandstone', 'red_sandstone_bottom', 'red_sandstone_top', 'red_sandstone', 'stone', 0.8],
+  ['smooth_sandstone', 'sandstone_top', 'sandstone_top', 'sandstone_top', 'stone', 2],
+  ['smooth_red_sandstone', 'red_sandstone_top', 'red_sandstone_top', 'red_sandstone_top', 'stone', 2],
+  ['smooth_stone', 'smooth_stone', 'smooth_stone', 'smooth_stone', 'stone', 2],
+  ['cut_sandstone', 'sandstone_top', 'sandstone_top', 'cut_sandstone', 'stone', 0.8],
 ];
+/** materials with a slab but no stairs in vanilla */
+const SLAB_ONLY = new Set(['smooth_stone', 'cut_sandstone']);
 for (const [name, bottom, top, side, sound, hardness] of SLAB_MATERIALS) {
   const tool = sound === 'wood' ? 'axe' : 'pickaxe';
   const bm = slabBottom(bottom, top, side), tm = slabTop(bottom, top, side), dm = cubeBottomTop(side, bottom, top);
   registerBlock(`${name}_slab`, {
-    props: [P.slabType, P.waterlogged], defaults: { type: 'bottom' }, hardness, resistance: 6, sound, tool, requiresTool: tool === 'pickaxe',
+    props: [P.slabType, P.waterlogged], defaults: { type: 'bottom' }, hardness, resistance: 6, sound, tool, requiresTool: tool === 'pickaxe', flammable: sound === 'wood',
     collision: (s) => (s.get('type') === 'double' ? 'full' : s.get('type') === 'top' ? [bx(0, 8, 0, 16, 16, 16)] : [bx(0, 0, 0, 16, 8, 16)]),
     opaque: (s) => s.get('type') === 'double',
     faceOcclusion: (s) => (s.get('type') === 'double' ? 63 : s.get('type') === 'top' ? 2 : 1),
     aoCaster: false,
     model: (s) => ({ model: s.get('type') === 'double' ? dm : s.get('type') === 'top' ? tm : bm }),
   });
-  if (name === 'stone') continue;
-  const stairName = name === 'stone_brick' ? 'stone_brick_stairs' : `${name}_stairs`;
+  if (SLAB_ONLY.has(name)) continue;
+  const stairName = `${name}_stairs`;
   const straight = stairsModel(bottom, top, side, 'straight');
   const inner = stairsModel(bottom, top, side, 'inner');
   const outer = stairsModel(bottom, top, side, 'outer');
@@ -567,6 +592,8 @@ registerBlock('cobweb', {
 });
 registerBlock('spawner', { hardness: 5, sound: 'metal', tool: 'pickaxe', requiresTool: true, layer: Layer.CUTOUT, opaque: false, aoCaster: true, model: one(cubeAll('spawner')) });
 registerBlock('magma_block', { hardness: 0.5, sound: 'stone', tool: 'pickaxe', requiresTool: true, light: 3, model: one(cubeAll('magma')) });
+
+registerExtraBlocks();
 
 finalizeBlocks();
 

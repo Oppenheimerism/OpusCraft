@@ -491,9 +491,8 @@ export const COMMANDS: Record<string, CommandDef> = {
       const name = target(c, 0);
       const p = c.game.player;
       const [x, y, z] = c.args[1] ? blockPos(c, 1) : [Math.floor(p.x), Math.floor(p.y), Math.floor(p.z)];
-      p.spawnX = x;
-      p.spawnY = y;
-      p.spawnZ = z;
+      p.respawnPos = [x, y, z];
+      p.respawnForced = true;
       c.ok(`Set spawn point to ${x}, ${y}, ${z} [0.0] in minecraft:overworld for ${name}`);
     },
   },

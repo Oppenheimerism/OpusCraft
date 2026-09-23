@@ -37,7 +37,8 @@ export interface Variant {
   weight?: number;
 }
 
-export type ModelChoice = Variant | Variant[] | { parts: Variant[] };
+/** a multipart part is one variant, or several picked at random per position (vanilla multipart "apply": [...]) */
+export type ModelChoice = Variant | Variant[] | { parts: (Variant | Variant[])[] };
 
 // ---------------------------------------------------------------------------
 // Model helpers (parents)

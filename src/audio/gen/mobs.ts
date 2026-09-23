@@ -1,7 +1,25 @@
 // Mob vocalisations (formant synthesis) and mob foley (steps, rattles, hisses).
 
 import type { SoundGen } from '../synth';
-import { TAU, addOsc, alloc, envAD, envBump, highpass, layer, lowpass, resample, reverse, mixInto, smooth, white } from './dsp';
+import {
+  type Rng,
+  TAU,
+  addOsc,
+  alloc,
+  envAD,
+  envBump,
+  highpass,
+  layer,
+  lowpass,
+  mixInto,
+  resample,
+  reverb,
+  reverse,
+  sinCyc,
+  smooth,
+  upsample2,
+  white,
+} from './dsp';
 import { bowShoot } from './player';
 import { type Ctx, sound } from './registry';
 import { bubble, burst, impact, phisem, sweep, thump, ticks, twoBump } from './texture';
@@ -462,6 +480,56 @@ function fuse(c: Ctx): Float32Array {
   return out;
 }
 
+/** Lit TNT: sparkly fizzing fuse with a soft attack, fluttering hiss and bright sparks. */
+function tntFuse(c: Ctx): Float32Array {
+  const { sr, rng } = c;
+  const d = rng.range(1.75, 1.9);
+  const out = alloc(d, sr);
+  const att = rng.range(0.12, 0.18);
+  const fl1 = rng.range(7, 11);
+  const fl2 = rng.range(13, 19);
+  const p1 = rng.next();
+  const p2 = rng.next();
+  const env = ctlTable(d, (t) =>
+    smooth(t / att) * (t > d - 0.2 ? Math.max(0, (d - t) / 0.2) : 1) * (0.85 + 0.1 * sinCyc(fl1 * t + p1) + 0.05 * sinCyc(fl2 * t + p2)),
+  );
+  layer(out, 1, (b) =>
+    phisem(b, sr, rng, {
+      dur: d,
+      rate: 10000,
+      energy: env,
+      grain: 0.00028,
+      heavy: 1.5,
+      dry: 0.45,
+      bands: [
+        { f: 6000, q: 1, g: 1, spread: 0.25 },
+        { f: 9500, q: 1.4, g: 0.6, spread: 0.15 },
+        { f: 3500, q: 1.8, g: 0.35, spread: 0.2 },
+      ],
+    }),
+  );
+  layer(out, 0.4, (b) => {
+    const w = white(b.length, rng);
+    highpass(w, 2800, sr);
+    for (let i = 0; i < b.length; i++) b[i] = w[i] * env(i / sr);
+  });
+  layer(out, 0.3, (b) =>
+    ticks(b, sr, rng, {
+      t: att * 0.5,
+      dur: d - att,
+      rate: 45,
+      energy: () => 1,
+      f: [3500, 8500],
+      t60: [0.002, 0.007],
+      ratios: [1, 1.6],
+      weights: [1, 0.4],
+      click: 0.9,
+    }),
+  );
+  layer(out, 0.12, (b) => sweep(b, sr, rng, { dur: d, f: () => 1400, q: 0.8, amp: env }));
+  return out;
+}
+
 function creeperHiss(c: Ctx, d: number): Float32Array {
   const { sr, rng } = c;
   const out = alloc(d, sr);
@@ -624,6 +692,28 @@ function enderTeleport(c: Ctx): Float32Array {
   return o2;
 }
 
+/**
+ * Ender pearl landing: an airy reversed swell rushing in, then a descending whoosh with a
+ * faint glassy "vwoop" glide underneath.
+ */
+function playerTeleport(c: Ctx): Float32Array {
+  const { sr, rng } = c;
+  const sw = rng.range(0.22, 0.28);
+  const wd = rng.range(0.3, 0.36);
+  const out = alloc(sw + wd + 0.05, sr);
+  layer(out, 0.8, (b) =>
+    sweep(b, sr, rng, { dur: sw, f: (t) => 500 * Math.pow(7, t / sw), q: 1.3, amp: (t) => Math.pow(t / sw, 2.5), color: 'pink' }),
+  );
+  const fa = rng.range(2800, 3600);
+  layer(out, 1, (b) => {
+    sweep(b, sr, rng, { t: sw, dur: wd, f: (t) => fa * Math.pow(400 / fa, t / wd), q: 1.2, amp: (t) => envAD(t, 0.01, wd * 0.35), color: 'pink' });
+    sweep(b, sr, rng, { t: sw + 0.012, dur: wd, f: (t) => fa * 1.4 * Math.pow(400 / fa, t / wd), q: 2, amp: (t) => 0.5 * envAD(t, 0.01, wd * 0.3) });
+  });
+  const g0 = rng.range(850, 1000);
+  layer(out, 0.25, (b) => addOsc(b, sr, sw, wd, (t) => g0 * Math.pow(0.33, t / wd) * (1 + 0.03 * Math.sin(TAU * 28 * t)), (t) => envAD(t, 0.01, wd * 0.3)));
+  return out;
+}
+
 function maxAbs(b: Float32Array): number {
   let m = 0;
   for (let i = 0; i < b.length; i++) m = Math.max(m, Math.abs(b[i]));
@@ -655,23 +745,321 @@ function enderHurt(c: Ctx): Float32Array {
   return out;
 }
 
+/** Randomly reverse or stutter a few short grains in place (with soft edges): a glitchy warp. */
+function glitch(b: Float32Array, sr: number, rng: Rng, d: number): void {
+  const fade = Math.round(0.0015 * sr);
+  const edge = (p: number) => {
+    for (let i = -fade; i < fade; i++) {
+      const j = p + i;
+      if (j >= 0 && j < b.length) b[j] *= Math.abs(i) / fade;
+    }
+  };
+  const n = 2 + rng.int(3);
+  for (let k = 0; k < n; k++) {
+    const len = Math.round(rng.range(0.035, 0.08) * sr);
+    const s = Math.round(rng.range(0.05, Math.max(0.06, d - 0.1)) * sr);
+    if (s + 2 * len >= b.length) continue;
+    if (rng.chance(0.5)) {
+      for (let i = 0; i < len >> 1; i++) {
+        const a = b[s + i];
+        b[s + i] = b[s + len - 1 - i];
+        b[s + len - 1 - i] = a;
+      }
+      edge(s);
+      edge(s + len);
+    } else {
+      for (let i = 0; i < len; i++) b[s + len + i] = b[s + i];
+      edge(s + len);
+      edge(s + 2 * len);
+    }
+  }
+}
+
+/**
+ * Enderman stare (turning hostile): two detuned vocal drones rising with an accelerating
+ * glide, warped by a sweeping ring modulator, swelling like reversed audio into a
+ * reversed-reverb "hit", over a sub-octave drone.
+ */
+function enderStare(c: Ctx): Float32Array {
+  const { sr, rng } = c;
+  const d = rng.range(1.6, 1.85);
+  const out = alloc(d + 0.25, sr);
+  const f0 = rng.range(70, 85);
+  const f1 = f0 * rng.range(2.6, 3.2);
+  const rise = (t: number) => f0 * Math.pow(f1 / f0, Math.pow(Math.min(1, t / d), 1.6));
+  // builds like reversed audio (slow swell, abrupt end) but is audible from the first moment
+  const sw = ctlTable(d + 0.2, (t) => Math.min(1, t / 0.06) * (0.22 + 0.78 * Math.pow(Math.min(1, t / d), 1.8)) * (t > d ? Math.max(0, 1 - (t - d) / 0.08) : 1));
+  const F = vowelGlide('u', 'a', 0, d * 0.75, 1.1);
+  const dets = [1, rng.range(1.025, 1.04)];
+  // the vocal drone lives below ~3 kHz: render it at half rate and upsample
+  layer(out, 1, (b) => {
+    const hr = sr / 2;
+    const h = alloc(d + 0.25, hr);
+    for (const det of dets) {
+      voice(h, hr, rng, {
+        dur: d + 0.08,
+        f0: (t) => rise(t) * det * (1 + 0.02 * Math.sin(TAU * 5.5 * t)),
+        amp: sw,
+        formants: [
+          { f: F[0], bw: 120, g: 1 },
+          { f: F[1], bw: 150, g: 0.7 },
+          { f: F[2], bw: 220, g: 0.35 },
+        ],
+        jitter: 0.03,
+        rough: 0.35,
+        sub: 0.05,
+        breath: 0.3,
+        oq: 0.5,
+      });
+    }
+    let ph = 0;
+    for (let i = 0; i < h.length; i++) {
+      ph += (25 + 45 * Math.min(1, i / hr / d)) / hr;
+      h[i] *= 0.45 + 0.55 * sinCyc(ph);
+    }
+    mixInto(b, upsample2(h));
+  });
+  layer(out, 0.55, (b) => {
+    const hit = alloc(0.25, sr);
+    voice(hit, sr, rng, {
+      dur: 0.2,
+      f0: f1 * 0.9,
+      amp: (t) => envAD(t, 0.005, 0.05),
+      formants: [
+        { f: 800, bw: 150, g: 1 },
+        { f: 1600, bw: 200, g: 0.6 },
+        { f: 2800, bw: 300, g: 0.3 },
+      ],
+      rough: 0.4,
+      breath: 0.5,
+    });
+    const rev = reverse(reverb(hit, sr, { t60: 1.4, hf: 0.4, wet: 1.2, dry: 0.3, tail: 1.3, pre: 0.01 }));
+    mixInto(b, rev, Math.round(d * sr) - rev.length, 1);
+  });
+  layer(out, 0.4, (b) => addOsc(b, sr, 0, d + 0.05, (t) => rise(t) * 0.5, sw));
+  return out;
+}
+
+/** Tabulate an envelope at 1 ms resolution; returns a cheap interpolating lookup. */
+function ctlTable(dur: number, f: (t: number) => number): (t: number) => number {
+  const n = Math.ceil(dur * 1000) + 2;
+  const tab = new Float32Array(n);
+  for (let i = 0; i < n; i++) tab[i] = f(i / 1000);
+  return (t: number) => {
+    const x = t * 1000;
+    if (x <= 0) return tab[0];
+    const k = x | 0;
+    if (k >= n - 1) return tab[n - 1];
+    return tab[k] + (tab[k + 1] - tab[k]) * (x - k);
+  };
+}
+
+/** Angry enderman: shrill vocal screech with glitchy stepped pitch, ring-mod warp and stutters. */
+function enderScream(c: Ctx): Float32Array {
+  const { sr, rng } = c;
+  const d = rng.range(0.8, 1.2);
+  const out = alloc(d + 0.1, sr);
+  const base = rng.range(430, 600);
+  const steps: number[] = [];
+  for (let t = 0; t < d; t += rng.range(0.04, 0.09)) steps.push(t, base * Math.pow(2, rng.range(-0.35, 0.6)));
+  const fAt = (t: number): number => {
+    let f = steps[1];
+    for (let k = 0; k < steps.length && steps[k] <= t; k += 2) f = steps[k + 1];
+    return f;
+  };
+  const F = vowelGlide(rng.pick(['ae', 'a', 'e']), rng.pick(['i', 'ih', 'ae']), 0, d, 1.25);
+  const trem = rng.range(9, 13);
+  layer(out, 1, (b) => {
+    voice(b, sr, rng, {
+      dur: d,
+      f0: (t) => fAt(t) * (1 + 0.05 * Math.sin(TAU * 23 * t)),
+      amp: (t) => envAD(t, 0.02, d * 0.45) * (0.75 + 0.25 * Math.sin(TAU * trem * t)),
+      formants: [
+        { f: F[0], bw: 160, g: 1 },
+        { f: F[1], bw: 200, g: 0.8 },
+        { f: F[2], bw: 300, g: 0.45 },
+      ],
+      jitter: 0.08,
+      rough: 0.45,
+      sub: 0.06,
+      breath: 0.35,
+      oq: 0.32,
+    });
+    ringMod(b, sr, rng.range(90, 160), 0.65);
+    glitch(b, sr, rng, d);
+  });
+  highpass(out, 250, sr);
+  return out;
+}
+
 // ------------------------------------------------------------------ slime, bat, villager
 
-function slimeSquish(c: Ctx): Float32Array {
+/** Slime squish; p scales pitch, ts scales time (small slimes: higher and quicker). */
+function slimeSquish(c: Ctx, p = 1, ts = 1): Float32Array {
   const { sr, rng } = c;
-  const d = rng.range(0.25, 0.35);
+  const d = rng.range(0.25, 0.35) * ts;
   const out = alloc(d + 0.1, sr);
-  const fA = rng.range(250, 350);
+  const fA = rng.range(250, 350) * p;
   const fB = fA * rng.range(2.5, 3.5);
   layer(out, 1, (b) => sweep(b, sr, rng, { dur: d, f: (t) => fA * Math.pow(fB / fA, t / d), q: 5, amp: (t) => envBump(t, d * 0.3, d * 0.7) }));
-  const fb = rng.range(160, 210);
+  const fb = rng.range(160, 210) * p;
   layer(out, 0.8, (b) =>
-    addOsc(b, sr, 0, d, (t) => fb * (1 + 0.8 * (t / d)) * (1 + 0.08 * Math.sin(TAU * 25 * t)), (t) => envAD(t, 0.01, 0.07)),
+    addOsc(b, sr, 0, d, (t) => fb * (1 + 0.8 * (t / d)) * (1 + 0.08 * Math.sin((TAU * 25 * t) / ts)), (t) => envAD(t, 0.01, 0.07 * ts)),
   );
   layer(out, 0.4, (b) => {
-    for (let k = 0; k < 3; k++) bubble(b, sr, rng.range(0.02, d), rng.range(400, 1200), rng.range(0.4, 1), undefined, 0.6);
+    for (let k = 0; k < 3; k++) bubble(b, sr, rng.range(0.02, d), rng.range(400, 1200) * p, rng.range(0.4, 1), undefined, 0.6);
   });
-  layer(out, 0.4, (b) => thump(b, sr, { f0: 110, f1: 70, tau: 0.03 }));
+  layer(out, 0.4 * (p > 1 ? 0.5 : 1), (b) => thump(b, sr, { f0: 110 * p, f1: 70 * p, tau: 0.03 * ts }));
+  return out;
+}
+
+/** Slime jump: a quick springy "boing" squelch. */
+function slimeJump(c: Ctx, p: number, ts: number): Float32Array {
+  const { sr, rng } = c;
+  const d = rng.range(0.18, 0.26) * ts;
+  const out = alloc(d + 0.12, sr);
+  const f0 = rng.range(120, 160) * p;
+  layer(out, 1, (b) =>
+    addOsc(
+      b,
+      sr,
+      0,
+      d,
+      (t) => f0 * (1 + 1.6 * (1 - Math.exp(-t / (0.05 * ts)))) * (1 + 0.1 * Math.sin((TAU * 30 * t) / ts)),
+      (t) => envAD(t, 0.006, d * 0.35),
+    ),
+  );
+  const fA = rng.range(300, 420) * p;
+  layer(out, 0.75, (b) => sweep(b, sr, rng, { dur: d, f: (t) => fA * Math.pow(3.2, t / d), q: 5, amp: (t) => envBump(t, d * 0.15, d * 0.85) }));
+  layer(out, 0.4, (b) => {
+    for (let k = 0; k < 2; k++) bubble(b, sr, rng.range(0.01, d * 0.7), rng.range(500, 1300) * p, rng.range(0.5, 1), undefined, 0.8);
+  });
+  layer(out, p > 1 ? 0.2 : 0.45, (b) => thump(b, sr, { f0: 120 * p, f1: 80 * p, tau: 0.025 * ts }));
+  return out;
+}
+
+/** Slime hurt: a sharp wet onset and a downward squelch. */
+function slimeHurt(c: Ctx, p: number, ts: number): Float32Array {
+  const { sr, rng } = c;
+  const d = rng.range(0.22, 0.3) * ts;
+  const out = alloc(d + 0.1, sr);
+  const fA = rng.range(900, 1200) * p;
+  const fB = fA * 0.3;
+  layer(out, 1, (b) => sweep(b, sr, rng, { dur: d, f: (t) => fA * Math.pow(fB / fA, t / d), q: 4.5, amp: (t) => envAD(t, 0.004, d * 0.35) }));
+  const fb = rng.range(240, 300) * p;
+  layer(out, 0.7, (b) =>
+    addOsc(b, sr, 0, d, (t) => fb * (1 - (0.4 * t) / d) * (1 + 0.12 * Math.sin((TAU * 34 * t) / ts)), (t) => envAD(t, 0.004, d * 0.3)),
+  );
+  layer(out, 0.5, (b) => burst(b, sr, rng, { dur: 0.04 * ts, attack: 0.0005, tau: 0.008 * ts, bp: [1300 * p, 1] }));
+  layer(out, 0.35, (b) => {
+    for (let k = 0; k < 3; k++) bubble(b, sr, rng.range(0.02, d), rng.range(400, 1100) * p, rng.range(0.4, 1), undefined, 0.5);
+  });
+  return out;
+}
+
+/** Slime death: the body collapsing in a few falling squelches with bubbles escaping. */
+function slimeDeath(c: Ctx, p: number, ts: number): Float32Array {
+  const { sr, rng } = c;
+  const d = rng.range(0.5, 0.65) * ts;
+  const out = alloc(d + 0.15, sr);
+  layer(out, 1, (b) => {
+    let t = 0;
+    const parts = [0.4, 0.33, 0.45];
+    for (let k = 0; k < parts.length; k++) {
+      const dd = d * parts[k];
+      const fA = rng.range(600, 800) * p * (1 - 0.2 * k);
+      sweep(b, sr, rng, { t, dur: dd, f: (x) => fA * Math.pow(0.35, x / dd), q: 4, amp: (x) => (1 - 0.25 * k) * envBump(x, dd * 0.2, dd * 0.8) });
+      t += dd * rng.range(0.6, 0.8);
+    }
+  });
+  const fb = rng.range(200, 260) * p;
+  layer(out, 0.6, (b) =>
+    addOsc(b, sr, 0, d, (t) => fb * (1 - (0.55 * t) / d) * (1 + 0.1 * Math.sin((TAU * 20 * t) / ts)), (t) => envAD(t, 0.01, d * 0.35)),
+  );
+  layer(out, 0.45, (b) => {
+    for (let k = 0; k < 8; k++) bubble(b, sr, rng.range(0.05, d), rng.range(300, 1000) * p, rng.range(0.3, 1), undefined, 0.5);
+  });
+  layer(out, p > 1 ? 0.2 : 0.45, (b) => thump(b, sr, { f0: 100 * p, f1: 60 * p, tau: 0.05 * ts }));
+  return out;
+}
+
+/** Slime attack: a sharp wet slap. */
+function slimeAttack(c: Ctx): Float32Array {
+  const { sr, rng } = c;
+  const d = rng.range(0.14, 0.2);
+  const out = alloc(d + 0.08, sr);
+  layer(out, 1, (b) => burst(b, sr, rng, { dur: d, attack: 0.0004, tau: 0.018, bp: [rng.range(1000, 1400), 0.8] }));
+  layer(out, 0.6, (b) => burst(b, sr, rng, { dur: 0.03, attack: 0.0002, tau: 0.003, hp: 2500 }));
+  layer(out, 0.6, (b) => thump(b, sr, { f0: rng.range(150, 180), f1: 90, tau: 0.025 }));
+  const fA = rng.range(500, 700);
+  layer(out, 0.45, (b) =>
+    sweep(b, sr, rng, { t: 0.01, dur: d * 0.8, f: (t) => fA * Math.pow(2.5, t / (d * 0.8)), q: 5, amp: (t) => envBump(t, d * 0.15, d * 0.65) }),
+  );
+  return out;
+}
+
+const SMALL_P = 1.75;
+const SMALL_T = 0.7;
+
+// ------------------------------------------------------------------ squid
+
+/** Squid voice: soft, muffled wet squishes with bubbles (heard through water). */
+function squidSquish(c: Ctx, kind: 'ambient' | 'hurt' | 'death'): Float32Array {
+  const { sr, rng } = c;
+  const hurt = kind === 'hurt';
+  const death = kind === 'death';
+  const d = death ? rng.range(0.75, 0.9) : hurt ? rng.range(0.28, 0.36) : rng.range(0.4, 0.6);
+  const out = alloc(d + 0.12, sr);
+  const fA = death ? rng.range(700, 900) : rng.range(200, 280) * (hurt ? 1.4 : 1);
+  const fB = death ? fA * rng.range(0.22, 0.3) : fA * rng.range(2.2, 3);
+  const pk = hurt ? 0.2 : 0.4;
+  const wob = death ? 9 : 14;
+  layer(out, 1, (b) =>
+    sweep(b, sr, rng, {
+      dur: d,
+      f: (t) => fA * Math.pow(fB / fA, t / d) * (1 + 0.06 * Math.sin(TAU * wob * t)),
+      q: 4,
+      amp: (t) => envBump(t, d * pk, d * (1 - pk)),
+    }),
+  );
+  const fb = rng.range(140, 200) * (hurt ? 1.3 : 1);
+  layer(out, 0.6, (b) =>
+    addOsc(b, sr, 0.01, d * 0.6, (t) => fb * (death ? 1 - (0.4 * t) / d : 1 + (0.9 * t) / d), (t) => envAD(t, 0.015, d * 0.18)),
+  );
+  layer(out, 0.5, (b) => {
+    const nb = death ? 14 : hurt ? 7 : 5;
+    for (let k = 0; k < nb; k++) {
+      const t = rng.range(0.02, d * (death ? 0.95 : 0.8));
+      bubble(b, sr, t, rng.logRange(280, 900) * (hurt ? 1.3 : 1), rng.range(0.3, 1), undefined, rng.range(0.2, 0.5));
+    }
+  });
+  if (hurt) layer(out, 0.45, (b) => burst(b, sr, rng, { dur: 0.05, attack: 0.001, tau: 0.01, bp: [900, 0.9] }));
+  lowpass(out, hurt ? 2600 : 1600, sr);
+  return out;
+}
+
+/** Squid squirt: a quick jet of ink — a rising band of bubbly noise. */
+function squidSquirt(c: Ctx): Float32Array {
+  const { sr, rng } = c;
+  const d = rng.range(0.3, 0.4);
+  const out = alloc(d + 0.1, sr);
+  layer(out, 1, (b) =>
+    sweep(b, sr, rng, {
+      dur: d,
+      f: (t) => 450 * Math.pow(3.2, Math.min(1, t / (d * 0.35))),
+      q: 1.6,
+      amp: (t) => envAD(t, 0.012, d * 0.3) * (0.7 + 0.3 * Math.sin(TAU * 38 * t)),
+    }),
+  );
+  layer(out, 0.8, (b) => {
+    const nb = 22 + rng.int(12);
+    for (let k = 0; k < nb; k++) {
+      const t = Math.pow(rng.next(), 1.5) * d * 0.8;
+      bubble(b, sr, t, rng.logRange(500, 1600), rng.range(0.3, 1) * Math.exp(-t / (d * 0.5)), undefined, rng.range(0.3, 0.7));
+    }
+  });
+  layer(out, 0.4, (b) => thump(b, sr, { f0: 160, f1: 100, tau: 0.03 }));
+  lowpass(out, 3200, sr);
   return out;
 }
 
@@ -764,6 +1152,7 @@ export function mobSounds(): Record<string, SoundGen> {
     'entity.skeleton.shoot': sound('entity.arrow.shoot', 1, bowShoot),
 
     'entity.creeper.primed': sound('entity.creeper.primed', 1, fuse),
+    'entity.tnt.primed': sound('entity.tnt.primed', 2, tntFuse),
     'entity.creeper.hurt': sound('entity.creeper.hurt', 4, (c) => creeperHiss(c, c.rng.range(0.3, 0.4))),
     'entity.creeper.death': sound('entity.creeper.death', 1, (c) => creeperHiss(c, 0.75)),
 
@@ -774,10 +1163,26 @@ export function mobSounds(): Record<string, SoundGen> {
 
     'entity.enderman.ambient': sound('entity.enderman.ambient', 5, enderIdle),
     'entity.enderman.teleport': sound('entity.enderman.teleport', 2, enderTeleport),
+    'entity.player.teleport': sound('entity.player.teleport', 2, playerTeleport),
     'entity.enderman.hurt': sound('entity.enderman.hurt', 4, enderHurt),
     'entity.enderman.death': sound('entity.enderman.hurt', 4, enderHurt),
+    'entity.enderman.stare': sound('entity.enderman.stare', 2, enderStare),
+    'entity.enderman.scream': sound('entity.enderman.scream', 4, enderScream),
 
-    'entity.slime.squish': sound('entity.slime.squish', 4, slimeSquish),
+    'entity.squid.ambient': sound('entity.squid.ambient', 5, (c) => squidSquish(c, 'ambient')),
+    'entity.squid.hurt': sound('entity.squid.hurt', 4, (c) => squidSquish(c, 'hurt')),
+    'entity.squid.death': sound('entity.squid.death', 3, (c) => squidSquish(c, 'death')),
+    'entity.squid.squirt': sound('entity.squid.squirt', 3, squidSquirt),
+
+    'entity.slime.squish': sound('entity.slime.squish', 4, (c) => slimeSquish(c)),
+    'entity.slime.jump': sound('entity.slime.jump', 4, (c) => slimeJump(c, 1, 1)),
+    'entity.slime.hurt': sound('entity.slime.hurt', 4, (c) => slimeHurt(c, 1, 1)),
+    'entity.slime.death': sound('entity.slime.death', 4, (c) => slimeDeath(c, 1, 1)),
+    'entity.slime.attack': sound('entity.slime.attack', 2, slimeAttack),
+    'entity.slime.squish_small': sound('entity.slime.squish_small', 5, (c) => slimeSquish(c, SMALL_P, SMALL_T)),
+    'entity.slime.jump_small': sound('entity.slime.jump_small', 5, (c) => slimeJump(c, SMALL_P, SMALL_T)),
+    'entity.slime.hurt_small': sound('entity.slime.hurt_small', 5, (c) => slimeHurt(c, SMALL_P, SMALL_T)),
+    'entity.slime.death_small': sound('entity.slime.death_small', 5, (c) => slimeDeath(c, SMALL_P, SMALL_T)),
     'entity.bat.ambient': sound('entity.bat.ambient', 4, batSqueak),
     'entity.villager.ambient': sound('entity.villager.ambient', 3, villagerHmm),
   };

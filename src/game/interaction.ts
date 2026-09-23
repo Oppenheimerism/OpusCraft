@@ -4,8 +4,9 @@ import type { Level } from './level';
 import type { Player } from '../entity/player';
 import { raycast, BlockHit } from './raycast';
 import { destroyProgress, placementState, canReplace, canSurvive, isCorrectTool } from './blockRules';
-import { BLOCKS, STATE_BLOCK, FLAGS, F_AIR, F_WATER, F_REPLACEABLE, COLLISION, getBlock, S } from '../world/block';
-import { DX, DY, DZ } from '../world/dir';
+import { BLOCKS, STATE_BLOCK, FLAGS, F_AIR, F_WATER, F_OPAQUE, F_REPLACEABLE, COLLISION, FACE_OCC, OUTLINE, getBlock, S } from '../world/block';
+import { updateShape, hasShapeUpdates } from './shapeUpdates';
+import { DX, DY, DZ, DIR_NAMES, dirFromYaw } from '../world/dir';
 import { blockForItem, itemForBlock, ItemStack, getItem } from '../item/item';
 import { AABB } from '../core/aabb';
 import { ItemEntity } from '../entity/itemEntity';
@@ -19,6 +20,7 @@ import { PrimedTnt } from '../entity/tnt';
 import { ThrownItem, ThrownKind } from '../entity/throwable';
 import { createMob } from './spawner';
 import { playerAttack } from './combat';
+import { canPlaceFire, fireStateAt, placeFire } from './fire';
 
 export class Interaction {
   hit: BlockHit | null = null;
@@ -200,6 +202,8 @@ export class Interaction {
     // swords can't break blocks in creative
     if (p.gameMode === 'creative' && held?.item.tool?.type === 'sword') return;
     const survival = p.gameMode === 'survival' || p.gameMode === 'adventure';
+    // vanilla BaseFireBlock.playerWillDestroy: punching out fire fizzes
+    if (b.name === 'fire') this.level.sound.play('block.fire.extinguish', x + 0.5, y + 0.5, z + 0.5, 0.5, 2.6 + (Math.random() - Math.random()) * 0.8);
     this.level.destroyBlock(x, y, z, survival, held?.item ?? null);
     if (survival) {
       p.food.addExhaustion(0.005);
@@ -269,6 +273,7 @@ export class Interaction {
         return;
       }
     }
+    if (h && p.gameMode !== 'spectator' && this.useOnBlock(h, stack)) return;
     // vanilla TntBlock.useItemOn: flint and steel / fire charge primes TNT
     if (h && stack && (stack.item.id === 'flint_and_steel' || stack.item.id === 'fire_charge') && this.level.getBlockName(h.x, h.y, h.z) === 'tnt') {
       this.level.setBlock(h.x, h.y, h.z, 0);
@@ -344,11 +349,16 @@ export class Interaction {
       }
       return false;
     }
-    const st = placementState(block, {
-      world, x, y, z, face: replaceClicked ? 1 : h.face, hitY: h.hy - h.y, yaw: p.yaw, pitch: p.pitch, sneaking: p.crouching, clickedState: clicked,
+    let st = placementState(block, {
+      world, x, y, z, face: replaceClicked ? 1 : h.face, hitY: h.hy - h.y, hitX: h.hx - x, hitZ: h.hz - z, yaw: p.yaw, pitch: p.pitch, sneaking: p.crouching, clickedState: clicked,
     });
     if (st === null) return false;
     if (!canSurvive(world, x, y, z, st)) return false;
+    // neighbour-dependent state at placement (vanilla getStateForPlacement connections)
+    if (hasShapeUpdates(st) && !block.name.endsWith('_door') && !block.name.endsWith('_bed')) {
+      const u = updateShape(world, x, y, z, st);
+      if (u) st = u;
+    }
     // don't place inside entities
     const boxes = COLLISION[st];
     if (boxes) {
@@ -360,14 +370,168 @@ export class Interaction {
         }
       }
     }
-    // double-height plants need the block above
+    // double-height plants and doors need the block above
     if (block.propIndex('half') >= 0 && block.s.props?.some((pp) => pp.values.includes('upper'))) {
       const above = world.getState(x, y + 1, z);
-      if (!canReplace(above, block)) return false;
+      if (y + 1 >= 320 || !canReplace(above, block)) return false;
       this.level.setBlock(x, y + 1, z, block.with(st, 'half', 'upper'), false);
       return this.commitPlace(x, y, z, block.with(st, 'half', 'lower'), stack, block.sound);
     }
+    // beds: foot here, head one block further in the facing direction (vanilla BedItem)
+    if (block.name.endsWith('_bed')) {
+      const d: Record<string, [number, number]> = { north: [0, -1], south: [0, 1], west: [-1, 0], east: [1, 0] };
+      const [dx, dz] = d[block.get<string>(st, 'facing')];
+      const hx = x + dx, hz = z + dz;
+      const headTarget = world.getState(hx, y, hz);
+      if (!canReplace(headTarget, block) || !(FACE_OCC[world.getState(hx, y - 1, hz)] & 2)) return false;
+      const bb = new AABB(hx, y, hz, hx + 1, y + 0.5625, hz + 1);
+      if (bb.intersects(p.bb)) return false;
+      this.level.setBlock(hx, y, hz, block.with(st, 'part', 'head'), false);
+      return this.commitPlace(x, y, z, block.with(st, 'part', 'foot'), stack, block.sound);
+    }
     return this.commitPlace(x, y, z, st, stack, block.sound);
+  }
+
+  /** right-click actions on blocks (vanilla useWithoutItem / item useOn); true if handled */
+  private useOnBlock(h: BlockHit, stack: ItemStack | null): boolean {
+    const p = this.player;
+    const lvl = this.level;
+    const st = lvl.getState(h.x, h.y, h.z);
+    const b = BLOCKS[STATE_BLOCK[st]];
+    const n = b.name;
+    const sneakingWithItem = p.crouching && !!stack;
+    // doors, trapdoors, fence gates toggle by hand (iron ones need redstone)
+    if (!sneakingWithItem && (n.endsWith('_door') || n.endsWith('_trapdoor') || n.endsWith('_fence_gate')) && !n.startsWith('iron_')) {
+      let ns = b.with(st, 'open', !b.get(st, 'open'));
+      if (n.endsWith('_fence_gate') && !b.get(st, 'open')) {
+        // vanilla FenceGateBlock.useWithoutItem: swings away from the player
+        const f = DIR_NAMES[dirFromYaw(p.yaw)];
+        const opp: Record<string, string> = { north: 'south', south: 'north', east: 'west', west: 'east' };
+        if (b.get(st, 'facing') === opp[f]) ns = b.with(ns, 'facing', f);
+      }
+      lvl.setBlock(h.x, h.y, h.z, ns);
+      const open = b.get(ns, 'open');
+      const kind = n.endsWith('_door') ? 'wooden_door' : n.endsWith('_trapdoor') ? 'wooden_trapdoor' : 'fence_gate';
+      lvl.sound.play(`block.${kind}.${open ? 'open' : 'close'}`, h.x + 0.5, h.y + 0.5, h.z + 0.5, 1, Math.random() * 0.1 + 0.9);
+      p.swing();
+      return true;
+    }
+    if (!sneakingWithItem && n.endsWith('_bed')) {
+      this.onUseBed?.(h.x, h.y, h.z);
+      p.swing();
+      return true;
+    }
+    if (!stack) return false;
+    const id = stack.item.id;
+    // vanilla HoeItem.useOn: grass/dirt/path → farmland (coarse dirt → dirt)
+    if (stack.item.tool?.type === 'hoe' && h.face !== 0) {
+      const above = lvl.getState(h.x, h.y + 1, h.z);
+      if (FLAGS[above] & F_AIR && (n === 'grass_block' || n === 'dirt' || n === 'dirt_path' || n === 'coarse_dirt' || n === 'rooted_dirt')) {
+        const to = n === 'coarse_dirt' ? S('dirt') : n === 'rooted_dirt' ? S('dirt') : S('farmland');
+        lvl.setBlock(h.x, h.y, h.z, to);
+        if (n === 'rooted_dirt') ItemEntity.drop(lvl, h.x, h.y, h.z, ItemStack.of('hanging_roots'));
+        lvl.sound.play('item.hoe.till', h.x + 0.5, h.y + 0.5, h.z + 0.5, 1, 1);
+        if (p.gameMode !== 'creative') this.damageHeld(1);
+        p.swing();
+        return true;
+      }
+    }
+    // vanilla BoneMealItem.useOn
+    if (id === 'bone_meal' && this.boneMeal(h.x, h.y, h.z, st)) {
+      if (p.gameMode !== 'creative') p.inventory.consumeSelected(1);
+      lvl.sound.play('item.bone_meal.use', h.x + 0.5, h.y + 0.5, h.z + 0.5, 1, 1);
+      this.growthParticles(h.x, h.y, h.z);
+      p.swing();
+      return true;
+    }
+    // vanilla FlintAndSteelItem.useOn: light a fire on the clicked face
+    if (id === 'flint_and_steel' || id === 'fire_charge') {
+      const fx = h.x + DX[h.face], fy = h.y + DY[h.face], fz = h.z + DZ[h.face];
+      if (canPlaceFire(lvl.world, fx, fy, fz)) {
+        placeFire(lvl, fx, fy, fz, fireStateAt(lvl.world, fx, fy, fz));
+        if (id === 'flint_and_steel') {
+          lvl.sound.play('item.flintandsteel.use', fx + 0.5, fy + 0.5, fz + 0.5, 1, Math.random() * 0.4 + 0.8);
+          if (p.gameMode !== 'creative') this.damageHeld(1);
+        } else {
+          lvl.sound.play('item.firecharge.use', fx + 0.5, fy + 0.5, fz + 0.5, 1, (Math.random() - Math.random()) * 0.2 + 1);
+          if (p.gameMode !== 'creative') p.inventory.consumeSelected(1);
+        }
+        p.swing();
+        return true;
+      }
+    }
+    return false;
+  }
+
+  onUseBed: ((x: number, y: number, z: number) => void) | null = null;
+
+  /** vanilla BoneMealItem.addGrowthParticles */
+  private growthParticles(x: number, y: number, z: number): void {
+    const lvl = this.level;
+    const st = lvl.getState(x, y, z);
+    if (FLAGS[st] & F_AIR) return;
+    let count = 15, spread = 0.5, height: number;
+    if (FLAGS[st] & F_OPAQUE) {
+      // grass and other full blocks: flowers spring up all around
+      y++;
+      count *= 3;
+      spread = 3;
+      height = 1;
+    } else height = Math.max(0, ...(OUTLINE[st]?.map((b) => b[4]) ?? [1]));
+    const gauss = () => Math.sqrt(-2 * Math.log(1 - Math.random())) * Math.cos(2 * Math.PI * Math.random());
+    lvl.particles.spawn?.('happy_villager', x + 0.5, y + 0.5, z + 0.5, 0, 0, 0);
+    for (let i = 0; i < count; i++) {
+      const px = x + 0.5 - spread + Math.random() * spread * 2, py = y + Math.random() * height, pz = z + 0.5 - spread + Math.random() * spread * 2;
+      if (FLAGS[lvl.getState(Math.floor(px), Math.floor(py) - 1, Math.floor(pz))] & F_AIR) continue;
+      lvl.particles.spawn?.('happy_villager', px, py, pz, gauss() * 0.02, gauss() * 0.02, gauss() * 0.02);
+    }
+  }
+
+  /** vanilla BonemealableBlock.performBonemeal for crops, stems, saplings and grass */
+  private boneMeal(x: number, y: number, z: number, st: number): boolean {
+    const lvl = this.level;
+    const b = BLOCKS[STATE_BLOCK[st]];
+    const n = b.name;
+    if (n === 'wheat' || n === 'carrots' || n === 'potatoes' || n === 'beetroots') {
+      const max = n === 'beetroots' ? 3 : 7;
+      const age = b.get<number>(st, 'age');
+      if (age >= max) return false;
+      const grow = n === 'beetroots' ? 1 : 2 + Math.floor(Math.random() * 4);
+      lvl.setBlock(x, y, z, b.with(st, 'age', Math.min(max, age + grow)));
+      return true;
+    }
+    if (n === 'pumpkin_stem' || n === 'melon_stem') {
+      const age = b.get<number>(st, 'age');
+      if (age >= 7) return false;
+      lvl.setBlock(x, y, z, b.with(st, 'age', Math.min(7, age + 2 + Math.floor(Math.random() * 4))));
+      return true;
+    }
+    if (n.endsWith('_sapling')) {
+      if (Math.random() < 0.45) lvl.randomTicks.advanceSapling(x, y, z, st);
+      return true;
+    }
+    if (n === 'grass_block') {
+      // scatter grass and flowers on nearby grass blocks
+      for (let i = 0; i < 128; i++) {
+        let px = x, py = y + 1, pz = z;
+        let ok = true;
+        for (let j = 0; j < i / 16; j++) {
+          px += Math.floor(Math.random() * 3) - 1;
+          py += Math.floor((Math.floor(Math.random() * 3) - 1) * Math.floor(Math.random() * 3) / 2);
+          pz += Math.floor(Math.random() * 3) - 1;
+          if (BLOCKS[STATE_BLOCK[lvl.getState(px, py - 1, pz)]].name !== 'grass_block') {
+            ok = false;
+            break;
+          }
+        }
+        if (!ok || !(FLAGS[lvl.getState(px, py, pz)] & F_AIR)) continue;
+        const r = Math.random();
+        const plant = r < 0.8 ? 'short_grass' : r < 0.9 ? 'dandelion' : 'poppy';
+        lvl.setBlock(px, py, pz, S(plant));
+      }
+      return true;
+    }
+    return false;
   }
 
   private commitPlace(x: number, y: number, z: number, st: number, stack: ItemStack, sound: string): boolean {

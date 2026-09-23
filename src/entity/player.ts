@@ -10,6 +10,9 @@ import { Inventory } from '../item/inventory';
 import { FoodData } from './food';
 import { ExperienceOrb } from './xpOrb';
 import { Arrow } from './arrow';
+import { BLOCKS, STATE_BLOCK } from '../world/block';
+import { wrapDegrees } from '../core/math';
+import { findStandUpPosition } from '../game/sleep';
 
 export type GameMode = 'survival' | 'creative' | 'adventure' | 'spectator';
 
@@ -92,6 +95,13 @@ export class Player extends LivingEntity {
   spawnX = 0;
   spawnY = 64;
   spawnZ = 0;
+  /** vanilla respawnPosition: a bed, or a /spawnpoint (forced); null = world spawn */
+  respawnPos: [number, number, number] | null = null;
+  respawnForced = false;
+  /** bed head block while asleep (vanilla sleepingPos) */
+  sleepingPos: [number, number, number] | null = null;
+  /** vanilla sleepCounter: climbs to 100 asleep, then 100..110 fades back after waking */
+  sleepCounter = 0;
   onStepSound: ((p: Player) => void) | null = null;
   onSwimSound: ((p: Player) => void) | null = null;
   onHurtSound: ((p: Player, source: string) => void) | null = null;
@@ -106,10 +116,73 @@ export class Player extends LivingEntity {
     this.setSize(0.6, 1.8);
     this.health = 20;
     this.maxHealth = 20;
+    this.remainingFireTicks = -this.fireImmuneTicks();
+  }
+
+  /** vanilla Player.getFireImmuneTicks: a second in fire before catching */
+  override fireImmuneTicks(): number {
+    return 20;
   }
 
   override get eyeHeight(): number {
+    if (this.sleepingPos) return 0.2;
     return this.crouching ? 1.27 : 1.62;
+  }
+
+  isSleeping(): boolean {
+    return this.sleepingPos !== null;
+  }
+
+  isSleepingLongEnough(): boolean {
+    return this.sleepingPos !== null && this.sleepCounter >= 100;
+  }
+
+  /** bed facing while asleep (vanilla getBedOrientation) */
+  bedOrientation(): string | null {
+    const pos = this.sleepingPos;
+    if (!pos) return null;
+    const st = this.level.world.getState(pos[0], pos[1], pos[2]);
+    const b = BLOCKS[STATE_BLOCK[st]];
+    return b.name.endsWith('_bed') ? b.get<string>(st, 'facing') : null;
+  }
+
+  /** vanilla LivingEntity.startSleeping: mark the bed occupied and lie down in it */
+  startSleeping(x: number, y: number, z: number): void {
+    const st = this.level.world.getState(x, y, z);
+    const b = BLOCKS[STATE_BLOCK[st]];
+    if (b.name.endsWith('_bed')) this.level.setBlock(x, y, z, b.with(st, 'occupied', true));
+    this.crouching = false;
+    this.sprinting = false;
+    this.sleepingPos = [x, y, z];
+    this.setSize(0.2, 0.2);
+    this.setPos(x + 0.5, y + 0.6875, z + 0.5);
+    this.dx = this.dy = this.dz = 0;
+    this.sleepCounter = 0;
+  }
+
+  /** vanilla LivingEntity.stopSleeping: free the bed and stand up beside it, facing it */
+  stopSleeping(): void {
+    const pos = this.sleepingPos;
+    if (!pos) return;
+    this.sleepingPos = null;
+    const [x, y, z] = pos;
+    const w = this.level.world;
+    const st = w.getState(x, y, z);
+    const b = BLOCKS[STATE_BLOCK[st]];
+    this.setSize(0.6, 1.8);
+    if (b.name.endsWith('_bed')) {
+      this.level.setBlock(x, y, z, b.with(st, 'occupied', false));
+      const at = findStandUpPosition(w, x, y, z, b.get<string>(st, 'facing'), this.yaw) ?? [x + 0.5, y + 1.1, z + 0.5];
+      const yaw = wrapDegrees((Math.atan2(z + 0.5 - at[2], x + 0.5 - at[0]) * 180) / Math.PI - 90);
+      this.moveTo(at[0], at[1], at[2], yaw, 0);
+    }
+    this.fallDistance = 0;
+  }
+
+  /** vanilla Player.stopSleepInBed: waking normally leaves a short fade (sleepCounter 100 → 110) */
+  stopSleepInBed(wakeImmediately: boolean): void {
+    this.stopSleeping();
+    this.sleepCounter = wakeImmediately ? 0 : 100;
   }
 
   setGameMode(m: GameMode): void {
@@ -163,6 +236,15 @@ export class Player extends LivingEntity {
     }
     this.eyeHeightCamO = this.eyeHeightCam;
     this.eyeHeightCam += (this.eyeHeight - this.eyeHeightCam) * 0.5;
+    // vanilla Player.tick: the sleep timer; morning (or a thunderstorm ending) wakes you
+    if (this.sleepingPos) {
+      if (++this.sleepCounter > 100) this.sleepCounter = 100;
+      if (this.level.isDay()) this.stopSleepInBed(false);
+    } else if (this.sleepCounter > 0) {
+      if (++this.sleepCounter >= 110) this.sleepCounter = 0;
+    }
+    // vanilla LivingEntity.tick: the bed was broken under you
+    if (this.sleepingPos && !this.bedOrientation()) this.stopSleeping();
     super.tick();
     // bob
     let f = 0;
@@ -201,6 +283,12 @@ export class Player extends LivingEntity {
 
   protected override serverAiStep(): void {
     const inp = this.input;
+    // vanilla Player.isImmobile: no steering while asleep
+    if (this.sleepingPos) {
+      this.xxa = this.zza = 0;
+      this.jumping = false;
+      return;
+    }
     // crouching pose (vanilla: shift while on ground / not flying)
     const wantCrouch = inp.sneak && !this.flying && !this.inWater;
     if (wantCrouch !== this.crouching) {
@@ -295,6 +383,8 @@ export class Player extends LivingEntity {
       else if (d === 'hard') amount = (amount * 3) / 2;
     }
     if (amount === 0) return false;
+    // vanilla LivingEntity.hurt: getting hurt wakes you up
+    if (this.sleepingPos) this.stopSleeping();
     this.lastDamageSource = source;
     this.lastDamageAttacker = attacker ?? null;
     const ok = super.hurt(amount, source, attacker, direct);

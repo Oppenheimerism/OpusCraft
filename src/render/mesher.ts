@@ -48,6 +48,8 @@ interface StateModels {
   weights: number[];
   total: number;
   multipart: boolean;
+  /** multipart parts with random alternatives (variants holds each part's first) */
+  randomParts?: BakedModel[][];
 }
 
 let MODELS: (StateModels | null)[] = [];
@@ -81,9 +83,13 @@ export function bakeChoice(choice: ModelChoice): StateModels {
     const weights = choice.map((v) => v.weight ?? 1);
     return { variants, weights, total: weights.reduce((a, b) => a + b, 0), multipart: false };
   }
-  if ((choice as { parts: Variant[] }).parts) {
-    const parts = (choice as { parts: Variant[] }).parts;
-    const variants = parts.map((v) => bakeVariant(v, SPRITES));
+  if ((choice as { parts: (Variant | Variant[])[] }).parts) {
+    const parts = (choice as { parts: (Variant | Variant[])[] }).parts;
+    if (parts.some((p) => Array.isArray(p))) {
+      const randomParts = parts.map((p) => (Array.isArray(p) ? p : [p]).map((v) => bakeVariant(v, SPRITES)));
+      return { variants: randomParts.map((p) => p[0]), weights: parts.map(() => 1), total: parts.length, multipart: true, randomParts };
+    }
+    const variants = (parts as Variant[]).map((v) => bakeVariant(v, SPRITES));
     return { variants, weights: parts.map(() => 1), total: parts.length, multipart: true };
   }
   return { variants: [bakeVariant(choice as Variant, SPRITES)], weights: [1], total: 1, multipart: false };
@@ -562,7 +568,11 @@ export function meshSection(input: MeshInput): MeshOutput {
             emitQuad(w, q, x, y, z, ox, oy, oz, tint, ao, 255, i);
           }
         };
-        if (models.multipart) {
+        if (models.randomParts) {
+          // vanilla MultiPartBakedModel: every part draws with the same random seed
+          const h = hash3(input.ox + x, input.oy + y, input.oz + z, 0x51a7e);
+          for (const p of models.randomParts) drawModel(p[h % p.length]);
+        } else if (models.multipart) {
           for (const m of models.variants) drawModel(m);
         } else if (models.variants.length === 1) {
           drawModel(models.variants[0]);

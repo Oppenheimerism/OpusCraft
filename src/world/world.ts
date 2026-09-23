@@ -96,6 +96,12 @@ export class World {
     return old;
   }
 
+  /** change a state that renders and lights the same (vanilla flag UPDATE_INVISIBLE, e.g. fire age) */
+  setStateQuiet(x: number, y: number, z: number, state: number): void {
+    const c = this.getChunk(x >> 4, z >> 4);
+    if (c && y >= MIN_Y && y < MAX_Y) c.setState(x & 15, y, z & 15, state);
+  }
+
   getBlockEntity(x: number, y: number, z: number): BlockEntity | null {
     return this.blockEntities.get(blockEntityKey(x, y, z)) ?? null;
   }

@@ -27,7 +27,20 @@ export function canSurvive(world: World, x: number, y: number, z: number, state:
   if (n === 'dead_bush') return PLANT_SOIL.has(bn) || bn === 'sand' || bn === 'red_sand' || bn.endsWith('terracotta');
   if (n === 'brown_mushroom' || n === 'red_mushroom') return FLAGS[below] & F_OPAQUE ? true : false;
   if (n === 'sweet_berry_bush') return PLANT_SOIL.has(bn);
-  if (n === 'wheat') return bn === 'farmland';
+  if (n === 'wheat' || n === 'carrots' || n === 'potatoes' || n === 'beetroots' || n.endsWith('_stem')) return bn === 'farmland';
+  if (n.endsWith('_door')) {
+    if (b.get(state, 'half') === 'upper') return blk(below) === b && blk(below).get(below, 'half') === 'lower';
+    return isSturdyFace(below, UP);
+  }
+  if (n.endsWith('_carpet')) return !(FLAGS[below] & F_AIR);
+  if (n === 'lantern') {
+    if (b.get(state, 'hanging')) {
+      const above = world.getState(x, y + 1, z);
+      return isSturdyFace(above, DOWN) || blk(above).name === 'chain' || blk(above).name.endsWith('_fence') || blk(above).name.endsWith('_wall');
+    }
+    return isSturdyFace(below, UP) || /_fence$|_wall$|^chain$/.test(bn);
+  }
+  if (n.endsWith('_bed')) return true;
   if (n === 'tall_grass' || n === 'large_fern' || n === 'sunflower' || n === 'lilac' || n === 'rose_bush' || n === 'peony' || n === 'tall_seagrass') {
     const half = b.get(state, 'half');
     if (half === 'upper') {
@@ -88,6 +101,9 @@ export interface PlaceContext {
   z: number;
   face: number; // clicked face
   hitY: number; // fractional hit y within clicked block
+  /** fractional hit x/z within the placement position (door hinges) */
+  hitX?: number;
+  hitZ?: number;
   yaw: number;
   pitch: number;
   sneaking: boolean;
@@ -120,6 +136,28 @@ export function placementState(block: Block, ctx: PlaceContext): number | null {
   } else if (n === 'ladder') {
     if (ctx.face === UP || ctx.face === DOWN) return null;
     st = block.with(st, 'facing', DIR_NAMES[ctx.face]);
+  } else if (n.endsWith('_door')) {
+    // vanilla DoorBlock.getStateForPlacement: facing = look direction, hinge from neighbours / click
+    st = block.with(st, 'facing', facingH);
+    st = block.with(st, 'half', 'lower');
+    st = block.with(st, 'hinge', doorHinge(ctx, facingH));
+  } else if (n.endsWith('_trapdoor')) {
+    // vanilla TrapDoorBlock.getStateForPlacement
+    if (ctx.face !== UP && ctx.face !== DOWN) {
+      st = block.with(st, 'facing', DIR_NAMES[ctx.face]);
+      st = block.with(st, 'half', ctx.hitY > 0.5 ? 'top' : 'bottom');
+    } else {
+      st = block.with(st, 'facing', oppositeH);
+      st = block.with(st, 'half', ctx.face === UP ? 'bottom' : 'top');
+    }
+  } else if (n.endsWith('_fence_gate') || n.endsWith('_bed')) {
+    st = block.with(st, 'facing', facingH);
+    if (n.endsWith('_bed')) st = block.with(st, 'part', 'foot');
+  } else if (n === 'lantern') {
+    // vanilla: prefer the vertical direction the player looks toward
+    const hanging = ctx.face === DOWN;
+    st = block.with(st, 'hanging', hanging);
+    if (!canSurvive(ctx.world, ctx.x, ctx.y, ctx.z, st)) st = block.with(st, 'hanging', !hanging);
   } else if (block.propIndex('facing') >= 0) {
     st = block.with(st, 'facing', oppositeH);
   }
@@ -129,6 +167,26 @@ export function placementState(block: Block, ctx: PlaceContext): number | null {
     if (blk(cur).name === 'water' && blk(cur).get(cur, 'level') === 0) st = block.with(st, 'waterlogged', true);
   }
   return st;
+}
+
+/** vanilla DoorBlock.getHinge */
+function doorHinge(ctx: PlaceContext, facing: string): 'left' | 'right' {
+  const w = ctx.world;
+  const ccw: Record<string, [number, number]> = { north: [-1, 0], south: [1, 0], west: [0, 1], east: [0, -1] };
+  const [lx, lz] = ccw[facing];
+  const full = (xx: number, yy: number, zz: number) => (FLAGS[w.getState(xx, yy, zz)] & F_COLLIDE) !== 0 && (FACE_OCC[w.getState(xx, yy, zz)] & 0b111111) === 0b111111;
+  const i = (full(ctx.x + lx, ctx.y, ctx.z + lz) ? -1 : 0) + (full(ctx.x + lx, ctx.y + 1, ctx.z + lz) ? -1 : 0) + (full(ctx.x - lx, ctx.y, ctx.z - lz) ? 1 : 0) + (full(ctx.x - lx, ctx.y + 1, ctx.z - lz) ? 1 : 0);
+  const doorAt = (xx: number, zz: number) => {
+    const s = w.getState(xx, ctx.y, zz);
+    return blk(s).name.endsWith('_door') && blk(s).get(s, 'half') === 'lower';
+  };
+  const flag = doorAt(ctx.x + lx, ctx.z + lz), flag1 = doorAt(ctx.x - lx, ctx.z - lz);
+  if ((flag && !flag1) || i > 0) return 'right';
+  if ((flag1 && !flag) || i < 0) return 'left';
+  const step: Record<string, [number, number]> = { north: [0, -1], south: [0, 1], west: [-1, 0], east: [1, 0] };
+  const [j, k] = step[facing];
+  const d0 = ctx.hitX ?? 0.5, d1 = ctx.hitZ ?? 0.5;
+  return (j >= 0 || !(d1 < 0.5)) && (j <= 0 || !(d1 > 0.5)) && (k >= 0 || !(d0 > 0.5)) && (k <= 0 || !(d0 < 0.5)) ? 'left' : 'right';
 }
 
 /** Is the target position replaceable by placing `block`? */
@@ -248,7 +306,28 @@ export function blockDrops(state: number, tool: Item | null, r: Rand, silk = fal
     }
     case 'sunflower': case 'lilac': case 'rose_bush': case 'peony':
       return b.get(state, 'half') === 'lower' ? stacks(n, 1) : [];
+    case 'carrots': case 'potatoes': {
+      const item = n === 'carrots' ? 'carrot' : 'potato';
+      const age = b.get<number>(state, 'age');
+      if (age < 7) return stacks(item, 1);
+      const out = stacks(item, 1 + binom(r, 3, 0.5714286));
+      if (n === 'potatoes' && r.next() < 0.02) out.push(...stacks('poisonous_potato', 1));
+      return out;
+    }
+    case 'beetroots': {
+      const age = b.get<number>(state, 'age');
+      if (age < 3) return stacks('beetroot_seeds', 1);
+      return [...stacks('beetroot', 1), ...stacks('beetroot_seeds', 1 + binom(r, 3, 0.5714286))];
+    }
+    case 'pumpkin_stem': case 'melon_stem': case 'attached_pumpkin_stem': case 'attached_melon_stem': {
+      // vanilla stem loot: seeds, binomial by age (attached = age 7)
+      const seeds = n.includes('pumpkin') ? 'pumpkin_seeds' : 'melon_seeds';
+      const age = n.startsWith('attached') ? 7 : b.get<number>(state, 'age');
+      return stacks(seeds, binom(r, 3, (age + 1) / 15));
+    }
+    case 'fire': return [];
   }
+  if (n.endsWith('_bed')) return b.get(state, 'part') === 'head' ? stacks(n, 1) : [];
   if (b.s.isLeaves) {
     if (shears) return stacks(n, 1);
     const out: ItemStack[] = [];

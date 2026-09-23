@@ -2,7 +2,7 @@
 
 import type { Game } from '../../game/game';
 import { TitleScreen } from './menus';
-import { PauseScreen, DeathScreen, LevelLoadingScreen, ChatScreen } from './ingame';
+import { PauseScreen, DeathScreen, LevelLoadingScreen, ChatScreen, InBedChatScreen } from './ingame';
 import { executeCommand } from '../../game/commands';
 import { InventoryScreen, CraftingScreen, FurnaceScreen, ChestScreen } from './container';
 import { CreativeInventoryScreen } from './creative';
@@ -14,6 +14,7 @@ export function installScreens(game: Game): void {
   game.deathScreenFactory = () => new DeathScreen(game, game.deathMessage(game.player.lastDamageSource), !!game.meta?.hardcore);
   game.loadingScreenFactory = () => new LevelLoadingScreen(game);
   game.chatScreenFactory = (initial) => new ChatScreen(game, initial);
+  game.inBedScreenFactory = () => new InBedChatScreen(game);
   game.onCommand = (cmd) => executeCommand(game, cmd);
   game.inventoryScreenFactory = () => {
     const p = game.player;

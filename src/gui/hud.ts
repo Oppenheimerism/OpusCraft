@@ -21,6 +21,11 @@ export class Hud {
   title: { text: string; sub: string; time: number } | null = null;
   actionBar: { text: string; time: number } | null = null;
 
+  /** vanilla Gui.setOverlayMessage (the action bar above the hotbar) */
+  setOverlayMessage(text: string): void {
+    this.actionBar = { text, time: 60 };
+  }
+
   tick(game: Game): void {
     this.tickCount++;
     const p = game.player;
@@ -92,11 +97,20 @@ export class Hud {
       if (!survival) y += 14;
       g.text(name, x, y, 0xffffff, true, alpha);
     }
+    // vanilla Gui sleep overlay: darkens over 100 ticks asleep, clears over 10 after waking
+    if (p.sleepCounter > 0) {
+      let f = p.sleepCounter / 100;
+      if (f > 1) f = 1 - (p.sleepCounter - 100) / 10;
+      g.fill(0, 0, W, H, ((Math.floor(220 * f) << 24) | 0x101020) >>> 0);
+    }
     // action bar
+    // vanilla Gui overlay message: fades over its last 20 ticks
     if (this.actionBar) {
-      const a = Math.min(1, this.actionBar.time / 20);
-      g.centered(this.actionBar.text, cx, H - 68, 0xffffff, true);
-      void a;
+      const a = Math.min(255, Math.floor(((this.actionBar.time - partial) * 255) / 20));
+      if (a > 8) {
+        const w = g.textWidth(this.actionBar.text);
+        g.text(this.actionBar.text, cx - Math.floor(w / 2), H - 72, 0xffffff, true, a / 255);
+      }
     }
     this.renderChat(g, game, chatOpen);
     if (game.showDebug) this.renderDebug(g, game);

@@ -125,7 +125,8 @@ export function getItem(id: string): Item {
 const BLOCK_TAB: [RegExp, string][] = [
   [/_(ore)$|^(stone|granite|diorite|andesite|deepslate|tuff|calcite|dirt|coarse_dirt|podzol|mycelium|grass_block|sand|red_sand|gravel|clay|bedrock|obsidian|snow_block|ice|packed_ice|blue_ice|mud|rooted_dirt|moss_block|dripstone_block|magma_block|powder_snow|raw_.*_block)$/, 'natural'],
   [/_log$|_wood$|_leaves$|_sapling$|^(short_grass|fern|dead_bush|tall_grass|large_fern|dandelion|poppy|blue_orchid|allium|azure_bluet|.*_tulip|oxeye_daisy|cornflower|lily_of_the_valley|sunflower|lilac|rose_bush|peony|brown_mushroom|red_mushroom|sugar_cane|cactus|pumpkin|melon|lily_pad|vine|seagrass|kelp|sweet_berry_bush|cobweb|carved_pumpkin|jack_o_lantern|hay_block)$/, 'natural'],
-  [/^(crafting_table|furnace|chest|bookshelf|ladder|torch|glowstone|sea_lantern|spawner|tnt|sponge)$/, 'functional'],
+  [/^(crafting_table|furnace|chest|bookshelf|ladder|torch|glowstone|sea_lantern|spawner|tnt|sponge|lantern|chain)$|_bed$/, 'functional'],
+  [/_carpet$|_stained_glass$|_stained_glass_pane$/, 'colored'],
 ];
 
 function blockTab(name: string): string {
@@ -143,7 +144,9 @@ for (const b of BLOCKS) {
   if (itemName !== b.name) continue; // e.g. wall_torch → torch registered by torch
   if (b.name.startsWith('tall_seagrass') || b.name === 'kelp_plant' || b.name === 'farmland' || b.name === 'sweet_berry_bush' || b.name === 'wheat') continue;
   let fuel: number | undefined;
-  if (/_planks$|_log$|_wood$|crafting_table|bookshelf|chest|ladder|_stairs$|_slab$/.test(b.name) && /oak|spruce|birch|jungle|acacia|dark_oak|mangrove|cherry|crafting|bookshelf|chest|ladder/.test(b.name)) fuel = b.name.endsWith('_slab') ? 150 : 300;
+  if (/_planks$|_log$|_wood$|crafting_table|bookshelf|chest|ladder|_stairs$|_slab$|_fence$|_fence_gate$|_trapdoor$|_door$/.test(b.name) && /oak|spruce|birch|jungle|acacia|dark_oak|mangrove|cherry|crafting|bookshelf|chest|ladder/.test(b.name)) fuel = b.name.endsWith('_slab') ? 150 : b.name.endsWith('_door') ? 200 : 300;
+  if (/_carpet$/.test(b.name)) fuel = 67;
+  if (/_wool$/.test(b.name)) fuel = 100;
   if (b.name === 'coal_block') fuel = 16000;
   if (b.name.endsWith('_sapling')) fuel = 100;
   reg({ id: b.name, block: b, maxStack: BLOCK_ITEM_MAX_STACK[b.name] ?? 64, creativeTab: blockTab(b.name), fuel });
@@ -210,16 +213,18 @@ const FOOD: [string, number, number, Partial<FoodInfo>?][] = [
   ['chicken', 2, 0.3], ['cooked_chicken', 6, 0.6], ['mutton', 2, 0.3], ['cooked_mutton', 6, 0.8], ['cod', 2, 0.1],
   ['cooked_cod', 5, 0.6], ['salmon', 2, 0.1], ['cooked_salmon', 6, 0.8], ['cookie', 2, 0.1], ['melon_slice', 2, 0.3],
   ['sweet_berries', 2, 0.1], ['rotten_flesh', 4, 0.1], ['mushroom_stew', 6, 0.6, { remainder: 'bowl' }],
+  ['beetroot', 1, 0.6], ['beetroot_soup', 6, 0.6, { remainder: 'bowl' }], ['golden_carrot', 6, 1.2], ['poisonous_potato', 2, 0.3],
+  ['pumpkin_pie', 8, 0.3],
 ];
 for (const [id, n, s, extra] of FOOD) {
-  reg({ id, texture: id, creativeTab: 'food', maxStack: id === 'mushroom_stew' ? 1 : 64, food: { nutrition: n, saturation: s, ...(extra ?? {}) } });
+  reg({ id, texture: id, creativeTab: 'food', maxStack: extra?.remainder ? 1 : 64, food: { nutrition: n, saturation: s, ...(extra ?? {}) } });
 }
 
 // Materials & misc
 const MISC: [string, number?, number?][] = [
   ['stick', 64, 100], ['coal', 64, 1600], ['charcoal', 64, 1600], ['diamond'], ['emerald'], ['lapis_lazuli'], ['redstone'], ['quartz'],
   ['iron_ingot'], ['gold_ingot'], ['copper_ingot'], ['netherite_ingot'], ['iron_nugget'], ['gold_nugget'], ['raw_iron'], ['raw_gold'],
-  ['raw_copper'], ['wheat'], ['wheat_seeds'], ['bone'], ['bone_meal'], ['string'], ['feather'], ['gunpowder'], ['leather'], ['flint'],
+  ['raw_copper'], ['wheat'], ['wheat_seeds'], ['beetroot_seeds'], ['pumpkin_seeds'], ['melon_seeds'], ['bone'], ['bone_meal'], ['string'], ['feather'], ['gunpowder'], ['leather'], ['flint'],
   ['clay_ball'], ['brick'], ['paper'], ['book'], ['sugar'], ['egg', 16], ['snowball', 16], ['slime_ball'], ['ender_pearl', 16],
   ['blaze_rod', 64, 2400], ['glowstone_dust'], ['bowl', 64, 100], ['glass_bottle'], ['experience_bottle'], ['saddle', 1],
   ['name_tag'], ['lead'], ['painting'], ['item_frame'], ['minecart', 1], ['oak_boat', 1], ['oak_sign', 16], ['oak_door'], ['iron_door'],
@@ -245,6 +250,19 @@ for (const id of ['torch', 'short_grass', 'fern', 'dead_bush', 'vine', 'lily_pad
   const it = ITEMS.get(id);
   if (it && it.block) it.texture = 'block:' + (id === 'kelp' ? 'kelp' : id);
 }
+// block items drawn as flat sprites (vanilla item/generated models)
+for (const b of BLOCKS) {
+  const it = ITEMS.get(b.name);
+  if (!it || !it.block) continue;
+  const n = b.name;
+  if (n.endsWith('_door') || n.endsWith('_bed') || n === 'lantern' || n === 'chain') {
+    it.texture = n;
+    if (n.endsWith('_bed')) it.maxStack = 1;
+  }
+  if (n === 'glass_pane') it.texture = 'block:glass';
+  if (n === 'iron_bars') it.texture = 'block:iron_bars';
+  if (n.endsWith('_stained_glass_pane')) it.texture = 'block:' + n.replace('_pane', '');
+}
 for (const b of BLOCKS) {
   const it = ITEMS.get(b.name);
   if (!it || !it.block) continue;
@@ -260,6 +278,11 @@ export function itemForBlock(name: string): Item | undefined {
 export function blockForItem(it: Item): Block | undefined {
   if (it.id === 'sugar_cane') return getBlock('sugar_cane');
   if (it.id === 'wheat_seeds') return getBlock('wheat');
+  if (it.id === 'carrot') return getBlock('carrots');
+  if (it.id === 'potato') return getBlock('potatoes');
+  if (it.id === 'beetroot_seeds') return getBlock('beetroots');
+  if (it.id === 'pumpkin_seeds') return getBlock('pumpkin_stem');
+  if (it.id === 'melon_seeds') return getBlock('melon_stem');
   if (it.id === 'sweet_berries') return getBlock('sweet_berry_bush');
   return it.block;
 }

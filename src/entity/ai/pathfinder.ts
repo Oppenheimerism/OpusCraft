@@ -496,7 +496,11 @@ export function rawPathType(world: World, x: number, y: number, z: number): Path
   const f = FLAGS[st];
   if (f & F_AIR) return PathType.OPEN;
   const name = BLOCKS[STATE_BLOCK[st]].name;
+  if (name.endsWith('_door')) return BLOCKS[STATE_BLOCK[st]].get(st, 'open') ? PathType.OPEN : PathType.BLOCKED;
+  if (name.endsWith('_fence_gate')) return BLOCKS[STATE_BLOCK[st]].get(st, 'open') ? PathType.OPEN : PathType.FENCE;
   if (name.endsWith('_trapdoor') || name === 'lily_pad') return PathType.TRAPDOOR;
+  if (name === 'fire') return PathType.DAMAGE_FIRE;
+  if (name.endsWith('_bed')) return PathType.BLOCKED;
   if (name === 'cactus' || name === 'sweet_berry_bush') return PathType.DAMAGE_OTHER;
   if (name === 'wither_rose' || name === 'pointed_dripstone') return PathType.DAMAGE_CAUTIOUS;
   if (f & F_LAVA) return PathType.LAVA;

@@ -14,6 +14,10 @@ import * as BL from './blocklib/building';
 import * as FL from './blocklib/fluids';
 import * as PL from './blocklib/plants';
 import * as UT from './blocklib/utility';
+import * as DR from './blocklib/doors';
+import * as DC from './blocklib/decor';
+import * as CR from './blocklib/crops';
+import { FIRE_TEXTURES } from './mobs';
 
 type Gen = () => TexDef;
 export const BLOCK_TEXTURES: Record<string, Gen> = {};
@@ -330,6 +334,63 @@ T['chest_lid_side'] = () => UT.chestFace('lid_side');
 T['chest_lid_front'] = () => UT.chestFace('lid_front');
 T['chest_latch'] = () => UT.chestLatch();
 T['spawner'] = () => UT.spawner();
+
+// ---------------------------------------------------------------------------
+// Doors & trapdoors (window pixels are fully transparent; cutout layer)
+
+for (const name of Object.keys(DR.DOORS)) {
+  T[`${name}_door_top`] = () => DR.door(name, 'top');
+  T[`${name}_door_bottom`] = () => DR.door(name, 'bottom');
+  T[`${name}_trapdoor`] = () => DR.trapdoor(name);
+}
+
+// ---------------------------------------------------------------------------
+// Beds (static model: mattress y=3..9, 3x3x3 legs). Side/end textures use rows 0-5 only.
+
+for (const [c, col] of Object.entries(DYE)) {
+  T[`bed_${c}_top_head`] = () => DC.bedTopHead(col.dye);
+  T[`bed_${c}_top_foot`] = () => DC.bedTopFoot(col.dye);
+  T[`bed_${c}_side_head`] = () => DC.bedBand(col.dye, 'side_head');
+  T[`bed_${c}_side_foot`] = () => DC.bedBand(col.dye, 'side_foot');
+  T[`bed_${c}_end_head`] = () => DC.bedBand(col.dye, 'end_head');
+  T[`bed_${c}_end_foot`] = () => DC.bedBand(col.dye, 'end_foot');
+}
+T['bed_bottom'] = () => DC.bedBottom();
+T['bed_leg'] = () => DC.bedLeg();
+
+// ---------------------------------------------------------------------------
+// Glass panes, stained glass, iron bars
+
+T['glass_pane_top'] = () => DC.paneTop(0xf4fbfd, 0xd2e4ea);
+for (const [c, col] of Object.entries(DC.STAINED)) {
+  T[`${c}_stained_glass`] = () => DC.stainedGlass(c, col);
+  T[`${c}_stained_glass_pane_top`] = () => DC.paneTop(mixC(col, 0xffffff, 0.4), mixC(col, 0xffffff, 0.15), 180);
+}
+T['iron_bars'] = () => DC.ironBars();
+
+// ---------------------------------------------------------------------------
+// Crops & stems
+
+for (let s = 0; s < 4; s++) {
+  T[`carrots_stage${s}`] = () => CR.carrots(s);
+  T[`potatoes_stage${s}`] = () => CR.potatoes(s);
+  T[`beetroots_stage${s}`] = () => CR.beetroots(s);
+}
+T['pumpkin_stem'] = () => CR.stem('pumpkin_stem');
+T['melon_stem'] = () => CR.stem('melon_stem');
+T['attached_pumpkin_stem'] = () => CR.attachedStem('attached_pumpkin_stem');
+T['attached_melon_stem'] = () => CR.attachedStem('attached_melon_stem');
+
+// ---------------------------------------------------------------------------
+// Lantern, chain, campfire
+
+T['lantern'] = () => DC.lantern();
+T['chain'] = () => DC.chain();
+T['fire_0'] = FIRE_TEXTURES.fire_0;
+T['fire_1'] = FIRE_TEXTURES.fire_1;
+T['campfire_log'] = () => DC.campfireLog(false);
+T['campfire_log_lit'] = () => DC.campfireLog(true);
+T['campfire_fire'] = () => DC.campfireFire();
 
 // ---------------------------------------------------------------------------
 // Wool / terracotta / concrete

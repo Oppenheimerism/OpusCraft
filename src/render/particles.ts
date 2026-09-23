@@ -8,6 +8,7 @@ import { COLLISION, BLOCKS, STATE_BLOCK, FLAGS, F_AIR } from '../world/block';
 import type { Camera } from './renderer';
 import type { SpriteRect } from '../world/models';
 import { AABB, collideWithBoxes } from '../core/aabb';
+import { fluidHeight, fluidType, FLUID_WATER, FLUID_LAVA } from '../world/fluids';
 
 interface Particle {
   x: number; y: number; z: number;
@@ -57,6 +58,18 @@ interface SpriteParticle {
   sub?: [number, number, number, number];
   /** squid ink sinks slowly in air */
   sinkInAir?: boolean;
+  /** vanilla bounding-box width: the position is the box's bottom centre (drips, bubbles, dust) */
+  bbw?: number;
+  /** vanilla getLightColor overrides: flames brighten as they age, lava glows */
+  lightMode?: 'flame' | 'lava';
+  /** vanilla getQuadSize curves */
+  sizeCurve?: 'flame' | 'lava';
+  /** DripParticle stage: hangs, falls, then lands/splashes */
+  drip?: { stage: 'hang' | 'fall' | 'land'; fluid: 'water' | 'lava' | null; next: string | null; cooling: boolean };
+  /** FallingDustParticle spin */
+  roll?: number;
+  oRoll?: number;
+  rotSpeed?: number;
 }
 
 export interface SpriteRectUV {
@@ -374,9 +387,157 @@ export class ParticleEngine {
         this.addSprite(p);
         break;
       }
+      case 'flame': {
+        // vanilla FlameParticle (RisingParticle): flickers in place, shrinking, brightening
+        const p = this.base(kind, x, y, z);
+        this.withSpeed(p, xd, yd, zd);
+        p.friction = 0.96;
+        p.dx = p.dx * 0.01 + xd;
+        p.dy = p.dy * 0.01 + yd;
+        p.dz = p.dz * 0.01 + zd;
+        p.x += (Math.random() - Math.random()) * 0.05;
+        p.y += (Math.random() - Math.random()) * 0.05;
+        p.z += (Math.random() - Math.random()) * 0.05;
+        p.xo = p.x;
+        p.yo = p.y;
+        p.zo = p.z;
+        p.lifetime = Math.floor(8 / (Math.random() * 0.8 + 0.2)) + 4;
+        p.physics = false;
+        p.frames = ['flame'];
+        p.frame = 0;
+        p.lightMode = 'flame';
+        p.sizeCurve = 'flame';
+        this.addSprite(p);
+        break;
+      }
+      case 'lava': {
+        // vanilla LavaParticle: a glowing ember popping out of lava, trailing smoke
+        const p = this.base(kind, x, y, z);
+        this.withSpeed(p, 0, 0, 0);
+        p.gravity = 0.75;
+        p.friction = 0.999;
+        p.dx *= 0.8;
+        p.dz *= 0.8;
+        p.dy = Math.random() * 0.4 + 0.05;
+        p.size *= Math.random() * 2 + 0.2;
+        p.lifetime = Math.floor(16 / (Math.random() * 0.8 + 0.2));
+        p.bbw = 0.2;
+        p.frames = ['lava'];
+        p.frame = 0;
+        p.lightMode = 'lava';
+        p.sizeCurve = 'lava';
+        this.addSprite(p);
+        break;
+      }
+      case 'dripping_water':
+      case 'dripping_lava':
+      case 'falling_water':
+      case 'falling_lava':
+      case 'landing_lava': {
+        // vanilla DripParticle and its hang / fall / land stages
+        const p = this.base(kind, x, y, z);
+        p.bbw = 0.01;
+        p.gravity = 0.06;
+        p.friction = 0.98;
+        const water = kind.endsWith('water');
+        if (water) {
+          p.r = 0.2;
+          p.g = 0.3;
+          p.b = 1;
+        } else {
+          p.r = 1;
+          p.g = 0.2857143;
+          p.b = 0.083333336;
+        }
+        if (kind.startsWith('dripping')) {
+          p.gravity *= 0.02;
+          p.lifetime = 40;
+          p.frames = ['drip_hang'];
+          p.drip = { stage: 'hang', fluid: water ? 'water' : 'lava', next: water ? 'falling_water' : 'falling_lava', cooling: !water };
+        } else if (kind.startsWith('falling')) {
+          p.lifetime = Math.floor(64 / (Math.random() * 0.8 + 0.2));
+          p.frames = ['drip_fall'];
+          p.drip = { stage: 'fall', fluid: water ? 'water' : 'lava', next: water ? 'splash' : 'landing_lava', cooling: false };
+        } else {
+          p.lifetime = Math.floor(16 / (Math.random() * 0.8 + 0.2));
+          p.frames = ['drip_land'];
+          p.drip = { stage: 'land', fluid: null, next: null, cooling: false };
+        }
+        p.frame = 0;
+        this.addSprite(p);
+        break;
+      }
+      case 'splash':
+      case 'rain': {
+        // vanilla WaterDropParticle / SplashParticle
+        const p = this.base(kind, x, y, z);
+        this.withSpeed(p, 0, 0, 0);
+        p.dx *= 0.3;
+        p.dy = Math.random() * 0.2 + 0.1;
+        p.dz *= 0.3;
+        p.bbw = 0.01;
+        p.gravity = kind === 'splash' ? 0.04 : 0.06;
+        p.lifetime = Math.floor(8 / (Math.random() * 0.8 + 0.2));
+        if (kind === 'splash' && yd === 0 && (xd !== 0 || zd !== 0)) {
+          p.dx = xd;
+          p.dy = 0.1;
+          p.dz = zd;
+        }
+        p.frames = ['splash_0', 'splash_1', 'splash_2', 'splash_3'];
+        p.frame = Math.floor(Math.random() * 4);
+        this.addSprite(p);
+        break;
+      }
+      case 'bubble': {
+        // vanilla BubbleParticle: wobbles upward, pops out of water
+        const p = this.base(kind, x, y, z);
+        p.bbw = 0.02;
+        p.size *= Math.random() * 0.6 + 0.2;
+        p.dx = xd * 0.2 + (Math.random() * 2 - 1) * 0.02;
+        p.dy = yd * 0.2 + (Math.random() * 2 - 1) * 0.02;
+        p.dz = zd * 0.2 + (Math.random() * 2 - 1) * 0.02;
+        p.lifetime = Math.floor(8 / (Math.random() * 0.8 + 0.2));
+        p.frames = ['bubble'];
+        p.frame = 0;
+        this.addSprite(p);
+        break;
+      }
+      case 'happy_villager': {
+        // vanilla SuspendedTownParticle (HappyVillagerProvider): hovers in place
+        const p = this.base(kind, x, y, z);
+        this.withSpeed(p, xd, yd, zd);
+        p.bbw = 0.02;
+        p.size *= Math.random() * 0.6 + 0.5;
+        p.dx *= 0.02;
+        p.dy *= 0.02;
+        p.dz *= 0.02;
+        p.lifetime = Math.floor(20 / (Math.random() * 0.8 + 0.2));
+        p.physics = false;
+        p.friction = 0.99;
+        p.frames = ['glint'];
+        p.frame = 0;
+        this.addSprite(p);
+        break;
+      }
       default:
         break;
     }
+  }
+
+  /** vanilla FallingDustParticle (dust sifting from under sand and gravel), tinted by the block */
+  fallingDust(x: number, y: number, z: number, color: number): void {
+    const p = this.base('falling_dust', x, y, z);
+    p.r = ((color >> 16) & 255) / 255;
+    p.g = ((color >> 8) & 255) / 255;
+    p.b = (color & 255) / 255;
+    p.size *= 0.67499995;
+    p.lifetime = Math.max(1, Math.floor(Math.floor(32 / (Math.random() * 0.8 + 0.2)) * 0.9));
+    p.rotSpeed = (Math.random() - 0.5) * 0.1;
+    p.roll = p.oRoll = Math.random() * Math.PI * 2;
+    p.bbw = 0.2;
+    p.grow = true;
+    p.friction = 1;
+    this.addSprite(p);
   }
 
   /** vanilla TrackingEmitter: 3 ticks × 16 particles around an entity (crits) */
@@ -414,6 +575,10 @@ export class ParticleEngine {
       p.xo = p.x;
       p.yo = p.y;
       p.zo = p.z;
+      if (p.bbw !== undefined && p.kind !== 'lava') {
+        if (this.tickSpecial(p)) list[w++] = p;
+        continue;
+      }
       if (p.age++ >= p.lifetime) continue;
       if (p.emitter === 'explosion') {
         for (let k = 0; k < 6; k++) {
@@ -445,7 +610,8 @@ export class ParticleEngine {
       }
       if (p.sinkInAir) p.dy -= 0.0074;
       p.dy -= 0.04 * p.gravity;
-      if (p.physics) this.move(p as unknown as Particle);
+      if (p.bbw !== undefined) this.moveBB(p);
+      else if (p.physics) this.move(p as unknown as Particle);
       else {
         p.x += p.dx;
         p.y += p.dy;
@@ -464,11 +630,137 @@ export class ParticleEngine {
       }
       p.g *= p.gDecay;
       p.b *= p.bDecay;
+      // vanilla LavaParticle.tick: embers trail smoke while young
+      if (p.kind === 'lava' && Math.random() > p.age / p.lifetime) this.spawn('smoke', p.x, p.y, p.z, p.dx, p.dy, p.dz);
       list[w++] = p;
     }
     // particles spawned by emitters this tick were appended after n
     for (let i = n; i < list.length; i++) list[w++] = list[i];
     list.length = w;
+  }
+
+  /** tick for particles with their own vanilla tick(); false = remove */
+  private tickSpecial(p: SpriteParticle): boolean {
+    const w = this.world;
+    const d = p.drip;
+    if (d) {
+      // vanilla DripParticle.tick: preMoveUpdate, fall, postMoveUpdate
+      if (d.stage === 'hang') {
+        if (d.cooling) {
+          p.r = 1;
+          p.g = 16 / (40 - p.lifetime + 16);
+          p.b = 4 / (40 - p.lifetime + 8);
+        }
+        if (p.lifetime-- <= 0) {
+          if (d.next) this.spawn(d.next, p.x, p.y, p.z, p.dx, p.dy, p.dz);
+          return false;
+        }
+      } else if (p.lifetime-- <= 0) return false;
+      p.dy -= p.gravity;
+      this.moveBB(p);
+      if (d.stage === 'hang') {
+        p.dx *= 0.02;
+        p.dy *= 0.02;
+        p.dz *= 0.02;
+      } else if (d.stage === 'fall' && p.onGround) {
+        if (d.next) this.spawn(d.next, p.x, p.y, p.z, 0, 0, 0);
+        return false;
+      }
+      p.dx *= 0.98;
+      p.dy *= 0.98;
+      p.dz *= 0.98;
+      if (d.fluid) {
+        const bx = Math.floor(p.x), by = Math.floor(p.y), bz = Math.floor(p.z);
+        const type = d.fluid === 'water' ? FLUID_WATER : FLUID_LAVA;
+        const h = fluidHeight(w, bx, by, bz, type);
+        if (h > 0 && p.y < by + h) return false;
+      }
+      return true;
+    }
+    switch (p.kind) {
+      case 'splash':
+      case 'rain': {
+        // vanilla WaterDropParticle.tick
+        if (p.lifetime-- <= 0) return false;
+        p.dy -= p.gravity;
+        this.moveBB(p);
+        p.dx *= 0.98;
+        p.dy *= 0.98;
+        p.dz *= 0.98;
+        if (p.onGround) {
+          if (Math.random() < 0.5) return false;
+          p.dx *= 0.7;
+          p.dz *= 0.7;
+        }
+        const bx = Math.floor(p.x), by = Math.floor(p.y), bz = Math.floor(p.z);
+        const st = w.getState(bx, by, bz);
+        let top = fluidHeight(w, bx, by, bz, FLUID_WATER);
+        const boxes = COLLISION[st];
+        if (boxes) {
+          const fx = p.x - bx, fz = p.z - bz;
+          for (const b of boxes) if (fx >= b[0] && fx <= b[3] && fz >= b[2] && fz <= b[5]) top = Math.max(top, b[4]);
+        }
+        return !(top > 0 && p.y < by + top);
+      }
+      case 'bubble': {
+        // vanilla BubbleParticle.tick
+        if (p.lifetime-- <= 0) return false;
+        p.dy += 0.002;
+        this.moveBB(p);
+        p.dx *= 0.85;
+        p.dy *= 0.85;
+        p.dz *= 0.85;
+        return fluidType(w.getState(Math.floor(p.x), Math.floor(p.y), Math.floor(p.z))) === FLUID_WATER;
+      }
+      case 'happy_villager': {
+        // vanilla SuspendedTownParticle.tick (moves without collision)
+        if (p.lifetime-- <= 0) return false;
+        p.x += p.dx;
+        p.y += p.dy;
+        p.z += p.dz;
+        p.dx *= 0.99;
+        p.dy *= 0.99;
+        p.dz *= 0.99;
+        return true;
+      }
+      case 'falling_dust': {
+        // vanilla FallingDustParticle.tick
+        if (p.age++ >= p.lifetime) return false;
+        p.oRoll = p.roll;
+        p.roll = (p.roll ?? 0) + Math.PI * (p.rotSpeed ?? 0) * 2;
+        if (p.onGround) p.oRoll = p.roll = 0;
+        this.moveBB(p);
+        p.dy -= 0.003;
+        p.dy = Math.max(p.dy, -0.14);
+        return true;
+      }
+      default:
+        return p.age++ < p.lifetime;
+    }
+  }
+
+  /** vanilla Particle.move with its bounding box (position = bottom centre) */
+  private moveBB(p: SpriteParticle): void {
+    const hw = (p.bbw ?? 0.2) / 2, h = p.bbw ?? 0.2;
+    const box = new AABB(p.x - hw, p.y, p.z - hw, p.x + hw, p.y + h, p.z + hw);
+    const boxes: AABB[] = [];
+    const x0 = Math.floor(Math.min(box.minX, box.minX + p.dx)), x1 = Math.floor(Math.max(box.maxX, box.maxX + p.dx));
+    const y0 = Math.floor(Math.min(box.minY, box.minY + p.dy)) - 1, y1 = Math.floor(Math.max(box.maxY, box.maxY + p.dy));
+    const z0 = Math.floor(Math.min(box.minZ, box.minZ + p.dz)), z1 = Math.floor(Math.max(box.maxZ, box.maxZ + p.dz));
+    for (let x = x0; x <= x1; x++)
+      for (let y = y0; y <= y1; y++)
+        for (let z = z0; z <= z1; z++) {
+          const c = COLLISION[this.world.getState(x, y, z)];
+          if (!c) continue;
+          for (const b of c) boxes.push(new AABB(x + b[0], y + b[1], z + b[2], x + b[3], y + b[4], z + b[5]));
+        }
+    const [rx, ry, rz] = boxes.length ? collideWithBoxes(p.dx, p.dy, p.dz, box, boxes) : [p.dx, p.dy, p.dz];
+    p.x += rx;
+    p.y += ry;
+    p.z += rz;
+    p.onGround = p.dy !== ry && p.dy < 0;
+    if (p.dx !== rx) p.dx = 0;
+    if (p.dz !== rz) p.dz = 0;
   }
 
   tick(): void {
@@ -572,9 +864,16 @@ export class ParticleEngine {
         const l = this.world.getLight(Math.floor(p.x), Math.floor(p.y), Math.floor(p.z));
         batch.lightB = (l & 15) * 16;
         batch.lightS = (l >> 4) * 16;
+        // vanilla FlameParticle / LavaParticle.getLightColor
+        if (p.lightMode === 'lava') batch.lightB = 240;
+        else if (p.lightMode === 'flame') batch.lightB = Math.min(240, batch.lightB + Math.floor(Math.max(0, Math.min(1, (p.age + partial) / p.lifetime)) * 15 * 16));
       }
       let s = p.size;
       if (p.grow) s *= Math.max(0, Math.min(1, ((p.age + partial) / p.lifetime) * 32));
+      if (p.sizeCurve) {
+        const f = (p.age + partial) / p.lifetime;
+        s *= p.sizeCurve === 'flame' ? 1 - f * f * 0.5 : 1 - f * f;
+      }
       if (p.portal) {
         let f = (p.age + partial) / p.lifetime;
         f = 1 - f;
@@ -589,13 +888,26 @@ export class ParticleEngine {
         ru1 = r.u0 + du * p.sub[2];
         rv1 = r.v0 + dv * p.sub[3];
       }
-      const ax = rx * s, az = rz * s;
-      const bx = ux * s, by = uy * s, bz = uz * s;
+      let ax = rx * s, az = rz * s, ay = 0;
+      let bx = ux * s, by = uy * s, bz = uz * s;
+      if (p.roll) {
+        // vanilla SingleQuadParticle roll: spin the quad in the view plane
+        const roll = (p.oRoll ?? p.roll) + (p.roll - (p.oRoll ?? p.roll)) * partial;
+        const c = Math.cos(roll), sn = Math.sin(roll);
+        const nax = ax * c + bx * sn, nay = by * sn, naz = az * c + bz * sn;
+        const nbx = -ax * sn + bx * c, nby = by * c, nbz = -az * sn + bz * c;
+        ax = nax;
+        ay = nay;
+        az = naz;
+        bx = nbx;
+        by = nby;
+        bz = nbz;
+      }
       const v = [
-        [x - ax - bx, y - by, z - az - bz, ru1, rv1],
-        [x - ax + bx, y + by, z - az + bz, ru1, rv0],
-        [x + ax + bx, y + by, z + az + bz, ru0, rv0],
-        [x + ax - bx, y - by, z + az - bz, ru0, rv1],
+        [x - ax - bx, y - ay - by, z - az - bz, ru1, rv1],
+        [x - ax + bx, y - ay + by, z - az + bz, ru1, rv0],
+        [x + ax + bx, y + ay + by, z + az + bz, ru0, rv0],
+        [x + ax - bx, y + ay - by, z + az - bz, ru0, rv1],
       ];
       for (const k of [0, 1, 2, 0, 2, 3]) {
         const q = v[k];

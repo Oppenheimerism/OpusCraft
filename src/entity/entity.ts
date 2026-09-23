@@ -47,7 +47,10 @@ export abstract class Entity {
   moveDist = 0;
   private nextStep = 1;
   invulnerableTime = 0;
-  remainingFireTicks = 0;
+  /** vanilla starts at -getFireImmuneTicks(): standing in fire takes that long to catch */
+  remainingFireTicks = -1;
+  /** vanilla stuckSpeedMultiplier (cobwebs, berry bushes): scales the next move */
+  private stuckSpeed: [number, number, number] | null = null;
 
   constructor(public level: Level) {}
 
@@ -121,7 +124,7 @@ export abstract class Entity {
   protected lavaHurt(): void {
     if (this.fireImmune()) return;
     this.igniteForSeconds(15);
-    this.hurt(4, 'lava');
+    if (this.hurt(4, 'lava')) this.level.sound.play('entity.generic.burn', this.x, this.y, this.z, 0.4, 2 + Math.random() * 0.4);
   }
 
   /** generic damage entry point; returns true if damage was applied */
@@ -278,6 +281,14 @@ export abstract class Entity {
       this.setPos(this.x + mx, this.y + my, this.z + mz);
       return;
     }
+    const wasOnFire = this.isOnFire();
+    if (this.stuckSpeed) {
+      mx *= this.stuckSpeed[0];
+      my *= this.stuckSpeed[1];
+      mz *= this.stuckSpeed[2];
+      this.stuckSpeed = null;
+      this.dx = this.dy = this.dz = 0;
+    }
     [mx, mz] = this.maybeBackOffFromEdge(mx, my, mz);
     const [rx, ry, rz] = this.collide(mx, my, mz);
     const lenSq = rx * rx + ry * ry + rz * rz;
@@ -305,12 +316,70 @@ export abstract class Entity {
         else if (this.onGround || climbing) this.playStepSound();
       }
     }
-    if (this.remainingFireTicks > 0 && !this.fireImmune() && (this.inWater || this.isInWaterOrRainNow())) this.remainingFireTicks = 0;
+    const touchingFire = this.checkInsideBlocks();
     // block speed factor (soul sand, honey)
     const f = this.blockSpeedFactor();
     this.dx *= f;
     this.dz *= f;
+    // vanilla: leaving fire resets the catch-fire delay; water and rain put fires out
+    const wet = this.inWater || this.isInWaterOrRainNow();
+    if (!touchingFire) {
+      if (this.remainingFireTicks <= 0) this.remainingFireTicks = -this.fireImmuneTicks();
+      if (wasOnFire && wet) this.level.sound.play('entity.generic.extinguish_fire', this.x, this.y, this.z, 0.7, 1.6 + (Math.random() - Math.random()) * 0.4);
+    }
+    if (this.isOnFire() && wet) this.remainingFireTicks = -this.fireImmuneTicks();
   }
+
+  /** vanilla getFireImmuneTicks: how long standing in fire takes to set you alight */
+  fireImmuneTicks(): number {
+    return 1;
+  }
+
+  /** vanilla makeStuckInBlock */
+  makeStuckInBlock(mx: number, my: number, mz: number): void {
+    this.fallDistance = 0;
+    this.stuckSpeed = [mx, my, mz];
+  }
+
+  /**
+   * vanilla Entity.checkInsideBlocks → BlockBehaviour.entityInside for the
+   * blocks the bounding box overlaps. Returns true when touching fire or lava.
+   */
+  checkInsideBlocks(): boolean {
+    const bb = this.bb, w = this.level.world;
+    const x0 = Math.floor(bb.minX + 1e-7), y0 = Math.floor(bb.minY + 1e-7), z0 = Math.floor(bb.minZ + 1e-7);
+    const x1 = Math.floor(bb.maxX - 1e-7), y1 = Math.floor(bb.maxY - 1e-7), z1 = Math.floor(bb.maxZ - 1e-7);
+    let fire = false;
+    for (let x = x0; x <= x1; x++)
+      for (let y = y0; y <= y1; y++)
+        for (let z = z0; z <= z1; z++) {
+          const st = w.getState(x, y, z);
+          if (st === 0) continue;
+          const kind = insideKind(st);
+          if (kind === INSIDE_NONE) continue;
+          if (kind === INSIDE_LAVA) fire = true;
+          else if (kind === INSIDE_FIRE) {
+            fire = true;
+            this.insideFire();
+          } else if (kind === INSIDE_COBWEB) this.makeStuckInBlock(0.25, 0.05, 0.25);
+          else if (kind === INSIDE_BERRY_BUSH) this.insideBerryBush(st);
+          else if (kind === INSIDE_CACTUS) this.hurt(1, 'cactus');
+          if (this.removed) return fire;
+        }
+    return fire;
+  }
+
+  /** vanilla BaseFireBlock.entityInside */
+  private insideFire(): void {
+    if (!this.fireImmune()) {
+      this.remainingFireTicks++;
+      if (this.remainingFireTicks === 0) this.igniteForSeconds(8);
+    }
+    this.hurt(1, 'inFire');
+  }
+
+  /** vanilla SweetBerryBushBlock.entityInside (living things only) */
+  protected insideBerryBush(_st: number): void {}
 
   protected onLand(): void {
     this.dy = 0;
@@ -475,4 +544,17 @@ export abstract class Entity {
   remove(): void {
     this.removed = true;
   }
+}
+
+const INSIDE_NONE = 0, INSIDE_FIRE = 1, INSIDE_LAVA = 2, INSIDE_COBWEB = 3, INSIDE_BERRY_BUSH = 4, INSIDE_CACTUS = 5;
+let INSIDE: Uint8Array | null = null;
+
+/** which vanilla entityInside behaviour a block has (lazy per-block table) */
+function insideKind(st: number): number {
+  if (!INSIDE) {
+    INSIDE = new Uint8Array(BLOCKS.length);
+    const kinds: Record<string, number> = { fire: INSIDE_FIRE, lava: INSIDE_LAVA, cobweb: INSIDE_COBWEB, sweet_berry_bush: INSIDE_BERRY_BUSH, cactus: INSIDE_CACTUS };
+    BLOCKS.forEach((b, i) => (INSIDE![i] = kinds[b.name] ?? INSIDE_NONE));
+  }
+  return INSIDE[STATE_BLOCK[st]];
 }

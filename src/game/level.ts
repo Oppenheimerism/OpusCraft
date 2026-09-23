@@ -9,6 +9,9 @@ import type { Player } from '../entity/player';
 import { Rand } from '../core/rng';
 import { BLOCKS, STATE_BLOCK, FLAGS, F_AIR, F_WATERLOGGED, S } from '../world/block';
 import { canSurvive, blockDrops } from './blockRules';
+import { updateShape, hasShapeUpdates } from './shapeUpdates';
+import { fireTick } from './fire';
+import { tickSleeping } from './sleep';
 import { ItemEntity } from '../entity/itemEntity';
 import { ExperienceOrb } from '../entity/xpOrb';
 import type { Item } from '../item/item';
@@ -34,6 +37,8 @@ export interface ParticleSink {
   spawn?(kind: string, x: number, y: number, z: number, dx: number, dy: number, dz: number): void;
   /** vanilla TrackingEmitter (crit sparks around an entity) */
   emitAround?(kind: 'crit' | 'enchanted_hit', e: Entity): void;
+  /** vanilla FallingDustParticle tinted with a block's dust colour */
+  fallingDust?(x: number, y: number, z: number, color: number): void;
 }
 
 const NULL_SOUND: SoundSink = { play() {}, playUI() {} };
@@ -169,6 +174,7 @@ export class Level {
     if (this.doDaylightCycle) this.dayTime++;
     if (this.gameRules.doWeatherCycle) this.tickWeather();
     else this.tickWeatherLevels();
+    tickSleeping(this);
     this.updateSkyBrightness();
     for (let i = 0; i < this.entities.length; i++) {
       const e = this.entities[i];
@@ -221,6 +227,8 @@ export class Level {
         this.fluids.tick(x, y, z);
       } else if (isGravityBlock(st)) {
         this.tryFall(x, y, z, st);
+      } else if (STATE_BLOCK[st] === fireId()) {
+        fireTick(this, x, y, z, st);
       }
     }
   }
@@ -324,17 +332,37 @@ export class Level {
     const be = this.world.getBlockEntity(x, y, z);
     if (be) for (const s of be.container.removeAll()) this.dropStackAt(x, y, z, s);
     this.world.setState(x, y, z, replacement);
-    // double-height plants: remove the other half
-    if (b.propIndex('half') >= 0 && !b.name.endsWith('_stairs') && !b.name.endsWith('_slab')) {
+    // two-block blocks (tall plants, doors, beds): remove the other part; loot comes from the lower half / bed head
+    let dropState = st;
+    let other: [number, number, number] | null = null;
+    const hi = b.propIndex('half');
+    if (hi >= 0 && b.props[hi].values.includes('upper')) {
       const half = b.get(st, 'half');
       const oy = half === 'upper' ? y - 1 : y + 1;
       const os = this.world.getState(x, oy, z);
-      if (BLOCKS[STATE_BLOCK[os]] === b) this.world.setState(x, oy, z, 0);
+      if (BLOCKS[STATE_BLOCK[os]] === b) {
+        if (half === 'upper') dropState = os;
+        this.world.setState(x, oy, z, FLAGS[os] & F_WATERLOGGED ? S('water') : 0);
+        other = [x, oy, z];
+      }
+    } else if (b.name.endsWith('_bed')) {
+      const facing = b.get<string>(st, 'facing');
+      const head = b.get(st, 'part') === 'head';
+      const d: Record<string, [number, number]> = { north: [0, -1], south: [0, 1], west: [-1, 0], east: [1, 0] };
+      const [dx, dz] = d[facing];
+      const ox = head ? x - dx : x + dx, oz = head ? z - dz : z + dz;
+      const os2 = this.world.getState(ox, y, oz);
+      if (BLOCKS[STATE_BLOCK[os2]] === b) {
+        if (!head) dropState = os2;
+        this.world.setState(ox, y, oz, 0);
+        other = [ox, y, oz];
+      }
     }
     if (drop) {
-      for (const stack of blockDrops(st, tool, this.random)) ItemEntity.drop(this, x, y, z, stack);
+      for (const stack of blockDrops(dropState, tool, this.random)) ItemEntity.drop(this, x, y, z, stack);
     }
     this.updateNeighbors(x, y, z);
+    if (other) this.updateNeighbors(other[0], other[1], other[2]);
     return true;
   }
 
@@ -354,17 +382,35 @@ export class Level {
     }
   }
 
-  /** vanilla-style neighbour checks: blocks that lost support pop off. */
+  /** vanilla-style neighbour updates: shape updates (connections, doors, beds) and blocks that lost support pop off. */
   updateNeighbors(x: number, y: number, z: number): void {
     this.updateNeighborsFluid(x, y, z);
     const dirs = [[0, 1, 0], [0, -1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1]];
     for (const [dx, dy, dz] of dirs) {
       const nx = x + dx, ny = y + dy, nz = z + dz;
-      const ns = this.world.getState(nx, ny, nz);
+      let ns = this.world.getState(nx, ny, nz);
       if (FLAGS[ns] & F_AIR) continue;
+      if (hasShapeUpdates(ns)) {
+        const nu = updateShape(this.world, nx, ny, nz, ns);
+        if (nu === 0) {
+          // vanilla Level.destroyBlock: fire goes out without break effects
+          this.destroyBlock(nx, ny, nz, true, null, STATE_BLOCK[ns] !== fireId());
+          continue;
+        }
+        if (nu !== ns) {
+          this.world.setState(nx, ny, nz, nu);
+          ns = nu;
+        }
+      }
       if (!canSurvive(this.world, nx, ny, nz, ns)) this.destroyBlock(nx, ny, nz, true, null, true);
     }
   }
+}
+
+let FIRE_ID = -1;
+function fireId(): number {
+  if (FIRE_ID < 0) FIRE_ID = BLOCKS.findIndex((b) => b.name === 'fire');
+  return FIRE_ID;
 }
 
 function isGravityBlock(st: number): boolean {

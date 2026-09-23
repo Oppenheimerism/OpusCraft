@@ -349,6 +349,26 @@ export function creak(out: Float32Array, sr: number, rng: Rng, o: CreakOpts): vo
   }
 }
 
+/** Sparse sharp fire crackles (+ optional bigger "pops"), Poisson-timed from t0 over dur seconds. */
+export function fireCrackles(b: Float32Array, sr: number, rng: Rng, t0: number, dur: number, rate: number, bigPops = 0): void {
+  let t = 0;
+  for (;;) {
+    t += -Math.log(1 - rng.next()) / rate;
+    if (t >= dur) break;
+    const a = 0.15 + 0.85 * Math.pow(rng.next(), 2.2);
+    impact(b, sr, rng, {
+      t: t0 + t,
+      modes: [rng.range(1500, 4000), a * 0.5, 0.008, rng.range(4000, 7000), a * 0.3, 0.005],
+      noise: a * 1.5,
+      noiseTau: rng.range(0.0002, 0.001),
+      noiseBp: [rng.range(2000, 6000), 0.8],
+    });
+    if (bigPops && rng.chance(bigPops)) {
+      impact(b, sr, rng, { t: t0 + t, modes: [rng.range(350, 700), a, 0.015, rng.range(900, 1400), a * 0.5, 0.01], noise: a, noiseTau: 0.001 });
+    }
+  }
+}
+
 /** Two-bump energy envelope (e.g. heel then toe of a footstep). */
 export function twoBump(a1: number, d1: number, t2: number, k2: number, a2: number, d2: number): (t: number) => number {
   return (t: number) => {

@@ -28,6 +28,7 @@ const ALIASES: [RegExp, string][] = [
   [/^block\.(rooted_dirt)\./, 'block.gravel.'],
   [/^block\.(powder_snow)\./, 'block.snow.'],
   [/^block\.(cobweb)\./, 'block.stone.'],
+  [/^block\.(stem|hard_crop)\./, 'block.wood.'],
 ];
 
 export class SoundManager {

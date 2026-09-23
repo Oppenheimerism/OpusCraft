@@ -76,7 +76,61 @@ const VOLUMES: Record<string, number> = {
   'block.stone_button.click_off': 0.3,
   'block.lever.click': 0.3,
   'entity.bat.ambient': 0.1,
-  'entity.slime.squish': 0.4,
+  // fire, TNT, items
+  'entity.tnt.primed': 1,
+  'item.flintandsteel.use': 1,
+  'item.firecharge.use': 1,
+  'item.dye.use': 1,
+  'entity.cow.milk': 1,
+  'entity.generic.extinguish_fire': 0.7,
+  'entity.generic.burn': 0.4,
+  // player
+  'entity.player.attack.knockback': 1,
+  'entity.player.hurt_on_fire': 1,
+  'entity.player.hurt_drown': 1,
+  'entity.player.hurt_freeze': 1,
+  // enderman (stare > 1 = heard from further away, as in vanilla)
+  'entity.enderman.stare': 2.5,
+  'entity.enderman.scream': 1,
+  // squid (vanilla squid volume is 0.4)
+  'entity.squid.ambient': 0.4,
+  'entity.squid.hurt': 0.4,
+  'entity.squid.death': 0.4,
+  'entity.squid.squirt': 0.4,
+  // slime: vanilla scales by size (0.4 per size step); big/medium vs tiny takes
+  'entity.slime.squish': 0.8,
+  'entity.slime.jump': 0.8,
+  'entity.slime.hurt': 0.8,
+  'entity.slime.death': 0.8,
+  'entity.slime.attack': 1,
+  'entity.slime.squish_small': 0.4,
+  'entity.slime.jump_small': 0.4,
+  'entity.slime.hurt_small': 0.4,
+  'entity.slime.death_small': 0.4,
+  // doors, trapdoors, gates
+  'block.wooden_trapdoor.open': 1,
+  'block.wooden_trapdoor.close': 1,
+  'block.iron_door.open': 1,
+  'block.iron_door.close': 1,
+  'block.iron_trapdoor.open': 1,
+  'block.iron_trapdoor.close': 1,
+  'block.fence_gate.open': 1,
+  'block.fence_gate.close': 1,
+  // chain & lantern (fall = landing on the block: vanilla plays it at half the block volume)
+  'block.chain.break': 1,
+  'block.chain.place': 1,
+  'block.chain.step': 0.15,
+  'block.chain.hit': 0.25,
+  'block.chain.fall': 0.5,
+  'block.lantern.break': 1,
+  'block.lantern.place': 1,
+  'block.lantern.step': 0.15,
+  'block.lantern.hit': 0.25,
+  'block.lantern.fall': 0.5,
+  // items & player
+  'item.hoe.till': 1,
+  'item.bone_meal.use': 1,
+  'entity.player.teleport': 1,
 };
 
 /**
@@ -88,6 +142,7 @@ export function soundHint(name: string): SoundHint {
   if (volume === undefined) {
     if (/^(block|entity)\.[a-z_]+\.step$/.test(name)) volume = 0.15;
     else if (/^block\.[a-z_]+\.hit$/.test(name)) volume = 0.25;
+    else if (/^block\.[a-z_]+\.fall$/.test(name)) volume = 0.5;
     else volume = 1;
   }
   return LOOPS.has(name) ? { volume, loop: true } : { volume };

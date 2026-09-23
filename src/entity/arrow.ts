@@ -138,6 +138,9 @@ export class Arrow extends Entity {
     this.dz *= f;
     this.dy -= 0.05;
     this.setPos(nx, ny, nz);
+    // vanilla: an arrow flying through fire catches alight; water and rain put it out
+    this.checkInsideBlocks();
+    if (this.isInWaterOrRainNow()) this.clearFire();
   }
 
   private shouldFall(): boolean {

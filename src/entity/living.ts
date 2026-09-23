@@ -3,7 +3,7 @@
 import { Entity } from './entity';
 import { FLUID_WATER } from '../world/fluids';
 import { wrapDegrees } from '../core/math';
-import { FLAGS, F_OPAQUE, F_FULL_COLLISION } from '../world/block';
+import { FLAGS, F_OPAQUE, F_FULL_COLLISION, BLOCKS, STATE_BLOCK } from '../world/block';
 import { clipBlocks } from '../game/raycast';
 
 /** damage sources that ignore armor (vanilla #bypasses_armor) */
@@ -382,6 +382,16 @@ export abstract class LivingEntity extends Entity {
 
   knockbackResistance(): number {
     return 0;
+  }
+
+  /** vanilla SweetBerryBushBlock.entityInside: slows, and pricks anything that moves in a grown bush */
+  protected override insideBerryBush(st: number): void {
+    if (this.type === 'fox' || this.type === 'bee') return;
+    this.makeStuckInBlock(0.8, 0.75, 0.8);
+    if (BLOCKS[STATE_BLOCK[st]].get<number>(st, 'age') > 0 && (this.xo !== this.x || this.zo !== this.z)) {
+      const mx = Math.abs(this.x - this.xo), mz = Math.abs(this.z - this.zo);
+      if (mx >= 0.003 || mz >= 0.003) this.hurt(1, 'sweetBerryBush');
+    }
   }
 
   /**

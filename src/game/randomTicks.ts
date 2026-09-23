@@ -5,6 +5,7 @@ import type { Level } from './level';
 import { MIN_Y, SECTIONS } from '../world/constants';
 import { placeTree, TreeKind } from '../world/gen/trees';
 import { canSurvive } from './blockRules';
+import { lavaRandomTick } from './fire';
 
 const SAPLING_TREE: Record<string, TreeKind> = {
   oak_sapling: 'oak', spruce_sapling: 'spruce', birch_sapling: 'birch', jungle_sapling: 'jungle',
@@ -49,6 +50,15 @@ export class RandomTicker {
     const lvl = this.level;
     const b = BLOCKS[STATE_BLOCK[st]];
     const n = b.name;
+    if (n === 'lava') {
+      lavaRandomTick(lvl, x, y, z);
+      return;
+    }
+    if (n === 'fire') {
+      // scheduled ticks are not saved with chunks: restart a loaded fire
+      lvl.scheduleTick(x, y, z, 30 + lvl.random.nextInt(10));
+      return;
+    }
     if (n === 'grass_block' || n === 'mycelium') {
       // vanilla SpreadingSnowyDirtBlock
       const above = lvl.getState(x, y + 1, z);
@@ -82,12 +92,35 @@ export class RandomTicker {
       }
       return;
     }
-    if (n === 'wheat') {
+    if (n === 'wheat' || n === 'carrots' || n === 'potatoes' || n === 'beetroots') {
+      // vanilla CropBlock.randomTick (beetroots only grow on 1/3 of ticks)
+      if (n === 'beetroots' && Math.random() * 3 >= 1) return;
+      const max = n === 'beetroots' ? 3 : 7;
       const age = b.get<number>(st, 'age');
-      if (age < 7 && this.light(x, y, z) >= 9) {
-        const moist = BLOCKS[STATE_BLOCK[lvl.getState(x, y - 1, z)]].name === 'farmland' && getBlock('farmland').get<number>(lvl.getState(x, y - 1, z), 'moisture') > 0;
-        const f = moist ? 4 : 2;
-        if (Math.random() < 1 / (Math.floor(25 / f) + 1)) lvl.setBlock(x, y, z, b.with(st, 'age', age + 1));
+      if (age < max && this.light(x, y, z) >= 9) {
+        const f = growthSpeed(lvl, x, y, z, b.name);
+        if (Math.floor(Math.random() * (Math.floor(25 / f) + 1)) === 0) lvl.setBlock(x, y, z, b.with(st, 'age', age + 1));
+      }
+      return;
+    }
+    if (n === 'pumpkin_stem' || n === 'melon_stem') {
+      // vanilla StemBlock.randomTick: grow, then place the fruit beside it
+      if (this.light(x, y, z) < 9) return;
+      const f = growthSpeed(lvl, x, y, z, b.name);
+      if (Math.floor(Math.random() * (Math.floor(25 / f) + 1)) !== 0) return;
+      const age = b.get<number>(st, 'age');
+      if (age < 7) {
+        lvl.setBlock(x, y, z, b.with(st, 'age', age + 1));
+        return;
+      }
+      const dirs: [string, number, number][] = [['north', 0, -1], ['south', 0, 1], ['west', -1, 0], ['east', 1, 0]];
+      const [dname, dx, dz] = dirs[Math.floor(Math.random() * 4)];
+      const fx = x + dx, fz = z + dz;
+      const soil = BLOCKS[STATE_BLOCK[lvl.getState(fx, y - 1, fz)]].name;
+      if (FLAGS[lvl.getState(fx, y, fz)] & F_AIR && (soil === 'farmland' || soil === 'dirt' || soil === 'grass_block' || soil === 'coarse_dirt' || soil === 'podzol' || soil === 'rooted_dirt' || soil === 'mud' || soil === 'moss_block')) {
+        const fruit = n === 'pumpkin_stem' ? 'pumpkin' : 'melon';
+        lvl.setBlock(fx, y, fz, S(fruit));
+        lvl.setBlock(x, y, z, getBlock(`attached_${fruit}_stem`).state({ facing: dname }));
       }
       return;
     }
@@ -126,11 +159,20 @@ export class RandomTicker {
       if (wet) {
         if (moisture < 7) lvl.setBlock(x, y, z, b.with(st, 'moisture', 7), false);
       } else if (moisture > 0) lvl.setBlock(x, y, z, b.with(st, 'moisture', moisture - 1), false);
-      else if (BLOCKS[STATE_BLOCK[lvl.getState(x, y + 1, z)]].name !== 'wheat') lvl.setBlock(x, y, z, S('dirt'));
+      else if (!MAINTAINS_FARMLAND.has(BLOCKS[STATE_BLOCK[lvl.getState(x, y + 1, z)]].name)) lvl.setBlock(x, y, z, S('dirt'));
       return;
     }
     void F_AIR;
     void F_LEAVES;
+  }
+
+  /** vanilla SaplingBlock.advanceTree (bone meal) */
+  advanceSapling(x: number, y: number, z: number, st: number): void {
+    const b = BLOCKS[STATE_BLOCK[st]];
+    const kind = SAPLING_TREE[b.name];
+    if (!kind) return;
+    if (b.get<number>(st, 'stage') === 0) this.level.setBlock(x, y, z, b.with(st, 'stage', 1));
+    else this.growTree(x, y, z, kind, st);
   }
 
   private canBeGrass(x: number, y: number, z: number, above: number): boolean {
@@ -191,4 +233,30 @@ export function growTreeInWorld(lvl: Level, kind: TreeKind, x: number, y: number
     }
   }
   return true;
+}
+
+/** vanilla #maintains_farmland */
+const MAINTAINS_FARMLAND = new Set(['wheat', 'carrots', 'potatoes', 'beetroots', 'pumpkin_stem', 'melon_stem', 'attached_pumpkin_stem', 'attached_melon_stem', 'torchflower_crop', 'pitcher_crop']);
+
+/** vanilla CropBlock.getGrowthSpeed: moist farmland around, penalty for crowded rows */
+function growthSpeed(lvl: Level, x: number, y: number, z: number, name: string): number {
+  let f = 1;
+  for (let i = -1; i <= 1; i++)
+    for (let j = -1; j <= 1; j++) {
+      const st = lvl.getState(x + i, y - 1, z + j);
+      const b = BLOCKS[STATE_BLOCK[st]];
+      let f1 = 0;
+      if (b.name === 'farmland') {
+        f1 = 1;
+        if (b.get<number>(st, 'moisture') > 0) f1 = 3;
+      }
+      if (i !== 0 || j !== 0) f1 /= 4;
+      f += f1;
+    }
+  const same = (dx: number, dz: number) => BLOCKS[STATE_BLOCK[lvl.getState(x + dx, y, z + dz)]].name === name;
+  const ew = same(-1, 0) || same(1, 0);
+  const ns = same(0, -1) || same(0, 1);
+  if (ew && ns) f /= 2;
+  else if (same(-1, -1) || same(1, -1) || same(1, 1) || same(-1, 1)) f /= 2;
+  return f;
 }

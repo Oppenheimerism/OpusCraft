@@ -628,6 +628,130 @@ function cropBreak(c: Ctx, dirt = 0): Float32Array {
   return out;
 }
 
+// ------------------------------------------------------------------ chain & lantern
+
+/** Chain links: bursts of small, bright, short-ringing metal collisions. */
+function chainLinks(b: Float32Array, sr: number, c: Ctx, t: number, dur: number, rate: number, energy: (t: number) => number, pitch = 1): void {
+  ticks(b, sr, c.rng, {
+    t,
+    dur,
+    rate,
+    energy,
+    f: [2000 * pitch, 5400 * pitch],
+    t60: [0.02, 0.07],
+    ratios: [1, 2.41, 4.13],
+    weights: [1, 0.5, 0.25],
+    heavy: 1.8,
+    click: 0.5,
+  });
+}
+
+function chainStep(c: Ctx): Float32Array {
+  const { sr, rng } = c;
+  const out = alloc(0.3, sr);
+  const en = twoBump(0.004, 0.035, rng.range(0.05, 0.08), rng.range(0.5, 0.8), 0.006, 0.04);
+  layer(out, 1, (b) => chainLinks(b, sr, c, 0, 0.22, 110, en));
+  layer(out, 0.3, (b) => thump(b, sr, { f0: 160, f1: 110, tau: 0.02 }));
+  layer(out, 0.2, (b) =>
+    phisem(b, sr, rng, { dur: 0.12, rate: 3000, energy: (t) => Math.exp(-t / 0.03), grain: 0.0005, bands: [{ f: 5000, q: 2, g: 1, spread: 0.3 }] }),
+  );
+  return out;
+}
+
+function chainBreak(c: Ctx, place: boolean): Float32Array {
+  const { sr, rng } = c;
+  const d = place ? 0.4 : 0.55;
+  const out = alloc(d, sr);
+  const f = rng.range(900, 1300) * (place ? 1.15 : 1);
+  layer(out, 1, (b) =>
+    impact(b, sr, rng, {
+      modes: [f, 1, 0.12, f * 2.41, 0.6, 0.08, f * 4.13, 0.35, 0.05, f * 6.2, 0.2, 0.03],
+      jitter: 0.02,
+      noise: 1,
+      noiseTau: 0.002,
+      noiseBp: [3500, 0.9],
+    }),
+  );
+  const tau = place ? 0.07 : 0.15;
+  layer(out, place ? 0.7 : 0.9, (b) => chainLinks(b, sr, c, 0.008, d - 0.05, place ? 80 : 95, (t) => Math.exp(-t / tau)));
+  layer(out, 0.3, (b) => thump(b, sr, { f0: 170, f1: 110, tau: 0.025 }));
+  return out;
+}
+
+/** Lantern: a thin metal body clink with a glassy ring from the panes and a rattling handle. */
+function lanternStep(c: Ctx): Float32Array {
+  const { sr, rng } = c;
+  const out = alloc(0.3, sr);
+  const f = rng.range(1400, 1900);
+  layer(out, 1, (b) =>
+    impact(b, sr, rng, {
+      modes: [f, 1, 0.12, f * 1.61, 0.7, 0.09, f * 2.33, 0.5, 0.07, f * 3.42, 0.3, 0.05],
+      jitter: 0.02,
+      noise: 0.8,
+      noiseTau: 0.0015,
+      noiseBp: [4000, 0.9],
+    }),
+  );
+  const g = rng.range(4200, 5600);
+  layer(out, 0.5, (b) => impact(b, sr, rng, { modes: [g, 1, 0.05, g * 1.73, 0.6, 0.035, g * 2.61, 0.35, 0.025] }));
+  layer(out, 0.3, (b) =>
+    ticks(b, sr, rng, { t: 0.01, dur: 0.1, rate: 40, energy: () => 1, f: [3000, 6000], t60: [0.01, 0.03], ratios: [1, 2.2], weights: [1, 0.4], click: 0.4 }),
+  );
+  return out;
+}
+
+function lanternBreak(c: Ctx): Float32Array {
+  const { sr, rng } = c;
+  const out = alloc(0.6, sr);
+  const f = rng.range(1200, 1600);
+  layer(out, 1, (b) =>
+    impact(b, sr, rng, {
+      modes: [f, 1, 0.15, f * 1.61, 0.75, 0.11, f * 2.33, 0.55, 0.08, f * 3.42, 0.35, 0.06],
+      jitter: 0.02,
+      noise: 1.1,
+      noiseTau: 0.002,
+      noiseBp: [3500, 0.8],
+    }),
+  );
+  layer(out, 0.75, (b) =>
+    ticks(b, sr, rng, {
+      t: 0.004,
+      dur: 0.5,
+      rate: 60,
+      energy: (t) => Math.exp(-t / 0.15),
+      f: [3000, 8000],
+      t60: [0.03, 0.15],
+      ratios: [1, 1.73, 2.61],
+      weights: [1, 0.6, 0.35],
+      heavy: 1.7,
+      click: 0.3,
+    }),
+  );
+  layer(out, 0.4, (b) =>
+    ticks(b, sr, rng, { t: 0.02, dur: 0.3, rate: 45, energy: (t) => Math.exp(-t / 0.1), f: [1500, 4000], t60: [0.02, 0.06], ratios: [1, 2.4], weights: [1, 0.4], click: 0.4 }),
+  );
+  return out;
+}
+
+function lanternPlace(c: Ctx): Float32Array {
+  const { sr, rng } = c;
+  const out = alloc(0.35, sr);
+  const f = rng.range(900, 1200);
+  layer(out, 1, (b) =>
+    impact(b, sr, rng, {
+      modes: [f, 1, 0.1, f * 1.61, 0.65, 0.08, f * 2.33, 0.45, 0.06, f * 0.5, 0.4, 0.07],
+      jitter: 0.02,
+      noise: 0.9,
+      noiseTau: 0.002,
+      noiseBp: [2500, 0.8],
+    }),
+  );
+  const g = rng.range(4000, 5200);
+  layer(out, 0.45, (b) => impact(b, sr, rng, { t: 0.003, modes: [g, 1, 0.06, g * 1.73, 0.55, 0.04, g * 2.61, 0.3, 0.03] }));
+  layer(out, 0.3, (b) => thump(b, sr, { f0: 180, f1: 120, tau: 0.02 }));
+  return out;
+}
+
 // ------------------------------------------------------------------ registry
 
 export function blockSounds(): Record<string, SoundGen> {
@@ -687,5 +811,13 @@ export function blockSounds(): Record<string, SoundGen> {
   );
 
   set('wet_grass', sound('block.wet_grass.break', 4, (c) => wetGrassStep(c, true)), sound('block.wet_grass.step', 6, (c) => wetGrassStep(c)));
+
+  // chain & lantern also get the landing sound: vanilla plays the step take at pitch 0.75
+  const chainStepS = sound('block.chain.step', 6, chainStep);
+  set('chain', sound('block.chain.break', 4, (c) => chainBreak(c, false)), chainStepS, sound('block.chain.place', 4, (c) => chainBreak(c, true)));
+  S['block.chain.fall'] = pitched(chainStepS, 0.75);
+  const lanternStepS = sound('block.lantern.step', 6, lanternStep);
+  set('lantern', sound('block.lantern.break', 4, lanternBreak), lanternStepS, sound('block.lantern.place', 4, lanternPlace));
+  S['block.lantern.fall'] = pitched(lanternStepS, 0.75);
   return S;
 }

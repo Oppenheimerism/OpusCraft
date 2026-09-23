@@ -72,11 +72,9 @@ shaped('ladder', 3, ['# #', '###', '# #'], { '#': 'stick' });
 shaped('bowl', 4, ['# #', ' # '], { '#': '#planks' });
 shaped('bookshelf', 1, ['###', 'XXX', '###'], { '#': '#planks', X: 'book' });
 shaped('oak_sign', 3, ['###', '###', ' X '], { '#': 'oak_planks', X: 'stick' });
-shaped('oak_door', 3, ['##', '##', '##'], { '#': 'oak_planks' });
 shaped('oak_boat', 1, ['# #', '###'], { '#': 'oak_planks' });
 shaped('painting', 1, ['###', '#X#', '###'], { '#': 'stick', X: '#wool' });
 shaped('item_frame', 1, ['###', '#X#', '###'], { '#': 'stick', X: 'leather' });
-shaped('red_bed', 1, ['###', 'XXX'], { '#': 'red_wool', X: '#planks' });
 
 // ---------------------------------------------------------------------------
 // Tools, weapons, armor
@@ -189,10 +187,59 @@ const SLABS: [string, string][] = [
   ['stone_brick', 'stone_bricks'],
   ['sandstone', 'sandstone'],
   ['brick', 'bricks'],
+  ['mossy_cobblestone', 'mossy_cobblestone'],
+  ['mossy_stone_brick', 'mossy_stone_bricks'],
+  ['granite', 'granite'],
+  ['polished_granite', 'polished_granite'],
+  ['diorite', 'diorite'],
+  ['polished_diorite', 'polished_diorite'],
+  ['andesite', 'andesite'],
+  ['polished_andesite', 'polished_andesite'],
+  ['cobbled_deepslate', 'cobbled_deepslate'],
+  ['polished_deepslate', 'polished_deepslate'],
+  ['deepslate_brick', 'deepslate_bricks'],
+  ['deepslate_tile', 'deepslate_tiles'],
+  ['red_sandstone', 'red_sandstone'],
+  ['smooth_sandstone', 'smooth_sandstone'],
+  ['smooth_red_sandstone', 'smooth_red_sandstone'],
+  ['smooth_stone', 'smooth_stone'],
+  ['cut_sandstone', 'cut_sandstone'],
 ];
 for (const [n, mat] of SLABS) {
   shaped(`${n}_slab`, 6, ['###'], { '#': mat });
   if (ITEMS.has(`${n}_stairs`)) shaped(`${n}_stairs`, 4, ['#  ', '## ', '###'], { '#': mat });
+}
+// walls (vanilla: 6 from two rows of three)
+for (const [wall, mat] of [
+  ['cobblestone_wall', 'cobblestone'], ['mossy_cobblestone_wall', 'mossy_cobblestone'], ['stone_brick_wall', 'stone_bricks'],
+  ['mossy_stone_brick_wall', 'mossy_stone_bricks'], ['brick_wall', 'bricks'], ['granite_wall', 'granite'], ['diorite_wall', 'diorite'],
+  ['andesite_wall', 'andesite'], ['sandstone_wall', 'sandstone'], ['red_sandstone_wall', 'red_sandstone'], ['cobbled_deepslate_wall', 'cobbled_deepslate'],
+  ['polished_deepslate_wall', 'polished_deepslate'], ['deepslate_brick_wall', 'deepslate_bricks'], ['deepslate_tile_wall', 'deepslate_tiles'],
+]) shaped(wall, 6, ['###', '###'], { '#': mat });
+// doors, trapdoors, fences, gates
+for (const w of WOODS) {
+  shaped(`${w}_door`, 3, ['##', '##', '##'], { '#': `${w}_planks` });
+  shaped(`${w}_trapdoor`, 2, ['###', '###'], { '#': `${w}_planks` });
+  shaped(`${w}_fence`, 3, ['W#W', 'W#W'], { W: `${w}_planks`, '#': 'stick' });
+  shaped(`${w}_fence_gate`, 1, ['#W#', '#W#'], { W: `${w}_planks`, '#': 'stick' });
+}
+shaped('iron_trapdoor', 1, ['##', '##'], { '#': 'iron_ingot' });
+shaped('iron_bars', 16, ['###', '###'], { '#': 'iron_ingot' });
+shaped('glass_pane', 16, ['###', '###'], { '#': 'glass' });
+shaped('lantern', 1, ['XXX', 'X#X', 'XXX'], { X: 'iron_nugget', '#': 'torch' });
+shaped('chain', 1, ['N', 'I', 'N'], { N: 'iron_nugget', I: 'iron_ingot' });
+shapeless('pumpkin_seeds', 4, 'pumpkin');
+shaped('beetroot_soup', 1, ['OOO', 'OOO', ' B '], { O: 'beetroot', B: 'bowl' });
+shapeless('pumpkin_pie', 1, 'pumpkin', 'sugar', 'egg');
+shaped('golden_carrot', 1, ['###', '#X#', '###'], { '#': 'gold_nugget', X: 'carrot' });
+shapeless('melon_seeds', 1, 'melon_slice');
+shaped('melon', 1, ['###', '###', '###'], { '#': 'melon_slice' });
+for (const c of COLORS) {
+  shaped(`${c}_stained_glass`, 8, ['###', '#X#', '###'], { '#': 'glass', X: `${c}_dye` });
+  shaped(`${c}_stained_glass_pane`, 16, ['###', '###'], { '#': `${c}_stained_glass` });
+  shaped(`${c}_stained_glass_pane`, 8, ['###', '#X#', '###'], { '#': 'glass_pane', X: `${c}_dye` });
+  shaped(`${c}_carpet`, 3, ['##'], { '#': `${c}_wool` });
+  shaped(`${c}_bed`, 1, ['###', 'XXX'], { '#': `${c}_wool`, X: '#planks' });
 }
 
 // ---------------------------------------------------------------------------

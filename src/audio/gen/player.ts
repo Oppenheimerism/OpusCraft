@@ -17,7 +17,7 @@ import {
   sinCyc,
 } from './dsp';
 import { type Ctx, pitched, sound } from './registry';
-import { bubble, burst, impact, phisem, sweep, thump, ticks } from './texture';
+import { bubble, burst, fireCrackles, impact, phisem, sweep, thump, ticks } from './texture';
 import { voice, vowelGlide } from './voice';
 
 // ------------------------------------------------------------------ UI
@@ -91,6 +91,90 @@ function grunt(c: Ctx, long: boolean): Float32Array {
   // glottal attack + chest "thump" of the hit
   layer(out, 0.3, (b) => burst(b, sr, rng, { dur: 0.025, tau: 0.004, bp: [1300, 0.7] }));
   layer(out, 0.3, (b) => thump(b, sr, { f0: 150, f1: 95, tau: 0.03 }));
+  return out;
+}
+
+/**
+ * Damage-type hurt variants: the regular grunt plus a cue — fire crackle and sizzle, an
+ * underwater gurgle (muffled, bubbling voice), or a brittle ice crack with a shiver.
+ */
+function hurtSpecial(c: Ctx, kind: 'fire' | 'drown' | 'freeze' | 'berry'): Float32Array {
+  const { sr, rng } = c;
+  const g = grunt(c, false);
+  const out = new Float32Array(g.length + Math.round(0.15 * sr));
+  if (kind === 'berry') {
+    // the grunt with a scratch of thorny twigs
+    layer(out, 1, (b) => b.set(g));
+    layer(out, 0.55, (b) =>
+      phisem(b, sr, rng, {
+        dur: 0.2,
+        rate: 3500,
+        energy: (t) => envAD(t, 0.004, 0.05),
+        grain: 0.0008,
+        heavy: 1.4,
+        dry: 0.4,
+        bands: [
+          { f: 3800, q: 1.4, g: 1, spread: 0.35 },
+          { f: 1900, q: 1.2, g: 0.5, spread: 0.3 },
+        ],
+      }),
+    );
+    return out;
+  }
+  if (kind === 'drown') {
+    const m = g.slice();
+    lowpass(m, 1100, sr);
+    lowpass(m, 1100, sr);
+    const fr = rng.range(18, 26) / sr;
+    for (let i = 0; i < m.length; i++) m[i] *= 0.7 + 0.3 * sinCyc(fr * i + 0.5 * sinCyc((3 * i) / sr));
+    layer(out, 1, (b) => b.set(m));
+    layer(out, 0.7, (b) => {
+      const nb = 18 + rng.int(8);
+      for (let k = 0; k < nb; k++) bubble(b, sr, rng.range(0, g.length / sr + 0.08), rng.logRange(250, 900), rng.range(0.3, 1), undefined, rng.range(0.3, 0.8));
+    });
+    layer(out, 0.4, (b) => addOsc(b, sr, 0.02, 0.12, (t) => 220 * (1 + (2 * t) / 0.12), (t) => envAD(t, 0.01, 0.04)));
+    return out;
+  }
+  if (kind === 'freeze') {
+    const m = g.slice();
+    const fr = rng.range(12, 16) / sr;
+    for (let i = 0; i < m.length; i++) m[i] *= 0.78 + 0.22 * sinCyc(fr * i);
+    layer(out, 1, (b) => b.set(m));
+    layer(out, 0.8, (b) => {
+      burst(b, sr, rng, { dur: 0.02, attack: 0.0002, tau: 0.0025, hp: 2500 });
+      impact(b, sr, rng, { modes: [rng.range(2600, 3400), 1, 0.03, rng.range(4200, 5200), 0.7, 0.02, rng.range(6500, 7500), 0.4, 0.015] });
+    });
+    layer(out, 0.45, (b) =>
+      ticks(b, sr, rng, {
+        t: 0.005,
+        dur: 0.22,
+        rate: 90,
+        energy: (t) => Math.exp(-t / 0.08),
+        f: [2500, 7000],
+        t60: [0.004, 0.02],
+        ratios: [1, 1.73, 2.6],
+        weights: [1, 0.5, 0.3],
+        click: 0.7,
+      }),
+    );
+    return out;
+  }
+  layer(out, 1, (b) => b.set(g));
+  layer(out, 0.6, (b) => fireCrackles(b, sr, rng, 0, 0.3, 45, 0.3));
+  layer(out, 0.35, (b) =>
+    phisem(b, sr, rng, {
+      dur: 0.3,
+      rate: 6000,
+      energy: (t) => envAD(t, 0.01, 0.1),
+      grain: 0.0005,
+      heavy: 1.8,
+      dry: 0.3,
+      bands: [
+        { f: 5200, q: 1.2, g: 1, spread: 0.3 },
+        { f: 3000, q: 1.8, g: 0.4, spread: 0.3 },
+      ],
+    }),
+  );
   return out;
 }
 
@@ -331,6 +415,22 @@ function attackNoDamage(c: Ctx): Float32Array {
   return out;
 }
 
+/** Knockback (sprint) hit: a longer, heavier swing, a deep thud and a shove of air. */
+function attackKnockback(c: Ctx): Float32Array {
+  const { sr, rng } = c;
+  const out = alloc(0.45, sr);
+  const tw = rng.range(0.07, 0.09);
+  layer(out, 0.6, (b) => swingWhoosh(b, sr, c, 0, tw + 0.025, rng.range(450, 600), rng.range(1600, 2100), 1.3));
+  layer(out, 1, (b) => thump(b, sr, { t: tw, f0: rng.range(120, 140), f1: 62, glide: 0.035, tau: 0.045 }));
+  layer(out, 0.85, (b) => burst(b, sr, rng, { t: tw, dur: 0.2, attack: 0.001, tau: 0.035, lp: 1200 }));
+  layer(out, 0.45, (b) => burst(b, sr, rng, { t: tw, dur: 0.03, attack: 0.0003, tau: 0.006, bp: [2200, 0.8] }));
+  const pd = rng.range(0.1, 0.14);
+  layer(out, 0.35, (b) =>
+    sweep(b, sr, rng, { t: tw + 0.01, dur: pd, f: (t) => 900 * Math.pow(0.45, t / pd), q: 1, amp: (t) => envBump(t, pd * 0.2, pd * 0.8) }),
+  );
+  return out;
+}
+
 // ------------------------------------------------------------------ chimes
 
 function orb(c: Ctx): Float32Array {
@@ -533,39 +633,185 @@ function bucketEmpty(c: Ctx, lava: boolean): Float32Array {
 
 // ------------------------------------------------------------------ misc items
 
-function flintAndSteel(c: Ctx): Float32Array {
+/** Flint and steel: a short ringing steel strike, a gritty scrape across the flint and a few sparks. */
+function flintStrike(c: Ctx): Float32Array {
   const { sr, rng } = c;
-  const out = alloc(1.0, sr);
+  const out = alloc(0.34, sr);
+  const f = rng.range(2700, 3500);
+  layer(out, 0.9, (b) =>
+    impact(b, sr, rng, {
+      modes: [f, 1, 0.1, f * rng.range(1.48, 1.56), 0.7, 0.075, f * rng.range(2.2, 2.35), 0.45, 0.05, f * 0.62, 0.35, 0.12],
+      jitter: 0.02,
+      noise: 1.2,
+      noiseTau: 0.0012,
+      noiseBp: [6000, 1],
+    }),
+  );
+  const sd = rng.range(0.18, 0.25);
+  const st = rng.range(0.004, 0.012);
   layer(out, 1, (b) =>
     phisem(b, sr, rng, {
-      dur: 0.09,
-      rate: 9000,
-      energy: (t) => envBump(t, 0.01, 0.07),
-      grain: 0.0004,
-      heavy: 2,
+      t: st,
+      dur: sd,
+      rate: 12000,
+      energy: (t) => envBump(t, sd * 0.2, sd * 0.8),
+      grain: 0.00035,
+      heavy: 1.8,
       bands: [
-        { f: 4500, q: 2, g: 1, spread: 0.3 },
-        { f: 7500, q: 2, g: 0.6, spread: 0.2 },
-        { f: 2500, q: 3, g: 0.4, spread: 0.3 },
+        { f: 4200, q: 2.2, g: 1, spread: 0.3 },
+        { f: 7000, q: 2, g: 0.7, spread: 0.2 },
+        { f: 2600, q: 3, g: 0.35, spread: 0.3 },
       ],
     }),
   );
-  layer(out, 0.6, (b) =>
-    impact(b, sr, rng, { modes: [3100, 1, 0.03, 4700, 0.6, 0.02, 6800, 0.4, 0.015], noise: 0.8, noiseTau: 0.001, noiseBp: [5000, 1] }),
-  );
-  layer(out, 0.65, (b) =>
-    sweep(b, sr, rng, {
-      t: 0.05,
-      dur: 0.85,
-      f: (t) => 300 + 1500 * (1 - Math.exp(-t / 0.15)),
-      q: 0.7,
-      amp: (t) => envAD(t, 0.08, 0.2),
-      mode: 'lp',
+  layer(out, 0.35, (b) =>
+    ticks(b, sr, rng, {
+      t: st + sd * 0.25,
+      dur: 0.26,
+      rate: 60,
+      energy: (t) => Math.exp(-t / 0.12),
+      f: [3000, 8000],
+      t60: [0.003, 0.01],
+      ratios: [1, 1.7],
+      weights: [1, 0.4],
+      click: 0.9,
     }),
   );
-  layer(out, 0.3, (b) =>
-    ticks(b, sr, rng, { t: 0.1, dur: 0.7, rate: 30, energy: (t) => Math.exp(-t / 0.3), f: [1500, 4500], t60: [0.004, 0.012], click: 0.8 }),
+  return out;
+}
+
+/** Fire charge: a short fiery "fwoosh" — a flaring low-passed roar with crackles. */
+function fireChargeUse(c: Ctx): Float32Array {
+  const { sr, rng } = c;
+  const d = rng.range(0.5, 0.65);
+  const out = alloc(d, sr);
+  const fb = rng.range(2600, 3600);
+  layer(out, 1, (b) =>
+    sweep(b, sr, rng, {
+      dur: d,
+      f: (t) => 500 + (fb - 500) * envAD(t, 0.05, 0.14),
+      q: 0.9,
+      amp: (t) => envAD(t, 0.025, 0.15),
+      mode: 'lp',
+      color: 'pink',
+    }),
   );
+  layer(out, 0.55, (b) =>
+    sweep(b, sr, rng, { dur: d, f: (t) => 900 + 1400 * envAD(t, 0.04, 0.1), q: 1.2, amp: (t) => envAD(t, 0.02, 0.12) }),
+  );
+  layer(out, 0.3, (b) => burst(b, sr, rng, { dur: d, attack: 0.03, tau: 0.12, lp: 380, color: 'brown' }));
+  layer(out, 0.35, (b) => fireCrackles(b, sr, rng, 0.02, d * 0.7, rng.range(35, 50), 0.2));
+  layer(out, 0.2, (b) => thump(b, sr, { f0: 95, f1: 60, glide: 0.06, tau: 0.08, attack: 0.02 }));
+  return out;
+}
+
+/** Cow milking: milk streaming into a metal bucket, glugs rising in pitch as it fills. */
+function cowMilk(c: Ctx): Float32Array {
+  const { sr, rng } = c;
+  const d = rng.range(0.48, 0.58);
+  const out = alloc(d + 0.2, sr);
+  const fb = rng.range(520, 640);
+  layer(out, 0.35, (b) =>
+    impact(b, sr, rng, {
+      t: 0.02,
+      modes: [fb, 1, 0.4, fb * 1.59, 0.7, 0.3, fb * 2.14, 0.5, 0.22, fb * 2.65, 0.35, 0.16, fb * 3.25, 0.2, 0.1],
+      noise: 0.3,
+      noiseTau: 0.002,
+      noiseBp: [3000, 1],
+    }),
+  );
+  const fl = rng.range(11, 17);
+  layer(out, 1, (b) =>
+    sweep(b, sr, rng, {
+      dur: d,
+      f: (t) => 1300 + (600 * t) / d,
+      q: 1.1,
+      amp: (t) => envBump(t, 0.03, d - 0.03) * (0.75 + 0.25 * Math.sin(TAU * fl * t)),
+      color: 'pink',
+    }),
+  );
+  layer(out, 0.7, (b) => {
+    const nb = 18 + rng.int(8);
+    for (let k = 0; k < nb; k++) {
+      const t = 0.02 + rng.next() * d * 0.85;
+      bubble(b, sr, t, rng.logRange(450, 1300) * (1 + (0.5 * t) / d), rng.range(0.3, 1), undefined, 0.35);
+    }
+  });
+  layer(out, 0.25, (b) => sweep(b, sr, rng, { dur: d, f: () => fb, q: 12, amp: (t) => envBump(t, 0.05, d - 0.05) }));
+  return out;
+}
+
+/** Dye use: a small soft squish with a tiny pop. */
+function dyeUse(c: Ctx): Float32Array {
+  const { sr, rng } = c;
+  const d = rng.range(0.14, 0.2);
+  const out = alloc(d + 0.08, sr);
+  const fA = rng.range(500, 700);
+  layer(out, 1, (b) => sweep(b, sr, rng, { dur: d, f: (t) => fA * Math.pow(2.6, t / d), q: 4, amp: (t) => envBump(t, d * 0.2, d * 0.8) }));
+  const fp = rng.range(380, 460);
+  layer(out, 0.7, (b) => addOsc(b, sr, 0.005, 0.08, (t) => fp * (1 + 1.3 * Math.min(1, t / 0.03)), (t) => envAD(t, 0.002, 0.018)));
+  layer(out, 0.3, (b) => bubble(b, sr, rng.range(0.02, d * 0.6), rng.range(700, 1200), 1, undefined, 0.5));
+  lowpass(out, 3500, sr);
+  return out;
+}
+
+/** Hoe tilling: a blade scraping through soil — gritty earth, a dull thud and a few clods. */
+function hoeTill(c: Ctx): Float32Array {
+  const { sr, rng } = c;
+  const d = rng.range(0.32, 0.42);
+  const out = alloc(d, sr);
+  const pk = rng.range(0.25, 0.35);
+  layer(out, 1, (b) =>
+    phisem(b, sr, rng, {
+      dur: d,
+      rate: 5000,
+      energy: (t) => envBump(t, d * pk, d * (1 - pk)),
+      grain: 0.0015,
+      heavy: 2.4,
+      bands: [
+        { f: 1100, q: 1.3, g: 1, spread: 0.4 },
+        { f: 2300, q: 1.5, g: 0.6, spread: 0.3 },
+        { f: 550, q: 1.5, g: 0.7, spread: 0.3 },
+      ],
+    }),
+  );
+  layer(out, 0.5, (b) => burst(b, sr, rng, { dur: 0.2, attack: 0.005, tau: 0.04, lp: 400 }));
+  const f = rng.range(2500, 3200);
+  layer(out, 0.2, (b) => impact(b, sr, rng, { modes: [f, 1, 0.05, f * 1.5, 0.5, 0.035], noise: 0.5, noiseTau: 0.001, noiseBp: [4000, 1] }));
+  layer(out, 0.35, (b) =>
+    ticks(b, sr, rng, { t: d * 0.2, dur: d * 0.7, rate: 40, energy: () => 1, f: [300, 900], t60: [0.01, 0.03], ratios: [1, 2.3], weights: [1, 0.4], click: 0.3 }),
+  );
+  return out;
+}
+
+/** Bone meal: a soft dusty sprinkle with a faint magical twinkle. */
+function boneMeal(c: Ctx): Float32Array {
+  const { sr, rng } = c;
+  const out = alloc(0.35, sr);
+  layer(out, 1, (b) =>
+    phisem(b, sr, rng, {
+      dur: 0.3,
+      rate: 15000,
+      energy: (t) => envAD(t, 0.015, 0.08),
+      grain: 0.0005,
+      heavy: 1.5,
+      bands: [
+        { f: 3500, q: 1, g: 1, spread: 0.2 },
+        { f: 6500, q: 1.2, g: 0.6, spread: 0.15 },
+      ],
+    }),
+  );
+  layer(out, 0.45, (b) => {
+    const n = 3 + rng.int(3);
+    for (let k = 0; k < n; k++) {
+      const s = Math.round(rng.range(0.03, 0.22) * sr);
+      const f = rng.range(5000, 9000);
+      const a = rng.range(0.4, 1);
+      addMode(b, s, sr, f, a, rng.range(0.08, 0.2));
+      addMode(b, s, sr, f * 2.76, a * 0.25, 0.05);
+    }
+  });
+  layer(out, 0.15, (b) => thump(b, sr, { f0: 180, f1: 120, tau: 0.02 }));
   return out;
 }
 
@@ -632,8 +878,18 @@ export function playerSounds(): Record<string, SoundGen> {
     'item.bucket.empty': sound('item.bucket.empty', 3, (c) => bucketEmpty(c, false)),
     'item.bucket.fill_lava': sound('item.bucket.fill_lava', 3, (c) => bucketFill(c, true)),
     'item.bucket.empty_lava': sound('item.bucket.empty_lava', 3, (c) => bucketEmpty(c, true)),
-    'item.flintandsteel.use': sound('item.flintandsteel.use', 1, flintAndSteel),
+    'item.flintandsteel.use': sound('item.flintandsteel.use', 3, flintStrike),
+    'item.firecharge.use': sound('item.firecharge.use', 3, fireChargeUse),
+    'entity.player.attack.knockback': sound('entity.player.attack.knockback', 4, attackKnockback),
+    'entity.player.hurt_on_fire': sound('entity.player.hurt_on_fire', 3, (c) => hurtSpecial(c, 'fire')),
+    'entity.player.hurt_drown': sound('entity.player.hurt_drown', 4, (c) => hurtSpecial(c, 'drown')),
+    'entity.player.hurt_freeze': sound('entity.player.hurt_freeze', 5, (c) => hurtSpecial(c, 'freeze')),
+    'entity.player.hurt_sweet_berry_bush': sound('entity.player.hurt_sweet_berry_bush', 2, (c) => hurtSpecial(c, 'berry')),
+    'entity.cow.milk': sound('entity.cow.milk', 3, cowMilk),
+    'item.dye.use': sound('item.dye.use', 2, dyeUse),
     'entity.item.break': sound('entity.item.break', 1, itemBreak),
+    'item.hoe.till': sound('item.hoe.till', 4, hoeTill),
+    'item.bone_meal.use': sound('item.bone_meal.use', 5, boneMeal),
   };
 }
 

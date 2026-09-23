@@ -203,6 +203,7 @@ export class Squid extends WaterAnimal {
   override hurt(amount: number, source: string, attacker?: Entity | null, direct?: Entity | null): boolean {
     const ok = super.hurt(amount, source, attacker, direct);
     if (ok && attacker) {
+      this.playSound('entity.squid.squirt', this.soundVolume(), this.voicePitch());
       // vanilla spawnInk: squirt a cloud of ink
       for (let i = 0; i < 30; i++) {
         const r = this.random;
@@ -214,5 +215,17 @@ export class Squid extends WaterAnimal {
 
   override lootTable(): LootEntry[] {
     return [{ item: 'ink_sac', min: 1, max: 3 }];
+  }
+  override soundVolume(): number {
+    return 0.4;
+  }
+  override ambientSound(): string {
+    return 'entity.squid.ambient';
+  }
+  override hurtSound(): string {
+    return 'entity.squid.hurt';
+  }
+  override deathSound(): string {
+    return 'entity.squid.death';
   }
 }

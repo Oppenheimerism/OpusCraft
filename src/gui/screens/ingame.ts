@@ -157,7 +157,7 @@ export class LevelLoadingScreen extends Screen {
 
 export class ChatScreen extends Screen {
   readonly isChat = true;
-  private input!: EditBox;
+  protected input!: EditBox;
   private historyPos = -1;
   private draft = '';
   private suggestions: string[] = [];
@@ -300,5 +300,46 @@ export class ChatScreen extends Screen {
     // scroll hints
     if (this.suggestOffset > 0) for (let i = 0; i < w; i += 2) g.fill(x + i, y - 1, x + i + 1, y, 0xffffffff);
     if (this.suggestOffset + 10 < this.suggestions.length) for (let i = 0; i < w; i += 2) g.fill(x + i, y + h, x + i + 1, y + h + 1, 0xffffffff);
+  }
+}
+
+/** vanilla InBedChatScreen: chat with a "Leave Bed" button while asleep */
+export class InBedChatScreen extends ChatScreen {
+  readonly inBed = true;
+
+  constructor(game: Game) {
+    super(game, '');
+  }
+
+  private leaveBed!: Button;
+
+  override init(): void {
+    super.init();
+    this.leaveBed = this.add(new Button(Math.floor(this.width / 2) - 100, this.height - 40, 200, 20, 'Leave Bed', () => this.game.leaveBed()));
+  }
+
+  override render(g: GuiGraphics, mx: number, my: number, partial: number): void {
+    super.render(g, mx, my, partial);
+    this.leaveBed.render(g, mx, my);
+  }
+
+  override keyPressed(e: KeyboardEvent): boolean {
+    if (e.key === 'Escape') {
+      this.game.leaveBed();
+      return true;
+    }
+    if (e.key === 'Enter') {
+      this.game.sendChat(this.input.value);
+      this.input.value = '';
+      this.input.cursor = 0;
+      return true;
+    }
+    return super.keyPressed(e);
+  }
+
+  /** vanilla onPlayerWokeUp: keep a half-typed message in a normal chat screen */
+  onPlayerWokeUp(): void {
+    const v = this.input.value;
+    this.game.setScreen(v ? new ChatScreen(this.game, v) : null);
   }
 }

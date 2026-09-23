@@ -53,6 +53,10 @@ interface ShadowJob {
   strength: number;
 }
 
+/** vanilla LivingEntityRenderer.sleepDirectionToRotation and the bed's step */
+const SLEEP_ROT: Record<string, number> = { south: 90, west: 0, north: 270, east: 180 };
+const BED_STEP: Record<string, [number, number]> = { north: [0, -1], south: [0, 1], west: [-1, 0], east: [1, 0] };
+
 export class EntityRenderDispatcher {
   private readonly textures = new Map<string, WebGLTexture>();
   private readonly pose = new PoseStack();
@@ -183,7 +187,15 @@ export class EntityRenderDispatcher {
     const headYaw = rotLerp(p, e.headYawO, e.headYaw);
     const net = wrapDegrees(headYaw - bodyYaw);
     const pitch = e.pitchO + (e.pitch - e.pitchO) * p;
-    pose.rotY(180 - bodyYaw);
+    const bed = e.type === 'player' ? (e as Player).bedOrientation() : null;
+    if (bed) {
+      // vanilla LivingEntityRenderer: a sleeper lies along the bed, head on the pillow
+      const f4 = 1.62 - 0.1;
+      pose.translate(-BED_STEP[bed][0] * f4, 0, -BED_STEP[bed][1] * f4);
+      pose.rotY(SLEEP_ROT[bed]);
+      pose.rotZ(flip);
+      pose.rotY(270);
+    } else pose.rotY(180 - bodyYaw);
     if (e.deathTime > 0) {
       let f = ((e.deathTime + p - 1) / 20) * 1.6;
       f = Math.sqrt(Math.max(0, f));
@@ -199,6 +211,7 @@ export class EntityRenderDispatcher {
       limbSwing = e.walkAnimPos - e.walkAnimSpeed * (1 - p);
       if (e instanceof Mob && e.isBaby()) limbSwing *= 3;
     }
+    if (bed) return { limbSwing, limbAmount, age: e.tickCount + p, headYaw: 0, headPitch: 0 };
     return { limbSwing, limbAmount, age: e.tickCount + p, headYaw: net, headPitch: pitch };
   }
 

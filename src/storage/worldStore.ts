@@ -34,6 +34,8 @@ export interface WorldMeta {
     inventory: ([string, number, number] | null)[];
     armor: ([string, number, number] | null)[];
     spawn: [number, number, number];
+    /** bed / spawnpoint: x, y, z, forced (1/0) */
+    respawn?: [number, number, number, number] | null;
     dead?: boolean;
   } | null;
   version: number;

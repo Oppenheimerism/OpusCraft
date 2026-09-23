@@ -28,7 +28,7 @@ import {
   white,
 } from './dsp';
 import { type Ctx, sound } from './registry';
-import { bubble, burst, creak, impact, phisem, sweep, thump, ticks } from './texture';
+import { bubble, burst, creak, fireCrackles, impact, phisem, sweep, thump, ticks } from './texture';
 import { voice } from './voice';
 
 // ------------------------------------------------------------------ helpers
@@ -173,33 +173,150 @@ function doorClose(c: Ctx): Float32Array {
   return out;
 }
 
-// ------------------------------------------------------------------ fire
+/** Lighter wooden trapdoor: a short, higher creak and a flat board "flap". */
+const TRAP_BODY = [
+  { f: 620, q: 5, g: 1 },
+  { f: 1350, q: 6, g: 0.7 },
+  { f: 2450, q: 5, g: 0.35 },
+];
 
-function crackles(b: Float32Array, sr: number, c: Ctx, t0: number, dur: number, rate: number, bigPops = 0): void {
+function boardFlap(b: Float32Array, sr: number, c: Ctx, t: number, a: number): void {
   const { rng } = c;
-  let t = 0;
-  for (;;) {
-    t += -Math.log(1 - rng.next()) / rate;
-    if (t >= dur) break;
-    const a = 0.15 + 0.85 * Math.pow(rng.next(), 2.2);
-    impact(b, sr, rng, {
-      t: t0 + t,
-      modes: [rng.range(1500, 4000), a * 0.5, 0.008, rng.range(4000, 7000), a * 0.3, 0.005],
-      noise: a * 1.5,
-      noiseTau: rng.range(0.0002, 0.001),
-      noiseBp: [rng.range(2000, 6000), 0.8],
-    });
-    if (bigPops && rng.chance(bigPops)) {
-      impact(b, sr, rng, { t: t0 + t, modes: [rng.range(350, 700), a, 0.015, rng.range(900, 1400), a * 0.5, 0.01], noise: a, noiseTau: 0.001 });
-    }
-  }
+  const f = rng.range(280, 360);
+  impact(b, sr, rng, {
+    t,
+    modes: [f, a, 0.05, f * 1.9, 0.7 * a, 0.035, f * 3.1, 0.45 * a, 0.025, f * 4.6, 0.25 * a, 0.018],
+    jitter: 0.03,
+    noise: 1.4 * a,
+    noiseTau: 0.005,
+    noiseBp: [900, 0.6],
+  });
 }
+
+function trapdoorOpen(c: Ctx): Float32Array {
+  const { sr, rng } = c;
+  const out = alloc(0.45, sr);
+  const cd = rng.range(0.12, 0.18);
+  const r0 = rng.range(150, 210);
+  layer(out, 0.55, (b) =>
+    creak(b, sr, rng, { dur: cd, rate: (t) => r0 * (1 - (0.3 * t) / cd), amp: (t) => envBump(t, cd * 0.3, cd * 0.7), jitter: 0.15, bands: TRAP_BODY }),
+  );
+  layer(out, 1, (b) => boardFlap(b, sr, c, cd * 0.85, 1));
+  layer(out, 0.25, (b) => thump(b, sr, { t: cd * 0.85, f0: 150, f1: 100, tau: 0.02 }));
+  return out;
+}
+
+function trapdoorClose(c: Ctx): Float32Array {
+  const { sr, rng } = c;
+  const out = alloc(0.35, sr);
+  const cd = rng.range(0.05, 0.08);
+  layer(out, 0.35, (b) =>
+    creak(b, sr, rng, { dur: cd, rate: (t) => 170 + (60 * t) / cd, amp: (t) => envBump(t, cd * 0.3, cd * 0.7), jitter: 0.15, bands: TRAP_BODY }),
+  );
+  layer(out, 1, (b) => boardFlap(b, sr, c, cd * 0.8, 1));
+  layer(out, 0.35, (b) => thump(b, sr, { t: cd * 0.8, f0: 140, f1: 90, tau: 0.025 }));
+  return out;
+}
+
+/** Heavy iron: high-Q metallic groan resonances and long-ringing plate clanks. */
+const IRON_BODY = [
+  { f: 380, q: 12, g: 1 },
+  { f: 910, q: 14, g: 0.8 },
+  { f: 1730, q: 12, g: 0.5 },
+  { f: 2950, q: 10, g: 0.3 },
+];
+
+function ironClank(b: Float32Array, sr: number, c: Ctx, t: number, f: number, ring: number): void {
+  impact(b, sr, c.rng, {
+    t,
+    modes: [
+      f, 1, 0.45 * ring,
+      f * 1.59, 0.75, 0.36 * ring,
+      f * 2.32, 0.6, 0.28 * ring,
+      f * 3.41, 0.4, 0.2 * ring,
+      f * 4.25, 0.35, 0.14 * ring,
+      f * 6.63, 0.25, 0.08 * ring,
+      f * 9.1, 0.16, 0.05 * ring,
+      f * 11.8, 0.1, 0.035 * ring,
+    ],
+    jitter: 0.015,
+    noise: 1.3,
+    noiseTau: 0.003,
+    noiseBp: [2000, 0.7],
+  });
+}
+
+function ironOpen(c: Ctx, trap: boolean): Float32Array {
+  const { sr, rng } = c;
+  const out = alloc(trap ? 0.7 : 0.95, sr);
+  layer(out, trap ? 0.55 : 0.75, (b) => ironClank(b, sr, c, 0, rng.range(trap ? 300 : 220, trap ? 380 : 280), 0.6));
+  layer(out, 0.4, (b) => thump(b, sr, { f0: 100, f1: 70, tau: 0.035 }));
+  const cd = trap ? rng.range(0.22, 0.3) : rng.range(0.45, 0.6);
+  const r0 = rng.range(70, 100);
+  layer(out, 1, (b) =>
+    creak(b, sr, rng, {
+      t: 0.05,
+      dur: cd,
+      rate: (t) => r0 * (1 - (0.35 * t) / cd) * (1 + 0.08 * Math.sin(TAU * 3 * t)),
+      amp: (t) => envBump(t, cd * 0.3, cd * 0.7),
+      jitter: 0.15,
+      bands: IRON_BODY,
+    }),
+  );
+  if (trap) layer(out, 0.8, (b) => ironClank(b, sr, c, 0.05 + cd * 0.9, rng.range(330, 420), 0.5));
+  return out;
+}
+
+function ironClose(c: Ctx, trap: boolean): Float32Array {
+  const { sr, rng } = c;
+  const out = alloc(trap ? 0.65 : 0.85, sr);
+  const cd = trap ? 0.07 : 0.12;
+  layer(out, 0.35, (b) =>
+    creak(b, sr, rng, { dur: cd, rate: (t) => 90 + (40 * t) / cd, amp: (t) => envBump(t, cd * 0.3, cd * 0.7), jitter: 0.15, bands: IRON_BODY }),
+  );
+  const tt = cd * 0.9;
+  layer(out, 1, (b) => ironClank(b, sr, c, tt, rng.range(trap ? 260 : 185, trap ? 340 : 240), trap ? 0.7 : 1));
+  layer(out, 0.55, (b) => thump(b, sr, { t: tt, f0: trap ? 110 : 85, f1: 60, tau: trap ? 0.035 : 0.05 }));
+  if (!trap) layer(out, 0.4, (b) => latch(b, sr, c, tt + 0.015, 1));
+  return out;
+}
+
+/** Fence gate: a wooden latch clack (open: latch lift + light creak; close: post knock + latch drop). */
+function gateOpen(c: Ctx): Float32Array {
+  const { sr, rng } = c;
+  const out = alloc(0.35, sr);
+  const f = rng.range(1300, 1800);
+  layer(out, 0.7, (b) => impact(b, sr, rng, { modes: [f, 1, 0.025, f * 2.2, 0.5, 0.015], noise: 0.8, noiseTau: 0.0015, noiseBp: [3000, 1] }));
+  const cd = rng.range(0.1, 0.14);
+  layer(out, 0.5, (b) =>
+    creak(b, sr, rng, { t: 0.02, dur: cd, rate: (t) => 160 * (1 - (0.25 * t) / cd), amp: (t) => envBump(t, cd * 0.3, cd * 0.7), jitter: 0.15, bands: TRAP_BODY }),
+  );
+  const g = rng.range(350, 450);
+  layer(out, 0.6, (b) => impact(b, sr, rng, { t: 0.02 + cd, modes: [g, 1, 0.05, g * 2.1, 0.5, 0.03, g * 3.4, 0.3, 0.02], noise: 0.6, noiseTau: 0.002, noiseBp: [1500, 0.8] }));
+  return out;
+}
+
+function gateClose(c: Ctx): Float32Array {
+  const { sr, rng } = c;
+  const out = alloc(0.3, sr);
+  const g = rng.range(350, 450);
+  layer(out, 1, (b) =>
+    impact(b, sr, rng, { modes: [g, 1, 0.06, g * 2.05, 0.6, 0.04, g * 3.3, 0.4, 0.025, g * 4.8, 0.2, 0.018], jitter: 0.02, noise: 1, noiseTau: 0.003, noiseBp: [1400, 0.8] }),
+  );
+  const f = rng.range(900, 1300);
+  const dt = rng.range(0.025, 0.045);
+  layer(out, 0.6, (b) => impact(b, sr, rng, { t: dt, modes: [f, 1, 0.03, f * 2.3, 0.5, 0.018], noise: 0.7, noiseTau: 0.0015, noiseBp: [2800, 1] }));
+  layer(out, 0.3, (b) => thump(b, sr, { f0: 150, f1: 100, tau: 0.02 }));
+  return out;
+}
+
+// ------------------------------------------------------------------ fire
 
 function furnaceCrackle(c: Ctx): Float32Array {
   const { sr, rng } = c;
   const d = rng.range(1.0, 1.5);
   const out = alloc(d, sr);
-  layer(out, 1, (b) => crackles(b, sr, c, 0.005, d - 0.05, rng.range(12, 22), 0.25));
+  layer(out, 1, (b) => fireCrackles(b, sr, rng, 0.005, d - 0.05, rng.range(12, 22), 0.25));
   layer(out, 0.18, (b) => burst(b, sr, rng, { dur: d, attack: 0.15, tau: d, lp: 350, color: 'brown', env: (t) => envBump(t, 0.2, d - 0.2) }));
   return out;
 }
@@ -220,7 +337,7 @@ function fireAmbient(c: Ctx): Float32Array {
         b[i] = r[i] * (0.7 + 0.2 * Math.sin(TAU * f1 * t) + 0.1 * Math.sin(TAU * f2 * t + 1));
       }
     });
-    layer(out, 1, (b) => crackles(b, sr, c, 0, L + X, 38, 0.15));
+    layer(out, 1, (b) => fireCrackles(b, sr, rng, 0, L + X, 38, 0.15));
     layer(out, 0.12, (b) => {
       const w = white(n, rng);
       highpass(w, 3500, sr);
@@ -249,6 +366,67 @@ function fizz(c: Ctx): Float32Array {
   );
   layer(out, 0.35, (b) => burst(b, sr, rng, { dur: 0.15, attack: 0.003, tau: 0.04, lp: 800 }));
   highpass(out, 200, sr);
+  return out;
+}
+
+/** Fire meeting water: a short steam hiss with a soft "pff" and a few bubbles. */
+function extinguishFire(c: Ctx): Float32Array {
+  const { sr, rng } = c;
+  const d = rng.range(0.35, 0.45);
+  const out = alloc(d, sr);
+  layer(out, 1, (b) =>
+    phisem(b, sr, rng, {
+      dur: d,
+      rate: 7000,
+      energy: (t) => envAD(t, 0.004, d * 0.3),
+      grain: 0.0005,
+      heavy: 1.7,
+      dry: 0.35,
+      bands: [
+        { f: 4800, q: 1.2, g: 1, spread: 0.3 },
+        { f: 8000, q: 1.5, g: 0.6, spread: 0.2 },
+        { f: 2600, q: 2, g: 0.3, spread: 0.3 },
+      ],
+    }),
+  );
+  layer(out, 0.3, (b) => burst(b, sr, rng, { dur: 0.1, attack: 0.002, tau: 0.025, lp: 900 }));
+  layer(out, 0.25, (b) => {
+    for (let k = 0; k < 5; k++) bubble(b, sr, rng.range(0, d * 0.6), rng.logRange(800, 2500), rng.range(0.3, 1), undefined, 0.4);
+  });
+  highpass(out, 250, sr);
+  return out;
+}
+
+/** Something burning in lava / fire: a quick flare with crackles and a sizzling hiss. */
+function burn(c: Ctx): Float32Array {
+  const { sr, rng } = c;
+  const d = rng.range(0.35, 0.5);
+  const out = alloc(d, sr);
+  layer(out, 1, (b) => fireCrackles(b, sr, rng, 0.002, d * 0.8, rng.range(40, 60), 0.2));
+  layer(out, 0.6, (b) =>
+    phisem(b, sr, rng, {
+      dur: d,
+      rate: 6000,
+      energy: (t) => envAD(t, 0.01, d * 0.35),
+      grain: 0.0005,
+      heavy: 1.8,
+      dry: 0.3,
+      bands: [
+        { f: 5200, q: 1.2, g: 1, spread: 0.3 },
+        { f: 3000, q: 1.8, g: 0.4, spread: 0.3 },
+      ],
+    }),
+  );
+  layer(out, 0.45, (b) =>
+    sweep(b, sr, rng, {
+      dur: d,
+      f: (t) => 400 + 1600 * envAD(t, 0.03, 0.08),
+      q: 0.8,
+      amp: (t) => envAD(t, 0.015, d * 0.3),
+      mode: 'lp',
+      color: 'pink',
+    }),
+  );
   return out;
 }
 
@@ -732,9 +910,19 @@ export function worldSounds(): Record<string, SoundGen> {
     'block.chest.close': sound('block.chest.close', 1, chestClose),
     'block.wooden_door.open': sound('block.wooden_door.open', 2, doorOpen),
     'block.wooden_door.close': sound('block.wooden_door.close', 2, doorClose),
+    'block.wooden_trapdoor.open': sound('block.wooden_trapdoor.open', 3, trapdoorOpen),
+    'block.wooden_trapdoor.close': sound('block.wooden_trapdoor.close', 3, trapdoorClose),
+    'block.iron_door.open': sound('block.iron_door.open', 4, (c) => ironOpen(c, false)),
+    'block.iron_door.close': sound('block.iron_door.close', 4, (c) => ironClose(c, false)),
+    'block.iron_trapdoor.open': sound('block.iron_trapdoor.open', 4, (c) => ironOpen(c, true)),
+    'block.iron_trapdoor.close': sound('block.iron_trapdoor.close', 4, (c) => ironClose(c, true)),
+    'block.fence_gate.open': sound('block.fence_gate.open', 2, gateOpen),
+    'block.fence_gate.close': sound('block.fence_gate.close', 3, gateClose),
     'block.furnace.fire_crackle': sound('block.furnace.fire_crackle', 5, furnaceCrackle),
     'block.fire.ambient': sound('block.fire.ambient', 1, fireAmbient, loop),
     'block.fire.extinguish': sound('block.fire.extinguish', 1, fizz),
+    'entity.generic.extinguish_fire': sound('entity.generic.extinguish_fire', 2, extinguishFire),
+    'entity.generic.burn': sound('entity.generic.burn', 3, burn),
     'block.lava.pop': sound('block.lava.pop', 1, lavaPop),
     'block.lava.ambient': sound('block.lava.ambient', 1, lavaAmbient, loop),
     'block.water.ambient': sound('block.water.ambient', 1, waterAmbient, loop),
