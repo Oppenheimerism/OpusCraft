@@ -454,19 +454,47 @@ function zombie(): TexImage {
 }
 
 // ---------------------------------------------------------------------------
-// Skeleton (64x32)
+// Skeleton and wither skeleton (64x32, one layout): the same bony build, in bone white or in the wither
+// skeleton's sooty near-black
 
-function skeleton(): TexImage {
+interface SkeletonLook {
+  seed: number;
+  /** the bone's shades, dark to light, and each one's share */
+  bone: Pal;
+  w: Pal;
+  /** darker flecks on the skull */
+  fleck: Pal;
+  /** the face: eye sockets (K, k round their rims), nose (n), mouth (D) and teeth (t) */
+  face: Record<'K' | 'k' | 'n' | 'D' | 't', number>;
+}
+
+const SKELETON_LOOK: SkeletonLook = {
+  seed: 0x5ce1e7,
+  bone: [0x9a9a9a, 0xa8a8a8, 0xb4b4b4, 0xbdbdbd, 0xc6c6c6, 0xcfcfcf],
+  w: [1, 2, 4, 8, 5, 2],
+  fleck: [0x858585, 0x8f8f8f],
+  face: { K: 0x0d0d0d, k: 0x1f1f1f, n: 0x3a3a3a, D: 0x262626, t: 0x9a9a9a },
+};
+
+const WITHER_SKELETON_LOOK: SkeletonLook = {
+  seed: 0x3a1e7,
+  bone: [0x1a1a1a, 0x222222, 0x2a2a2a, 0x313131, 0x393939, 0x474747],
+  w: [1, 2, 4, 8, 5, 2],
+  fleck: [0x141414, 0x181818],
+  face: { K: 0x000000, k: 0x080808, n: 0x0c0c0c, D: 0x0a0a0a, t: 0x3e3e3e },
+};
+
+function skeleton(look: SkeletonLook = SKELETON_LOOK): TexImage {
   const t = img(64, 32);
-  const r = new Rand(0x5ce1e7);
-  const BN = [0x9a9a9a, 0xa8a8a8, 0xb4b4b4, 0xbdbdbd, 0xc6c6c6, 0xcfcfcf];
-  const BNW = [1, 2, 4, 8, 5, 2];
+  const r = new Rand(look.seed);
+  const BN = look.bone;
+  const BNW = look.w;
   const head = boxFaces(0, 0, 8, 8, 8);
   const body = boxFaces(16, 16, 8, 12, 4);
   const arm = boxFaces(40, 16, 2, 12, 2);
   const leg = boxFaces(0, 16, 2, 12, 2);
   noiseBox(t, head, r, BN, { w: BNW });
-  for (const k of ['top', 'right', 'left', 'back'] as FaceName[]) fleck(t, head[k], r, 0.05, [0x858585, 0x8f8f8f]);
+  for (const k of ['top', 'right', 'left', 'back'] as FaceName[]) fleck(t, head[k], r, 0.05, look.fleck);
   drawFace(t, head.front, [
     '........',
     '........',
@@ -476,7 +504,7 @@ function skeleton(): TexImage {
     '...nn...',
     '.DtDDtD.',
     '........',
-  ], { K: 0x0d0d0d, k: 0x1f1f1f, n: 0x3a3a3a, D: 0x262626, t: 0x9a9a9a }, r);
+  ], look.face, r);
   // ribcage: solid rib rows, open gaps elsewhere except the spine (front/back)
   noiseBox(t, body, r, BN, { w: BNW });
   const RIB = [1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 1];
@@ -858,6 +886,37 @@ function magmaCube(): TexImage {
   // the molten core: bright orange going yellow in the middle
   const core = boxFaces(0, 16, 4, 4, 4);
   noiseBox(t, core, r, [0xe8580f, 0xf5781c, 0xfb9a2a, 0xffbf45, 0xffdc6e], { w: [1, 2, 3, 2, 1], cell: 1 });
+  return t;
+}
+
+// ---------------------------------------------------------------------------
+// Blaze (64x32, vanilla BlazeModel): the 8-cube head, and at (0,16) the 2x8x2 strip all twelve rods share.
+// Hot yellow metal mottled with orange and scorched orange-brown; black eyes in darker sockets and a dark mouth.
+// The blaze is drawn full bright, so the colours carry no shading of their own.
+
+function blaze(): TexImage {
+  const t = img(64, 32);
+  const r = new Rand(0xb1a2e);
+  const HOT = [0x7c3606, 0xa8500a, 0xd67a12, 0xf3a01c, 0xfcc72c, 0xffe046, 0xfff498];
+  const head = boxFaces(0, 0, 8, 8, 8);
+  noiseBox(t, head, r, HOT, { w: [1, 2, 3, 4, 5, 4, 1], cell: 3, white: 0.35 });
+  // the face: brighter round its features so they stand out
+  noiseFace(t, head.front, r, HOT, { w: [0, 1, 2, 4, 5, 4, 1], cell: 3, white: 0.35 });
+  drawFace(t, head.front, [
+    '........',
+    '........',
+    '........',
+    '.SS..SS.',
+    '.KK..KK.',
+    '.ss..ss.',
+    '.mMMMMm.',
+    '........',
+  ], { S: [0x5e2604, 0x6a2c06], K: 0x0c0603, s: 0xa8500a, M: 0x4e1e04, m: 0x8a3e08 }, r);
+  // the rods: yellow-orange flecked with orange and brown, going darker at their ends
+  const rod = boxFaces(0, 16, 2, 8, 2);
+  noiseBox(t, rod, r, [0x8a420a, 0xc0620e, 0xe68a16, 0xf6b026, 0xffd23e, 0xffea7a], { w: [1, 2, 3, 5, 4, 1], cell: 1 });
+  for (const k of SIDES) paintFace(t, rod[k], (_x, y, c) => (y === 0 || y === 7 ? mixC(c, 0xa04a06, 0.4) : undefined));
+  for (const k of ['top', 'bottom'] as FaceName[]) noiseFace(t, rod[k], r, [0x7c3606, 0x9a4c0a, 0xb8620e]);
   return t;
 }
 
@@ -1327,7 +1386,8 @@ export const MOB_TEXTURES: Record<string, () => TexImage> = {
   sheep_fur: sheepFur,
   chicken,
   zombie,
-  skeleton,
+  skeleton: () => skeleton(),
+  wither_skeleton: () => skeleton(WITHER_SKELETON_LOOK),
   creeper,
   spider: () => spider(),
   cave_spider: () => spider(CAVE_SPIDER_LOOK),
@@ -1337,6 +1397,7 @@ export const MOB_TEXTURES: Record<string, () => TexImage> = {
   squid,
   slime,
   magma_cube: magmaCube,
+  blaze,
   zombified_piglin: zombifiedPiglin,
   ghast: () => ghast(false),
   ghast_shooting: () => ghast(true),
@@ -1462,6 +1523,8 @@ const EGGS: [string, number, number][] = [
   ['magma_cube', 0x340000, 0xfcfc00],
   ['zombified_piglin', 0xea9393, 0x4c7129],
   ['ghast', 0xf9f9f9, 0xbcbcbc],
+  ['blaze', 0xf6b201, 0xfff87e],
+  ['wither_skeleton', 0x141414, 0x474d4d],
 ];
 
 export const SPAWN_EGG_TEXTURES: Record<string, () => TexImage> = {};

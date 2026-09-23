@@ -151,6 +151,9 @@ shaped('iron_door', 3, ['##', '##', '##'], { '#': 'iron_ingot' });
 shaped('glass_bottle', 3, ['# #', ' # '], { '#': 'glass' });
 shaped('lead', 2, ['~~ ', '~O ', '  ~'], { '~': 'string', O: 'slime_ball' });
 shaped('magma_block', 1, ['##', '##'], { '#': 'magma_cream' });
+shapeless('blaze_powder', 2, 'blaze_rod');
+shapeless('fire_charge', 3, 'gunpowder', 'blaze_powder', ['coal', 'charcoal']);
+shapeless('magma_cream', 1, 'blaze_powder', 'slime_ball');
 
 // ---------------------------------------------------------------------------
 // Food
