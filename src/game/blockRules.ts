@@ -422,7 +422,7 @@ export function destroyProgress(state: number, item: Item | null, underwater: bo
 // Drops (simplified vanilla loot tables)
 
 /** loot tables with no silk touch alternative (shears-only drops and the like) */
-const SILK_IGNORED = new Set(['glow_lichen', 'vine', 'seagrass', 'tall_seagrass', 'cave_vines', 'cave_vines_plant', 'small_dripleaf', 'big_dripleaf_stem', 'short_grass', 'fern', 'tall_grass', 'large_fern', 'dead_bush']);
+const SILK_IGNORED = new Set(['glow_lichen', 'vine', 'seagrass', 'tall_seagrass', 'cave_vines', 'cave_vines_plant', 'small_dripleaf', 'big_dripleaf_stem', 'short_grass', 'fern', 'tall_grass', 'large_fern', 'dead_bush', 'nether_portal']);
 
 function stacks(id: string, n: number): ItemStack[] {
   return n > 0 ? [ItemStack.of(id, n)] : [];
@@ -479,6 +479,10 @@ export function blockDrops(state: number, tool: Item | null, r: Rand, silk = fal
     case 'gravel': return r.nextInt(10) === 0 ? stacks('flint', 1) : stacks('gravel', 1);
     case 'clay': return stacks('clay_ball', 4);
     case 'glowstone': return stacks('glowstone_dust', fortuneless(r, 2, 4));
+    case 'nether_quartz_ore': return stacks('quartz', 1);
+    case 'nether_gold_ore': return stacks('gold_nugget', fortuneless(r, 2, 6));
+    case 'crimson_nylium': case 'warped_nylium': return stacks('netherrack', 1);
+    case 'nether_portal': return [];
     case 'melon': return stacks('melon_slice', fortuneless(r, 3, 7));
     case 'bookshelf': return stacks('book', 3);
     case 'snow_block': return stacks('snowball', 4);

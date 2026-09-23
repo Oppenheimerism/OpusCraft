@@ -47,6 +47,12 @@ const ALIASES: [RegExp, string][] = [
   [/^block\.(polished_deepslate|deepslate_bricks|deepslate_tiles|basalt)\./, 'block.deepslate.'],
   [/^block\.(calcite|tuff|dripstone_block|pointed_dripstone|stone|copper|spawner|sponge)\./, 'block.stone.'],
   [/^block\.(rooted_dirt)\./, 'block.gravel.'],
+  // (nether materials until they get their own takes)
+  [/^block\.(netherrack|nether_ore|nether_gold_ore|nylium)\./, 'block.stone.'],
+  [/^block\.(soul_sand)\./, 'block.sand.'],
+  [/^block\.(soul_soil)\./, 'block.gravel.'],
+  [/^block\.(wart_block)\./, 'block.moss.'],
+  [/^block\.(ancient_debris)\./, 'block.deepslate.'],
   [/^block\.(powder_snow)\./, 'block.snow.'],
   [/^block\.(cobweb)\./, 'block.stone.'],
   [/^block\.(stem|hard_crop)\./, 'block.wood.'],

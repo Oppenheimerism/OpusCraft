@@ -20,6 +20,7 @@ import * as CR from './blocklib/crops';
 import * as RL from './blocklib/rails';
 import * as CV from './blocklib/caves';
 import * as LU from './blocklib/lush';
+import * as NE from './blocklib/nether';
 import * as IB from './blocklib/iconblocks';
 import { FIRE_TEXTURES } from './mobs';
 
@@ -463,6 +464,31 @@ T['chiseled_tuff_top'] = () => IB.chiseledTuffTop();
 T['oxidized_copper_bulb'] = () => IB.oxidizedCopperBulb();
 T['verdant_froglight_top'] = () => IB.verdantFroglightTop();
 T['verdant_froglight_side'] = () => IB.verdantFroglightSide();
+
+// Nether terrain
+const netherrackBase = memo(() => NE.netherrack());
+T['netherrack'] = () => netherrackBase();
+T['nether_quartz_ore'] = () => NE.netherQuartzOre(netherrackBase());
+T['nether_gold_ore'] = () => NE.netherGoldOre(netherrackBase());
+T['soul_sand'] = () => NE.soulSand();
+T['soul_soil'] = () => NE.soulSoil();
+T['basalt_side'] = () => NE.basaltSide();
+T['basalt_top'] = () => NE.basaltTop();
+T['blackstone'] = () => NE.blackstone();
+T['blackstone_top'] = () => NE.blackstoneTop();
+{
+  const crimsonTop = memo(() => NE.crimsonNyliumTop());
+  const warpedTop = memo(() => NE.warpedNyliumTop());
+  T['crimson_nylium'] = () => crimsonTop();
+  T['warped_nylium'] = () => warpedTop();
+  T['crimson_nylium_side'] = () => NE.nyliumSide(netherrackBase(), crimsonTop(), 'crimson_nylium', NE.CRIMSON_NYLIUM_PAL);
+  T['warped_nylium_side'] = () => NE.nyliumSide(netherrackBase(), warpedTop(), 'warped_nylium', NE.WARPED_NYLIUM_PAL);
+}
+T['nether_wart_block'] = () => NE.netherWartBlock();
+T['warped_wart_block'] = () => NE.warpedWartBlock();
+T['ancient_debris_side'] = () => NE.ancientDebrisSide();
+T['ancient_debris_top'] = () => NE.ancientDebrisTop();
+T['nether_portal'] = () => NE.netherPortal();
 
 // Missing texture (vanilla's magenta/black checkerboard)
 T['missing'] = () => {

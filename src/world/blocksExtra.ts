@@ -6,6 +6,7 @@ import { registerBlock, P, Layer, StateView, Box, enumProp, boolProp, intProp } 
 import type { ModelDef, ModelChoice, ElementDef, FaceDef, Variant } from './models';
 import { box, cubeAll, cross } from './models';
 import type { DirName } from './dir';
+import { registerNetherBlocks } from './blocksNether';
 
 const px = (v: number) => v / 16;
 const bx = (x0: number, y0: number, z0: number, x1: number, y1: number, z1: number): Box => [px(x0), px(y0), px(z0), px(x1), px(y1), px(z1)];
@@ -726,6 +727,7 @@ export function registerExtraBlocks(): void {
     });
   }
   registerLushBlocks();
+  registerNetherBlocks();
   void intProp;
 }
 
