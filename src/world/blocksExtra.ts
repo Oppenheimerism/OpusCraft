@@ -6,6 +6,7 @@ import { registerBlock, P, Layer, StateView, Box, enumProp, boolProp, intProp } 
 import type { ModelDef, ModelChoice, ElementDef, FaceDef, Variant } from './models';
 import { box, cubeAll, cross } from './models';
 import type { DirName } from './dir';
+import { registerNetherBlocks } from './blocksNether';
 
 const px = (v: number) => v / 16;
 const bx = (x0: number, y0: number, z0: number, x1: number, y1: number, z1: number): Box => [px(x0), px(y0), px(z0), px(x1), px(y1), px(z1)];
@@ -476,6 +477,10 @@ export function registerExtraBlocks(): void {
     registerFence(`${w}_fence`, `${w}_planks`, 2, w === 'cherry' ? 'cherry_wood' : 'wood', 'axe');
     registerFenceGate(`${w}_fence_gate`, `${w}_planks`);
   }
+  for (const w of ['crimson', 'warped']) {
+    registerFence(`${w}_fence`, `${w}_planks`, 2, 'nether_wood', 'axe');
+    registerFenceGate(`${w}_fence_gate`, `${w}_planks`);
+  }
   // panes and bars
   registerPane('glass_pane', 'glass', 'glass_pane_top', { sound: 'glass', hardness: 0.3, layer: Layer.CUTOUT, noDrop: true });
   registerPane('iron_bars', 'iron_bars', 'iron_bars', { sound: 'metal', hardness: 5, layer: Layer.CUTOUT, tool: 'pickaxe' });
@@ -725,7 +730,185 @@ export function registerExtraBlocks(): void {
       model: () => ({ model: cubeAll('tinted_glass') }),
     });
   }
+  registerLushBlocks();
+  registerNetherBlocks();
   void intProp;
+}
+
+/** a box in pixels turned about the block's centre for a horizontal facing (models are drawn facing north) */
+function turnBox(b: [number, number, number, number, number, number], facing: string): Box {
+  const [x0, y0, z0, x1, y1, z1] = b;
+  switch (facing) {
+    case 'east': return bx(16 - z1, y0, x0, 16 - z0, y1, x1);
+    case 'south': return bx(16 - x1, y0, 16 - z1, 16 - x0, y1, 16 - z0);
+    case 'west': return bx(z0, y0, 16 - x1, z1, y1, 16 - x0);
+    default: return bx(x0, y0, z0, x1, y1, z1);
+  }
+}
+
+/** two planes crossed at 45° round a vertical line (vanilla dripleaf stems stand at the leaf's back) */
+function crossAt(tex: string, cx: number, cz: number, w: number, y0: number, y1: number, uv: [number, number, number, number]): ElementDef[] {
+  const o: [number, number, number] = [cx, 8, cz];
+  return [45, -45].map((angle) => ({
+    from: [cx - w / 2, y0, cz] as [number, number, number],
+    to: [cx + w / 2, y1, cz] as [number, number, number],
+    rot: { origin: o, axis: 'y' as const, angle },
+    shade: false,
+    faces: { north: f(tex, uv), south: f(tex, uv) },
+  }));
+}
+
+// ---------------------------------------------------------------------------
+// Lush caves (vanilla CarpetBlock for moss carpet, AzaleaBlock, LeavesBlock,
+// HangingRootsBlock, SporeBlossomBlock, CaveVinesBlock / CaveVinesPlantBlock,
+// BigDripleafBlock / BigDripleafStemBlock and SmallDripleafBlock)
+
+function registerLushBlocks(): void {
+  {
+    const m: ModelDef = { particle: 'moss_block', elements: [box([0, 0, 0], [16, 1, 16], 'moss_block')] };
+    registerBlock('moss_carpet', {
+      hardness: 0.1, sound: 'moss_carpet', tool: 'hoe', opaque: false, aoCaster: false, opacity: 0, collision: [bx(0, 0, 0, 16, 1, 16)], model: () => ({ model: m }),
+    });
+  }
+  // vanilla template_azalea: a leafy top and sides round the woody plant in the middle
+  for (const fl of ['', 'flowering_']) {
+    const top = `${fl}azalea_top`, side = `${fl}azalea_side`;
+    const m: ModelDef = {
+      ao: false,
+      particle: side,
+      elements: [
+        { from: [0, 16, 0], to: [16, 16, 16], faces: { up: f(top, [0, 0, 16, 16], 'up'), down: f(top, [0, 16, 16, 0]) } },
+        { from: [0, 0, 0], to: [16, 16, 0], faces: { north: f(side, [0, 0, 16, 16], 'north'), south: f(side, [16, 0, 0, 16]) } },
+        { from: [0, 0, 16], to: [16, 16, 16], faces: { south: f(side, [0, 0, 16, 16], 'south'), north: f(side, [16, 0, 0, 16]) } },
+        { from: [0, 0, 0], to: [0, 16, 16], faces: { west: f(side, [0, 0, 16, 16], 'west'), east: f(side, [16, 0, 0, 16]) } },
+        { from: [16, 0, 0], to: [16, 16, 16], faces: { east: f(side, [0, 0, 16, 16], 'east'), west: f(side, [16, 0, 0, 16]) } },
+        ...cross('azalea_plant').elements,
+      ],
+    };
+    const shape = [bx(0, 8, 0, 16, 16, 16), bx(6, 0, 6, 10, 8, 10)];
+    registerBlock(`${fl}azalea`, {
+      hardness: 0, sound: `${fl}azalea`, layer: Layer.CUTOUT, opaque: false, aoCaster: false, opacity: 0, collision: shape, model: () => ({ model: m }),
+    });
+  }
+  {
+    const m = cubeAll('flowering_azalea_leaves');
+    registerBlock('flowering_azalea_leaves', {
+      props: [P.distance, P.persistent, P.waterlogged], defaults: { distance: 7 }, hardness: 0.2, sound: 'azalea_leaves', tool: 'hoe',
+      layer: Layer.CUTOUT_MIPPED, opaque: false, isLeaves: true, viewBlocking: false, randomTicks: true, model: () => ({ model: m }),
+    });
+  }
+  {
+    const m = cross('hanging_roots');
+    registerBlock('hanging_roots', {
+      props: [P.waterlogged], hardness: 0, sound: 'hanging_roots', collision: 'none', outline: [bx(2, 10, 2, 14, 16, 14)], layer: Layer.CUTOUT, opaque: false,
+      aoCaster: false, opacity: 0, replaceable: true, offset: 'xz', model: () => ({ model: m }),
+    });
+  }
+  // vanilla spore_blossom: the leafy base on the ceiling, four big petals drooping out from its middle
+  {
+    const petal = (from: [number, number, number], to: [number, number, number], axis: 'x' | 'z', angle: number, rot: 0 | 90 | 180 | 270): ElementDef => ({
+      from, to, rot: { origin: [8, 15.7, 8], axis, angle }, shade: false,
+      faces: { down: f('spore_blossom', [0, 0, 16, 16], undefined, { rot }), up: f('spore_blossom', [0, 0, 16, 16], undefined, { rot }) },
+    });
+    const m: ModelDef = {
+      ao: false,
+      particle: 'spore_blossom',
+      elements: [
+        { from: [1, 15.9, 1], to: [15, 15.9, 15], shade: false, faces: { down: f('spore_blossom_base', [1, 1, 15, 15]), up: f('spore_blossom_base', [1, 1, 15, 15]) } },
+        petal([8, 15.7, 0], [24, 15.7, 16], 'z', -22.5, 270),
+        petal([-8, 15.7, 0], [8, 15.7, 16], 'z', 22.5, 90),
+        petal([0, 15.7, 8], [16, 15.7, 24], 'x', 22.5, 0),
+        petal([0, 15.7, -8], [16, 15.7, 8], 'x', -22.5, 180),
+      ],
+    };
+    registerBlock('spore_blossom', {
+      hardness: 0, sound: 'spore_blossom', collision: 'none', outline: [bx(2, 13, 2, 14, 16, 14)], layer: Layer.CUTOUT, opaque: false, aoCaster: false,
+      opacity: 0, model: () => ({ model: m }),
+    });
+  }
+  // vanilla CaveVines: glow berries light the vine up (level 14)
+  {
+    const berries = boolProp('berries');
+    const models: Record<string, ModelDef> = {};
+    for (const t of ['cave_vines', 'cave_vines_lit', 'cave_vines_plant', 'cave_vines_plant_lit']) models[t] = cross(t);
+    const common = {
+      hardness: 0, sound: 'cave_vines', collision: 'none' as const, outline: [bx(1, 0, 1, 15, 16, 15)], layer: Layer.CUTOUT, opaque: false, aoCaster: false,
+      opacity: 0, climbable: true, item: false as const, light: (s: StateView) => (s.get('berries') ? 14 : 0),
+    };
+    registerBlock('cave_vines', {
+      ...common, props: [P.age25, berries], randomTicks: true,
+      model: (s) => ({ model: models[s.get('berries') ? 'cave_vines_lit' : 'cave_vines'] }),
+    });
+    registerBlock('cave_vines_plant', {
+      ...common, props: [berries],
+      model: (s) => ({ model: models[s.get('berries') ? 'cave_vines_plant_lit' : 'cave_vines_plant'] }),
+    });
+  }
+  // vanilla big_dripleaf / big_dripleaf_partial_tilt / big_dripleaf_full_tilt: the leaf tips forward off
+  // the stem at its back as something stands on it
+  {
+    const tilt = enumProp('tilt', ['none', 'unstable', 'partial', 'full']);
+    const ANGLE: Record<string, number> = { none: 0, unstable: 0, partial: -22.5, full: -45 };
+    const stem = crossAt('big_dripleaf_stem', 8, 12, 6, 0, 15, [5, 1, 11, 16]);
+    const leafModel = (angle: number): ModelDef => {
+      const rot = angle ? { origin: [8, 15, 12] as [number, number, number], axis: 'x' as const, angle } : undefined;
+      return {
+        ao: false,
+        particle: 'big_dripleaf_top',
+        elements: [
+          { from: [0, 15, 0], to: [16, 15, 16], rot, faces: { up: f('big_dripleaf_top', [0, 0, 16, 16]), down: f('big_dripleaf_top', [0, 16, 16, 0]) } },
+          { from: [0, 11, 0], to: [16, 15, 0], rot, shade: false, faces: { north: f('big_dripleaf_tip', [0, 0, 16, 4]), south: f('big_dripleaf_tip', [16, 0, 0, 4]) } },
+          { from: [0, 11, 0], to: [0, 15, 16], rot, shade: false, faces: { west: f('big_dripleaf_side', [0, 0, 16, 4]), east: f('big_dripleaf_side', [16, 0, 0, 4]) } },
+          { from: [16, 11, 0], to: [16, 15, 16], rot, shade: false, faces: { east: f('big_dripleaf_side', [16, 0, 0, 4]), west: f('big_dripleaf_side', [0, 0, 16, 4]) } },
+          ...stem,
+        ],
+      };
+    };
+    const leaves: Record<string, ModelDef> = {};
+    for (const t of tilt.values as string[]) leaves[t] = leafModel(ANGLE[t]);
+    // vanilla shapes: the leaf (thinner as it tips, gone when it hangs), and the stem behind it
+    const LEAF: Record<string, Box[]> = { none: [bx(0, 11, 0, 16, 15, 16)], unstable: [bx(0, 11, 0, 16, 15, 16)], partial: [bx(0, 11, 0, 16, 13, 16)], full: [] };
+    registerBlock('big_dripleaf', {
+      props: [P.facingH, tilt, P.waterlogged], defaults: { facing: 'north' }, hardness: 0.1, sound: 'big_dripleaf', layer: Layer.CUTOUT, opaque: false,
+      aoCaster: false, opacity: 0,
+      collision: (s) => {
+        const l = LEAF[s.get('tilt') as string];
+        return l.length ? l : 'none';
+      },
+      outline: (s) => [...LEAF[s.get('tilt') as string], turnBox([5, 0, 9, 11, 13, 15], s.get('facing') as string)],
+      model: (s) => ({ model: leaves[s.get('tilt') as string], y: HOR_ROT[s.get('facing') as string] }),
+    });
+    const stemModel: ModelDef = { ao: false, particle: 'big_dripleaf_stem', elements: crossAt('big_dripleaf_stem', 8, 12, 6, 0, 16, [5, 0, 11, 16]) };
+    registerBlock('big_dripleaf_stem', {
+      props: [P.facingH, P.waterlogged], defaults: { facing: 'north' }, hardness: 0.1, sound: 'big_dripleaf', collision: 'none', layer: Layer.CUTOUT,
+      opaque: false, aoCaster: false, opacity: 0, item: false,
+      outline: (s) => [turnBox([5, 0, 9, 11, 16, 15], s.get('facing') as string)],
+      model: (s) => ({ model: stemModel, y: HOR_ROT[s.get('facing') as string] }),
+    });
+  }
+  // vanilla small_dripleaf_top / small_dripleaf_bottom: a short stem with three little leaves on top
+  {
+    const leaf = (from: [number, number, number], to: [number, number, number], origin: [number, number, number], axis: 'x' | 'z', angle: number, rot: 0 | 90 | 180 | 270): ElementDef => ({
+      from, to, rot: { origin, axis, angle },
+      faces: { up: f('small_dripleaf_top', [0, 0, 8, 8], undefined, { rot }), down: f('small_dripleaf_top', [0, 8, 8, 0], undefined, { rot }) },
+    });
+    const top: ModelDef = {
+      ao: false,
+      particle: 'small_dripleaf_top',
+      elements: [
+        ...cross('small_dripleaf_stem_top').elements,
+        leaf([4, 13, 0.5], [12, 13, 8.5], [8, 13, 8.5], 'x', -22.5, 0),
+        leaf([8, 12, 6], [16, 12, 14], [8, 12, 10], 'z', -22.5, 90),
+        leaf([0, 11, 7], [8, 11, 15], [8, 11, 11], 'z', 22.5, 270),
+      ],
+    };
+    const bottom = cross('small_dripleaf_stem_bottom');
+    registerBlock('small_dripleaf', {
+      props: [P.half, P.waterlogged, P.facingH], defaults: { half: 'lower', facing: 'north' }, hardness: 0, sound: 'small_dripleaf', collision: 'none',
+      outline: [bx(2, 0, 2, 14, 13, 14)], layer: Layer.CUTOUT, opaque: false, aoCaster: false, opacity: 0, offset: 'xyz',
+      model: (s) => ({ model: s.get('half') === 'upper' ? top : bottom, y: HOR_ROT[s.get('facing') as string] }),
+    });
+  }
 }
 
 /** vanilla RailShape */

@@ -73,12 +73,12 @@ function craftingGroup(result: string, r: CraftingRecipe): string {
   if (result.endsWith('_planks')) return 'planks';
   if (result.endsWith('_wood')) return 'bark';
   if (wood) {
-    for (const [suffix, g] of [['_slab', 'wooden_slab'], ['_stairs', 'wooden_stairs'], ['_door', 'wooden_door'], ['_trapdoor', 'wooden_trapdoor'], ['_fence_gate', 'wooden_fence_gate'], ['_fence', 'wooden_fence'], ['_sign', 'wooden_sign'], ['_boat', 'boat'], ['_pressure_plate', 'wooden_pressure_plate'], ['_button', 'wooden_button']] as const) {
+    for (const [suffix, g] of [['_slab', 'wooden_slab'], ['_stairs', 'wooden_stairs'], ['_door', 'wooden_door'], ['_trapdoor', 'wooden_trapdoor'], ['_fence_gate', 'wooden_fence_gate'], ['_fence', 'wooden_fence'], ['_sign', 'wooden_sign'], ['_chest_boat', 'chest_boat'], ['_boat', 'boat'], ['_pressure_plate', 'wooden_pressure_plate'], ['_button', 'wooden_button']] as const) {
       if (result.endsWith(suffix)) return g;
     }
   }
   if (result.endsWith('_bed')) return 'bed';
-  if (result.endsWith('_carpet')) return 'carpet';
+  if (result.endsWith('_carpet') && result !== 'moss_carpet') return 'carpet';
   if (result.endsWith('_stained_glass_pane')) return 'stained_glass_pane';
   if (result.endsWith('_stained_glass')) return 'stained_glass';
   if (result.endsWith('_terracotta')) return 'stained_terracotta';

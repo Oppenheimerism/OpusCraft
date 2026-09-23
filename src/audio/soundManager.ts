@@ -4,6 +4,7 @@ import type { GameOptions } from '../game/options';
 import type { Player } from '../entity/player';
 import type { Game } from '../game/game';
 import { MinecartSounds } from './minecartSounds';
+import { BiomeAmbience } from './biomeAmbience';
 
 const SR = 44100;
 
@@ -29,6 +30,8 @@ export class LoopSound {
 type Category = 'master' | 'music' | 'blocks' | 'weather' | 'hostile' | 'friendly' | 'players' | 'ambient';
 
 function categoryOf(name: string): Category {
+  // vanilla plays these with SimpleSoundInstance.forLocalAmbience (SoundSource.AMBIENT)
+  if (name === 'block.portal.trigger' || name === 'block.portal.travel') return 'ambient';
   if (name.startsWith('block.') || name.startsWith('item.')) return 'blocks';
   if (name.startsWith('weather.') || name.startsWith('entity.lightning')) return 'weather';
   if (name.startsWith('ambient.')) return 'ambient';
@@ -41,14 +44,18 @@ function categoryOf(name: string): Category {
 
 // alias events not synthesized to ones that are
 const ALIASES: [RegExp, string][] = [
-  [/^block\.(cherry_wood|bamboo_wood|nether_wood)\./, 'block.wood.'],
-  [/^block\.(cherry_leaves|azalea_leaves|azalea|cherry_sapling|sweet_berry_bush|vine|lily_pad|moss|moss_carpet|grass)\./, 'block.grass.'],
-  [/^block\.(polished_deepslate|deepslate_bricks|deepslate_tiles|basalt)\./, 'block.deepslate.'],
+  [/^block\.(cherry_wood|bamboo_wood)\./, 'block.wood.'],
+  [/^block\.(moss_carpet)\./, 'block.moss.'],
+  [/^block\.(cherry_leaves|azalea_leaves|azalea|flowering_azalea|cherry_sapling|sweet_berry_bush|vine|cave_vines|spore_blossom|hanging_roots|lily_pad|moss|grass)\./, 'block.grass.'],
+  [/^block\.(polished_deepslate|deepslate_bricks|deepslate_tiles)\./, 'block.deepslate.'],
   [/^block\.(calcite|tuff|dripstone_block|pointed_dripstone|stone|copper|spawner|sponge)\./, 'block.stone.'],
   [/^block\.(rooted_dirt)\./, 'block.gravel.'],
   [/^block\.(powder_snow)\./, 'block.snow.'],
   [/^block\.(cobweb)\./, 'block.stone.'],
-  [/^block\.(stem|hard_crop)\./, 'block.wood.'],
+  [/^block\.(hard_crop)\./, 'block.wood.'],
+  // the nether wart crop (vanilla SoundType.NETHER_WART): stone steps, its planting sound on place
+  [/^block\.nether_wart\.(?=step|hit)/, 'block.stone.'],
+  [/^block\.nether_wart\.place$/, 'item.nether_wart.plant'],
 ];
 
 export class SoundManager {
@@ -60,6 +67,8 @@ export class SoundManager {
   private nextId = 1;
   private variants: Record<string, number> = {};
   private musicCount = 0;
+  /** situational music pools (vanilla music.nether.<biome>): event -> track count */
+  private musicPools: Record<string, number> = {};
   private listener = { x: 0, y: 0, z: 0, yaw: 0 };
   private musicSource: AudioBufferSourceNode | null = null;
   private musicGain: GainNode | null = null;
@@ -72,6 +81,7 @@ export class SoundManager {
   private musicLoading = false;
   private readonly loops: LoopSound[] = [];
   private readonly minecarts = new MinecartSounds(this);
+  readonly biomeAmbience = new BiomeAmbience(this);
 
   constructor() {
     const unlock = () => this.ensure();
@@ -94,6 +104,7 @@ export class SoundManager {
         if (d.type === 'ready') {
           this.variants = d.sounds;
           this.musicCount = d.music;
+          this.musicPools = d.pools ?? {};
           for (const n of ['ui.button.click', 'block.grass.step', 'block.stone.step', 'block.wood.step', 'block.gravel.step', 'block.sand.step', 'block.grass.break', 'block.stone.break', 'block.wood.break', 'block.gravel.break', 'block.grass.hit', 'block.stone.hit', 'block.wood.hit', 'block.gravel.hit', 'entity.item.pickup', 'block.grass.place', 'block.stone.place', 'block.wood.place']) {
             const v = this.variants[n] ?? 0;
             for (let i = 0; i < v; i++) this.load(n, i);
@@ -301,20 +312,26 @@ export class SoundManager {
     if (!this.ctx) return;
     const p = game.player;
     this.minecarts.tick(game.level, p);
-    // game music (vanilla MusicManager: 12000..24000 tick gaps)
+    // biome loops, additions and (where the biome has its own) mood (vanilla BiomeAmbientSoundsHandler)
+    const biomeMood = this.biomeAmbience.tick(game);
+    // game music (vanilla MusicManager: 12000..24000 tick gaps); a biome with its own music (the
+    // Nether's music.nether.<biome>) picks from that pool when the next track is due
     if (!this.musicPlaying && !this.musicLoading && this.musicCount > 0) {
       if (--this.nextSongDelay <= 0) {
         this.nextSongDelay = 12000 + Math.floor(Math.random() * 12000);
-        void this.playMusic(Math.floor(Math.random() * this.musicCount));
+        const pool = this.biomeAmbience.music(game);
+        const n = pool ? (this.musicPools[pool] ?? 0) : 0;
+        if (pool && n > 0) void this.playMusic(Math.floor(Math.random() * n), false, pool);
+        else void this.playMusic(Math.floor(Math.random() * this.musicCount));
       }
     }
-    // cave ambience (vanilla AmbientSoundHandler mood)
+    // cave ambience (vanilla AmbientSoundHandler mood; biomes with their own mood use that instead)
     const w = game.world;
     const bx = Math.floor(p.x), by = Math.floor(p.y + p.eyeHeight), bz = Math.floor(p.z);
     const ox = bx + Math.floor(Math.random() * 17) - 8, oy = by + Math.floor(Math.random() * 17) - 8, oz = bz + Math.floor(Math.random() * 17) - 8;
     const st = w.getState(ox, oy, oz);
     const l = w.getLight(ox, oy, oz);
-    if (st === 0) {
+    if (st === 0 && !biomeMood) {
       const sky = l >> 4, blk = l & 15;
       if (sky === 0 && blk < 1) this.moodiness += 1 / 6000;
       else this.moodiness -= (Math.max(sky, blk) - 1) / 6000;
@@ -326,10 +343,10 @@ export class SoundManager {
     }
   }
 
-  private async playMusic(index: number, menu = false): Promise<void> {
+  private async playMusic(index: number, menu = false, pool?: string): Promise<void> {
     if (!this.ctx || !this.master) return;
     this.musicLoading = true;
-    const d = await this.request(menu ? { type: 'menu' } : { type: 'music', index });
+    const d = await this.request(menu ? { type: 'menu' } : pool ? { type: 'pool', pool, index } : { type: 'music', index });
     this.musicLoading = false;
     if (!d || !this.ctx) return;
     const b = this.ctx.createBuffer(1, d.length, SR);

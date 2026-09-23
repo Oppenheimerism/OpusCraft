@@ -997,3 +997,48 @@ const POINTED_DRIPSTONE = [
 ];
 M['pointed_dripstone'] = () =>
   spr(POINTED_DRIPSTONE, { '#': 0x3a2c25, 1: 0x4d3b32, 2: 0x5b463b, 3: 0x695246, 4: 0x775d50, 5: 0x846858, 6: 0x9d7f6f }, 'pointed_dripstone');
+
+// ---------------------------------------------------------------------------
+// Small dripleaf: a stem with little leaves; spore blossom: four pink petals round a green middle
+
+// prettier-ignore
+const SMALL_DRIPLEAF = [
+  '................',
+  '..qqq.....qqq...',
+  '.qlllq...qlllq..',
+  '.qllggq.qggllq..',
+  '..qqggqqqggqq...',
+  '....qqgqgqq.....',
+  '..qqq.qgq.......',
+  '.qlllqqgq.......',
+  '.qllgggqq.......',
+  '..qqqqgq........',
+  '.....qgq........',
+  '.....qgq........',
+  '......qgq.......',
+  '......qgq.......',
+  '......qgq.......',
+  '.......q........',
+];
+M['small_dripleaf'] = () => spr(SMALL_DRIPLEAF, { q: 0x1f3d0f, g: 0x508127, l: 0x82b845 }, 'small_dripleaf');
+
+// prettier-ignore
+const SPORE_BLOSSOM = [
+  '................',
+  '..###......###..',
+  '.#ppp#....#ppp#.',
+  '.#pPPp#..#pPPp#.',
+  '.#pPPPp##pPPPp#.',
+  '..#pPPpggpPPp#..',
+  '...#ppgGGgpp#...',
+  '....#gGllGg#....',
+  '....#gGllGg#....',
+  '...#ppgGGgpp#...',
+  '..#pPPpggpPPp#..',
+  '.#pPPPp##pPPPp#.',
+  '.#pPPp#..#pPPp#.',
+  '.#ppp#....#ppp#.',
+  '..###......###..',
+  '................',
+];
+M['spore_blossom'] = () => spr(SPORE_BLOSSOM, { '#': 0x4a1d47, p: 0xa8509f, P: 0xd77dcb, g: 0x486622, G: 0x628532, l: 0x80a445 }, 'spore_blossom');

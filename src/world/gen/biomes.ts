@@ -18,6 +18,10 @@ export interface Biome {
   sky: number;
   fog: number;
   grassModifier?: 'dark_forest' | 'swamp';
+  /** vanilla BiomeSpecialEffects.ambientParticle: a particle type and its per-block chance each frame */
+  particle?: { type: string; chance: number };
+  /** vanilla ambient loop / mood / additions sounds and the biome's music */
+  ambient?: { loop: string; mood: string; additions: string; additionsChance: number; music: string };
 }
 
 export const BIOMES: Biome[] = [];
@@ -53,7 +57,7 @@ function def(
   name: string,
   temperature: number,
   downfall: number,
-  o: Partial<Pick<Biome, 'grass' | 'foliage' | 'water' | 'waterFog' | 'frozen' | 'grassModifier' | 'precipitation'>> = {},
+  o: Partial<Pick<Biome, 'grass' | 'foliage' | 'water' | 'waterFog' | 'frozen' | 'grassModifier' | 'precipitation' | 'fog' | 'sky' | 'particle' | 'ambient'>> = {},
 ): number {
   const id = BIOMES.length;
   const displayName = name;
@@ -69,9 +73,11 @@ function def(
     foliage: o.foliage ?? colormapFoliage(temperature, downfall),
     water: o.water ?? 0x3f76e4,
     waterFog: o.waterFog ?? 0x050533,
-    sky: skyColor(temperature),
-    fog: 0xc0d8ff,
+    sky: o.sky ?? skyColor(temperature),
+    fog: o.fog ?? 0xc0d8ff,
     grassModifier: o.grassModifier,
+    particle: o.particle,
+    ambient: o.ambient,
   });
   BIOME_ID[name] = id;
   return id;
@@ -132,7 +138,27 @@ export const B = {
   dripstone_caves: def('dripstone_caves', 0.8, 0.4, { grass: 0x91bd59, foliage: 0x77ab2f }),
   lush_caves: def('lush_caves', 0.5, 0.5, { grass: 0x8eb971, foliage: 0x71a74d }),
   deep_dark: def('deep_dark', 0.8, 0.4, { grass: 0x91bd59, foliage: 0x77ab2f }),
+  // the Nether (vanilla NetherBiomes: hot, dry, no rain, each with its own fog, particles and sounds)
+  nether_wastes: def('nether_wastes', 2.0, 0.0, { precipitation: false, fog: 0x330808, sky: 0x6eb1ff, ambient: netherAmbient('nether_wastes', 'nether_wastes') }),
+  soul_sand_valley: def('soul_sand_valley', 2.0, 0.0, {
+    precipitation: false, fog: 0x1b4745, sky: 0x6eb1ff, particle: { type: 'ash', chance: 0.00625 }, ambient: netherAmbient('soul_sand_valley', 'soul_sand_valley'),
+  }),
+  crimson_forest: def('crimson_forest', 2.0, 0.0, {
+    precipitation: false, fog: 0x330303, sky: 0x6eb1ff, particle: { type: 'crimson_spore', chance: 0.025 }, ambient: netherAmbient('crimson_forest', 'crimson_forest'),
+  }),
+  warped_forest: def('warped_forest', 2.0, 0.0, {
+    precipitation: false, fog: 0x1a051a, sky: 0x6eb1ff, particle: { type: 'warped_spore', chance: 0.01428 }, ambient: netherAmbient('warped_forest', 'warped_forest'),
+  }),
+  basalt_deltas: def('basalt_deltas', 2.0, 0.0, {
+    precipitation: false, fog: 0x685f70, sky: 0x6eb1ff, particle: { type: 'white_ash', chance: 0.118093334 }, ambient: netherAmbient('basalt_deltas', 'basalt_deltas'),
+  }),
 };
+
+function netherAmbient(sounds: string, music: string): NonNullable<Biome['ambient']> {
+  return { loop: `ambient.${sounds}.loop`, mood: `ambient.${sounds}.mood`, additions: `ambient.${sounds}.additions`, additionsChance: 0.0111, music: `music.nether.${music}` };
+}
+
+export const NETHER_BIOMES = [B.nether_wastes, B.soul_sand_valley, B.crimson_forest, B.warped_forest, B.basalt_deltas];
 
 // Pretty names for F3 ("minecraft:plains" style is used there).
 for (const b of BIOMES) b.displayName = 'minecraft:' + b.name;

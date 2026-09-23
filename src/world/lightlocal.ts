@@ -20,10 +20,27 @@ function blockedByShape(from: number, to: number, dir: number): boolean {
   return false;
 }
 
-export function computeChunkLight(blocks: Uint16Array): Uint8Array {
+/** `hasSky`: the dimension has sky light (the Nether doesn't) */
+export function computeChunkLight(blocks: Uint16Array, hasSky = true): Uint8Array {
   const light = new Uint8Array(COLUMN_VOLUME);
   const sky = new Uint8Array(COLUMN_VOLUME);
   const blk = new Uint8Array(COLUMN_VOLUME);
+  if (hasSky) skyLight(blocks, sky);
+  // --- block light
+  let head = 0, tail = 0;
+  for (let i = 0; i < COLUMN_VOLUME; i++) {
+    const e = EMISSION[blocks[i]];
+    if (e > 0) {
+      blk[i] = e;
+      queue[tail++] = i;
+    }
+  }
+  bfs(blocks, blk, head, tail, false);
+  for (let i = 0; i < COLUMN_VOLUME; i++) light[i] = (sky[i] << 4) | blk[i];
+  return light;
+}
+
+function skyLight(blocks: Uint16Array, sky: Uint8Array): void {
   // --- sky: direct columns
   const top = new Int16Array(256); // first y index (relative) at or above which sky is direct 15
   for (let z = 0; z < 16; z++)
@@ -54,19 +71,6 @@ export function computeChunkLight(blocks: Uint16Array): Uint8Array {
       for (let y = t + 1; y < Math.min(HEIGHT, maxN); y++) push((y << 8) | (z << 4) | x);
     }
   bfs(blocks, sky, head, tail, true);
-  // --- block light
-  head = 0;
-  tail = 0;
-  for (let i = 0; i < COLUMN_VOLUME; i++) {
-    const e = EMISSION[blocks[i]];
-    if (e > 0) {
-      blk[i] = e;
-      queue[tail++] = i;
-    }
-  }
-  bfs(blocks, blk, head, tail, false);
-  for (let i = 0; i < COLUMN_VOLUME; i++) light[i] = (sky[i] << 4) | blk[i];
-  return light;
 }
 
 function bfs(blocks: Uint16Array, arr: Uint8Array, head: number, tail: number, isSky: boolean): void {

@@ -205,6 +205,29 @@ F['sweet_berries'] = () =>
     q: 0x163d0d, g: 0x2f7d1b, l: 0x5fb535,
   }, 'sweet_berries');
 
+// Glow berries: three glowing orange berries on a curling green vine
+// prettier-ignore
+const GLOW_BERRIES = [
+  '................',
+  '...........qq...',
+  '..........qglq..',
+  '.........qglq...',
+  '........qggq....',
+  '.......qgqq.....',
+  '......qgq.......',
+  '.....qgqgq......',
+  '...####.qgq.....',
+  '..#5543#.qgq....',
+  '.#554432#.####..',
+  '.#543321##5543#.',
+  '.#432211#554432#',
+  '..#3211#.#43321#',
+  '...####..#3211#.',
+  '..........####..',
+];
+F['glow_berries'] = () =>
+  spr(GLOW_BERRIES, { '#': 0x3b1b06, 1: 0x9a4a16, 2: 0xc56a21, 3: 0xe4892c, 4: 0xf5ac3c, 5: 0xffdf85, q: 0x1d3a0e, g: 0x3f6b1f, l: 0x6f9f38 }, 'glow_berries');
+
 // ---------------------------------------------------------------------------
 // Meats
 

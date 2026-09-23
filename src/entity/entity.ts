@@ -4,6 +4,7 @@ import { AABB, collideWithBoxes } from '../core/aabb';
 import { COLLISION, FLAGS, F_WATER, F_LAVA, BLOCKS, STATE_BLOCK, F_CLIMBABLE } from '../world/block';
 import { fluidType, fluidHeight, fluidFlow, FLUID_WATER, FLUID_LAVA, FLUID_NONE } from '../world/fluids';
 import type { Level } from '../game/level';
+import { setDripleafTilt } from '../game/blockRules';
 
 let nextEntityId = 1;
 
@@ -112,6 +113,7 @@ export abstract class Entity {
     this.pitchO = this.pitch;
     this.walkDistO = this.walkDist;
     this.tickCount++;
+    this.handlePortal();
     this.updateFluids();
     // vanilla Entity.baseTick: burning and lava
     if (this.remainingFireTicks > 0) {
@@ -128,6 +130,59 @@ export abstract class Entity {
     }
     if (this.invulnerableTime > 0) this.invulnerableTime--;
     if (this.boardingCooldown > 0) this.boardingCooldown--;
+  }
+
+  /** vanilla PortalProcessor: the nether portal this is standing in and for how long */
+  portal: { x: number; y: number; z: number; time: number; inside: boolean } | null = null;
+  /** vanilla portalCooldown: after using a portal, ticks until one takes this again (refreshed while still in one) */
+  portalCooldown = 0;
+
+  /** vanilla getDimensionChangingDelay */
+  dimensionChangingDelay(): number {
+    return 300;
+  }
+
+  /** vanilla NetherPortalBlock.getPortalTransitionTime: ticks in a portal before it takes you */
+  portalWaitTime(): number {
+    return 0;
+  }
+
+  /** whether this can go through a portal to another dimension (only players can, here) */
+  canChangeDimensions(): boolean {
+    return false;
+  }
+
+  /** vanilla Entity.setAsInsidePortal (NetherPortalBlock.entityInside, when canUsePortal: not while riding) */
+  private insidePortal(x: number, y: number, z: number): void {
+    if (this.vehicle || this.removed) return;
+    if (this.portalCooldown > 0) {
+      this.portalCooldown = this.dimensionChangingDelay();
+      return;
+    }
+    const p = this.portal;
+    if (p) {
+      p.x = x;
+      p.y = y;
+      p.z = z;
+      p.inside = true;
+    } else this.portal = { x, y, z, time: 0, inside: true };
+  }
+
+  /** vanilla Entity.handlePortal: long enough in a portal takes you through; out of one, the count runs back down */
+  private handlePortal(): void {
+    if (this.portalCooldown > 0) this.portalCooldown--;
+    const p = this.portal;
+    if (!p) return;
+    if (!p.inside) {
+      p.time = Math.max(0, p.time - 4);
+      if (p.time <= 0) this.portal = null;
+      return;
+    }
+    p.inside = false;
+    if (!this.canChangeDimensions() || p.time++ < this.portalWaitTime()) return;
+    this.portalCooldown = this.dimensionChangingDelay();
+    this.portal = null;
+    this.level.onPortal?.(this, p.x, p.y, p.z);
   }
 
   protected lavaHurt(): void {
@@ -231,8 +286,18 @@ export abstract class Entity {
     if (!force && (!this.canRide(vehicle) || !vehicle.canAddPassenger(this))) return false;
     if (this.vehicle) this.stopRiding();
     this.vehicle = vehicle;
-    vehicle.passengers.push(this);
+    // vanilla Entity.addPassenger: a player takes the front seat unless a player already has it
+    if (this.type === 'player' && vehicle.passengers.length && vehicle.passengers[0].type !== 'player') vehicle.passengers.unshift(this);
+    else vehicle.passengers.push(this);
     return true;
+  }
+
+  /** vanilla onPassengerTurned: the rider looked around (boats clamp it) */
+  onPassengerTurned(_p: Entity): void {}
+
+  /** riders of this don't count as in water (vanilla: a boat that isn't under water) */
+  keepsRidersDry(): boolean {
+    return false;
   }
 
   stopRiding(): void {
@@ -334,8 +399,18 @@ export abstract class Entity {
     return out;
   }
 
-  /** vanilla getEntityCollisions: boxes of entities this can't move through (none by default) */
-  protected entityCollisions(_box: AABB, _out: AABB[]): void {}
+  /** vanilla canBeCollidedWith: solid to other entities (boats) */
+  canBeCollidedWith(): boolean {
+    return false;
+  }
+
+  /** vanilla getEntityCollisions with Entity.canCollideWith: the solid entities (boats) in the way, not the one you ride */
+  protected entityCollisions(box: AABB, out: AABB[]): void {
+    const solid = solidEntities(this.level);
+    if (!solid.length) return;
+    const q = box.inflate(1e-7);
+    for (const e of solid) if (e !== this && !e.removed && e.bb.intersects(q) && !this.isPassengerOfSameVehicle(e)) out.push(e.bb);
+  }
 
   isFree(box: AABB): boolean {
     return this.collisionBoxes(box).length === 0 && !this.isInLiquidBox(box);
@@ -471,6 +546,8 @@ export abstract class Entity {
           } else if (kind === INSIDE_COBWEB) this.insideCobweb();
           else if (kind === INSIDE_BERRY_BUSH) this.insideBerryBush(st);
           else if (kind === INSIDE_CACTUS) this.hurt(1, 'cactus');
+          else if (kind === INSIDE_DRIPLEAF) this.insideDripleaf(x, y, z, st);
+          else if (kind === INSIDE_PORTAL) this.insidePortal(x, y, z);
           if (this.removed) return fire;
         }
     return fire;
@@ -487,6 +564,13 @@ export abstract class Entity {
 
   /** vanilla SweetBerryBushBlock.entityInside (living things only) */
   protected insideBerryBush(_st: number): void {}
+
+  /** vanilla BigDripleafBlock.entityInside: standing on a still leaf sets it tipping */
+  private insideDripleaf(x: number, y: number, z: number, st: number): void {
+    const b = BLOCKS[STATE_BLOCK[st]];
+    if (b.get(st, 'tilt') !== 'none' || !this.onGround || this.y <= y + 0.6875) return;
+    setDripleafTilt(this.level, x, y, z, st, 'unstable', null);
+  }
 
   /** vanilla WebBlock.entityInside */
   protected insideCobweb(): void {
@@ -580,17 +664,21 @@ export abstract class Entity {
   /** vanilla updateFluidHeightAndDoFluidPushing for water and lava */
   protected updateFluids(): void {
     this.wasInWater = this.inWater;
-    const w = this.fluidPush(FLUID_WATER, 0.014);
+    // vanilla updateInWaterStateAndDoWaterCurrentPushing: riding a boat that isn't under water keeps you dry
+    const v = this.vehicle, dry = !!v && v.keepsRidersDry();
+    if (dry) this.fluidHeightWater = 0;
+    const w = !dry && this.fluidPush(FLUID_WATER, 0.014);
     this.inWater = w;
     if (this.inWater && !this.wasInWater && this.tickCount > 1) this.doWaterSplashEffect();
     if (this.inWater) this.fallDistance = 0;
     this.inLava = this.fluidPush(FLUID_LAVA, 0.0023333333333333335);
-    // eye fluid
+    // eye fluid (vanilla updateFluidOnEyes: none while the eyes are down inside such a boat)
+    this.eyeFluid = FLUID_NONE;
     const ey = this.y + this.eyeHeight - 0.11111111;
+    if (v && dry && v.bb.maxY >= ey && v.bb.minY <= ey) return;
     const ex = Math.floor(this.x), ez = Math.floor(this.z), eyi = Math.floor(ey);
     const st = this.level.world.getState(ex, eyi, ez);
     const ft = fluidType(st);
-    this.eyeFluid = FLUID_NONE;
     if (ft !== FLUID_NONE) {
       const h = eyi + fluidHeight(this.level.world, ex, eyi, ez, ft);
       if (h > ey) this.eyeFluid = ft;
@@ -706,14 +794,25 @@ export abstract class Entity {
   }
 }
 
-const INSIDE_NONE = 0, INSIDE_FIRE = 1, INSIDE_LAVA = 2, INSIDE_COBWEB = 3, INSIDE_BERRY_BUSH = 4, INSIDE_CACTUS = 5;
+/** per level, the entities other entities collide with (refreshed each tick, and whenever one is added) */
+const SOLID = new WeakMap<Level, { time: number; count: number; list: Entity[] }>();
+function solidEntities(level: Level): Entity[] {
+  let c = SOLID.get(level);
+  if (!c || c.time !== level.gameTime || c.count !== level.entities.length) {
+    c = { time: level.gameTime, count: level.entities.length, list: level.entities.filter((e) => e.canBeCollidedWith() && !e.removed) };
+    SOLID.set(level, c);
+  }
+  return c.list;
+}
+
+const INSIDE_NONE = 0, INSIDE_FIRE = 1, INSIDE_LAVA = 2, INSIDE_COBWEB = 3, INSIDE_BERRY_BUSH = 4, INSIDE_CACTUS = 5, INSIDE_DRIPLEAF = 6, INSIDE_PORTAL = 7;
 let INSIDE: Uint8Array | null = null;
 
 /** which vanilla entityInside behaviour a block has (lazy per-block table) */
 function insideKind(st: number): number {
   if (!INSIDE) {
     INSIDE = new Uint8Array(BLOCKS.length);
-    const kinds: Record<string, number> = { fire: INSIDE_FIRE, lava: INSIDE_LAVA, cobweb: INSIDE_COBWEB, sweet_berry_bush: INSIDE_BERRY_BUSH, cactus: INSIDE_CACTUS };
+    const kinds: Record<string, number> = { fire: INSIDE_FIRE, lava: INSIDE_LAVA, cobweb: INSIDE_COBWEB, sweet_berry_bush: INSIDE_BERRY_BUSH, cactus: INSIDE_CACTUS, big_dripleaf: INSIDE_DRIPLEAF, nether_portal: INSIDE_PORTAL };
     BLOCKS.forEach((b, i) => (INSIDE![i] = kinds[b.name] ?? INSIDE_NONE));
   }
   return INSIDE[STATE_BLOCK[st]];

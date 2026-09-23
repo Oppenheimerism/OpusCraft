@@ -1,6 +1,7 @@
 // Items: block items + regular items with vanilla stats.
 
 import { BLOCKS, Block, ToolType, getBlock } from '../world/block';
+import { WOODS } from '../world/blocksExtra';
 
 export interface ToolInfo {
   type: ToolType;
@@ -136,8 +137,8 @@ export function getItem(id: string): Item {
 // Block items
 
 const BLOCK_TAB: [RegExp, string][] = [
-  [/_(ore)$|^(stone|granite|diorite|andesite|deepslate|tuff|calcite|dirt|coarse_dirt|podzol|mycelium|grass_block|sand|red_sand|gravel|clay|bedrock|obsidian|snow_block|ice|packed_ice|blue_ice|mud|rooted_dirt|moss_block|dripstone_block|magma_block|powder_snow|raw_.*_block)$/, 'natural'],
-  [/_log$|_wood$|_leaves$|_sapling$|^(short_grass|fern|dead_bush|tall_grass|large_fern|dandelion|poppy|blue_orchid|allium|azure_bluet|.*_tulip|oxeye_daisy|cornflower|lily_of_the_valley|sunflower|lilac|rose_bush|peony|brown_mushroom|red_mushroom|sugar_cane|cactus|pumpkin|melon|lily_pad|vine|seagrass|kelp|sweet_berry_bush|cobweb|carved_pumpkin|jack_o_lantern|hay_block)$/, 'natural'],
+  [/_(ore)$|^(stone|granite|diorite|andesite|deepslate|tuff|calcite|dirt|coarse_dirt|podzol|mycelium|grass_block|sand|red_sand|gravel|clay|bedrock|obsidian|snow_block|ice|packed_ice|blue_ice|mud|rooted_dirt|moss_block|dripstone_block|magma_block|powder_snow|raw_.*_block|netherrack|soul_sand|soul_soil|basalt|blackstone|crimson_nylium|warped_nylium|nether_wart_block|warped_wart_block|ancient_debris|crimson_stem|warped_stem|crimson_fungus|warped_fungus|crimson_roots|warped_roots|nether_sprouts|weeping_vines|twisting_vines|shroomlight)$/, 'natural'],
+  [/_log$|_wood$|_leaves$|_sapling$|^(short_grass|fern|dead_bush|tall_grass|large_fern|dandelion|poppy|blue_orchid|allium|azure_bluet|.*_tulip|oxeye_daisy|cornflower|lily_of_the_valley|sunflower|lilac|rose_bush|peony|brown_mushroom|red_mushroom|sugar_cane|cactus|pumpkin|melon|lily_pad|vine|seagrass|kelp|sweet_berry_bush|cobweb|carved_pumpkin|jack_o_lantern|hay_block|moss_carpet|azalea|flowering_azalea|hanging_roots|spore_blossom|big_dripleaf|small_dripleaf)$/, 'natural'],
   [/^(crafting_table|furnace|chest|bookshelf|ladder|torch|glowstone|sea_lantern|spawner|tnt|sponge|lantern|chain|enchanting_table|grindstone|(chipped_|damaged_)?anvil)$|_bed$/, 'functional'],
   [/_carpet$|_stained_glass$|_stained_glass_pane$/, 'colored'],
 ];
@@ -227,7 +228,7 @@ const FOOD: [string, number, number, Partial<FoodInfo>?][] = [
   ['cooked_cod', 5, 0.6], ['salmon', 2, 0.1], ['cooked_salmon', 6, 0.8], ['cookie', 2, 0.1], ['melon_slice', 2, 0.3],
   ['sweet_berries', 2, 0.1], ['rotten_flesh', 4, 0.1], ['spider_eye', 2, 0.8], ['mushroom_stew', 6, 0.6, { remainder: 'bowl' }],
   ['beetroot', 1, 0.6], ['beetroot_soup', 6, 0.6, { remainder: 'bowl' }], ['golden_carrot', 6, 1.2], ['poisonous_potato', 2, 0.3],
-  ['pumpkin_pie', 8, 0.3],
+  ['pumpkin_pie', 8, 0.3], ['glow_berries', 2, 0.1],
 ];
 for (const [id, n, s, extra] of FOOD) {
   reg({ id, texture: id, creativeTab: 'food', maxStack: extra?.remainder ? 1 : 64, food: { nutrition: n, saturation: s, ...(extra ?? {}) } });
@@ -258,6 +259,12 @@ const MISC: [string, number?, number?][] = [
 for (const [id, stack, fuel] of MISC) {
   if (ITEMS.has(id)) continue;
   reg({ id, texture: id, maxStack: stack ?? 64, fuel });
+  // vanilla BoatItem: every wood's boat and boat with chest, listed where the oak boat is
+  if (id === 'oak_boat')
+    for (const w of WOODS) {
+      if (w !== 'oak') reg({ id: `${w}_boat`, texture: `${w}_boat`, maxStack: 1, creativeTab: 'tools' });
+      reg({ id: `${w}_chest_boat`, name: `${prettyName(w)} Boat with Chest`, texture: `${w}_chest_boat`, maxStack: 1, creativeTab: 'tools' });
+    }
 }
 Object.assign(ITEMS.get('experience_bottle')!, { rarity: 'uncommon', glint: true });
 reg({ id: 'enchanted_book', texture: 'enchanted_book', maxStack: 1, rarity: 'uncommon', glint: true });
@@ -270,7 +277,7 @@ for (const c of ['white', 'orange', 'magenta', 'light_blue', 'yellow', 'lime', '
   reg({ id: `${c}_dye`, texture: `${c}_dye` });
 }
 // spawn eggs (creative tab order is alphabetical, like vanilla)
-for (const m of ['cave_spider', 'chicken', 'cow', 'creeper', 'enderman', 'pig', 'sheep', 'skeleton', 'slime', 'spider', 'squid', 'zombie']) {
+for (const m of ['bat', 'cave_spider', 'chicken', 'cow', 'creeper', 'enderman', 'pig', 'sheep', 'skeleton', 'slime', 'spider', 'squid', 'zombie']) {
   reg({ id: `${m}_spawn_egg`, texture: `${m}_spawn_egg`, creativeTab: 'spawn_eggs' });
 }
 // sugar cane item places the block
@@ -306,6 +313,8 @@ for (const b of BLOCKS) {
     it.creativeTab = 'natural';
   }
   if (/amethyst/.test(n)) it.creativeTab = 'natural';
+  if (n === 'hanging_roots') it.texture = 'block:hanging_roots';
+  if (n === 'spore_blossom' || n === 'small_dripleaf') it.texture = n;
   if (n === 'iron_bars') it.texture = 'block:iron_bars';
   if (n.endsWith('_stained_glass_pane')) it.texture = 'block:' + n.replace('_pane', '');
 }
@@ -318,6 +327,8 @@ for (const b of BLOCKS) {
 
 export function itemForBlock(name: string): Item | undefined {
   if (name === 'wall_torch') return ITEMS.get('torch');
+  if (name === 'cave_vines' || name === 'cave_vines_plant') return ITEMS.get('glow_berries');
+  if (name === 'big_dripleaf_stem') return ITEMS.get('big_dripleaf');
   return ITEMS.get(name);
 }
 
@@ -330,6 +341,7 @@ export function blockForItem(it: Item): Block | undefined {
   if (it.id === 'pumpkin_seeds') return getBlock('pumpkin_stem');
   if (it.id === 'melon_seeds') return getBlock('melon_stem');
   if (it.id === 'sweet_berries') return getBlock('sweet_berry_bush');
+  if (it.id === 'glow_berries') return getBlock('cave_vines');
   return it.block;
 }
 

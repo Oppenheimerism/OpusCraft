@@ -7,6 +7,7 @@ import { WorkerPool, Job } from '../worker/pool';
 import { WorldRenderer, sectionKey } from '../render/worldRenderer';
 import { SECTIONS } from './constants';
 import type { SavedBlockEntity } from './blockEntity';
+import type { PendingWrites } from './gen/context';
 
 export class ChunkManager {
   renderDistance = 12;
@@ -20,18 +21,33 @@ export class ChunkManager {
   private meshList: Chunk[] = [];
   private meshListIdx = 0;
   /** loads a saved chunk (blocks + biomes) or null if never saved */
-  savedLoader: ((cx: number, cz: number) => Promise<{ blocks: Uint16Array; biomes: Uint8Array; caveBiomes: Uint8Array | null; blockEntities?: SavedBlockEntity[] } | null>) | null = null;
-  private readonly lightQueue: { cx: number; cz: number; blocks: Uint16Array; biomes: Uint8Array; caveBiomes: Uint8Array | null; blockEntities?: SavedBlockEntity[] }[] = [];
+  savedLoader: ((cx: number, cz: number) => Promise<{ blocks: Uint16Array; biomes: Uint8Array; caveBiomes: Uint8Array | null; blockEntities?: SavedBlockEntity[]; genWrites: PendingWrites[]; baked: number } | null>) | null = null;
+  private readonly lightQueue: { cx: number; cz: number; blocks: Uint16Array; biomes: Uint8Array; caveBiomes: Uint8Array | null; blockEntities?: SavedBlockEntity[]; genWrites: PendingWrites[]; baked: number }[] = [];
   onChunkLoaded: ((c: Chunk) => void) | null = null;
   onChunkUnloaded: ((c: Chunk) => void) | null = null;
   stats = { genMs: 0, gens: 0, meshes: 0 };
   paused = false;
+  /** bumped when the world drops its chunks (a change of dimension): work for the old ones is thrown away */
+  private epoch = 0;
 
   constructor(readonly world: World, readonly pool: WorkerPool, readonly renderer: WorldRenderer) {
     pool.jobSource = () => this.nextJob();
     world.onDirty = () => {
       /* picked up by mesh scan */
     };
+  }
+
+  /** forget everything queued or on its way (the world was just emptied for another dimension) */
+  reset(): void {
+    this.epoch++;
+    this.requested.clear();
+    this.genQueue = [];
+    this.genFallback.length = 0;
+    this.lightQueue.length = 0;
+    this.meshList = [];
+    this.meshListIdx = 0;
+    this.genQueueDirty = true;
+    this.centerX = this.centerZ = Number.NaN;
   }
 
   setCenter(x: number, z: number): void {
@@ -111,15 +127,18 @@ export class ChunkManager {
     const lj = this.lightQueue.shift();
     if (lj) {
       const key = Chunk.key(lj.cx, lj.cz);
+      const epoch = this.epoch;
       return {
         type: 'light',
         cx: lj.cx,
         cz: lj.cz,
         blocks: lj.blocks,
+        sky: this.world.dim.hasSkyLight,
         done: (light) => {
+          if (epoch !== this.epoch) return;
           this.requested.delete(key);
           if (this.world.chunks.has(key)) return;
-          const c = this.world.addChunk({ cx: lj.cx, cz: lj.cz, blocks: lj.blocks, light, biomes: lj.biomes, caveBiomes: lj.caveBiomes, pending: [], blockEntities: lj.blockEntities });
+          const c = this.world.addChunk({ cx: lj.cx, cz: lj.cz, blocks: lj.blocks, light, biomes: lj.biomes, caveBiomes: lj.caveBiomes, pending: lj.genWrites, baked: lj.baked, blockEntities: lj.blockEntities });
           this.onChunkLoaded?.(c);
         },
       };
@@ -138,9 +157,11 @@ export class ChunkManager {
       this.requested.add(key);
       if (this.savedLoader) {
         // check storage first; fall back to generation
+        const epoch = this.epoch;
         void this.savedLoader(cx, cz).then((saved) => {
+          if (epoch !== this.epoch) return;
           if (saved) {
-            this.lightQueue.push({ cx, cz, blocks: saved.blocks, biomes: saved.biomes, caveBiomes: saved.caveBiomes, blockEntities: saved.blockEntities });
+            this.lightQueue.push({ cx, cz, blocks: saved.blocks, biomes: saved.biomes, caveBiomes: saved.caveBiomes, blockEntities: saved.blockEntities, genWrites: saved.genWrites, baked: saved.baked });
             this.pool.pump();
           } else {
             this.genFallback.push([cx, cz]);
@@ -159,11 +180,14 @@ export class ChunkManager {
   private readonly genFallback: [number, number][] = [];
 
   private genJob(cx: number, cz: number, key: number): Job {
+      const epoch = this.epoch;
       return {
         type: 'gen',
+        dim: this.world.dim.id,
         cx,
         cz,
         done: (r) => {
+          if (epoch !== this.epoch) return;
           this.requested.delete(key);
           const dx = cx - this.centerX, dz = cz - this.centerZ;
           const R = this.loadRadius + 2;

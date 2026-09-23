@@ -9,6 +9,7 @@ import type { World } from '../world/world';
 import type { Level } from './level';
 import { BIOMES } from '../world/gen/biomes';
 import { PrimedTnt } from '../entity/tnt';
+import { fireCouldOpenPortal, tryLightPortal } from './portal';
 
 const blk = (st: number): Block => BLOCKS[STATE_BLOCK[st]];
 
@@ -77,6 +78,8 @@ function tables(): void {
   set('big_dripleaf_stem', 60, 100);
   set('small_dripleaf', 60, 100);
   set('hanging_roots', 30, 60);
+  set('moss_block', 5, 100);
+  set('moss_carpet', 5, 100);
   set('glow_lichen', 15, 100);
 }
 
@@ -134,14 +137,19 @@ export function fireCanSurvive(world: World, x: number, y: number, z: number): b
   return sturdyTop(world.getState(x, y - 1, z)) || validLocation(world, x, y, z);
 }
 
-/** vanilla BaseFireBlock.canBePlacedAt (flint and steel, fire charges, lava) */
-export function canPlaceFire(world: World, x: number, y: number, z: number): boolean {
-  return (FLAGS[world.getState(x, y, z)] & F_AIR) !== 0 && fireCanSurvive(world, x, y, z);
+/**
+ * vanilla BaseFireBlock.canBePlacedAt (flint and steel, fire charges, lava): somewhere fire survives, or
+ * (lit by a player facing `facing`) inside an empty obsidian frame
+ */
+export function canPlaceFire(world: World, x: number, y: number, z: number, facing?: string): boolean {
+  if (!(FLAGS[world.getState(x, y, z)] & F_AIR)) return false;
+  return fireCanSurvive(world, x, y, z) || (facing !== undefined && fireCouldOpenPortal(world, world.dim, x, y, z, facing, Math.random));
 }
 
-/** set a fire block and schedule its first tick (vanilla FireBlock.onPlace) */
+/** set a fire block and schedule its first tick (vanilla BaseFireBlock/FireBlock.onPlace: in a frame it opens a portal) */
 export function placeFire(level: Level, x: number, y: number, z: number, st: number): void {
   level.setBlock(x, y, z, st);
+  if (tryLightPortal(level.world, level.world.dim, x, y, z)) return;
   level.scheduleTick(x, y, z, fireTickDelay(level));
 }
 

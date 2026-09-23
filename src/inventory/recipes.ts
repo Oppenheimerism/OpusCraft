@@ -35,6 +35,13 @@ const TAGS: Record<string, string[]> = {
   wooden_slabs: WOODS.map((w) => `${w}_slab`),
 };
 for (const w of WOODS) TAGS[`${w}_logs`] = [`${w}_log`, `${w}_wood`, `stripped_${w}_log`, `stripped_${w}_wood`];
+/** the nether woods: planks like any other, but (vanilla #non_flammable_wood) no good as fuel */
+const NETHER_WOODS = ['crimson', 'warped'];
+for (const w of NETHER_WOODS) {
+  TAGS.planks.push(`${w}_planks`);
+  TAGS[`${w}_stems`] = [`${w}_stem`, `${w}_hyphae`, `stripped_${w}_stem`, `stripped_${w}_hyphae`];
+  TAGS.wooden_slabs.push(`${w}_slab`);
+}
 
 export type Ingredient = Ing;
 
@@ -66,6 +73,15 @@ for (const w of WOODS) {
   shaped(`${w}_slab`, 6, ['###'], { '#': `${w}_planks` });
   shaped(`${w}_stairs`, 4, ['#  ', '## ', '###'], { '#': `${w}_planks` });
 }
+for (const w of NETHER_WOODS) {
+  shaped(`${w}_slab`, 6, ['###'], { '#': `${w}_planks` });
+  shaped(`${w}_stairs`, 4, ['#  ', '## ', '###'], { '#': `${w}_planks` });
+  shaped(`${w}_fence`, 3, ['W#W', 'W#W'], { W: `${w}_planks`, '#': 'stick' });
+  shaped(`${w}_fence_gate`, 1, ['#W#', '#W#'], { W: `${w}_planks`, '#': 'stick' });
+  shapeless(`${w}_planks`, 4, `#${w}_stems`);
+  shaped(`${w}_hyphae`, 3, ['##', '##'], { '#': `${w}_stem` });
+  shaped(`stripped_${w}_hyphae`, 3, ['##', '##'], { '#': `stripped_${w}_stem` });
+}
 shaped('stick', 4, ['#', '#'], { '#': '#planks' });
 shaped('crafting_table', 1, ['##', '##'], { '#': '#planks' });
 shaped('chest', 1, ['###', '# #', '###'], { '#': '#planks' });
@@ -78,7 +94,11 @@ shaped('enchanting_table', 1, [' B ', 'D#D', '###'], { B: 'book', D: 'diamond', 
 shaped('anvil', 1, ['III', ' i ', 'iii'], { I: 'iron_block', i: 'iron_ingot' });
 shaped('grindstone', 1, ['I-I', '# #'], { I: 'stick', '-': 'stone_slab', '#': '#planks' });
 shaped('oak_sign', 3, ['###', '###', ' X '], { '#': 'oak_planks', X: 'stick' });
-shaped('oak_boat', 1, ['# #', '###'], { '#': 'oak_planks' });
+// vanilla boat recipes: planks in a U, and a chest added to a boat
+for (const w of WOODS) {
+  shaped(`${w}_boat`, 1, ['# #', '###'], { '#': `${w}_planks` });
+  shapeless(`${w}_chest_boat`, 1, 'chest', `${w}_boat`);
+}
 shaped('painting', 1, ['###', '#X#', '###'], { '#': 'stick', X: '#wool' });
 shaped('item_frame', 1, ['###', '#X#', '###'], { '#': 'stick', X: 'leather' });
 
@@ -167,6 +187,7 @@ shaped('melon', 1, ['###', '###', '###'], { '#': 'melon_slice' });
 shaped('stone_bricks', 4, ['##', '##'], { '#': 'stone' });
 shapeless('mossy_stone_bricks', 1, 'stone_bricks', ['vine', 'moss_block']);
 shapeless('mossy_cobblestone', 1, 'cobblestone', ['vine', 'moss_block']);
+shaped('moss_carpet', 3, ['##'], { '#': 'moss_block' });
 shaped('chiseled_stone_bricks', 1, ['#', '#'], { '#': 'stone_brick_slab' });
 shaped('sandstone', 1, ['##', '##'], { '#': 'sand' });
 shaped('cut_sandstone', 4, ['##', '##'], { '#': 'sandstone' });
@@ -398,8 +419,11 @@ export function fuelTime(s: ItemStack | null): number {
   if (!s) return 0;
   const id = s.item.id;
   if (FUEL[id] !== undefined) return FUEL[id];
+  // vanilla #boats (chest boats included)
+  if (id.endsWith('_boat')) return 1200;
   if (id.endsWith('_wool')) return 100;
   if (id.endsWith('_sapling')) return 100;
+  if (NETHER_WOODS.some((w) => id.startsWith(w + '_'))) return 0;
   if (TAGS.logs.includes(id) || TAGS.planks.includes(id) || /_(stairs)$/.test(id) && WOODS.some((w) => id.startsWith(w))) return 300;
   if (id.endsWith('_slab') && WOODS.some((w) => id.startsWith(w))) return 150;
   return s.item.fuel ?? 0;

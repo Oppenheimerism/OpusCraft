@@ -19,6 +19,8 @@ export type Criterion =
   | { t: 'sniper' }
   | { t: 'fall_from_height' }
   | { t: 'enchanted_item' }
+  | { t: 'changed_dimension'; from?: string; to?: string }
+  | { t: 'nether_travel'; distance: number }
   | { t: 'impossible' };
 
 export interface AdvancementDef {
@@ -43,6 +45,7 @@ export interface AdvancementDef {
 const inv = (...items: string[]): Criterion => ({ t: 'inventory', items });
 const never: Criterion = { t: 'impossible' };
 const one = (c: Criterion): Record<string, Criterion> => ({ c });
+const toNether: Criterion = { t: 'changed_dimension', to: 'the_nether' };
 
 const HOSTILE = [
   'blaze', 'bogged', 'breeze', 'cave_spider', 'creeper', 'drowned', 'elder_guardian', 'ender_dragon', 'enderman', 'endermite', 'evoker',
@@ -61,6 +64,7 @@ const FOODS = [
   'pumpkin_pie', 'rabbit', 'cooked_rabbit', 'rabbit_stew', 'mutton', 'cooked_mutton', 'chorus_fruit', 'beetroot', 'beetroot_soup',
   'dried_kelp', 'suspicious_stew', 'sweet_berries', 'honey_bottle', 'glow_berries',
 ];
+const NETHER_BIOMES = ['nether_wastes', 'soul_sand_valley', 'crimson_forest', 'warped_forest', 'basalt_deltas'];
 const OVERWORLD_BIOMES = [
   'mushroom_fields', 'deep_frozen_ocean', 'frozen_ocean', 'deep_cold_ocean', 'cold_ocean', 'deep_ocean', 'ocean', 'deep_lukewarm_ocean',
   'lukewarm_ocean', 'warm_ocean', 'stony_shore', 'swamp', 'mangrove_swamp', 'snowy_slopes', 'snowy_plains', 'snowy_beach', 'windswept_gravelly_hills',
@@ -78,6 +82,7 @@ function each(names: string[], mk: (n: string) => Criterion): Record<string, Cri
 
 export const TABS: { root: string; background: string }[] = [
   { root: 'story/root', background: 'advancements_bg_stone' },
+  { root: 'nether/root', background: 'advancements_bg_nether' },
   { root: 'adventure/root', background: 'advancements_bg_adventure' },
   { root: 'husbandry/root', background: 'advancements_bg_husbandry' },
 ];
@@ -98,7 +103,7 @@ const A: AdvancementDef[] = [
   { id: 'story/deflect_arrow', parent: 'story/obtain_armor', title: 'Not Today, Thank You', description: 'Deflect a projectile with a Shield', icon: 'shield', frame: 'task', criteria: one(never) },
   { id: 'story/form_obsidian', parent: 'story/lava_bucket', title: 'Ice Bucket Challenge', description: 'Obtain a block of Obsidian', icon: 'obsidian', frame: 'task', criteria: { obsidian: inv('obsidian') } },
   { id: 'story/mine_diamond', parent: 'story/iron_tools', title: 'Diamonds!', description: 'Acquire diamonds', icon: 'diamond', frame: 'task', criteria: { diamond: inv('diamond') } },
-  { id: 'story/enter_the_nether', parent: 'story/form_obsidian', title: 'We Need to Go Deeper', description: 'Build, light and enter a Nether Portal', icon: 'flint_and_steel', frame: 'task', criteria: one(never) },
+  { id: 'story/enter_the_nether', parent: 'story/form_obsidian', title: 'We Need to Go Deeper', description: 'Build, light and enter a Nether Portal', icon: 'flint_and_steel', frame: 'task', criteria: { entered_nether: toNether } },
   {
     id: 'story/shiny_gear', parent: 'story/mine_diamond', title: 'Cover Me with Diamonds', description: 'Diamond armor saves lives', icon: 'diamond_chestplate', frame: 'task',
     criteria: { diamond_helmet: inv('diamond_helmet'), diamond_chestplate: inv('diamond_chestplate'), diamond_leggings: inv('diamond_leggings'), diamond_boots: inv('diamond_boots') },
@@ -108,6 +113,35 @@ const A: AdvancementDef[] = [
   { id: 'story/cure_zombie_villager', parent: 'story/enter_the_nether', title: 'Zombie Doctor', description: 'Weaken and then cure a Zombie Villager', icon: 'golden_apple', frame: 'goal', criteria: one(never) },
   { id: 'story/follow_ender_eye', parent: 'story/enter_the_nether', title: 'Eye Spy', description: 'Follow an Eye of Ender', icon: 'ender_eye', frame: 'task', criteria: one(never) },
   { id: 'story/enter_the_end', parent: 'story/follow_ender_eye', title: 'The End?', description: 'Enter the End Portal', icon: 'end_stone', frame: 'task', criteria: one(never) },
+
+  // --- Nether
+  { id: 'nether/root', parent: null, title: 'Nether', description: 'Bring summer clothes', icon: 'red_nether_bricks', frame: 'task', toast: false, announce: false, criteria: { entered_nether: toNether } },
+  { id: 'nether/return_to_sender', parent: 'nether/root', title: 'Return to Sender', description: 'Destroy a Ghast with a fireball', icon: 'fire_charge', frame: 'challenge', criteria: one(never) },
+  { id: 'nether/find_bastion', parent: 'nether/root', title: 'Those Were the Days', description: 'Enter a Bastion Remnant', icon: 'polished_blackstone_bricks', frame: 'task', criteria: one(never) },
+  { id: 'nether/obtain_ancient_debris', parent: 'nether/root', title: 'Hidden in the Depths', description: 'Obtain Ancient Debris', icon: 'ancient_debris', frame: 'task', criteria: { ancient_debris: inv('ancient_debris') } },
+  { id: 'nether/fast_travel', parent: 'nether/root', title: 'Subspace Bubble', description: 'Use the Nether to travel 7 km in the Overworld', icon: 'map', frame: 'challenge', criteria: { travelled: { t: 'nether_travel', distance: 7000 } } },
+  { id: 'nether/find_fortress', parent: 'nether/root', title: 'A Terrible Fortress', description: 'Break your way into a Nether Fortress', icon: 'nether_bricks', frame: 'task', criteria: one(never) },
+  { id: 'nether/obtain_crying_obsidian', parent: 'nether/root', title: 'Who is Cutting Onions?', description: 'Obtain Crying Obsidian', icon: 'crying_obsidian', frame: 'task', criteria: { crying_obsidian: inv('crying_obsidian') } },
+  { id: 'nether/distract_piglin', parent: 'nether/root', title: 'Oh Shiny', description: 'Distract Piglins with gold', icon: 'gold_ingot', frame: 'task', criteria: one(never) },
+  { id: 'nether/ride_strider', parent: 'nether/root', title: 'This Boat Has Legs', description: 'Ride a Strider with a Warped Fungus on a Stick', icon: 'warped_fungus_on_a_stick', frame: 'task', criteria: one(never) },
+  { id: 'nether/uneasy_alliance', parent: 'nether/return_to_sender', title: 'Uneasy Alliance', description: 'Rescue a Ghast from the Nether, bring it safely home to the Overworld... and then kill it', icon: 'ghast_tear', frame: 'challenge', criteria: one(never) },
+  { id: 'nether/loot_bastion', parent: 'nether/find_bastion', title: 'War Pigs', description: 'Loot a Chest in a Bastion Remnant', icon: 'chest', frame: 'task', criteria: one(never) },
+  { id: 'nether/use_lodestone', parent: 'nether/obtain_ancient_debris', title: 'Country Lode, Take Me Home', description: 'Use a Compass on a Lodestone', icon: 'lodestone', frame: 'task', criteria: one(never) },
+  {
+    id: 'nether/netherite_armor', parent: 'nether/obtain_ancient_debris', title: 'Cover Me in Debris', description: 'Get a full suit of Netherite armor', icon: 'netherite_chestplate', frame: 'challenge',
+    criteria: { helmet: inv('netherite_helmet'), chestplate: inv('netherite_chestplate'), leggings: inv('netherite_leggings'), boots: inv('netherite_boots') },
+  },
+  { id: 'nether/get_wither_skull', parent: 'nether/find_fortress', title: 'Spooky Scary Skeleton', description: "Obtain a Wither Skeleton's skull", icon: 'wither_skeleton_skull', frame: 'task', criteria: { skull: inv('wither_skeleton_skull') } },
+  { id: 'nether/obtain_blaze_rod', parent: 'nether/find_fortress', title: 'Into Fire', description: 'Relieve a Blaze of its rod', icon: 'blaze_rod', frame: 'task', criteria: { blaze_rod: inv('blaze_rod') } },
+  { id: 'nether/charge_respawn_anchor', parent: 'nether/obtain_crying_obsidian', title: 'Not Quite "Nine" Lives', description: 'Charge a Respawn Anchor to the maximum', icon: 'respawn_anchor', frame: 'task', criteria: one(never) },
+  { id: 'nether/ride_strider_in_overworld_lava', parent: 'nether/ride_strider', title: 'Feels Like Home', description: 'Take a Strider for a loooong ride on a lava lake in the Overworld', icon: 'warped_fungus_on_a_stick', frame: 'task', criteria: one(never) },
+  { id: 'nether/explore_nether', parent: 'nether/ride_strider', title: 'Hot Tourist Destinations', description: 'Explore all Nether biomes', icon: 'netherite_boots', frame: 'challenge', criteria: each(NETHER_BIOMES, (b) => ({ t: 'biome', biome: b })) },
+  { id: 'nether/summon_wither', parent: 'nether/get_wither_skull', title: 'Withering Heights', description: 'Summon the Wither', icon: 'nether_star', frame: 'task', criteria: one(never) },
+  { id: 'nether/brew_potion', parent: 'nether/obtain_blaze_rod', title: 'Local Brewery', description: 'Brew a Potion', icon: 'potion', frame: 'task', criteria: one(never) },
+  { id: 'nether/create_beacon', parent: 'nether/summon_wither', title: 'Bring Home the Beacon', description: 'Construct and place a Beacon', icon: 'beacon', frame: 'task', criteria: one(never) },
+  { id: 'nether/all_potions', parent: 'nether/brew_potion', title: 'A Furious Cocktail', description: 'Have every potion effect applied at the same time', icon: 'milk_bucket', frame: 'challenge', criteria: one(never) },
+  { id: 'nether/create_full_beacon', parent: 'nether/create_beacon', title: 'Beaconator', description: 'Bring a Beacon to full power', icon: 'beacon', frame: 'goal', criteria: one(never) },
+  { id: 'nether/all_effects', parent: 'nether/all_potions', title: 'How Did We Get Here?', description: 'Have every effect applied at the same time', icon: 'bucket', frame: 'challenge', hidden: true, criteria: one(never) },
 
   // --- Adventure
   {
@@ -353,6 +387,9 @@ export interface TriggerPayload {
   consume?: string;
   breed?: string;
   biome?: string;
+  dimension?: { from: string; to: string };
+  /** horizontal distance travelled through the Nether (vanilla NetherTravelTrigger) */
+  netherTravel?: number;
 }
 
 export class PlayerAdvancements {
@@ -465,6 +502,10 @@ function matches(c: Criterion, p: TriggerPayload): boolean {
       return !!p.breed && (c.type === '*' || c.type === p.breed);
     case 'biome':
       return p.biome === c.biome;
+    case 'changed_dimension':
+      return !!p.dimension && (!c.from || c.from === p.dimension.from) && (!c.to || c.to === p.dimension.to);
+    case 'nether_travel':
+      return p.netherTravel !== undefined && p.netherTravel >= c.distance;
     case 'killed_by':
     case 'slept':
     case 'shoot_arrow':

@@ -20,9 +20,13 @@ import { PrimedTnt } from '../entity/tnt';
 import { ThrownItem, ThrownKind } from '../entity/throwable';
 import { createMob } from './spawner';
 import { SpawnerBlockEntity } from '../world/blockEntity';
+import { patchColumns, MOSS_BONEMEAL } from '../world/gen/lush';
+import { runPatchColumn } from '../world/gen/patches';
+import { Rand } from '../core/rng';
 import { playerAttack } from './combat';
 import { canPlaceFire, fireStateAt, placeFire } from './fire';
 import { Minecart, MinecartChest, createMinecart } from '../entity/minecart';
+import { Boat, ChestBoat, boatItemInfo, useBoatItem } from '../entity/boat';
 import { isRail, railShape, isAscending } from './rails';
 import { MobEffectInstance, MOB_EFFECTS } from '../entity/effects';
 import { levelOf, miningEfficiency, submergedMiningSpeed, hurtAndBreak } from '../item/enchantHelper';
@@ -103,6 +107,8 @@ export class Interaction {
     const p = this.player;
     if (this.missTime > 0) return;
     if (p.isUsingItem()) return;
+    // vanilla Minecraft.startAttack: not while rowing
+    if (p.handsBusy) return;
     if (this.entityHit) {
       playerAttack(this.level, p, this.entityHit, (n) => this.damageHeld(n));
       p.swing();
@@ -260,6 +266,8 @@ export class Interaction {
     }
     if (!(pressed || (held && this.rightClickDelay === 0))) return;
     this.rightClickDelay = 4;
+    // vanilla Minecraft.startUseItem: not while rowing
+    if (p.handsBusy) return;
     const stack = p.inventory.selectedItem;
     // entity interaction (vanilla Player.interactOn → Mob.mobInteract)
     const e = this.entityHit;
@@ -282,6 +290,16 @@ export class Interaction {
         this.onOpenEntityContainer?.(e);
         p.swing();
         return;
+      }
+      // vanilla Boat.interact (climb in) / ChestBoat.interact (sneaking or a full seat opens the chest)
+      if (e instanceof Boat) {
+        const r = e.interact(p);
+        if (r === 'mounted') this.onMounted?.();
+        else if (r === 'container' && e instanceof ChestBoat) this.onOpenEntityContainer?.(e);
+        if (r) {
+          p.swing();
+          return;
+        }
       }
       if (stack && stack.item.id.endsWith('_spawn_egg') && e instanceof Animal && e.type === stack.item.id.slice(0, -10)) {
         // spawn egg on a matching animal spawns a baby
@@ -381,7 +399,7 @@ export class Interaction {
       y += DY[h.face];
       z += DZ[h.face];
     }
-    if (y < -64 || y >= 320) return false;
+    if (y < world.dim.minY || y >= world.dim.maxY) return false;
     const target = world.getState(x, y, z);
     const targetBlock = BLOCKS[STATE_BLOCK[target]];
     if (!(canReplace(target, block) || (targetBlock.name === 'water' && block.name !== 'water'))) {
@@ -395,7 +413,7 @@ export class Interaction {
       world, x, y, z, face: replaceClicked ? 1 : h.face, hitY: h.hy - h.y, hitX: h.hx - x, hitZ: h.hz - z, yaw: p.yaw, pitch: p.pitch, sneaking: p.crouching, clickedState: clicked, replaceClicked: !!replaceClicked,
     });
     if (st === null) return false;
-    if (!canSurvive(world, x, y, z, st)) return false;
+    if (!canSurvive(world, x, y, z, st, true)) return false;
     // neighbour-dependent state at placement (vanilla getStateForPlacement connections)
     if (hasShapeUpdates(st) && !block.name.endsWith('_door') && !block.name.endsWith('_bed')) {
       const u = updateShape(world, x, y, z, st);
@@ -416,7 +434,10 @@ export class Interaction {
     if (block.propIndex('half') >= 0 && block.s.props?.some((pp) => pp.values.includes('upper'))) {
       const above = world.getState(x, y + 1, z);
       if (y + 1 >= 320 || !canReplace(above, block)) return false;
-      this.level.setBlock(x, y + 1, z, block.with(st, 'half', 'upper'), false);
+      // (vanilla DoublePlantBlock.setPlacedBy: the top half is waterlogged by what is up there)
+      let upper = block.with(st, 'half', 'upper');
+      if (block.propIndex('waterlogged') >= 0) upper = block.with(upper, 'waterlogged', BLOCKS[STATE_BLOCK[above]].name === 'water' && BLOCKS[STATE_BLOCK[above]].get(above, 'level') === 0);
+      this.level.setBlock(x, y + 1, z, upper, false);
       return this.commitPlace(x, y, z, block.with(st, 'half', 'lower'), stack, block.sound);
     }
     // beds: foot here, head one block further in the facing direction (vanilla BedItem)
@@ -463,6 +484,23 @@ export class Interaction {
       p.swing();
       return true;
     }
+    // vanilla CaveVines.use: pick the glow berry
+    if (!sneakingWithItem && (n === 'cave_vines' || n === 'cave_vines_plant') && b.get(st, 'berries')) {
+      ItemEntity.drop(lvl, h.x, h.y, h.z, ItemStack.of('glow_berries'));
+      lvl.sound.play('block.cave_vines.pick_berries', h.x + 0.5, h.y + 0.5, h.z + 0.5, 1, 0.8 + Math.random() * 0.4);
+      lvl.setBlock(h.x, h.y, h.z, b.with(st, 'berries', false));
+      p.swing();
+      return true;
+    }
+    // vanilla SweetBerryBushBlock.useWithoutItem: pick a grown bush (bone meal grows one that isn't ripe instead)
+    if (!sneakingWithItem && n === 'sweet_berry_bush' && b.get<number>(st, 'age') > 1 && !(stack?.item.id === 'bone_meal' && b.get<number>(st, 'age') < 3)) {
+      const age = b.get<number>(st, 'age');
+      ItemEntity.drop(lvl, h.x, h.y, h.z, ItemStack.of('sweet_berries', 1 + Math.floor(Math.random() * 2) + (age === 3 ? 1 : 0)));
+      lvl.sound.play('block.sweet_berry_bush.pick_berries', h.x + 0.5, h.y + 0.5, h.z + 0.5, 1, 0.8 + Math.random() * 0.4);
+      lvl.setBlock(h.x, h.y, h.z, b.with(st, 'age', 1));
+      p.swing();
+      return true;
+    }
     if (!stack) return false;
     const id = stack.item.id;
     // vanilla HoeItem.useOn: grass/dirt/path → farmland (coarse dirt → dirt)
@@ -498,7 +536,7 @@ export class Interaction {
     // vanilla FlintAndSteelItem.useOn: light a fire on the clicked face
     if (id === 'flint_and_steel' || id === 'fire_charge') {
       const fx = h.x + DX[h.face], fy = h.y + DY[h.face], fz = h.z + DZ[h.face];
-      if (canPlaceFire(lvl.world, fx, fy, fz)) {
+      if (canPlaceFire(lvl.world, fx, fy, fz, DIR_NAMES[dirFromYaw(p.yaw)])) {
         placeFire(lvl, fx, fy, fz, fireStateAt(lvl.world, fx, fy, fz));
         if (id === 'flint_and_steel') {
           lvl.sound.play('item.flintandsteel.use', fx + 0.5, fy + 0.5, fz + 0.5, 1, Math.random() * 0.4 + 0.8);
@@ -517,8 +555,8 @@ export class Interaction {
   onUseBed: ((x: number, y: number, z: number) => void) | null = null;
   /** the player climbed into a vehicle (vanilla "mount.onboard" hint) */
   onMounted: (() => void) | null = null;
-  /** right-clicked a container entity (a chest minecart) */
-  onOpenEntityContainer: ((e: MinecartChest) => void) | null = null;
+  /** right-clicked a container entity (a chest minecart or chest boat) */
+  onOpenEntityContainer: ((e: MinecartChest | ChestBoat) => void) | null = null;
   /** a block was placed by the player (advancements: planted seeds) */
   onPlaced: ((name: string) => void) | null = null;
   /** food or a drink was finished */
@@ -571,6 +609,67 @@ export class Interaction {
       if (Math.random() < 0.45) lvl.randomTicks.advanceSapling(x, y, z, st);
       return true;
     }
+    // vanilla AzaleaBlock: grows into an azalea tree 45% of the time, if nothing wet is above it
+    if (n === 'azalea' || n === 'flowering_azalea') {
+      if (FLAGS[lvl.getState(x, y + 1, z)] & F_WATER) return false;
+      if (Math.random() < 0.45) lvl.randomTicks.growAzalea(x, y, z, st);
+      return true;
+    }
+    // vanilla CaveVines.performBonemeal: a glow berry
+    if (n === 'cave_vines' || n === 'cave_vines_plant') {
+      if (b.get(st, 'berries')) return false;
+      lvl.setBlock(x, y, z, b.with(st, 'berries', true));
+      return true;
+    }
+    // vanilla MossBlock.performBonemeal: a small moss patch with plants spreads round it (moss_patch_bonemeal)
+    if (n === 'moss_block') {
+      if (!(FLAGS[lvl.getState(x, y + 1, z)] & F_AIR)) return false;
+      const r = new Rand((Math.random() * 2 ** 31) | 0);
+      for (const c of patchColumns(r, MOSS_BONEMEAL, x, y + 1, z)) runPatchColumn(lvl.world.access, c);
+      return true;
+    }
+    // vanilla RootedDirtBlock.performBonemeal: hanging roots under it
+    if (n === 'rooted_dirt') {
+      if (!(FLAGS[lvl.getState(x, y - 1, z)] & F_AIR)) return false;
+      lvl.setBlock(x, y - 1, z, S('hanging_roots'));
+      return true;
+    }
+    // vanilla BigDripleafBlock / BigDripleafStemBlock.performBonemeal: the leaf rises a block on a longer stem
+    if (n === 'big_dripleaf' || n === 'big_dripleaf_stem') {
+      let ty = y;
+      while (BLOCKS[STATE_BLOCK[lvl.getState(x, ty, z)]].name === 'big_dripleaf_stem') ty++;
+      const top = lvl.getState(x, ty, z);
+      if (BLOCKS[STATE_BLOCK[top]].name !== 'big_dripleaf') return false;
+      const above = lvl.getState(x, ty + 1, z);
+      if (ty + 1 >= 320 || !(FLAGS[above] & F_AIR || BLOCKS[STATE_BLOCK[above]].name === 'water')) return false;
+      const facing = BLOCKS[STATE_BLOCK[top]].get(top, 'facing');
+      const water = (st: number) => BLOCKS[STATE_BLOCK[st]].name === 'water' && BLOCKS[STATE_BLOCK[st]].get(st, 'level') === 0 || !!(FLAGS[st] & F_WATER && BLOCKS[STATE_BLOCK[st]].propIndex('waterlogged') >= 0 && BLOCKS[STATE_BLOCK[st]].get(st, 'waterlogged'));
+      lvl.setBlock(x, ty + 1, z, getBlock('big_dripleaf').state({ facing, waterlogged: water(above) }), false);
+      lvl.setBlock(x, ty, z, getBlock('big_dripleaf_stem').state({ facing, waterlogged: water(top) }));
+      return true;
+    }
+    // vanilla SmallDripleafBlock.performBonemeal: it grows into a big dripleaf 2 to 5 blocks tall
+    if (n === 'small_dripleaf') {
+      const by = b.get(st, 'half') === 'upper' ? y - 1 : y;
+      const lower = lvl.getState(x, by, z);
+      const facing = b.get(lower, 'facing');
+      const upperState = lvl.getState(x, by + 1, z);
+      lvl.setBlock(x, by + 1, z, b.get(upperState, 'waterlogged') ? S('water') : 0, false);
+      const want = 2 + Math.floor(Math.random() * 4);
+      let fit = 0;
+      for (; fit < want && by + fit < 320; fit++) {
+        const t = lvl.getState(x, by + fit, z);
+        const tn = BLOCKS[STATE_BLOCK[t]].name;
+        if (!(FLAGS[t] & F_AIR || tn === 'water' || tn === 'small_dripleaf')) break;
+      }
+      const inWater = (yy: number) => {
+        const t = lvl.getState(x, yy, z);
+        return BLOCKS[STATE_BLOCK[t]].name === 'water' || !!(BLOCKS[STATE_BLOCK[t]].propIndex('waterlogged') >= 0 && BLOCKS[STATE_BLOCK[t]].get(t, 'waterlogged'));
+      };
+      for (let yy = by; yy < by + fit - 1; yy++) lvl.setBlock(x, yy, z, getBlock('big_dripleaf_stem').state({ facing, waterlogged: inWater(yy) }), false);
+      lvl.setBlock(x, by + Math.max(0, fit - 1), z, getBlock('big_dripleaf').state({ facing, waterlogged: inWater(by + Math.max(0, fit - 1)) }));
+      return true;
+    }
     if (n === 'grass_block') {
       // scatter grass and flowers on nearby grass blocks
       for (let i = 0; i < 128; i++) {
@@ -597,6 +696,14 @@ export class Interaction {
 
   private commitPlace(x: number, y: number, z: number, st: number, stack: ItemStack, sound: string): boolean {
     const p = this.player;
+    if (stack.item.id === 'water_bucket' && this.level.world.dim.ultraWarm) {
+      // vanilla BucketItem.emptyContents: in the Nether the water boils away with a hiss
+      const r = Math.random;
+      this.level.sound.play('block.fire.extinguish', x + 0.5, y + 0.5, z + 0.5, 0.5, 2.6 + (r() - r()) * 0.8);
+      for (let i = 0; i < 8; i++) this.level.particles.spawn?.('large_smoke', x + r(), y + r(), z + r(), 0, 0, 0);
+      if (p.gameMode !== 'creative') p.inventory.setSelectedItem(ItemStack.of('bucket'));
+      return true;
+    }
     this.level.setBlock(x, y, z, st);
     this.onPlaced?.(BLOCKS[STATE_BLOCK[st]].name);
     const isBucket = stack.item.id.endsWith('_bucket');
@@ -636,6 +743,14 @@ export class Interaction {
     // vanilla BowItem.use: needs arrows unless creative
     if (it.id === 'bow') {
       if (p.gameMode === 'creative' || p.inventory.findSlot((s) => s.item.id === 'arrow') >= 0) p.startUsingItem(stack, 72000);
+      return;
+    }
+    // vanilla BoatItem.use: a boat (or chest boat) where the eye ray meets a block or any fluid
+    if (boatItemInfo(it.id)) {
+      if (useBoatItem(this.level, p, it.id, this.reach())) {
+        if (p.gameMode !== 'creative') p.inventory.consumeSelected(1);
+        p.swing();
+      }
       return;
     }
     // bucket pickup

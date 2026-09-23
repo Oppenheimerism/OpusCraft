@@ -6,7 +6,7 @@ import { GenContext, W_LOG, W_REPLACEABLE, W_ANY } from './context';
 
 export type TreeKind =
   | 'oak' | 'fancy_oak' | 'birch' | 'tall_birch' | 'spruce' | 'pine' | 'mega_spruce' | 'mega_pine'
-  | 'jungle' | 'jungle_bush' | 'mega_jungle' | 'acacia' | 'dark_oak' | 'swamp_oak' | 'cherry';
+  | 'jungle' | 'jungle_bush' | 'mega_jungle' | 'acacia' | 'dark_oak' | 'swamp_oak' | 'cherry' | 'azalea';
 
 interface TreeBlocks {
   log: string;
@@ -29,12 +29,16 @@ const WOOD: Record<TreeKind, TreeBlocks> = {
   dark_oak: { log: 'dark_oak_log', leaves: 'dark_oak_leaves' },
   swamp_oak: { log: 'oak_log', leaves: 'oak_leaves' },
   cherry: { log: 'cherry_log', leaves: 'cherry_leaves' },
+  azalea: { log: 'oak_log', leaves: 'azalea_leaves' },
 };
 
 /** Collects tree blocks, then commits to the context (so a tree can be rejected). */
 class TreeBuilder {
   logs = new Map<string, [number, number, number, number]>();
-  leaves = new Map<string, [number, number, number]>();
+  /** leaf positions and the leaf block each gets */
+  leaves = new Map<string, [number, number, number, number]>();
+  /** picks the leaves for each leaf position (vanilla WeightedStateProvider), else all are leafBase */
+  leafPick: (() => number) | null = null;
   constructor(readonly ctx: GenContext, readonly logState: (axis: string) => number, readonly leafBase: number) {}
 
   isFree(x: number, y: number, z: number): boolean {
@@ -57,7 +61,7 @@ class TreeBuilder {
       const f = FLAGS[s];
       if (!((f & (F_AIR | F_REPLACEABLE)) && !(f & F_WATER))) return;
     }
-    this.leaves.set(k, [x, y, z]);
+    this.leaves.set(k, [x, y, z, this.leafPick ? this.leafPick() : this.leafBase]);
   }
 
   /** leaves row helper (vanilla placeLeavesRow) */
@@ -74,7 +78,6 @@ class TreeBuilder {
 
   commit(): void {
     const ctx = this.ctx;
-    const leafBlock = blockOf(this.leafBase);
     // leaf distances via BFS from logs (only within this tree)
     const dist = new Map<string, number>();
     const q: [number, number, number, number][] = [];
@@ -90,9 +93,9 @@ class TreeBuilder {
         q.push([x + dx, y + dy, z + dz, d + 1]);
       }
     }
-    for (const [k, [x, y, z]] of this.leaves) {
+    for (const [k, [x, y, z, base]] of this.leaves) {
       const d = dist.get(k) ?? 7;
-      ctx.set(x, y, z, leafBlock.with(this.leafBase, 'distance', Math.min(7, d)), W_REPLACEABLE);
+      ctx.set(x, y, z, blockOf(base).with(base, 'distance', Math.min(7, d)), W_REPLACEABLE);
     }
     for (const [x, y, z, st] of this.logs.values()) ctx.set(x, y, z, st, W_LOG);
   }
@@ -121,13 +124,18 @@ function canGrowOn(s: number): boolean {
 /** Try to grow a tree at (x,y,z) where y is the first air block above ground. */
 export function placeTree(ctx: GenContext, kind: TreeKind, x: number, y: number, z: number, r: Rand): boolean {
   const ground = ctx.get(x, y - 1, z);
-  if (!canGrowOn(ground)) return false;
+  // (the azalea tree's callers check its ground: the bush's soil, or a root system's surface)
+  if (kind !== 'azalea' && !canGrowOn(ground)) return false;
   const w = WOOD[kind];
   const logB = getBlock(w.log);
   const leafB = getBlock(w.leaves);
   const logState = (axis: string) => logB.state({ axis });
   const leafBase = leafB.state({ persistent: false, distance: 1 });
   const t = new TreeBuilder(ctx, logState, leafBase);
+  if (kind === 'azalea') {
+    const flowering = getBlock('flowering_azalea_leaves').state({ persistent: false, distance: 1 });
+    t.leafPick = () => (r.nextInt(4) === 0 ? flowering : leafBase);
+  }
   let ok = true;
   switch (kind) {
     case 'oak': ok = blobTree(t, r, x, y, z, straightHeight(r, 4, 2, 0), 2); break;
@@ -145,10 +153,12 @@ export function placeTree(ctx: GenContext, kind: TreeKind, x: number, y: number,
     case 'mega_spruce': ok = megaPine(t, r, x, y, z, true); break;
     case 'mega_pine': ok = megaPine(t, r, x, y, z, false); break;
     case 'cherry': ok = cherryTree(t, r, x, y, z); break;
+    case 'azalea': ok = azaleaTree(t, r, x, y, z); break;
   }
   if (!ok) return false;
-  // dirt under trunk
-  if (blockOf(ground).name === 'grass_block' || blockOf(ground).name === 'mycelium') ctx.set(x, y - 1, z, S('dirt'), W_ANY);
+  // dirt under trunk (the azalea tree always roots its ground: vanilla dirt provider rooted_dirt, forceDirt)
+  if (kind === 'azalea') ctx.set(x, y - 1, z, S('rooted_dirt'), W_ANY);
+  else if (ground >= 0 && (blockOf(ground).name === 'grass_block' || blockOf(ground).name === 'mycelium')) ctx.set(x, y - 1, z, S('dirt'), W_ANY);
   t.commit();
   if (kind === 'swamp_oak') vines(ctx, t, r, 0.25);
   if (kind === 'jungle' || kind === 'mega_jungle') vines(ctx, t, r, 0.25);
@@ -495,6 +505,45 @@ function cherryTree(t: TreeBuilder, r: Rand, x: number, y: number, z: number): b
         }
     }
   }
+  return true;
+}
+
+const HORIZ: [number, number][] = [[0, -1], [0, 1], [-1, 0], [1, 0]];
+
+/**
+ * vanilla azalea_tree: BendingTrunkPlacer(4, 2, 0, 3, UniformInt(1, 2)) — a trunk that steps
+ * sideways once or twice near its top, then runs on sideways — with RandomSpreadFoliagePlacer(3, 0, 2, 50):
+ * 50 leaves scattered round every trunk block from the fourth up, and TwoLayersFeatureSize(1, 0, 1)
+ */
+function azaleaTree(t: TreeBuilder, r: Rand, x: number, y: number, z: number): boolean {
+  const h = straightHeight(r, 4, 2, 0);
+  if (y + h + 2 >= 320) return false;
+  for (let i = 0; i <= h + 1; i++) {
+    const s = i < 1 ? 0 : 1;
+    for (let dx = -s; dx <= s; dx++) for (let dz = -s; dz <= s; dz++) if (!t.isFree(x + dx, y + i, z + dz)) return false;
+  }
+  const [sx, sz] = HORIZ[r.nextInt(4)];
+  let px = x, py = y, pz = z;
+  const top = h - 1;
+  const attach: [number, number, number][] = [];
+  for (let j = 0; j <= top; j++) {
+    if (j + 1 >= top + r.nextInt(2)) {
+      px += sx;
+      pz += sz;
+    }
+    if (t.isFree(px, py, pz)) t.log(px, py, pz);
+    if (j >= 3) attach.push([px, py, pz]);
+    py++;
+  }
+  const bend = 1 + r.nextInt(2);
+  for (let k = 0; k <= bend; k++) {
+    if (t.isFree(px, py, pz)) t.log(px, py, pz);
+    attach.push([px, py, pz]);
+    px += sx;
+    pz += sz;
+  }
+  for (const [ax, ay, az] of attach)
+    for (let i = 0; i < 50; i++) t.leaf(ax + r.nextInt(3) - r.nextInt(3), ay + r.nextInt(2) - r.nextInt(2), az + r.nextInt(3) - r.nextInt(3));
   return true;
 }
 

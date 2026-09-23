@@ -27,6 +27,8 @@ import { Zombie, Skeleton, Creeper, Enderman, Slime } from '../entity/monsters';
 import { Squid } from '../entity/water';
 import { ThrownItem } from '../entity/throwable';
 import { AbstractMinecart } from '../entity/minecart';
+import { Boat } from '../entity/boat';
+import type { Bat } from '../entity/bat';
 import type { Player } from '../entity/player';
 import { MOB_TEXTURES, FIRE_TEXTURES } from '../textures/mobs';
 import { FLAGS, F_FULL_COLLISION, F_AIR, OUTLINE, S } from '../world/block';
@@ -75,6 +77,9 @@ export class EntityRenderDispatcher {
   /** model matrix living renderers start from instead of identity (mobs drawn inside spawners) */
   private base: Float32Array | null = null;
   private readonly spawnerPose = new PoseStack();
+  private readonly boatModels: Record<string, M.BoatModelDef> = { boat: M.boatModel(), chest_boat: M.chestBoatModel() };
+  /** boat water masks, drawn once every entity is down so riders' legs aren't masked out */
+  private readonly waterPatches: { m: Float32Array; part: ModelPart; tex: WebGLTexture; texW: number; texH: number }[] = [];
 
   constructor(private readonly gl: GL, private readonly items: ItemRenderer, private readonly skin: WebGLTexture) {
     this.models = {
@@ -93,6 +98,7 @@ export class EntityRenderDispatcher {
       slime: M.slimeInnerModel(),
       slime_outer: M.slimeOuterModel(),
       minecart: M.minecartModel(),
+      bat: M.batModel(),
     };
     // vanilla textures/misc/shadow.png: soft black disc
     const n = 32, data = new Uint8Array(n * n * 4);
@@ -160,6 +166,7 @@ export class EntityRenderDispatcher {
       }
     }
     this.rendered = drawn;
+    this.renderWaterPatches(b);
     this.renderSpawners(b, level, cam, partial, frustum);
     this.renderEnchantingBooks(b, level, cam, partial, frustum);
     b.setOverlay(0, 0, 0, 0);
@@ -237,6 +244,7 @@ export class EntityRenderDispatcher {
     else if (e instanceof FallingBlockEntity) this.renderFalling(b, e, dx, dy, dz);
     else if (e instanceof ThrownItem) this.renderThrown(b, e, dx, dy, dz, cam);
     else if (e instanceof AbstractMinecart) this.renderMinecart(b, e, x, y, z, dx, dy, dz, p);
+    else if (e instanceof Boat) this.renderBoat(b, e, dx, dy, dz, p);
     if (e.isOnFire() && !(e instanceof ItemEntity) && !(e instanceof ExperienceOrb)) this.renderFlame(b, e, dx, dy, dz, cam, level.gameTime);
   }
 
@@ -399,9 +407,17 @@ export class EntityRenderDispatcher {
         M.animateEnderman(def.root, a.limbSwing, a.limbAmount, a.age, a.headYaw, a.headPitch, attack, en.carried !== 0, en.creepy);
         break;
       }
+      case 'bat': {
+        // vanilla AnimationState: seconds since each loop started (a tick is 50 ms)
+        const bat = e as Bat;
+        const t = (start: number) => (start < 0 ? -1 : Math.max(0, (e.tickCount + p - start) * 0.05));
+        M.animateBat(def.root, bat.resting, a.headYaw, t(bat.flyAnimStart), t(bat.restAnimStart));
+        break;
+      }
     }
     this.overlay(b, e, white);
-    this.drawBody(b, e, def, tex, baby);
+    // vanilla BatModel renders entityCutout (culled: its flat wings have a front and a back side)
+    this.drawBody(b, e, def, tex, baby, type === 'bat' ? { cull: true } : undefined);
     // layers (vanilla draws them even for invisible mobs: an invisible spider still shows its eyes)
     if (e instanceof Sheep && !e.sheared && !e.isInvisible()) {
       const fur = this.models.sheep_fur, ft = this.tex('sheep_fur');
@@ -436,9 +452,9 @@ export class EntityRenderDispatcher {
    * vanilla LivingEntityRenderer body pass: invisible entities skip it (their layers still draw), and a
    * spectator sees them at 15% opacity
    */
-  private drawBody(b: EntityBatch, e: LivingEntity, def: MobModelDef, tex: WebGLTexture, baby: boolean): void {
+  private drawBody(b: EntityBatch, e: LivingEntity, def: MobModelDef, tex: WebGLTexture, baby: boolean, extra?: Partial<DrawState>): void {
     if (!e.isInvisible()) {
-      b.begin(this.state(tex));
+      b.begin(this.state(tex, extra));
       this.drawModel(b, def, baby);
     } else if (e.level.player?.gameMode === 'spectator') {
       b.begin(this.state(tex, { blend: true, cutoff: 0.01, depthWrite: false }));
@@ -720,6 +736,47 @@ export class EntityRenderDispatcher {
     def.root.render(b, pose, def.texW, def.texH);
   }
 
+  /** vanilla BoatRenderer */
+  private renderBoat(b: EntityBatch, e: Boat, dx: number, dy: number, dz: number, p: number): void {
+    const def = this.boatModels[e.type], tex = this.tex(`${e.type}_${e.variant}`);
+    if (!def || !tex) return;
+    b.setOverlay(0, 0, 0, 0);
+    const pose = this.pose;
+    pose.reset();
+    pose.translate(dx, dy, dz);
+    pose.translate(0, 0.375, 0);
+    pose.rotY(180 - (e.yawO + (e.yaw - e.yawO) * p));
+    // the hurt wobble
+    const f = e.hurtTime - p, f1 = Math.max(0, e.damage - p);
+    if (f > 0) pose.rotX(((Math.sin(f) * f * f1) / 10) * e.hurtDir);
+    // rocking over a bubble column, about the (1, 0, 1) axis
+    const bubble = e.bubbleAngleO + (e.bubbleAngle - e.bubbleAngleO) * p;
+    if (bubble !== 0) {
+      pose.rotY(-45);
+      pose.rotX(bubble);
+      pose.rotY(45);
+    }
+    pose.scale(-1, -1, 1);
+    pose.rotY(90);
+    M.animateBoat(def.root, e.getRowingTime(0, p), e.getRowingTime(1, p));
+    b.begin(this.state(tex));
+    def.root.render(b, pose, def.texW, def.texH);
+    // vanilla RenderType.waterMask: the hull's inside written to depth only, so no water shows in the boat
+    if (!e.isUnderWater()) this.waterPatches.push({ m: new Float32Array(pose.m), part: def.waterPatch, tex, texW: def.texW, texH: def.texH });
+  }
+
+  private renderWaterPatches(b: EntityBatch): void {
+    if (!this.waterPatches.length) return;
+    b.setOverlay(0, 0, 0, 0);
+    for (const w of this.waterPatches) {
+      this.pose.reset(w.m);
+      b.begin(this.state(w.tex, { cutoff: -1, cull: true, lit: false, colorWrite: false }));
+      w.part.render(b, this.pose, w.texW, w.texH);
+    }
+    b.flush();
+    this.waterPatches.length = 0;
+  }
+
   private renderFalling(b: EntityBatch, e: FallingBlockEntity, dx: number, dy: number, dz: number): void {
     b.setOverlay(0, 0, 0, 0);
     const pose = this.pose;
@@ -889,6 +946,13 @@ function shadowRadius(e: Entity): number {
       break;
     case 'squid':
       r = 0.7;
+      break;
+    case 'bat':
+      r = 0.25;
+      break;
+    case 'boat':
+    case 'chest_boat':
+      r = 0.8;
       break;
     case 'enderman':
       r = 0.5;

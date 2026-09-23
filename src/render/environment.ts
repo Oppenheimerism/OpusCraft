@@ -23,13 +23,53 @@ export interface Weather {
   flash: number; // lightning flash ticks remaining
 }
 
-/** Sky color (0..1 rgb) from biome sky color. */
-export function skyColor(biomeSky: number, tod: number, w: Weather, partial = 0): [number, number, number] {
+export type RGB = [number, number, number];
+
+export function rgb24(c: number): RGB {
+  return [((c >> 16) & 255) / 255, ((c >> 8) & 255) / 255, (c & 255) / 255];
+}
+
+const GAUSSIAN_KERNEL = [0, 1, 4, 6, 4, 1, 0];
+
+/**
+ * vanilla CubicSampler.gaussianSampleVec3 over the biome colours round a camera at (x, y, z): the fog and
+ * sky colours of the 6×6×6 quarts about it, weighted so they fade smoothly from one biome to the next
+ */
+export function blendBiomeColors(x: number, y: number, z: number, quartColors: (qx: number, qy: number, qz: number) => { fog: number; sky: number }): { fog: RGB; sky: RGB } {
+  const vx = (x - 2) * 0.25, vy = (y - 2) * 0.25, vz = (z - 2) * 0.25;
+  const i = Math.floor(vx), j = Math.floor(vy), k = Math.floor(vz);
+  const dx = vx - i, dy = vy - j, dz = vz - k;
+  let total = 0, fr = 0, fg = 0, fb = 0, sr = 0, sg = 0, sb = 0;
+  for (let l = 0; l < 6; l++) {
+    const wx = GAUSSIAN_KERNEL[l + 1] + (GAUSSIAN_KERNEL[l] - GAUSSIAN_KERNEL[l + 1]) * dx;
+    for (let m = 0; m < 6; m++) {
+      const wy = GAUSSIAN_KERNEL[m + 1] + (GAUSSIAN_KERNEL[m] - GAUSSIAN_KERNEL[m + 1]) * dy;
+      for (let n = 0; n < 6; n++) {
+        const wz = GAUSSIAN_KERNEL[n + 1] + (GAUSSIAN_KERNEL[n] - GAUSSIAN_KERNEL[n + 1]) * dz;
+        const w = wx * wy * wz;
+        if (w === 0) continue;
+        const c = quartColors(i - 2 + l, j - 2 + m, k - 2 + n);
+        total += w;
+        fr += ((c.fog >> 16) & 255) * w;
+        fg += ((c.fog >> 8) & 255) * w;
+        fb += (c.fog & 255) * w;
+        sr += ((c.sky >> 16) & 255) * w;
+        sg += ((c.sky >> 8) & 255) * w;
+        sb += (c.sky & 255) * w;
+      }
+    }
+  }
+  const k255 = 1 / (total * 255);
+  return { fog: [fr * k255, fg * k255, fb * k255], sky: [sr * k255, sg * k255, sb * k255] };
+}
+
+/** Sky color (0..1 rgb) from the (blended) biome sky color. */
+export function skyColor(biomeSky: RGB, tod: number, w: Weather, partial = 0): [number, number, number] {
   let f1 = Math.cos(tod * Math.PI * 2) * 2 + 0.5;
   f1 = clamp(f1, 0, 1);
-  let r = ((biomeSky >> 16) & 255) / 255 * f1;
-  let g = ((biomeSky >> 8) & 255) / 255 * f1;
-  let b = (biomeSky & 255) / 255 * f1;
+  let r = biomeSky[0] * f1;
+  let g = biomeSky[1] * f1;
+  let b = biomeSky[2] * f1;
   if (w.rain > 0) {
     const f6 = (r * 0.3 + g * 0.59 + b * 0.11) * 0.6;
     const f7 = 1 - w.rain * 0.75;
@@ -116,17 +156,22 @@ export function skyDarkenInt(tod: number, w: Weather): number {
 }
 
 /**
- * Fog color (vanilla FogRenderer.setupColor for the overworld, above water).
- * lookDir: camera look vector; sunAngle: tod*2π.
+ * Fog color (vanilla FogRenderer.setupColor, out of any fluid).
+ * lookDir: camera look vector; sunAngle: tod*2π. `darkens`: the fog dims with the daylight (vanilla
+ * getBrightnessDependentFogColor: the Overworld's does, the Nether's doesn't); below `minY` + 32 it fades
+ * to black towards the void.
  */
 export function fogColor(
-  biomeFog: number, biomeSky: number, tod: number, w: Weather, renderDistanceChunks: number,
-  lookX: number, lookY: number, lookZ: number, camY: number,
+  biomeFog: RGB, biomeSky: RGB, tod: number, w: Weather, renderDistanceChunks: number,
+  lookX: number, lookY: number, lookZ: number, camY: number, darkens = true, minY = -64,
 ): [number, number, number] {
   const brightness = clamp(Math.cos(tod * Math.PI * 2) * 2 + 0.5, 0, 1);
-  let fr = ((biomeFog >> 16) & 255) / 255 * (brightness * 0.94 + 0.06);
-  let fg = ((biomeFog >> 8) & 255) / 255 * (brightness * 0.94 + 0.06);
-  let fb = (biomeFog & 255) / 255 * (brightness * 0.91 + 0.09);
+  let fr = biomeFog[0], fg = biomeFog[1], fb = biomeFog[2];
+  if (darkens) {
+    fr *= brightness * 0.94 + 0.06;
+    fg *= brightness * 0.94 + 0.06;
+    fb *= brightness * 0.91 + 0.09;
+  }
   const sky = skyColor(biomeSky, tod, w);
   let f = 0.25 + (0.75 * renderDistanceChunks) / 32;
   f = 1 - Math.pow(f, 0.25);
@@ -162,7 +207,7 @@ export function fogColor(
     fb *= m;
   }
   // void darkening deep underground
-  let d0 = (camY - -64) * 0.03125;
+  let d0 = (camY - minY) * 0.03125;
   if (d0 < 1) {
     if (d0 < 0) d0 = 0;
     d0 *= d0;

@@ -10,6 +10,8 @@ import { Pig, Cow, Sheep, Chicken, Animal } from '../entity/animals';
 import { Zombie, Skeleton, Creeper, Spider, CaveSpider, Enderman, Slime, Monster, validSpawnBlock } from '../entity/monsters';
 import { Squid, WaterAnimal } from '../entity/water';
 import { AbstractMinecart, createMinecart, MINECART_TYPES } from '../entity/minecart';
+import { Bat } from '../entity/bat';
+import { Boat, createBoat, BOAT_TYPES } from '../entity/boat';
 import { moonPhase } from '../render/environment';
 import { BIOMES } from '../world/gen/biomes';
 import { BLOCKS, STATE_BLOCK, FLAGS, F_OPAQUE, F_FULL_COLLISION, F_WATER, F_LAVA, COLLISION } from '../world/block';
@@ -31,6 +33,7 @@ export const MOB_TYPES: Record<string, (l: Level) => Mob> = {
   enderman: (l) => new Enderman(l),
   slime: (l) => new Slime(l),
   squid: (l) => new Squid(l),
+  bat: (l) => new Bat(l),
 };
 
 export function createMob(type: string, level: Level): Mob | null {
@@ -54,7 +57,7 @@ function saveWithPassengers(e: Entity): SavedEntity | null {
 
 function saveOne(e: Entity): SavedEntity | null {
   if (e instanceof Mob) return e.health > 0 && !e.removed ? e.save() : null;
-  if (e instanceof AbstractMinecart) return e.removed ? null : e.save();
+  if (e instanceof AbstractMinecart || e instanceof Boat) return e.removed ? null : e.save();
   if (e instanceof ItemEntity && !e.removed) {
     const s = e.stack;
     return {
@@ -93,34 +96,40 @@ function loadOne(d: SavedEntity, level: Level): Entity | null {
     cart.load(d);
     return cart;
   }
+  const boat = createBoat(d.id, level);
+  if (boat) {
+    boat.load(d);
+    return boat;
+  }
   const m = createMob(d.id, level);
   if (m) m.load(d);
   return m;
 }
 
-/** entities that belong to chunk storage (a cart carrying the player is saved with the player) */
+/** entities that belong to chunk storage (a cart or boat carrying the player is saved with the player) */
 export function isChunkSaved(e: Entity): boolean {
-  if (e instanceof AbstractMinecart) return !e.passengers.some((p) => p.type === 'player');
+  if (e instanceof AbstractMinecart || e instanceof Boat) return !e.passengers.some((p) => p.type === 'player');
   return e instanceof Mob || e instanceof ItemEntity;
 }
 
 const ENTITY_NAMES: Record<string, string> = {
   pig: 'Pig', cow: 'Cow', sheep: 'Sheep', chicken: 'Chicken', zombie: 'Zombie', skeleton: 'Skeleton', creeper: 'Creeper', spider: 'Spider',
-  cave_spider: 'Cave Spider', enderman: 'Enderman', slime: 'Slime', squid: 'Squid',
+  cave_spider: 'Cave Spider', enderman: 'Enderman', slime: 'Slime', squid: 'Squid', bat: 'Bat',
   arrow: 'Arrow', tnt: 'Primed TNT', item: 'Item', experience_orb: 'Experience Orb', falling_block: 'Falling Block', player: 'Player',
   egg: 'Thrown Egg', snowball: 'Snowball', ender_pearl: 'Thrown Ender Pearl',
-  minecart: 'Minecart', chest_minecart: 'Minecart with Chest',
+  minecart: 'Minecart', chest_minecart: 'Minecart with Chest', boat: 'Boat', chest_boat: 'Boat with Chest',
 };
 
 /** vanilla entity type display names (death messages, commands) */
 export function entityDisplayName(e: Entity | string): string {
+  if (e instanceof Boat) return e.displayName();
   const t = typeof e === 'string' ? e : e.type;
   return ENTITY_NAMES[t] ?? t;
 }
 
 /** entity type ids accepted by /summon */
 export function summonableTypes(): string[] {
-  return [...Object.keys(MOB_TYPES), 'tnt', 'experience_orb', 'arrow', ...MINECART_TYPES];
+  return [...Object.keys(MOB_TYPES), 'tnt', 'experience_orb', 'arrow', ...MINECART_TYPES, ...BOAT_TYPES];
 }
 
 /** vanilla MobCategory caps (per 289 spawnable chunks) */
@@ -139,6 +148,7 @@ interface MobSettings {
   creature: SpawnerData[];
   monster: SpawnerData[];
   water: SpawnerData[];
+  ambient: SpawnerData[];
   creatureProbability: number;
 }
 
@@ -166,10 +176,13 @@ function settingsFor(name: string): MobSettings {
   let water: SpawnerData[] = [];
   if (name === 'river' || name === 'frozen_river') water = SQUID(2);
   else if (name.endsWith('ocean')) water = SQUID(name.includes('cold') ? 3 : name.includes('lukewarm') || name.includes('warm') ? 10 : 1, name.includes('frozen') ? 4 : 4);
-  return { ...base, water };
+  // vanilla BiomeDefaultFeatures.caveSpawns (through commonSpawns, the mooshroom and cave biomes): bats
+  // everywhere in the overworld but the deep dark
+  const ambient = name === 'deep_dark' || name === 'the_void' ? [] : [{ type: 'bat', weight: 10, min: 8, max: 8 }];
+  return { ...base, water, ambient };
 }
 
-function settingsForLand(name: string): Omit<MobSettings, 'water'> {
+function settingsForLand(name: string): Omit<MobSettings, 'water' | 'ambient'> {
   const none = { creature: [], monster: monsters(), creatureProbability: 0.1 };
   switch (name) {
     case 'mushroom_fields':
@@ -258,7 +271,8 @@ export class NaturalSpawner {
     const lvl = this.level;
     const p = lvl.player;
     if (!p || !lvl.gameRules.doMobSpawning) return;
-    // vanilla: persistent creatures only every 400 ticks; water creatures and monsters every tick
+    // vanilla: persistent creatures only every 400 ticks; monsters, ambient (bats, even in peaceful)
+    // and water creatures every tick
     const spawnFriendlies = lvl.gameTime % 400 === 0;
     const spawnEnemies = lvl.difficulty !== 'peaceful';
     const pcx = Math.floor(p.x) >> 4, pcz = Math.floor(p.z) >> 4;
@@ -269,7 +283,7 @@ export class NaturalSpawner {
     if (!chunks.length) return;
     const counts = this.counts();
     const cats: MobCategory[] = [];
-    for (const cat of ['monster', 'creature', 'water_creature'] as MobCategory[]) {
+    for (const cat of ['monster', 'creature', 'ambient', 'water_creature'] as MobCategory[]) {
       if (cat === 'creature' && !spawnFriendlies) continue;
       if (cat === 'monster' && !spawnEnemies) continue;
       const cap = Math.floor((CAPS[cat] * chunks.length) / 289);
@@ -314,7 +328,7 @@ export class NaturalSpawner {
         if (!lvl.isEntityTicking(x, z)) continue;
         if (!data) {
           const bs = biomeSettings(w.getBiome3(x, y, z));
-          const list = cat === 'monster' ? bs.monster : cat === 'water_creature' ? bs.water : bs.creature;
+          const list = cat === 'monster' ? bs.monster : cat === 'water_creature' ? bs.water : cat === 'ambient' ? bs.ambient : bs.creature;
           data = pickWeighted(list, r);
           if (!data) break;
           tries = data.min + r.nextInt(1 + data.max - data.min);
@@ -362,6 +376,8 @@ export class NaturalSpawner {
     switch (type) {
       case 'squid':
         return WaterAnimal.checkSurfaceSpawn(lvl, x, y, z);
+      case 'bat':
+        return Bat.checkBatSpawnRules(lvl, x, y, z, this.rand);
       case 'slime': {
         const biome = BIOMES[lvl.world.getBiome3(x, y, z)]?.name ?? '';
         return Slime.checkSlimeSpawn(lvl, x, y, z, () => this.rand.nextFloat(), this.isSlimeChunk(x >> 4, z >> 4), SURFACE_SLIMES.has(biome), MOON_BRIGHTNESS[moonPhase(lvl.dayTime)]);

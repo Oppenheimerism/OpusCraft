@@ -239,6 +239,7 @@ export class ChunkGenerator {
       }
 
     const ctx = new GenContext(cx, cz, blocks, biomes, caveBiomes);
+    ctx.solidGuess = (x, y, z) => this.substanceAt(x, y, z) === SUB_SOLID;
     ctx.computeHeightmaps();
     this.buildSurface(ctx, cols, colAt);
     this.carvers.carve(ctx, aquifer);

@@ -19,6 +19,9 @@ import * as DC from './blocklib/decor';
 import * as CR from './blocklib/crops';
 import * as RL from './blocklib/rails';
 import * as CV from './blocklib/caves';
+import * as LU from './blocklib/lush';
+import * as NE from './blocklib/nether';
+import * as NF from './blocklib/netherFlora';
 import * as IB from './blocklib/iconblocks';
 import { FIRE_TEXTURES } from './mobs';
 import { registerEnchantingTextures } from './blocklib/enchanting';
@@ -349,6 +352,28 @@ T['smooth_basalt'] = () => CV.smoothBasalt();
 T['tinted_glass'] = () => CV.tintedGlass();
 for (const th of ['tip_merge', 'tip', 'frustum', 'middle', 'base'])
   for (const d of ['up', 'down']) T[`pointed_dripstone_${d}_${th}`] = () => CV.pointedDripstone(th, d === 'up');
+// lush caves
+T['flowering_azalea_leaves'] = () => LU.floweringAzaleaLeaves();
+T['azalea_top'] = () => LU.azaleaTop(false);
+T['azalea_side'] = () => LU.azaleaSide(false);
+T['flowering_azalea_top'] = () => LU.azaleaTop(true);
+T['flowering_azalea_side'] = () => LU.azaleaSide(true);
+T['azalea_plant'] = () => LU.azaleaPlant();
+T['hanging_roots'] = () => LU.hangingRoots();
+T['spore_blossom'] = () => LU.sporeBlossom();
+T['spore_blossom_base'] = () => LU.sporeBlossomBase();
+T['cave_vines'] = () => LU.caveVines(true, false);
+T['cave_vines_lit'] = () => LU.caveVines(true, true);
+T['cave_vines_plant'] = () => LU.caveVines(false, false);
+T['cave_vines_plant_lit'] = () => LU.caveVines(false, true);
+T['big_dripleaf_top'] = () => LU.bigDripleafTop();
+T['big_dripleaf_side'] = () => LU.bigDripleafSide();
+T['big_dripleaf_tip'] = () => LU.bigDripleafTip();
+T['big_dripleaf_stem'] = () => LU.dripleafStem(false, false);
+T['small_dripleaf_top'] = () => LU.smallDripleafTop();
+T['small_dripleaf_side'] = () => LU.smallDripleafSide();
+T['small_dripleaf_stem_top'] = () => LU.dripleafStem(true, true);
+T['small_dripleaf_stem_bottom'] = () => LU.dripleafStem(true, false);
 
 // ---------------------------------------------------------------------------
 // Doors & trapdoors (window pixels are fully transparent; cutout layer)
@@ -442,6 +467,46 @@ T['chiseled_tuff_top'] = () => IB.chiseledTuffTop();
 T['oxidized_copper_bulb'] = () => IB.oxidizedCopperBulb();
 T['verdant_froglight_top'] = () => IB.verdantFroglightTop();
 T['verdant_froglight_side'] = () => IB.verdantFroglightSide();
+
+// Nether terrain
+const netherrackBase = memo(() => NE.netherrack());
+T['netherrack'] = () => netherrackBase();
+T['nether_quartz_ore'] = () => NE.netherQuartzOre(netherrackBase());
+T['nether_gold_ore'] = () => NE.netherGoldOre(netherrackBase());
+T['soul_sand'] = () => NE.soulSand();
+T['soul_soil'] = () => NE.soulSoil();
+T['basalt_side'] = () => NE.basaltSide();
+T['basalt_top'] = () => NE.basaltTop();
+T['blackstone'] = () => NE.blackstone();
+T['blackstone_top'] = () => NE.blackstoneTop();
+{
+  const crimsonTop = memo(() => NE.crimsonNyliumTop());
+  const warpedTop = memo(() => NE.warpedNyliumTop());
+  T['crimson_nylium'] = () => crimsonTop();
+  T['warped_nylium'] = () => warpedTop();
+  T['crimson_nylium_side'] = () => NE.nyliumSide(netherrackBase(), crimsonTop(), 'crimson_nylium', NE.CRIMSON_NYLIUM_PAL);
+  T['warped_nylium_side'] = () => NE.nyliumSide(netherrackBase(), warpedTop(), 'warped_nylium', NE.WARPED_NYLIUM_PAL);
+}
+T['nether_wart_block'] = () => NE.netherWartBlock();
+T['warped_wart_block'] = () => NE.warpedWartBlock();
+T['ancient_debris_side'] = () => NE.ancientDebrisSide();
+T['ancient_debris_top'] = () => NE.ancientDebrisTop();
+T['nether_portal'] = () => NE.netherPortal();
+for (const k of ['crimson', 'warped'] as const) {
+  T[`${k}_stem`] = () => NF.stemSide(k);
+  T[`${k}_stem_top`] = () => NF.stemTop(k);
+  T[`stripped_${k}_stem`] = () => NF.strippedStemSide(k);
+  T[`stripped_${k}_stem_top`] = () => NF.strippedStemTop(k);
+  T[`${k}_planks`] = () => NF.netherPlanks(k);
+  T[`${k}_fungus`] = () => NF.fungus(k);
+  T[`${k}_roots`] = () => NF.roots(k);
+}
+T['nether_sprouts'] = () => NF.netherSprouts();
+T['weeping_vines'] = () => NF.weepingVines();
+T['weeping_vines_plant'] = () => NF.weepingVinesPlant();
+T['twisting_vines'] = () => NF.twistingVines();
+T['twisting_vines_plant'] = () => NF.twistingVinesPlant();
+T['shroomlight'] = () => NF.shroomlight();
 
 // Missing texture (vanilla's magenta/black checkerboard)
 T['missing'] = () => {

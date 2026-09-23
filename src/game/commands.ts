@@ -16,9 +16,11 @@ import { ExperienceOrb } from '../entity/xpOrb';
 import { Arrow } from '../entity/arrow';
 import { createMob, entityDisplayName, summonableTypes } from './spawner';
 import { createMinecart, MINECART_TYPES } from '../entity/minecart';
+import { createBoat, BOAT_TYPES, BOAT_WOODS } from '../entity/boat';
 import { MOB_EFFECTS, MobEffect, MobEffectInstance, mobEffect } from '../entity/effects';
 import { ENCHANTMENTS, areCompatible, canEnchant, enchantmentLine } from '../item/enchantments';
 import { craftingEnchants, setCraftingEnchants, weaponOf } from '../item/enchantHelper';
+import { DIMENSIONS, type DimensionType } from '../world/dimension';
 
 class CommandError extends Error {
   constructor(msg: string, readonly pos = -1) {
@@ -52,6 +54,8 @@ interface Ctx {
   line: string;
   args: Tok[];
   ok: (msg: string) => void;
+  /** `execute in`: the dimension the command runs in (default: the player's) */
+  dim?: DimensionType;
 }
 
 type Handler = (c: Ctx) => void;
@@ -555,6 +559,12 @@ export const COMMANDS: Record<string, CommandDef> = {
         const cart = createMinecart(type, lvl)!;
         cart.moveTo(x, y, z, 0, 0);
         e = cart;
+      } else if (BOAT_TYPES.includes(type)) {
+        // the wood is entity data in 1.21: /summon boat ~ ~ ~ {Type:"spruce"}
+        const wood = c.args[4] ? /Type:\s*"?([a-z_]+)"?/.exec(c.line.slice(c.args[4].pos))?.[1] : undefined;
+        const boat = createBoat(type, lvl, wood && BOAT_WOODS.includes(wood) ? wood : 'oak')!;
+        boat.moveTo(x, y, z, 0, 0);
+        e = boat;
       } else {
         const m = createMob(type, lvl);
         if (!m) throw new CommandError(`Can't find element 'minecraft:${type}' of type 'minecraft:entity_type'`, c.args[0].pos);
@@ -624,6 +634,17 @@ export const COMMANDS: Record<string, CommandDef> = {
       p.respawnForced = true;
       c.ok(`Set spawn point to ${x}, ${y}, ${z} [0.0] in minecraft:overworld for ${name}`);
     },
+  },
+  execute: {
+    usage: ['/execute in <dimension> run <command>', '/execute run <command>'],
+    suggest: (_g, prev, i) => {
+      const k = prev[i - 1];
+      if (i === 0 || (k !== 'in' && prev[i - 2] === 'in')) return ['in', 'run'];
+      if (k === 'in') return Object.keys(DIMENSIONS).map((d) => 'minecraft:' + d);
+      if (k === 'run') return Object.keys(COMMANDS);
+      return [];
+    },
+    run: (c) => executeSubcommand(c),
   },
   teleport: {
     usage: ['/teleport <location>', '/teleport <destination>', '/teleport <targets> <location>'],
@@ -729,8 +750,35 @@ function tpCommand(c: Ctx): void {
   if (c.args[off + 3]) yaw = coord(c, off + 3, p.yaw, false);
   if (c.args[off + 4]) pitch = Math.max(-90, Math.min(90, coord(c, off + 4, p.pitch, false)));
   if (y < -20000000 || y > 20000000 || Math.abs(x) > 30000000 || Math.abs(z) > 30000000) throw new CommandError('Invalid position for teleport');
-  c.game.teleport(x, y, z, yaw, pitch);
+  if (c.dim && c.dim !== c.game.world.dim) {
+    // to another dimension: the position as given (vanilla execute in doesn't scale it)
+    p.yaw = yaw;
+    p.pitch = pitch;
+    c.game.changeDimension(c.dim, x, y, z, null, false);
+  } else c.game.teleport(x, y, z, yaw, pitch);
   c.ok(`Teleported ${c.game.playerName} to ${f6(x)}, ${f6(y)}, ${f6(z)}`);
+}
+
+/** vanilla ExecuteCommand, the `in` modifier only: `execute [in <dimension>]... run <command>` */
+function executeSubcommand(c: Ctx): void {
+  let i = 0;
+  let dim = c.dim;
+  for (;;) {
+    const k = needArg(c, i);
+    if (k === 'in') {
+      const id = needArg(c, i + 1).replace(/^minecraft:/, '');
+      dim = DIMENSIONS[id as keyof typeof DIMENSIONS];
+      if (!dim) throw new CommandError(`Unknown dimension 'minecraft:${id}'`, c.args[i + 1].pos);
+      i += 2;
+    } else if (k === 'run') {
+      i++;
+      break;
+    } else badArg(c, i);
+  }
+  const name = needArg(c, i).replace(/^minecraft:/, '');
+  const def = COMMANDS[name];
+  if (!def) badArg(c, i, 'Unknown or incomplete command, see below for error');
+  def.run({ ...c, args: c.args.slice(i + 1), dim });
 }
 
 /** run a command line (without the leading slash) */

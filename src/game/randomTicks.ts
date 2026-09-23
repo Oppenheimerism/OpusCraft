@@ -158,6 +158,21 @@ export class RandomTicker {
       } else lvl.setBlock(x, y, z, b.with(st, 'age', age + 1), false);
       return;
     }
+    if (n === 'weeping_vines' || n === 'twisting_vines') {
+      // vanilla GrowingPlantHeadBlock.randomTick: 1 in 10 grows on (down, or up) into air, one age older
+      const age = b.get<number>(st, 'age');
+      const ny = n === 'weeping_vines' ? y - 1 : y + 1;
+      if (age < 25 && Math.random() < 0.1 && FLAGS[lvl.getState(x, ny, z)] & F_AIR) lvl.setBlock(x, ny, z, b.with(st, 'age', age + 1));
+      return;
+    }
+    if (n === 'cave_vines') {
+      // vanilla GrowingPlantHeadBlock.randomTick: 1 in 10 grows a block down into air (with a berry 11% of the time)
+      const age = b.get<number>(st, 'age');
+      if (age < 25 && Math.random() < 0.1 && FLAGS[lvl.getState(x, y - 1, z)] & F_AIR) {
+        lvl.setBlock(x, y - 1, z, b.with(b.with(st, 'age', age + 1), 'berries', Math.random() < 0.11));
+      }
+      return;
+    }
     if (n === 'sweet_berry_bush') {
       const age = b.get<number>(st, 'age');
       if (age < 3 && Math.random() < 0.2 && this.light(x, y + 1, z) >= 9) lvl.setBlock(x, y, z, b.with(st, 'age', age + 1));
@@ -185,6 +200,11 @@ export class RandomTicker {
     }
     void F_AIR;
     void F_LEAVES;
+  }
+
+  /** vanilla AzaleaBlock.performBonemeal: TreeGrower.AZALEA */
+  growAzalea(x: number, y: number, z: number, st: number): void {
+    this.growTree(x, y, z, 'azalea', st);
   }
 
   /** vanilla SaplingBlock.advanceTree (bone meal) */

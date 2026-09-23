@@ -19,6 +19,7 @@ import { WeatherRenderer } from './weather';
 import { EntityRenderDispatcher, EntityRenderOptions } from './entityRenderers';
 import { buildParticleAtlas } from './particleAtlas';
 import type { BlindnessFog } from './effectVisuals';
+import { OVERWORLD, type DimensionType } from '../world/dimension';
 
 export interface Camera {
   x: number;
@@ -43,6 +44,12 @@ export interface FrameEnv {
   bob?: Mat4 | null;
   underwater?: boolean;
   waterFogColor?: [number, number, number];
+  /** the camera is in lava: how far the player can see there (vanilla FogRenderer, FogType.LAVA) */
+  lava?: 'normal' | 'fire_resistant' | 'spectator' | null;
+  /** the dimension's sky, fog and light (vanilla DimensionSpecialEffects) */
+  dim?: DimensionType;
+  /** the biome fog and sky colours blended round the camera (environment.blendBiomeColors) */
+  biomeColors?: { fog: env.RGB; sky: env.RGB };
   level?: Level;
   entityOptions?: EntityRenderOptions;
 }
@@ -63,6 +70,8 @@ export class Renderer {
   private readonly pose = new PoseStack();
   lastFogStart = 0;
   lastFogEnd = 0;
+  /** vanilla FogShape: 0 sphere, 1 cylinder */
+  lastFogShape = 1;
   readonly proj = mat4();
   readonly view = mat4();
   readonly viewRot = mat4();
@@ -108,21 +117,38 @@ export class Renderer {
 
   render(cam: Camera, e: FrameEnv): void {
     const gl = this.gl;
-    const tod = env.timeOfDay(e.dayTime + e.partial);
+    const dim = e.dim ?? OVERWORLD;
+    // (a dimension with a fixed time always shows it: the Nether's lightmap is midnight's)
+    const tod = env.timeOfDay(dim.fixedTime ?? e.dayTime + e.partial);
     const biome = BIOMES[e.biome] ?? BIOMES[1];
+    const colors = e.biomeColors ?? { fog: env.rgb24(biome.fog), sky: env.rgb24(biome.sky) };
     this.setupCamera(cam, e.bob ?? null);
     // look vector
     const pr = cam.pitch * DEG, yr = cam.yaw * DEG;
     const lx = -Math.sin(yr) * Math.cos(pr), ly = -Math.sin(pr), lz = Math.cos(yr) * Math.cos(pr);
     const rdBlocks = this.renderDistance * 16;
-    const sky = env.skyColor(biome.sky, tod, e.weather, e.partial);
-    let fog = env.fogColor(biome.fog, biome.sky, tod, e.weather, this.renderDistance, lx, ly, lz, cam.y);
+    const sky = env.skyColor(colors.sky, tod, e.weather, e.partial);
+    let fog = env.fogColor(colors.fog, colors.sky, tod, e.weather, this.renderDistance, lx, ly, lz, cam.y, dim.effects.sky === 'normal', dim.minY);
     let fogStart = rdBlocks - Math.min(Math.max(rdBlocks / 10, 4), 64);
     let fogEnd = rdBlocks;
-    if (e.underwater) {
+    // vanilla FogShape: cylindrical for the ordinary distance fog, spherical for the rest
+    let fogShape = 1;
+    if (e.lava) {
+      fog = [0.6, 0.1, 0];
+      fogShape = 0;
+      if (e.lava === 'spectator') [fogStart, fogEnd] = [-8, rdBlocks * 0.5];
+      else if (e.lava === 'fire_resistant') [fogStart, fogEnd] = [0, 5];
+      else [fogStart, fogEnd] = [0.25, 1];
+    } else if (e.underwater) {
       fog = e.waterFogColor ?? [0.02, 0.02, 0.2];
       fogStart = -8;
       fogEnd = 96;
+      fogShape = 0;
+    } else if (dim.effects.foggy) {
+      // vanilla isFoggyAt: the Nether's thick fog
+      fogStart = rdBlocks * 0.05;
+      fogEnd = Math.min(rdBlocks, 192) * 0.5;
+      fogShape = 0;
     }
     // vanilla FogRenderer: blindness darkens the fog colour and pulls the fog in to a few blocks
     const blind = e.blindness;
@@ -133,6 +159,7 @@ export class Renderer {
       }
       fogStart = blind.end * 0.25;
       fogEnd = blind.end;
+      fogShape = 0;
     }
     // vanilla FogRenderer.setupColor: night vision brightens the fog (underwater, water vision does)
     const nv = e.underwater ? 0 : e.nightVision;
@@ -142,15 +169,15 @@ export class Renderer {
     }
     this.lastFog = fog;
     // lightmap
-    this.lightmap.update(env.skyDarken(tod, e.weather), e.weather.flash > 0, e.gamma, e.nightVision);
+    this.lightmap.update(env.skyDarken(tod, e.weather), e.weather.flash > 0, e.gamma, e.nightVision, dim.ambientLight);
     // clear to fog color
     gl.viewport(0, 0, this.width, this.height);
     gl.clearColor(fog[0], fog[1], fog[2], 1);
     gl.clearDepth(1);
     gl.depthMask(true);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-    // vanilla LevelRenderer.renderSky: no sky while blind (doesMobEffectBlockSky)
-    if (!e.underwater && !blind) {
+    // vanilla LevelRenderer.renderSky: no sky in lava or while blind (doesMobEffectBlockSky), none at all in the Nether
+    if (!e.underwater && !e.lava && !blind && dim.effects.sky === 'normal') {
       this.sky.render({
         proj: this.proj,
         viewRot: this.viewRot,
@@ -174,12 +201,18 @@ export class Renderer {
       fogColor: fog,
       fogStart,
       fogEnd,
+      fogShape,
       atlas: this.atlas.texture!,
       lightmap: this.lightmap.texture,
       frustum: this.frustum,
     };
     this.lastFogStart = fogStart;
     this.lastFogEnd = fogEnd;
+    this.lastFogShape = fogShape;
+    this.batch.fogShape = fogShape;
+    // vanilla Lighting.setupNetherLevel: in the Nether entities are lit from above and below
+    this.batch.light0 = [0.2, 1.0, -0.7];
+    this.batch.light1 = dim.effects.constantAmbientLight ? [-0.2, -1.0, 0.7] : [-0.2, 1.0, 0.7];
     this.world.cull(tp, rdBlocks);
     this.world.drawOpaque(tp);
     if (e.level) this.renderEntities(e.level, cam, e.partial, fog, fogStart, fogEnd, e.entityOptions);
@@ -198,7 +231,7 @@ export class Renderer {
       this.particles.spriteRects = this.particleAtlas.rects;
       this.particles.renderSprites(this.batch, cam, e.partial);
     }
-    if (this.cloudsEnabled && !e.underwater && !this.skipClouds && !blind) {
+    if (this.cloudsEnabled && !e.underwater && !this.skipClouds && !blind && dim.effects.clouds) {
       const cc = env.cloudColor(tod, e.weather);
       this.clouds.render(this.proj, this.view, cam.x, cam.y, cam.z, e.ticks + e.partial, cc, fog, rdBlocks);
     }
@@ -222,8 +255,6 @@ export class Renderer {
     b.lightmap = this.lightmap.texture;
     b.fogColor = fog;
     b.fog = [fogStart, fogEnd];
-    b.light0 = [0.2, 1.0, -0.7];
-    b.light1 = [-0.2, 1.0, 0.7];
     const gl = this.gl;
     gl.enable(gl.DEPTH_TEST);
     gl.depthFunc(gl.LEQUAL);

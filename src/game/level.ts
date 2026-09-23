@@ -10,7 +10,7 @@ import type { Player } from '../entity/player';
 import type { LivingEntity } from '../entity/living';
 import { Rand } from '../core/rng';
 import { BLOCKS, STATE_BLOCK, FLAGS, F_AIR, F_WATERLOGGED, S } from '../world/block';
-import { canSurvive, blockDrops, isDripstoneFacing } from './blockRules';
+import { canSurvive, blockDrops, isDripstoneFacing, dripleafTick } from './blockRules';
 import { updateShape, hasShapeUpdates } from './shapeUpdates';
 import { isRail, railOnPlace, railNeighborChanged } from './rails';
 import { fireTick } from './fire';
@@ -26,6 +26,7 @@ import { F_WATER, F_LAVA, F_REPLACEABLE } from '../world/block';
 import { skyDarkenInt, timeOfDay } from '../render/environment';
 import { BIOMES } from '../world/gen/biomes';
 import type { AABB } from '../core/aabb';
+import type { DimensionType } from '../world/dimension';
 
 export interface SoundSink {
   play(name: string, x: number, y: number, z: number, volume?: number, pitch?: number): void;
@@ -121,11 +122,37 @@ export class Level {
   skyDarken = 0;
 
   updateSkyBrightness(): void {
-    this.skyDarken = skyDarkenInt(timeOfDay(this.dayTime), { rain: this.rainLevel(1), thunder: this.thunderLevel(1), flash: 0 });
+    this.skyDarken = skyDarkenInt(timeOfDay(this.skyTime()), { rain: this.rainLevel(1), thunder: this.thunderLevel(1), flash: 0 });
   }
 
+  /** the dimension this level's chunks are in */
+  get dim(): DimensionType {
+    return this.world.dim;
+  }
+
+  /** the time of day the sky shows (vanilla fixed_time: always midnight in the Nether) */
+  skyTime(): number {
+    return this.world.dim.fixedTime ?? this.dayTime;
+  }
+
+  /** vanilla Level.isDay: never in a dimension with a fixed time */
   isDay(): boolean {
-    return this.skyDarken < 4;
+    return this.world.dim.fixedTime === null && this.skyDarken < 4;
+  }
+
+  /** the player went to another dimension: what was here was saved and unloaded with its chunks */
+  resetForDimension(): void {
+    const keep: Entity[] = this.player ? [this.player] : [];
+    for (const e of this.entities) if (!keep.includes(e)) e.removed = true;
+    this.entities.length = 0;
+    this.entities.push(...keep);
+    this.scheduled.clear();
+    this.skyFlash = 0;
+    // (the overworld's weather carried on meanwhile: back under the sky it's as it is, not fading in)
+    if (this.world.dim.hasSkyLight) {
+      this.rain = this.rainO = this.raining ? 1 : 0;
+      this.thunder = this.thunderO = this.thundering ? 1 : 0;
+    }
   }
 
   /** vanilla getMaxLocalRawBrightness: max(sky - skyDarken, block) */
@@ -134,14 +161,17 @@ export class Level {
     return Math.max((l >> 4) - darken, l & 15);
   }
 
-  /** vanilla getLightLevelDependentMagicValue (overworld ambient light 0) */
+  /** vanilla getLightLevelDependentMagicValue: the dimension's ambient light lifts the dark */
   brightness(x: number, y: number, z: number): number {
     const f = this.rawBrightness(x, y, z) / 15;
-    return f / (4 - 3 * f);
+    const g = f / (4 - 3 * f);
+    const a = this.world.dim.ambientLight;
+    return g + a * (1 - g);
   }
 
+  /** vanilla canSeeSky: full sky light (none at all where there's no sky) */
   canSeeSky(x: number, y: number, z: number): boolean {
-    return y >= this.world.heightAt(x, z);
+    return this.world.dim.hasSkyLight && y >= this.world.heightAt(x, z);
   }
 
   isRaining(): boolean {
@@ -173,6 +203,8 @@ export class Level {
   onBred: ((child: Entity, cause: Entity | null) => void) | null = null;
   /** an arrow the player shot hurt something (vanilla "Take Aim") */
   onPlayerArrowHit: ((target: Entity) => void) | null = null;
+  /** an entity's time in a nether portal came up (the portal block it was in) */
+  onPortal: ((e: Entity, x: number, y: number, z: number) => void) | null = null;
 
   /** vanilla: entities tick only inside the simulation distance (and in loaded chunks) */
   isEntityTicking(x: number, z: number): boolean {
@@ -267,6 +299,8 @@ export class Level {
         this.tryFall(x, y, z, st);
       } else if (STATE_BLOCK[st] === fireId()) {
         fireTick(this, x, y, z, st);
+      } else if (STATE_BLOCK[st] === DRIPLEAF()) {
+        dripleafTick(this, x, y, z, st);
       }
     }
   }
@@ -286,7 +320,7 @@ export class Level {
       const nx = x + dx, ny = y + dy, nz = z + dz;
       const st = this.world.getState(nx, ny, nz);
       const f = FLAGS[st];
-      if (f & (F_WATER | F_LAVA) && BLOCKS[STATE_BLOCK[st]].s.fluid) this.scheduleTick(nx, ny, nz, fluidStateOf(st).type === 1 ? 5 : 30);
+      if (f & (F_WATER | F_LAVA) && BLOCKS[STATE_BLOCK[st]].s.fluid) this.scheduleTick(nx, ny, nz, fluidStateOf(st).type === 1 ? 5 : this.world.dim.ultraWarm ? 10 : 30);
       else if (isGravityBlock(st)) this.scheduleTick(nx, ny, nz, 2);
     }
   }
@@ -311,6 +345,11 @@ export class Level {
   }
 
   private tickWeatherLevels(): void {
+    // vanilla ServerLevel.advanceWeatherCycle: only under a sky does the rain come and go
+    if (!this.world.dim.hasSkyLight) {
+      this.rain = this.rainO = this.thunder = this.thunderO = 0;
+      return;
+    }
     this.rainO = this.rain;
     this.rain = Math.max(0, Math.min(1, this.rain + (this.raining ? 0.01 : -0.01)));
     this.thunderO = this.thunder;
@@ -482,6 +521,12 @@ let DRIPSTONE_ID = -1;
 function DRIPSTONE(): number {
   if (DRIPSTONE_ID < 0) DRIPSTONE_ID = BLOCKS.findIndex((b) => b.name === 'pointed_dripstone');
   return DRIPSTONE_ID;
+}
+
+let DRIPLEAF_ID = -1;
+function DRIPLEAF(): number {
+  if (DRIPLEAF_ID < 0) DRIPLEAF_ID = BLOCKS.findIndex((b) => b.name === 'big_dripleaf');
+  return DRIPLEAF_ID;
 }
 
 let FIRE_ID = -1;

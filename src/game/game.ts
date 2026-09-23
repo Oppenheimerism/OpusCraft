@@ -36,7 +36,7 @@ import type { Entity } from '../entity/entity';
 import { Mob } from '../entity/mob';
 import { SoundManager } from '../audio/soundManager';
 import { Panorama } from '../render/panorama';
-import { timeOfDay, skyDarkenInt } from '../render/environment';
+import { timeOfDay, skyDarkenInt, blendBiomeColors } from '../render/environment';
 import { GameOptions, loadOptions, saveOptions } from './options';
 import { DEFAULT_GAME_RULES } from './gameRules';
 import { ItemEntity } from '../entity/itemEntity';
@@ -55,7 +55,10 @@ import { keyDisplayName } from './input';
 import { LivingEntity } from '../entity/living';
 import { Monster } from '../entity/monsters';
 import type { MinecartChest } from '../entity/minecart';
+import { ChestBoat } from '../entity/boat';
 import { nightVisionScale, blindnessFog, applyNausea } from '../render/effectVisuals';
+import { OVERWORLD, THE_NETHER, dimensionById, teleportationScale, type DimensionType } from '../world/dimension';
+import { PortalPoi, portalRectangle, relativePortalPosition, portalExit, createPortal, isPortal, portalAxis, type PortalRect } from './portal';
 
 export type { GameOptions } from './options';
 
@@ -123,6 +126,19 @@ export class Game {
   pauseScreenFactory: (() => Screen) | null = null;
   deathScreenFactory: (() => Screen) | null = null;
   loadingScreenFactory: (() => Screen) | null = null;
+  /** vanilla ReceivingLevelScreen, shown while changing dimension */
+  receivingScreenFactory: ((portal: boolean) => Screen) | null = null;
+  /** nether portal blocks in every dimension (vanilla POI records) */
+  readonly portalPoi = new PortalPoi();
+  /** after a change of dimension: puts the player in place once the chunks are in (false: wait some more) */
+  private arrival: ((g: Game) => boolean) | null = null;
+  /** the loading screen shows the portal's swirl */
+  private receivingPortal = false;
+  /** where the player left the Overworld for the Nether (vanilla enteredNetherPosition, not saved) */
+  private enteredNetherAt: [number, number] | null = null;
+  private leftOverworldAt: [number, number] | null = null;
+  /** the tutorial hints start on first joining the world, not on every change of dimension */
+  private joined = false;
   chatScreenFactory: ((initial: string) => Screen) | null = null;
   /** vanilla InBedChatScreen (chat + Leave Bed) */
   inBedScreenFactory: (() => Screen) | null = null;
@@ -268,8 +284,13 @@ export class Game {
           return true;
         }
         if (e.code === KEYS.inventory && !e.repeat) {
-          if (this.inventoryScreenFactory) this.setScreen(this.inventoryScreenFactory());
-          this.tutorial.onOpenInventory();
+          // vanilla isServerControlledInventory: in a chest boat the key opens its chest
+          const v = this.player.vehicle;
+          if (v instanceof ChestBoat) this.openEntityContainer(v);
+          else {
+            if (this.inventoryScreenFactory) this.setScreen(this.inventoryScreenFactory());
+            this.tutorial.onOpenInventory();
+          }
           return true;
         }
         if (e.code === KEYS.advancements && !e.repeat && this.advancementsScreenFactory) {
@@ -304,7 +325,7 @@ export class Game {
     this.input.consumeClicks();
     if (s) {
       s.initScreen(this.gui.width, this.gui.height);
-      this.input.unlock();
+      if (!(s as { keepsMouse?: boolean }).keepsMouse) this.input.unlock();
     } else if (this.inWorld) {
       this.input.lock();
     }
@@ -324,6 +345,12 @@ export class Game {
     this.entityDirty.clear();
     this.entityLoading.clear();
     this.world = new World();
+    this.world.dim = dimensionById(meta.player && !meta.player.dead ? meta.player.dimension : 'overworld');
+    this.portalPoi.load(meta.portals);
+    this.world.onPortalChanged = (x, y, z, present) => this.portalPoi.changed(this.world.dim.id, x, y, z, present);
+    this.arrival = null;
+    this.receivingPortal = false;
+    this.joined = false;
     this.renderer.world.meshes.forEach((_m, k) => this.renderer.world.dispose(k));
     this.chunks = new ChunkManager(this.world, this.pool, this.renderer.world);
     this.chunks.renderDistance = this.opts.renderDistance;
@@ -334,7 +361,7 @@ export class Game {
     this.chunks.onChunkUnloaded = (c) => {
       this.unloadChunkEntities(c);
       if (c.modified && this.meta && !this.meta.transient) {
-        const sc = serializeChunk(this.meta.id, c, this.world.chunkBlockEntities(c.cx, c.cz).map((b) => b.save()));
+        const sc = serializeChunk(this.meta.id, c, this.world.chunkBlockEntities(c.cx, c.cz).map((b) => b.save()), this.world.dim.storage);
         this.savedKeys.add(sc.key);
         void saveChunks([sc]);
       }
@@ -367,6 +394,9 @@ export class Game {
     this.interaction.onOpenEntityContainer = (e) => this.openEntityContainer(e);
     this.interaction.onMounted = () => this.hud.setOverlayMessage(`Press ${keyDisplayName(KEYS.sneak)} to Dismount`);
     this.interaction.onUseBed = (x, y, z) => useBed(this.sleepHost(), x, y, z);
+    this.level.onPortal = (e, x, y, z) => {
+      if (e === this.player) this.portalTravel(x, y, z);
+    };
     this.player.dropHandler = (s) => this.interaction.throwItem(s);
     this.applyGameRules();
     const world = this.world;
@@ -466,7 +496,7 @@ export class Game {
 
   private async loadSavedChunk(cx: number, cz: number): Promise<ReturnType<typeof deserializeChunk> | null> {
     if (!this.meta) return null;
-    const key = chunkKey(this.meta.id, cx, cz);
+    const key = chunkKey(this.meta.id, cx, cz, this.world.dim.storage);
     if (!this.savedKeys.has(key)) return null;
     const s = await loadChunk(key);
     if (!s) return null;
@@ -501,11 +531,13 @@ export class Game {
       dead: p.health <= 0,
       effects: p.saveEffects(),
       vehicle: p.vehicle ? saveEntity(p.vehicle) : null,
+      dimension: this.world.dim.id,
     };
+    m.portals = this.portalPoi.save();
     const list = [];
     for (const c of this.world.chunks.values()) {
       if (!c.modified) continue;
-      const sc = serializeChunk(m.id, c, this.world.chunkBlockEntities(c.cx, c.cz).map((b) => b.save()));
+      const sc = serializeChunk(m.id, c, this.world.chunkBlockEntities(c.cx, c.cz).map((b) => b.save()), this.world.dim.storage);
       this.savedKeys.add(sc.key);
       list.push(sc);
       c.modified = false;
@@ -519,7 +551,7 @@ export class Game {
   // entity persistence (per-chunk records, like vanilla's entities/ region files)
 
   private entityChunkKey(cx: number, cz: number): string {
-    return chunkKey(this.meta!.id, cx, cz);
+    return chunkKey(this.meta!.id, cx, cz, this.world.dim.storage);
   }
 
   /** a chunk became available: restore its saved entities or run chunk-generation spawning */
@@ -532,7 +564,7 @@ export class Game {
       for (let i = 0; i < t.length; i += 3) {
         const x = c.cx * 16 + t[i], y = t[i + 1], z = c.cz * 16 + t[i + 2];
         const f = FLAGS[this.world.getState(x, y, z)];
-        if (f & (F_WATER | F_LAVA)) this.level.scheduleTick(x, y, z, f & F_LAVA ? 30 : 5);
+        if (f & (F_WATER | F_LAVA)) this.level.scheduleTick(x, y, z, f & F_LAVA ? (this.world.dim.ultraWarm ? 10 : 30) : 5);
       }
     }
     // structure fences connect to what's around them (vanilla ChunkAccess.postProcessGeneration)
@@ -698,8 +730,8 @@ export class Game {
     else if (kind === 'grindstone') this.setScreen(this.containerScreenFactory(new GrindstoneMenu(p, [x, y, z])));
   }
 
-  /** right-clicked a chest minecart (vanilla ContainerEntity.interactWithContainerVehicle: no sound, no lid) */
-  openEntityContainer(e: MinecartChest): void {
+  /** right-clicked a chest minecart or chest boat (vanilla ContainerEntity.interactWithContainerVehicle: no sound, no lid) */
+  openEntityContainer(e: MinecartChest | ChestBoat): void {
     if (!this.containerScreenFactory) return;
     e.unpackLoot();
     this.setScreen(this.containerScreenFactory(new ChestMenu(this.player, e, entityDisplayName(e))));
@@ -740,6 +772,8 @@ export class Game {
         return k && k !== this.player && k.type !== 'arrow' ? `${n} was shot by ${kn}` : `${n} was shot by Arrow`;
       case 'explosion':
         return `${n} blew up`;
+      case 'badRespawnPoint':
+        return `${n} was killed by [Intentional Game Design]`;
       case 'playerExplosion':
         return k === this.player || !k ? `${n} blew up` : `${n} was blown up by ${kn}`;
       case 'fall':
@@ -841,17 +875,30 @@ export class Game {
     p.sleepingPos = null;
     p.sleepCounter = 0;
     p.setSize(0.6, 1.8);
+    p.portal = null;
+    p.portalCooldown = 0;
+    p.spinningEffectIntensity = p.oSpinningEffectIntensity = 0;
     // vanilla PlayerList.respawn: at the bed (facing it) if it's still there and clear
-    const at = findRespawn(this.level, p);
-    if (at) this.teleport(at.x, at.y, at.z, at.yaw, 0);
-    else {
-      if (p.respawnPos) {
-        p.respawnPos = null;
-        this.chat(MSG.noRespawnBlock);
+    const place = (g: Game): boolean => {
+      const at = findRespawn(g.level, p);
+      if (at) g.teleport(at.x, at.y, at.z, at.yaw, 0);
+      else {
+        if (p.respawnPos) {
+          p.respawnPos = null;
+          g.chat(MSG.noRespawnBlock);
+        }
+        g.teleport(p.spawnX + 0.5, p.spawnY, p.spawnZ + 0.5, 0, 0);
       }
-      this.teleport(p.spawnX + 0.5, p.spawnY, p.spawnZ + 0.5, 0, 0);
-    }
+      return true;
+    };
     if (!this.level.entities.includes(p)) this.level.addEntity(p);
+    if (this.world.dim !== OVERWORLD) {
+      // the bed (and the world spawn) are in the Overworld: go back there, then find the spot
+      const [x, y, z] = p.respawnPos ?? [p.spawnX, p.spawnY, p.spawnZ];
+      this.changeDimension(OVERWORLD, x + 0.5, y, z + 0.5, place, false);
+      return;
+    }
+    place(this);
     this.setScreen(null);
   }
 
@@ -877,6 +924,100 @@ export class Game {
     this.player.moveTo(x, y, z, yaw ?? this.player.yaw, pitch ?? this.player.pitch);
     this.player.dx = this.player.dy = this.player.dz = 0;
     this.player.fallDistance = 0;
+  }
+
+  // -------------------------------------------------------------------------
+  // Dimensions (vanilla ServerPlayer.changeDimension)
+
+  /**
+   * Take the player to another dimension: what's loaded here is saved and let go, the player waits at
+   * (x, y, z) on the "Loading terrain..." screen until the chunks round there are in, and then `arrive`
+   * puts them in place (returning false to wait again, having moved them somewhere else).
+   */
+  changeDimension(dim: DimensionType, x: number, y: number, z: number, arrive: ((g: Game) => boolean) | null, portal: boolean): void {
+    const p = this.player;
+    if (p.isSleeping()) p.stopSleepInBed(true);
+    p.removeVehicle();
+    for (const c of [...this.world.chunks.values()]) {
+      this.chunks.onChunkUnloaded?.(c);
+      this.world.removeChunk(c.cx, c.cz);
+      this.renderer.world.disposeChunk(c.cx, c.cz);
+    }
+    // (vanilla Minecraft.setLevel stops every sound, the music too; the portal's whoosh comes on arrival)
+    this.sound.stopAll();
+    this.world.reset(dim);
+    this.chunks.reset();
+    this.level.resetForDimension();
+    this.renderer.particles?.clear();
+    this.interaction.hit = null;
+    p.moveTo(x, y, z, p.yaw, p.pitch);
+    p.dx = p.dy = p.dz = 0;
+    p.fallDistance = 0;
+    this.chunks.setCenter(x, z);
+    this.arrival = arrive;
+    this.spawned = false;
+    this.receivingPortal = portal;
+    this.setScreen(this.receivingScreenFactory ? this.receivingScreenFactory(portal) : null);
+  }
+
+  /**
+   * vanilla NetherPortalBlock.getPortalDestination: the other dimension, at this position scaled by 8 (or
+   * 1/8), through the nearest portal there within 128 blocks (16 in the Nether), or through a new one
+   */
+  private portalTravel(bx: number, by: number, bz: number): void {
+    const p = this.player, w = this.world;
+    if (p.vehicle || p.passengers.length || p.health <= 0) return;
+    const st = w.getState(bx, by, bz);
+    if (!isPortal(st)) return;
+    const from = w.dim, to = from.id === 'the_nether' ? OVERWORLD : THE_NETHER;
+    const axis = portalAxis(st);
+    // where in its portal the player stands, to come out at the same place in the other
+    const rel = relativePortalPosition(portalRectangle(w, bx, by, bz), axis, p.x, p.y, p.z, p.width, p.height);
+    const scale = teleportationScale(from, to);
+    const BORDER = 29999984;
+    const tx = Math.floor(clamp(p.x * scale, -BORDER, BORDER)), ty = Math.floor(p.y), tz = Math.floor(clamp(p.z * scale, -BORDER, BORDER));
+    const radius = to.id === 'the_nether' ? 16 : 128;
+    const yaw = p.yaw, pitch = p.pitch, vx = p.dx, vy = p.dy, vz = p.dz;
+    let target = this.portalPoi.closest(to.id, tx, ty, tz, radius);
+    const arrive = (g: Game): boolean => {
+      let rect: PortalRect;
+      if (target) {
+        const [px, py, pz] = target;
+        if (!isPortal(g.world.getState(px, py, pz))) {
+          // the record of a portal that's not there any more
+          g.portalPoi.changed(to.id, px, py, pz, false);
+          target = g.portalPoi.closest(to.id, tx, ty, tz, radius);
+          const [wx, wy, wz] = target ?? [tx, ty, tz];
+          g.player.moveTo(wx + 0.5, wy, wz + 0.5, yaw, pitch);
+          g.chunks.setCenter(g.player.x, g.player.z);
+          return false;
+        }
+        rect = portalRectangle(g.world, px, py, pz);
+      } else rect = createPortal(g.world, to, tx, ty, tz, axis);
+      const exitAxis = portalAxis(g.world.getState(rect.x, rect.y, rect.z));
+      const e = portalExit(rect, exitAxis, axis, rel, g.player.width, g.player.height);
+      g.player.moveTo(e.x, e.y, e.z, yaw + e.turn, pitch);
+      // (the momentum turns with the portal)
+      if (e.turn) [g.player.dx, g.player.dy, g.player.dz] = [vz, vy, -vx];
+      else [g.player.dx, g.player.dy, g.player.dz] = [vx, vy, vz];
+      g.player.portalCooldown = g.player.dimensionChangingDelay();
+      g.sound.playUI('block.portal.travel', 0.25, Math.random() * 0.4 + 0.8);
+      g.onChangedDimension(from, to);
+      return true;
+    };
+    const [wx, wy, wz] = target ?? [tx, ty, tz];
+    this.leftOverworldAt = from.id === 'overworld' ? [p.x, p.z] : null;
+    this.changeDimension(to, wx + 0.5, wy, wz + 0.5, arrive, true);
+  }
+
+  /** the player arrived in another dimension (vanilla ServerPlayer.triggerDimensionChangeTriggers) */
+  private onChangedDimension(from: DimensionType, to: DimensionType): void {
+    const p = this.player;
+    this.advancements.trigger('changed_dimension', { dimension: { from: from.id, to: to.id } });
+    if (from.id === 'the_nether' && to.id === 'overworld' && this.enteredNetherAt)
+      this.advancements.trigger('nether_travel', { netherTravel: Math.hypot(p.x - this.enteredNetherAt[0], p.z - this.enteredNetherAt[1]) });
+    if (to.id === 'the_nether' && from.id === 'overworld') this.enteredNetherAt = this.leftOverworldAt;
+    else if (to.id !== 'the_nether') this.enteredNetherAt = null;
   }
 
   private findSpawn(): boolean {
@@ -983,8 +1124,14 @@ export class Game {
     if (this.spawned && inp.locked && !this.screen) {
       const s = this.opts.sensitivity * 0.6 + 0.2;
       const k = s * s * s * 8;
-      this.player.yaw += mx * k * 0.15;
-      this.player.pitch = clamp(this.player.pitch + my * k * 0.15 * (this.opts.invertMouse ? -1 : 1), -90, 90);
+      // vanilla Entity.turn: last tick's angles turn too (a rider's view lerps between ticks), and a
+      // boat clamps how far its riders look round
+      const p = this.player, dyaw = mx * k * 0.15, dpitch = my * k * 0.15 * (this.opts.invertMouse ? -1 : 1);
+      p.yaw += dyaw;
+      p.yawO += dyaw;
+      p.pitch = clamp(p.pitch + dpitch, -90, 90);
+      p.pitchO = clamp(p.pitchO + dpitch, -90, 90);
+      if ((mx || my) && p.vehicle) p.vehicle.onPassengerTurned(p);
       if (mx || my) this.tutorial.onMouse(mx * k, my * k);
     }
     if (this.spawned) {
@@ -998,13 +1145,22 @@ export class Game {
     this.ticks++;
     if (!this.inWorld) return;
     if (!this.spawned) {
-      if (this.spawnSearch) {
+      // (the loading screen's portal swirl keeps turning)
+      this.atlas.tick();
+      // (the world spawn is looked for in the Overworld only)
+      if (this.spawnSearch && this.world.dim === OVERWORLD) {
         if (this.findSpawn()) this.spawnSearch = false;
         else return;
       }
       if (this.chunks.isReady(this.player.x, this.player.z, 2)) {
+        if (this.arrival) {
+          if (!this.arrival(this)) return;
+          this.arrival = null;
+        }
         this.spawned = true;
-        this.tutorial.start();
+        this.receivingPortal = false;
+        if (!this.joined) this.tutorial.start();
+        this.joined = true;
         if (this.screen) this.setScreen(null);
         this.input.lock();
       } else return;
@@ -1014,6 +1170,11 @@ export class Game {
     // vanilla Minecraft.tick: asleep → the in-bed chat screen; woken → close it
     if (!this.screen && p.isSleeping() && p.health > 0 && this.inBedScreenFactory) this.setScreen(this.inBedScreenFactory());
     else if (this.screen && (this.screen as { inBed?: boolean }).inBed && !p.isSleeping()) (this.screen as unknown as { onPlayerWokeUp(): void }).onPlayerWokeUp();
+    // vanilla LocalPlayer.handleConfusionTransitionEffect: standing in a portal closes whatever's open (not the pause or death screens)
+    if (p.portal?.inside && this.screen && !this.screen.isPauseScreen() && p.health > 0) {
+      (this.screen as { onClose?(): void }).onClose?.();
+      if (this.screen) this.setScreen(null);
+    }
     this.screen?.tick();
     const noScreen = !this.screen;
     for (const code of inp.pressed()) {
@@ -1063,7 +1224,7 @@ export class Game {
     this.ambient?.tick(p.x, p.y, p.z);
     this.ambient?.tickRain(p.x, p.y + p.eyeHeight, p.z, this.opts.graphics >= 1);
     if (this.freezeTime) this.level.dayTime--;
-    if (p.y < MIN_Y - 64 && p.health > 0) p.hurt(4, 'void');
+    if (p.y < this.world.dim.minY - 64 && p.health > 0) p.hurt(4, 'void');
     this.atlas.tick();
     this.renderer.lightmap.tick();
     this.renderer.hand.tick(p);
@@ -1131,7 +1292,13 @@ export class Game {
     this.blurRequested = false;
     if (!this.inWorld || !this.spawned) {
       const gl = this.gl;
-      if (this.panorama && this.panorama.state === 'ready') this.panorama.render(this.panoramaFade);
+      if (this.inWorld && this.receivingPortal) {
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        gl.viewport(0, 0, this.canvas.width, this.canvas.height);
+        gl.clearColor(0, 0, 0, 1);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+        this.overlay.renderScreenSprite('nether_portal', 1, this.canvas.width, this.canvas.height);
+      } else if (this.panorama && this.panorama.state === 'ready') this.panorama.render(this.panoramaFade);
       else {
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);
         gl.viewport(0, 0, this.canvas.width, this.canvas.height);
@@ -1191,7 +1358,8 @@ export class Game {
       fov /= (1 - 500 / (f + 500)) * 2 + 1;
     }
     let cx = ex, cy = ey, cz = ez;
-    let yaw = p.yaw, pitch = p.pitch;
+    // vanilla LocalPlayer.getViewYRot: a rider's view turns smoothly with the vehicle
+    let yaw = p.vehicle ? p.yawO + (p.yaw - p.yawO) * partial : p.yaw, pitch = p.pitch;
     const bed = p.bedOrientation();
     if (this.thirdPerson === 0 && bed) {
       // vanilla Camera.setup: asleep, look down the bed from the pillow
@@ -1212,6 +1380,8 @@ export class Game {
     const cam: Camera = camOverride ?? { x: cx, y: cy, z: cz, yaw, pitch, fov };
     const biome = this.world.getBiome3(Math.floor(cam.x), Math.floor(cam.y), Math.floor(cam.z));
     const b = BIOMES[biome];
+    const w = this.world;
+    this.renderer.hand.netherLighting = w.dim.effects.constantAmbientLight;
     this.renderer.render(cam, {
       dayTime: this.level.dayTime,
       ticks: this.ticks,
@@ -1224,6 +1394,9 @@ export class Game {
       bob: camOverride ? null : bob,
       underwater: eyeFluid === FLUID_WATER,
       waterFogColor: [((b.waterFog >> 16) & 255) / 255, ((b.waterFog >> 8) & 255) / 255, (b.waterFog & 255) / 255],
+      lava: eyeFluid !== FLUID_LAVA ? null : p.gameMode === 'spectator' ? 'spectator' : p.hasEffect('fire_resistance') ? 'fire_resistant' : 'normal',
+      dim: w.dim,
+      biomeColors: blendBiomeColors(cam.x, cam.y, cam.z, (qx, qy, qz) => BIOMES[w.getBiome3(qx * 4 + 2, qy * 4 + 2, qz * 4 + 2)] ?? b),
       level: this.level,
       entityOptions: { shadows: this.opts.entityShadows, drawPlayer: this.thirdPerson > 0 && !camOverride, distanceScale: this.opts.entityDistanceScaling },
     });
@@ -1239,7 +1412,7 @@ export class Game {
 
   /** vanilla level.getSkyDarken as an int (0..11) for the current time/weather */
   skyDarkenInt(): number {
-    return skyDarkenInt(timeOfDay(this.level.dayTime), { rain: this.level.rainLevel(1), thunder: this.level.thunderLevel(1), flash: 0 });
+    return skyDarkenInt(timeOfDay(this.level.skyTime()), { rain: this.level.rainLevel(1), thunder: this.level.thunderLevel(1), flash: 0 });
   }
 
   private renderHandAndEffects(partial: number, p: Player, ex: number, ey: number, ez: number, eyeFluid: number): void {
@@ -1258,6 +1431,17 @@ export class Game {
       this.renderer.entities.renderScreenFire(this.renderer.batch, this.canvas.width, this.canvas.height, 70, this.level.gameTime);
     }
     if (this.opts.fancy && !this.hideGui) this.overlay.renderVignette(this.gui.sprites.get('vignette'), this.hud.vignetteBrightness, this.canvas.width, this.canvas.height);
+    // vanilla Gui.renderPortalOverlay: the portal's swirl fades in over the screen while standing in one
+    const spin = p.oSpinningEffectIntensity + (p.spinningEffectIntensity - p.oSpinningEffectIntensity) * partial;
+    if (spin > 0 && !this.hideGui && !p.hasEffect('nausea')) {
+      let a = spin;
+      if (a < 1) {
+        a *= a;
+        a *= a;
+        a = a * 0.8 + 0.2;
+      }
+      this.overlay.renderScreenSprite('nether_portal', a, this.canvas.width, this.canvas.height);
+    }
   }
 
   private cameraFluid(x: number, y: number, z: number): number {
@@ -1266,7 +1450,10 @@ export class Game {
       const h = Math.floor(y) + fluidHeight(this.world, Math.floor(x), Math.floor(y), Math.floor(z), FLUID_WATER);
       if (y < h) return FLUID_WATER;
     }
-    if (FLAGS[st] & F_LAVA) return FLUID_LAVA;
+    if (FLAGS[st] & F_LAVA) {
+      const h = Math.floor(y) + fluidHeight(this.world, Math.floor(x), Math.floor(y), Math.floor(z), FLUID_LAVA);
+      if (y <= h) return FLUID_LAVA;
+    }
     return 0;
   }
 

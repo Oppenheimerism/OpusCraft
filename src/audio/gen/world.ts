@@ -24,7 +24,6 @@ import {
   smooth,
   SVF,
   sinCyc,
-  upsample2,
   white,
 } from './dsp';
 import { type Ctx, sound } from './registry';
@@ -873,34 +872,6 @@ function cave(c: Ctx): Float32Array {
   return o;
 }
 
-function portal(c: Ctx): Float32Array {
-  const { rng } = c;
-  // everything here lives below ~2 kHz: render at half rate, then upsample (periodically)
-  const sr = c.sr / 2;
-  const L = 4;
-  const X = 0.5;
-  const half = looped(sr, L, X, (out) => {
-    const n = out.length;
-    layer(out, 1, (b) => {
-      for (let k = 0; k < 3; k++) {
-        const fc = rng.range(300, 900);
-        const lf = rng.range(0.25, 0.9);
-        const ph = rng.next() * TAU;
-        sweep(b, sr, rng, { dur: L + X, f: (t) => fc * (1 + 0.45 * Math.sin(TAU * lf * t + ph)), q: 9, amp: () => 1, color: 'pink' });
-      }
-    });
-    layer(out, 0.6, (b) => {
-      const f = rng.range(52, 60);
-      for (let h = 1; h <= 6; h++) addOsc(b, sr, 0, L + X, (t) => f * h * (1 + 0.004 * Math.sin(TAU * 0.5 * t)), () => 0.5 / h);
-      addOsc(b, sr, 0, L + X, () => f * 1.007, () => 0.4);
-      lowpass(b, 400, sr);
-    });
-    const sw = rng.range(0.4, 0.7);
-    for (let i = 0; i < n; i++) out[i] *= 0.75 + 0.25 * Math.sin((TAU * sw * i) / sr);
-  });
-  return upsample2(half, true);
-}
-
 // ------------------------------------------------------------------ registry
 
 export function worldSounds(): Record<string, SoundGen> {
@@ -931,7 +902,6 @@ export function worldSounds(): Record<string, SoundGen> {
     'weather.rain.above': sound('weather.rain.above', 3, (c) => rain(c, true), loop),
     'entity.lightning_bolt.thunder': sound('entity.lightning_bolt.thunder', 3, thunder, { hp: 25 }),
     'ambient.cave': sound('ambient.cave', CAVES.length, cave, { trimDb: -70, fadeOut: 0.3 }),
-    'block.portal.ambient': sound('block.portal.ambient', 1, portal, loop),
   };
 }
 

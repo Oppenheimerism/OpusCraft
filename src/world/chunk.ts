@@ -2,6 +2,7 @@
 
 import { MIN_Y, MAX_Y, SECTIONS } from './constants';
 import type { SavedEntity } from '../entity/mob';
+import type { PendingWrites } from './gen/context';
 
 export const LIGHT_DEFAULT = 0xf0; // sky 15, block 0
 
@@ -18,6 +19,8 @@ export class Chunk {
   grassTint: Uint32Array | null = null;
   foliageTint: Uint32Array | null = null;
   waterTint: Uint32Array | null = null;
+  /** tints for the layers of 4 blocks that have underground biomes about (grass, foliage, water x 256), else null */
+  caveTints: (Uint32Array | null)[] | null = null;
   /** true once lighting has been merged with neighbours at least once */
   lightMerged = false;
   /** sections that need remeshing (bitmask) */
@@ -34,7 +37,13 @@ export class Chunk {
   /** generated fences to connect once loaded (packed lx, y, lz) */
   postProcess: number[] | null = null;
   inhabitedTime = 0;
-  constructor(readonly cx: number, readonly cz: number) {}
+  /** this chunk's generation writes into its neighbours (tree leaves, patch columns...), kept so a
+   * neighbour that is generated again, or loads later, still gets them */
+  genWrites: PendingWrites[] = [];
+  /** neighbours whose generation writes these blocks already have (bits World.nbBit) */
+  baked = 0;
+  /** light of space with no light data (sky 15 in dimensions with sky light, else dark) */
+  constructor(readonly cx: number, readonly cz: number, readonly lightDefault = LIGHT_DEFAULT) {}
 
   static key(cx: number, cz: number): number {
     return (cx + 32768) * 65536 + (cz + 32768);
@@ -72,10 +81,10 @@ export class Chunk {
   }
 
   getLight(x: number, y: number, z: number): number {
-    if (y >= MAX_Y) return LIGHT_DEFAULT;
+    if (y >= MAX_Y) return this.lightDefault;
     if (y < MIN_Y) return 0;
     const l = this.light[(y - MIN_Y) >> 4];
-    if (!l) return LIGHT_DEFAULT;
+    if (!l) return this.lightDefault;
     return l[(((y - MIN_Y) & 15) << 8) | (z << 4) | x];
   }
 
@@ -84,8 +93,8 @@ export class Chunk {
     const si = (y - MIN_Y) >> 4;
     let l = this.light[si];
     if (!l) {
-      if (v === LIGHT_DEFAULT) return;
-      l = new Uint8Array(4096).fill(LIGHT_DEFAULT);
+      if (v === this.lightDefault) return;
+      l = new Uint8Array(4096).fill(this.lightDefault);
       this.light[si] = l;
     }
     l[(((y - MIN_Y) & 15) << 8) | (z << 4) | x] = v;
@@ -102,7 +111,7 @@ export class Chunk {
       const l = light.subarray(s * 4096, (s + 1) * 4096);
       let uniform = true;
       for (let i = 0; i < 4096; i++)
-        if (l[i] !== LIGHT_DEFAULT) {
+        if (l[i] !== this.lightDefault) {
           uniform = false;
           break;
         }
