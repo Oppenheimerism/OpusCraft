@@ -436,8 +436,9 @@ function ghastShriek(c: Ctx): Float32Array {
       d,
       f0: (x) => hi * envExpPts(x, SHRIEKS[k]) * (k === 4 ? 1 + 0.05 * Math.sin(TAU * 11 * x * d) : 1),
       amp: k === 2 ? (x) => envPts(x, [0, 0, 0.04, 1, 0.34, 0.7, 0.4, 0.15, 0.46, 1, 1, 0]) : (x) => envPts(x, [0, 0, 0.05, 1, 0.5, 0.75, 1, 0]),
-      from: rng.pick(['ae', 'e']),
-      to: rng.pick(['i', 'ih']),
+      // "ee-ow": the vowel opens as the pitch falls, like a cat's screech
+      from: rng.pick(['i', 'ih', 'e']),
+      to: rng.pick(['ae', 'aw']),
       bright: 0.1,
       breath: 0.3,
       vib: [0.02, 0.04],
@@ -1010,7 +1011,12 @@ function hoglinRetreat(c: Ctx): Float32Array {
   const { sr, rng, v } = c;
   const out = alloc(0.7, sr);
   layer(out, 0.7, (b) => snortInto(b, c, 0, 0.12, 800, v === 1));
-  layer(out, 1, (b) => yelpInto(b, c, 0.1, rng.range(0.3, 0.38), rng.range(135, 160), 0.5 + 0.15 * v, 0.8, 0.45));
+  layer(out, 1, (b) => {
+    const d = rng.range(0.3, 0.38);
+    yelpInto(b, c, 0.1, d, rng.range(135, 160), 0.5 + 0.15 * v, 0.8, 0.45);
+    // the third take backs off with a sulky grunt
+    if (v === 2) gruntInto(b, c, HOGLIN, { t: 0.12 + d, d: 0.2, f0: (x) => 68 * (1.1 - 0.2 * x), open: 0.3, a: 0.6 });
+  });
   lowpass(out, 4200, sr);
   return out;
 }
