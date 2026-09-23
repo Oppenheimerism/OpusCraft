@@ -2,9 +2,10 @@
 
 import { Chunk, LIGHT_DEFAULT, blocksSky } from './chunk';
 import { LightEngine } from './light';
-import { MIN_Y, MAX_Y, SECTIONS, caveBiomeIndex, NO_CAVE_BIOME } from './constants';
+import { MIN_Y, MAX_Y, SECTIONS, caveBiomeIndex, NO_CAVE_BIOME, CAVE_BIOME_LEVELS } from './constants';
 import { BIOMES } from './gen/biomes';
-import { ruleAllows, PendingWrites } from './gen/context';
+import { ruleAllows, PendingWrites, W_HANGING } from './gen/context';
+import { runPatchColumn, type BlockAccess } from './gen/patches';
 import { MeshInput, PS, PAD, PADDED_VOLUME } from '../render/mesher';
 import { OPACITY, BLOCKS, STATE_BLOCK } from './block';
 import { BlockEntity, SavedBlockEntity, blockEntityKey, createBlockEntity, loadBlockEntity } from './blockEntity';
@@ -25,13 +26,16 @@ export interface GenResult {
   /** generated blocks to reshape against their neighbours (packed lx, y, lz) */
   postProcess?: number[];
   caveBiomes?: Uint8Array | null;
+  /** neighbours whose generation writes these blocks already have (a chunk loaded from a save) */
+  baked?: number;
 }
+
+/** the bit for the neighbour chunk (dx, dz) away */
+export const nbBit = (dx: number, dz: number): number => 1 << ((dx + 1) * 3 + (dz + 1));
 
 export class World {
   readonly chunks = new Map<number, Chunk>();
   readonly light: LightEngine;
-  /** writes waiting for their target chunk (key → packed [lx,y,lz,state,rule]) */
-  private readonly pending = new Map<number, number[]>();
   biomeBlend = 2;
   /** called when a section's mesh became stale */
   onDirty: ((c: Chunk, section: number) => void) | null = null;
@@ -189,26 +193,23 @@ export class World {
     if (r.entities?.length) c.genEntities = r.entities;
     if (r.postProcess?.length) c.postProcess = r.postProcess;
     c.caveBiomes = r.caveBiomes ?? null;
+    c.genWrites = r.pending;
+    c.baked = r.baked ?? 0;
     this.chunks.set(c.key, c);
     this.lastChunk = null;
-    // pending writes into this chunk from earlier neighbours
-    const pend = this.pending.get(c.key);
-    this.pending.delete(c.key);
-    // this chunk's writes into neighbours
-    for (const p of r.pending) {
-      const key = Chunk.key(p.cx, p.cz);
-      const target = this.chunks.get(key);
-      if (target) this.applyWrites(target, p.data);
-      else {
-        let arr = this.pending.get(key);
-        if (!arr) this.pending.set(key, (arr = []));
-        for (const v of p.data) arr.push(v);
+    // generation writes across chunk borders go in once both chunks are here: this chunk's
+    // into the neighbours, then theirs into it (a chunk from a save already has what it had then)
+    const near: Chunk[] = [];
+    for (let dx = -1; dx <= 1; dx++)
+      for (let dz = -1; dz <= 1; dz++) {
+        const n = dx || dz ? this.chunks.get(Chunk.key(c.cx + dx, c.cz + dz)) : undefined;
+        if (n) near.push(n);
       }
-    }
+    for (const n of near) this.bakeWrites(n, c);
     // mark everything dirty
     c.dirty = (1 << SECTIONS) - 1;
     this.light.mergeChunk(c);
-    if (pend) this.applyWrites(c, pend);
+    for (const n of near) this.bakeWrites(c, n);
     c.lightMerged = true;
     if (r.blockEntities)
       for (const d of r.blockEntities) {
@@ -218,15 +219,33 @@ export class World {
     return c;
   }
 
-  private applyWrites(c: Chunk, data: number[]): void {
+  /** `from`'s generation writes into `to`, unless `to` has them already */
+  private bakeWrites(to: Chunk, from: Chunk): void {
+    const bit = nbBit(from.cx - to.cx, from.cz - to.cz);
+    if (to.baked & bit) return;
+    to.baked |= bit;
+    for (const p of from.genWrites) if (p.cx === to.cx && p.cz === to.cz) this.applyWrites(to, p);
+  }
+
+  private applyWrites(c: Chunk, p: PendingWrites): void {
+    // (generation, not a change to save)
+    const was = c.modified;
+    const data = p.data;
     for (let i = 0; i < data.length; i += 5) {
       const lx = data[i], y = data[i + 1], lz = data[i + 2], st = data[i + 3], rule = data[i + 4];
       const cur = c.getState(lx, y, lz);
-      if (!ruleAllows(rule, cur)) continue;
+      if (!ruleAllows(rule, cur, rule === W_HANGING ? c.getState(lx, y + 1, lz) : 0)) continue;
       this.setState(c.cx * 16 + lx, y, c.cz * 16 + lz, st);
     }
-    c.modified = false;
+    if (p.ops) for (const op of p.ops) runPatchColumn(this.access, op);
+    c.modified = was;
   }
+
+  /** the loaded blocks, for column programs (-1 where no chunk is loaded) */
+  readonly access: BlockAccess = {
+    get: (x, y, z) => (y < MIN_Y || y >= MAX_Y ? 0 : this.getChunk(x >> 4, z >> 4) ? this.getState(x, y, z) : -1),
+    set: (x, y, z, st) => void this.setState(x, y, z, st),
+  };
 
   removeChunk(cx: number, cz: number): Chunk | null {
     const key = Chunk.key(cx, cz);
@@ -291,6 +310,59 @@ export class World {
     c.grassTint = g;
     c.foliageTint = f;
     c.waterTint = w;
+    this.ensureCaveTints(c);
+  }
+
+  /** the underground biomes' tints, layer by layer (vanilla blends the biomes at the block's own height) */
+  private ensureCaveTints(c: Chunk): void {
+    c.caveTints = null;
+    const near: Chunk[] = [];
+    for (let dz = -1; dz <= 1; dz++)
+      for (let dx = -1; dx <= 1; dx++) {
+        const n = this.getChunk(c.cx + dx, c.cz + dz);
+        if (n?.caveBiomes) near.push(n);
+      }
+    if (!near.length) return;
+    const r = this.biomeBlend, W = 16 + 2 * r;
+    const x0 = c.cx * 16, z0 = c.cz * 16;
+    const cols = new Uint32Array(W * W * 3);
+    const layers: (Uint32Array | null)[] = new Array(CAVE_BIOME_LEVELS).fill(null);
+    for (let qy = 0; qy < CAVE_BIOME_LEVELS; qy++) {
+      let any = false;
+      for (const n of near) {
+        const cb = n.caveBiomes!;
+        for (let i = qy << 4; i < (qy + 1) << 4 && !any; i++) if (cb[i] !== NO_CAVE_BIOME) any = true;
+        if (any) break;
+      }
+      if (!any) continue;
+      const y = MIN_Y + qy * 4;
+      for (let sz = 0; sz < W; sz++)
+        for (let sx = 0; sx < W; sx++) {
+          const x = x0 - r + sx, z = z0 - r + sz;
+          const biome = this.getChunk(x >> 4, z >> 4) ? this.getBiome3(x, y, z) : c.biomes[(Math.min(15, Math.max(0, z - z0)) << 4) | Math.min(15, Math.max(0, x - x0))];
+          const i = (sz * W + sx) * 3;
+          cols[i] = this.biomeColor(0, biome, x, z);
+          cols[i + 1] = this.biomeColor(1, biome, x, z);
+          cols[i + 2] = this.biomeColor(2, biome, x, z);
+        }
+      const out = new Uint32Array(768);
+      const n = (2 * r + 1) * (2 * r + 1);
+      for (let lz = 0; lz < 16; lz++)
+        for (let lx = 0; lx < 16; lx++)
+          for (let k = 0; k < 3; k++) {
+            let cr = 0, cg = 0, cb = 0;
+            for (let dz = 0; dz <= 2 * r; dz++)
+              for (let dx = 0; dx <= 2 * r; dx++) {
+                const v = cols[((lz + dz) * W + lx + dx) * 3 + k];
+                cr += v >> 16;
+                cg += (v >> 8) & 255;
+                cb += v & 255;
+              }
+            out[k * 256 + ((lz << 4) | lx)] = ((cr / n) << 16) | ((cg / n) << 8) | (cb / n);
+          }
+      layers[qy] = out;
+    }
+    c.caveTints = layers;
   }
 
   /** Build padded mesh input for section (cx, si, cz). Requires all 8 neighbours. */
@@ -341,7 +413,24 @@ export class World {
         }
       }
     }
-    return { blocks, light, grass, foliage, water, ox: cx * 16, oy: y0, oz: cz * 16, smooth, fancy };
+    // tints by height where underground biomes are about: one layer per 4 blocks the padded section covers
+    let tint3: MeshInput['tint3'];
+    if (chunks.some((c) => c!.caveTints)) {
+      const q0 = Math.max(0, (y0 - PAD - MIN_Y) >> 2), q1 = Math.min(CAVE_BIOME_LEVELS - 1, (y0 + 16 + PAD - 1 - MIN_Y) >> 2);
+      const L = PS * PS, g3 = new Uint32Array((q1 - q0 + 1) * L), f3 = new Uint32Array(g3.length), w3 = new Uint32Array(g3.length);
+      for (let q = q0; q <= q1; q++)
+        for (let pz = -PAD; pz < 16 + PAD; pz++)
+          for (let px = -PAD; px < 16 + PAD; px++) {
+            const c = chunks[((pz < 0 ? -1 : pz > 15 ? 1 : 0) + 1) * 3 + ((px < 0 ? -1 : px > 15 ? 1 : 0) + 1)]!;
+            const col = (pz + PAD) * PS + (px + PAD), ci = ((pz & 15) << 4) | (px & 15), o = (q - q0) * L + col;
+            const layer = c.caveTints?.[q];
+            g3[o] = layer ? layer[ci] : grass[col];
+            f3[o] = layer ? layer[256 + ci] : foliage[col];
+            w3[o] = layer ? layer[512 + ci] : water[col];
+          }
+      tint3 = { q0, grass: g3, foliage: f3, water: w3 };
+    }
+    return { blocks, light, grass, foliage, water, tint3, ox: cx * 16, oy: y0, oz: cz * 16, smooth, fancy };
   }
 }
 

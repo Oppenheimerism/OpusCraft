@@ -21,6 +21,7 @@ const enum K {
   LEAVES,
   FALLING,
   DRIPSTONE,
+  SPORE_BLOSSOM,
 }
 
 let KIND: Uint8Array | null = null;
@@ -40,6 +41,7 @@ function kindOf(st: number): number {
         : n.endsWith('_leaves') ? K.LEAVES
         : n in DUST || n.endsWith('_concrete_powder') ? K.FALLING
         : n === 'pointed_dripstone' ? K.DRIPSTONE
+        : n === 'spore_blossom' ? K.SPORE_BLOSSOM
         : K.NONE;
     });
   }
@@ -152,9 +154,24 @@ export class AmbientTicker {
       case K.DRIPSTONE:
         this.dripstone(x, y, z, st);
         break;
+      case K.SPORE_BLOSSOM:
+        this.sporeBlossom(x, y, z);
+        break;
     }
     const f = FLAGS[st];
     if (f & (F_WATER | F_LAVA)) this.fluid(x, y, z, st);
+  }
+
+  /** vanilla SporeBlossomBlock.animateTick: a spore falls from the flower, and spores hang in the air all round it */
+  private sporeBlossom(x: number, y: number, z: number): void {
+    const p = this.level.particles, w = this.level.world;
+    p.spawn?.('falling_spore_blossom', x + Math.random(), y + 0.7, z + Math.random(), 0, 0, 0);
+    for (let l = 0; l < 14; l++) {
+      const ax = x + Math.floor(Math.random() * 21) - 10, ay = y - Math.floor(Math.random() * 10), az = z + Math.floor(Math.random() * 21) - 10;
+      const c = COLLISION[w.getState(ax, ay, az)];
+      const full = !!c && c.length === 1 && c[0][0] === 0 && c[0][1] === 0 && c[0][2] === 0 && c[0][3] === 1 && c[0][4] === 1 && c[0][5] === 1;
+      if (!full) p.spawn?.('spore_blossom_air', ax + Math.random(), ay + Math.random(), az + Math.random(), 0, 0, 0);
+    }
   }
 
   /**

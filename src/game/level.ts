@@ -10,7 +10,7 @@ import type { Player } from '../entity/player';
 import type { LivingEntity } from '../entity/living';
 import { Rand } from '../core/rng';
 import { BLOCKS, STATE_BLOCK, FLAGS, F_AIR, F_WATERLOGGED, S } from '../world/block';
-import { canSurvive, blockDrops, isDripstoneFacing } from './blockRules';
+import { canSurvive, blockDrops, isDripstoneFacing, dripleafTick } from './blockRules';
 import { updateShape, hasShapeUpdates } from './shapeUpdates';
 import { isRail, railOnPlace, railNeighborChanged } from './rails';
 import { fireTick } from './fire';
@@ -263,6 +263,8 @@ export class Level {
         this.tryFall(x, y, z, st);
       } else if (STATE_BLOCK[st] === fireId()) {
         fireTick(this, x, y, z, st);
+      } else if (STATE_BLOCK[st] === DRIPLEAF()) {
+        dripleafTick(this, x, y, z, st);
       }
     }
   }
@@ -478,6 +480,12 @@ let DRIPSTONE_ID = -1;
 function DRIPSTONE(): number {
   if (DRIPSTONE_ID < 0) DRIPSTONE_ID = BLOCKS.findIndex((b) => b.name === 'pointed_dripstone');
   return DRIPSTONE_ID;
+}
+
+let DRIPLEAF_ID = -1;
+function DRIPLEAF(): number {
+  if (DRIPLEAF_ID < 0) DRIPLEAF_ID = BLOCKS.findIndex((b) => b.name === 'big_dripleaf');
+  return DRIPLEAF_ID;
 }
 
 let FIRE_ID = -1;

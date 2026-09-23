@@ -4,6 +4,7 @@ import { AABB, collideWithBoxes } from '../core/aabb';
 import { COLLISION, FLAGS, F_WATER, F_LAVA, BLOCKS, STATE_BLOCK, F_CLIMBABLE } from '../world/block';
 import { fluidType, fluidHeight, fluidFlow, FLUID_WATER, FLUID_LAVA, FLUID_NONE } from '../world/fluids';
 import type { Level } from '../game/level';
+import { setDripleafTilt } from '../game/blockRules';
 
 let nextEntityId = 1;
 
@@ -471,6 +472,7 @@ export abstract class Entity {
           } else if (kind === INSIDE_COBWEB) this.insideCobweb();
           else if (kind === INSIDE_BERRY_BUSH) this.insideBerryBush(st);
           else if (kind === INSIDE_CACTUS) this.hurt(1, 'cactus');
+          else if (kind === INSIDE_DRIPLEAF) this.insideDripleaf(x, y, z, st);
           if (this.removed) return fire;
         }
     return fire;
@@ -487,6 +489,13 @@ export abstract class Entity {
 
   /** vanilla SweetBerryBushBlock.entityInside (living things only) */
   protected insideBerryBush(_st: number): void {}
+
+  /** vanilla BigDripleafBlock.entityInside: standing on a still leaf sets it tipping */
+  private insideDripleaf(x: number, y: number, z: number, st: number): void {
+    const b = BLOCKS[STATE_BLOCK[st]];
+    if (b.get(st, 'tilt') !== 'none' || !this.onGround || this.y <= y + 0.6875) return;
+    setDripleafTilt(this.level, x, y, z, st, 'unstable', null);
+  }
 
   /** vanilla WebBlock.entityInside */
   protected insideCobweb(): void {
@@ -706,14 +715,14 @@ export abstract class Entity {
   }
 }
 
-const INSIDE_NONE = 0, INSIDE_FIRE = 1, INSIDE_LAVA = 2, INSIDE_COBWEB = 3, INSIDE_BERRY_BUSH = 4, INSIDE_CACTUS = 5;
+const INSIDE_NONE = 0, INSIDE_FIRE = 1, INSIDE_LAVA = 2, INSIDE_COBWEB = 3, INSIDE_BERRY_BUSH = 4, INSIDE_CACTUS = 5, INSIDE_DRIPLEAF = 6;
 let INSIDE: Uint8Array | null = null;
 
 /** which vanilla entityInside behaviour a block has (lazy per-block table) */
 function insideKind(st: number): number {
   if (!INSIDE) {
     INSIDE = new Uint8Array(BLOCKS.length);
-    const kinds: Record<string, number> = { fire: INSIDE_FIRE, lava: INSIDE_LAVA, cobweb: INSIDE_COBWEB, sweet_berry_bush: INSIDE_BERRY_BUSH, cactus: INSIDE_CACTUS };
+    const kinds: Record<string, number> = { fire: INSIDE_FIRE, lava: INSIDE_LAVA, cobweb: INSIDE_COBWEB, sweet_berry_bush: INSIDE_BERRY_BUSH, cactus: INSIDE_CACTUS, big_dripleaf: INSIDE_DRIPLEAF };
     BLOCKS.forEach((b, i) => (INSIDE![i] = kinds[b.name] ?? INSIDE_NONE));
   }
   return INSIDE[STATE_BLOCK[st]];

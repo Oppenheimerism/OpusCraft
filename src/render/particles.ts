@@ -90,6 +90,8 @@ const EFFECT = Array.from({ length: 8 }, (_, i) => `effect_${7 - i}`);
 export class ParticleEngine {
   private readonly list: Particle[] = [];
   private readonly sprites: SpriteParticle[] = [];
+  /** spore blossom air particles alive (vanilla keeps at most 1000) */
+  private sporeAir = 0;
   readonly max = 16384;
   spriteTexture: WebGLTexture | null = null;
   spriteRects: Record<string, SpriteRectUV> = {};
@@ -496,6 +498,41 @@ export class ParticleEngine {
         this.addSprite(p);
         break;
       }
+      case 'falling_spore_blossom': {
+        // vanilla DripParticle.createSporeBlossomFallParticle: a green speck drifting down, gone when it lands
+        const p = this.base(kind, x, y, z);
+        p.bbw = 0.01;
+        p.gravity = 0.005;
+        p.lifetime = Math.floor(64 / (0.1 + Math.random() * 0.8));
+        p.r = 0.32;
+        p.g = 0.5;
+        p.b = 0.22;
+        p.frames = ['drip_fall'];
+        p.frame = 0;
+        p.drip = { stage: 'fall', fluid: null, next: null, cooling: false };
+        this.addSprite(p);
+        break;
+      }
+      case 'spore_blossom_air': {
+        // vanilla SuspendedParticle (SporeBlossomAirProvider): drifts through blocks for 25 to 50 seconds, slowly sinking
+        // (at most 1000 of them: vanilla ParticleGroup.SPORE_BLOSSOM)
+        if (this.sporeAir >= 1000) break;
+        const p = this.base(kind, x, y - 0.125, z);
+        this.withSpeed(p, 0, -0.8, 0);
+        p.size *= Math.random() * 0.6 + 0.6;
+        p.lifetime = 500 + Math.floor(Math.random() * 501);
+        p.physics = false;
+        p.friction = 1;
+        p.gravity = 0.01;
+        p.r = 0.32;
+        p.g = 0.5;
+        p.b = 0.22;
+        p.frames = ['generic_0'];
+        p.frame = 0;
+        this.sporeAir++;
+        this.addSprite(p);
+        break;
+      }
       case 'splash':
       case 'rain': {
         // vanilla WaterDropParticle / SplashParticle
@@ -619,6 +656,9 @@ export class ParticleEngine {
     let w = 0;
     const list = this.sprites;
     const n = list.length;
+    let spores = 0;
+    for (let i = 0; i < n; i++) if (list[i].kind === 'spore_blossom_air') spores++;
+    this.sporeAir = spores;
     for (let i = 0; i < n; i++) {
       const p = list[i];
       p.xo = p.x;

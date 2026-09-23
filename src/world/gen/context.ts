@@ -2,9 +2,10 @@
 // Writes outside the chunk are recorded as pending writes for neighbours.
 
 import { MIN_Y, MAX_Y, colIndex, caveBiomeIndex, NO_CAVE_BIOME } from '../constants';
-import { FLAGS, F_AIR, F_REPLACEABLE, F_LEAVES, STATE_BLOCK, BLOCKS, F_WATER, F_OPAQUE, F_COLLIDE } from '../block';
+import { FLAGS, FACE_OCC, F_AIR, F_REPLACEABLE, F_LEAVES, STATE_BLOCK, BLOCKS, F_WATER, F_OPAQUE, F_COLLIDE } from '../block';
 import type { SavedBlockEntity } from '../blockEntity';
 import type { SavedEntity } from '../../entity/mob';
+import { type PatchColumn, runPatchColumn } from './patches';
 
 /** Write rules (applied at write time against the current target block). */
 export const W_ANY = 0, // unconditional
@@ -14,18 +15,23 @@ export const W_ANY = 0, // unconditional
   W_ORE_DEEP = 4, // deepslate, tuff
   W_AIR = 5, // only air
   W_BASE_STONE = 6, // any base stone (stone, deepslate, granite...) -> for blobs
-  W_WATER_OR_AIR = 7;
+  W_WATER_OR_AIR = 7,
+  W_ROOT = 8, // vanilla #azalea_root_replaceable (rooted dirt of a root system)
+  W_HANGING = 9; // air under a sturdy face (hanging roots)
 
 export interface PendingWrites {
   cx: number;
   cz: number;
   /** packed [lx, y, lz, state, rule] */
   data: number[];
+  /** vegetation patch columns that fall in this chunk, run once it exists (world coordinates) */
+  ops?: PatchColumn[];
 }
 
 let BASE_STONE: Set<number> | null = null;
 let ORE_STONE: Set<number> | null = null;
 let ORE_DEEP: Set<number> | null = null;
+let ROOT: Set<number> | null = null;
 
 function blockSets(): void {
   if (BASE_STONE) return;
@@ -33,9 +39,13 @@ function blockSets(): void {
   ORE_STONE = ids(['stone', 'granite', 'diorite', 'andesite']);
   ORE_DEEP = ids(['deepslate', 'tuff']);
   BASE_STONE = ids(['stone', 'granite', 'diorite', 'andesite', 'deepslate', 'tuff']);
+  const TERRACOTTA = ['', 'white_', 'orange_', 'magenta_', 'light_blue_', 'yellow_', 'lime_', 'pink_', 'gray_', 'light_gray_', 'cyan_', 'purple_', 'blue_', 'brown_', 'green_', 'red_', 'black_'].map((c) => c + 'terracotta');
+  ROOT = ids(['stone', 'granite', 'diorite', 'andesite', 'deepslate', 'tuff', 'dirt', 'grass_block', 'podzol', 'coarse_dirt', 'mycelium', 'rooted_dirt', 'moss_block', 'mud', 'muddy_mangrove_roots',
+    ...TERRACOTTA, 'red_sand', 'clay', 'gravel', 'sand', 'snow_block', 'powder_snow']);
 }
 
-export function ruleAllows(rule: number, target: number): boolean {
+/** may a write with this rule go into `target`? (`above` is the block over it, for W_HANGING) */
+export function ruleAllows(rule: number, target: number, above = 0): boolean {
   blockSets();
   const f = FLAGS[target];
   switch (rule) {
@@ -47,6 +57,8 @@ export function ruleAllows(rule: number, target: number): boolean {
     case W_AIR: return (f & F_AIR) !== 0;
     case W_BASE_STONE: return BASE_STONE!.has(STATE_BLOCK[target]);
     case W_WATER_OR_AIR: return (f & F_AIR) !== 0 || (f & F_WATER) !== 0 && (f & F_COLLIDE) === 0;
+    case W_ROOT: return ROOT!.has(STATE_BLOCK[target]);
+    case W_HANGING: return (f & F_AIR) !== 0 && ((FACE_OCC[above] >> 0) & 1) === 1;
   }
   return false;
 }
@@ -72,6 +84,8 @@ export class GenContext {
   readonly entities: SavedEntity[] = [];
   /** blocks whose connections are fixed up against their neighbours on load (packed lx, y, lz) */
   readonly postProcess: number[] = [];
+  /** whether an unknown block (in a neighbouring chunk) is solid rock, from the noise terrain */
+  solidGuess?: (x: number, y: number, z: number) => boolean;
 
   constructor(readonly cx: number, readonly cz: number, blocks: Uint16Array, biomes: Uint8Array, readonly caveBiomes: Uint8Array | null = null) {
     this.x0 = cx * 16;
@@ -117,7 +131,7 @@ export class GenContext {
       return true;
     }
     const i = colIndex(lx, y, lz);
-    if (!ruleAllows(rule, this.blocks[i])) return false;
+    if (!ruleAllows(rule, this.blocks[i], rule === W_HANGING && y + 1 < MAX_Y ? this.blocks[colIndex(lx, y + 1, lz)] : 0)) return false;
     this.blocks[i] = state;
     const ci = (lz << 4) | lx;
     if (state !== 0 && y + 1 > this.surface[ci]) this.surface[ci] = y + 1;
@@ -138,6 +152,23 @@ export class GenContext {
     const lx = x - this.x0, lz = z - this.z0;
     if (lx < 0 || lz < 0 || lx > 15 || lz > 15) return;
     this.fluidTicks.push(lx, y, lz);
+  }
+
+  /** a vegetation patch column: run now when it is in this chunk, else sent to the chunk it falls in */
+  runColumn(c: PatchColumn): void {
+    if (this.inChunk(c.x, c.z)) {
+      runPatchColumn(this, c);
+      return;
+    }
+    const ncx = Math.floor(c.x / 16), ncz = Math.floor(c.z / 16);
+    if (Math.abs(ncx - this.cx) > 1 || Math.abs(ncz - this.cz) > 1) return;
+    const key = (ncx - this.cx + 1) * 3 + (ncz - this.cz + 1);
+    let p = this.pending.get(key);
+    if (!p) {
+      p = { cx: ncx, cz: ncz, data: [] };
+      this.pending.set(key, p);
+    }
+    (p.ops ??= []).push(c);
   }
 
   pendingWrites(): PendingWrites[] {

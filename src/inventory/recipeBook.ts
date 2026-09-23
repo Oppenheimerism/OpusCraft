@@ -78,7 +78,7 @@ function craftingGroup(result: string, r: CraftingRecipe): string {
     }
   }
   if (result.endsWith('_bed')) return 'bed';
-  if (result.endsWith('_carpet')) return 'carpet';
+  if (result.endsWith('_carpet') && result !== 'moss_carpet') return 'carpet';
   if (result.endsWith('_stained_glass_pane')) return 'stained_glass_pane';
   if (result.endsWith('_stained_glass')) return 'stained_glass';
   if (result.endsWith('_terracotta')) return 'stained_terracotta';

@@ -164,6 +164,7 @@ shaped('melon', 1, ['###', '###', '###'], { '#': 'melon_slice' });
 shaped('stone_bricks', 4, ['##', '##'], { '#': 'stone' });
 shapeless('mossy_stone_bricks', 1, 'stone_bricks', ['vine', 'moss_block']);
 shapeless('mossy_cobblestone', 1, 'cobblestone', ['vine', 'moss_block']);
+shaped('moss_carpet', 3, ['##'], { '#': 'moss_block' });
 shaped('chiseled_stone_bricks', 1, ['#', '#'], { '#': 'stone_brick_slab' });
 shaped('sandstone', 1, ['##', '##'], { '#': 'sand' });
 shaped('cut_sandstone', 4, ['##', '##'], { '#': 'sandstone' });

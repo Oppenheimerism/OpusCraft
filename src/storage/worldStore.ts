@@ -9,6 +9,8 @@ import { SECTIONS, NO_CAVE_BIOME } from '../world/constants';
 import type { SavedBlockEntity } from '../world/blockEntity';
 import type { SavedEntity } from '../entity/mob';
 import type { SavedStack } from '../item/item';
+import type { PendingWrites } from '../world/gen/context';
+import { VEG_BLOCK, type PatchColumn } from '../world/gen/patches';
 
 export interface WorldMeta {
   id: string;
@@ -65,6 +67,11 @@ export interface SavedChunk {
   /** underground biomes per quart: names, and a palette index per quart (255 = the surface biome) */
   caveBiomes?: string[];
   caveBiomeData?: Uint8Array;
+  /** the chunk's generation writes into its neighbours, packed (packGenWrites; states as indices into genPalette) */
+  genWrites?: { cx: number; cz: number; data: Int32Array; ops?: Int32Array }[];
+  genPalette?: string[];
+  /** neighbours whose generation writes the blocks already have */
+  baked?: number;
 }
 
 const DB_NAME = 'mcreplica';
@@ -242,11 +249,60 @@ export function serializeChunk(worldId: string, c: Chunk, blockEntities: SavedBl
     });
     out.caveBiomes = names;
   }
+  if (c.genWrites.length) {
+    const palette: string[] = [];
+    const pmap = new Map<number, number>();
+    const pal = (st: number) => {
+      let pi = pmap.get(st);
+      if (pi === undefined) {
+        pi = palette.length;
+        pmap.set(st, pi);
+        palette.push(stateToString(st));
+      }
+      return pi;
+    };
+    out.genWrites = c.genWrites.map((p) => {
+      // one int per write: lx, lz, y + 64, state, rule
+      const data = new Int32Array(p.data.length / 5);
+      for (let i = 0, k = 0; i < p.data.length; i += 5, k++) data[k] = p.data[i] | (p.data[i + 2] << 4) | ((p.data[i + 1] + 64) << 8) | (pal(p.data[i + 3]) << 17) | (p.data[i + 4] << 27);
+      return { cx: p.cx, cz: p.cz, data, ops: p.ops && packOps(p.ops, pal) };
+    });
+    out.genPalette = palette;
+  }
+  out.baked = c.baked;
   return out;
 }
 
+/** the block states in a vegetation program (patches VEG_BLOCK / VEG_COLUMN) mapped through f */
+function mapVegStates(veg: number[], f: (st: number) => number): number[] {
+  if (veg[0] === VEG_BLOCK) return [veg[0], f(veg[1])];
+  return [veg[0], veg[1], veg[2], ...veg.slice(3).map(f)];
+}
+
+/** patch columns as ints: x, z, y, flags (ceiling 1, pool 2), range, depth, ground, replace, then the plant program's length and the program */
+function packOps(ops: PatchColumn[], pal: (st: number) => number): Int32Array {
+  const out: number[] = [];
+  for (const o of ops) {
+    out.push(o.x, o.z, o.y, (o.ceiling ? 1 : 0) | (o.pool ? 2 : 0), o.range, o.depth, pal(o.ground), o.replace);
+    const veg = o.veg ? mapVegStates(o.veg, pal) : [];
+    out.push(veg.length, ...veg);
+  }
+  return Int32Array.from(out);
+}
+
+function unpackOps(a: Int32Array, state: (i: number) => number): PatchColumn[] {
+  const ops: PatchColumn[] = [];
+  for (let i = 0; i < a.length; ) {
+    const [x, z, y, flags, range, depth, ground, replace, n] = a.subarray(i, i + 9);
+    const veg = n ? mapVegStates(Array.from(a.subarray(i + 9, i + 9 + n)), state) : null;
+    ops.push({ x, z, y, ceiling: (flags & 1) !== 0, pool: (flags & 2) !== 0, range, depth, ground: state(ground), replace, veg });
+    i += 9 + n;
+  }
+  return ops;
+}
+
 /** Returns a full-column blocks array + biomes. */
-export function deserializeChunk(s: SavedChunk): { blocks: Uint16Array; biomes: Uint8Array; caveBiomes: Uint8Array | null; blockEntities: SavedBlockEntity[] } {
+export function deserializeChunk(s: SavedChunk): { blocks: Uint16Array; biomes: Uint8Array; caveBiomes: Uint8Array | null; blockEntities: SavedBlockEntity[]; genWrites: PendingWrites[]; baked: number } {
   const blocks = new Uint16Array(SECTIONS * 4096);
   s.sections.forEach((sec, si) => {
     if (!sec) return;
@@ -262,7 +318,14 @@ export function deserializeChunk(s: SavedChunk): { blocks: Uint16Array; biomes: 
     const cids = s.caveBiomes.map((n) => BIOME_ID[n] ?? NO_CAVE_BIOME);
     caveBiomes = s.caveBiomeData.map((pi) => (pi === NO_CAVE_BIOME ? NO_CAVE_BIOME : cids[pi]));
   }
-  return { blocks, biomes, caveBiomes, blockEntities: s.blockEntities ?? [] };
+  const gp = (s.genPalette ?? []).map(stateFromString);
+  const genWrites: PendingWrites[] = (s.genWrites ?? []).map((p) => {
+    const data: number[] = [];
+    for (const v of p.data) data.push(v & 15, ((v >> 8) & 511) - 64, (v >> 4) & 15, gp[(v >> 17) & 1023], (v >> 27) & 15);
+    return { cx: p.cx, cz: p.cz, data, ops: p.ops && unpackOps(p.ops, (i) => gp[i]) };
+  });
+  // (saves from before this was kept: the neighbours' writes were in, as far as can be known)
+  return { blocks, biomes, caveBiomes, blockEntities: s.blockEntities ?? [], genWrites, baked: s.baked ?? 0x1ef };
 }
 
 export async function saveChunks(list: SavedChunk[]): Promise<void> {

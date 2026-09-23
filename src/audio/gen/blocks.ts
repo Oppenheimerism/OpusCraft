@@ -900,6 +900,85 @@ function dripstoneLand(c: Ctx): Float32Array {
   return out;
 }
 
+// ------------------------------------------------------------------ lush caves
+
+/** Moss: a soft, cushioned rustle with little crackle (vanilla SoundType.MOSS / MOSS_CARPET). */
+function mossSound(c: Ctx, brk: boolean): Float32Array {
+  const { sr, rng } = c;
+  const dur = brk ? 0.42 : 0.28;
+  const out = alloc(dur, sr);
+  const en = brk
+    ? (t: number) => (1 - Math.exp(-t / 0.008)) * (0.7 * Math.exp(-t / 0.06) + 0.3 * Math.exp(-t / 0.2))
+    : twoBump(0.02, 0.05, rng.range(0.06, 0.1), rng.range(0.4, 0.7), 0.02, 0.06);
+  layer(out, 1, (b) =>
+    phisem(b, sr, rng, {
+      dur,
+      rate: 7000,
+      energy: en,
+      grain: 0.001,
+      heavy: 2.4,
+      bands: [
+        { f: 1500, q: 0.9, g: 1, spread: 0.3 },
+        { f: 700, q: 1.1, g: 0.8, spread: 0.3 },
+        { f: 3200, q: 1.2, g: 0.25, spread: 0.2 },
+      ],
+    }),
+  );
+  layer(out, brk ? 0.55 : 0.4, (b) => burst(b, sr, rng, { dur: 0.16, attack: 0.01, tau: 0.04, lp: 600 }));
+  return out;
+}
+
+/** Dripleaf: a rubbery slap of a big waxy leaf over a hollow little body. */
+function dripleafSound(c: Ctx, size: number, brk: boolean): Float32Array {
+  const { sr, rng } = c;
+  const out = alloc(0.36, sr);
+  const en = brk ? (t: number) => (1 - Math.exp(-t / 0.004)) * Math.exp(-t / 0.07) : twoBump(0.008, 0.035, rng.range(0.05, 0.08), rng.range(0.3, 0.5), 0.01, 0.04);
+  layer(out, 1, (b) =>
+    phisem(b, sr, rng, {
+      dur: 0.3,
+      rate: 5000,
+      energy: en,
+      grain: 0.0012,
+      heavy: 2,
+      bands: [
+        { f: 2400 / size, q: 1.4, g: 1, spread: 0.25 },
+        { f: 1100 / size, q: 2, g: 0.9, spread: 0.2 },
+      ],
+    }),
+  );
+  layer(out, brk ? 0.7 : 0.5, (b) => thump(b, sr, { f0: rng.range(170, 210) / size, f1: 110 / size, glide: 0.03, tau: 0.04 }));
+  return out;
+}
+
+/** Big dripleaf tipping: the stem creaks as it bends and the leaf flops (down), or springs back (up). */
+function dripleafTilt(c: Ctx, down: boolean): Float32Array {
+  const { sr, rng } = c;
+  const out = alloc(0.5, sr);
+  layer(out, 0.8, (b) =>
+    creak(b, sr, rng, {
+      dur: 0.32,
+      rate: (t) => (down ? 95 - t * 150 : 55 + t * 160),
+      amp: (t) => envBump(t, 0.03, 0.29),
+      jitter: 0.15,
+      bands: [
+        { f: 850, q: 6, g: 1 },
+        { f: 1900, q: 5, g: 0.5 },
+      ],
+    }),
+  );
+  layer(out, 0.55, (b) => b.set(dripleafSound(c, 1.1, true).subarray(0, b.length)), down ? 0.18 : 0.12);
+  return out;
+}
+
+/** Picking a berry: a little wet pop and a tug on the leaves. */
+function berryPick(c: Ctx): Float32Array {
+  const { sr, rng } = c;
+  const out = alloc(0.35, sr);
+  layer(out, 1, (b) => bubble(b, sr, 0.004, rng.range(650, 950), 1, 0.018, 0.9));
+  layer(out, 0.5, (b) => b.set(grassStep(c, 1.2, 0.1).subarray(0, b.length)), 0.01);
+  return out;
+}
+
 // ------------------------------------------------------------------ registry
 
 export function blockSounds(): Record<string, SoundGen> {
@@ -967,6 +1046,15 @@ export function blockSounds(): Record<string, SoundGen> {
   const lanternStepS = sound('block.lantern.step', 6, lanternStep);
   set('lantern', sound('block.lantern.break', 4, lanternBreak), lanternStepS, sound('block.lantern.place', 4, lanternPlace));
   S['block.lantern.fall'] = pitched(lanternStepS, 0.75);
+
+  // lush caves: moss, dripleaves (big ones tip over), berries
+  set('moss', sound('block.moss.break', 4, (c) => mossSound(c, true)), sound('block.moss.step', 6, (c) => mossSound(c, false)));
+  set('big_dripleaf', sound('block.big_dripleaf.break', 4, (c) => dripleafSound(c, 1, true)), sound('block.big_dripleaf.step', 6, (c) => dripleafSound(c, 1, false)));
+  set('small_dripleaf', sound('block.small_dripleaf.break', 4, (c) => dripleafSound(c, 0.8, true)), sound('block.small_dripleaf.step', 6, (c) => dripleafSound(c, 0.8, false)));
+  S['block.big_dripleaf.tilt_down'] = sound('block.big_dripleaf.tilt_down', 3, (c) => dripleafTilt(c, true));
+  S['block.big_dripleaf.tilt_up'] = sound('block.big_dripleaf.tilt_up', 3, (c) => dripleafTilt(c, false));
+  S['block.cave_vines.pick_berries'] = sound('block.cave_vines.pick_berries', 3, berryPick);
+  S['block.sweet_berry_bush.pick_berries'] = sound('block.sweet_berry_bush.pick_berries', 3, berryPick);
 
   S['block.pointed_dripstone.drip_water'] = sound('block.pointed_dripstone.drip_water', 6, dripWater);
   S['block.pointed_dripstone.drip_lava'] = sound('block.pointed_dripstone.drip_lava', 4, dripLava);

@@ -230,13 +230,30 @@ export function updateShape(world: World, x: number, y: number, z: number, st: n
     return st;
   }
   if (n === 'fire') return fireCanSurvive(world, x, y, z) ? fireStateAt(world, x, y, z, b.get<number>(st, 'age')) : 0;
+  // vanilla GrowingPlantHeadBlock / GrowingPlantBodyBlock.updateShape: a head with more vine under it becomes
+  // a piece of the plant, and a piece left at the bottom a head again (of any age), keeping its berries
+  if (n === 'cave_vines' || n === 'cave_vines_plant') {
+    const bn = blk(world.getState(x, y - 1, z)).name;
+    const vine = bn === 'cave_vines' || bn === 'cave_vines_plant';
+    if (n === 'cave_vines' && vine) return plantOf('cave_vines_plant').state({ berries: b.get(st, 'berries') });
+    if (n === 'cave_vines_plant' && !vine) return plantOf('cave_vines').state({ age: Math.floor(Math.random() * 25), berries: b.get(st, 'berries') });
+    return st;
+  }
+  // vanilla BigDripleafBlock.updateShape: another leaf on top turns this one into stem
+  if (n === 'big_dripleaf' && blk(world.getState(x, y + 1, z)).name === 'big_dripleaf') {
+    return plantOf('big_dripleaf_stem').state({ facing: b.get(st, 'facing'), waterlogged: b.get(st, 'waterlogged') });
+  }
   return st;
+}
+
+function plantOf(name: string): Block {
+  return BLOCKS.find((q) => q.name === name)!;
 }
 
 /** blocks whose state depends on neighbours (skip the work for everything else) */
 export function hasShapeUpdates(st: number): boolean {
   const n = blk(st).name;
-  return n === 'glow_lichen' || n === 'pointed_dripstone' || n.endsWith('_stairs') || n.endsWith('_fence') || n.endsWith('_pane') || n === 'iron_bars' || n.endsWith('_wall') || n.endsWith('_fence_gate') || n.endsWith('_door') || n.endsWith('_bed') || n === 'grass_block' || n === 'podzol' || n === 'mycelium' || n.startsWith('attached_') || n === 'fire';
+  return n === 'glow_lichen' || n === 'pointed_dripstone' || n === 'cave_vines' || n === 'cave_vines_plant' || n === 'big_dripleaf' || n.endsWith('_stairs') || n.endsWith('_fence') || n.endsWith('_pane') || n === 'iron_bars' || n.endsWith('_wall') || n.endsWith('_fence_gate') || n.endsWith('_door') || n.endsWith('_bed') || n === 'grass_block' || n === 'podzol' || n === 'mycelium' || n.startsWith('attached_') || n === 'fire';
 }
 
 export { F_OPAQUE };

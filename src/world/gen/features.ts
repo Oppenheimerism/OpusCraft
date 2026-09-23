@@ -9,6 +9,7 @@ import { MIN_Y, SEA_LEVEL } from '../constants';
 import { NormalNoise } from './noise';
 import { UP, NORTH, SOUTH, WEST, EAST, DX, DY, DZ, DIR_NAMES } from '../dir';
 import { largeDripstones, dripstoneDecoration } from './dripstone';
+import { lushCaves } from './lush';
 
 // ---------------------------------------------------------------------------
 // Ores
@@ -54,6 +55,8 @@ const ORES: OreSpec[] = [
 ];
 
 const COPPER_LARGE: OreSpec = { ...ORES.find((o) => o.stone === 'copper_ore')!, size: 20 };
+/** vanilla ore_clay, only in the lush caves */
+const CLAY_ORE: OreSpec = { stone: 'clay', size: 33, count: 46, height: ['uniform', -64, 256], rule: W_BASE_STONE };
 
 function sampleHeight(r: Rand, h: OreSpec['height']): number {
   const [type, lo, hi] = h;
@@ -272,6 +275,13 @@ export class Decorator {
         placeOre(ctx, r, spec.stone === 'copper_ore' && ctx.biomeAt3(x, y, z) === B.dripstone_caves ? COPPER_LARGE : spec, x, y, z);
       }
     }
+    if (ctx.caveBiomes?.includes(B.lush_caves)) {
+      const rc = new Rand(hash2(ctx.cx, ctx.cz, this.seed ^ 0xc1a7), 10);
+      for (let i = 0; i < 46; i++) {
+        const x = ctx.x0 + rc.nextInt(16), z = ctx.z0 + rc.nextInt(16), y = sampleHeight(rc, CLAY_ORE.height);
+        if (ctx.biomeAt3(x, y, z) === B.lush_caves) placeOre(ctx, rc, CLAY_ORE, x, y, z);
+      }
+    }
     // --- disks (sand/clay/gravel under water)
     if (DECO[centerBiome]?.disks || centerBiome === B.swamp || centerBiome === B.beach || centerBiome === B.plains || centerBiome === B.forest) {
       this.disks(ctx, r);
@@ -283,6 +293,8 @@ export class Decorator {
     ctx.computeHeightmaps();
     // --- glow lichen, the first of the vanilla VEGETAL_DECORATION features
     this.glowLichen(ctx, new Rand(hash2(ctx.cx, ctx.cz, this.seed ^ 0x611c), 6));
+    // --- the lush caves' moss, clay pools, plants and rooted azalea trees
+    lushCaves(ctx, new Rand(hash2(ctx.cx, ctx.cz, this.seed ^ 0x105b), 11));
     // --- vegetation: pick sample biomes per quadrant so mixed chunks decorate with each biome
     for (let q = 0; q < 4; q++) {
       const qx = (q & 1) * 8, qz = (q >> 1) * 8;

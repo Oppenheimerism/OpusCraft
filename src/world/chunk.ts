@@ -2,6 +2,7 @@
 
 import { MIN_Y, MAX_Y, SECTIONS } from './constants';
 import type { SavedEntity } from '../entity/mob';
+import type { PendingWrites } from './gen/context';
 
 export const LIGHT_DEFAULT = 0xf0; // sky 15, block 0
 
@@ -18,6 +19,8 @@ export class Chunk {
   grassTint: Uint32Array | null = null;
   foliageTint: Uint32Array | null = null;
   waterTint: Uint32Array | null = null;
+  /** tints for the layers of 4 blocks that have underground biomes about (grass, foliage, water x 256), else null */
+  caveTints: (Uint32Array | null)[] | null = null;
   /** true once lighting has been merged with neighbours at least once */
   lightMerged = false;
   /** sections that need remeshing (bitmask) */
@@ -34,6 +37,11 @@ export class Chunk {
   /** generated fences to connect once loaded (packed lx, y, lz) */
   postProcess: number[] | null = null;
   inhabitedTime = 0;
+  /** this chunk's generation writes into its neighbours (tree leaves, patch columns...), kept so a
+   * neighbour that is generated again, or loads later, still gets them */
+  genWrites: PendingWrites[] = [];
+  /** neighbours whose generation writes these blocks already have (bits World.nbBit) */
+  baked = 0;
   constructor(readonly cx: number, readonly cz: number) {}
 
   static key(cx: number, cz: number): number {

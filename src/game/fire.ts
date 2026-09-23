@@ -77,6 +77,8 @@ function tables(): void {
   set('big_dripleaf_stem', 60, 100);
   set('small_dripleaf', 60, 100);
   set('hanging_roots', 30, 60);
+  set('moss_block', 5, 100);
+  set('moss_carpet', 5, 100);
   set('glow_lichen', 15, 100);
 }
 

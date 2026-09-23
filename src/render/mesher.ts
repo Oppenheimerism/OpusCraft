@@ -8,6 +8,7 @@ import {
 } from '../world/block';
 import { BakedModel, BakedQuad, bakeVariant, SpriteLookup, SpriteRect, Variant, ModelChoice } from '../world/models';
 import { mcPosSeed, hash3 } from '../core/rng';
+import { MIN_Y } from '../world/constants';
 
 export const PAD = 2;
 export const PS = 16 + PAD * 2; // 20
@@ -24,6 +25,8 @@ export interface MeshInput {
   grass: Uint32Array;
   foliage: Uint32Array;
   water: Uint32Array;
+  /** where underground biomes are about: the same by height, a PS*PS layer per 4 blocks from quart q0 up */
+  tint3?: { q0: number; grass: Uint32Array; foliage: Uint32Array; water: Uint32Array };
   ox: number;
   oy: number;
   oz: number;
@@ -244,12 +247,18 @@ function flatLight(i: number): number {
 
 // ---------------------------------------------------------------------------
 
-function tintFor(state: number, colIdx: number): number {
+/** index into the height tints (inp.tint3) for a block of the section */
+function tint3Index(colIdx: number, y: number): number {
+  return (((inp.oy + y - MIN_Y) >> 2) - inp.tint3!.q0) * PS * PS + colIdx;
+}
+
+function tintFor(state: number, colIdx: number, y: number): number {
   const b = BLOCKS[STATE_BLOCK[state]];
+  const t3 = inp.tint3;
   switch (b.tint) {
-    case 'grass': return inp.grass[colIdx];
-    case 'foliage': return inp.foliage[colIdx];
-    case 'water': return inp.water[colIdx];
+    case 'grass': return t3 ? t3.grass[tint3Index(colIdx, y)] : inp.grass[colIdx];
+    case 'foliage': return t3 ? t3.foliage[tint3Index(colIdx, y)] : inp.foliage[colIdx];
+    case 'water': return t3 ? t3.water[tint3Index(colIdx, y)] : inp.water[colIdx];
     case 'birch': return 0x80a755;
     case 'spruce': return 0x619961;
     case 'lily': return 0x208030;
@@ -410,7 +419,7 @@ function renderFluid(x: number, y: number, z: number, ox: number, oy: number, oz
   const flow = lava ? sprites.lavaFlow : sprites.waterFlow;
   let r = 255, g = 255, b = 255;
   if (!lava) {
-    const c = inp.water[colIdx];
+    const c = inp.tint3 ? inp.tint3.water[tint3Index(colIdx, y)] : inp.water[colIdx];
     r = (c >> 16) & 255;
     g = (c >> 8) & 255;
     b = c & 255;
@@ -547,7 +556,7 @@ export function meshSection(input: MeshInput): MeshOutput {
         if (layer === 4) continue;
         if (!input.fancy && f & F_LEAVES) layer = 0;
         const w = writers[layer];
-        const tint = b.tint !== 'none' ? tintFor(st, colIdx) : 0xffffff;
+        const tint = b.tint !== 'none' ? tintFor(st, colIdx, y) : 0xffffff;
         // plant offset
         let ox = 0, oy = 0, oz = 0;
         if (b.offset !== 'none') {

@@ -20,6 +20,9 @@ import { PrimedTnt } from '../entity/tnt';
 import { ThrownItem, ThrownKind } from '../entity/throwable';
 import { createMob } from './spawner';
 import { SpawnerBlockEntity } from '../world/blockEntity';
+import { patchColumns, MOSS_BONEMEAL } from '../world/gen/lush';
+import { runPatchColumn } from '../world/gen/patches';
+import { Rand } from '../core/rng';
 import { playerAttack } from './combat';
 import { canPlaceFire, fireStateAt, placeFire } from './fire';
 import { Minecart, MinecartChest, createMinecart } from '../entity/minecart';
@@ -388,7 +391,7 @@ export class Interaction {
       world, x, y, z, face: replaceClicked ? 1 : h.face, hitY: h.hy - h.y, hitX: h.hx - x, hitZ: h.hz - z, yaw: p.yaw, pitch: p.pitch, sneaking: p.crouching, clickedState: clicked, replaceClicked: !!replaceClicked,
     });
     if (st === null) return false;
-    if (!canSurvive(world, x, y, z, st)) return false;
+    if (!canSurvive(world, x, y, z, st, true)) return false;
     // neighbour-dependent state at placement (vanilla getStateForPlacement connections)
     if (hasShapeUpdates(st) && !block.name.endsWith('_door') && !block.name.endsWith('_bed')) {
       const u = updateShape(world, x, y, z, st);
@@ -409,7 +412,10 @@ export class Interaction {
     if (block.propIndex('half') >= 0 && block.s.props?.some((pp) => pp.values.includes('upper'))) {
       const above = world.getState(x, y + 1, z);
       if (y + 1 >= 320 || !canReplace(above, block)) return false;
-      this.level.setBlock(x, y + 1, z, block.with(st, 'half', 'upper'), false);
+      // (vanilla DoublePlantBlock.setPlacedBy: the top half is waterlogged by what is up there)
+      let upper = block.with(st, 'half', 'upper');
+      if (block.propIndex('waterlogged') >= 0) upper = block.with(upper, 'waterlogged', BLOCKS[STATE_BLOCK[above]].name === 'water' && BLOCKS[STATE_BLOCK[above]].get(above, 'level') === 0);
+      this.level.setBlock(x, y + 1, z, upper, false);
       return this.commitPlace(x, y, z, block.with(st, 'half', 'lower'), stack, block.sound);
     }
     // beds: foot here, head one block further in the facing direction (vanilla BedItem)
@@ -453,6 +459,23 @@ export class Interaction {
     }
     if (!sneakingWithItem && n.endsWith('_bed')) {
       this.onUseBed?.(h.x, h.y, h.z);
+      p.swing();
+      return true;
+    }
+    // vanilla CaveVines.use: pick the glow berry
+    if (!sneakingWithItem && (n === 'cave_vines' || n === 'cave_vines_plant') && b.get(st, 'berries')) {
+      ItemEntity.drop(lvl, h.x, h.y, h.z, ItemStack.of('glow_berries'));
+      lvl.sound.play('block.cave_vines.pick_berries', h.x + 0.5, h.y + 0.5, h.z + 0.5, 1, 0.8 + Math.random() * 0.4);
+      lvl.setBlock(h.x, h.y, h.z, b.with(st, 'berries', false));
+      p.swing();
+      return true;
+    }
+    // vanilla SweetBerryBushBlock.useWithoutItem: pick a grown bush (bone meal grows one that isn't ripe instead)
+    if (!sneakingWithItem && n === 'sweet_berry_bush' && b.get<number>(st, 'age') > 1 && !(stack?.item.id === 'bone_meal' && b.get<number>(st, 'age') < 3)) {
+      const age = b.get<number>(st, 'age');
+      ItemEntity.drop(lvl, h.x, h.y, h.z, ItemStack.of('sweet_berries', 1 + Math.floor(Math.random() * 2) + (age === 3 ? 1 : 0)));
+      lvl.sound.play('block.sweet_berry_bush.pick_berries', h.x + 0.5, h.y + 0.5, h.z + 0.5, 1, 0.8 + Math.random() * 0.4);
+      lvl.setBlock(h.x, h.y, h.z, b.with(st, 'age', 1));
       p.swing();
       return true;
     }
@@ -562,6 +585,67 @@ export class Interaction {
     }
     if (n.endsWith('_sapling')) {
       if (Math.random() < 0.45) lvl.randomTicks.advanceSapling(x, y, z, st);
+      return true;
+    }
+    // vanilla AzaleaBlock: grows into an azalea tree 45% of the time, if nothing wet is above it
+    if (n === 'azalea' || n === 'flowering_azalea') {
+      if (FLAGS[lvl.getState(x, y + 1, z)] & F_WATER) return false;
+      if (Math.random() < 0.45) lvl.randomTicks.growAzalea(x, y, z, st);
+      return true;
+    }
+    // vanilla CaveVines.performBonemeal: a glow berry
+    if (n === 'cave_vines' || n === 'cave_vines_plant') {
+      if (b.get(st, 'berries')) return false;
+      lvl.setBlock(x, y, z, b.with(st, 'berries', true));
+      return true;
+    }
+    // vanilla MossBlock.performBonemeal: a small moss patch with plants spreads round it (moss_patch_bonemeal)
+    if (n === 'moss_block') {
+      if (!(FLAGS[lvl.getState(x, y + 1, z)] & F_AIR)) return false;
+      const r = new Rand((Math.random() * 2 ** 31) | 0);
+      for (const c of patchColumns(r, MOSS_BONEMEAL, x, y + 1, z)) runPatchColumn(lvl.world.access, c);
+      return true;
+    }
+    // vanilla RootedDirtBlock.performBonemeal: hanging roots under it
+    if (n === 'rooted_dirt') {
+      if (!(FLAGS[lvl.getState(x, y - 1, z)] & F_AIR)) return false;
+      lvl.setBlock(x, y - 1, z, S('hanging_roots'));
+      return true;
+    }
+    // vanilla BigDripleafBlock / BigDripleafStemBlock.performBonemeal: the leaf rises a block on a longer stem
+    if (n === 'big_dripleaf' || n === 'big_dripleaf_stem') {
+      let ty = y;
+      while (BLOCKS[STATE_BLOCK[lvl.getState(x, ty, z)]].name === 'big_dripleaf_stem') ty++;
+      const top = lvl.getState(x, ty, z);
+      if (BLOCKS[STATE_BLOCK[top]].name !== 'big_dripleaf') return false;
+      const above = lvl.getState(x, ty + 1, z);
+      if (ty + 1 >= 320 || !(FLAGS[above] & F_AIR || BLOCKS[STATE_BLOCK[above]].name === 'water')) return false;
+      const facing = BLOCKS[STATE_BLOCK[top]].get(top, 'facing');
+      const water = (st: number) => BLOCKS[STATE_BLOCK[st]].name === 'water' && BLOCKS[STATE_BLOCK[st]].get(st, 'level') === 0 || !!(FLAGS[st] & F_WATER && BLOCKS[STATE_BLOCK[st]].propIndex('waterlogged') >= 0 && BLOCKS[STATE_BLOCK[st]].get(st, 'waterlogged'));
+      lvl.setBlock(x, ty + 1, z, getBlock('big_dripleaf').state({ facing, waterlogged: water(above) }), false);
+      lvl.setBlock(x, ty, z, getBlock('big_dripleaf_stem').state({ facing, waterlogged: water(top) }));
+      return true;
+    }
+    // vanilla SmallDripleafBlock.performBonemeal: it grows into a big dripleaf 2 to 5 blocks tall
+    if (n === 'small_dripleaf') {
+      const by = b.get(st, 'half') === 'upper' ? y - 1 : y;
+      const lower = lvl.getState(x, by, z);
+      const facing = b.get(lower, 'facing');
+      const upperState = lvl.getState(x, by + 1, z);
+      lvl.setBlock(x, by + 1, z, b.get(upperState, 'waterlogged') ? S('water') : 0, false);
+      const want = 2 + Math.floor(Math.random() * 4);
+      let fit = 0;
+      for (; fit < want && by + fit < 320; fit++) {
+        const t = lvl.getState(x, by + fit, z);
+        const tn = BLOCKS[STATE_BLOCK[t]].name;
+        if (!(FLAGS[t] & F_AIR || tn === 'water' || tn === 'small_dripleaf')) break;
+      }
+      const inWater = (yy: number) => {
+        const t = lvl.getState(x, yy, z);
+        return BLOCKS[STATE_BLOCK[t]].name === 'water' || !!(BLOCKS[STATE_BLOCK[t]].propIndex('waterlogged') >= 0 && BLOCKS[STATE_BLOCK[t]].get(t, 'waterlogged'));
+      };
+      for (let yy = by; yy < by + fit - 1; yy++) lvl.setBlock(x, yy, z, getBlock('big_dripleaf_stem').state({ facing, waterlogged: inWater(yy) }), false);
+      lvl.setBlock(x, by + Math.max(0, fit - 1), z, getBlock('big_dripleaf').state({ facing, waterlogged: inWater(by + Math.max(0, fit - 1)) }));
       return true;
     }
     if (n === 'grass_block') {

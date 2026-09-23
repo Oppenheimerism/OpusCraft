@@ -19,6 +19,7 @@ import * as DC from './blocklib/decor';
 import * as CR from './blocklib/crops';
 import * as RL from './blocklib/rails';
 import * as CV from './blocklib/caves';
+import * as LU from './blocklib/lush';
 import * as IB from './blocklib/iconblocks';
 import { FIRE_TEXTURES } from './mobs';
 
@@ -347,6 +348,28 @@ T['smooth_basalt'] = () => CV.smoothBasalt();
 T['tinted_glass'] = () => CV.tintedGlass();
 for (const th of ['tip_merge', 'tip', 'frustum', 'middle', 'base'])
   for (const d of ['up', 'down']) T[`pointed_dripstone_${d}_${th}`] = () => CV.pointedDripstone(th, d === 'up');
+// lush caves
+T['flowering_azalea_leaves'] = () => LU.floweringAzaleaLeaves();
+T['azalea_top'] = () => LU.azaleaTop(false);
+T['azalea_side'] = () => LU.azaleaSide(false);
+T['flowering_azalea_top'] = () => LU.azaleaTop(true);
+T['flowering_azalea_side'] = () => LU.azaleaSide(true);
+T['azalea_plant'] = () => LU.azaleaPlant();
+T['hanging_roots'] = () => LU.hangingRoots();
+T['spore_blossom'] = () => LU.sporeBlossom();
+T['spore_blossom_base'] = () => LU.sporeBlossomBase();
+T['cave_vines'] = () => LU.caveVines(true, false);
+T['cave_vines_lit'] = () => LU.caveVines(true, true);
+T['cave_vines_plant'] = () => LU.caveVines(false, false);
+T['cave_vines_plant_lit'] = () => LU.caveVines(false, true);
+T['big_dripleaf_top'] = () => LU.bigDripleafTop();
+T['big_dripleaf_side'] = () => LU.bigDripleafSide();
+T['big_dripleaf_tip'] = () => LU.bigDripleafTip();
+T['big_dripleaf_stem'] = () => LU.dripleafStem(false, false);
+T['small_dripleaf_top'] = () => LU.smallDripleafTop();
+T['small_dripleaf_side'] = () => LU.smallDripleafSide();
+T['small_dripleaf_stem_top'] = () => LU.dripleafStem(true, true);
+T['small_dripleaf_stem_bottom'] = () => LU.dripleafStem(true, false);
 
 // ---------------------------------------------------------------------------
 // Doors & trapdoors (window pixels are fully transparent; cutout layer)
