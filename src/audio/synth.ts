@@ -9,6 +9,8 @@ import { playerSounds } from './gen/player';
 import { worldSounds } from './gen/world';
 import { minecartSounds } from './gen/minecart';
 import { boatSounds } from './gen/boat';
+import { netherBlockSounds } from './gen/netherBlocks';
+import { netherSounds } from './gen/nether';
 
 export const SAMPLE_RATE = 44100;
 
@@ -26,6 +28,8 @@ export const SOUNDS: Record<string, SoundGen> = {
   ...mobSounds(),
   ...minecartSounds(),
   ...boatSounds(),
+  ...netherBlockSounds(),
+  ...netherSounds(),
 };
 
 /** Number of in-game (overworld) music tracks. */
