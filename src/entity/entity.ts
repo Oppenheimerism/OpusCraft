@@ -51,6 +51,11 @@ export abstract class Entity {
   remainingFireTicks = -1;
   /** vanilla stuckSpeedMultiplier (cobwebs, berry bushes): scales the next move */
   private stuckSpeed: [number, number, number] | null = null;
+  /** what this rides, and who rides it (vanilla vehicle / passengers) */
+  vehicle: Entity | null = null;
+  readonly passengers: Entity[] = [];
+  /** vanilla boardingCooldown: ticks until this can get on something again after getting off */
+  boardingCooldown = 0;
 
   constructor(public level: Level) {}
 
@@ -119,6 +124,7 @@ export abstract class Entity {
       this.fallDistance *= 0.5;
     }
     if (this.invulnerableTime > 0) this.invulnerableTime--;
+    if (this.boardingCooldown > 0) this.boardingCooldown--;
   }
 
   protected lavaHurt(): void {
@@ -168,8 +174,9 @@ export abstract class Entity {
     this.dz += z;
   }
 
-  /** vanilla Entity.push(Entity): mutual separation push */
+  /** vanilla Entity.push(Entity): mutual separation push (entities carrying riders stay put) */
   pushAgainst(e: Entity): void {
+    if (this.isPassengerOfSameVehicle(e)) return;
     if (e.noPhysics || this.noPhysics) return;
     let d0 = e.x - this.x, d1 = e.z - this.z;
     let d2 = Math.max(Math.abs(d0), Math.abs(d1));
@@ -181,8 +188,97 @@ export abstract class Entity {
     if (d3 > 1) d3 = 1;
     d0 *= d3 * 0.05;
     d1 *= d3 * 0.05;
-    if (this.isPushable()) this.push(-d0, 0, -d1);
-    if (e.isPushable()) e.push(d0, 0, d1);
+    if (!this.isVehicle() && this.isPushable()) this.push(-d0, 0, -d1);
+    if (!e.isVehicle() && e.isPushable()) e.push(d0, 0, d1);
+  }
+
+  // --- riding (vanilla Entity.startRiding / stopRiding / rideTick / positionRider) ---
+
+  isVehicle(): boolean {
+    return this.passengers.length > 0;
+  }
+
+  rootVehicle(): Entity {
+    let e: Entity = this;
+    while (e.vehicle) e = e.vehicle;
+    return e;
+  }
+
+  isPassengerOfSameVehicle(e: Entity): boolean {
+    return this.rootVehicle() === e.rootVehicle();
+  }
+
+  /** vanilla isShiftKeyDown (the sneak key) */
+  isShiftKeyDown(): boolean {
+    return false;
+  }
+
+  /** vanilla canRide: not while sneaking or right after getting off */
+  protected canRide(_vehicle: Entity): boolean {
+    return !this.isShiftKeyDown() && this.boardingCooldown <= 0;
+  }
+
+  canAddPassenger(_p: Entity): boolean {
+    return this.passengers.length === 0;
+  }
+
+  startRiding(vehicle: Entity, force = false): boolean {
+    if (vehicle === this.vehicle) return false;
+    for (let e: Entity | null = vehicle; e; e = e.vehicle) if (e === this) return false;
+    if (!force && (!this.canRide(vehicle) || !vehicle.canAddPassenger(this))) return false;
+    if (this.vehicle) this.stopRiding();
+    this.vehicle = vehicle;
+    vehicle.passengers.push(this);
+    return true;
+  }
+
+  stopRiding(): void {
+    this.removeVehicle();
+  }
+
+  /** vanilla removeVehicle + Entity.removePassenger (which sets the boarding cooldown) */
+  removeVehicle(): void {
+    const v = this.vehicle;
+    if (!v) return;
+    this.vehicle = null;
+    const i = v.passengers.indexOf(this);
+    if (i >= 0) v.passengers.splice(i, 1);
+    this.boardingCooldown = 60;
+  }
+
+  ejectPassengers(): void {
+    for (let i = this.passengers.length - 1; i >= 0; i--) this.passengers[i].stopRiding();
+  }
+
+  /** height of the seat above this entity's position (vanilla passenger attachment point) */
+  passengerAttachmentY(_p: Entity): number {
+    return this.height;
+  }
+
+  /** how far below the seat a rider's position sits (vanilla vehicle attachment point) */
+  vehicleAttachmentY(): number {
+    return 0;
+  }
+
+  positionRider(p: Entity): void {
+    p.setPos(this.x, this.y + this.passengerAttachmentY(p) - p.vehicleAttachmentY(), this.z);
+  }
+
+  /** vanilla Entity.rideTick: ticked by the vehicle, then carried along to the seat */
+  rideTick(): void {
+    this.dx = this.dy = this.dz = 0;
+    this.tick();
+    if (this.vehicle) this.vehicle.positionRider(this);
+  }
+
+  /** where a rider gets off (vanilla Entity.getDismountLocationForPassenger: on top) */
+  dismountLocation(_p: Entity): [number, number, number] {
+    return [this.x, this.bb.maxY, this.z];
+  }
+
+  /** item given by a creative middle-click (vanilla getPickResult) */
+  pickResult(): string | null {
+    return null;
   }
 
   /** vanilla isInWaterOrRain / isInWaterRainOrBubble */
@@ -205,7 +301,7 @@ export abstract class Entity {
     return Math.floor(this.z);
   }
 
-  /** Collision boxes of blocks intersecting `box` (plus entities later). */
+  /** Collision boxes of blocks (and entities this collides with) intersecting `box`. */
   collisionBoxes(box: AABB): AABB[] {
     const out: AABB[] = [];
     const world = this.level.world;
@@ -231,8 +327,12 @@ export abstract class Entity {
           }
         }
       }
+    this.entityCollisions(box, out);
     return out;
   }
+
+  /** vanilla getEntityCollisions: boxes of entities this can't move through (none by default) */
+  protected entityCollisions(_box: AABB, _out: AABB[]): void {}
 
   isFree(box: AABB): boolean {
     return this.collisionBoxes(box).length === 0 && !this.isInLiquidBox(box);
@@ -302,8 +402,8 @@ export abstract class Entity {
     if (colX) this.dx = 0;
     if (colZ) this.dz = 0;
     if (my !== ry) this.onLand();
-    if (!this.noPhysics) {
-      // vanilla walkDist/moveDist accounting (step & swim sounds, view bobbing)
+    if (!this.noPhysics && !this.vehicle) {
+      // vanilla walkDist/moveDist accounting (step & swim sounds, view bobbing); riders don't walk
       const onX = Math.floor(this.x), onY = Math.floor(this.y - 0.2), onZ = Math.floor(this.z);
       const onState = this.level.world.getState(onX, onY, onZ);
       const climbing = this.onClimbable();
@@ -431,7 +531,10 @@ export abstract class Entity {
     if (this.inWater) this.fallDistance = 0;
   }
 
-  protected causeFallDamage(_dist: number): void {}
+  /** vanilla Entity.causeFallDamage: a vehicle hands the landing on to its riders */
+  protected causeFallDamage(dist: number): void {
+    for (const p of this.passengers) p.causeFallDamage(dist);
+  }
 
   blockSpeedFactor(): number {
     const st = this.level.world.getState(Math.floor(this.x), Math.floor(this.y), Math.floor(this.z));
@@ -568,8 +671,16 @@ export abstract class Entity {
     return [-Math.sin(yr) * Math.cos(pr), -Math.sin(pr), Math.cos(yr) * Math.cos(pr)];
   }
 
+  /** vanilla Entity.kill (/kill): gone for good */
+  kill(): void {
+    this.remove();
+  }
+
   remove(): void {
     this.removed = true;
+    // vanilla setRemoved: the riders get off, and a removed rider leaves its seat
+    if (this.passengers.length) this.ejectPassengers();
+    if (this.vehicle) this.stopRiding();
   }
 }
 

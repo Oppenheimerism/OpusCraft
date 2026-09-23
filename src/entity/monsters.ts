@@ -143,6 +143,10 @@ export class Zombie extends Monster {
   override get eyeHeight(): number {
     return this.baby ? 0.93 : 1.74;
   }
+  /** vanilla EntityType ridingOffset(-0.7) (halved for babies) */
+  override vehicleAttachmentY(): number {
+    return this.baby ? 0.35 : 0.7;
+  }
   override experienceReward(): number {
     const x = super.experienceReward();
     return this.baby ? Math.floor(x * 2.5) : x;
@@ -291,6 +295,10 @@ export class Skeleton extends Monster {
     this.maxHealth = this.health = 20;
     this.moveSpeedAttr = 0.25;
     this.followRange = 16;
+  }
+  /** vanilla EntityType ridingOffset(-0.7) */
+  override vehicleAttachmentY(): number {
+    return 0.7;
   }
   protected registerGoals(): void {
     this.goalSelector.addGoal(2, new RestrictSunGoal(this));

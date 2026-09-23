@@ -12,6 +12,7 @@ import { Rand } from '../core/rng';
 import { BLOCKS, STATE_BLOCK, FLAGS, F_AIR, F_WATERLOGGED, S } from '../world/block';
 import { canSurvive, blockDrops } from './blockRules';
 import { updateShape, hasShapeUpdates } from './shapeUpdates';
+import { isRail, railOnPlace, railNeighborChanged } from './rails';
 import { fireTick } from './fire';
 import { tickSleeping } from './sleep';
 import { ItemEntity } from '../entity/itemEntity';
@@ -88,6 +89,8 @@ export class Level {
 
   addEntity(e: Entity): void {
     this.entities.push(e);
+    // vanilla addFreshEntityWithPassengers: riders loaded with their vehicle come along
+    for (const p of e.passengers) if (!this.entities.includes(p)) this.addEntity(p);
   }
 
   /** entities whose bounding box intersects `box` */
@@ -188,10 +191,11 @@ export class Level {
     this.updateSkyBrightness();
     for (let i = 0; i < this.entities.length; i++) {
       const e = this.entities[i];
-      if (e.removed) continue;
+      if (e.removed || e.vehicle) continue;
       if (e !== this.player && !this.isEntityTicking(e.x, e.z)) continue;
       e.tick();
       if (!e.removed) this.onEntityTick?.(e);
+      if (e.passengers.length) this.tickPassengers(e);
     }
     // prune removed
     let w = 0;
@@ -214,6 +218,19 @@ export class Level {
         const c = this.world.getChunk(be.x >> 4, be.z >> 4);
         if (c) c.modified = true;
       }
+    }
+  }
+
+  /** vanilla ServerLevel.tickPassenger: riders tick after their vehicle, then sit back in their seat */
+  private tickPassengers(v: Entity): void {
+    for (const p of [...v.passengers]) {
+      if (p.removed || p.vehicle !== v) {
+        p.stopRiding();
+        continue;
+      }
+      p.rideTick();
+      if (!p.removed) this.onEntityTick?.(p);
+      if (p.passengers.length) this.tickPassengers(p);
     }
   }
 
@@ -253,7 +270,7 @@ export class Level {
     const f = FLAGS[below];
     if ((f & (F_AIR | F_REPLACEABLE) || (f & (F_WATER | F_LAVA) && BLOCKS[STATE_BLOCK[below]].s.fluid)) && y > -64) {
       FallingBlockEntity.fall(this, x, y, z, st);
-      this.updateNeighbors(x, y, z);
+      this.updateNeighbors(x, y, z, st);
     }
   }
 
@@ -329,7 +346,10 @@ export class Level {
   /** place/remove a block with the usual side effects */
   setBlock(x: number, y: number, z: number, state: number, notify = true): number {
     const old = this.world.setState(x, y, z, state);
-    if (notify && old !== state) this.updateNeighbors(x, y, z);
+    if (old === state) return old;
+    // vanilla BaseRailBlock.onPlace: a new rail connects up (reshaping itself notifies the neighbours)
+    if (STATE_BLOCK[old] !== STATE_BLOCK[state] && isRail(state)) railOnPlace(this, x, y, z, state);
+    if (notify && this.world.getState(x, y, z) === state) this.updateNeighbors(x, y, z, old);
     return old;
   }
 
@@ -379,7 +399,7 @@ export class Level {
     if (drop) {
       for (const stack of blockDrops(dropState, tool, this.random)) ItemEntity.drop(this, x, y, z, stack);
     }
-    this.updateNeighbors(x, y, z);
+    this.updateNeighbors(x, y, z, st);
     if (other) this.updateNeighbors(other[0], other[1], other[2]);
     return true;
   }
@@ -400,14 +420,21 @@ export class Level {
     }
   }
 
-  /** vanilla-style neighbour updates: shape updates (connections, doors, beds) and blocks that lost support pop off. */
-  updateNeighbors(x: number, y: number, z: number): void {
+  /**
+   * vanilla-style neighbour updates: shape updates (connections, doors, beds) and blocks that lost
+   * support pop off. `changed` is the previous state at (x, y, z) (vanilla's neighborBlock).
+   */
+  updateNeighbors(x: number, y: number, z: number, changed?: number): void {
     this.updateNeighborsFluid(x, y, z);
     const dirs = [[0, 1, 0], [0, -1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1]];
     for (const [dx, dy, dz] of dirs) {
       const nx = x + dx, ny = y + dy, nz = z + dz;
       let ns = this.world.getState(nx, ny, nz);
       if (FLAGS[ns] & F_AIR) continue;
+      if (isRail(ns)) {
+        railNeighborChanged(this, nx, ny, nz, ns, changed);
+        continue;
+      }
       if (hasShapeUpdates(ns)) {
         const nu = updateShape(this.world, nx, ny, nz, ns);
         if (nu === 0) {

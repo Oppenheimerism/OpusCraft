@@ -51,6 +51,7 @@ import { Tutorial, TutorialStep } from './tutorial';
 import { keyDisplayName } from './input';
 import { LivingEntity } from '../entity/living';
 import { Monster } from '../entity/monsters';
+import type { MinecartChest } from '../entity/minecart';
 
 export type { GameOptions } from './options';
 
@@ -359,6 +360,8 @@ export class Game {
     this.level.addEntity(this.player);
     this.interaction = new Interaction(this.level, this.player);
     this.interaction.onOpenContainer = (kind, x, y, z) => this.openContainer(kind, x, y, z);
+    this.interaction.onOpenEntityContainer = (e) => this.openEntityContainer(e);
+    this.interaction.onMounted = () => this.hud.setOverlayMessage(`Press ${keyDisplayName(KEYS.sneak)} to Dismount`);
     this.interaction.onUseBed = (x, y, z) => useBed(this.sleepHost(), x, y, z);
     this.player.dropHandler = (s) => this.interaction.throwItem(s);
     this.applyGameRules();
@@ -427,6 +430,12 @@ export class Game {
         this.player.respawnForced = pd.respawn[3] === 1;
       }
       this.spawnSearch = false;
+      // vanilla RootVehicle: back in the minecart you left the game in
+      const v = pd.vehicle && !pd.dead ? loadEntity(pd.vehicle, this.level) : null;
+      if (v) {
+        this.level.addEntity(v);
+        this.player.startRiding(v, true);
+      }
       if (pd.dead || pd.health <= 0) {
         // died before quitting: come back respawned at spawn
         this.player.health = this.player.maxHealth;
@@ -481,6 +490,7 @@ export class Game {
       advancements: this.advancements.save(),
       recipeBook: this.recipeBook.save(),
       dead: p.health <= 0,
+      vehicle: p.vehicle ? saveEntity(p.vehicle) : null,
     };
     const list = [];
     for (const c of this.world.chunks.values()) {
@@ -549,11 +559,13 @@ export class Game {
     if (!this.meta || !this.level) return;
     const key = this.entityChunkKey(c.cx, c.cz);
     const list = this.entitiesIn(c.cx, c.cz);
+    // serialized before removal (a removed entity saves as nothing)
+    const saved = list.map(saveEntity).filter((d) => d !== null);
     // projectiles and orbs in unloaded chunks are dropped
     for (const e of this.level.entities) if (e !== this.player && !e.removed && Math.floor(e.x) >> 4 === c.cx && Math.floor(e.z) >> 4 === c.cz) e.remove();
     if (this.meta.transient || this.entityLoading.has(key)) return;
     if (!list.length && !this.entityKeys.has(key) && !this.entityDirty.has(key)) return;
-    const rec: SavedEntityChunk = { key, entities: list.map(saveEntity).filter((d) => d !== null) };
+    const rec: SavedEntityChunk = { key, entities: saved };
     void saveEntityChunks([rec]);
     this.entityKeys.add(key);
     this.entityDirty.delete(key);
@@ -657,6 +669,13 @@ export class Game {
       this.setScreen(this.containerScreenFactory(new ChestMenu(p, be)));
       if (be.openCount++ === 0) this.sound.play('block.chest.open', x + 0.5, y + 0.5, z + 0.5, 0.5, Math.random() * 0.1 + 0.9);
     }
+  }
+
+  /** right-clicked a chest minecart (vanilla ContainerEntity.interactWithContainerVehicle: no sound, no lid) */
+  openEntityContainer(e: MinecartChest): void {
+    if (!this.containerScreenFactory) return;
+    e.unpackLoot();
+    this.setScreen(this.containerScreenFactory(new ChestMenu(this.player, e, entityDisplayName(e))));
   }
 
   /** chest closed (called by the chest screen) */
@@ -807,6 +826,8 @@ export class Game {
   }
 
   teleport(x: number, y: number, z: number, yaw?: number, pitch?: number): void {
+    // vanilla ServerPlayer.teleportTo gets out of any vehicle first (as does respawning)
+    this.player.removeVehicle();
     this.player.moveTo(x, y, z, yaw ?? this.player.yaw, pitch ?? this.player.pitch);
     this.player.dx = this.player.dy = this.player.dz = 0;
     this.player.fallDistance = 0;

@@ -26,6 +26,7 @@ import { Sheep, Chicken, sheepFurColor } from '../entity/animals';
 import { Zombie, Skeleton, Creeper, Enderman, Slime } from '../entity/monsters';
 import { Squid } from '../entity/water';
 import { ThrownItem } from '../entity/throwable';
+import { AbstractMinecart } from '../entity/minecart';
 import type { Player } from '../entity/player';
 import { MOB_TEXTURES, FIRE_TEXTURES } from '../textures/mobs';
 import { FLAGS, F_FULL_COLLISION, F_AIR, OUTLINE, S } from '../world/block';
@@ -89,6 +90,7 @@ export class EntityRenderDispatcher {
       squid: M.squidModel(),
       slime: M.slimeInnerModel(),
       slime_outer: M.slimeOuterModel(),
+      minecart: M.minecartModel(),
     };
     // vanilla textures/misc/shadow.png: soft black disc
     const n = 32, data = new Uint8Array(n * n * 4);
@@ -211,6 +213,7 @@ export class EntityRenderDispatcher {
     else if (e instanceof PrimedTnt) this.renderTnt(b, e, dx, dy, dz, p);
     else if (e instanceof FallingBlockEntity) this.renderFalling(b, e, dx, dy, dz);
     else if (e instanceof ThrownItem) this.renderThrown(b, e, dx, dy, dz, cam);
+    else if (e instanceof AbstractMinecart) this.renderMinecart(b, e, x, y, z, dx, dy, dz, p);
     if (e.isOnFire() && !(e instanceof ItemEntity) && !(e instanceof ExperienceOrb)) this.renderFlame(b, e, dx, dy, dz, cam, level.gameTime);
   }
 
@@ -245,7 +248,8 @@ export class EntityRenderDispatcher {
     scale?.(pose);
     pose.translate(0, -1.501, 0);
     let limbAmount = 0, limbSwing = 0;
-    if (e.isAlive) {
+    // vanilla shouldSit: a rider's legs don't walk
+    if (e.isAlive && !e.vehicle) {
       limbAmount = Math.min(1, e.walkAnimSpeedO + (e.walkAnimSpeed - e.walkAnimSpeedO) * p);
       limbSwing = e.walkAnimPos - e.walkAnimSpeed * (1 - p);
       if (e instanceof Mob && e.isBaby()) limbSwing *= 3;
@@ -347,13 +351,13 @@ export class EntityRenderDispatcher {
         break;
       }
       case 'zombie':
-        M.animateHumanoidMob(def.root, a.limbSwing, a.limbAmount, a.age, a.headYaw, a.headPitch, attack, 'empty');
+        M.animateHumanoidMob(def.root, a.limbSwing, a.limbAmount, a.age, a.headYaw, a.headPitch, attack, 'empty', !!e.vehicle);
         M.animateZombieArms(def.root, (e as Zombie).aggressive, attack, a.age);
         break;
       case 'skeleton': {
         const bow = e.mainHand?.item.id === 'bow';
         armPose = bow && e.aggressive ? 'bow' : 'empty';
-        M.animateHumanoidMob(def.root, a.limbSwing, a.limbAmount, a.age, a.headYaw, a.headPitch, attack, armPose);
+        M.animateHumanoidMob(def.root, a.limbSwing, a.limbAmount, a.age, a.headYaw, a.headPitch, attack, armPose, !!e.vehicle);
         if (e.aggressive && !bow) M.animateSkeletonMelee(def.root, attack, a.age);
         break;
       }
@@ -482,7 +486,7 @@ export class EntityRenderDispatcher {
     const crouch = e.crouching && !e.flying;
     const a = this.setupLiving(e, dx, dy + (crouch ? -0.125 : 0), dz, p, 90, (pose) => pose.scale(0.9375, 0.9375, 0.9375));
     const m = this.player;
-    animateHumanoid(m, a.limbSwing, a.limbAmount, a.age, a.headYaw, a.headPitch, attackAnim(e, p), crouch);
+    animateHumanoid(m, a.limbSwing, a.limbAmount, a.age, a.headYaw, a.headPitch, attackAnim(e, p), crouch, !!e.vehicle);
     const held = e.inventory.selectedItem;
     if (held) {
       const ra = m.child('right_arm');
@@ -623,6 +627,56 @@ export class EntityRenderDispatcher {
     this.items.render(b, pose, e.stack, 'ground');
   }
 
+  /**
+   * vanilla MinecartRenderer: drawn on the rail's centre line between its front and back wheel points
+   * (0.3 either way), turned and tilted along the track, wobbling after a hit, with its block (the
+   * chest) inside at 3/4 size.
+   */
+  private renderMinecart(b: EntityBatch, e: AbstractMinecart, x: number, y: number, z: number, dx: number, dy: number, dz: number, p: number): void {
+    const def = this.models.minecart, tex = this.tex('minecart');
+    if (!tex) return;
+    b.setOverlay(0, 0, 0, 0);
+    const pose = this.pose;
+    pose.reset();
+    pose.translate(dx, dy, dz);
+    const j = minecartJitter(e.id);
+    pose.translate(j[0], j[1], j[2]);
+    let yaw = e.yawO + (e.yaw - e.yawO) * p;
+    let pitch = e.pitchO + (e.pitch - e.pitchO) * p;
+    const on = e.getPos(x, y, z);
+    if (on) {
+      const front = e.getPosOffs(x, y, z, 0.3) ?? on, back = e.getPosOffs(x, y, z, -0.3) ?? on;
+      pose.translate(on[0] - x, (front[1] + back[1]) / 2 - y, on[2] - z);
+      let vx = back[0] - front[0], vy = back[1] - front[1], vz = back[2] - front[2];
+      const l = Math.sqrt(vx * vx + vy * vy + vz * vz);
+      if (l !== 0) {
+        vx /= l;
+        vy /= l;
+        vz /= l;
+        yaw = (Math.atan2(vz, vx) * 180) / Math.PI;
+        pitch = Math.atan(vy) * 73;
+      }
+    }
+    pose.translate(0, 0.375, 0);
+    pose.rotY(180 - yaw);
+    pose.rotZ(-pitch);
+    const f5 = e.hurtTime - p, f6 = Math.max(0, e.damage - p);
+    if (f5 > 0) pose.rotX(((Math.sin(f5) * f5 * f6) / 10) * e.hurtDir);
+    const display = e.displayState();
+    if (display) {
+      pose.push();
+      pose.scale(0.75, 0.75, 0.75);
+      pose.translate(-0.5, (e.displayOffset() - 8) / 16, 0.5);
+      pose.rotY(90);
+      this.items.renderBlockState(b, pose, display);
+      pose.pop();
+    }
+    pose.scale(-1, -1, 1);
+    M.animateMinecart(def.root, -0.1);
+    b.begin(this.state(tex));
+    def.root.render(b, pose, def.texW, def.texH);
+  }
+
   private renderFalling(b: EntityBatch, e: FallingBlockEntity, dx: number, dy: number, dz: number): void {
     b.setOverlay(0, 0, 0, 0);
     const pose = this.pose;
@@ -753,6 +807,14 @@ function gaussian(): number {
   return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * Math.random());
 }
 
+/** vanilla MinecartRenderer: a fixed per-cart offset of up to ±2 mm so carts in one spot don't z-fight */
+function minecartJitter(id: number): [number, number, number] {
+  let i = BigInt.asIntN(64, BigInt(id) * 493286711n);
+  i = BigInt.asIntN(64, i * i * 4392167121n + i * 98761n);
+  const f = (shift: bigint) => ((Number((i >> shift) & 7n) + 0.5) / 8 - 0.5) * 0.004;
+  return [f(16n), f(20n), f(24n)];
+}
+
 /** vanilla LivingEntity.getAttackAnim */
 function attackAnim(e: LivingEntity, p: number): number {
   let f = e.attackAnim - e.attackAnimO;
@@ -774,6 +836,10 @@ function shadowRadius(e: Entity): number {
       break;
     case 'spider':
       r = 0.8;
+      break;
+    case 'minecart':
+    case 'chest_minecart':
+      r = 0.7;
       break;
     case 'squid':
       r = 0.7;

@@ -454,12 +454,13 @@ export class FurnaceScreen extends AbstractContainerScreen<FurnaceMenu> {
 
 export class ChestScreen extends AbstractContainerScreen<ChestMenu> {
   constructor(game: Game, menu: ChestMenu) {
-    super(game, menu, 'Chest');
+    super(game, menu, menu.title);
     this.imageHeight = 114 + menu.rows * 18;
   }
   override removed(): void {
     super.removed();
-    this.game.chestClosed(this.menu.chest);
+    const c = this.menu.chest;
+    if (!('containerStillValid' in c)) this.game.chestClosed(c);
   }
   renderBg(g: GuiGraphics): void {
     const L = this.leftPos, T = this.topPos, rows = this.menu.rows;

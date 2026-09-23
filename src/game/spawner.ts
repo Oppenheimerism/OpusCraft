@@ -9,6 +9,7 @@ import { ItemStack, ITEMS, cloneTag } from '../item/item';
 import { Pig, Cow, Sheep, Chicken, Animal } from '../entity/animals';
 import { Zombie, Skeleton, Creeper, Spider, Enderman, Slime, Monster, validSpawnBlock } from '../entity/monsters';
 import { Squid, WaterAnimal } from '../entity/water';
+import { AbstractMinecart, createMinecart, MINECART_TYPES } from '../entity/minecart';
 import { moonPhase } from '../render/environment';
 import { BIOMES } from '../world/gen/biomes';
 import { BLOCKS, STATE_BLOCK, FLAGS, F_OPAQUE, F_FULL_COLLISION, F_WATER, F_LAVA, COLLISION } from '../world/block';
@@ -35,9 +36,23 @@ export function createMob(type: string, level: Level): Mob | null {
   return f ? f(level) : null;
 }
 
-/** serialize an entity for chunk storage (mobs and dropped items) */
+/** serialize an entity for chunk storage (mobs, dropped items, minecarts); riders go inside their vehicle's record */
 export function saveEntity(e: Entity): SavedEntity | null {
+  return e.vehicle ? null : saveWithPassengers(e);
+}
+
+/** vanilla Entity.saveAsPassenger: the record plus its riders (players are saved on their own) */
+function saveWithPassengers(e: Entity): SavedEntity | null {
+  const d = saveOne(e);
+  if (!d) return null;
+  const riders = e.passengers.filter((p) => p.type !== 'player').map(saveWithPassengers).filter((r) => r !== null);
+  if (riders.length) d.data = { ...d.data, passengers: JSON.stringify(riders) };
+  return d;
+}
+
+function saveOne(e: Entity): SavedEntity | null {
   if (e instanceof Mob) return e.health > 0 && !e.removed ? e.save() : null;
+  if (e instanceof AbstractMinecart) return e.removed ? null : e.save();
   if (e instanceof ItemEntity && !e.removed) {
     const s = e.stack;
     return {
@@ -48,7 +63,16 @@ export function saveEntity(e: Entity): SavedEntity | null {
   return null;
 }
 
+/** vanilla EntityType.loadEntityRecursive: the entity with its riders on board */
 export function loadEntity(d: SavedEntity, level: Level): Entity | null {
+  const e = loadOne(d, level);
+  if (e && typeof d.data?.passengers === 'string') {
+    for (const pd of JSON.parse(d.data.passengers) as SavedEntity[]) loadEntity(pd, level)?.startRiding(e, true);
+  }
+  return e;
+}
+
+function loadOne(d: SavedEntity, level: Level): Entity | null {
   if (d.id === 'item') {
     const it = ITEMS.get(String(d.data?.item));
     if (!it) return null;
@@ -62,13 +86,19 @@ export function loadEntity(d: SavedEntity, level: Level): Entity | null {
     e.pickupDelay = Number(d.data?.pickupDelay ?? 0);
     return e;
   }
+  const cart = createMinecart(d.id, level);
+  if (cart) {
+    cart.load(d);
+    return cart;
+  }
   const m = createMob(d.id, level);
   if (m) m.load(d);
   return m;
 }
 
-/** entities that belong to chunk storage */
+/** entities that belong to chunk storage (a cart carrying the player is saved with the player) */
 export function isChunkSaved(e: Entity): boolean {
+  if (e instanceof AbstractMinecart) return !e.passengers.some((p) => p.type === 'player');
   return e instanceof Mob || e instanceof ItemEntity;
 }
 
@@ -77,6 +107,7 @@ const ENTITY_NAMES: Record<string, string> = {
   enderman: 'Enderman', slime: 'Slime', squid: 'Squid',
   arrow: 'Arrow', tnt: 'Primed TNT', item: 'Item', experience_orb: 'Experience Orb', falling_block: 'Falling Block', player: 'Player',
   egg: 'Thrown Egg', snowball: 'Snowball', ender_pearl: 'Thrown Ender Pearl',
+  minecart: 'Minecart', chest_minecart: 'Minecart with Chest',
 };
 
 /** vanilla entity type display names (death messages, commands) */
@@ -87,7 +118,7 @@ export function entityDisplayName(e: Entity | string): string {
 
 /** entity type ids accepted by /summon */
 export function summonableTypes(): string[] {
-  return [...Object.keys(MOB_TYPES), 'tnt', 'experience_orb', 'arrow'];
+  return [...Object.keys(MOB_TYPES), 'tnt', 'experience_orb', 'arrow', ...MINECART_TYPES];
 }
 
 /** vanilla MobCategory caps (per 289 spawnable chunks) */

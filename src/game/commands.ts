@@ -15,6 +15,7 @@ import { PrimedTnt } from '../entity/tnt';
 import { ExperienceOrb } from '../entity/xpOrb';
 import { Arrow } from '../entity/arrow';
 import { createMob, entityDisplayName, summonableTypes } from './spawner';
+import { createMinecart, MINECART_TYPES } from '../entity/minecart';
 
 class CommandError extends Error {
   constructor(msg: string, readonly pos = -1) {
@@ -404,7 +405,7 @@ export const COMMANDS: Record<string, CommandDef> = {
         } else if (e instanceof LivingEntity) {
           e.invulnerableTime = 0;
           e.hurt(Number.MAX_VALUE / 2, 'genericKill');
-        } else e.remove();
+        } else e.kill();
       }
       c.ok(list.length === 1 ? `Killed ${list[0] === c.game.player ? c.game.playerName : entityDisplayName(list[0])}` : `Killed ${list.length} entities`);
     },
@@ -426,6 +427,10 @@ export const COMMANDS: Record<string, CommandDef> = {
         const a = new Arrow(lvl, null);
         a.moveTo(x, y, z);
         e = a;
+      } else if (MINECART_TYPES.includes(type)) {
+        const cart = createMinecart(type, lvl)!;
+        cart.moveTo(x, y, z, 0, 0);
+        e = cart;
       } else {
         const m = createMob(type, lvl);
         if (!m) throw new CommandError(`Can't find element 'minecraft:${type}' of type 'minecraft:entity_type'`, c.args[0].pos);

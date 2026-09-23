@@ -7,6 +7,7 @@ import { mobSounds } from './gen/mobs';
 import { MUSIC_TRACKS, MUSIC_TRACK_NAMES, renderMenuMusic, renderMusicTrack } from './gen/music';
 import { playerSounds } from './gen/player';
 import { worldSounds } from './gen/world';
+import { minecartSounds } from './gen/minecart';
 
 export const SAMPLE_RATE = 44100;
 
@@ -22,6 +23,7 @@ export const SOUNDS: Record<string, SoundGen> = {
   ...playerSounds(),
   ...worldSounds(),
   ...mobSounds(),
+  ...minecartSounds(),
 };
 
 /** Number of in-game (overworld) music tracks. */
@@ -53,7 +55,7 @@ export interface SoundHint {
   loop?: boolean;
 }
 
-const LOOPS = new Set(['weather.rain', 'weather.rain.above', 'block.fire.ambient', 'block.lava.ambient', 'block.water.ambient', 'block.portal.ambient']);
+const LOOPS = new Set(['weather.rain', 'weather.rain.above', 'block.fire.ambient', 'block.lava.ambient', 'block.water.ambient', 'block.portal.ambient', 'entity.minecart.riding', 'entity.minecart.inside', 'entity.minecart.inside.underwater']);
 const VOLUMES: Record<string, number> = {
   'ui.button.click': 0.25,
   'ui.toast.in': 0.4,

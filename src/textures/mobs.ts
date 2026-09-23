@@ -653,6 +653,65 @@ function slime(): TexImage {
 }
 
 // ---------------------------------------------------------------------------
+// Minecart (64x32, vanilla MinecartModel layout): wall box at (0,0) 16x8x2 (front = inside face,
+// back = outside face, top = rim), floor box at (0,10) 20x16x2 rotated flat (back = the floor
+// inside, front = the underside, top/bottom/right/left = the base's edges), inner plate at (44,10).
+
+function minecart(): TexImage {
+  const t = img(64, 32);
+  const r = new Rand(0x3ca47);
+  const METAL = [0x767676, 0x7d7d7d, 0x848484, 0x8b8b8b, 0x929292];
+  const MW = [1, 3, 5, 4, 1];
+  const FLOOR = [0x404040, 0x464646, 0x4b4b4b, 0x505050];
+  const FW = [1, 3, 4, 2];
+  const wall = boxFaces(0, 0, 16, 8, 2);
+  const base = boxFaces(0, 10, 20, 16, 2);
+  const plate = boxFaces(44, 10, 18, 14, 1);
+  // outside of the walls: riveted plates between darker corner posts, a bright lip and a dark foot
+  noiseFace(t, wall.back, r, METAL, { w: MW });
+  paintFace(t, wall.back, (x, y, c, w, h) => {
+    if (x === 0 || x === w - 1) return y === 0 ? 0x9c9c9c : y === h - 1 ? 0x434343 : pick(r, [0x575757, 0x5d5d5d]);
+    if (y === 0) return pick(r, [0xb4b4b4, 0xbababa]);
+    if (y === 1) return mixC(c, 0xa6a6a6, 0.6);
+    if (y === h - 2) return mulC(c, 0.8);
+    if (y === h - 1) return pick(r, [0x4a4a4a, 0x505050]);
+    if (x === 7) return mulC(c, 0.86);
+    return undefined;
+  });
+  for (const [x, y] of [[2, 2], [5, 2], [10, 2], [13, 2], [2, 5], [5, 5], [10, 5], [13, 5]]) {
+    plot(t, wall.back[0] + x, wall.back[1] + y, 0xc4c4c4);
+    plot(t, wall.back[0] + x + 1, wall.back[1] + y + 1, 0x5c5c5c);
+  }
+  // inside of the walls: shadowed, darker towards the floor
+  noiseFace(t, wall.front, r, METAL, { w: MW });
+  paintFace(t, wall.front, (x, y, c, w, h) => {
+    if (y === 0) return mixC(c, 0x9a9a9a, 0.5);
+    const k = 0.92 - (y / (h - 1)) * 0.3;
+    return mulC(x === 0 || x === w - 1 ? mulC(c, 0.85) : c, k);
+  });
+  // the rim: light outer edge, a shade darker on the inner edge
+  paintFace(t, wall.top, (_x, y) => (y === 0 ? pick(r, [0xbebebe, 0xc6c6c6]) : pick(r, [0xa2a2a2, 0xa9a9a9])));
+  noiseFace(t, wall.bottom, r, [0x474747, 0x4d4d4d]);
+  for (const k of ['right', 'left'] as FaceName[]) paintFace(t, wall[k], (_x, y, _c, _w, h) => (y === 0 ? 0x9c9c9c : y === h - 1 ? 0x434343 : pick(r, [0x5a5a5a, 0x606060])));
+  // the base: dark edges under the walls, the underside with two axle bars
+  for (const k of ['top', 'bottom', 'right', 'left'] as FaceName[]) noiseFace(t, base[k], r, [0x3e3e3e, 0x444444, 0x4a4a4a], { w: [2, 3, 1] });
+  noiseFace(t, base.front, r, [0x353535, 0x3a3a3a, 0x3f3f3f], { w: [2, 3, 2] });
+  paintFace(t, base.front, (x, y, c, w, h) => {
+    if (x === 0 || y === 0 || x === w - 1 || y === h - 1) return 0x2e2e2e;
+    if (y === 3 || y === h - 4) return pick(r, [0x575757, 0x5e5e5e]);
+    if (y === 4 || y === h - 3) return 0x2a2a2a;
+    return c;
+  });
+  // the floor and the inner plate: dark iron sheet with seams every 4 pixels
+  for (const f of [base.back, plate.front]) {
+    noiseFace(t, f, r, FLOOR, { w: FW });
+    paintFace(t, f, (x, _y, c) => (x % 4 === 3 ? mulC(c, 0.82) : undefined));
+  }
+  for (const k of ['top', 'right', 'left'] as FaceName[]) noiseFace(t, plate[k], r, [0x3c3c3c, 0x414141]);
+  return t;
+}
+
+// ---------------------------------------------------------------------------
 // Arrow entity (32x32)
 
 function arrow(): TexImage {
@@ -999,6 +1058,7 @@ export const MOB_TEXTURES: Record<string, () => TexImage> = {
   enderman_eyes: endermanEyes,
   squid,
   slime,
+  minecart,
   arrow,
   experience_orb: experienceOrb,
 };

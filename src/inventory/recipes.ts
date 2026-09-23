@@ -117,6 +117,8 @@ shaped('clock', 1, [' # ', '#X#', ' # '], { '#': 'gold_ingot', X: 'redstone' });
 shaped('fishing_rod', 1, ['  #', ' #X', '# X'], { '#': 'stick', X: 'string' });
 shaped('map', 1, ['###', '#X#', '###'], { '#': 'paper', X: 'compass' });
 shaped('minecart', 1, ['# #', '###'], { '#': 'iron_ingot' });
+shapeless('chest_minecart', 1, 'chest', 'minecart');
+shaped('rail', 16, ['X X', 'X#X', 'X X'], { X: 'iron_ingot', '#': 'stick' });
 shaped('iron_door', 3, ['##', '##', '##'], { '#': 'iron_ingot' });
 shaped('glass_bottle', 3, ['# #', ' # '], { '#': 'glass' });
 shaped('lead', 2, ['~~ ', '~O ', '  ~'], { '~': 'string', O: 'slime_ball' });
