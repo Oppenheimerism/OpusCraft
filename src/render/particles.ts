@@ -280,6 +280,41 @@ export class ParticleEngine {
         this.addSprite(p);
         break;
       }
+      case 'ash':
+      case 'white_ash': {
+        // vanilla BaseAshSmokeParticle (AshParticle, WhiteAshParticle): sifting motes that sink (ash) or hang (white ash)
+        const white = kind === 'white_ash';
+        const p = this.base(kind, x, y, z);
+        this.withSpeed(p, 0, 0, 0);
+        p.friction = 0.96;
+        p.gravity = white ? 0.0125 : 0.1;
+        p.speedUpWhenBlocked = true;
+        p.dx = p.dx * 0.1 + xd;
+        p.dy = p.dy * -0.1 + yd;
+        p.dz = p.dz * 0.1 + zd;
+        [p.r, p.g, p.b] = white ? [0.7921569, 0.74509805, 0.7058824] : [0.7294118, 0.69411767, 0.7607843];
+        p.size *= 0.75;
+        p.lifetime = Math.max(1, Math.floor(20 / (Math.random() * 0.8 + 0.2)));
+        p.physics = false;
+        this.addSprite(p);
+        break;
+      }
+      case 'crimson_spore':
+      case 'warped_spore': {
+        // vanilla SuspendedParticle (CrimsonSporeProvider, WarpedSporeProvider): specks drifting up through the air
+        const p = this.base(kind, x, y - 0.125, z);
+        this.withSpeed(p, xd, yd, zd);
+        p.size *= Math.random() * 0.6 + 0.6;
+        p.lifetime = Math.floor(16 / (Math.random() * 0.8 + 0.2));
+        p.physics = false;
+        p.friction = 1;
+        p.gravity = 0;
+        [p.r, p.g, p.b] = kind === 'crimson_spore' ? [0.9, 0.4, 0.5] : [0.1, 0.1, 0.3];
+        p.frames = ['generic_0'];
+        p.frame = 0;
+        this.addSprite(p);
+        break;
+      }
       case 'explosion': {
         const p = this.base(kind, x, y, z);
         p.lifetime = 6 + Math.floor(Math.random() * 4);

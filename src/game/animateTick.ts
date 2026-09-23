@@ -6,7 +6,8 @@
 // water or lava dripping through thin ceilings.
 
 import { mcPosSeed } from '../core/rng';
-import { BLOCKS, STATE_BLOCK, FLAGS, COLLISION, FACE_OCC, F_AIR, F_OPAQUE, F_REPLACEABLE, F_WATER, F_LAVA } from '../world/block';
+import { BLOCKS, STATE_BLOCK, FLAGS, COLLISION, FACE_OCC, F_AIR, F_OPAQUE, F_REPLACEABLE, F_WATER, F_LAVA, F_FULL_COLLISION } from '../world/block';
+import { BIOMES } from '../world/gen/biomes';
 import { DOWN, UP } from '../world/dir';
 import { fluidStateOf } from './fluidTicks';
 import { canBurn } from './fire';
@@ -48,6 +49,18 @@ function kindOf(st: number): number {
     });
   }
   return KIND[STATE_BLOCK[st]];
+}
+
+/** the push each ambient particle's provider gives it (vanilla WhiteAshParticle.Provider, the spore providers) */
+function ambientMotion(type: string): [number, number, number] {
+  const r = Math.random;
+  if (type === 'white_ash') return [r() * -1.9 * r() * 0.1, r() * -0.5 * r() * 0.1 * 5, r() * -1.9 * r() * 0.1];
+  if (type === 'warped_spore') return [0, r() * -1.9 * r() * 0.1, 0];
+  if (type === 'crimson_spore') return [gauss() * 1e-6, gauss() * 1e-4, gauss() * 1e-6];
+  return [0, 0, 0];
+}
+function gauss(): number {
+  return Math.sqrt(-2 * Math.log(Math.random() || 1e-9)) * Math.cos(2 * Math.PI * Math.random());
 }
 
 const STEP: Record<string, [number, number]> = { north: [0, -1], south: [0, 1], west: [-1, 0], east: [1, 0] };
@@ -117,6 +130,14 @@ export class AmbientTicker {
     const z = cz + Math.floor(r() * range) - Math.floor(r() * range);
     const w = this.level.world;
     const st = w.getState(x, y, z);
+    // vanilla ClientLevel.doAnimateTick: the biome's own motes (the Nether's ash and spores), anywhere not a full block
+    if (!(FLAGS[st] & F_FULL_COLLISION)) {
+      const pt = BIOMES[w.getBiome3(x, y, z)]?.particle;
+      if (pt && r() <= pt.chance) {
+        const [xd, yd, zd] = ambientMotion(pt.type);
+        this.level.particles.spawn?.(pt.type, x + r(), y + r(), z + r(), xd, yd, zd);
+      }
+    }
     if (st === 0) return;
     switch (kindOf(st)) {
       case K.TORCH:
