@@ -27,7 +27,12 @@ import { Hud } from '../gui/hud';
 import type { Screen } from '../gui/screen';
 import { setClickSound } from '../gui/screen';
 import type { FontData } from '../textures/font';
-import { WorldMeta, saveWorldMeta, serializeChunk, saveChunks, savedChunkKeys, chunkKey, loadChunk, deserializeChunk } from '../storage/worldStore';
+import { WorldMeta, saveWorldMeta, serializeChunk, saveChunks, savedChunkKeys, chunkKey, loadChunk, deserializeChunk, entityChunkKeys, saveEntityChunks, loadEntityChunk, SavedEntityChunk } from '../storage/worldStore';
+import { NaturalSpawner, saveEntity, loadEntity, isChunkSaved } from './spawner';
+import { hashString } from '../core/rng';
+import type { Chunk } from '../world/chunk';
+import type { Entity } from '../entity/entity';
+import { Mob } from '../entity/mob';
 import { SoundManager } from '../audio/soundManager';
 import { Panorama } from '../render/panorama';
 import { timeOfDay, skyDarkenInt } from '../render/environment';
@@ -89,6 +94,11 @@ export class Game {
   inventoryScreenFactory: (() => Screen) | null = null;
   onCommand: ((cmd: string) => void) | null = null;
   worldSpawn: [number, number, number] | null = null;
+  spawner: NaturalSpawner | null = null;
+  /** chunks with a saved entity record / with entities not yet saved / with a record load in flight */
+  private entityKeys = new Set<string>();
+  private entityDirty = new Set<string>();
+  private entityLoading = new Set<string>();
 
   constructor(readonly canvas: HTMLCanvasElement, readonly ui: HTMLCanvasElement) {
     this.opts = loadOptions();
@@ -268,6 +278,9 @@ export class Game {
     this.pool = new WorkerPool(workers, meta.seed, this.atlas.sprites);
     await this.pool.ready;
     this.savedKeys = await savedChunkKeys(meta.id);
+    this.entityKeys = meta.transient ? new Set() : await entityChunkKeys(meta.id);
+    this.entityDirty.clear();
+    this.entityLoading.clear();
     this.world = new World();
     this.renderer.world.meshes.forEach((_m, k) => this.renderer.world.dispose(k));
     this.chunks = new ChunkManager(this.world, this.pool, this.renderer.world);
@@ -275,7 +288,9 @@ export class Game {
     this.chunks.smoothLighting = this.opts.smoothLighting;
     this.chunks.fancyLeaves = this.opts.fancy;
     this.chunks.savedLoader = (cx, cz) => this.loadSavedChunk(cx, cz);
+    this.chunks.onChunkLoaded = (c) => this.chunkEntitiesLoaded(c);
     this.chunks.onChunkUnloaded = (c) => {
+      this.unloadChunkEntities(c);
       if (c.modified && this.meta && !this.meta.transient) {
         const sc = serializeChunk(this.meta.id, c, this.world.chunkBlockEntities(c.cx, c.cz).map((b) => b.save()));
         this.savedKeys.add(sc.key);
@@ -324,7 +339,14 @@ export class Game {
       return 0xffffff;
     });
     this.renderer.particles = particles;
-    this.level.particles = { blockBreak: (x, y, z, s) => particles.blockBreak(x, y, z, s), blockHit: (x, y, z, s, f) => particles.blockHit(x, y, z, s, f) };
+    this.level.particles = {
+      blockBreak: (x, y, z, s) => particles.blockBreak(x, y, z, s),
+      blockHit: (x, y, z, s, f) => particles.blockHit(x, y, z, s, f),
+      poof: (e) => particles.poof(e),
+      spawn: (k, x, y, z, dx, dy, dz) => particles.spawn(k, x, y, z, dx, dy, dz),
+      emitAround: (k, e) => particles.emitAround(k, e),
+    };
+    this.spawner = new NaturalSpawner(this.level, hashString(meta.seed));
     this.renderer.weather.tempAt = (biome, x, y, z) => {
       const b = BIOMES[biome];
       if (y > 80) return b.temperature - ((Math.sin(x * 0.13 + z * 0.07) * 4 + y - 80) * 0.05) / 40;
@@ -415,7 +437,76 @@ export class Game {
       c.modified = false;
     }
     await saveChunks(list);
+    await this.saveLoadedEntities();
     await saveWorldMeta(m);
+  }
+
+  // -------------------------------------------------------------------------
+  // entity persistence (per-chunk records, like vanilla's entities/ region files)
+
+  private entityChunkKey(cx: number, cz: number): string {
+    return chunkKey(this.meta!.id, cx, cz);
+  }
+
+  /** a chunk became available: restore its saved entities or run chunk-generation spawning */
+  private chunkEntitiesLoaded(c: Chunk): void {
+    if (!this.meta || !this.level) return;
+    const key = this.entityChunkKey(c.cx, c.cz);
+    const lvl = this.level;
+    if (this.entityKeys.has(key)) {
+      this.entityLoading.add(key);
+      void loadEntityChunk(key).then((rec) => {
+        this.entityLoading.delete(key);
+        if (!rec || this.level !== lvl || !this.world.getChunk(c.cx, c.cz)) return;
+        for (const d of rec.entities) {
+          const e = loadEntity(d, lvl);
+          if (e) lvl.addEntity(e);
+        }
+      });
+    } else if (this.spawner) {
+      if (this.spawner.spawnForNewChunk(c.cx, c.cz).length) this.entityDirty.add(key);
+    }
+  }
+
+  private entitiesIn(cx: number, cz: number): Entity[] {
+    return this.level.entities.filter((e) => !e.removed && isChunkSaved(e) && Math.floor(e.x) >> 4 === cx && Math.floor(e.z) >> 4 === cz);
+  }
+
+  private unloadChunkEntities(c: Chunk): void {
+    if (!this.meta || !this.level) return;
+    const key = this.entityChunkKey(c.cx, c.cz);
+    const list = this.entitiesIn(c.cx, c.cz);
+    // projectiles and orbs in unloaded chunks are dropped
+    for (const e of this.level.entities) if (e !== this.player && !e.removed && Math.floor(e.x) >> 4 === c.cx && Math.floor(e.z) >> 4 === c.cz) e.remove();
+    if (this.meta.transient || this.entityLoading.has(key)) return;
+    if (!list.length && !this.entityKeys.has(key) && !this.entityDirty.has(key)) return;
+    const rec: SavedEntityChunk = { key, entities: list.map(saveEntity).filter((d) => d !== null) };
+    void saveEntityChunks([rec]);
+    this.entityKeys.add(key);
+    this.entityDirty.delete(key);
+  }
+
+  private async saveLoadedEntities(): Promise<void> {
+    if (!this.meta || this.meta.transient) return;
+    const groups = new Map<string, Entity[]>();
+    for (const e of this.level.entities) {
+      if (e.removed || !isChunkSaved(e)) continue;
+      const key = this.entityChunkKey(Math.floor(e.x) >> 4, Math.floor(e.z) >> 4);
+      let g = groups.get(key);
+      if (!g) groups.set(key, (g = []));
+      g.push(e);
+    }
+    const out: SavedEntityChunk[] = [];
+    for (const c of this.world.chunks.values()) {
+      const key = this.entityChunkKey(c.cx, c.cz);
+      if (this.entityLoading.has(key)) continue;
+      const g = groups.get(key) ?? [];
+      if (!g.length && !this.entityKeys.has(key) && !this.entityDirty.has(key)) continue;
+      out.push({ key, entities: g.map(saveEntity).filter((d) => d !== null) });
+      this.entityKeys.add(key);
+      this.entityDirty.delete(key);
+    }
+    await saveEntityChunks(out);
   }
 
   async leaveWorld(): Promise<void> {
@@ -513,7 +604,19 @@ export class Game {
   /** vanilla combat tracker death messages */
   deathMessage(source: string): string {
     const n = this.playerName;
+    const k = this.player.killer;
+    const kn = k ? entityDisplayName(k) : '';
     switch (source) {
+      case 'mob':
+        return `${n} was slain by ${kn}`;
+      case 'player':
+        return `${n} was slain by ${kn}`;
+      case 'arrow':
+        return k && k !== this.player && k.type !== 'arrow' ? `${n} was shot by ${kn}` : `${n} was shot by Arrow`;
+      case 'explosion':
+        return `${n} blew up`;
+      case 'playerExplosion':
+        return k === this.player || !k ? `${n} blew up` : `${n} was blown up by ${kn}`;
       case 'fall':
         return `${n} fell from a high place`;
       case 'drown':
@@ -577,6 +680,11 @@ export class Game {
     p.health = p.maxHealth;
     p.deathTime = 0;
     p.hurtTime = 0;
+    p.dead = false;
+    p.killer = null;
+    p.lastHurtByMob = null;
+    p.remainingFireTicks = 0;
+    p.stopUsingItem();
     p.food.level = 20;
     p.food.saturation = 5;
     p.food.exhaustion = 0;
@@ -596,6 +704,9 @@ export class Game {
     p.health = p.maxHealth;
     p.deathTime = 0;
     p.hurtTime = 0;
+    p.dead = false;
+    p.killer = null;
+    p.remainingFireTicks = 0;
     p.removed = false;
     p.fallDistance = 0;
     if (!this.level.entities.includes(p)) this.level.addEntity(p);
@@ -770,14 +881,19 @@ export class Game {
     const clicks = inp.consumeClicks();
     if (active) {
       if (clicks.includes(0)) this.interaction.startAttack();
-      this.interaction.continueAttack(inp.buttons[0]);
+      this.interaction.continueAttack(inp.buttons[0] && !p.isUsingItem());
       this.interaction.use(clicks.includes(2), inp.buttons[2]);
       if (clicks.includes(1)) this.interaction.pickBlock();
-    } else this.interaction.continueAttack(false);
+    } else {
+      this.interaction.continueAttack(false);
+      if (p.isUsingItem()) this.interaction.releaseUsingItem();
+    }
+    this.interaction.tickUsingItem();
     this.fovModO = this.fovMod;
     const target = clamp(1 + (p.fovModifier() - 1) * this.opts.fovEffects, 0.1, 1.5);
     this.fovMod += (target - this.fovMod) * 0.5;
     this.level.tick();
+    this.spawner?.tick();
     if (this.freezeTime) this.level.dayTime--;
     if (p.y < MIN_Y - 64 && p.health > 0) p.hurt(4, 'void');
     this.atlas.tick();
@@ -930,6 +1046,7 @@ export class Game {
       underwater: eyeFluid === FLUID_WATER,
       waterFogColor: [((b.waterFog >> 16) & 255) / 255, ((b.waterFog >> 8) & 255) / 255, (b.waterFog & 255) / 255],
       level: this.level,
+      entityOptions: { shadows: this.opts.entityShadows, drawPlayer: this.thirdPerson > 0 && !camOverride, distanceScale: this.opts.entityDistanceScaling },
     });
     if (camOverride) return;
     const hit = this.interaction.hit;
@@ -1059,4 +1176,15 @@ export class Game {
 function lookVec(yaw: number, pitch: number): [number, number, number] {
   const pr = pitch * DEG, yr = yaw * DEG;
   return [-Math.sin(yr) * Math.cos(pr), -Math.sin(pr), Math.cos(yr) * Math.cos(pr)];
+}
+
+const ENTITY_NAMES: Record<string, string> = {
+  pig: 'Pig', cow: 'Cow', sheep: 'Sheep', chicken: 'Chicken', zombie: 'Zombie', skeleton: 'Skeleton', creeper: 'Creeper', spider: 'Spider',
+  arrow: 'Arrow', tnt: 'Primed TNT', item: 'Item', experience_orb: 'Experience Orb', falling_block: 'Falling Block',
+};
+
+/** vanilla entity display names (death messages, commands) */
+export function entityDisplayName(e: Entity): string {
+  if (e.type === 'player') return 'Player';
+  return ENTITY_NAMES[e.type] ?? e.type;
 }

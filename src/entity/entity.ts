@@ -102,7 +102,104 @@ export abstract class Entity {
     this.walkDistO = this.walkDist;
     this.tickCount++;
     this.updateFluids();
+    // vanilla Entity.baseTick: burning and lava
+    if (this.remainingFireTicks > 0) {
+      if (this.fireImmune()) {
+        this.remainingFireTicks = Math.max(0, this.remainingFireTicks - 4);
+      } else {
+        if (this.remainingFireTicks % 20 === 0 && !this.inLava) this.hurt(1, 'onFire');
+        this.remainingFireTicks--;
+      }
+    }
+    if (this.inLava) {
+      this.lavaHurt();
+      this.fallDistance *= 0.5;
+    }
     if (this.invulnerableTime > 0) this.invulnerableTime--;
+  }
+
+  protected lavaHurt(): void {
+    if (this.fireImmune()) return;
+    this.igniteForSeconds(15);
+    this.hurt(4, 'lava');
+  }
+
+  /** generic damage entry point; returns true if damage was applied */
+  hurt(_amount: number, _source: string, _attacker?: Entity | null, _direct?: Entity | null): boolean {
+    return false;
+  }
+
+  fireImmune(): boolean {
+    return false;
+  }
+
+  isOnFire(): boolean {
+    return this.remainingFireTicks > 0;
+  }
+
+  igniteForSeconds(s: number): void {
+    const t = Math.floor(s * 20);
+    if (this.remainingFireTicks < t) this.remainingFireTicks = t;
+  }
+
+  clearFire(): void {
+    this.remainingFireTicks = 0;
+  }
+
+  /** can be targeted by the crosshair / hit by attacks */
+  isPickable(): boolean {
+    return false;
+  }
+
+  pickRadius(): number {
+    return 0;
+  }
+
+  isPushable(): boolean {
+    return false;
+  }
+
+  push(x: number, y: number, z: number): void {
+    this.dx += x;
+    this.dy += y;
+    this.dz += z;
+  }
+
+  /** vanilla Entity.push(Entity): mutual separation push */
+  pushAgainst(e: Entity): void {
+    if (e.noPhysics || this.noPhysics) return;
+    let d0 = e.x - this.x, d1 = e.z - this.z;
+    let d2 = Math.max(Math.abs(d0), Math.abs(d1));
+    if (d2 < 0.01) return;
+    d2 = Math.sqrt(d2);
+    d0 /= d2;
+    d1 /= d2;
+    let d3 = 1 / d2;
+    if (d3 > 1) d3 = 1;
+    d0 *= d3 * 0.05;
+    d1 *= d3 * 0.05;
+    if (this.isPushable()) this.push(-d0, 0, -d1);
+    if (e.isPushable()) e.push(d0, 0, d1);
+  }
+
+  /** vanilla isInWaterOrRain / isInWaterRainOrBubble */
+  isInWaterOrRainNow(): boolean {
+    return this.inWater || this.level.isRainingAt(Math.floor(this.x), Math.floor(this.y), Math.floor(this.z)) || this.level.isRainingAt(Math.floor(this.x), Math.floor(this.bb.maxY), Math.floor(this.z));
+  }
+
+  /** vanilla getLightLevelDependentMagicValue at the eyes */
+  lightMagic(): number {
+    return this.level.brightness(Math.floor(this.x), Math.floor(this.y + this.eyeHeight), Math.floor(this.z));
+  }
+
+  get blockX(): number {
+    return Math.floor(this.x);
+  }
+  get blockY(): number {
+    return Math.floor(this.y);
+  }
+  get blockZ(): number {
+    return Math.floor(this.z);
   }
 
   /** Collision boxes of blocks intersecting `box` (plus entities later). */
@@ -208,6 +305,7 @@ export abstract class Entity {
         else if (this.onGround || climbing) this.playStepSound();
       }
     }
+    if (this.remainingFireTicks > 0 && !this.fireImmune() && (this.inWater || this.isInWaterOrRainNow())) this.remainingFireTicks = 0;
     // block speed factor (soul sand, honey)
     const f = this.blockSpeedFactor();
     this.dx *= f;

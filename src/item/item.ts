@@ -232,6 +232,10 @@ for (const [id, stack, fuel] of MISC) {
 for (const c of ['white', 'orange', 'magenta', 'light_blue', 'yellow', 'lime', 'pink', 'gray', 'light_gray', 'cyan', 'purple', 'blue', 'brown', 'green', 'red', 'black']) {
   reg({ id: `${c}_dye`, texture: `${c}_dye` });
 }
+// spawn eggs (creative tab order is alphabetical, like vanilla)
+for (const m of ['chicken', 'cow', 'creeper', 'pig', 'sheep', 'skeleton', 'spider', 'zombie']) {
+  reg({ id: `${m}_spawn_egg`, texture: `${m}_spawn_egg`, creativeTab: 'spawn_eggs' });
+}
 // sugar cane item places the block
 {
   const sc = ITEMS.get('sugar_cane');

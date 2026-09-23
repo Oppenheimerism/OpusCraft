@@ -25,9 +25,51 @@ interface Particle {
   kind: 'terrain';
 }
 
+/** vanilla TextureSheetParticle subclasses drawn from the particle sprite sheet */
+interface SpriteParticle {
+  kind: string;
+  x: number; y: number; z: number;
+  xo: number; yo: number; zo: number;
+  dx: number; dy: number; dz: number;
+  age: number;
+  lifetime: number;
+  size: number;
+  gravity: number;
+  friction: number;
+  onGround: boolean;
+  physics: boolean;
+  speedUpWhenBlocked: boolean;
+  /** quad size ramps up over the first frames (crit/heart/smoke) */
+  grow: boolean;
+  fullBright: boolean;
+  frames: string[];
+  /** fixed frame (random pick) or -1 = by age */
+  frame: number;
+  r: number; g: number; b: number;
+  /** per-tick color decay (crit) */
+  gDecay: number; bDecay: number;
+  /** emitter particles spawn children and are never drawn */
+  emitter?: 'explosion' | 'crit' | 'enchanted_hit';
+  target?: { x: number; y: number; z: number; width: number; height: number };
+}
+
+export interface SpriteRectUV {
+  u0: number;
+  v0: number;
+  u1: number;
+  v1: number;
+}
+
+const GENERIC = ['generic_0', 'generic_1', 'generic_2', 'generic_3', 'generic_4', 'generic_5', 'generic_6', 'generic_7'];
+const EXPLOSION = Array.from({ length: 16 }, (_, i) => `explosion_${i}`);
+const SWEEP = Array.from({ length: 8 }, (_, i) => `sweep_${i}`);
+
 export class ParticleEngine {
   private readonly list: Particle[] = [];
+  private readonly sprites: SpriteParticle[] = [];
   readonly max = 16384;
+  spriteTexture: WebGLTexture | null = null;
+  spriteRects: Record<string, SpriteRectUV> = {};
 
   constructor(private readonly atlas: Atlas, private readonly world: World, private readonly tintOf: (x: number, y: number, z: number, state: number) => number) {}
 
@@ -128,7 +170,240 @@ export class ParticleEngine {
     this.add(p);
   }
 
+  // -------------------------------------------------------------------------
+  // sprite particles (vanilla Particle constructors)
+
+  private base(kind: string, x: number, y: number, z: number): SpriteParticle {
+    return {
+      kind, x, y, z, xo: x, yo: y, zo: z, dx: 0, dy: 0, dz: 0, age: 0,
+      lifetime: Math.floor(4 / (Math.random() * 0.9 + 0.1)),
+      size: 0.1 * (Math.random() * 0.5 + 0.5) * 2,
+      gravity: 0, friction: 0.98, onGround: false, physics: true, speedUpWhenBlocked: false, grow: false, fullBright: false,
+      frames: GENERIC, frame: -1, r: 1, g: 1, b: 1, gDecay: 1, bDecay: 1,
+    };
+  }
+
+  /** vanilla Particle(level, x, y, z, xd, yd, zd): randomized initial motion */
+  private withSpeed(p: SpriteParticle, xd: number, yd: number, zd: number): void {
+    p.dx = xd + (Math.random() * 2 - 1) * 0.4;
+    p.dy = yd + (Math.random() * 2 - 1) * 0.4;
+    p.dz = zd + (Math.random() * 2 - 1) * 0.4;
+    const f = (Math.random() + Math.random() + 1) * 0.15;
+    const f1 = Math.sqrt(p.dx * p.dx + p.dy * p.dy + p.dz * p.dz) || 1;
+    p.dx = (p.dx / f1) * f * 0.4;
+    p.dy = (p.dy / f1) * f * 0.4 + 0.1;
+    p.dz = (p.dz / f1) * f * 0.4;
+  }
+
+  private addSprite(p: SpriteParticle): void {
+    if (this.sprites.length >= 4096) this.sprites.shift();
+    this.sprites.push(p);
+  }
+
+  /** spawn by vanilla particle type name */
+  spawn(kind: string, x: number, y: number, z: number, xd: number, yd: number, zd: number): void {
+    switch (kind) {
+      case 'poof': {
+        const p = this.base(kind, x, y, z);
+        p.gravity = -0.1;
+        p.friction = 0.9;
+        p.dx = xd + (Math.random() * 2 - 1) * 0.05;
+        p.dy = yd + (Math.random() * 2 - 1) * 0.05;
+        p.dz = zd + (Math.random() * 2 - 1) * 0.05;
+        const f = Math.random() * 0.3 + 0.7;
+        p.r = p.g = p.b = f;
+        p.size = 0.1 * (Math.random() * Math.random() * 6 + 1);
+        p.lifetime = Math.floor(16 / (Math.random() * 0.8 + 0.2)) + 2;
+        this.addSprite(p);
+        break;
+      }
+      case 'smoke':
+      case 'large_smoke': {
+        const mul = kind === 'large_smoke' ? 2.5 : 1;
+        const p = this.base(kind, x, y, z);
+        this.withSpeed(p, 0, 0, 0);
+        p.friction = 0.96;
+        p.gravity = -0.1;
+        p.speedUpWhenBlocked = true;
+        p.dx = p.dx * 0.1 + xd;
+        p.dy = p.dy * 0.1 + yd;
+        p.dz = p.dz * 0.1 + zd;
+        const c = Math.random() * 0.3;
+        p.r = p.g = p.b = c;
+        p.size *= 0.75 * mul;
+        p.lifetime = Math.max(1, Math.floor((8 / (Math.random() * 0.8 + 0.2)) * mul));
+        p.grow = true;
+        this.addSprite(p);
+        break;
+      }
+      case 'explosion': {
+        const p = this.base(kind, x, y, z);
+        p.lifetime = 6 + Math.floor(Math.random() * 4);
+        const f = Math.random() * 0.6 + 0.4;
+        p.r = p.g = p.b = f;
+        p.size = 2 * (1 - xd * 0.5);
+        p.frames = EXPLOSION;
+        p.fullBright = true;
+        p.physics = false;
+        p.friction = 1;
+        this.addSprite(p);
+        break;
+      }
+      case 'explosion_emitter': {
+        const p = this.base(kind, x, y, z);
+        p.lifetime = 8;
+        p.emitter = 'explosion';
+        this.addSprite(p);
+        break;
+      }
+      case 'crit':
+      case 'enchanted_hit':
+      case 'damage_indicator': {
+        const p = this.base(kind, x, y, z);
+        p.friction = 0.7;
+        p.gravity = 0.5;
+        p.dx *= 0.1;
+        p.dy *= 0.1;
+        p.dz *= 0.1;
+        p.dx += xd * 0.4;
+        p.dy += (kind === 'damage_indicator' ? yd + 1 : yd) * 0.4;
+        p.dz += zd * 0.4;
+        const f = Math.random() * 0.3 + 0.6;
+        p.r = p.g = p.b = f;
+        if (kind === 'enchanted_hit') {
+          p.r *= 0.3;
+          p.g *= 0.8;
+        }
+        p.size *= 0.75;
+        p.lifetime = kind === 'damage_indicator' ? 20 : Math.max(Math.floor(6 / (Math.random() * 0.8 + 0.6)), 1);
+        p.physics = false;
+        p.grow = true;
+        p.gDecay = 0.96;
+        p.bDecay = 0.9;
+        p.frames = [kind === 'crit' ? 'critical_hit' : kind === 'enchanted_hit' ? 'enchanted_hit' : 'damage'];
+        p.frame = 0;
+        this.addSprite(p);
+        break;
+      }
+      case 'heart': {
+        const p = this.base(kind, x, y, z);
+        this.withSpeed(p, xd, yd, zd);
+        p.speedUpWhenBlocked = true;
+        p.friction = 0.86;
+        p.dx *= 0.01;
+        p.dy *= 0.01;
+        p.dz *= 0.01;
+        p.dy += 0.1;
+        p.size *= 1.5;
+        p.lifetime = 16;
+        p.physics = false;
+        p.grow = true;
+        p.frames = ['heart'];
+        p.frame = 0;
+        this.addSprite(p);
+        break;
+      }
+      case 'sweep_attack': {
+        const p = this.base(kind, x, y, z);
+        p.lifetime = 4;
+        const f = Math.random() * 0.6 + 0.4;
+        p.r = p.g = p.b = f;
+        p.size = 1 - xd * 0.5;
+        p.frames = SWEEP;
+        p.fullBright = true;
+        p.physics = false;
+        p.friction = 1;
+        this.addSprite(p);
+        break;
+      }
+      default:
+        break;
+    }
+  }
+
+  /** vanilla TrackingEmitter: 3 ticks × 16 particles around an entity (crits) */
+  emitAround(kind: 'crit' | 'enchanted_hit', e: { x: number; y: number; z: number; width: number; height: number }): void {
+    const p = this.base('emitter', e.x, e.y, e.z);
+    p.lifetime = 3;
+    p.emitter = kind;
+    p.target = e;
+    this.addSprite(p);
+  }
+
+  /** vanilla LivingEntity.makePoofParticles */
+  poof(e: { x: number; y: number; z: number; width: number; height: number }): void {
+    for (let i = 0; i < 20; i++) {
+      const g = () => {
+        let u = 0, v = 0;
+        while (u === 0) u = Math.random();
+        while (v === 0) v = Math.random();
+        return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+      };
+      const d0 = g() * 0.02, d1 = g() * 0.02, d2 = g() * 0.02;
+      const x = e.x + e.width * (2 * Math.random() - 1) - d0 * 10;
+      const y = e.y + e.height * Math.random() - d1 * 10;
+      const z = e.z + e.width * (2 * Math.random() - 1) - d2 * 10;
+      this.spawn('poof', x, y, z, d0, d1, d2);
+    }
+  }
+
+  private tickSprites(): void {
+    let w = 0;
+    const list = this.sprites;
+    const n = list.length;
+    for (let i = 0; i < n; i++) {
+      const p = list[i];
+      p.xo = p.x;
+      p.yo = p.y;
+      p.zo = p.z;
+      if (p.age++ >= p.lifetime) continue;
+      if (p.emitter === 'explosion') {
+        for (let k = 0; k < 6; k++) {
+          const x = p.x + (Math.random() - Math.random()) * 4, y = p.y + (Math.random() - Math.random()) * 4, z = p.z + (Math.random() - Math.random()) * 4;
+          this.spawn('explosion', x, y, z, p.age / p.lifetime, 0, 0);
+        }
+        list[w++] = p;
+        continue;
+      }
+      if (p.emitter && p.target) {
+        const t = p.target;
+        for (let k = 0; k < 16; k++) {
+          const d0 = Math.random() * 2 - 1, d1 = Math.random() * 2 - 1, d2 = Math.random() * 2 - 1;
+          if (d0 * d0 + d1 * d1 + d2 * d2 > 1) continue;
+          this.spawn(p.emitter, t.x + t.width * (d0 / 4), t.y + t.height * (0.5 + d1 / 4), t.z + t.width * (d2 / 4), d0, d1 + 0.2, d2);
+        }
+        list[w++] = p;
+        continue;
+      }
+      p.dy -= 0.04 * p.gravity;
+      if (p.physics) this.move(p as unknown as Particle);
+      else {
+        p.x += p.dx;
+        p.y += p.dy;
+        p.z += p.dz;
+      }
+      if (p.speedUpWhenBlocked && p.y === p.yo) {
+        p.dx *= 1.1;
+        p.dz *= 1.1;
+      }
+      p.dx *= p.friction;
+      p.dy *= p.friction;
+      p.dz *= p.friction;
+      if (p.onGround) {
+        p.dx *= 0.7;
+        p.dz *= 0.7;
+      }
+      p.g *= p.gDecay;
+      p.b *= p.bDecay;
+      list[w++] = p;
+    }
+    // particles spawned by emitters this tick were appended after n
+    for (let i = n; i < list.length; i++) list[w++] = list[i];
+    list.length = w;
+  }
+
   tick(): void {
+    this.tickSprites();
     let w = 0;
     for (let i = 0; i < this.list.length; i++) {
       const p = this.list[i];
@@ -206,11 +481,53 @@ export class ParticleEngine {
     batch.flush();
   }
 
+  /** draw sprite particles (after terrain particles) */
+  renderSprites(batch: EntityBatch, cam: Camera, partial: number): void {
+    if (!this.sprites.length || !this.spriteTexture) return;
+    batch.begin({ texture: this.spriteTexture, cutoff: 0.1, blend: false, cull: false, lit: false, useLightmap: true });
+    const yr = (cam.yaw * Math.PI) / 180, pr = (cam.pitch * Math.PI) / 180;
+    const rx = -Math.cos(yr), rz = -Math.sin(yr);
+    const ux = -Math.sin(yr) * Math.sin(pr), uy = Math.cos(pr), uz = Math.cos(yr) * Math.sin(pr);
+    for (const p of this.sprites) {
+      if (p.emitter) continue;
+      const name = p.frame >= 0 ? p.frames[p.frame] : p.frames[Math.min(p.frames.length - 1, Math.floor((p.age * (p.frames.length - 1)) / Math.max(1, p.lifetime)))];
+      const r = this.spriteRects[name];
+      if (!r) continue;
+      const x = p.xo + (p.x - p.xo) * partial - cam.x;
+      const y = p.yo + (p.y - p.yo) * partial - cam.y;
+      const z = p.zo + (p.z - p.zo) * partial - cam.z;
+      if (p.fullBright) {
+        batch.lightB = 240;
+        batch.lightS = 240;
+      } else {
+        const l = this.world.getLight(Math.floor(p.x), Math.floor(p.y), Math.floor(p.z));
+        batch.lightB = (l & 15) * 16;
+        batch.lightS = (l >> 4) * 16;
+      }
+      let s = p.size;
+      if (p.grow) s *= Math.max(0, Math.min(1, ((p.age + partial) / p.lifetime) * 32));
+      const ax = rx * s, az = rz * s;
+      const bx = ux * s, by = uy * s, bz = uz * s;
+      const v = [
+        [x - ax - bx, y - by, z - az - bz, r.u1, r.v1],
+        [x - ax + bx, y + by, z - az + bz, r.u1, r.v0],
+        [x + ax + bx, y + by, z + az + bz, r.u0, r.v0],
+        [x + ax - bx, y - by, z + az - bz, r.u0, r.v1],
+      ];
+      for (const k of [0, 1, 2, 0, 2, 3]) {
+        const q = v[k];
+        batch.vertexRaw(q[0], q[1], q[2], q[3], q[4], p.r, p.g, p.b, 1, 0, 1, 0);
+      }
+    }
+    batch.flush();
+  }
+
   clear(): void {
     this.list.length = 0;
+    this.sprites.length = 0;
   }
 
   get count(): number {
-    return this.list.length;
+    return this.list.length + this.sprites.length;
   }
 }

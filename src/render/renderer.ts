@@ -13,10 +13,11 @@ import { EntityBatch, PoseStack } from './entityRenderer';
 import { ItemRenderer } from './itemRenderer';
 import { HandRenderer } from './handRenderer';
 import type { Level } from '../game/level';
-import { ItemEntity } from '../entity/itemEntity';
 import type { TexImage } from '../textures/tex';
 import { ParticleEngine } from './particles';
 import { WeatherRenderer } from './weather';
+import { EntityRenderDispatcher, EntityRenderOptions } from './entityRenderers';
+import { buildParticleAtlas } from './particleAtlas';
 
 export interface Camera {
   x: number;
@@ -40,6 +41,7 @@ export interface FrameEnv {
   underwater?: boolean;
   waterFogColor?: [number, number, number];
   level?: Level;
+  entityOptions?: EntityRenderOptions;
 }
 
 export class Renderer {
@@ -51,6 +53,8 @@ export class Renderer {
   readonly items: ItemRenderer;
   readonly hand: HandRenderer;
   readonly weather: WeatherRenderer;
+  readonly entities: EntityRenderDispatcher;
+  private particleAtlas: ReturnType<typeof buildParticleAtlas> | null = null;
   particles: ParticleEngine | null = null;
   fancy = true;
   private readonly pose = new PoseStack();
@@ -77,6 +81,7 @@ export class Renderer {
     this.items = new ItemRenderer(gl, atlas, itemTextures, blockImages);
     this.hand = new HandRenderer(gl, this.items);
     this.weather = new WeatherRenderer(gl);
+    this.entities = new EntityRenderDispatcher(gl, this.items, this.hand.skinTexture);
   }
 
   resize(w: number, h: number): void {
@@ -157,14 +162,21 @@ export class Renderer {
     this.lastFogEnd = fogEnd;
     this.world.cull(tp, rdBlocks);
     this.world.drawOpaque(tp);
-    if (e.level) this.renderEntities(e.level, cam, e.partial, fog, fogStart, fogEnd);
+    if (e.level) this.renderEntities(e.level, cam, e.partial, fog, fogStart, fogEnd, e.entityOptions);
     this.world.drawTranslucent(tp);
     if (this.particles) {
       this.batch.proj = this.proj;
       this.batch.view = this.view;
       this.batch.fog = [fogStart, fogEnd];
       this.batch.fogColor = fog;
+      this.batch.lightmap = this.lightmap.texture;
       this.particles.render(this.batch, cam, e.partial, this.atlas.texture!);
+      if (!this.particleAtlas) {
+        this.particleAtlas = buildParticleAtlas(this.gl);
+      }
+      this.particles.spriteTexture = this.particleAtlas.texture;
+      this.particles.spriteRects = this.particleAtlas.rects;
+      this.particles.renderSprites(this.batch, cam, e.partial);
     }
     if (this.cloudsEnabled && !e.underwater && !this.skipClouds) {
       const cc = env.cloudColor(tod, e.weather);
@@ -183,7 +195,7 @@ export class Renderer {
     }
   }
 
-  private renderEntities(level: Level, cam: Camera, partial: number, fog: [number, number, number], fogStart: number, fogEnd: number): void {
+  private renderEntities(level: Level, cam: Camera, partial: number, fog: [number, number, number], fogStart: number, fogEnd: number, opts?: EntityRenderOptions): void {
     const b = this.batch;
     b.proj = this.proj;
     b.view = this.view;
@@ -195,38 +207,6 @@ export class Renderer {
     const gl = this.gl;
     gl.enable(gl.DEPTH_TEST);
     gl.depthFunc(gl.LEQUAL);
-    for (const ent of level.entities) {
-      if (!(ent instanceof ItemEntity) || ent.removed) continue;
-      const x = ent.lerpX(partial), y = ent.lerpY(partial), z = ent.lerpZ(partial);
-      const dx = x - cam.x, dy = y - cam.y, dz = z - cam.z;
-      if (dx * dx + dy * dy + dz * dz > 64 * 64) continue;
-      if (!this.frustum.testBox(dx - 0.5, dy - 0.2, dz - 0.5, dx + 0.5, dy + 0.8, dz + 0.5)) continue;
-      const l = level.world.getLight(Math.floor(x), Math.floor(y + 0.25), Math.floor(z));
-      b.lightS = (l >> 4) * 16;
-      b.lightB = (l & 15) * 16;
-      const pose = this.pose;
-      pose.reset();
-      pose.translate(dx, dy, dz);
-      const age = ent.age + partial;
-      const bobY = Math.sin(age / 10 + ent.bobOffset) * 0.1 + 0.1;
-      const sy = this.items.displayScaleY(ent.stack, 'ground');
-      pose.translate(0, bobY + 0.25 * sy, 0);
-      pose.rotY(((age / 20 + ent.bobOffset) * 180) / Math.PI);
-      const copies = ent.stack.count > 48 ? 5 : ent.stack.count > 32 ? 4 : ent.stack.count > 16 ? 3 : ent.stack.count > 1 ? 2 : 1;
-      const block3d = this.items.isBlockModel(ent.stack.item);
-      let seed = ent.stack.item.id.length * 31 + 7;
-      const rnd = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
-      for (let i = 0; i < copies; i++) {
-        pose.push();
-        if (i > 0) {
-          if (block3d) pose.translate((rnd() * 2 - 1) * 0.15, (rnd() * 2 - 1) * 0.15, (rnd() * 2 - 1) * 0.15);
-          else pose.translate((rnd() * 2 - 1) * 0.15 * 0.5, (rnd() * 2 - 1) * 0.15 * 0.5, 0);
-        }
-        this.items.render(b, pose, ent.stack, 'ground');
-        pose.pop();
-        if (!block3d) pose.translate(0, 0, 0.09375);
-      }
-    }
-    b.flush();
+    this.entities.render(b, level, cam, partial, this.frustum, opts ?? { shadows: true, drawPlayer: false, distanceScale: 1 });
   }
 }

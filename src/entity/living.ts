@@ -3,6 +3,20 @@
 import { Entity } from './entity';
 import { FLUID_WATER } from '../world/fluids';
 import { wrapDegrees } from '../core/math';
+import { FLAGS, F_OPAQUE, F_FULL_COLLISION } from '../world/block';
+
+/** damage sources that ignore armor (vanilla #bypasses_armor) */
+const BYPASSES_ARMOR = new Set(['onFire', 'inWall', 'drown', 'starve', 'fall', 'void', 'genericKill', 'magic', 'generic', 'cramming', 'flyIntoWall']);
+/** damage sources that never knock back (vanilla #no_knockback) */
+const NO_KNOCKBACK = new Set(['explosion', 'playerExplosion', 'fall', 'drown', 'starve', 'onFire', 'inFire', 'lava', 'inWall', 'void', 'genericKill', 'magic', 'cactus', 'sweetBerryBush', 'generic']);
+export const FIRE_SOURCES = new Set(['onFire', 'inFire', 'lava', 'hotFloor', 'fireball']);
+
+/** vanilla CombatRules.getDamageAfterAbsorb */
+export function damageAfterArmor(damage: number, armor: number, toughness: number): number {
+  const f = 2 + toughness / 4;
+  const f1 = Math.max(armor * 0.2, Math.min(20, armor - damage / f));
+  return damage * (1 - f1 / 25);
+}
 
 export abstract class LivingEntity extends Entity {
   health = 20;
@@ -32,8 +46,17 @@ export abstract class LivingEntity extends Entity {
   swingTime = 0;
   swinging = false;
   absorption = 0;
-  protected noActionTime = 0;
+  noActionTime = 0;
   lastHurtByPlayerTime = 0;
+  /** vanilla lastHurtByMob (cleared after 100 ticks) */
+  lastHurtByMob: LivingEntity | null = null;
+  lastHurtByMobTimestamp = 0;
+  lastHurtByPlayer: LivingEntity | null = null;
+  lastHurtMob: LivingEntity | null = null;
+  /** who dealt the killing blow and how (death messages, loot) */
+  killer: Entity | null = null;
+  deathSource = '';
+  dead = false;
 
   constructor(level: Entity['level']) {
     super(level);
@@ -59,6 +82,56 @@ export abstract class LivingEntity extends Entity {
 
   blockJumpFactor(): number {
     return 1;
+  }
+
+  override baseTick(): void {
+    super.baseTick();
+    this.bodyYawO = this.bodyYaw;
+    this.headYawO = this.headYaw;
+    if (this.health > 0 && this.isInWall()) this.hurt(1, 'inWall');
+    if (this.lastHurtByPlayerTime > 0) this.lastHurtByPlayerTime--;
+    else this.lastHurtByPlayer = null;
+    if (this.lastHurtMob && !this.lastHurtMob.isAlive) this.lastHurtMob = null;
+    if (this.lastHurtByMob) {
+      if (!this.lastHurtByMob.isAlive || this.tickCount - this.lastHurtByMobTimestamp > 100) this.lastHurtByMob = null;
+    }
+  }
+
+  /** vanilla isInWall: eyes inside a suffocating block */
+  isInWall(): boolean {
+    if (this.noPhysics) return false;
+    const f = this.width * 0.8;
+    const ey = this.y + this.eyeHeight;
+    const x0 = Math.floor(this.x - f / 2), x1 = Math.floor(this.x + f / 2);
+    const z0 = Math.floor(this.z - f / 2), z1 = Math.floor(this.z + f / 2);
+    const y0 = Math.floor(ey - 5e-7), y1 = Math.floor(ey + 5e-7);
+    const w = this.level.world;
+    for (let x = x0; x <= x1; x++)
+      for (let y = y0; y <= y1; y++)
+        for (let z = z0; z <= z1; z++) {
+          const fl = FLAGS[w.getState(x, y, z)];
+          if (fl & F_OPAQUE && fl & F_FULL_COLLISION) return true;
+        }
+    return false;
+  }
+
+  setLastHurtByMob(e: LivingEntity | null): void {
+    this.lastHurtByMob = e;
+    this.lastHurtByMobTimestamp = this.tickCount;
+  }
+
+  override isPickable(): boolean {
+    return !this.removed && this.health > 0;
+  }
+
+  override isPushable(): boolean {
+    return this.isAlive;
+  }
+
+  /** vanilla pushEntities: separate from overlapping pushable entities */
+  protected pushEntities(): void {
+    const list = this.level.getEntities(this.bb, (e) => e instanceof LivingEntity && e.isPushable(), this);
+    for (const e of list) this.pushAgainst(e);
   }
 
   override tick(): void {
@@ -123,6 +196,7 @@ export abstract class LivingEntity extends Entity {
     this.xxa *= 0.98;
     this.zza *= 0.98;
     this.travel(this.xxa, this.yya, this.zza);
+    this.pushEntities();
   }
 
   isImmobile(): boolean {
@@ -249,8 +323,6 @@ export abstract class LivingEntity extends Entity {
   }
 
   protected updateBodyRotation(): void {
-    this.bodyYawO = this.bodyYaw;
-    this.headYawO = this.headYaw;
     const d0 = this.x - this.xo, d1 = this.z - this.zo;
     const f = d0 * d0 + d1 * d1;
     let f1 = this.bodyYaw;
@@ -280,31 +352,87 @@ export abstract class LivingEntity extends Entity {
     void f;
   }
 
-  /** damage the entity; returns true if damage was applied */
-  hurt(amount: number, _source: string, attacker?: Entity): boolean {
-    if (this.health <= 0) return false;
-    if (this.invulnerableTime > 10) {
+  /** damage sources this entity ignores */
+  isInvulnerableTo(_source: string): boolean {
+    return false;
+  }
+
+  armorValue(): number {
+    return 0;
+  }
+
+  armorToughness(): number {
+    return 0;
+  }
+
+  /** wear armor pieces (players) */
+  protected hurtArmor(_amount: number): void {}
+
+  knockbackResistance(): number {
+    return 0;
+  }
+
+  /**
+   * vanilla LivingEntity.hurt: invulnerability frames, armor, knockback, hurt/death
+   * sounds. `attacker` is the entity responsible, `direct` the projectile if any.
+   */
+  override hurt(amount: number, source: string, attacker?: Entity | null, direct?: Entity | null): boolean {
+    if (this.isInvulnerableTo(source) || this.removed || this.health <= 0) return false;
+    if (FIRE_SOURCES.has(source) && this.fireImmune()) return false;
+    this.noActionTime = 0;
+    if (amount < 0) amount = 0;
+    let fresh = true;
+    if (this.invulnerableTime > 10 && source !== 'genericKill' && source !== 'void') {
       if (amount <= this.lastHurt) return false;
-      this.applyDamage(amount - this.lastHurt);
+      this.actuallyHurt(source, amount - this.lastHurt);
       this.lastHurt = amount;
+      fresh = false;
     } else {
       this.lastHurt = amount;
       this.invulnerableTime = 20;
-      this.applyDamage(amount);
+      this.actuallyHurt(source, amount);
       this.hurtTime = this.hurtDuration = 10;
-      if (attacker) {
-        let kx = attacker.x - this.x, kz = attacker.z - this.z;
-        while (kx * kx + kz * kz < 1e-4) {
-          kx = (Math.random() - Math.random()) * 0.01;
-          kz = (Math.random() - Math.random()) * 0.01;
+    }
+    if (attacker instanceof LivingEntity && attacker !== this) {
+      this.setLastHurtByMob(attacker);
+      if (attacker.type === 'player') {
+        this.lastHurtByPlayerTime = 100;
+        this.lastHurtByPlayer = attacker;
+      }
+    }
+    if (fresh) {
+      if (!NO_KNOCKBACK.has(source) && (attacker || direct)) {
+        let kx: number, kz: number;
+        if (direct && direct !== attacker) {
+          kx = -direct.dx;
+          kz = -direct.dz;
+        } else {
+          kx = attacker!.x - this.x;
+          kz = attacker!.z - this.z;
         }
         this.knockback(0.4, kx, kz);
       }
-      this.onHurt(_source);
+      this.onHurt(source);
     }
-    if (this.health <= 0) this.die(_source);
+    if (this.health <= 0) {
+      this.killer = attacker ?? null;
+      this.deathSource = source;
+      if (fresh) this.playDeathSound();
+      this.die(source, attacker ?? null);
+    } else if (fresh) this.playHurtSound(source);
     return true;
   }
+
+  protected actuallyHurt(source: string, amount: number): void {
+    if (!BYPASSES_ARMOR.has(source)) {
+      this.hurtArmor(amount);
+      amount = damageAfterArmor(amount, this.armorValue(), this.armorToughness());
+    }
+    this.applyDamage(amount);
+  }
+
+  protected playHurtSound(_source: string): void {}
+  protected playDeathSound(): void {}
 
   protected onHurt(_source: string): void {}
 
@@ -316,7 +444,12 @@ export abstract class LivingEntity extends Entity {
   }
 
   knockback(strength: number, x: number, z: number): void {
+    strength *= 1 - this.knockbackResistance();
     if (strength <= 0) return;
+    while (x * x + z * z < 1e-5) {
+      x = (Math.random() - Math.random()) * 0.01;
+      z = (Math.random() - Math.random()) * 0.01;
+    }
     const l = Math.sqrt(x * x + z * z);
     const kx = (x / l) * strength, kz = (z / l) * strength;
     this.dx = this.dx / 2 - kx;
@@ -324,7 +457,9 @@ export abstract class LivingEntity extends Entity {
     this.dy = this.onGround ? Math.min(0.4, this.dy / 2 + strength) : this.dy;
   }
 
-  die(_source: string): void {
+  die(_source: string, _attacker: Entity | null = null): void {
+    if (this.dead) return;
+    this.dead = true;
     this.deathTime = 0;
   }
 

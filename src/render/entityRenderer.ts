@@ -157,6 +157,10 @@ export interface DrawState {
   cull: boolean;
   lit: boolean;
   useLightmap: boolean;
+  /** additive blending (vanilla eyes render type) */
+  additive?: boolean;
+  /** default true */
+  depthWrite?: boolean;
 }
 
 /** Accumulates quads for one texture/state, then flushes. */
@@ -270,14 +274,17 @@ export class EntityBatch {
     gl.bufferData(gl.ARRAY_BUFFER, this.data.subarray(0, this.n * FLOATS), gl.STREAM_DRAW);
     if (st.blend) {
       gl.enable(gl.BLEND);
-      gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+      if (st.additive) gl.blendFunc(gl.ONE, gl.ONE);
+      else gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
     } else gl.disable(gl.BLEND);
     if (st.cull) gl.enable(gl.CULL_FACE);
     else gl.disable(gl.CULL_FACE);
+    if (st.depthWrite === false) gl.depthMask(false);
     gl.drawArrays(gl.TRIANGLES, 0, this.n);
     gl.bindVertexArray(null);
     gl.enable(gl.CULL_FACE);
     gl.disable(gl.BLEND);
+    if (st.depthWrite === false) gl.depthMask(true);
     this.n = 0;
   }
 
@@ -290,5 +297,5 @@ export class EntityBatch {
 }
 
 function sameState(a: DrawState, b: DrawState): boolean {
-  return a.texture === b.texture && a.cutoff === b.cutoff && a.blend === b.blend && a.cull === b.cull && a.lit === b.lit && a.useLightmap === b.useLightmap;
+  return a.texture === b.texture && a.cutoff === b.cutoff && a.blend === b.blend && a.cull === b.cull && a.lit === b.lit && a.useLightmap === b.useLightmap && !!a.additive === !!b.additive && (a.depthWrite !== false) === (b.depthWrite !== false);
 }

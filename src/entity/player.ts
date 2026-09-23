@@ -8,6 +8,8 @@ import type { Level } from '../game/level';
 import type { ItemStack } from '../item/item';
 import { Inventory } from '../item/inventory';
 import { FoodData } from './food';
+import { ExperienceOrb } from './xpOrb';
+import { Arrow } from './arrow';
 
 export type GameMode = 'survival' | 'creative' | 'adventure' | 'spectator';
 
@@ -56,6 +58,34 @@ export class Player extends LivingEntity {
   xpTotal = 0;
   air = 300;
   usingItemTicks = 0;
+  /** vanilla takeXpDelay: one orb every 2 ticks */
+  takeXpDelay = 0;
+  /** item being used (eating, drinking, drawing a bow) and ticks left (vanilla useItemRemaining) */
+  useItem: ItemStack | null = null;
+  useItemRemaining = 0;
+  useDuration = 0;
+
+  isUsingItem(): boolean {
+    return this.useItem !== null;
+  }
+
+  /** ticks the current item has been used */
+  ticksUsingItem(): number {
+    return this.useItem ? this.useDuration - this.useItemRemaining : 0;
+  }
+
+  startUsingItem(stack: ItemStack, duration: number): void {
+    this.useItem = stack;
+    this.useDuration = duration;
+    this.useItemRemaining = duration;
+    this.usingItemTicks = 1;
+  }
+
+  stopUsingItem(): void {
+    this.useItem = null;
+    this.useItemRemaining = 0;
+    this.usingItemTicks = 0;
+  }
   spawnX = 0;
   spawnY = 64;
   spawnZ = 0;
@@ -137,6 +167,14 @@ export class Player extends LivingEntity {
     this.bob += (f - this.bob) * 0.4;
     this.food.tick(this);
     this.tickAir();
+    if (this.takeXpDelay > 0) this.takeXpDelay--;
+    // vanilla Player.aiStep touch(): orbs and arrows within the inflated box
+    if (this.health > 0 && this.gameMode !== 'spectator') {
+      for (const e of this.level.getEntities(this.bb.inflate(1, 0.5, 1), undefined, this)) {
+        if (e instanceof ExperienceOrb) e.playerTouch(this);
+        else if (e instanceof Arrow && e.playerTouch(this)) this.level.sound.play('entity.item.pickup', this.x, this.y, this.z, 0.2, ((Math.random() - Math.random()) * 0.7 + 1) * 2);
+      }
+    }
     if (this.flying) this.fallDistance = 0;
   }
 
@@ -229,15 +267,59 @@ export class Player extends LivingEntity {
     this.food.addExhaustion(this.sprinting ? 0.2 : 0.05);
   }
 
-  override hurt(amount: number, source: string, attacker?: Entity): boolean {
-    if (this.invulnerable && source !== 'void' && source !== 'genericKill') return false;
+  override isInvulnerableTo(source: string): boolean {
+    if (this.invulnerable && source !== 'void' && source !== 'genericKill') return true;
     const rules = this.level.gameRules;
-    if ((source === 'fall' && !rules.fallDamage) || (source === 'drown' && !rules.drowningDamage)) return false;
-    if ((source === 'lava' || source === 'inFire' || source === 'onFire') && !rules.fireDamage) return false;
+    if ((source === 'fall' && !rules.fallDamage) || (source === 'drown' && !rules.drowningDamage)) return true;
+    if ((source === 'lava' || source === 'inFire' || source === 'onFire') && !rules.fireDamage) return true;
+    return false;
+  }
+
+  override hurt(amount: number, source: string, attacker?: Entity | null, direct?: Entity | null): boolean {
+    if (this.isInvulnerableTo(source)) return false;
+    // vanilla Player.hurt: damage caused by mobs (and all explosions) scales with difficulty
+    const scales = source === 'explosion' || source === 'playerExplosion' || (attacker && attacker !== this && attacker instanceof LivingEntity && attacker.type !== 'player' && source !== 'thorns');
+    if (scales) {
+      const d = this.level.difficulty;
+      if (d === 'peaceful') amount = 0;
+      else if (d === 'easy') amount = Math.min(amount / 2 + 1, amount);
+      else if (d === 'hard') amount = (amount * 3) / 2;
+    }
+    if (amount === 0) return false;
     this.lastDamageSource = source;
-    const ok = super.hurt(amount, source, attacker);
+    this.lastDamageAttacker = attacker ?? null;
+    const ok = super.hurt(amount, source, attacker, direct);
     if (ok) this.food.addExhaustion(0.1);
     return ok;
+  }
+
+  lastDamageAttacker: Entity | null = null;
+
+  override armorValue(): number {
+    return this.inventory.armorValue();
+  }
+
+  override armorToughness(): number {
+    let t = 0;
+    for (const s of this.inventory.armor) if (s?.item.armor) t += s.item.armor.toughness;
+    return t;
+  }
+
+  /** vanilla Inventory.hurtArmor: each piece loses max(1, dmg/4) durability */
+  protected override hurtArmor(amount: number): void {
+    if (amount <= 0) return;
+    const d = Math.max(1, Math.floor(amount / 4));
+    const inv = this.inventory;
+    for (let i = 0; i < 4; i++) {
+      const s = inv.armor[i];
+      if (!s?.item.armor || !s.item.maxDamage) continue;
+      s.damage += d;
+      if (s.damage >= s.item.maxDamage) {
+        inv.armor[i] = null;
+        this.level.sound.play('entity.item.break', this.x, this.y, this.z, 0.8, 0.8 + Math.random() * 0.4);
+      }
+    }
+    inv.version++;
   }
 
   protected override onHurt(source: string): void {
@@ -253,8 +335,9 @@ export class Player extends LivingEntity {
     super.causeFallDamage(dist);
   }
 
-  override die(source: string): void {
-    super.die(source);
+  override die(source: string, attacker: Entity | null = null): void {
+    if (this.dead) return;
+    super.die(source, attacker);
     this.onDeath?.(this, source);
   }
 
@@ -315,6 +398,13 @@ export class Player extends LivingEntity {
     const speed = this.movementSpeed();
     f *= (speed / walk + 1) / 2;
     if (this.flySpeed === 0 || isNaN(f) || !isFinite(f)) f = 1;
+    // drawing a bow zooms in
+    if (this.useItem?.item.id === 'bow') {
+      let f1 = this.ticksUsingItem() / 20;
+      if (f1 > 1) f1 = 1;
+      else f1 *= f1;
+      f *= 1 - f1 * 0.15;
+    }
     return f;
   }
 }

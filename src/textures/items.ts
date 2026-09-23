@@ -11,8 +11,10 @@ import { ARMOR_ITEMS } from './itemlib/armor';
 import { DYE_ITEMS } from './itemlib/dyes';
 import { VARIANT_ITEMS } from './itemlib/variants';
 import { EXTRA_ITEMS } from './itemlib/extras';
+import { SPAWN_EGG_TEXTURES } from './mobs';
 
 export const ITEM_TEXTURES: Record<string, () => TexImage> = {
+  ...SPAWN_EGG_TEXTURES,
   ...TOOL_ITEMS,
   ...MATERIAL_ITEMS,
   ...FOOD_ITEMS,

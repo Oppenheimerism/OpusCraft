@@ -1,6 +1,6 @@
 // Block picking: voxel traversal testing each block's outline shape.
 
-import { OUTLINE, FLAGS, F_AIR, F_WATER, F_LAVA } from '../world/block';
+import { OUTLINE, COLLISION, FLAGS, F_AIR, F_WATER, F_LAVA } from '../world/block';
 import type { World } from '../world/world';
 import { AABB } from '../core/aabb';
 
@@ -72,6 +72,69 @@ export function raycast(world: World, ox: number, oy: number, oz: number, dx: nu
         z += stepZ;
         tMaxZ += tDeltaZ;
       }
+    }
+  }
+  return null;
+}
+
+export interface SegmentHit {
+  x: number;
+  y: number;
+  z: number;
+  face: number;
+  /** fraction along the segment */
+  t: number;
+  px: number;
+  py: number;
+  pz: number;
+}
+
+/**
+ * Clip the segment (x0,y0,z0)→(x1,y1,z1) against block collision shapes
+ * (vanilla Level.clip with ClipContext.Block.COLLIDER, Fluid.NONE).
+ */
+export function clipBlocks(world: World, x0: number, y0: number, z0: number, x1: number, y1: number, z1: number): SegmentHit | null {
+  const dx = x1 - x0, dy = y1 - y0, dz = z1 - z0;
+  const len = Math.sqrt(dx * dx + dy * dy + dz * dz);
+  if (len < 1e-9) return null;
+  let x = Math.floor(x0), y = Math.floor(y0), z = Math.floor(z0);
+  const ex = Math.floor(x1), ey = Math.floor(y1), ez = Math.floor(z1);
+  const stepX = dx > 0 ? 1 : -1, stepY = dy > 0 ? 1 : -1, stepZ = dz > 0 ? 1 : -1;
+  const tDX = dx !== 0 ? Math.abs(1 / dx) : Infinity, tDY = dy !== 0 ? Math.abs(1 / dy) : Infinity, tDZ = dz !== 0 ? Math.abs(1 / dz) : Infinity;
+  let tMX = dx !== 0 ? (dx > 0 ? x + 1 - x0 : x0 - x) * tDX : Infinity;
+  let tMY = dy !== 0 ? (dy > 0 ? y + 1 - y0 : y0 - y) * tDY : Infinity;
+  let tMZ = dz !== 0 ? (dz > 0 ? z + 1 - z0 : z0 - z) * tDZ : Infinity;
+  for (let i = 0; i < 1024; i++) {
+    const st = world.getState(x, y, z);
+    const boxes = COLLISION[st];
+    if (boxes && boxes.length) {
+      let best: SegmentHit | null = null;
+      for (const b of boxes) {
+        const box = new AABB(x + b[0], y + b[1], z + b[2], x + b[3], y + b[4], z + b[5]);
+        const h = box.clip(x0, y0, z0, x1, y1, z1);
+        if (h && (!best || h.t < best.t)) best = { x, y, z, face: h.face, t: h.t, px: x0 + dx * h.t, py: y0 + dy * h.t, pz: z0 + dz * h.t };
+      }
+      if (best) return best;
+    }
+    if (x === ex && y === ey && z === ez) return null;
+    if (tMX < tMY) {
+      if (tMX < tMZ) {
+        if (tMX > 1) return null;
+        x += stepX;
+        tMX += tDX;
+      } else {
+        if (tMZ > 1) return null;
+        z += stepZ;
+        tMZ += tDZ;
+      }
+    } else if (tMY < tMZ) {
+      if (tMY > 1) return null;
+      y += stepY;
+      tMY += tDY;
+    } else {
+      if (tMZ > 1) return null;
+      z += stepZ;
+      tMZ += tDZ;
     }
   }
   return null;

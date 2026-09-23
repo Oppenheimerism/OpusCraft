@@ -10,11 +10,15 @@ import { Rand } from '../core/rng';
 import { BLOCKS, STATE_BLOCK, FLAGS, F_AIR, F_WATERLOGGED, S } from '../world/block';
 import { canSurvive, blockDrops } from './blockRules';
 import { ItemEntity } from '../entity/itemEntity';
+import { ExperienceOrb } from '../entity/xpOrb';
 import type { Item } from '../item/item';
 import { FluidTicker, fluidStateOf } from './fluidTicks';
 import { RandomTicker } from './randomTicks';
 import { FallingBlockEntity } from '../entity/fallingBlock';
 import { F_WATER, F_LAVA, F_REPLACEABLE } from '../world/block';
+import { skyDarkenInt, timeOfDay } from '../render/environment';
+import { BIOMES } from '../world/gen/biomes';
+import type { AABB } from '../core/aabb';
 
 export interface SoundSink {
   play(name: string, x: number, y: number, z: number, volume?: number, pitch?: number): void;
@@ -24,6 +28,12 @@ export interface SoundSink {
 export interface ParticleSink {
   blockBreak(x: number, y: number, z: number, state: number): void;
   blockHit(x: number, y: number, z: number, state: number, face: number): void;
+  /** entity death smoke (vanilla makePoofParticles) */
+  poof?(e: Entity): void;
+  /** generic sprite particle by vanilla particle type name */
+  spawn?(kind: string, x: number, y: number, z: number, dx: number, dy: number, dz: number): void;
+  /** vanilla TrackingEmitter (crit sparks around an entity) */
+  emitAround?(kind: 'crit' | 'enchanted_hit', e: Entity): void;
 }
 
 const NULL_SOUND: SoundSink = { play() {}, playUI() {} };
@@ -71,17 +81,101 @@ export class Level {
     this.entities.push(e);
   }
 
+  /** entities whose bounding box intersects `box` */
+  getEntities(box: AABB, filter?: (e: Entity) => boolean, except?: Entity | null): Entity[] {
+    const out: Entity[] = [];
+    for (const e of this.entities) {
+      if (e.removed || e === except) continue;
+      if (!e.bb.intersects(box)) continue;
+      if (filter && !filter(e)) continue;
+      out.push(e);
+    }
+    return out;
+  }
+
+  /** vanilla ExperienceOrb.award: split into orb sizes */
+  awardExperience(x: number, y: number, z: number, amount: number): void {
+    while (amount > 0) {
+      const v = ExperienceOrb.valueFor(amount);
+      amount -= v;
+      this.addEntity(new ExperienceOrb(this, x, y, z, v));
+    }
+  }
+
+  /** vanilla Level.skyDarken (0..11), refreshed every tick */
+  skyDarken = 0;
+
+  updateSkyBrightness(): void {
+    this.skyDarken = skyDarkenInt(timeOfDay(this.dayTime), { rain: this.rainLevel(1), thunder: this.thunderLevel(1), flash: 0 });
+  }
+
+  isDay(): boolean {
+    return this.skyDarken < 4;
+  }
+
+  /** vanilla getMaxLocalRawBrightness: max(sky - skyDarken, block) */
+  rawBrightness(x: number, y: number, z: number, darken = this.skyDarken): number {
+    const l = this.world.getLight(x, y, z);
+    return Math.max((l >> 4) - darken, l & 15);
+  }
+
+  /** vanilla getLightLevelDependentMagicValue (overworld ambient light 0) */
+  brightness(x: number, y: number, z: number): number {
+    const f = this.rawBrightness(x, y, z) / 15;
+    return f / (4 - 3 * f);
+  }
+
+  canSeeSky(x: number, y: number, z: number): boolean {
+    return y >= this.world.heightAt(x, z);
+  }
+
+  isRaining(): boolean {
+    return this.rainLevel(1) > 0.2;
+  }
+
+  isThundering(): boolean {
+    return this.thunderLevel(1) > 0.9;
+  }
+
+  /** vanilla isRainingAt: raining, open to the sky, and warm enough to rain (not snow) */
+  isRainingAt(x: number, y: number, z: number): boolean {
+    if (!this.isRaining() || !this.canSeeSky(x, y, z)) return false;
+    const b = BIOMES[this.world.getBiome(x, z)];
+    if (!b || !b.precipitation) return false;
+    return this.temperatureAt(b.temperature, y) >= 0.15;
+  }
+
+  /** biome temperature with the vanilla height falloff above y=80 */
+  temperatureAt(base: number, y: number): number {
+    return y > 80 ? base - ((y - 80) * 0.05) / 40 : base;
+  }
+
+  /** called for every entity tick (spawner despawn checks etc.) */
+  onEntityTick: ((e: Entity) => void) | null = null;
+
+  /** vanilla: entities tick only inside the simulation distance (and in loaded chunks) */
+  isEntityTicking(x: number, z: number): boolean {
+    const bx = Math.floor(x), bz = Math.floor(z);
+    if (!this.world.isLoaded(bx, bz)) return false;
+    const p = this.player;
+    if (!p) return true;
+    const dx = (bx >> 4) - (Math.floor(p.x) >> 4), dz = (bz >> 4) - (Math.floor(p.z) >> 4);
+    const r = this.simulationDistance;
+    return Math.max(Math.abs(dx), Math.abs(dz)) <= r;
+  }
+
   tick(): void {
     this.gameTime++;
     if (this.doDaylightCycle) this.dayTime++;
     if (this.gameRules.doWeatherCycle) this.tickWeather();
     else this.tickWeatherLevels();
+    this.updateSkyBrightness();
     for (let i = 0; i < this.entities.length; i++) {
       const e = this.entities[i];
       if (e.removed) continue;
-      // only tick entities in loaded chunks
-      if (!this.world.isLoaded(Math.floor(e.x), Math.floor(e.z))) continue;
+      if (e !== this.player && !this.isEntityTicking(e.x, e.z)) continue;
       e.tick();
+      if (!e.removed) this.onEntityTick?.(e);
     }
     // prune removed
     let w = 0;

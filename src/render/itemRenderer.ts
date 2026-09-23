@@ -39,6 +39,12 @@ const HANDHELD_DISPLAY: Record<DisplayContext, Transform> = {
   thirdperson_righthand: { rot: [0, -90, 55], trans: [0, 4, 0.5], scale: [0.85, 0.85, 0.85] },
   firstperson_righthand: { rot: [0, -90, 25], trans: [1.13, 3.2, 1.13], scale: [0.68, 0.68, 0.68] },
 };
+/** models/item/bow.json display */
+const BOW_DISPLAY: Record<DisplayContext, Transform> = {
+  ...GENERATED_DISPLAY,
+  thirdperson_righthand: { rot: [-80, 260, -40], trans: [-1, -2, 2.5], scale: [0.9, 0.9, 0.9] },
+  firstperson_righthand: { rot: [0, -90, 25], trans: [1.13, 3.2, 1.13], scale: [0.68, 0.68, 0.68] },
+};
 // flat-in-world block items (plants, torch...) use item/generated with the block texture
 function isHandheld(it: Item): boolean {
   return !!it.tool || it.id === 'stick' || it.id === 'bone' || it.id === 'blaze_rod' || it.id === 'fishing_rod';
@@ -101,8 +107,8 @@ export class ItemRenderer {
   }
 
   /** texture source for a flat item: item atlas sprite or a block-atlas sprite ("block:name") */
-  private flatSource(it: Item): { tex: WebGLTexture; u0: number; v0: number; u1: number; v1: number; img: TexImage } | null {
-    const t = it.texture;
+  private flatSource(it: Item, override?: string): { tex: WebGLTexture; u0: number; v0: number; u1: number; v1: number; img: TexImage } | null {
+    const t = override ?? it.texture;
     if (!t) return null;
     if (t.startsWith('block:')) {
       const name = t.slice(6);
@@ -167,8 +173,22 @@ export class ItemRenderer {
     return (isHandheld(it) ? HANDHELD_DISPLAY : GENERATED_DISPLAY)[ctx].scale[1];
   }
 
-  /** Render an item at the pose origin (model-space centered at 0). */
-  render(batch: EntityBatch, pose: PoseStack, stack: ItemStack, ctx: DisplayContext, left = false): void {
+  /** Render every quad of a block state's model in the unit cube at the pose origin (TNT, falling blocks). */
+  renderBlockState(batch: EntityBatch, pose: PoseStack, state: number): void {
+    const models = getStateModels(state);
+    if (!models || !this.atlas.texture) return;
+    const layer = LAYER[state];
+    batch.begin({ texture: this.atlas.texture, cutoff: layer === Layer.SOLID ? -1 : 0.1, blend: layer === Layer.TRANSLUCENT, cull: true, lit: true, useLightmap: true });
+    const parts = models.multipart ? models.variants : [models.variants[0]];
+    for (const m of parts)
+      for (const q of m.quads) {
+        const nrm = FACE_NORMALS[q.dir];
+        batch.quad(pose, Array.from(q.pos), Array.from(q.uv), nrm[0], nrm[1], nrm[2]);
+      }
+  }
+
+  /** Render an item at the pose origin (model-space centered at 0). `texture` overrides the sprite (bow pulling). */
+  render(batch: EntityBatch, pose: PoseStack, stack: ItemStack, ctx: DisplayContext, left = false, texture?: string): void {
     const it = stack.item;
     pose.push();
     if (this.isBlockModel(it)) {
@@ -191,12 +211,12 @@ export class ItemRenderer {
           }
       }
     } else {
-      const src = this.flatSource(it);
+      const src = this.flatSource(it, texture);
       if (src) {
-        const disp = isHandheld(it) ? HANDHELD_DISPLAY : GENERATED_DISPLAY;
+        const disp = it.id === 'bow' ? BOW_DISPLAY : isHandheld(it) ? HANDHELD_DISPLAY : GENERATED_DISPLAY;
         this.applyTransform(pose, disp[ctx], left);
         pose.translate(-0.5, -0.5, -0.5);
-        const model = this.flatModel((it.texture ?? it.id), src.img, src.u0, src.v0, src.u1, src.v1);
+        const model = this.flatModel((texture ?? it.texture ?? it.id), src.img, src.u0, src.v0, src.u1, src.v1);
         batch.begin({ texture: src.tex, cutoff: 0.1, blend: false, cull: true, lit: true, useLightmap: ctx !== 'gui' });
         let tint = 0xffffff;
         if (it.block && it.block.tint !== 'none') tint = itemTint(it);

@@ -10,9 +10,19 @@ import { blockForItem, itemForBlock, ItemStack, getItem } from '../item/item';
 import { AABB } from '../core/aabb';
 import { ItemEntity } from '../entity/itemEntity';
 import { FLUID_WATER } from '../world/fluids';
+import type { Entity } from '../entity/entity';
+import { LivingEntity } from '../entity/living';
+import { Animal } from '../entity/animals';
+import { Creeper, bowPower } from '../entity/monsters';
+import { Arrow } from '../entity/arrow';
+import { PrimedTnt } from '../entity/tnt';
+import { createMob } from './spawner';
+import { playerAttack } from './combat';
 
 export class Interaction {
   hit: BlockHit | null = null;
+  /** entity under the crosshair (vanilla crosshairPickEntity) */
+  entityHit: Entity | null = null;
   destroying = false;
   dX = 0;
   dY = 0;
@@ -33,17 +43,61 @@ export class Interaction {
     return this.player.gameMode === 'creative' ? 5 : 4.5;
   }
 
-  /** Update target from camera (called per frame and per tick). */
+  entityReach(): number {
+    return this.player.gameMode === 'creative' ? 5 : 3;
+  }
+
+  /** Update target from camera (vanilla GameRenderer.pick: blocks and entities). */
   pick(ex: number, ey: number, ez: number, yaw: number, pitch: number): void {
     const pr = (pitch * Math.PI) / 180, yr = (yaw * Math.PI) / 180;
     const dx = -Math.sin(yr) * Math.cos(pr), dy = -Math.sin(pr), dz = Math.cos(yr) * Math.cos(pr);
-    this.hit = raycast(this.level.world, ex, ey, ez, dx, dy, dz, this.reach());
+    const d0 = this.reach(), d1 = this.entityReach();
+    let d2 = Math.max(d0, d1);
+    const bh = raycast(this.level.world, ex, ey, ez, dx, dy, dz, d2);
+    let d4 = d2 * d2;
+    if (bh) {
+      d4 = bh.dist * bh.dist;
+      d2 = bh.dist;
+    }
+    const p = this.player;
+    const x1 = ex + dx * d2, y1 = ey + dy * d2, z1 = ez + dz * d2;
+    const box = p.bb.expandTowards(dx * d2, dy * d2, dz * d2).inflate(1);
+    let best: Entity | null = null, bestD = d4;
+    for (const e of this.level.getEntities(box, (e) => e.isPickable() && e !== p, p)) {
+      const eb = e.bb.inflate(e.pickRadius());
+      if (eb.contains(ex, ey, ez)) {
+        if (bestD >= 0) {
+          best = e;
+          bestD = 0;
+        }
+        continue;
+      }
+      const h = eb.clip(ex, ey, ez, x1, y1, z1);
+      if (!h) continue;
+      const hd = (h.t * d2) ** 2;
+      if (hd < bestD || bestD === 0) {
+        if (bestD === 0) continue;
+        best = e;
+        bestD = hd;
+      }
+    }
+    this.entityHit = null;
+    this.hit = null;
+    if (best && bestD < d4) {
+      if (bestD < d1 * d1) this.entityHit = best;
+    } else if (bh && bh.dist < d0) this.hit = bh;
   }
 
   /** Attack button pressed this tick. */
   startAttack(): void {
     const p = this.player;
     if (this.missTime > 0) return;
+    if (p.isUsingItem()) return;
+    if (this.entityHit) {
+      playerAttack(this.level, p, this.entityHit, (n) => this.damageHeld(n));
+      p.swing();
+      return;
+    }
     const h = this.hit;
     if (!h) {
       if (p.gameMode !== 'creative') this.missTime = 10;
@@ -173,10 +227,37 @@ export class Interaction {
 
   use(pressed: boolean, held: boolean): void {
     if (this.rightClickDelay > 0) this.rightClickDelay--;
+    const p = this.player;
+    // vanilla handleKeybinds: while using an item, releasing the key releases it
+    if (p.isUsingItem()) {
+      if (!held) this.releaseUsingItem();
+      return;
+    }
     if (!(pressed || (held && this.rightClickDelay === 0))) return;
     this.rightClickDelay = 4;
-    const p = this.player;
     const stack = p.inventory.selectedItem;
+    // entity interaction (vanilla Player.interactOn → Mob.mobInteract)
+    const e = this.entityHit;
+    if (e && p.gameMode !== 'spectator') {
+      if (e instanceof Animal && e.interact(p, stack)) {
+        p.swing();
+        return;
+      }
+      if (e instanceof Creeper && e.interact(p, stack)) {
+        p.swing();
+        return;
+      }
+      if (stack && stack.item.id.endsWith('_spawn_egg') && e instanceof Animal && e.type === stack.item.id.slice(0, -10)) {
+        // spawn egg on a matching animal spawns a baby
+        const baby = e.makeBaby();
+        baby.setAge(-24000);
+        baby.moveTo(e.x, e.y, e.z, 0, 0);
+        this.level.addEntity(baby);
+        if (p.gameMode !== 'creative') p.inventory.consumeSelected(1);
+        p.swing();
+        return;
+      }
+    }
     const h = this.hit;
     // blocks with a menu (vanilla Block.useWithoutItem), skipped when sneaking with an item
     if (h && !(p.crouching && stack) && p.gameMode !== 'spectator') {
@@ -186,6 +267,33 @@ export class Interaction {
         p.swing();
         return;
       }
+    }
+    // vanilla TntBlock.useItemOn: flint and steel / fire charge primes TNT
+    if (h && stack && (stack.item.id === 'flint_and_steel' || stack.item.id === 'fire_charge') && this.level.getBlockName(h.x, h.y, h.z) === 'tnt') {
+      this.level.setBlock(h.x, h.y, h.z, 0);
+      PrimedTnt.prime(this.level, h.x, h.y, h.z, p);
+      if (stack.item.id === 'flint_and_steel') {
+        this.level.sound.play('item.flintandsteel.use', h.x + 0.5, h.y + 0.5, h.z + 0.5, 1, Math.random() * 0.4 + 0.8);
+        if (p.gameMode !== 'creative') this.damageHeld(1);
+      } else if (p.gameMode !== 'creative') p.inventory.consumeSelected(1);
+      p.swing();
+      return;
+    }
+    // vanilla SpawnEggItem.useOn
+    if (h && stack && stack.item.id.endsWith('_spawn_egg') && p.gameMode !== 'spectator') {
+      const replace = FLAGS[h.state] & F_REPLACEABLE || COLLISION[h.state]?.length === 0;
+      const x = replace ? h.x : h.x + DX[h.face], y = replace ? h.y : h.y + DY[h.face], z = replace ? h.z : h.z + DZ[h.face];
+      const mob = createMob(stack.item.id.slice(0, -10), this.level);
+      if (mob) {
+        const up = !replace && h.face === 1;
+        mob.moveTo(x + 0.5, y + (up ? 0 : 0), z + 0.5, Math.random() * 360, 0);
+        mob.bodyYaw = mob.headYaw = mob.yaw;
+        mob.finalizeSpawn('egg');
+        this.level.addEntity(mob);
+        if (p.gameMode !== 'creative') p.inventory.consumeSelected(1);
+        p.swing();
+      }
+      return;
     }
     if (h && stack) {
       if (this.placeBlock(h, stack)) {
@@ -276,6 +384,21 @@ export class Interaction {
 
   private useItem(stack: ItemStack): void {
     const p = this.player;
+    const it = stack.item;
+    // food / drinks (vanilla Item.use → startUsingItem when edible)
+    if (it.food) {
+      if (p.gameMode === 'creative' || it.food.alwaysEat || p.food.needsFood()) p.startUsingItem(stack, it.food.fast ? 16 : 32);
+      return;
+    }
+    if (it.id === 'milk_bucket') {
+      p.startUsingItem(stack, 32);
+      return;
+    }
+    // vanilla BowItem.use: needs arrows unless creative
+    if (it.id === 'bow') {
+      if (p.gameMode === 'creative' || p.inventory.findSlot((s) => s.item.id === 'arrow') >= 0) p.startUsingItem(stack, 72000);
+      return;
+    }
     // bucket pickup
     if (stack.item.id === 'bucket') {
       const pr = (p.pitch * Math.PI) / 180, yr = (p.yaw * Math.PI) / 180;
@@ -305,6 +428,82 @@ export class Interaction {
         p.swing();
       }
     }
+  }
+
+  /** vanilla LivingEntity.updatingUsingItem (called every tick) */
+  tickUsingItem(): void {
+    const p = this.player;
+    const u = p.useItem;
+    if (!u) return;
+    if (p.inventory.selectedItem !== u || p.health <= 0) {
+      p.stopUsingItem();
+      return;
+    }
+    p.usingItemTicks = p.ticksUsingItem() + 1;
+    const edible = !!u.item.food || u.item.id === 'milk_bucket';
+    if (edible) {
+      const used = p.useDuration - p.useItemRemaining;
+      if (used > Math.floor(p.useDuration * 0.21875) && p.useItemRemaining % 4 === 0) this.itemUseEffects(u);
+    }
+    if (--p.useItemRemaining === 0) this.completeUsingItem();
+  }
+
+  private itemUseEffects(s: ItemStack): void {
+    const p = this.player;
+    if (s.item.id === 'milk_bucket') this.level.sound.play('entity.generic.drink', p.x, p.y, p.z, 0.5, Math.random() * 0.1 + 0.9);
+    else this.level.sound.play('entity.generic.eat', p.x, p.y, p.z, 0.5 + 0.5 * Math.floor(Math.random() * 2), (Math.random() - Math.random()) * 0.2 + 1);
+  }
+
+  /** vanilla completeUsingItem → Item.finishUsingItem */
+  private completeUsingItem(): void {
+    const p = this.player;
+    const s = p.useItem!;
+    p.stopUsingItem();
+    const it = s.item;
+    if (it.food) {
+      this.itemUseEffects(s);
+      p.food.eat(it.food.nutrition, it.food.saturation);
+      this.level.sound.play('entity.player.burp', p.x, p.y, p.z, 0.5, Math.random() * 0.1 + 0.9);
+      if (p.gameMode !== 'creative') {
+        p.inventory.consumeSelected(1);
+        const rem = it.food.remainder;
+        if (rem) {
+          const r = ItemStack.of(rem);
+          if (!p.inventory.selectedItem) p.inventory.setSelectedItem(r);
+          else if (p.inventory.add(r) > 0) p.dropItem(r, false);
+        }
+      }
+      p.inventory.version++;
+    } else if (it.id === 'milk_bucket') {
+      if (p.gameMode !== 'creative') p.inventory.setSelectedItem(ItemStack.of('bucket'));
+    }
+  }
+
+  /** vanilla releaseUsingItem → BowItem.releaseUsing */
+  releaseUsingItem(): void {
+    const p = this.player;
+    const s = p.useItem;
+    const used = p.ticksUsingItem();
+    p.stopUsingItem();
+    if (!s || s.item.id !== 'bow') return;
+    const creative = p.gameMode === 'creative';
+    const slot = p.inventory.findSlot((x) => x.item.id === 'arrow');
+    if (slot < 0 && !creative) return;
+    const f = bowPower(used);
+    if (f < 0.1) return;
+    if (!creative && slot >= 0) {
+      const a = p.inventory.main[slot]!;
+      a.count--;
+      if (a.count <= 0) p.inventory.main[slot] = null;
+      p.inventory.version++;
+    }
+    const arrow = new Arrow(this.level, p);
+    arrow.pickup = creative ? 'creative_only' : 'allowed';
+    arrow.shootFromRotation(p, p.pitch, p.yaw, 0, f * 3, 1);
+    arrow.crit = f === 1;
+    this.level.addEntity(arrow);
+    if (!creative) this.damageHeld(1);
+    this.level.sound.play('entity.arrow.shoot', p.x, p.y, p.z, 1, 1 / (Math.random() * 0.4 + 1.2) + f * 0.5);
   }
 
   /** Middle click: pick block (creative puts it in the hotbar). */

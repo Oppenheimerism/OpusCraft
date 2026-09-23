@@ -7,6 +7,7 @@ import { BIOMES, BIOME_ID } from '../world/gen/biomes';
 import type { Chunk } from '../world/chunk';
 import { SECTIONS } from '../world/constants';
 import type { SavedBlockEntity } from '../world/blockEntity';
+import type { SavedEntity } from '../entity/mob';
 
 export interface WorldMeta {
   id: string;
@@ -54,7 +55,7 @@ export interface SavedChunk {
 }
 
 const DB_NAME = 'mcreplica';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 let dbp: Promise<IDBDatabase> | null = null;
 
@@ -66,6 +67,8 @@ function db(): Promise<IDBDatabase> {
       const d = req.result;
       if (!d.objectStoreNames.contains('worlds')) d.createObjectStore('worlds', { keyPath: 'id' });
       if (!d.objectStoreNames.contains('chunks')) d.createObjectStore('chunks', { keyPath: 'key' });
+      // per-chunk entity lists (vanilla keeps entities in separate region files too)
+      if (!d.objectStoreNames.contains('entities')) d.createObjectStore('entities', { keyPath: 'key' });
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
@@ -104,6 +107,29 @@ export async function deleteWorld(id: string): Promise<void> {
   await tx('worlds', 'readwrite', (s) => s.delete(id));
   const range = IDBKeyRange.bound(id + '/', id + '/￿');
   await tx('chunks', 'readwrite', (s) => s.delete(range));
+  await tx('entities', 'readwrite', (s) => s.delete(range));
+}
+
+export interface SavedEntityChunk {
+  key: string;
+  entities: SavedEntity[];
+}
+
+export async function entityChunkKeys(worldId: string): Promise<Set<string>> {
+  const range = IDBKeyRange.bound(worldId + '/', worldId + '/￿');
+  const keys = (await tx<IDBValidKey[]>('entities', 'readonly', (s) => s.getAllKeys(range))) ?? [];
+  return new Set(keys.map((k) => String(k)));
+}
+
+export async function saveEntityChunks(list: SavedEntityChunk[]): Promise<void> {
+  if (!list.length) return;
+  await tx('entities', 'readwrite', (s) => {
+    for (const c of list) s.put(c);
+  });
+}
+
+export async function loadEntityChunk(key: string): Promise<SavedEntityChunk | undefined> {
+  return tx<SavedEntityChunk>('entities', 'readonly', (s) => s.get(key));
 }
 
 export async function savedChunkKeys(worldId: string): Promise<Set<string>> {

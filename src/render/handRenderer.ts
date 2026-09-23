@@ -64,8 +64,46 @@ export class HandRenderer {
     swing = p.attackAnimO + swing * partial;
     const equip = 1 - (this.oMainHandHeight + (this.mainHandHeight - this.oMainHandHeight) * partial);
     const item = this.mainHandItem;
+    const using = !!item && p.useItem === item && p.useItemRemaining > 0;
     if (!item) this.renderArm(batch, pose, equip, swing);
-    else {
+    else if (using) {
+      const it = item.item;
+      let tex: string | undefined;
+      if (it.id === 'bow') {
+        // vanilla ItemInHandRenderer BOW use animation
+        pose.translate(0.56, -0.52 + equip * -0.6, -0.72);
+        pose.translate(-0.2785682, 0.18344387, 0.15731531);
+        pose.rotX(-13.935);
+        pose.rotY(35.3);
+        pose.rotZ(-9.785);
+        const f8 = p.useDuration - (p.useItemRemaining - partial + 1);
+        let f12 = f8 / 20;
+        f12 = (f12 * f12 + f12 * 2) / 3;
+        if (f12 > 1) f12 = 1;
+        if (f12 > 0.1) {
+          const f15 = Math.sin((f8 - 0.1) * 1.3);
+          const f18 = f12 - 0.1;
+          pose.translate(0, f15 * f18 * 0.004, 0);
+        }
+        pose.translate(0, 0, f12 * 0.04);
+        pose.scale(1, 1, 1 + f12 * 0.2);
+        pose.rotY(-45);
+        const pull = f8 / 20;
+        tex = pull >= 0.9 ? 'bow_pulling_2' : pull >= 0.65 ? 'bow_pulling_1' : 'bow_pulling_0';
+      } else {
+        // vanilla applyEatTransform + applyItemArmTransform (eating and drinking)
+        const f = p.useItemRemaining - partial + 1;
+        const f1 = f / p.useDuration;
+        if (f1 < 0.8) pose.translate(0, Math.abs(Math.cos((f / 4) * Math.PI) * 0.1), 0);
+        const f3 = 1 - Math.pow(f1, 27);
+        pose.translate(f3 * 0.6, f3 * -0.5, 0);
+        pose.rotY(f3 * 90);
+        pose.rotX(f3 * 10);
+        pose.rotZ(f3 * 30);
+        pose.translate(0.56, -0.52 + equip * -0.6, -0.72);
+      }
+      this.items.render(batch, pose, item, 'firstperson_righthand', false, tex);
+    } else {
       const sq = Math.sqrt(swing);
       const f5 = -0.4 * Math.sin(sq * Math.PI);
       const f6 = 0.2 * Math.sin(sq * Math.PI * 2);

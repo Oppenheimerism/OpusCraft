@@ -1,6 +1,7 @@
 // In-game HUD (vanilla Gui.render layout).
 
 import type { GuiGraphics } from './guiGraphics';
+import { LivingEntity } from '../entity/living';
 import type { Game } from '../game/game';
 import { debugLines } from '../render/overlay';
 import { FLUID_WATER } from '../world/fluids';
@@ -106,7 +107,23 @@ export class Hud {
     // attack indicator (vanilla default: crosshair mode)
     const p = game.player;
     const f = p.attackStrengthScale(0);
-    if (f < 1) {
+    const t = game.interaction.entityHit;
+    const full = f >= 1 && !!t && t instanceof LivingEntity && t.isAlive && p.attackStrengthDelay() > 5;
+    if (full) {
+      // crosshair_attack_indicator_full: a small sword under the crosshair
+      const x = Math.floor(g.width / 2 - 8), y = Math.floor(g.height / 2 - 7 + 16);
+      ctx.save();
+      ctx.globalCompositeOperation = 'difference';
+      const px = (a: number, b: number) => g.fill(x + a, y + b, x + a + 1, y + b + 1, 0xffffffff);
+      for (let i = 0; i < 6; i++) px(9 - i, 2 + i);
+      for (let i = 0; i < 5; i++) px(10 - i, 2 + i);
+      px(3, 6);
+      px(4, 8);
+      px(5, 9);
+      px(2, 9);
+      px(3, 10);
+      ctx.restore();
+    } else if (f < 1) {
       const x = Math.floor(g.width / 2 - 8), y = Math.floor(g.height / 2 - 7 + 16);
       const w = Math.floor(f * 17);
       ctx.save();

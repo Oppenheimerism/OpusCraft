@@ -46,6 +46,8 @@ function tabOf(it: Item): string {
       return 'combat';
     case 'food':
       return 'food';
+    case 'spawn_eggs':
+      return 'spawn_eggs';
     default:
       return 'ingredients';
   }
@@ -66,7 +68,7 @@ function tabs(): Tab[] {
     { id: 'combat', name: 'Combat', icon: 'netherite_sword', top: false, col: 1, items: [] },
     { id: 'food', name: 'Food & Drinks', icon: 'golden_apple', top: false, col: 2, items: [] },
     { id: 'ingredients', name: 'Ingredients', icon: 'iron_ingot', top: false, col: 3, items: [] },
-    { id: 'spawn_eggs', name: 'Spawn Eggs', icon: 'egg', top: false, col: 4, items: [] },
+    { id: 'spawn_eggs', name: 'Spawn Eggs', icon: 'pig_spawn_egg', top: false, col: 4, items: [] },
     { id: 'inventory', name: 'Survival Inventory', icon: 'chest', top: false, col: 6, right: true, type: 'inventory', items: [] },
   ];
   const byId = new Map(t.map((x) => [x.id, x]));
