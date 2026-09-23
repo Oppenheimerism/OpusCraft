@@ -29,6 +29,8 @@ export class Chunk {
   fluidTicks: number[] | null = null;
   /** structure entities from generation, added once (vanilla ProtoChunk entities) */
   genEntities: SavedEntity[] | null = null;
+  /** generated fences to connect once loaded (packed lx, y, lz) */
+  postProcess: number[] | null = null;
   inhabitedTime = 0;
   constructor(readonly cx: number, readonly cz: number) {}
 

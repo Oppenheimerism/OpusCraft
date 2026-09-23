@@ -8,6 +8,7 @@ import { pickSurfaceBiome, B, BIOMES, pickCaveBiome } from './biomes';
 import { GenContext, PendingWrites } from './context';
 import { Decorator } from './features';
 import { Carvers } from './carvers';
+import { Mineshafts } from './mineshaft';
 import { S, getBlock } from '../block';
 import { MIN_Y, MAX_Y, SEA_LEVEL, COLUMN_VOLUME, colIndex } from '../constants';
 import { hash3, hash2, hashFloat, hash32, Rand, hashString } from '../../core/rng';
@@ -27,6 +28,7 @@ export interface GenOutput {
   fluidTicks: number[];
   blockEntities: SavedBlockEntity[];
   entities: SavedEntity[];
+  postProcess: number[];
 }
 
 const CELL_W = 4, CELL_H = 8;
@@ -49,6 +51,7 @@ export class ChunkGenerator {
     this.seedHash = hash32(this.seeds.lo ^ this.seeds.hi);
     this.decorator = new Decorator(this.seedHash, this.router.n.patch, this.router.n.temperature_variation);
     this.carvers = new Carvers(this.seedHash);
+    this.decorator.mineshafts = new Mineshafts(this.seedHash, (x, z) => BIOMES[this.biomeAt(x, z)].name, (x, z) => this.router.preliminarySurface(this.column(x, z)));
     this.surfaceNoise = this.router.n.surface;
     this.surfaceSecondary = this.router.n.surface_secondary;
     this.clayBands = makeClayBands(new Rand(this.seedHash ^ 0xba4d, 3));
@@ -195,7 +198,7 @@ export class ChunkGenerator {
     this.carvers.carve(ctx, aquifer);
     this.decorator.decorate(ctx);
     const light = computeChunkLight(blocks);
-    return { cx, cz, blocks, light, biomes, pending: ctx.pendingWrites(), fluidTicks: ctx.fluidTicks, blockEntities: ctx.blockEntities, entities: ctx.entities };
+    return { cx, cz, blocks, light, biomes, pending: ctx.pendingWrites(), fluidTicks: ctx.fluidTicks, blockEntities: ctx.blockEntities, entities: ctx.entities, postProcess: ctx.postProcess };
   }
 
   private zoomBiome(x: number, z: number, cx: number, cz: number, quartBiome: Int16Array): number {

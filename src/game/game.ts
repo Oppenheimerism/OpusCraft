@@ -17,6 +17,7 @@ import { BLOCKS, STATE_BLOCK, FLAGS, F_WATER, F_LAVA, F_OPAQUE, F_COLLIDE } from
 import { FLUID_WATER, FLUID_LAVA, fluidHeight } from '../world/fluids';
 import { BIOMES } from '../world/gen/biomes';
 import { ItemStack, ITEMS, saveStack, loadStack } from '../item/item';
+import { hasShapeUpdates, updateShape } from './shapeUpdates';
 import { MIN_Y, MAX_Y } from '../world/constants';
 import { Overlay } from '../render/overlay';
 import { isAnim, TexImage } from '../textures/tex';
@@ -513,6 +514,18 @@ export class Game {
         const x = c.cx * 16 + t[i], y = t[i + 1], z = c.cz * 16 + t[i + 2];
         const f = FLAGS[this.world.getState(x, y, z)];
         if (f & (F_WATER | F_LAVA)) this.level.scheduleTick(x, y, z, f & F_LAVA ? 30 : 5);
+      }
+    }
+    // structure fences connect to what's around them (vanilla ChunkAccess.postProcessGeneration)
+    if (c.postProcess) {
+      const t = c.postProcess;
+      c.postProcess = null;
+      for (let i = 0; i < t.length; i += 3) {
+        const x = c.cx * 16 + t[i], y = t[i + 1], z = c.cz * 16 + t[i + 2];
+        const st = this.world.getState(x, y, z);
+        if (!hasShapeUpdates(st)) continue;
+        const nu = updateShape(this.world, x, y, z, st);
+        if (nu && nu !== st) this.world.setState(x, y, z, nu);
       }
     }
     const key = this.entityChunkKey(c.cx, c.cz);

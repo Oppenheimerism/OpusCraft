@@ -22,6 +22,8 @@ export interface GenResult {
   fluidTicks?: number[];
   /** entities placed by generation (added the first time the chunk's entities load) */
   entities?: SavedEntity[];
+  /** generated blocks to reshape against their neighbours (packed lx, y, lz) */
+  postProcess?: number[];
 }
 
 export class World {
@@ -173,6 +175,7 @@ export class World {
     c.loadColumn(r.blocks, r.light, r.biomes);
     if (r.fluidTicks?.length) c.fluidTicks = r.fluidTicks;
     if (r.entities?.length) c.genEntities = r.entities;
+    if (r.postProcess?.length) c.postProcess = r.postProcess;
     this.chunks.set(c.key, c);
     this.lastChunk = null;
     // pending writes into this chunk from earlier neighbours

@@ -41,6 +41,22 @@ export const LOOT_TABLES: Record<string, LootPool[]> = {
     },
     { rolls: 3, entries: [e('bone', 10, [1, 8]), e('gunpowder', 10, [1, 8]), e('rotten_flesh', 10, [1, 8]), e('string', 10, [1, 8])] },
   ],
+  // ('' is an empty entry; items the game doesn't have yet roll nothing too)
+  'chests/abandoned_mineshaft': [
+    {
+      rolls: 1,
+      entries: [e('golden_apple', 20), e('enchanted_golden_apple', 1), e('name_tag', 30), e('book', 10, undefined, true), e('iron_pickaxe', 5), e('', 5)],
+    },
+    {
+      rolls: [2, 4],
+      entries: [
+        e('iron_ingot', 10, [1, 5]), e('gold_ingot', 5, [1, 3]), e('redstone', 5, [4, 9]), e('lapis_lazuli', 5, [4, 9]), e('diamond', 3, [1, 2]),
+        e('coal', 10, [3, 8]), e('bread', 15, [1, 3]), e('glow_berries', 15, [3, 6]), e('melon_seeds', 10, [2, 4]), e('pumpkin_seeds', 10, [2, 4]),
+        e('beetroot_seeds', 10, [2, 4]),
+      ],
+    },
+    { rolls: 3, entries: [e('rail', 20, [4, 8]), e('powered_rail', 5, [1, 4]), e('detector_rail', 5, [1, 4]), e('activator_rail', 5, [1, 4]), e('torch', 15, [1, 16])] },
+  ],
 };
 
 /** vanilla Mth.nextInt(random, lo, hi) */

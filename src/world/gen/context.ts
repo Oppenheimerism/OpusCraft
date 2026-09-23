@@ -70,6 +70,8 @@ export class GenContext {
   readonly blockEntities: SavedBlockEntity[] = [];
   /** entities placed by structures (mineshaft chest minecarts), in the saved-entity format */
   readonly entities: SavedEntity[] = [];
+  /** blocks whose connections are fixed up against their neighbours on load (packed lx, y, lz) */
+  readonly postProcess: number[] = [];
 
   constructor(readonly cx: number, readonly cz: number, blocks: Uint16Array, biomes: Uint8Array) {
     this.x0 = cx * 16;
@@ -122,6 +124,13 @@ export class GenContext {
     const f = FLAGS[state];
     if ((f & (F_COLLIDE | F_WATER)) && y + 1 > this.motion[ci]) this.motion[ci] = y + 1;
     return true;
+  }
+
+  /** vanilla ChunkAccess.markPosForPostprocessing (fences placed by structures) */
+  markForPostprocessing(x: number, y: number, z: number): void {
+    const lx = x - this.x0, lz = z - this.z0;
+    if (lx < 0 || lz < 0 || lx > 15 || lz > 15) return;
+    this.postProcess.push(lx, y, lz);
   }
 
   /** vanilla scheduleTick / markPosForPostprocessing for a generated fluid */
