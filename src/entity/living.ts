@@ -1,16 +1,21 @@
-// LivingEntity: vanilla travel() physics, jumping, health, hurt/death.
+// LivingEntity: vanilla travel() physics, jumping, health, hurt/death, status effects.
 
 import { Entity } from './entity';
 import { FLUID_WATER } from '../world/fluids';
 import { wrapDegrees } from '../core/math';
 import { FLAGS, F_AIR, F_OPAQUE, F_FULL_COLLISION, BLOCKS, STATE_BLOCK } from '../world/block';
 import { clipBlocks } from '../game/raycast';
+import { MobEffectInstance, SavedEffect, saveEffect, loadEffect } from './effects';
 
 /** damage sources that ignore armor (vanilla #bypasses_armor) */
-const BYPASSES_ARMOR = new Set(['onFire', 'inWall', 'drown', 'starve', 'fall', 'void', 'genericKill', 'magic', 'generic', 'cramming', 'flyIntoWall']);
+const BYPASSES_ARMOR = new Set(['onFire', 'inWall', 'drown', 'starve', 'fall', 'void', 'genericKill', 'magic', 'wither', 'generic', 'cramming', 'flyIntoWall']);
 /** damage sources that never knock back (vanilla #no_knockback) */
-const NO_KNOCKBACK = new Set(['explosion', 'playerExplosion', 'fall', 'drown', 'starve', 'onFire', 'inFire', 'lava', 'inWall', 'void', 'genericKill', 'magic', 'cactus', 'sweetBerryBush', 'generic']);
+const NO_KNOCKBACK = new Set(['explosion', 'playerExplosion', 'fall', 'drown', 'starve', 'onFire', 'inFire', 'lava', 'inWall', 'void', 'genericKill', 'magic', 'wither', 'cactus', 'sweetBerryBush', 'generic']);
+/** vanilla #bypasses_resistance */
+const BYPASSES_RESISTANCE = new Set(['void', 'genericKill']);
 export const FIRE_SOURCES = new Set(['onFire', 'inFire', 'lava', 'hotFloor', 'fireball']);
+/** vanilla Player.getDestroySpeed: mining fatigue multiplier per amplifier (capped at IV) */
+const FATIGUE_DIG = [0.3, 0.09, 0.0027, 8.1e-4];
 
 /** vanilla CombatRules.getDamageAfterAbsorb */
 export function damageAfterArmor(damage: number, armor: number, toughness: number): number {
@@ -21,7 +26,8 @@ export function damageAfterArmor(damage: number, armor: number, toughness: numbe
 
 export abstract class LivingEntity extends Entity {
   health = 20;
-  maxHealth = 20;
+  /** MAX_HEALTH base value; `maxHealth` adds health boost */
+  private baseMaxHealth = 20;
   hurtTime = 0;
   hurtDuration = 10;
   deathTime = 0;
@@ -60,6 +66,12 @@ export abstract class LivingEntity extends Entity {
   killer: Entity | null = null;
   deathSource = '';
   dead = false;
+  /** vanilla activeEffects */
+  readonly activeEffects = new Map<string, MobEffectInstance>();
+  private effectsDirty = true;
+  /** vanilla DATA_EFFECT_PARTICLES (ARGB per visible effect) and DATA_EFFECT_AMBIENCE_ID */
+  private effectParticles: number[] = [];
+  private effectsAmbient = false;
 
   constructor(level: Entity['level']) {
     super(level);
@@ -70,9 +82,19 @@ export abstract class LivingEntity extends Entity {
     return !this.removed && this.health > 0;
   }
 
-  /** effective movement speed (sprint modifier +30%) */
+  /** vanilla MAX_HEALTH attribute: base + 4 per health boost level */
+  get maxHealth(): number {
+    const b = this.effectAmp('health_boost');
+    return this.baseMaxHealth + (b >= 0 ? 4 * (b + 1) : 0);
+  }
+
+  set maxHealth(v: number) {
+    this.baseMaxHealth = v;
+  }
+
+  /** effective movement speed (sprint modifier +30%, speed / slowness) */
   movementSpeed(): number {
-    return this.speed * (this.sprinting ? 1.3 : 1);
+    return Math.max(0, this.speed * (this.sprinting ? 1.3 : 1) * this.speedEffectFactor());
   }
 
   flyingSpeed(): number {
@@ -80,7 +102,13 @@ export abstract class LivingEntity extends Entity {
   }
 
   jumpPower(): number {
-    return 0.42 * this.blockJumpFactor();
+    return 0.42 * this.blockJumpFactor() + this.jumpBoostPower();
+  }
+
+  /** vanilla getJumpBoostPower */
+  jumpBoostPower(): number {
+    const a = this.effectAmp('jump_boost');
+    return a >= 0 ? 0.1 * (a + 1) : 0;
   }
 
   blockJumpFactor(): number {
@@ -98,7 +126,204 @@ export abstract class LivingEntity extends Entity {
     if (this.lastHurtByMob) {
       if (!this.lastHurtByMob.isAlive || this.tickCount - this.lastHurtByMobTimestamp > 100) this.lastHurtByMob = null;
     }
+    this.tickEffects();
   }
+
+  // --- status effects (vanilla LivingEntity effect handling) -----------------
+
+  hasEffect(id: string): boolean {
+    return this.activeEffects.has(id);
+  }
+
+  getEffect(id: string): MobEffectInstance | undefined {
+    return this.activeEffects.get(id);
+  }
+
+  /** amplifier of an active effect, -1 without it */
+  effectAmp(id: string): number {
+    return this.activeEffects.get(id)?.amplifier ?? -1;
+  }
+
+  /** vanilla canBeAffected: undead ignore poison and regeneration (#ignores_poison_and_regen) */
+  canBeAffected(inst: MobEffectInstance): boolean {
+    return !(this.isUndead() && (inst.id === 'regeneration' || inst.id === 'poison'));
+  }
+
+  /** vanilla #undead: healed by instant damage, harmed by instant health */
+  isUndead(): boolean {
+    return false;
+  }
+
+  /** vanilla LivingEntity.addEffect: add, or merge into the active instance (MobEffectInstance.update) */
+  addEffect(inst: MobEffectInstance, _source: Entity | null = null): boolean {
+    if (!this.canBeAffected(inst)) return false;
+    const cur = this.activeEffects.get(inst.id);
+    let changed = false;
+    if (!cur) {
+      this.activeEffects.set(inst.id, inst);
+      this.onEffectAdded(inst);
+      changed = true;
+    } else if (cur.update(inst)) {
+      this.onEffectUpdated(cur, true);
+      changed = true;
+    }
+    inst.effect.onStarted(this, inst.amplifier);
+    return changed;
+  }
+
+  removeEffect(id: string): boolean {
+    const inst = this.activeEffects.get(id);
+    if (!inst) return false;
+    this.activeEffects.delete(id);
+    this.onEffectRemoved(inst);
+    return true;
+  }
+
+  /** vanilla removeAllEffects (milk, /effect clear); false if there were none */
+  removeAllEffects(): boolean {
+    if (!this.activeEffects.size) return false;
+    const all = [...this.activeEffects.values()];
+    this.activeEffects.clear();
+    for (const inst of all) this.onEffectRemoved(inst);
+    return true;
+  }
+
+  protected onEffectAdded(_inst: MobEffectInstance): void {
+    this.effectsDirty = true;
+  }
+
+  protected onEffectUpdated(_inst: MobEffectInstance, forced: boolean): void {
+    this.effectsDirty = true;
+    if (forced) this.onEffectAttributesChanged();
+  }
+
+  protected onEffectRemoved(_inst: MobEffectInstance): void {
+    this.effectsDirty = true;
+    this.onEffectAttributesChanged();
+  }
+
+  /** vanilla onAttributeUpdated: health and absorption can't exceed their new maximums */
+  private onEffectAttributesChanged(): void {
+    if (this.health > this.maxHealth) this.health = this.maxHealth;
+    if (this.absorption > this.maxAbsorption()) this.absorption = this.maxAbsorption();
+  }
+
+  /** vanilla LivingEntity.tickEffects */
+  protected tickEffects(): void {
+    for (const [id, inst] of this.activeEffects) {
+      if (!inst.tick(this, () => this.onEffectUpdated(inst, true))) {
+        if (this.activeEffects.get(id) === inst) {
+          this.activeEffects.delete(id);
+          this.onEffectRemoved(inst);
+        }
+      } else if (inst.duration % 600 === 0) this.onEffectUpdated(inst, false);
+    }
+    if (this.effectsDirty) {
+      // vanilla updateInvisibilityStatus → updateSynchronizedMobEffectParticles
+      this.effectParticles = [];
+      this.effectsAmbient = true;
+      for (const inst of this.activeEffects.values()) {
+        if (!inst.visible) continue;
+        this.effectParticles.push(((inst.ambient ? 38 : 255) << 24 | inst.effect.color) >>> 0);
+        if (!inst.ambient) this.effectsAmbient = false;
+      }
+      this.effectsDirty = false;
+    }
+    // swirls in a visible effect's colour: rarer when invisible, rarer and fainter when all are ambient
+    if (this.effectParticles.length) {
+      const i = this.isInvisible() ? 15 : 4, j = this.effectsAmbient ? 5 : 1;
+      if (Math.floor(Math.random() * i * j) === 0) {
+        const c = this.effectParticles[Math.floor(Math.random() * this.effectParticles.length)];
+        const x = this.x + this.width * (2 * Math.random() - 1) * 0.5, y = this.y + this.height * Math.random(), z = this.z + this.width * (2 * Math.random() - 1) * 0.5;
+        this.level.particles.entityEffect?.(x, y, z, c & 0xffffff, (c >>> 24) / 255);
+      }
+    }
+  }
+
+  saveEffects(): SavedEffect[] {
+    return [...this.activeEffects.values()].map(saveEffect);
+  }
+
+  /** restore saved effects (vanilla readAdditionalSaveData: before health, so health boost holds) */
+  loadEffects(list: SavedEffect[] | undefined): void {
+    for (const d of list ?? []) {
+      const inst = loadEffect(d);
+      if (inst) this.activeEffects.set(inst.id, inst);
+    }
+    this.effectsDirty = true;
+  }
+
+  /** vanilla speed / slowness MOVEMENT_SPEED modifiers (ADD_MULTIPLIED_TOTAL, +20% / -15% per level) */
+  speedEffectFactor(): number {
+    const s = this.effectAmp('speed'), sl = this.effectAmp('slowness');
+    return (s >= 0 ? 1 + 0.2 * (s + 1) : 1) * (sl >= 0 ? 1 - 0.15 * (sl + 1) : 1);
+  }
+
+  /** vanilla ATTACK_DAMAGE with strength (+3 per level) and weakness (-4 per level) */
+  effectAttackDamage(base: number): number {
+    const s = this.effectAmp('strength'), w = this.effectAmp('weakness');
+    return Math.max(0, Math.min(2048, base + (s >= 0 ? 3 * (s + 1) : 0) - (w >= 0 ? 4 * (w + 1) : 0)));
+  }
+
+  /** vanilla ATTACK_SPEED haste (+10%) / mining fatigue (-10%) modifiers per level */
+  attackSpeedEffectFactor(): number {
+    const h = this.effectAmp('haste'), f = this.effectAmp('mining_fatigue');
+    return Math.max(0, (h >= 0 ? 1 + 0.1 * (h + 1) : 1) * (f >= 0 ? 1 - 0.1 * (f + 1) : 1));
+  }
+
+  /** vanilla Player.getDestroySpeed effect part: haste +20% per level, mining fatigue 0.3^level */
+  digSpeedEffectFactor(): number {
+    const h = this.effectAmp('haste'), f = this.effectAmp('mining_fatigue');
+    return (h >= 0 ? 1 + (h + 1) * 0.2 : 1) * (f >= 0 ? FATIGUE_DIG[Math.min(f, 3)] : 1);
+  }
+
+  /** vanilla MAX_ABSORPTION: 4 per absorption level */
+  maxAbsorption(): number {
+    const a = this.effectAmp('absorption');
+    return a >= 0 ? 4 * (a + 1) : 0;
+  }
+
+  /** vanilla LUCK attribute (luck +1, bad luck -1 per level) */
+  luck(): number {
+    const l = this.effectAmp('luck'), u = this.effectAmp('unluck');
+    return (l >= 0 ? l + 1 : 0) - (u >= 0 ? u + 1 : 0);
+  }
+
+  /** vanilla SAFE_FALL_DISTANCE: 3, +1 per jump boost level */
+  safeFallDistance(): number {
+    return 3 + this.effectAmp('jump_boost') + 1;
+  }
+
+  /** vanilla isInvisible (the invisibility effect) */
+  isInvisible(): boolean {
+    return this.activeEffects.has('invisibility');
+  }
+
+  /** vanilla MobEffectUtil.hasWaterBreathing */
+  hasWaterBreathing(): boolean {
+    return this.activeEffects.has('water_breathing');
+  }
+
+  /** vanilla isDiscrete (sneaking) */
+  isDiscrete(): boolean {
+    return false;
+  }
+
+  /** vanilla getArmorCoverPercentage */
+  armorCoverPercentage(): number {
+    return 0;
+  }
+
+  /** vanilla getVisibilityPercent: how far away mobs notice this entity */
+  visibilityPercent(_looker: Entity | null): number {
+    let d = 1;
+    if (this.isDiscrete()) d *= 0.8;
+    if (this.isInvisible()) d *= 0.7 * Math.max(0.1, this.armorCoverPercentage());
+    return d;
+  }
+
+  /** vanilla Player.causeFoodExhaustion (hunger effect) */
+  causeFoodExhaustion(_v: number): void {}
 
   /** vanilla isInWall: eyes inside a suffocating block */
   isInWall(): boolean {
@@ -169,8 +394,11 @@ export abstract class LivingEntity extends Entity {
     this.attackAnim = this.swingTime / dur;
   }
 
+  /** vanilla getCurrentSwingDuration: haste swings faster, mining fatigue slower */
   swingDuration(): number {
-    return 6;
+    const h = this.effectAmp('haste'), f = this.effectAmp('mining_fatigue');
+    if (h >= 0) return Math.max(1, 6 - (1 + h));
+    return f >= 0 ? 6 + (1 + f) * 2 : 6;
   }
 
   swing(): void {
@@ -207,6 +435,8 @@ export abstract class LivingEntity extends Entity {
     } else this.noJumpDelay = 0;
     this.xxa *= 0.98;
     this.zza *= 0.98;
+    // vanilla: slow falling and levitation keep resetting the fall
+    if (this.hasEffect('slow_falling') || this.hasEffect('levitation')) this.fallDistance = 0;
     this.travel(this.xxa, this.yya, this.zza);
     this.pushEntities();
   }
@@ -251,8 +481,10 @@ export abstract class LivingEntity extends Entity {
   }
 
   travel(sx: number, sy: number, sz: number): void {
-    const g = this.gravity();
+    let g = this.gravity();
     const falling = this.dy <= 0;
+    // vanilla: slow falling caps gravity on the way down
+    if (falling && this.hasEffect('slow_falling')) g = Math.min(g, 0.01);
     if (this.inWater && this.isAffectedByFluids()) {
       const y0 = this.y;
       let slow = this.sprinting ? 0.9 : this.waterSlowDown();
@@ -292,7 +524,10 @@ export abstract class LivingEntity extends Entity {
       this.move(this.dx, this.dy, this.dz);
       if ((this.horizontalCollision || this.jumping) && this.onClimbable()) this.dy = 0.2;
       let d2 = this.dy;
-      if (!this.noGravity()) d2 -= g;
+      // vanilla: levitation eases vertical speed toward 0.05 per level instead of falling
+      const lev = this.effectAmp('levitation');
+      if (lev >= 0) d2 += (0.05 * (lev + 1) - this.dy) * 0.2;
+      else if (!this.noGravity()) d2 -= g;
       this.dx *= f3;
       this.dy = d2 * 0.98;
       this.dz *= f3;
@@ -386,11 +621,12 @@ export abstract class LivingEntity extends Entity {
 
   /** vanilla LivingEntity.checkFallDamage: a hard landing kicks up a burst of the block below */
   protected override checkFallDamage(dy: number, onGround: boolean): void {
-    if (onGround && this.fallDistance > 3 && !this.inWater) {
+    const safe = this.safeFallDistance();
+    if (onGround && this.fallDistance > safe && !this.inWater) {
       const bx = Math.floor(this.x), by = Math.floor(this.y - 0.2), bz = Math.floor(this.z);
       const st = this.level.world.getState(bx, by, bz);
       if (!(FLAGS[st] & F_AIR)) {
-        const f = Math.ceil(this.fallDistance - 3);
+        const f = Math.ceil(this.fallDistance - safe);
         const count = Math.floor(150 * Math.min(0.2 + f / 15, 2.5));
         const gauss = () => Math.sqrt(-2 * Math.log(1 - Math.random())) * Math.cos(2 * Math.PI * Math.random());
         for (let i = 0; i < count; i++) this.level.particles.blockParticle?.(this.x, this.y, this.z, gauss() * 0.15, gauss() * 0.15, gauss() * 0.15, st, bx, by, bz);
@@ -415,7 +651,7 @@ export abstract class LivingEntity extends Entity {
    */
   override hurt(amount: number, source: string, attacker?: Entity | null, direct?: Entity | null): boolean {
     if (this.isInvulnerableTo(source) || this.removed || this.health <= 0) return false;
-    if (FIRE_SOURCES.has(source) && this.fireImmune()) return false;
+    if (FIRE_SOURCES.has(source) && (this.fireImmune() || this.hasEffect('fire_resistance'))) return false;
     this.noActionTime = 0;
     if (amount < 0) amount = 0;
     let fresh = true;
@@ -468,7 +704,14 @@ export abstract class LivingEntity extends Entity {
       this.hurtArmor(amount);
       amount = damageAfterArmor(amount, this.armorValue(), this.armorToughness());
     }
-    this.applyDamage(amount);
+    this.applyDamage(this.damageAfterMagicAbsorb(source, amount));
+  }
+
+  /** vanilla getDamageAfterMagicAbsorb: resistance blocks 20% per level (starvation bypasses effects) */
+  protected damageAfterMagicAbsorb(source: string, amount: number): number {
+    const r = this.effectAmp('resistance');
+    if (r >= 0 && source !== 'starve' && !BYPASSES_RESISTANCE.has(source)) amount = Math.max((amount * (25 - (r + 1) * 5)) / 25, 0);
+    return amount;
   }
 
   protected playHurtSound(_source: string): void {}
@@ -509,7 +752,7 @@ export abstract class LivingEntity extends Entity {
   }
 
   protected override causeFallDamage(dist: number): void {
-    const dmg = Math.ceil(dist - 3);
+    const dmg = Math.ceil(dist - this.safeFallDistance());
     if (dmg > 0) {
       this.onFallDamage(dmg, dist);
       this.hurt(dmg, 'fall');

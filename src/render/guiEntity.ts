@@ -98,9 +98,12 @@ export class GuiEntityRenderer {
     pose.scale(-1, -1, 1);
     pose.scale(0.9375, 0.9375, 0.9375);
     pose.translate(0, -1.501, 0);
-    b.begin({ texture: this.skin, cutoff: 0.1, blend: false, cull: false, lit: true, useLightmap: false });
-    m.render(b, pose, 64, 64);
-    b.flush();
+    // vanilla: an invisible player leaves the preview empty
+    if (!p.isInvisible()) {
+      b.begin({ texture: this.skin, cutoff: 0.1, blend: false, cull: false, lit: true, useLightmap: false });
+      m.render(b, pose, 64, 64);
+      b.flush();
+    }
     gl.readPixels(0, 0, W, H, gl.RGBA, gl.UNSIGNED_BYTE, this.pixels);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     const ctx = this.out.getContext('2d')!;

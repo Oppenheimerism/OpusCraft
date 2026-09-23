@@ -65,8 +65,10 @@ export class HandRenderer {
     const equip = 1 - (this.oMainHandHeight + (this.mainHandHeight - this.oMainHandHeight) * partial);
     const item = this.mainHandItem;
     const using = !!item && p.useItem === item && p.useItemRemaining > 0;
-    if (!item) this.renderArm(batch, pose, equip, swing);
-    else if (using) {
+    // vanilla renderArmWithItem: no bare arm while invisible
+    if (!item) {
+      if (!p.isInvisible()) this.renderArm(batch, pose, equip, swing);
+    } else if (using) {
       const it = item.item;
       let tex: string | undefined;
       if (it.id === 'bow') {

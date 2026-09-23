@@ -368,7 +368,7 @@ export abstract class Entity {
           else if (kind === INSIDE_FIRE) {
             fire = true;
             this.insideFire();
-          } else if (kind === INSIDE_COBWEB) this.makeStuckInBlock(0.25, 0.05, 0.25);
+          } else if (kind === INSIDE_COBWEB) this.insideCobweb();
           else if (kind === INSIDE_BERRY_BUSH) this.insideBerryBush(st);
           else if (kind === INSIDE_CACTUS) this.hurt(1, 'cactus');
           if (this.removed) return fire;
@@ -387,6 +387,11 @@ export abstract class Entity {
 
   /** vanilla SweetBerryBushBlock.entityInside (living things only) */
   protected insideBerryBush(_st: number): void {}
+
+  /** vanilla WebBlock.entityInside */
+  protected insideCobweb(): void {
+    this.makeStuckInBlock(0.25, 0.05, 0.25);
+  }
 
   protected onLand(): void {
     this.dy = 0;

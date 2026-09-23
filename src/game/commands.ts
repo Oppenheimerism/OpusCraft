@@ -15,6 +15,7 @@ import { PrimedTnt } from '../entity/tnt';
 import { ExperienceOrb } from '../entity/xpOrb';
 import { Arrow } from '../entity/arrow';
 import { createMob, entityDisplayName, summonableTypes } from './spawner';
+import { MOB_EFFECTS, MobEffect, MobEffectInstance, mobEffect } from '../entity/effects';
 
 class CommandError extends Error {
   constructor(msg: string, readonly pos = -1) {
@@ -203,6 +204,65 @@ function blockIds(): string[] {
   return [...BLOCK_BY_NAME.keys()].map((k) => 'minecraft:' + k);
 }
 
+function effectIds(): string[] {
+  return Object.keys(MOB_EFFECTS).sort().map((k) => 'minecraft:' + k);
+}
+
+/** vanilla ResourceArgument for minecraft:mob_effect */
+function parseEffect(c: Ctx, i: number): MobEffect {
+  const s = needArg(c, i);
+  const e = mobEffect(s);
+  if (!e) throw new CommandError(`Can't find element '${s.includes(':') ? s : 'minecraft:' + s}' of type 'minecraft:mob_effect'`, c.args[i].pos);
+  return e;
+}
+
+function parseBool(c: Ctx, i: number): boolean {
+  const s = needArg(c, i);
+  if (s !== 'true' && s !== 'false') throw new CommandError(`Invalid boolean, expected 'true' or 'false' but found '${s}'`, c.args[i].pos);
+  return s === 'true';
+}
+
+function targetName(c: Ctx, e: Entity): string {
+  return e === c.game.player ? c.game.playerName : entityDisplayName(e);
+}
+
+/** vanilla EffectCommands: give (instant effects default to 1 tick, others 30 s) and clear */
+function effectCommand(c: Ctx): void {
+  const sub = needArg(c, 0);
+  if (sub === 'give') {
+    needArg(c, 1);
+    const targets = selectEntities(c, 1);
+    if (!targets.length) throw new CommandError('No entity was found');
+    const e = parseEffect(c, 2);
+    let ticks = e.instant ? 1 : 600;
+    let k = 3;
+    if (c.args[3]?.s === 'infinite') {
+      ticks = -1;
+      k = 4;
+    } else if (c.args[3]) {
+      const secs = parseIntArg(c, 3, 1, 1000000);
+      ticks = e.instant ? secs : secs * 20;
+      k = 4;
+    }
+    const amp = c.args[k] ? parseIntArg(c, k, 0, 255) : 0;
+    const showParticles = c.args[k + 1] ? !parseBool(c, k + 1) : true;
+    let n = 0;
+    for (const t of targets) if (t instanceof LivingEntity && t.addEffect(new MobEffectInstance(e, ticks, amp, false, showParticles), c.game.player)) n++;
+    if (!n) throw new CommandError('Unable to apply this effect (target is either immune to effects, or has something stronger)');
+    c.ok(targets.length === 1 ? `Applied effect ${e.name} to ${targetName(c, targets[0])}` : `Applied effect ${e.name} to ${targets.length} targets`);
+  } else if (sub === 'clear') {
+    const targets = selectEntities(c, 1);
+    if (!targets.length) throw new CommandError('No entity was found');
+    const e = c.args[2] ? parseEffect(c, 2) : null;
+    let n = 0;
+    for (const t of targets) if (t instanceof LivingEntity && (e ? t.removeEffect(e.id) : t.removeAllEffects())) n++;
+    if (!n) throw new CommandError(e ? "Target doesn't have the requested effect" : 'Target has no effects to remove');
+    const one = targets.length === 1;
+    if (e) c.ok(one ? `Removed effect ${e.name} from ${targetName(c, targets[0])}` : `Removed effect ${e.name} from ${targets.length} targets`);
+    else c.ok(one ? `Removed every effect from ${targetName(c, targets[0])}` : `Removed every effect from ${targets.length} targets`);
+  } else badArg(c, 0);
+}
+
 const coordSuggest = (i: number) => ['~', '~ ~', '~ ~ ~'].slice(0, 3 - (i % 3));
 
 export const COMMANDS: Record<string, CommandDef> = {
@@ -268,6 +328,12 @@ export const COMMANDS: Record<string, CommandDef> = {
       }
       c.ok(`The difficulty has been set to ${DIFF_NAME[d]}`);
     },
+  },
+  effect: {
+    usage: ['/effect (clear|give) ...'],
+    suggest: (_g, prev, i) =>
+      i === 0 ? ['clear', 'give'] : i === 1 ? TARGETS : i === 2 ? effectIds() : prev[0] === 'give' && i === 3 ? ['infinite'] : prev[0] === 'give' && i === 5 ? ['false', 'true'] : [],
+    run: (c) => effectCommand(c),
   },
   experience: {
     usage: ['/experience (add|query|set) ...'],

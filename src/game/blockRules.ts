@@ -306,12 +306,12 @@ export function isCorrectTool(item: Item | null, block: Block): boolean {
   return item.tool.type === block.tool && item.tool.tier >= block.tier;
 }
 
-/** vanilla getDestroyProgress per tick */
-export function destroyProgress(state: number, item: Item | null, underwater: boolean, onGround: boolean): number {
+/** vanilla getDestroyProgress per tick; `effectMul` = haste / mining fatigue (LivingEntity.digSpeedEffectFactor) */
+export function destroyProgress(state: number, item: Item | null, underwater: boolean, onGround: boolean, effectMul = 1): number {
   const b = blk(state);
   const hardness = b.hardness;
   if (hardness < 0) return 0;
-  let speed = toolSpeed(item, b);
+  let speed = toolSpeed(item, b) * effectMul;
   if (underwater) speed /= 5;
   if (!onGround) speed /= 5;
   const div = isCorrectTool(item, b) ? 30 : 100;

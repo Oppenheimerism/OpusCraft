@@ -15,6 +15,7 @@ import { AABB } from '../core/aabb';
 import { Rand } from '../core/rng';
 import { BLOCKS, STATE_BLOCK, FLAGS, F_WATER } from '../world/block';
 import { FLUID_WATER } from '../world/fluids';
+import type { SavedEffect } from './effects';
 
 export type MobCategory = 'monster' | 'creature' | 'ambient' | 'water_creature' | 'misc';
 
@@ -33,6 +34,8 @@ export interface SavedEntity {
   persistent?: boolean;
   hand?: SavedStack | null;
   data?: Record<string, number | string | boolean>;
+  /** vanilla active_effects */
+  effects?: SavedEffect[];
 }
 
 /** per-tick cached line-of-sight checks (vanilla Sensing) */
@@ -82,10 +85,9 @@ export abstract class Mob extends LivingEntity {
   ambientSoundTime = 0;
   xpReward = 0;
   followRange = 16;
-  attackDamage = 2;
+  private baseAttackDamage = 2;
   attackKnockback = 0;
-  /** movement speed attribute */
-  moveSpeedAttr = 0.25;
+  private baseMoveSpeed = 0.25;
   baseArmor = 0;
   kbResist = 0;
   aggressive = false;
@@ -117,6 +119,22 @@ export abstract class Mob extends LivingEntity {
   }
 
   // --- attributes / tunables ------------------------------------------------
+
+  /** ATTACK_DAMAGE attribute value: assign the base, read it with strength / weakness applied */
+  get attackDamage(): number {
+    return this.effectAttackDamage(this.baseAttackDamage);
+  }
+  set attackDamage(v: number) {
+    this.baseAttackDamage = v;
+  }
+
+  /** MOVEMENT_SPEED attribute value: assign the base, read it with speed / slowness applied */
+  get moveSpeedAttr(): number {
+    return Math.max(0, this.baseMoveSpeed * this.speedEffectFactor());
+  }
+  set moveSpeedAttr(v: number) {
+    this.baseMoveSpeed = v;
+  }
 
   headRotSpeed(): number {
     return 10;
@@ -187,13 +205,15 @@ export abstract class Mob extends LivingEntity {
       this.ambientSoundTime = -this.ambientSoundInterval();
       this.playAmbientSound();
     }
-    // vanilla LivingEntity.baseTick air supply
+    // vanilla LivingEntity.baseTick air supply (water breathing holds it)
     if (this.isAlive) {
-      if (this.eyeFluid === FLUID_WATER && !this.canBreatheUnderwater()) {
-        this.air--;
-        if (this.air === -20) {
-          this.air = 0;
-          this.hurt(2, 'drown');
+      if (this.eyeFluid === FLUID_WATER) {
+        if (!this.canBreatheUnderwater() && !this.hasWaterBreathing()) {
+          this.air--;
+          if (this.air === -20) {
+            this.air = 0;
+            this.hurt(2, 'drown');
+          }
         }
       } else if (this.air < 300) this.air = Math.min(300, this.air + 4);
     }
@@ -495,6 +515,7 @@ export abstract class Mob extends LivingEntity {
       persistent: this.persistenceRequired || undefined,
       hand: this.mainHand ? saveStack(this.mainHand) : null,
       data: this.saveData(),
+      effects: this.activeEffects.size ? this.saveEffects() : undefined,
     };
   }
 
@@ -504,6 +525,7 @@ export abstract class Mob extends LivingEntity {
     this.dx = d.dx;
     this.dy = d.dy;
     this.dz = d.dz;
+    this.loadEffects(d.effects);
     this.health = d.health;
     this.remainingFireTicks = d.fire;
     this.persistenceRequired = !!d.persistent;

@@ -18,6 +18,7 @@ import { ParticleEngine } from './particles';
 import { WeatherRenderer } from './weather';
 import { EntityRenderDispatcher, EntityRenderOptions } from './entityRenderers';
 import { buildParticleAtlas } from './particleAtlas';
+import type { BlindnessFog } from './effectVisuals';
 
 export interface Camera {
   x: number;
@@ -36,6 +37,8 @@ export interface FrameEnv {
   biome: number;
   gamma: number;
   nightVision: number;
+  /** blindness fog (effectVisuals.blindnessFog) */
+  blindness?: BlindnessFog | null;
   /** extra (e.g. view bobbing) applied to view matrix */
   bob?: Mat4 | null;
   underwater?: boolean;
@@ -121,6 +124,22 @@ export class Renderer {
       fogStart = -8;
       fogEnd = 96;
     }
+    // vanilla FogRenderer: blindness darkens the fog colour and pulls the fog in to a few blocks
+    const blind = e.blindness;
+    if (blind) {
+      if (blind.darkness < 1) {
+        const d = Math.max(0, blind.darkness) ** 2;
+        fog = [fog[0] * d, fog[1] * d, fog[2] * d];
+      }
+      fogStart = blind.end * 0.25;
+      fogEnd = blind.end;
+    }
+    // vanilla FogRenderer.setupColor: night vision brightens the fog (underwater, water vision does)
+    const nv = e.underwater ? 0 : e.nightVision;
+    if (nv > 0 && fog[0] !== 0 && fog[1] !== 0 && fog[2] !== 0) {
+      const k = Math.min(1 / fog[0], 1 / fog[1], 1 / fog[2]);
+      fog = [fog[0] * (1 - nv) + fog[0] * k * nv, fog[1] * (1 - nv) + fog[1] * k * nv, fog[2] * (1 - nv) + fog[2] * k * nv];
+    }
     this.lastFog = fog;
     // lightmap
     this.lightmap.update(env.skyDarken(tod, e.weather), e.weather.flash > 0, e.gamma, e.nightVision);
@@ -130,7 +149,8 @@ export class Renderer {
     gl.clearDepth(1);
     gl.depthMask(true);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-    if (!e.underwater) {
+    // vanilla LevelRenderer.renderSky: no sky while blind (doesMobEffectBlockSky)
+    if (!e.underwater && !blind) {
       this.sky.render({
         proj: this.proj,
         viewRot: this.viewRot,
@@ -178,7 +198,7 @@ export class Renderer {
       this.particles.spriteRects = this.particleAtlas.rects;
       this.particles.renderSprites(this.batch, cam, e.partial);
     }
-    if (this.cloudsEnabled && !e.underwater && !this.skipClouds) {
+    if (this.cloudsEnabled && !e.underwater && !this.skipClouds && !blind) {
       const cc = env.cloudColor(tod, e.weather);
       this.clouds.render(this.proj, this.view, cam.x, cam.y, cam.z, e.ticks + e.partial, cc, fog, rdBlocks);
     }
