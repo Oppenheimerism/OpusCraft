@@ -314,6 +314,205 @@ function zpigDeath(c: Ctx): Float32Array {
   return out;
 }
 
+// ------------------------------------------------------------------ ghast
+
+/** One ghast cry: pitch and loudness over normalised time, a vowel glide and vibrato depths. */
+interface Cry {
+  t?: number;
+  d: number;
+  f0: (x: number) => number;
+  amp: (x: number) => number;
+  from: string;
+  to: string;
+  /** extra formant scale (smaller, brighter mouth) */
+  bright?: number;
+  breath?: number;
+  /** vibrato depth (fraction) at the start and at the end */
+  vib?: [number, number];
+  rough?: number;
+  oq?: number;
+}
+
+/**
+ * A ghast cry: a high, child-like voice (formants scaled ~1.5x) whose vibrato blooms just
+ * after the onset, like a crying toddler or a mewling cat.
+ */
+function cryInto(b: Float32Array, c: Ctx, o: Cry): void {
+  const { sr, rng } = c;
+  const d = o.d;
+  const F = vowelGlide(o.from, o.to, d * 0.1, d * 0.9, 1.45 + (o.bright ?? 0));
+  const vr = rng.range(5, 6.5);
+  const [va, vb] = o.vib ?? [0.03, 0.03];
+  const ph = rng.next() * TAU;
+  voice(b, sr, rng, {
+    t: o.t,
+    dur: d,
+    f0: (t) => o.f0(t / d) * (1 + (va + ((vb - va) * t) / d) * smooth(t / 0.25) * Math.sin(TAU * vr * t + ph)),
+    amp: (t) => o.amp(t / d),
+    formants: [
+      { f: F[0], bw: 130, g: 1 },
+      { f: F[1], bw: 170, g: 0.6 },
+      { f: F[2], bw: 280, g: 0.3 },
+      { f: F[3], bw: 420, g: 0.12 },
+    ],
+    jitter: 0.012,
+    shimmer: 0.06,
+    rough: o.rough ?? 0.06,
+    breath: o.breath ?? 0.2,
+    oq: o.oq ?? 0.62,
+  });
+}
+
+/** The ghast's voice rings through a huge Nether cavern: a long, dark, diffuse tail. */
+function cavern(buf: Float32Array, sr: number, t60: number, wet: number): Float32Array {
+  highpass(buf, 160, sr);
+  return reverbHalf(buf, sr, { t60, wet, dry: 0.9, size: 1.8, pre: 0.03, hf: 0.35, lowcut: 200, tail: t60 * 0.75 });
+}
+
+/** Ghast moan: a drawn-out, eerie coo or crying wail with vibrato; seven different shapes. */
+function ghastMoan(c: Ctx): Float32Array {
+  const { sr, rng, v } = c;
+  const base = rng.range(430, 520);
+  const bump = (a: number) => (x: number) => envBump(x, a, 1 - a);
+  const cries: Cry[] = [];
+  switch (v) {
+    case 0: // a rise-and-fall coo, "ooOOoo"
+      cries.push({ d: 1.5, f0: (x) => base * (1 + 0.3 * Math.sin(Math.PI * x)), amp: bump(0.3), from: 'u', to: 'o' });
+      break;
+    case 1: // a falling cry, "waaah"
+      cries.push({ d: 1.3, f0: (x) => base * 1.45 * (1 - 0.38 * Math.pow(x, 1.3)), amp: (x) => envPts(x, [0, 0, 0.08, 1, 0.6, 0.8, 1, 0]), from: 'a', to: 'u', breath: 0.25 });
+      break;
+    case 2: // a sob: a short "oo", then a longer, breaking wail
+      cries.push({ d: 0.55, f0: (x) => base * 1.2 * (1 - 0.1 * x), amp: bump(0.25), from: 'o', to: 'a' });
+      cries.push({ t: 0.65, d: 1.05, f0: (x) => base * 1.3 * (1 + 0.15 * Math.sin(Math.PI * x) - 0.3 * x), amp: bump(0.2), from: 'a', to: 'u', vib: [0.03, 0.05] });
+      break;
+    case 3: // a coo that lifts at the end, "oooo-OO?"
+      cries.push({ d: 1.4, f0: (x) => base * (0.9 + 0.55 * x * x * x), amp: bump(0.35), from: 'u', to: 'oo', bright: 0.15 });
+      break;
+    case 4: // a long, wavering wail
+      cries.push({ d: 2, f0: (x) => base * (1.05 + 0.12 * Math.sin(TAU * 1.5 * x) - 0.1 * x), amp: bump(0.3), from: 'oo', to: 'aw', vib: [0.025, 0.045] });
+      break;
+    case 5: // a high, sobbing whimper
+      cries.push({
+        d: 0.95,
+        f0: (x) => base * 1.6 * (1 - 0.15 * x),
+        amp: (x) => envBump(x, 0.15, 0.85) * (0.7 + 0.3 * Math.cos(TAU * 3.5 * x)),
+        from: 'ae',
+        to: 'u',
+        bright: 0.1,
+        breath: 0.3,
+      });
+      break;
+    default: // a low, slow moan
+      cries.push({ d: 1.9, f0: (x) => base * 0.78 * (1 + 0.25 * Math.sin(Math.PI * Math.pow(x, 0.7))), amp: bump(0.35), from: 'u', to: 'aw', vib: [0.02, 0.04] });
+  }
+  const len = Math.max(...cries.map((q) => (q.t ?? 0) + q.d)) + 0.05;
+  const out = alloc(len, sr);
+  layer(out, 1, (b) => {
+    for (const q of cries) cryInto(b, c, q);
+  });
+  return cavern(out, sr, 3.2, 0.75);
+}
+
+/** Pitch shapes (normalised time, pitch ratio) of the five ghast shrieks. */
+const SHRIEKS: readonly (readonly number[])[] = [
+  [0, 0.8, 0.12, 1, 1, 0.6], // snaps up, then falls
+  [0, 0.9, 0.35, 1.1, 1, 0.75], // rises and falls
+  [0, 0.85, 0.08, 1, 0.4, 0.82, 0.5, 1.05, 1, 0.65], // a double yelp
+  [0, 1.1, 1, 0.7], // one sharp, falling yelp
+  [0, 0.85, 0.2, 1, 1, 0.7], // a wavering shriek
+];
+
+/** Ghast hurt / scream: a short, shrill, pained shriek (a cat-like "mrEEow") with a cavern tail. */
+function ghastShriek(c: Ctx): Float32Array {
+  const { sr, rng, v } = c;
+  const k = v % SHRIEKS.length;
+  const hi = rng.range(1000, 1250);
+  const d = [0.42, 0.34, 0.52, 0.3, 0.46][k] * rng.range(0.92, 1.08);
+  const out = alloc(d + 0.05, sr);
+  layer(out, 1, (b) =>
+    cryInto(b, c, {
+      d,
+      f0: (x) => hi * envExpPts(x, SHRIEKS[k]) * (k === 4 ? 1 + 0.05 * Math.sin(TAU * 11 * x * d) : 1),
+      amp: k === 2 ? (x) => envPts(x, [0, 0, 0.04, 1, 0.34, 0.7, 0.4, 0.15, 0.46, 1, 1, 0]) : (x) => envPts(x, [0, 0, 0.05, 1, 0.5, 0.75, 1, 0]),
+      from: rng.pick(['ae', 'e']),
+      to: rng.pick(['i', 'ih']),
+      bright: 0.1,
+      breath: 0.3,
+      vib: [0.02, 0.04],
+      rough: 0.25,
+      oq: 0.45,
+    }),
+  );
+  return cavern(out, sr, 1.8, 0.45);
+}
+
+/** Ghast death: a long wail that falls away, its vibrato widening as it dies. */
+function ghastDeath(c: Ctx): Float32Array {
+  const { sr, rng } = c;
+  const d = 2.1;
+  const out = alloc(d + 0.05, sr);
+  const hi = rng.range(1050, 1150);
+  layer(out, 1, (b) =>
+    cryInto(b, c, {
+      d,
+      f0: (x) => hi * envExpPts(x, [0, 0.85, 0.1, 1, 0.35, 0.85, 1, 0.3]),
+      amp: (x) => envPts(x, [0, 0, 0.05, 1, 0.4, 0.85, 1, 0]),
+      from: 'a',
+      to: 'u',
+      breath: 0.28,
+      vib: [0.02, 0.07],
+      rough: 0.15,
+      oq: 0.5,
+    }),
+  );
+  return cavern(out, sr, 3.5, 0.8);
+}
+
+/** Ghast warn: the loud, rising "affectionate scream" it lets out just before it spits a fireball. */
+function ghastWarn(c: Ctx): Float32Array {
+  const { sr, rng } = c;
+  const d = 1.05;
+  const out = alloc(d + 0.05, sr);
+  const f = rng.range(460, 500);
+  layer(out, 1, (b) =>
+    cryInto(b, c, {
+      d,
+      f0: (x) => f * envExpPts(x, [0, 1, 0.15, 1.1, 0.8, 2.6, 1, 2.45]),
+      amp: (x) => envPts(x, [0, 0, 0.1, 0.55, 0.75, 1, 1, 0]),
+      from: 'u',
+      to: 'i',
+      bright: 0.1,
+      breath: 0.25,
+      vib: [0.02, 0.045],
+      rough: 0.15,
+      oq: 0.5,
+    }),
+  );
+  return cavern(out, sr, 2.6, 0.6);
+}
+
+/** Ghast shoot: the fireball launching, a deep, fiery "fwoomp" of flame with a few crackles. */
+function ghastShoot(c: Ctx): Float32Array {
+  const { sr, rng } = c;
+  const out = alloc(1.3, sr);
+  const fl = rng.range(9, 13);
+  // the roar of the flame: dark noise with a fast swell, a flickering body and a long tail
+  layer(out, 1, (b) =>
+    burst(b, sr, rng, { dur: 1.2, attack: 0.035, tau: 0.22, lp: 900, color: 'brown', env: (t) => 0.72 + 0.28 * Math.sin(TAU * fl * t + 2 * Math.sin(TAU * 3.3 * t)) }),
+  );
+  // the whoosh: the band swings up as the fireball leaves, then settles
+  layer(out, 0.75, (b) =>
+    sweep(b, sr, rng, { dur: 1, f: (t) => envExpPts(t, [0, 280, 0.09, 1500, 0.7, 420]), q: 1.1, amp: (t) => envAD(t, 0.05, 0.22), color: 'pink' }),
+  );
+  // the hiss of the flame front
+  layer(out, 0.22, (b) => burst(b, sr, rng, { dur: 0.5, attack: 0.02, tau: 0.08, hp: 2500 }));
+  // a deep pressure thump
+  layer(out, 0.8, (b) => thump(b, sr, { f0: 120, f1: 45, glide: 0.06, tau: 0.12, attack: 0.012 }));
+  layer(out, 0.25, (b) => fireCrackles(b, sr, rng, 0.03, 0.7, 70, 0.1));
+  return reverbHalf(out, sr, { t60: 1.4, wet: 0.35, size: 1.4, pre: 0.02, hf: 0.4, lowcut: 150, tail: 1 });
+}
+
 // ------------------------------------------------------------------ registry
 
 export function netherMobSounds(): Record<string, SoundGen> {
@@ -322,5 +521,12 @@ export function netherMobSounds(): Record<string, SoundGen> {
     'entity.zombified_piglin.angry': sound('entity.zombified_piglin.angry', 4, zpigAngry),
     'entity.zombified_piglin.hurt': sound('entity.zombified_piglin.hurt', 2, zpigHurt),
     'entity.zombified_piglin.death': sound('entity.zombified_piglin.death', 2, zpigDeath),
+
+    'entity.ghast.ambient': sound('entity.ghast.ambient', 7, ghastMoan),
+    'entity.ghast.hurt': sound('entity.ghast.hurt', 5, ghastShriek),
+    'entity.ghast.scream': sound('entity.ghast.scream', 5, ghastShriek),
+    'entity.ghast.death': sound('entity.ghast.death', 1, ghastDeath),
+    'entity.ghast.warn': sound('entity.ghast.warn', 1, ghastWarn),
+    'entity.ghast.shoot': sound('entity.ghast.shoot', 1, ghastShoot),
   };
 }
