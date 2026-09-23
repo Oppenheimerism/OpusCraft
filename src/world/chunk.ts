@@ -1,6 +1,7 @@
 // Chunk column storage (main thread). Sections are allocated lazily.
 
 import { MIN_Y, MAX_Y, SECTIONS } from './constants';
+import type { SavedEntity } from '../entity/mob';
 
 export const LIGHT_DEFAULT = 0xf0; // sky 15, block 0
 
@@ -26,6 +27,8 @@ export class Chunk {
   modified = false;
   /** generated fluids waiting to be ticked by the level (packed lx, y, lz) */
   fluidTicks: number[] | null = null;
+  /** structure entities from generation, added once (vanilla ProtoChunk entities) */
+  genEntities: SavedEntity[] | null = null;
   inhabitedTime = 0;
   constructor(readonly cx: number, readonly cz: number) {}
 

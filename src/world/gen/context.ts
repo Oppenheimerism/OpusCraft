@@ -4,6 +4,7 @@
 import { MIN_Y, MAX_Y, colIndex } from '../constants';
 import { FLAGS, F_AIR, F_REPLACEABLE, F_LEAVES, STATE_BLOCK, BLOCKS, F_WATER, F_OPAQUE, F_COLLIDE } from '../block';
 import type { SavedBlockEntity } from '../blockEntity';
+import type { SavedEntity } from '../../entity/mob';
 
 /** Write rules (applied at write time against the current target block). */
 export const W_ANY = 0, // unconditional
@@ -67,6 +68,8 @@ export class GenContext {
   readonly fluidTicks: number[] = [];
   /** block entities placed by features (dungeon chests and spawners) */
   readonly blockEntities: SavedBlockEntity[] = [];
+  /** entities placed by structures (mineshaft chest minecarts), in the saved-entity format */
+  readonly entities: SavedEntity[] = [];
 
   constructor(readonly cx: number, readonly cz: number, blocks: Uint16Array, biomes: Uint8Array) {
     this.x0 = cx * 16;

@@ -8,6 +8,7 @@ import { ruleAllows, PendingWrites } from './gen/context';
 import { MeshInput, PS, PAD, PADDED_VOLUME } from '../render/mesher';
 import { OPACITY, BLOCKS, STATE_BLOCK } from './block';
 import { BlockEntity, SavedBlockEntity, blockEntityKey, createBlockEntity, loadBlockEntity } from './blockEntity';
+import type { SavedEntity } from '../entity/mob';
 
 export interface GenResult {
   cx: number;
@@ -19,6 +20,8 @@ export interface GenResult {
   blockEntities?: SavedBlockEntity[];
   /** freshly generated fluids that should start flowing (packed lx, y, lz) */
   fluidTicks?: number[];
+  /** entities placed by generation (added the first time the chunk's entities load) */
+  entities?: SavedEntity[];
 }
 
 export class World {
@@ -169,6 +172,7 @@ export class World {
     const c = new Chunk(r.cx, r.cz);
     c.loadColumn(r.blocks, r.light, r.biomes);
     if (r.fluidTicks?.length) c.fluidTicks = r.fluidTicks;
+    if (r.entities?.length) c.genEntities = r.entities;
     this.chunks.set(c.key, c);
     this.lastChunk = null;
     // pending writes into this chunk from earlier neighbours

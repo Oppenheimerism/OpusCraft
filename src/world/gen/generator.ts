@@ -14,6 +14,7 @@ import { hash3, hash2, hashFloat, hash32, Rand, hashString } from '../../core/rn
 import { clampedMap } from '../../core/math';
 import { computeChunkLight } from '../lightlocal';
 import type { SavedBlockEntity } from '../blockEntity';
+import type { SavedEntity } from '../../entity/mob';
 
 export interface GenOutput {
   cx: number;
@@ -25,6 +26,7 @@ export interface GenOutput {
   /** generated fluids to tick once loaded (packed lx, y, lz) */
   fluidTicks: number[];
   blockEntities: SavedBlockEntity[];
+  entities: SavedEntity[];
 }
 
 const CELL_W = 4, CELL_H = 8;
@@ -193,7 +195,7 @@ export class ChunkGenerator {
     this.carvers.carve(ctx, aquifer);
     this.decorator.decorate(ctx);
     const light = computeChunkLight(blocks);
-    return { cx, cz, blocks, light, biomes, pending: ctx.pendingWrites(), fluidTicks: ctx.fluidTicks, blockEntities: ctx.blockEntities };
+    return { cx, cz, blocks, light, biomes, pending: ctx.pendingWrites(), fluidTicks: ctx.fluidTicks, blockEntities: ctx.blockEntities, entities: ctx.entities };
   }
 
   private zoomBiome(x: number, z: number, cx: number, cz: number, quartBiome: Int16Array): number {

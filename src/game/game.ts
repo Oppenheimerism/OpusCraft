@@ -527,9 +527,18 @@ export class Game {
           if (e) lvl.addEntity(e);
         }
       });
-    } else if (this.spawner) {
-      if (this.spawner.spawnForNewChunk(c.cx, c.cz).length) this.entityDirty.add(key);
+    } else {
+      // a new chunk: its structure entities, then the chunk-generation animals
+      if (c.genEntities) {
+        for (const d of c.genEntities) {
+          const e = loadEntity(d, lvl);
+          if (e) lvl.addEntity(e);
+        }
+        this.entityDirty.add(key);
+      }
+      if (this.spawner?.spawnForNewChunk(c.cx, c.cz).length) this.entityDirty.add(key);
     }
+    c.genEntities = null;
   }
 
   private entitiesIn(cx: number, cz: number): Entity[] {
