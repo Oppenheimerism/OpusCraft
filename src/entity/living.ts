@@ -4,6 +4,7 @@ import { Entity } from './entity';
 import { FLUID_WATER } from '../world/fluids';
 import { wrapDegrees } from '../core/math';
 import { FLAGS, F_OPAQUE, F_FULL_COLLISION } from '../world/block';
+import { clipBlocks } from '../game/raycast';
 
 /** damage sources that ignore armor (vanilla #bypasses_armor) */
 const BYPASSES_ARMOR = new Set(['onFire', 'inWall', 'drown', 'starve', 'fall', 'void', 'genericKill', 'magic', 'generic', 'cramming', 'flyIntoWall']);
@@ -113,6 +114,15 @@ export abstract class LivingEntity extends Entity {
           if (fl & F_OPAQUE && fl & F_FULL_COLLISION) return true;
         }
     return false;
+  }
+
+  /** vanilla LivingEntity.hasLineOfSight: eye-to-eye collider clip */
+  hasLineOfSight(e: Entity): boolean {
+    const ex = this.x, ey = this.y + this.eyeHeight, ez = this.z;
+    const tx = e.x, ty = e instanceof LivingEntity ? e.y + e.eyeHeight : (e.bb.minY + e.bb.maxY) / 2, tz = e.z;
+    const dx = tx - ex, dy = ty - ey, dz = tz - ez;
+    if (dx * dx + dy * dy + dz * dz > 128 * 128) return false;
+    return clipBlocks(this.level.world, ex, ey, ez, tx, ty, tz) === null;
   }
 
   setLastHurtByMob(e: LivingEntity | null): void {

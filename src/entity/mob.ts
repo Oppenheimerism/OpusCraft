@@ -265,15 +265,6 @@ export abstract class Mob extends LivingEntity {
 
   // --- senses ---------------------------------------------------------------
 
-  /** vanilla LivingEntity.hasLineOfSight: eye-to-eye collider clip */
-  hasLineOfSight(e: Entity): boolean {
-    const ex = this.x, ey = this.y + this.eyeHeight, ez = this.z;
-    const tx = e.x, ty = eyeY(e), tz = e.z;
-    const dx = tx - ex, dy = ty - ey, dz = tz - ez;
-    if (dx * dx + dy * dy + dz * dz > 128 * 128) return false;
-    return clipBlocks(this.level.world, ex, ey, ez, tx, ty, tz) === null;
-  }
-
   /** can this mob attack `e` (vanilla canAttack + TargetingConditions basics) */
   canAttack(e: LivingEntity | null): boolean {
     if (!e || !e.isAlive || e === this) return false;

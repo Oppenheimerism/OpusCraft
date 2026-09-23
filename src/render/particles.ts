@@ -51,6 +51,12 @@ interface SpriteParticle {
   /** emitter particles spawn children and are never drawn */
   emitter?: 'explosion' | 'crit' | 'enchanted_hit';
   target?: { x: number; y: number; z: number; width: number; height: number };
+  /** portal particles move along a curve from their start point */
+  portal?: { x: number; y: number; z: number };
+  /** sub-rectangle of the sprite (fractions), e.g. item crumbs */
+  sub?: [number, number, number, number];
+  /** squid ink sinks slowly in air */
+  sinkInAir?: boolean;
 }
 
 export interface SpriteRectUV {
@@ -316,6 +322,52 @@ export class ParticleEngine {
         this.addSprite(p);
         break;
       }
+      case 'portal': {
+        // vanilla PortalParticle
+        const p = this.base(kind, x, y, z);
+        p.dx = xd;
+        p.dy = yd;
+        p.dz = zd;
+        p.portal = { x, y, z };
+        p.size = 0.1 * (Math.random() * 0.2 + 0.5);
+        const f = Math.random() * 0.6 + 0.4;
+        p.r = f * 0.9;
+        p.g = f * 0.3;
+        p.b = f;
+        p.lifetime = Math.floor(Math.random() * 10) + 40;
+        p.frame = Math.floor(Math.random() * 8);
+        p.physics = false;
+        this.addSprite(p);
+        break;
+      }
+      case 'squid_ink': {
+        // vanilla SquidInkParticle
+        const p = this.base(kind, x, y, z);
+        p.friction = 0.92;
+        p.size = 0.5;
+        p.r = p.g = p.b = 0;
+        p.lifetime = Math.floor((0.5 * 12) / (Math.random() * 0.8 + 0.2));
+        p.physics = false;
+        p.dx = xd;
+        p.dy = yd;
+        p.dz = zd;
+        p.sinkInAir = true;
+        this.addSprite(p);
+        break;
+      }
+      case 'item_slime': {
+        // vanilla BreakingItemParticle with the slime ball sprite
+        const p = this.base(kind, x, y, z);
+        this.withSpeed(p, 0, 0, 0);
+        p.gravity = 1;
+        p.size /= 2;
+        p.frames = ['item_slime_ball'];
+        p.frame = 0;
+        const uo = Math.random() * 3, vo = Math.random() * 3;
+        p.sub = [uo / 4, vo / 4, (uo + 1) / 4, (vo + 1) / 4];
+        this.addSprite(p);
+        break;
+      }
       default:
         break;
     }
@@ -375,6 +427,17 @@ export class ParticleEngine {
         list[w++] = p;
         continue;
       }
+      if (p.portal) {
+        const f = p.age / p.lifetime;
+        const f1 = -f + f * f * 2;
+        const f2 = 1 - f1;
+        p.x = p.portal.x + p.dx * f2;
+        p.y = p.portal.y + p.dy * f2 + (1 - f);
+        p.z = p.portal.z + p.dz * f2;
+        list[w++] = p;
+        continue;
+      }
+      if (p.sinkInAir) p.dy -= 0.0074;
       p.dy -= 0.04 * p.gravity;
       if (p.physics) this.move(p as unknown as Particle);
       else {
@@ -506,13 +569,27 @@ export class ParticleEngine {
       }
       let s = p.size;
       if (p.grow) s *= Math.max(0, Math.min(1, ((p.age + partial) / p.lifetime) * 32));
+      if (p.portal) {
+        let f = (p.age + partial) / p.lifetime;
+        f = 1 - f;
+        f *= f;
+        s *= 1 - f;
+      }
+      let ru0 = r.u0, rv0 = r.v0, ru1 = r.u1, rv1 = r.v1;
+      if (p.sub) {
+        const du = r.u1 - r.u0, dv = r.v1 - r.v0;
+        ru0 = r.u0 + du * p.sub[0];
+        rv0 = r.v0 + dv * p.sub[1];
+        ru1 = r.u0 + du * p.sub[2];
+        rv1 = r.v0 + dv * p.sub[3];
+      }
       const ax = rx * s, az = rz * s;
       const bx = ux * s, by = uy * s, bz = uz * s;
       const v = [
-        [x - ax - bx, y - by, z - az - bz, r.u1, r.v1],
-        [x - ax + bx, y + by, z - az + bz, r.u1, r.v0],
-        [x + ax + bx, y + by, z + az + bz, r.u0, r.v0],
-        [x + ax - bx, y - by, z + az - bz, r.u0, r.v1],
+        [x - ax - bx, y - by, z - az - bz, ru1, rv1],
+        [x - ax + bx, y + by, z - az + bz, ru1, rv0],
+        [x + ax + bx, y + by, z + az + bz, ru0, rv0],
+        [x + ax - bx, y - by, z + az - bz, ru0, rv1],
       ];
       for (const k of [0, 1, 2, 0, 2, 3]) {
         const q = v[k];

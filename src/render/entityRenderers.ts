@@ -23,11 +23,12 @@ import { ExperienceOrb } from '../entity/xpOrb';
 import { PrimedTnt } from '../entity/tnt';
 import { FallingBlockEntity } from '../entity/fallingBlock';
 import { Sheep, Chicken, sheepFurColor } from '../entity/animals';
-import { Zombie, Skeleton, Creeper } from '../entity/monsters';
+import { Zombie, Skeleton, Creeper, Enderman, Slime } from '../entity/monsters';
+import { Squid } from '../entity/water';
 import type { Player } from '../entity/player';
 import { MOB_TEXTURES, FIRE_TEXTURES } from '../textures/mobs';
 import { FLAGS, F_FULL_COLLISION, F_AIR, OUTLINE, S } from '../world/block';
-import { ItemStack } from '../item/item';
+import type { ItemStack } from '../item/item';
 
 export interface EntityRenderOptions {
   shadows: boolean;
@@ -60,7 +61,8 @@ export class EntityRenderDispatcher {
   private fireTex: WebGLTexture | null = null;
   private fireFrames = 32;
   private readonly shadows: ShadowJob[] = [];
-  private tntStack: ItemStack | null = null;
+  /** entities drawn last frame (F3 "E:") */
+  rendered = 0;
 
   constructor(private readonly gl: GL, private readonly items: ItemRenderer, private readonly skin: WebGLTexture) {
     this.models = {
@@ -73,6 +75,10 @@ export class EntityRenderDispatcher {
       skeleton: M.skeletonModel(),
       creeper: M.creeperModel(),
       spider: M.spiderModel(),
+      enderman: M.endermanModel(),
+      squid: M.squidModel(),
+      slime: M.slimeInnerModel(),
+      slime_outer: M.slimeOuterModel(),
     };
     // vanilla textures/misc/shadow.png: soft black disc
     const n = 32, data = new Uint8Array(n * n * 4);
@@ -118,6 +124,7 @@ export class EntityRenderDispatcher {
   /** draw all entities; call between opaque and translucent terrain */
   render(b: EntityBatch, level: Level, cam: Camera, partial: number, frustum: Frustum, opts: EntityRenderOptions): void {
     this.shadows.length = 0;
+    let drawn = 0;
     for (const e of level.entities) {
       if (e.removed) continue;
       if (e === level.player && !opts.drawPlayer) continue;
@@ -132,11 +139,13 @@ export class EntityRenderDispatcher {
       const hw = (bb.maxX - bb.minX) / 2 + 0.5, h = bb.maxY - bb.minY + 0.5;
       if (!frustum.testBox(dx - hw, dy - 0.5, dz - hw, dx + hw, dy + h, dz + hw)) continue;
       this.renderEntity(b, level, e, x, y, z, dx, dy, dz, partial, cam);
+      drawn++;
       if (opts.shadows) {
         const r = shadowRadius(e);
         if (r > 0) this.shadows.push({ x, y, z, radius: r, strength: e instanceof ItemEntity || e instanceof ExperienceOrb ? 0.75 : 1 });
       }
     }
+    this.rendered = drawn;
     b.setOverlay(0, 0, 0, 0);
     b.flush();
     if (this.shadows.length) this.renderShadows(b, level, cam);
@@ -231,6 +240,26 @@ export class EntityRenderDispatcher {
     const baby = e.isBaby();
     let white = 0;
     let scale: ((pose: PoseStack) => void) | undefined;
+    let jx = 0, jz = 0;
+    if (e instanceof Enderman && e.creepy) {
+      // vanilla EndermanRenderer.getRenderOffset: jitter while angry
+      jx = gaussian() * 0.02;
+      jz = gaussian() * 0.02;
+    }
+    if (e instanceof Squid) {
+      this.renderSquid(b, e, dx, dy, dz, p, def, tex);
+      return;
+    }
+    if (e instanceof Slime) {
+      const f = e.size;
+      const f1 = (e.oSquish + (e.squish - e.oSquish) * p) / (f * 0.5 + 1);
+      const f2 = 1 / (f1 + 1);
+      scale = (pose) => {
+        pose.scale(0.999, 0.999, 0.999);
+        pose.translate(0, 0.001, 0);
+        pose.scale(f2 * f, (1 / f2) * f, f2 * f);
+      };
+    }
     if (e instanceof Creeper) {
       const sw = e.swelling(p);
       const f1 = 1 + Math.sin(sw * 100) * sw * 0.01;
@@ -241,7 +270,7 @@ export class EntityRenderDispatcher {
       scale = (pose) => pose.scale(f2, f3, f2);
       white = Math.floor(sw * 10) % 2 === 0 ? 0 : Math.max(0.5, Math.min(1, sw));
     }
-    const a = this.setupLiving(e, dx, dy, dz, p, type === 'spider' ? 180 : 90, scale);
+    const a = this.setupLiving(e, dx + jx, dy, dz + jz, p, type === 'spider' ? 180 : 90, scale);
     const attack = attackAnim(e, p);
     let armPose: M.ArmPose = 'empty';
     switch (type) {
@@ -280,6 +309,11 @@ export class EntityRenderDispatcher {
       case 'spider':
         M.animateSpider(def.root, a.limbSwing, a.limbAmount, a.headYaw, a.headPitch);
         break;
+      case 'enderman': {
+        const en = e as Enderman;
+        M.animateEnderman(def.root, a.limbSwing, a.limbAmount, a.age, a.headYaw, a.headPitch, attack, en.carried !== 0, en.creepy);
+        break;
+      }
     }
     this.overlay(b, e, white);
     b.begin(this.state(tex));
@@ -295,10 +329,64 @@ export class EntityRenderDispatcher {
       }
     }
     if (type === 'spider') this.drawEyes(b, def, 'spider_eyes', baby);
+    if (e instanceof Enderman) {
+      this.drawEyes(b, def, 'enderman_eyes', false);
+      if (e.carried) this.drawCarriedBlock(b, e.carried);
+    }
+    if (e instanceof Slime) {
+      const outer = this.models.slime_outer;
+      if (outer) {
+        this.overlay(b, e);
+        b.begin(this.state(tex, { blend: true, cutoff: 0.01 }));
+        this.drawModel(b, outer, false);
+        b.flush();
+      }
+    }
     if (e.mainHand && (e instanceof Zombie || e instanceof Skeleton)) {
       b.setOverlay(0, 0, 0, 0);
       this.drawHeldItem(b, def.root, e.mainHand, baby, e.usingItem ? e.useItemTicks + p : -1);
     }
+  }
+
+  /** vanilla CarriedBlockLayer */
+  private drawCarriedBlock(b: EntityBatch, state: number): void {
+    const pose = this.pose;
+    b.setOverlay(0, 0, 0, 0);
+    pose.push();
+    pose.translate(0, 0.6875, -0.75);
+    pose.rotX(20);
+    pose.rotY(45);
+    pose.translate(0.25, 0.1875, 0.25);
+    pose.scale(-0.5, -0.5, 0.5);
+    pose.rotY(90);
+    this.items.renderBlockState(b, pose, state);
+    pose.pop();
+  }
+
+  /** vanilla SquidRenderer (custom body rotations, tentacle bob) */
+  private renderSquid(b: EntityBatch, e: Squid, dx: number, dy: number, dz: number, p: number, def: MobModelDef, tex: WebGLTexture): void {
+    const pose = this.pose;
+    pose.reset();
+    pose.translate(dx, dy, dz);
+    const bodyYaw = rotLerp(p, e.bodyYawO, e.bodyYaw);
+    const xr = e.xBodyRotO + (e.xBodyRot - e.xBodyRotO) * p;
+    const zr = e.zBodyRotO + (e.zBodyRot - e.zBodyRotO) * p;
+    pose.translate(0, 0.5, 0);
+    pose.rotY(180 - bodyYaw);
+    pose.rotX(xr);
+    pose.rotY(zr);
+    pose.translate(0, -1.2, 0);
+    if (e.deathTime > 0) {
+      let f = ((e.deathTime + p - 1) / 20) * 1.6;
+      f = Math.sqrt(Math.max(0, f));
+      pose.rotZ(Math.min(1, f) * 90);
+    }
+    pose.scale(-1, -1, 1);
+    pose.translate(0, -1.501, 0);
+    M.animateSquid(def.root, e.oldTentacleAngle + (e.tentacleAngle - e.oldTentacleAngle) * p);
+    this.overlay(b, e);
+    b.begin(this.state(tex));
+    this.drawModel(b, def, false);
   }
 
   private drawEyes(b: EntityBatch, def: MobModelDef, texName: string, baby: boolean): void {
@@ -560,6 +648,12 @@ export class EntityRenderDispatcher {
   }
 }
 
+function gaussian(): number {
+  let u = 0;
+  while (u === 0) u = Math.random();
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * Math.random());
+}
+
 /** vanilla LivingEntity.getAttackAnim */
 function attackAnim(e: LivingEntity, p: number): number {
   let f = e.attackAnim - e.attackAnimO;
@@ -581,6 +675,15 @@ function shadowRadius(e: Entity): number {
       break;
     case 'spider':
       r = 0.8;
+      break;
+    case 'squid':
+      r = 0.7;
+      break;
+    case 'enderman':
+      r = 0.5;
+      break;
+    case 'slime':
+      r = 0.25 * (e as Slime).size;
       break;
     case 'zombie':
     case 'skeleton':

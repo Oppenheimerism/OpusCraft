@@ -28,7 +28,7 @@ import type { Screen } from '../gui/screen';
 import { setClickSound } from '../gui/screen';
 import type { FontData } from '../textures/font';
 import { WorldMeta, saveWorldMeta, serializeChunk, saveChunks, savedChunkKeys, chunkKey, loadChunk, deserializeChunk, entityChunkKeys, saveEntityChunks, loadEntityChunk, SavedEntityChunk } from '../storage/worldStore';
-import { NaturalSpawner, saveEntity, loadEntity, isChunkSaved } from './spawner';
+import { NaturalSpawner, saveEntity, loadEntity, isChunkSaved, entityDisplayName } from './spawner';
 import { hashString } from '../core/rng';
 import type { Chunk } from '../world/chunk';
 import type { Entity } from '../entity/entity';
@@ -1176,15 +1176,4 @@ export class Game {
 function lookVec(yaw: number, pitch: number): [number, number, number] {
   const pr = pitch * DEG, yr = yaw * DEG;
   return [-Math.sin(yr) * Math.cos(pr), -Math.sin(pr), Math.cos(yr) * Math.cos(pr)];
-}
-
-const ENTITY_NAMES: Record<string, string> = {
-  pig: 'Pig', cow: 'Cow', sheep: 'Sheep', chicken: 'Chicken', zombie: 'Zombie', skeleton: 'Skeleton', creeper: 'Creeper', spider: 'Spider',
-  arrow: 'Arrow', tnt: 'Primed TNT', item: 'Item', experience_orb: 'Experience Orb', falling_block: 'Falling Block',
-};
-
-/** vanilla entity display names (death messages, commands) */
-export function entityDisplayName(e: Entity): string {
-  if (e.type === 'player') return 'Player';
-  return ENTITY_NAMES[e.type] ?? e.type;
 }

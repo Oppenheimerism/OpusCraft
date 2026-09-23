@@ -171,6 +171,8 @@ export class Player extends LivingEntity {
     // vanilla Player.aiStep touch(): orbs and arrows within the inflated box
     if (this.health > 0 && this.gameMode !== 'spectator') {
       for (const e of this.level.getEntities(this.bb.inflate(1, 0.5, 1), undefined, this)) {
+        const touch = (e as { touchPlayer?: (p: Player) => void }).touchPlayer;
+        if (touch) touch.call(e, this);
         if (e instanceof ExperienceOrb) e.playerTouch(this);
         else if (e instanceof Arrow && e.playerTouch(this)) this.level.sound.play('entity.item.pickup', this.x, this.y, this.z, 0.2, ((Math.random() - Math.random()) * 0.7 + 1) * 2);
       }

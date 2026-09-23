@@ -9,6 +9,12 @@ import { MIN_Y, MAX_Y } from '../world/constants';
 import { saveWorldMeta } from '../storage/worldStore';
 import { ItemEntity } from '../entity/itemEntity';
 import { DEFAULT_GAME_RULES as GAME_RULES } from './gameRules';
+import type { Entity } from '../entity/entity';
+import { LivingEntity } from '../entity/living';
+import { PrimedTnt } from '../entity/tnt';
+import { ExperienceOrb } from '../entity/xpOrb';
+import { Arrow } from '../entity/arrow';
+import { createMob, entityDisplayName, summonableTypes } from './spawner';
 
 class CommandError extends Error {
   constructor(msg: string, readonly pos = -1) {
@@ -83,6 +89,29 @@ function target(c: Ctx, i: number, optional = true): string {
   if (s === '@s' || s === '@p' || s === '@a' || s === '@r' || s === '@e' || s.startsWith('@s[') || s.startsWith('@p[') || s.startsWith('@a[')) return c.game.playerName;
   if (s === c.game.playerName) return s;
   throw new CommandError('No player was found', a.pos);
+}
+
+/** vanilla EntitySelector subset: @s @p @a @r @e with [type=...] and [type=!...], or the player name */
+function selectEntities(c: Ctx, i: number): Entity[] {
+  const a = c.args[i];
+  const g = c.game;
+  if (!a) return [g.player];
+  const s = a.s;
+  if (s === g.playerName) return [g.player];
+  const m = /^@([spare])(?:\[(.*)\])?$/.exec(s);
+  if (!m) throw new CommandError('No player was found', a.pos);
+  if (m[1] !== 'e') return [g.player];
+  let list: Entity[] = g.level.entities.filter((e) => !e.removed);
+  for (const cond of (m[2] ?? '').split(',').filter(Boolean)) {
+    const [k, v0] = cond.split('=');
+    if (k.trim() !== 'type') continue;
+    let v = (v0 ?? '').trim();
+    const neg = v.startsWith('!');
+    if (neg) v = v.slice(1);
+    v = v.replace(/^minecraft:/, '');
+    list = list.filter((e) => (e.type === v) !== neg);
+  }
+  return list;
 }
 
 /** coordinate with ~ relative and integer block-centering (vanilla Vec3Argument) */
@@ -359,17 +388,54 @@ export const COMMANDS: Record<string, CommandDef> = {
   },
   kill: {
     usage: ['/kill [<targets>]'],
-    suggest: (_g, _p, i) => (i === 0 ? TARGETS : []),
+    suggest: (_g, _p, i) => (i === 0 ? [...TARGETS, '@e[type=!player]'] : []),
     run: (c) => {
-      const name = target(c, 0);
-      const p = c.game.player;
-      p.invulnerableTime = 0;
-      p.hurt(Number.MAX_VALUE / 2, 'genericKill');
-      if (p.health > 0) {
-        p.health = 0;
-        p.die('genericKill');
+      const list = selectEntities(c, 0);
+      if (!list.length) throw new CommandError('No entity was found');
+      for (const e of list) {
+        if (e === c.game.player) {
+          const p = c.game.player;
+          p.invulnerableTime = 0;
+          p.hurt(Number.MAX_VALUE / 2, 'genericKill');
+          if (p.health > 0) {
+            p.health = 0;
+            p.die('genericKill');
+          }
+        } else if (e instanceof LivingEntity) {
+          e.invulnerableTime = 0;
+          e.hurt(Number.MAX_VALUE / 2, 'genericKill');
+        } else e.remove();
       }
-      c.ok(`Killed ${name}`);
+      c.ok(list.length === 1 ? `Killed ${list[0] === c.game.player ? c.game.playerName : entityDisplayName(list[0])}` : `Killed ${list.length} entities`);
+    },
+  },
+  summon: {
+    usage: ['/summon <entity> [<pos>]'],
+    suggest: (_g, _p, i) => (i === 0 ? summonableTypes().map((t) => 'minecraft:' + t) : i < 4 ? coordSuggest(i - 1) : []),
+    run: (c) => {
+      const type = needArg(c, 0).replace(/^minecraft:/, '');
+      const p = c.game.player;
+      const x = c.args[1] ? coord(c, 1, p.x, true) : p.x;
+      const y = c.args[2] ? coord(c, 2, p.y, false) : p.y;
+      const z = c.args[3] ? coord(c, 3, p.z, true) : p.z;
+      const lvl = c.game.level;
+      let e: Entity | null = null;
+      if (type === 'tnt') e = new PrimedTnt(lvl, x, y, z, null);
+      else if (type === 'experience_orb') e = new ExperienceOrb(lvl, x, y, z, 1);
+      else if (type === 'arrow') {
+        const a = new Arrow(lvl, null);
+        a.moveTo(x, y, z);
+        e = a;
+      } else {
+        const m = createMob(type, lvl);
+        if (!m) throw new CommandError(`Can't find element 'minecraft:${type}' of type 'minecraft:entity_type'`, c.args[0].pos);
+        m.moveTo(x, y, z, Math.random() * 360, 0);
+        m.bodyYaw = m.headYaw = m.yaw;
+        m.finalizeSpawn('command');
+        e = m;
+      }
+      lvl.addEntity(e);
+      c.ok(`Summoned new ${entityDisplayName(e)}`);
     },
   },
   list: {

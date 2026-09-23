@@ -3,10 +3,14 @@
 import type { GL } from './gl';
 import { createTexture } from './gl';
 import { MOB_PARTICLE_TEXTURES } from '../textures/mobs';
+import { ITEM_TEXTURES } from '../textures/items';
 import type { SpriteRectUV } from './particles';
 
 export function buildParticleAtlas(gl: GL): { texture: WebGLTexture; rects: Record<string, SpriteRectUV> } {
-  const names = Object.keys(MOB_PARTICLE_TEXTURES);
+  const src: Record<string, () => { w: number; h: number; data: Uint8ClampedArray }> = { ...MOB_PARTICLE_TEXTURES };
+  // item crumb particles (vanilla ItemParticleOption)
+  if (ITEM_TEXTURES['slime_ball']) src['item_slime_ball'] = ITEM_TEXTURES['slime_ball'];
+  const names = Object.keys(src);
   const cell = 16;
   const cols = 8;
   const rows = Math.max(1, Math.ceil(names.length / cols));
@@ -16,7 +20,7 @@ export function buildParticleAtlas(gl: GL): { texture: WebGLTexture; rects: Reco
   const data = new Uint8Array(W * H * 4);
   const rects: Record<string, SpriteRectUV> = {};
   names.forEach((n, i) => {
-    const t = MOB_PARTICLE_TEXTURES[n]();
+    const t = src[n]();
     const gx = (i % cols) * cell, gy = Math.floor(i / cols) * cell;
     for (let y = 0; y < Math.min(t.h, cell); y++)
       for (let x = 0; x < Math.min(t.w, cell); x++)

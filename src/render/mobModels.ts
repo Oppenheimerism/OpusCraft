@@ -308,3 +308,96 @@ export function animateSpider(root: ModelPart, limbSwing: number, limbAmount: nu
   L('right_front_leg').zRot += f10;
   L('left_front_leg').zRot += -f10;
 }
+
+// ---------------------------------------------------------------------------
+// enderman (HumanoidModel with long limbs; "hat" is the jaw)
+
+export function endermanModel(): MobModelDef {
+  const root = new ModelPart();
+  root.add('hat', part([{ x: -4, y: -8, z: -4, w: 8, h: 8, d: 8, u: 0, v: 16, inflate: -0.5 }], [0, -13, 0]));
+  root.add('head', part([{ x: -4, y: -8, z: -4, w: 8, h: 8, d: 8, u: 0, v: 0 }], [0, -13, 0]));
+  root.add('body', part([{ x: -4, y: 0, z: -2, w: 8, h: 12, d: 4, u: 32, v: 16 }], [0, -14, 0]));
+  root.add('right_arm', part([{ x: -1, y: -2, z: -1, w: 2, h: 30, d: 2, u: 56, v: 0 }], [-5, -12, 0]));
+  root.add('left_arm', part([{ x: -1, y: -2, z: -1, w: 2, h: 30, d: 2, u: 56, v: 0, mirror: true }], [5, -12, 0]));
+  root.add('right_leg', part([{ x: -1, y: 0, z: -1, w: 2, h: 30, d: 2, u: 56, v: 0 }], [-2, -5, 0]));
+  root.add('left_leg', part([{ x: -1, y: 0, z: -1, w: 2, h: 30, d: 2, u: 56, v: 0, mirror: true }], [2, -5, 0]));
+  return { root, texW: 64, texH: 32 };
+}
+
+/** vanilla EndermanModel.setupAnim (on top of HumanoidModel) */
+export function animateEnderman(root: ModelPart, limbSwing: number, limbAmount: number, age: number, headYaw: number, headPitch: number, attackTime: number, carrying: boolean, creepy: boolean): void {
+  animateHumanoidMob(root, limbSwing, limbAmount, age, headYaw, headPitch, attackTime, 'empty');
+  const head = root.child('head'), hat = root.child('hat'), body = root.child('body');
+  const ra = root.child('right_arm'), la = root.child('left_arm'), rl = root.child('right_leg'), ll = root.child('left_leg');
+  body.xRot = 0;
+  body.y = -14;
+  body.z = 0;
+  ra.xRot *= 0.5;
+  la.xRot *= 0.5;
+  rl.xRot *= 0.5;
+  ll.xRot *= 0.5;
+  const clampR = (p: ModelPart) => (p.xRot = Math.max(-0.4, Math.min(0.4, p.xRot)));
+  clampR(ra);
+  clampR(la);
+  clampR(rl);
+  clampR(ll);
+  if (carrying) {
+    ra.xRot = -0.5;
+    la.xRot = -0.5;
+    ra.zRot = 0.05;
+    la.zRot = -0.05;
+  }
+  rl.z = 0;
+  ll.z = 0;
+  rl.y = -5;
+  ll.y = -5;
+  head.z = 0;
+  head.y = -13;
+  hat.x = head.x;
+  hat.y = head.y;
+  hat.z = head.z;
+  hat.xRot = head.xRot;
+  hat.yRot = head.yRot;
+  hat.zRot = head.zRot;
+  if (creepy) head.y -= 5;
+  ra.x = -5;
+  ra.y = -12;
+  ra.z = 0;
+  la.x = 5;
+  la.y = -12;
+  la.z = 0;
+}
+
+// ---------------------------------------------------------------------------
+
+export function squidModel(): MobModelDef {
+  const root = new ModelPart();
+  root.add('body', part([{ x: -6, y: -8, z: -6, w: 12, h: 16, d: 12, u: 0, v: 0 }], [0, 8, 0]));
+  for (let i = 0; i < 8; i++) {
+    const d0 = (i * Math.PI * 2) / 8;
+    const x = Math.cos(d0) * 5, z = Math.sin(d0) * 5;
+    const yRot = (i * Math.PI * -2) / 8 + Math.PI / 2;
+    root.add('tentacle' + i, part([{ x: -1, y: 0, z: -1, w: 2, h: 18, d: 2, u: 48, v: 0 }], [x, 15, z], [0, yRot, 0]));
+  }
+  return { root, texW: 64, texH: 32 };
+}
+
+export function animateSquid(root: ModelPart, tentacleAngle: number): void {
+  root.resetPose();
+  for (let i = 0; i < 8; i++) root.child('tentacle' + i).xRot = tentacleAngle;
+}
+
+export function slimeInnerModel(): MobModelDef {
+  const root = new ModelPart();
+  root.add('cube', part([{ x: -3, y: 17, z: -3, w: 6, h: 6, d: 6, u: 0, v: 16 }]));
+  root.add('right_eye', part([{ x: -3.25, y: 18, z: -3.5, w: 2, h: 2, d: 2, u: 32, v: 0 }]));
+  root.add('left_eye', part([{ x: 1.25, y: 18, z: -3.5, w: 2, h: 2, d: 2, u: 32, v: 4 }]));
+  root.add('mouth', part([{ x: 0, y: 21, z: -3.5, w: 1, h: 1, d: 1, u: 32, v: 8 }]));
+  return { root, texW: 64, texH: 32 };
+}
+
+export function slimeOuterModel(): MobModelDef {
+  const root = new ModelPart();
+  root.add('cube', part([{ x: -4, y: 16, z: -4, w: 8, h: 8, d: 8, u: 0, v: 0 }]));
+  return { root, texW: 64, texH: 32 };
+}

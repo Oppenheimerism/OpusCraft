@@ -7,7 +7,9 @@ import { Mob, MobCategory, SavedEntity } from '../entity/mob';
 import { ItemEntity } from '../entity/itemEntity';
 import { ItemStack, ITEMS } from '../item/item';
 import { Pig, Cow, Sheep, Chicken, Animal } from '../entity/animals';
-import { Zombie, Skeleton, Creeper, Spider, Monster, validSpawnBlock } from '../entity/monsters';
+import { Zombie, Skeleton, Creeper, Spider, Enderman, Slime, Monster, validSpawnBlock } from '../entity/monsters';
+import { Squid, WaterAnimal } from '../entity/water';
+import { moonPhase } from '../render/environment';
 import { BIOMES } from '../world/gen/biomes';
 import { BLOCKS, STATE_BLOCK, FLAGS, F_OPAQUE, F_FULL_COLLISION, F_WATER, F_LAVA, COLLISION } from '../world/block';
 import { MIN_Y } from '../world/constants';
@@ -23,6 +25,9 @@ export const MOB_TYPES: Record<string, (l: Level) => Mob> = {
   skeleton: (l) => new Skeleton(l),
   creeper: (l) => new Creeper(l),
   spider: (l) => new Spider(l),
+  enderman: (l) => new Enderman(l),
+  slime: (l) => new Slime(l),
+  squid: (l) => new Squid(l),
 };
 
 export function createMob(type: string, level: Level): Mob | null {
@@ -66,8 +71,27 @@ export function isChunkSaved(e: Entity): boolean {
   return e instanceof Mob || e instanceof ItemEntity;
 }
 
+const ENTITY_NAMES: Record<string, string> = {
+  pig: 'Pig', cow: 'Cow', sheep: 'Sheep', chicken: 'Chicken', zombie: 'Zombie', skeleton: 'Skeleton', creeper: 'Creeper', spider: 'Spider',
+  enderman: 'Enderman', slime: 'Slime', squid: 'Squid',
+  arrow: 'Arrow', tnt: 'Primed TNT', item: 'Item', experience_orb: 'Experience Orb', falling_block: 'Falling Block', player: 'Player',
+};
+
+/** vanilla entity type display names (death messages, commands) */
+export function entityDisplayName(e: Entity | string): string {
+  const t = typeof e === 'string' ? e : e.type;
+  return ENTITY_NAMES[t] ?? t;
+}
+
+/** entity type ids accepted by /summon */
+export function summonableTypes(): string[] {
+  return [...Object.keys(MOB_TYPES), 'tnt', 'experience_orb', 'arrow'];
+}
+
 /** vanilla MobCategory caps (per 289 spawnable chunks) */
 const CAPS: Record<MobCategory, number> = { monster: 70, creature: 10, ambient: 15, water_creature: 5, misc: -1 };
+const SURFACE_SLIMES = new Set(['swamp', 'mangrove_swamp']);
+const MOON_BRIGHTNESS = [1, 0.75, 0.5, 0.25, 0, 0.25, 0.5, 0.75];
 
 interface SpawnerData {
   type: string;
@@ -79,6 +103,7 @@ interface SpawnerData {
 interface MobSettings {
   creature: SpawnerData[];
   monster: SpawnerData[];
+  water: SpawnerData[];
   creatureProbability: number;
 }
 
@@ -89,15 +114,27 @@ const farmAnimals = (): SpawnerData[] => [
   { type: 'cow', weight: 8, min: 4, max: 4 },
 ];
 
-/** vanilla BiomeDefaultFeatures.monsters (zombie villagers, witches, slimes and endermen not implemented yet) */
+/** vanilla BiomeDefaultFeatures.monsters (zombie villagers and witches not implemented yet) */
 const monsters = (zombie = 95, skeleton = 100): SpawnerData[] => [
   { type: 'spider', weight: 100, min: 4, max: 4 },
   { type: 'zombie', weight: zombie + 5, min: 4, max: 4 },
   { type: 'skeleton', weight: skeleton, min: 4, max: 4 },
   { type: 'creeper', weight: 100, min: 4, max: 4 },
+  { type: 'slime', weight: 100, min: 4, max: 4 },
+  { type: 'enderman', weight: 10, min: 1, max: 4 },
 ];
 
+const SQUID = (w: number, max = 4): SpawnerData[] => [{ type: 'squid', weight: w, min: 1, max }];
+
 function settingsFor(name: string): MobSettings {
+  const base = settingsForLand(name);
+  let water: SpawnerData[] = [];
+  if (name === 'river' || name === 'frozen_river') water = SQUID(2);
+  else if (name.endsWith('ocean')) water = SQUID(name.includes('cold') ? 3 : name.includes('lukewarm') || name.includes('warm') ? 10 : 1, name.includes('frozen') ? 4 : 4);
+  return { ...base, water };
+}
+
+function settingsForLand(name: string): Omit<MobSettings, 'water'> {
   const none = { creature: [], monster: monsters(), creatureProbability: 0.1 };
   switch (name) {
     case 'mushroom_fields':
@@ -186,9 +223,9 @@ export class NaturalSpawner {
     const lvl = this.level;
     const p = lvl.player;
     if (!p || !lvl.gameRules.doMobSpawning) return;
+    // vanilla: persistent creatures only every 400 ticks; water creatures and monsters every tick
     const spawnFriendlies = lvl.gameTime % 400 === 0;
     const spawnEnemies = lvl.difficulty !== 'peaceful';
-    if (!spawnFriendlies && !spawnEnemies) return;
     const pcx = Math.floor(p.x) >> 4, pcz = Math.floor(p.z) >> 4;
     const r = Math.min(8, lvl.simulationDistance);
     const chunks: [number, number][] = [];
@@ -197,10 +234,9 @@ export class NaturalSpawner {
     if (!chunks.length) return;
     const counts = this.counts();
     const cats: MobCategory[] = [];
-    for (const cat of ['monster', 'creature'] as MobCategory[]) {
-      const friendly = cat === 'creature';
-      if (friendly && !spawnFriendlies) continue;
-      if (!friendly && !spawnEnemies) continue;
+    for (const cat of ['monster', 'creature', 'water_creature'] as MobCategory[]) {
+      if (cat === 'creature' && !spawnFriendlies) continue;
+      if (cat === 'monster' && !spawnEnemies) continue;
       const cap = Math.floor((CAPS[cat] * chunks.length) / 289);
       if (counts[cat] < cap) cats.push(cat);
     }
@@ -242,19 +278,21 @@ export class NaturalSpawner {
         if (this.spawnPos && (this.spawnPos[0] - x - 0.5) ** 2 + (this.spawnPos[1] - y) ** 2 + (this.spawnPos[2] - z - 0.5) ** 2 < 576) continue;
         if (!lvl.isEntityTicking(x, z)) continue;
         if (!data) {
-          const list = cat === 'monster' ? biomeSettings(w.getBiome(x, z)).monster : biomeSettings(w.getBiome(x, z)).creature;
+          const bs = biomeSettings(w.getBiome(x, z));
+          const list = cat === 'monster' ? bs.monster : cat === 'water_creature' ? bs.water : bs.creature;
           data = pickWeighted(list, r);
           if (!data) break;
           tries = data.min + r.nextInt(1 + data.max - data.min);
         }
         if (d2 > 128 * 128) continue;
-        if (!this.isSpawnPositionOk(x, y, z) || !this.checkSpawnRules(data.type, x, y, z)) continue;
+        const placeOk = data.type === 'squid' ? this.isInWaterPositionOk(x, y, z) : this.isSpawnPositionOk(x, y, z);
+        if (!placeOk || !this.checkSpawnRules(data.type, x, y, z)) continue;
         const mob = createMob(data.type, lvl);
         if (!mob) return spawned;
         mob.moveTo(x + 0.5, y, z + 0.5, r.nextFloat() * 360, 0);
         mob.bodyYaw = mob.headYaw = mob.yaw;
         if (!this.noCollision(mob.bb)) continue;
-        if (!mob.checkSpawnRules() || !mob.checkSpawnObstruction()) continue;
+        if (data.type !== 'squid' && (!mob.checkSpawnRules() || !mob.checkSpawnObstruction())) continue;
         mob.finalizeSpawn('natural');
         lvl.addEntity(mob);
         spawned++;
@@ -272,9 +310,27 @@ export class NaturalSpawner {
     return validSpawnBlock(this.level, x, y - 1, z) && emptySpawnBlock(w.getState(x, y, z)) && emptySpawnBlock(w.getState(x, y + 1, z));
   }
 
+  /** vanilla SpawnPlacementTypes.IN_WATER */
+  private isInWaterPositionOk(x: number, y: number, z: number): boolean {
+    const w = this.level.world;
+    const above = w.getState(x, y + 1, z);
+    return (FLAGS[w.getState(x, y, z)] & F_WATER) !== 0 && !(FLAGS[above] & F_OPAQUE && FLAGS[above] & F_FULL_COLLISION);
+  }
+
+  /** vanilla WorldgenRandom.seedSlimeChunk(...).nextInt(10) == 0 (hash-based here) */
+  isSlimeChunk(cx: number, cz: number): boolean {
+    return hash2(cx, cz, this.worldSeed ^ 987234911) % 10 === 0;
+  }
+
   private checkSpawnRules(type: string, x: number, y: number, z: number): boolean {
     const lvl = this.level;
     switch (type) {
+      case 'squid':
+        return WaterAnimal.checkSurfaceSpawn(lvl, x, y, z);
+      case 'slime': {
+        const biome = BIOMES[lvl.world.getBiome(x, z)]?.name ?? '';
+        return Slime.checkSlimeSpawn(lvl, x, y, z, () => this.rand.nextFloat(), this.isSlimeChunk(x >> 4, z >> 4), SURFACE_SLIMES.has(biome), MOON_BRIGHTNESS[moonPhase(lvl.dayTime)]);
+      }
       case 'pig':
       case 'cow':
       case 'sheep':
