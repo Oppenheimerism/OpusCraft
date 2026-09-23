@@ -375,6 +375,7 @@ export function debugLines(game: Game): string[] {
     `${game.fps} fps T: inf vsync fancy-clouds B: 2`,
     `C: ${r.drawn}/${r.sections} (s) D: ${game.opts.renderDistance}, pC: 000, pU: 00, aB: ${game.pool?.busy() ?? 0}`,
     `E: ${game.renderer.entities.rendered}/${game.level.entities.length}, SD: ${game.level.simulationDistance}`,
+    `minecraft:${game.world.dim.id} FC: 0`,
     ``,
     `XYZ: ${p.x.toFixed(3)} / ${p.y.toFixed(5)} / ${p.z.toFixed(3)}`,
     `Block: ${bx} ${by} ${bz} [${bx & 15} ${by & 15} ${bz & 15}]`,
