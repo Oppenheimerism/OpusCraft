@@ -84,6 +84,8 @@ export function canSurvive(world: World, x: number, y: number, z: number, state:
     const above = world.getState(x, y + 1, z);
     return (isSturdyFace(above, DOWN) || /_fence$|_wall$|^chain$/.test(blk(above).name)) && !(FLAGS[world.getState(x, y, z)] & F_WATER);
   }
+  // vanilla NetherWartBlock.mayPlaceOn: soul sand
+  if (n === 'nether_wart') return bn === 'soul_sand';
   if (n === 'crimson_fungus' || n === 'warped_fungus' || n === 'crimson_roots' || n === 'warped_roots' || n === 'nether_sprouts') return NETHER_PLANT_SOIL.has(bn);
   // (weeping vines hang down from more vine or a sturdy face, twisting vines stand up on them)
   if (n === 'weeping_vines' || n === 'weeping_vines_plant') {
@@ -521,6 +523,8 @@ export function blockDrops(state: number, tool: Item | null, r: Rand, silk = fal
     // vanilla cave vines loot: a glow berry if it has one; hanging roots and small dripleaf need shears
     case 'cave_vines': case 'cave_vines_plant': return b.get(state, 'berries') ? stacks('glow_berries', 1) : [];
     case 'hanging_roots': case 'nether_sprouts': return shears ? stacks(n, 1) : [];
+    // vanilla nether_wart loot: 2 to 4 when ripe (fortune adds up to its level), else 1
+    case 'nether_wart': return stacks('nether_wart', b.get<number>(state, 'age') === 3 ? 2 + r.nextInt(3) : 1);
     // vanilla weeping_vines / twisting_vines loot: shears or silk touch, else a one in three chance
     case 'weeping_vines': case 'weeping_vines_plant': case 'twisting_vines': case 'twisting_vines_plant': {
       const head = n.replace('_plant', '');

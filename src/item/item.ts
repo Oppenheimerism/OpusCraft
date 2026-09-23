@@ -250,7 +250,7 @@ for (const [id, fx] of Object.entries(EAT_EFFECTS)) ITEMS.get(id)!.food!.effects
 const MISC: [string, number?, number?][] = [
   ['stick', 64, 100], ['coal', 64, 1600], ['charcoal', 64, 1600], ['diamond'], ['emerald'], ['lapis_lazuli'], ['redstone'], ['quartz'],
   ['iron_ingot'], ['gold_ingot'], ['copper_ingot'], ['netherite_ingot'], ['iron_nugget'], ['gold_nugget'], ['raw_iron'], ['raw_gold'],
-  ['raw_copper'], ['wheat'], ['wheat_seeds'], ['beetroot_seeds'], ['pumpkin_seeds'], ['melon_seeds'], ['bone'], ['bone_meal'], ['string'], ['feather'], ['gunpowder'], ['leather'], ['flint'],
+  ['raw_copper'], ['wheat'], ['wheat_seeds'], ['beetroot_seeds'], ['nether_wart'], ['pumpkin_seeds'], ['melon_seeds'], ['bone'], ['bone_meal'], ['string'], ['feather'], ['gunpowder'], ['leather'], ['flint'],
   ['clay_ball'], ['brick'], ['paper'], ['book'], ['sugar'], ['egg', 16], ['snowball', 16], ['slime_ball'], ['ender_pearl', 16],
   ['blaze_rod', 64, 2400], ['glowstone_dust'], ['bowl', 64, 100], ['glass_bottle'], ['experience_bottle'], ['saddle', 1],
   ['name_tag'], ['lead'], ['painting'], ['item_frame'], ['minecart', 1], ['chest_minecart', 1], ['oak_boat', 1], ['oak_sign', 16], ['oak_door'], ['iron_door'],
@@ -338,6 +338,7 @@ export function blockForItem(it: Item): Block | undefined {
   if (it.id === 'carrot') return getBlock('carrots');
   if (it.id === 'potato') return getBlock('potatoes');
   if (it.id === 'beetroot_seeds') return getBlock('beetroots');
+  if (it.id === 'nether_wart') return getBlock('nether_wart');
   if (it.id === 'pumpkin_seeds') return getBlock('pumpkin_stem');
   if (it.id === 'melon_seeds') return getBlock('melon_stem');
   if (it.id === 'sweet_berries') return getBlock('sweet_berry_bush');

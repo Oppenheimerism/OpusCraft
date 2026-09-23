@@ -158,6 +158,12 @@ export class RandomTicker {
       } else lvl.setBlock(x, y, z, b.with(st, 'age', age + 1), false);
       return;
     }
+    if (n === 'nether_wart') {
+      // vanilla NetherWartBlock.randomTick: one in ten grows it an age
+      const age = b.get<number>(st, 'age');
+      if (age < 3 && Math.floor(Math.random() * 10) === 0) lvl.setBlock(x, y, z, b.with(st, 'age', age + 1), false);
+      return;
+    }
     if (n === 'weeping_vines' || n === 'twisting_vines') {
       // vanilla GrowingPlantHeadBlock.randomTick: 1 in 10 grows on (down, or up) into air, one age older
       const age = b.get<number>(st, 'age');

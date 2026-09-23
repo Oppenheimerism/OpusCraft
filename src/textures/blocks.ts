@@ -507,6 +507,7 @@ T['weeping_vines_plant'] = () => NF.weepingVinesPlant();
 T['twisting_vines'] = () => NF.twistingVines();
 T['twisting_vines_plant'] = () => NF.twistingVinesPlant();
 T['shroomlight'] = () => NF.shroomlight();
+for (const i of [0, 1, 2] as const) T[`nether_wart_stage${i}`] = () => NF.netherWartStage(i);
 
 // Missing texture (vanilla's magenta/black checkerboard)
 T['missing'] = () => {

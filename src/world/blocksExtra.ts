@@ -542,6 +542,17 @@ export function registerExtraBlocks(): void {
       item: false, noDrop: true, outline: [bx(0, 0, 0, 16, 1, 16)], model: () => ({ parts }),
     });
   }
+  // vanilla NetherWartBlock: on soul sand, four ages drawn as three looks (crop model)
+  {
+    const models = [0, 1, 2].map((i) => cropModel(`nether_wart_stage${i}`));
+    const heights = [5, 8, 11, 14];
+    registerBlock('nether_wart', {
+      props: [P.age3], hardness: 0, sound: 'nether_wart', collision: 'none', layer: Layer.CUTOUT, opaque: false, randomTicks: true,
+      aoCaster: false, opacity: 0, item: false,
+      outline: (s) => [bx(0, 0, 0, 16, heights[s.get('age') as number], 16)],
+      model: (s) => ({ model: models[[0, 1, 1, 2][s.get('age') as number]] }),
+    });
+  }
   // crops
   for (const [name, tex, maxAge, stages] of [
     ['carrots', 'carrots', 7, [0, 0, 1, 1, 2, 2, 2, 3]],
