@@ -15,7 +15,10 @@ import { clampedMap } from '../../core/math';
 import { computeChunkLight } from '../lightlocal';
 import type { GenOutput } from './generator';
 import { placeOre, sampleHeight, type OreSpec } from './features';
-import { placeNetherFeature, F_GLOWSTONE, F_FIRE, F_BROWN_MUSHROOM, F_RED_MUSHROOM, F_DELTA, F_SMALL_COLUMNS, F_LARGE_COLUMNS, F_PILLAR } from './netherFeatures';
+import {
+  placeNetherFeature, F_GLOWSTONE, F_FIRE, F_BROWN_MUSHROOM, F_RED_MUSHROOM, F_DELTA, F_SMALL_COLUMNS, F_LARGE_COLUMNS, F_PILLAR,
+  F_CRIMSON_FUNGUS, F_WARPED_FUNGUS, F_CRIMSON_VEGETATION, F_WARPED_VEGETATION, F_NETHER_SPROUTS, F_WEEPING_VINES, F_TWISTING_VINES,
+} from './netherFeatures';
 
 const CELL_W = 4, CELL_H = 8;
 /** vanilla nether noise settings: min_y 0, height 128 */
@@ -356,6 +359,14 @@ export class NetherGenerator {
         if ([W, CF, WF].includes(ctx.biomeAt(x, z))) feature(f)(r, x, ctx.heightMotion(x, z), z);
       });
     }
+    // the forests: weeping vines, huge fungi and the undergrowth (crimson); fungi, undergrowth, sprouts and twisting vines (warped)
+    step([CF], (r) => this.count(ctx, r, 10, 0, 255, [CF], feature(F_WEEPING_VINES)));
+    step([CF], (r) => this.everyLayer(ctx, r, 8, [CF], feature(F_CRIMSON_FUNGUS)));
+    step([CF], (r) => this.everyLayer(ctx, r, 6, [CF], feature(F_CRIMSON_VEGETATION)));
+    step([WF], (r) => this.everyLayer(ctx, r, 8, [WF], feature(F_WARPED_FUNGUS)));
+    step([WF], (r) => this.everyLayer(ctx, r, 5, [WF], feature(F_WARPED_VEGETATION)));
+    step([WF], (r) => this.everyLayer(ctx, r, 4, [WF], feature(F_NETHER_SPROUTS)));
+    step([WF], (r) => this.count(ctx, r, 10, 0, 255, [WF], feature(F_TWISTING_VINES)));
   }
 
   /** vanilla CountPlacement + InSquarePlacement + a uniform height range + BiomeFilter */

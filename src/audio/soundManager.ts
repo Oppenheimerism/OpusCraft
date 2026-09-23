@@ -53,6 +53,8 @@ const ALIASES: [RegExp, string][] = [
   [/^block\.(soul_soil)\./, 'block.gravel.'],
   [/^block\.(wart_block)\./, 'block.moss.'],
   [/^block\.(ancient_debris)\./, 'block.deepslate.'],
+  [/^block\.(stem|shroomlight)\./, 'block.wood.'],
+  [/^block\.(fungus|roots|nether_sprouts|weeping_vines)\./, 'block.grass.'],
   [/^block\.(powder_snow)\./, 'block.snow.'],
   [/^block\.(cobweb)\./, 'block.stone.'],
   [/^block\.(stem|hard_crop)\./, 'block.wood.'],

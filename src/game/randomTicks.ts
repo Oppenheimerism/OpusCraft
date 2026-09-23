@@ -158,6 +158,13 @@ export class RandomTicker {
       } else lvl.setBlock(x, y, z, b.with(st, 'age', age + 1), false);
       return;
     }
+    if (n === 'weeping_vines' || n === 'twisting_vines') {
+      // vanilla GrowingPlantHeadBlock.randomTick: 1 in 10 grows on (down, or up) into air, one age older
+      const age = b.get<number>(st, 'age');
+      const ny = n === 'weeping_vines' ? y - 1 : y + 1;
+      if (age < 25 && Math.random() < 0.1 && FLAGS[lvl.getState(x, ny, z)] & F_AIR) lvl.setBlock(x, ny, z, b.with(st, 'age', age + 1));
+      return;
+    }
     if (n === 'cave_vines') {
       // vanilla GrowingPlantHeadBlock.randomTick: 1 in 10 grows a block down into air (with a berry 11% of the time)
       const age = b.get<number>(st, 'age');

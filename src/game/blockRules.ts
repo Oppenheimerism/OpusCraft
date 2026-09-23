@@ -55,6 +55,8 @@ export function multifaceSupported(world: World, x: number, y: number, z: number
 
 /** vanilla #big_dripleaf_placeable: #small_dripleaf_placeable (clay, moss), #dirt and farmland */
 const DRIPLEAF_SOIL = new Set([...PLANT_SOIL, 'clay']);
+/** vanilla FungusBlock / RootsBlock / NetherSproutsBlock.mayPlaceOn: #nylium, soul soil, or what a bush grows in */
+const NETHER_PLANT_SOIL = new Set([...PLANT_SOIL, 'crimson_nylium', 'warped_nylium', 'soul_soil']);
 
 /** Can the block `state` stay at (x,y,z)? `placing`: the other half of a tall plant isn't there yet */
 export function canSurvive(world: World, x: number, y: number, z: number, state: number, placing = false): boolean {
@@ -82,6 +84,14 @@ export function canSurvive(world: World, x: number, y: number, z: number, state:
     const above = world.getState(x, y + 1, z);
     return (isSturdyFace(above, DOWN) || /_fence$|_wall$|^chain$/.test(blk(above).name)) && !(FLAGS[world.getState(x, y, z)] & F_WATER);
   }
+  if (n === 'crimson_fungus' || n === 'warped_fungus' || n === 'crimson_roots' || n === 'warped_roots' || n === 'nether_sprouts') return NETHER_PLANT_SOIL.has(bn);
+  // (weeping vines hang down from more vine or a sturdy face, twisting vines stand up on them)
+  if (n === 'weeping_vines' || n === 'weeping_vines_plant') {
+    const above = world.getState(x, y + 1, z);
+    const an = blk(above).name;
+    return an === 'weeping_vines' || an === 'weeping_vines_plant' || isSturdyFace(above, DOWN);
+  }
+  if (n === 'twisting_vines' || n === 'twisting_vines_plant') return bn === 'twisting_vines' || bn === 'twisting_vines_plant' || isSturdyFace(below, UP);
   // vanilla GrowingPlantBlock.canSurvive: hangs from more vine, or a sturdy face
   if (n === 'cave_vines' || n === 'cave_vines_plant') {
     const above = world.getState(x, y + 1, z);
@@ -322,6 +332,11 @@ export function placementState(block: Block, ctx: PlaceContext): number | null {
     st = block.state({ vertical_direction: dir, thickness: dripstoneThickness(ctx.world, ctx.x, ctx.y, ctx.z, dir, !ctx.sneaking) });
   } else if (AMETHYST_BUD.test(n)) {
     st = block.with(st, 'facing', DIR_NAMES[ctx.face]);
+  } else if (n === 'weeping_vines' || n === 'twisting_vines') {
+    // (as cave vines: placed onto the end of more vine it's a piece of the plant)
+    const next = blk(ctx.world.getState(ctx.x, ctx.y + (n === 'weeping_vines' ? -1 : 1), ctx.z)).name;
+    if (next === n || next === n + '_plant') return getBlock(n + '_plant').defaultState;
+    st = block.with(st, 'age', Math.floor(Math.random() * 25));
   } else if (n === 'cave_vines') {
     // vanilla GrowingPlantBlock.getStateForPlacement: onto more vine it is a piece of the plant, else a head of any age
     const bn = blk(ctx.world.getState(ctx.x, ctx.y - 1, ctx.z)).name;
@@ -422,7 +437,7 @@ export function destroyProgress(state: number, item: Item | null, underwater: bo
 // Drops (simplified vanilla loot tables)
 
 /** loot tables with no silk touch alternative (shears-only drops and the like) */
-const SILK_IGNORED = new Set(['glow_lichen', 'vine', 'seagrass', 'tall_seagrass', 'cave_vines', 'cave_vines_plant', 'small_dripleaf', 'big_dripleaf_stem', 'short_grass', 'fern', 'tall_grass', 'large_fern', 'dead_bush', 'nether_portal']);
+const SILK_IGNORED = new Set(['weeping_vines', 'weeping_vines_plant', 'twisting_vines', 'twisting_vines_plant', 'nether_sprouts', 'glow_lichen', 'vine', 'seagrass', 'tall_seagrass', 'cave_vines', 'cave_vines_plant', 'small_dripleaf', 'big_dripleaf_stem', 'short_grass', 'fern', 'tall_grass', 'large_fern', 'dead_bush', 'nether_portal']);
 
 function stacks(id: string, n: number): ItemStack[] {
   return n > 0 ? [ItemStack.of(id, n)] : [];
@@ -505,7 +520,12 @@ export function blockDrops(state: number, tool: Item | null, r: Rand, silk = fal
     case 'wall_torch': return stacks('torch', 1);
     // vanilla cave vines loot: a glow berry if it has one; hanging roots and small dripleaf need shears
     case 'cave_vines': case 'cave_vines_plant': return b.get(state, 'berries') ? stacks('glow_berries', 1) : [];
-    case 'hanging_roots': return shears ? stacks(n, 1) : [];
+    case 'hanging_roots': case 'nether_sprouts': return shears ? stacks(n, 1) : [];
+    // vanilla weeping_vines / twisting_vines loot: shears or silk touch, else a one in three chance
+    case 'weeping_vines': case 'weeping_vines_plant': case 'twisting_vines': case 'twisting_vines_plant': {
+      const head = n.replace('_plant', '');
+      return shears || silk || r.nextFloat() < 0.33 ? stacks(head, 1) : [];
+    }
     case 'small_dripleaf': return shears && b.get(state, 'half') === 'lower' ? stacks(n, 1) : [];
     case 'big_dripleaf_stem': return stacks('big_dripleaf', 1);
     case 'kelp_plant': return stacks('kelp', 1);

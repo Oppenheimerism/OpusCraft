@@ -21,6 +21,7 @@ import * as RL from './blocklib/rails';
 import * as CV from './blocklib/caves';
 import * as LU from './blocklib/lush';
 import * as NE from './blocklib/nether';
+import * as NF from './blocklib/netherFlora';
 import * as IB from './blocklib/iconblocks';
 import { FIRE_TEXTURES } from './mobs';
 
@@ -489,6 +490,21 @@ T['warped_wart_block'] = () => NE.warpedWartBlock();
 T['ancient_debris_side'] = () => NE.ancientDebrisSide();
 T['ancient_debris_top'] = () => NE.ancientDebrisTop();
 T['nether_portal'] = () => NE.netherPortal();
+for (const k of ['crimson', 'warped'] as const) {
+  T[`${k}_stem`] = () => NF.stemSide(k);
+  T[`${k}_stem_top`] = () => NF.stemTop(k);
+  T[`stripped_${k}_stem`] = () => NF.strippedStemSide(k);
+  T[`stripped_${k}_stem_top`] = () => NF.strippedStemTop(k);
+  T[`${k}_planks`] = () => NF.netherPlanks(k);
+  T[`${k}_fungus`] = () => NF.fungus(k);
+  T[`${k}_roots`] = () => NF.roots(k);
+}
+T['nether_sprouts'] = () => NF.netherSprouts();
+T['weeping_vines'] = () => NF.weepingVines();
+T['weeping_vines_plant'] = () => NF.weepingVinesPlant();
+T['twisting_vines'] = () => NF.twistingVines();
+T['twisting_vines_plant'] = () => NF.twistingVinesPlant();
+T['shroomlight'] = () => NF.shroomlight();
 
 // Missing texture (vanilla's magenta/black checkerboard)
 T['missing'] = () => {
