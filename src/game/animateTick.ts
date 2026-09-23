@@ -5,6 +5,7 @@
 // furnaces, rain dripping off leaves, dust sifting under sand and gravel, and
 // water or lava dripping through thin ceilings.
 
+import { mcPosSeed } from '../core/rng';
 import { BLOCKS, STATE_BLOCK, FLAGS, COLLISION, FACE_OCC, F_AIR, F_OPAQUE, F_REPLACEABLE, F_WATER, F_LAVA } from '../world/block';
 import { DOWN, UP } from '../world/dir';
 import { fluidStateOf } from './fluidTicks';
@@ -19,6 +20,7 @@ const enum K {
   FURNACE,
   LEAVES,
   FALLING,
+  DRIPSTONE,
 }
 
 let KIND: Uint8Array | null = null;
@@ -37,6 +39,7 @@ function kindOf(st: number): number {
         : n === 'furnace' ? K.FURNACE
         : n.endsWith('_leaves') ? K.LEAVES
         : n in DUST || n.endsWith('_concrete_powder') ? K.FALLING
+        : n === 'pointed_dripstone' ? K.DRIPSTONE
         : K.NONE;
     });
   }
@@ -146,9 +149,36 @@ export class AmbientTicker {
           }
         }
         break;
+      case K.DRIPSTONE:
+        this.dripstone(x, y, z, st);
+        break;
     }
     const f = FLAGS[st];
     if (f & (F_WATER | F_LAVA)) this.fluid(x, y, z, st);
+  }
+
+  /**
+   * vanilla PointedDripstoneBlock.animateTick: a dry stalactite tip now and then drips; it drips
+   * far more often with water or lava above the block it hangs from (the fluid it drips)
+   */
+  private dripstone(x: number, y: number, z: number, st: number): void {
+    const w = this.level.world;
+    const b = BLOCKS[STATE_BLOCK[st]];
+    if (b.get(st, 'vertical_direction') !== 'down' || b.get(st, 'thickness') !== 'tip' || b.get(st, 'waterlogged')) return;
+    const f = Math.random();
+    if (f > 0.12) return;
+    // findRootBlock: up the stalactite (11 at most) to the block it hangs from
+    let ry = y + 1;
+    for (let i = 0; i < 11 && BLOCKS[STATE_BLOCK[w.getState(x, ry, z)]].name === 'pointed_dripstone'; i++) ry++;
+    if (BLOCKS[STATE_BLOCK[w.getState(x, ry, z)]].name === 'pointed_dripstone') return;
+    const above = w.getState(x, ry + 1, z);
+    const fluid = FLAGS[above] & F_LAVA ? 'lava' : FLAGS[above] & F_WATER ? 'water' : null;
+    if (!fluid && f >= 0.02) return;
+    // spawnDripParticle: under the tip, shifted with the block's random offset
+    const l = mcPosSeed(x, 0, z);
+    const ox = Math.max(-0.125, Math.min(0.125, ((l & 15) / 15 - 0.5) * 0.5));
+    const oz = Math.max(-0.125, Math.min(0.125, (((l >> 8) & 15) / 15 - 0.5) * 0.5));
+    this.level.particles.spawn?.(fluid === 'lava' ? 'dripping_dripstone_lava' : 'dripping_dripstone_water', x + 0.5 + ox, y + 1 - 0.6875 - 0.0625, z + 0.5 + oz, 0, 0, 0);
   }
 
   private torch(x: number, y: number, z: number): void {

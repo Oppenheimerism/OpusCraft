@@ -11,7 +11,7 @@ import { Carvers } from './carvers';
 import { Mineshafts } from './mineshaft';
 import { Geodes, SUB_AIR, SUB_SOLID, SUB_FLUID } from './geode';
 import { S, getBlock } from '../block';
-import { MIN_Y, MAX_Y, SEA_LEVEL, COLUMN_VOLUME, colIndex } from '../constants';
+import { MIN_Y, MAX_Y, SEA_LEVEL, COLUMN_VOLUME, colIndex, CAVE_BIOME_LEVELS, NO_CAVE_BIOME } from '../constants';
 import { hash3, hash2, hashFloat, hash32, Rand, hashString } from '../../core/rng';
 import { clampedMap } from '../../core/math';
 import { computeChunkLight } from '../lightlocal';
@@ -30,6 +30,8 @@ export interface GenOutput {
   blockEntities: SavedBlockEntity[];
   entities: SavedEntity[];
   postProcess: number[];
+  /** underground biomes per quart, null when the whole column has the surface biome */
+  caveBiomes: Uint8Array | null;
 }
 
 const CELL_W = 4, CELL_H = 8;
@@ -223,13 +225,26 @@ export class ChunkGenerator {
           }
         }
 
-    const ctx = new GenContext(cx, cz, blocks, biomes);
+    // ---- underground biomes, per quart (vanilla samples the climate at each quart's corner)
+    let caveBiomes: Uint8Array | null = null;
+    for (let k = 0; k < 4; k++)
+      for (let i = 0; i < 4; i++) {
+        const c = colAt(i, k);
+        for (let qy = 0; qy < CAVE_BIOME_LEVELS; qy++) {
+          const b = pickCaveBiome(c.humidity, c.continents, c.erosion, router.depth(MIN_Y + qy * 4, c));
+          if (b < 0) continue;
+          if (!caveBiomes) caveBiomes = new Uint8Array(CAVE_BIOME_LEVELS * 16).fill(NO_CAVE_BIOME);
+          caveBiomes[(qy << 4) | (k << 2) | i] = b;
+        }
+      }
+
+    const ctx = new GenContext(cx, cz, blocks, biomes, caveBiomes);
     ctx.computeHeightmaps();
     this.buildSurface(ctx, cols, colAt);
     this.carvers.carve(ctx, aquifer);
     this.decorator.decorate(ctx);
     const light = computeChunkLight(blocks);
-    return { cx, cz, blocks, light, biomes, pending: ctx.pendingWrites(), fluidTicks: ctx.fluidTicks, blockEntities: ctx.blockEntities, entities: ctx.entities, postProcess: ctx.postProcess };
+    return { cx, cz, blocks, light, biomes, pending: ctx.pendingWrites(), fluidTicks: ctx.fluidTicks, blockEntities: ctx.blockEntities, entities: ctx.entities, postProcess: ctx.postProcess, caveBiomes };
   }
 
   private zoomBiome(x: number, z: number, cx: number, cz: number, quartBiome: Int16Array): number {

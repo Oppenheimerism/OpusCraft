@@ -313,7 +313,7 @@ export class NaturalSpawner {
         if (this.spawnPos && (this.spawnPos[0] - x - 0.5) ** 2 + (this.spawnPos[1] - y) ** 2 + (this.spawnPos[2] - z - 0.5) ** 2 < 576) continue;
         if (!lvl.isEntityTicking(x, z)) continue;
         if (!data) {
-          const bs = biomeSettings(w.getBiome(x, z));
+          const bs = biomeSettings(w.getBiome3(x, y, z));
           const list = cat === 'monster' ? bs.monster : cat === 'water_creature' ? bs.water : bs.creature;
           data = pickWeighted(list, r);
           if (!data) break;
@@ -363,7 +363,7 @@ export class NaturalSpawner {
       case 'squid':
         return WaterAnimal.checkSurfaceSpawn(lvl, x, y, z);
       case 'slime': {
-        const biome = BIOMES[lvl.world.getBiome(x, z)]?.name ?? '';
+        const biome = BIOMES[lvl.world.getBiome3(x, y, z)]?.name ?? '';
         return Slime.checkSlimeSpawn(lvl, x, y, z, () => this.rand.nextFloat(), this.isSlimeChunk(x >> 4, z >> 4), SURFACE_SLIMES.has(biome), MOON_BRIGHTNESS[moonPhase(lvl.dayTime)]);
       }
       case 'pig':

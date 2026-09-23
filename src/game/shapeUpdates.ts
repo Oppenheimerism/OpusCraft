@@ -7,7 +7,7 @@ import { BLOCKS, STATE_BLOCK, FLAGS, FACE_OCC, COLLISION, F_AIR, F_OPAQUE, Block
 import { DOWN, UP, NORTH, SOUTH, WEST, EAST } from '../world/dir';
 import type { World } from '../world/world';
 import { fireCanSurvive, fireStateAt } from './fire';
-import { MULTIFACE, multifaceSupported } from './blockRules';
+import { MULTIFACE, multifaceSupported, dripstoneSupported, dripstoneThickness } from './blockRules';
 
 const blk = (st: number): Block => BLOCKS[STATE_BLOCK[st]];
 
@@ -163,6 +163,13 @@ export function updateShape(world: World, x: number, y: number, z: number, st: n
     }
     return any ? s : 0;
   }
+  // vanilla PointedDripstoneBlock.updateShape: the thickness follows the pieces above and below
+  // (losing its support is handled by the level: stalactites fall, stalagmites break)
+  if (n === 'pointed_dripstone') {
+    const dir = b.get(st, 'vertical_direction') as 'up' | 'down';
+    if (!dripstoneSupported(world, x, y, z, dir)) return st;
+    return b.with(st, 'thickness', dripstoneThickness(world, x, y, z, dir, b.get(st, 'thickness') === 'tip_merge'));
+  }
   if (n.endsWith('_fence')) {
     let s = st;
     for (const [d, dx, dz] of HDIRS) s = b.with(s, d, fenceConnects(b, world.getState(x + dx, y, z + dz), d));
@@ -229,7 +236,7 @@ export function updateShape(world: World, x: number, y: number, z: number, st: n
 /** blocks whose state depends on neighbours (skip the work for everything else) */
 export function hasShapeUpdates(st: number): boolean {
   const n = blk(st).name;
-  return n === 'glow_lichen' || n.endsWith('_stairs') || n.endsWith('_fence') || n.endsWith('_pane') || n === 'iron_bars' || n.endsWith('_wall') || n.endsWith('_fence_gate') || n.endsWith('_door') || n.endsWith('_bed') || n === 'grass_block' || n === 'podzol' || n === 'mycelium' || n.startsWith('attached_') || n === 'fire';
+  return n === 'glow_lichen' || n === 'pointed_dripstone' || n.endsWith('_stairs') || n.endsWith('_fence') || n.endsWith('_pane') || n === 'iron_bars' || n.endsWith('_wall') || n.endsWith('_fence_gate') || n.endsWith('_door') || n.endsWith('_bed') || n === 'grass_block' || n === 'podzol' || n === 'mycelium' || n.startsWith('attached_') || n === 'fire';
 }
 
 export { F_OPAQUE };

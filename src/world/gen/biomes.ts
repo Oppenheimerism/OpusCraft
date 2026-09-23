@@ -352,14 +352,35 @@ export function pickSurfaceBiome(T: number, H: number, C: number, E: number, W: 
   }
 }
 
-/** Underground biome override (depth > ~0.2). Returns -1 if none. */
+/** distance from a value to a climate parameter span (vanilla Climate.Parameter.distance) */
+function spanDist(v: number, lo: number, hi: number): number {
+  return v < lo ? lo - v : v > hi ? v - hi : 0;
+}
+
+/**
+ * Underground biome at a quart (vanilla OverworldBiomeBuilder.addUndergroundBiomes, picked by
+ * the nearest climate point): dripstone caves (continentalness 0.8..1) and lush caves (humidity
+ * 0.7..1) span depth 0.2..0.9, the deep dark (erosion -1..-0.375) sits at depth 1.1, and every
+ * surface biome is also placed at depth 0 and depth 1, so whichever is closest wins. Returns -1
+ * where the surface biome is closer.
+ */
 export function pickCaveBiome(H: number, C: number, E: number, depth: number): number {
-  if (depth < 0.2) return -1;
-  // deep dark near the bottom with low erosion
-  if (depth > 0.9 && E < -0.375) return B.deep_dark;
-  if (C > 0.8) return B.dripstone_caves;
-  if (H > 0.7) return B.lush_caves;
-  return -1;
+  const surface = Math.min(depth * depth, (depth - 1) * (depth - 1));
+  const band = spanDist(depth, 0.2, 0.9);
+  const dripstone = spanDist(C, 0.8, 1) ** 2 + band * band;
+  const lush = spanDist(H, 0.7, 1) ** 2 + band * band;
+  const deepDark = spanDist(E, -1, -0.375) ** 2 + (depth - 1.1) ** 2;
+  let best = surface, biome = -1;
+  if (dripstone < best) {
+    best = dripstone;
+    biome = B.dripstone_caves;
+  }
+  if (lush < best) {
+    best = lush;
+    biome = B.lush_caves;
+  }
+  if (deepDark < best) biome = B.deep_dark;
+  return biome;
 }
 
 export function isOcean(b: number): boolean {

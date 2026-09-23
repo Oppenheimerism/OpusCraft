@@ -870,6 +870,36 @@ function clusterBreak(c: Ctx, size: number, place: boolean): Float32Array {
   return out;
 }
 
+// ------------------------------------------------------------------ pointed dripstone
+
+/** A water drop from a stalactite landing: a single small rising "plink". */
+function dripWater(c: Ctx): Float32Array {
+  const { sr, rng } = c;
+  const out = alloc(0.25, sr);
+  layer(out, 1, (b) => bubble(b, sr, 0.002, rng.range(900, 1600), 1, rng.range(0.018, 0.032), rng.range(0.4, 0.8)));
+  layer(out, 0.2, (b) => burst(b, sr, rng, { dur: 0.008, attack: 0.0002, tau: 0.0015, bp: [4500, 1] }));
+  return out;
+}
+
+/** A lava drop: a thicker, lower blob with a little sizzle. */
+function dripLava(c: Ctx): Float32Array {
+  const { sr, rng } = c;
+  const out = alloc(0.4, sr);
+  layer(out, 1, (b) => bubble(b, sr, 0.002, rng.range(320, 520), 1, rng.range(0.04, 0.06), rng.range(0.2, 0.4)));
+  layer(out, 0.35, (b) => burst(b, sr, rng, { t: 0.01, dur: 0.25, attack: 0.01, tau: 0.07, hp: 3000 }));
+  return out;
+}
+
+/** A fallen stalactite shattering on the ground. */
+function dripstoneLand(c: Ctx): Float32Array {
+  const { sr, rng } = c;
+  const out = alloc(0.6, sr);
+  layer(out, 1, (b) => b.set(stoneBreak(c, 0.85, 1.4).subarray(0, b.length)));
+  layer(out, 0.6, (b) => thump(b, sr, { f0: 160, f1: 90, tau: 0.03 }));
+  layer(out, 0.45, (b) => ticks(b, sr, rng, { t: 0.01, dur: 0.25, rate: 70, energy: (t) => Math.exp(-t / 0.08), f: [900, 3000], t60: [0.03, 0.1], heavy: 1.5, click: 0.4 }));
+  return out;
+}
+
 // ------------------------------------------------------------------ registry
 
 export function blockSounds(): Record<string, SoundGen> {
@@ -937,6 +967,10 @@ export function blockSounds(): Record<string, SoundGen> {
   const lanternStepS = sound('block.lantern.step', 6, lanternStep);
   set('lantern', sound('block.lantern.break', 4, lanternBreak), lanternStepS, sound('block.lantern.place', 4, lanternPlace));
   S['block.lantern.fall'] = pitched(lanternStepS, 0.75);
+
+  S['block.pointed_dripstone.drip_water'] = sound('block.pointed_dripstone.drip_water', 6, dripWater);
+  S['block.pointed_dripstone.drip_lava'] = sound('block.pointed_dripstone.drip_lava', 4, dripLava);
+  S['block.pointed_dripstone.land'] = sound('block.pointed_dripstone.land', 4, dripstoneLand);
 
   // amethyst: the block, and the cluster sounds the four growth stages share for steps and hits
   const amStepS = sound('block.amethyst_block.step', 6, amethystStep);

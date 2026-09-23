@@ -121,6 +121,8 @@ export interface BlockSettings {
   tint?: TintType;
   tintColor?: number;
   offset?: 'none' | 'xz' | 'xyz';
+  /** vanilla getMaxHorizontalOffset (0.25; pointed dripstone 0.125) */
+  maxOffset?: number;
   model?: (s: StateView) => ModelChoice;
   /** same-type face culling (glass/ice/water) */
   cullSame?: boolean;
@@ -158,6 +160,7 @@ export class Block {
   readonly jumpFactor: number;
   readonly tint: TintType;
   readonly offset: 'none' | 'xz' | 'xyz';
+  readonly maxOffset: number;
 
   constructor(readonly name: string, readonly s: BlockSettings) {
     this.props = s.props ?? [];
@@ -172,6 +175,7 @@ export class Block {
     this.jumpFactor = s.jumpFactor ?? 1;
     this.tint = s.tint ?? 'none';
     this.offset = s.offset ?? 'none';
+    this.maxOffset = s.maxOffset ?? 0.25;
     let stride = 1;
     for (let i = this.props.length - 1; i >= 0; i--) {
       this.strides[i] = stride;

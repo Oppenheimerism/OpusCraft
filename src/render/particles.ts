@@ -65,7 +65,7 @@ interface SpriteParticle {
   /** vanilla getQuadSize curves */
   sizeCurve?: 'flame' | 'lava';
   /** DripParticle stage: hangs, falls, then lands/splashes */
-  drip?: { stage: 'hang' | 'fall' | 'land'; fluid: 'water' | 'lava' | null; next: string | null; cooling: boolean };
+  drip?: { stage: 'hang' | 'fall' | 'land'; fluid: 'water' | 'lava' | null; next: string | null; cooling: boolean; dripstone?: boolean };
   /** FallingDustParticle spin */
   roll?: number;
   oRoll?: number;
@@ -93,6 +93,8 @@ export class ParticleEngine {
   readonly max = 16384;
   spriteTexture: WebGLTexture | null = null;
   spriteRects: Record<string, SpriteRectUV> = {};
+  /** vanilla DripstoneFallAndLandParticle: a drip from a stalactite plays a sound where it lands */
+  onDripstoneDripLand: ((x: number, y: number, z: number, lava: boolean) => void) | null = null;
 
   constructor(private readonly atlas: Atlas, private readonly world: World, private readonly tintOf: (x: number, y: number, z: number, state: number) => number) {}
 
@@ -454,7 +456,11 @@ export class ParticleEngine {
       case 'dripping_lava':
       case 'falling_water':
       case 'falling_lava':
-      case 'landing_lava': {
+      case 'landing_lava':
+      case 'dripping_dripstone_water':
+      case 'dripping_dripstone_lava':
+      case 'falling_dripstone_water':
+      case 'falling_dripstone_lava': {
         // vanilla DripParticle and its hang / fall / land stages
         const p = this.base(kind, x, y, z);
         p.bbw = 0.01;
@@ -470,15 +476,17 @@ export class ParticleEngine {
           p.g = 0.2857143;
           p.b = 0.083333336;
         }
+        const dripstone = kind.includes('dripstone');
         if (kind.startsWith('dripping')) {
           p.gravity *= 0.02;
           p.lifetime = 40;
           p.frames = ['drip_hang'];
-          p.drip = { stage: 'hang', fluid: water ? 'water' : 'lava', next: water ? 'falling_water' : 'falling_lava', cooling: !water };
+          const fall = dripstone ? (water ? 'falling_dripstone_water' : 'falling_dripstone_lava') : water ? 'falling_water' : 'falling_lava';
+          p.drip = { stage: 'hang', fluid: water ? 'water' : 'lava', next: fall, cooling: !water };
         } else if (kind.startsWith('falling')) {
           p.lifetime = Math.floor(64 / (Math.random() * 0.8 + 0.2));
           p.frames = ['drip_fall'];
-          p.drip = { stage: 'fall', fluid: water ? 'water' : 'lava', next: water ? 'splash' : 'landing_lava', cooling: false };
+          p.drip = { stage: 'fall', fluid: water ? 'water' : 'lava', next: water ? 'splash' : 'landing_lava', cooling: false, dripstone };
         } else {
           p.lifetime = Math.floor(16 / (Math.random() * 0.8 + 0.2));
           p.frames = ['drip_land'];
@@ -705,6 +713,7 @@ export class ParticleEngine {
         p.dz *= 0.02;
       } else if (d.stage === 'fall' && p.onGround) {
         if (d.next) this.spawn(d.next, p.x, p.y, p.z, 0, 0, 0);
+        if (d.dripstone) this.onDripstoneDripLand?.(p.x, p.y, p.z, d.fluid === 'lava');
         return false;
       }
       p.dx *= 0.98;

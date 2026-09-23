@@ -382,6 +382,7 @@ export class Game {
       return 0xffffff;
     });
     this.renderer.particles = particles;
+    particles.onDripstoneDripLand = (x, y, z, lava) => this.sound.play(lava ? 'block.pointed_dripstone.drip_lava' : 'block.pointed_dripstone.drip_water', x, y, z, 0.3 + Math.random() * 0.7, 1);
     this.level.particles = {
       blockBreak: (x, y, z, s) => particles.blockBreak(x, y, z, s),
       blockHit: (x, y, z, s, f) => particles.blockHit(x, y, z, s, f),
@@ -642,7 +643,7 @@ export class Game {
     };
     p.onSwimSound = (pl) => this.sound.play('entity.player.swim', pl.x, pl.y, pl.z, Math.min(1, Math.hypot(pl.dx * 0.44, pl.dy, pl.dz * 0.44) * 0.35), 1 + (Math.random() - Math.random()) * 0.4);
     p.onHurtSound = (pl, src) => {
-      if (src === 'fall') return;
+      if (src === 'fall' || src === 'stalagmite') return;
       // vanilla Player.getHurtSound: fire / drowning / freezing variants
       const name = src === 'onFire' || src === 'inFire' || src === 'lava' ? 'entity.player.hurt_on_fire' : src === 'drown' ? 'entity.player.hurt_drown' : src === 'freeze' ? 'entity.player.hurt_freeze' : src === 'sweetBerryBush' ? 'entity.player.hurt_sweet_berry_bush' : 'entity.player.hurt';
       this.sound.play(name, pl.x, pl.y, pl.z, 1, (Math.random() - Math.random()) * 0.2 + 1);
@@ -759,6 +760,10 @@ export class Game {
         return `${n} was killed by magic`;
       case 'wither':
         return `${n} withered away`;
+      case 'stalagmite':
+        return `${n} was impaled on a stalagmite`;
+      case 'fallingStalactite':
+        return `${n} was skewered by a falling stalactite`;
       default:
         return `${n} died`;
     }
@@ -1189,7 +1194,7 @@ export class Game {
       cz = ez - lz * dist;
     }
     const cam: Camera = camOverride ?? { x: cx, y: cy, z: cz, yaw, pitch, fov };
-    const biome = this.world.getBiome(Math.floor(cam.x), Math.floor(cam.z));
+    const biome = this.world.getBiome3(Math.floor(cam.x), Math.floor(cam.y), Math.floor(cam.z));
     const b = BIOMES[biome];
     this.renderer.render(cam, {
       dayTime: this.level.dayTime,
@@ -1374,7 +1379,7 @@ export class Game {
       this.tutorial.onGetItem(ids);
     }
     if (this.ticks % 20 === 0) {
-      const b = BIOMES[this.world.getBiome(Math.floor(p.x), Math.floor(p.z))];
+      const b = BIOMES[this.world.getBiome3(Math.floor(p.x), Math.floor(p.y), Math.floor(p.z))];
       if (b) this.advancements.trigger('biome', { biome: b.name });
     }
     // vanilla fall_from_world_height: from the build limit to the bottom, alive

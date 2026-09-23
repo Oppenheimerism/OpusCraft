@@ -10,7 +10,7 @@ import type { Player } from '../entity/player';
 import type { LivingEntity } from '../entity/living';
 import { Rand } from '../core/rng';
 import { BLOCKS, STATE_BLOCK, FLAGS, F_AIR, F_WATERLOGGED, S } from '../world/block';
-import { canSurvive, blockDrops } from './blockRules';
+import { canSurvive, blockDrops, isDripstoneFacing } from './blockRules';
 import { updateShape, hasShapeUpdates } from './shapeUpdates';
 import { isRail, railOnPlace, railNeighborChanged } from './rails';
 import { fireTick } from './fire';
@@ -447,11 +447,37 @@ export class Level {
         if (nu !== ns) {
           this.world.setState(nx, ny, nz, nu);
           ns = nu;
+          // a dripstone's new thickness reshapes the pieces above and below it in turn
+          if (STATE_BLOCK[nu] === DRIPSTONE()) this.updateNeighbors(nx, ny, nz);
         }
       }
-      if (!canSurvive(this.world, nx, ny, nz, ns)) this.destroyBlock(nx, ny, nz, true, null, true);
+      if (!canSurvive(this.world, nx, ny, nz, ns)) {
+        if (isDripstoneFacing(ns, 'down')) this.fallStalactite(nx, ny, nz);
+        else this.destroyBlock(nx, ny, nz, true, null, true);
+      }
     }
   }
+
+  /** vanilla PointedDripstoneBlock.spawnFallingStalactite: the stalactite falls from here to its tip, and the tip hurts what it lands on */
+  fallStalactite(x: number, y: number, z: number): void {
+    for (let yy = y; ; yy--) {
+      const st = this.world.getState(x, yy, z);
+      if (!isDripstoneFacing(st, 'down')) break;
+      const e = FallingBlockEntity.fall(this, x, yy, z, st);
+      const th = BLOCKS[STATE_BLOCK[st]].get(st, 'thickness');
+      if (th === 'tip' || th === 'tip_merge') {
+        const n = Math.max(1 + y - yy, 6);
+        e.hurtEntities(n, n, 'fallingStalactite');
+        break;
+      }
+    }
+  }
+}
+
+let DRIPSTONE_ID = -1;
+function DRIPSTONE(): number {
+  if (DRIPSTONE_ID < 0) DRIPSTONE_ID = BLOCKS.findIndex((b) => b.name === 'pointed_dripstone');
+  return DRIPSTONE_ID;
 }
 
 let FIRE_ID = -1;

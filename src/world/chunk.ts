@@ -10,6 +10,8 @@ export class Chunk {
   readonly light: (Uint8Array | null)[] = new Array(SECTIONS).fill(null);
   readonly nonAir = new Uint16Array(SECTIONS);
   biomes: Uint8Array = new Uint8Array(256);
+  /** underground biomes per quart (constants caveBiomeIndex), null when all of it has the surface biome */
+  caveBiomes: Uint8Array | null = null;
   /** highest opacity>0 block + 1 per column (for sky light & rain) */
   readonly heightmap = new Int16Array(256);
   /** blended biome tints per column (computed when neighbours are present) */

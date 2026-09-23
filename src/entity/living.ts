@@ -8,9 +8,9 @@ import { clipBlocks } from '../game/raycast';
 import { MobEffectInstance, SavedEffect, saveEffect, loadEffect } from './effects';
 
 /** damage sources that ignore armor (vanilla #bypasses_armor) */
-const BYPASSES_ARMOR = new Set(['onFire', 'inWall', 'drown', 'starve', 'fall', 'void', 'genericKill', 'magic', 'wither', 'generic', 'cramming', 'flyIntoWall']);
+const BYPASSES_ARMOR = new Set(['onFire', 'inWall', 'drown', 'starve', 'fall', 'stalagmite', 'void', 'genericKill', 'magic', 'wither', 'generic', 'cramming', 'flyIntoWall']);
 /** damage sources that never knock back (vanilla #no_knockback) */
-const NO_KNOCKBACK = new Set(['explosion', 'playerExplosion', 'fall', 'drown', 'starve', 'onFire', 'inFire', 'lava', 'inWall', 'void', 'genericKill', 'magic', 'wither', 'cactus', 'sweetBerryBush', 'generic']);
+const NO_KNOCKBACK = new Set(['explosion', 'playerExplosion', 'fall', 'stalagmite', 'drown', 'starve', 'onFire', 'inFire', 'lava', 'inWall', 'void', 'genericKill', 'magic', 'wither', 'cactus', 'sweetBerryBush', 'generic']);
 /** vanilla #bypasses_resistance */
 const BYPASSES_RESISTANCE = new Set(['void', 'genericKill']);
 export const FIRE_SOURCES = new Set(['onFire', 'inFire', 'lava', 'hotFloor', 'fireball']);
@@ -779,10 +779,14 @@ export abstract class LivingEntity extends Entity {
   }
 
   protected override causeFallDamage(dist: number): void {
-    const dmg = Math.ceil(dist - this.safeFallDistance());
+    // vanilla PointedDripstoneBlock.fallOn: landing on a stalagmite's tip hurts twice as much, from 2.5 blocks higher
+    const on = this.level.world.getState(Math.floor(this.x), Math.floor(this.y - 0.2), Math.floor(this.z));
+    const b = BLOCKS[STATE_BLOCK[on]];
+    const stalagmite = b.name === 'pointed_dripstone' && b.get(on, 'vertical_direction') === 'up' && b.get(on, 'thickness') === 'tip';
+    const dmg = stalagmite ? Math.ceil((dist + 2.5 - this.safeFallDistance()) * 2) : Math.ceil(dist - this.safeFallDistance());
     if (dmg > 0) {
       this.onFallDamage(dmg, dist);
-      this.hurt(dmg, 'fall');
+      this.hurt(dmg, stalagmite ? 'stalagmite' : 'fall');
     }
   }
 

@@ -148,3 +148,41 @@ export function tintedGlass(): TexImage {
   for (const [x, y] of [[3, 2], [2, 3], [4, 2], [2, 4], [5, 3], [3, 5], [11, 13], [12, 12], [13, 11]]) setPx(t, x, y, 0x4a4351, 200);
   return t;
 }
+
+// ---------------------------------------------------------------------------
+// Pointed dripstone (vanilla block/pointed_dripstone_{up,down}_{tip_merge,tip,
+// frustum,middle,base}): a stone spike drawn on a cross model. Down textures
+// hang from the top edge; up textures are the same flipped.
+
+const DRIP = [0x4d3b32, 0x5b463b, 0x695246, 0x775d50, 0x846858, 0x907363, 0x9d7f6f, 0xac8e7e];
+
+/** half widths at the top (y 0) and bottom (y 15) of the down-pointing texture, and the rows it covers:
+ * each stage starts as wide as the one above it ends, matching the vanilla shapes (12, 10, 8, 6 px) */
+const DRIP_SHAPE: Record<string, { top: number; bottom: number; end: number }> = {
+  base: { top: 6, bottom: 5, end: 16 },
+  middle: { top: 5, bottom: 4, end: 16 },
+  frustum: { top: 4, bottom: 3, end: 16 },
+  tip: { top: 3, bottom: 0, end: 11 },
+  tip_merge: { top: 3, bottom: 0, end: 16 },
+};
+
+export function pointedDripstone(thickness: string, up: boolean): TexImage {
+  const t = img();
+  const r = new Rand(0xd819 + thickness.length * 31, 3);
+  const { top, bottom, end } = DRIP_SHAPE[thickness];
+  // vertical banding, shared by all the stages so a column lines up
+  const band = [3, 4, 3, 5, 4, 6, 5, 4, 5, 6, 4, 3, 4, 5, 3, 4];
+  for (let y = 0; y < end; y++) {
+    const h = end > 1 ? y / (end - 1) : 0;
+    const w = Math.round(top + (bottom - top) * h);
+    const x0 = w > 0 ? 8 - w : 7, x1 = w > 0 ? 8 + w - 1 : 8;
+    for (let x = x0; x <= x1; x++) {
+      let k = band[x];
+      if (x === x1 && x1 > x0) k -= 2; // shaded right edge
+      else if (x === x0) k += 1; // lit left edge
+      if (r.nextFloat() < 0.15) k += r.nextBool() ? 1 : -1;
+      setPx(t, x, up ? 15 - y : y, DRIP[Math.max(0, Math.min(DRIP.length - 1, k))]);
+    }
+  }
+  return t;
+}

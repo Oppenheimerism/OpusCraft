@@ -2,7 +2,7 @@
 
 import { Chunk, LIGHT_DEFAULT, blocksSky } from './chunk';
 import { LightEngine } from './light';
-import { MIN_Y, MAX_Y, SECTIONS } from './constants';
+import { MIN_Y, MAX_Y, SECTIONS, caveBiomeIndex, NO_CAVE_BIOME } from './constants';
 import { BIOMES } from './gen/biomes';
 import { ruleAllows, PendingWrites } from './gen/context';
 import { MeshInput, PS, PAD, PADDED_VOLUME } from '../render/mesher';
@@ -24,6 +24,7 @@ export interface GenResult {
   entities?: SavedEntity[];
   /** generated blocks to reshape against their neighbours (packed lx, y, lz) */
   postProcess?: number[];
+  caveBiomes?: Uint8Array | null;
 }
 
 export class World {
@@ -72,6 +73,17 @@ export class World {
   getBiome(x: number, z: number): number {
     const c = this.getChunk(x >> 4, z >> 4);
     if (!c) return 0;
+    return c.biomes[((z & 15) << 4) | (x & 15)];
+  }
+
+  /** the biome at a block, underground biomes (lush caves, dripstone caves, deep dark) included */
+  getBiome3(x: number, y: number, z: number): number {
+    const c = this.getChunk(x >> 4, z >> 4);
+    if (!c) return 0;
+    if (c.caveBiomes && y >= MIN_Y && y < MAX_Y) {
+      const b = c.caveBiomes[caveBiomeIndex(x & 15, y, z & 15)];
+      if (b !== NO_CAVE_BIOME) return b;
+    }
     return c.biomes[((z & 15) << 4) | (x & 15)];
   }
 
@@ -176,6 +188,7 @@ export class World {
     if (r.fluidTicks?.length) c.fluidTicks = r.fluidTicks;
     if (r.entities?.length) c.genEntities = r.entities;
     if (r.postProcess?.length) c.postProcess = r.postProcess;
+    c.caveBiomes = r.caveBiomes ?? null;
     this.chunks.set(c.key, c);
     this.lastChunk = null;
     // pending writes into this chunk from earlier neighbours

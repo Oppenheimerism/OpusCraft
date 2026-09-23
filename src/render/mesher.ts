@@ -553,8 +553,9 @@ export function meshSection(input: MeshInput): MeshOutput {
         if (b.offset !== 'none') {
           const wx = input.ox + x, wz = input.oz + z;
           const l = mcPosSeed(wx, 0, wz);
-          ox = Math.max(-0.25, Math.min(0.25, ((l & 15) / 15 - 0.5) * 0.5));
-          oz = Math.max(-0.25, Math.min(0.25, (((l >> 8) & 15) / 15 - 0.5) * 0.5));
+          const m = b.maxOffset;
+          ox = Math.max(-m, Math.min(m, ((l & 15) / 15 - 0.5) * 0.5));
+          oz = Math.max(-m, Math.min(m, (((l >> 8) & 15) / 15 - 0.5) * 0.5));
           if (b.offset === 'xyz') oy = (((l >> 4) & 15) / 15 - 1) * 0.2;
         }
         const useAO = input.smooth && EMISSION[st] === 0;

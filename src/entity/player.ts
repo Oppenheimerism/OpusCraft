@@ -441,7 +441,7 @@ export class Player extends LivingEntity {
   override isInvulnerableTo(source: string): boolean {
     if (this.invulnerable && source !== 'void' && source !== 'genericKill') return true;
     const rules = this.level.gameRules;
-    if ((source === 'fall' && !rules.fallDamage) || (source === 'drown' && !rules.drowningDamage)) return true;
+    if (((source === 'fall' || source === 'stalagmite') && !rules.fallDamage) || (source === 'drown' && !rules.drowningDamage)) return true;
     if ((source === 'lava' || source === 'inFire' || source === 'onFire') && !rules.fireDamage) return true;
     return false;
   }

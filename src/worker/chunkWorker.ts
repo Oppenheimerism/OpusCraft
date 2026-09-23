@@ -27,8 +27,8 @@ ctx.onmessage = (e: MessageEvent) => {
       const out = gen!.generate(m.cx, m.cz);
       const ms = performance.now() - t0;
       ctx.postMessage(
-        { type: 'gen', id: m.id, cx: m.cx, cz: m.cz, blocks: out.blocks, light: out.light, biomes: out.biomes, pending: out.pending, fluidTicks: out.fluidTicks, blockEntities: out.blockEntities, entities: out.entities, postProcess: out.postProcess, ms },
-        [out.blocks.buffer, out.light.buffer, out.biomes.buffer],
+        { type: 'gen', id: m.id, cx: m.cx, cz: m.cz, blocks: out.blocks, light: out.light, biomes: out.biomes, pending: out.pending, fluidTicks: out.fluidTicks, blockEntities: out.blockEntities, entities: out.entities, postProcess: out.postProcess, caveBiomes: out.caveBiomes, ms },
+        out.caveBiomes ? [out.blocks.buffer, out.light.buffer, out.biomes.buffer, out.caveBiomes.buffer] : [out.blocks.buffer, out.light.buffer, out.biomes.buffer],
       );
     } else if ((m as unknown as { type: string }).type === 'light') {
       const lm = m as unknown as { id: number; blocks: Uint16Array };

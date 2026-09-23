@@ -345,6 +345,8 @@ T['budding_amethyst'] = () => CV.buddingAmethyst();
 for (const b of ['small_amethyst_bud', 'medium_amethyst_bud', 'large_amethyst_bud', 'amethyst_cluster']) T[b] = () => CV.amethystBud(b);
 T['smooth_basalt'] = () => CV.smoothBasalt();
 T['tinted_glass'] = () => CV.tintedGlass();
+for (const th of ['tip_merge', 'tip', 'frustum', 'middle', 'base'])
+  for (const d of ['up', 'down']) T[`pointed_dripstone_${d}_${th}`] = () => CV.pointedDripstone(th, d === 'up');
 
 // ---------------------------------------------------------------------------
 // Doors & trapdoors (window pixels are fully transparent; cutout layer)

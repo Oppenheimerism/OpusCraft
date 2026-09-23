@@ -1,7 +1,7 @@
 // Generation-time chunk access used by surface rules and features.
 // Writes outside the chunk are recorded as pending writes for neighbours.
 
-import { MIN_Y, MAX_Y, colIndex } from '../constants';
+import { MIN_Y, MAX_Y, colIndex, caveBiomeIndex, NO_CAVE_BIOME } from '../constants';
 import { FLAGS, F_AIR, F_REPLACEABLE, F_LEAVES, STATE_BLOCK, BLOCKS, F_WATER, F_OPAQUE, F_COLLIDE } from '../block';
 import type { SavedBlockEntity } from '../blockEntity';
 import type { SavedEntity } from '../../entity/mob';
@@ -73,7 +73,7 @@ export class GenContext {
   /** blocks whose connections are fixed up against their neighbours on load (packed lx, y, lz) */
   readonly postProcess: number[] = [];
 
-  constructor(readonly cx: number, readonly cz: number, blocks: Uint16Array, biomes: Uint8Array) {
+  constructor(readonly cx: number, readonly cz: number, blocks: Uint16Array, biomes: Uint8Array, readonly caveBiomes: Uint8Array | null = null) {
     this.x0 = cx * 16;
     this.z0 = cz * 16;
     this.blocks = blocks;
@@ -146,6 +146,16 @@ export class GenContext {
 
   biomeAt(x: number, z: number): number {
     const lx = Math.min(15, Math.max(0, x - this.x0)), lz = Math.min(15, Math.max(0, z - this.z0));
+    return this.biomes[(lz << 4) | lx];
+  }
+
+  /** the biome at a block, underground biomes included (vanilla getBiome for a 3D position) */
+  biomeAt3(x: number, y: number, z: number): number {
+    const lx = Math.min(15, Math.max(0, x - this.x0)), lz = Math.min(15, Math.max(0, z - this.z0));
+    if (this.caveBiomes && y >= MIN_Y && y < MAX_Y) {
+      const b = this.caveBiomes[caveBiomeIndex(lx, y, lz)];
+      if (b !== NO_CAVE_BIOME) return b;
+    }
     return this.biomes[(lz << 4) | lx];
   }
 

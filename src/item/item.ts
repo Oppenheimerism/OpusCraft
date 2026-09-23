@@ -301,6 +301,10 @@ for (const b of BLOCKS) {
     it.creativeTab = 'tools';
   }
   if (/_amethyst_bud$|^amethyst_cluster$/.test(n)) it.texture = 'block:' + n;
+  if (n === 'pointed_dripstone') {
+    it.texture = 'pointed_dripstone';
+    it.creativeTab = 'natural';
+  }
   if (/amethyst/.test(n)) it.creativeTab = 'natural';
   if (n === 'iron_bars') it.texture = 'block:iron_bars';
   if (n.endsWith('_stained_glass_pane')) it.texture = 'block:' + n.replace('_pane', '');

@@ -8,6 +8,7 @@ import { B, BIOMES } from './biomes';
 import { MIN_Y, SEA_LEVEL } from '../constants';
 import { NormalNoise } from './noise';
 import { UP, NORTH, SOUTH, WEST, EAST, DX, DY, DZ, DIR_NAMES } from '../dir';
+import { largeDripstones, dripstoneDecoration } from './dripstone';
 
 // ---------------------------------------------------------------------------
 // Ores
@@ -51,6 +52,8 @@ const ORES: OreSpec[] = [
   { stone: 'lapis_ore', deep: 'deepslate_lapis_ore', size: 7, count: 4, height: ['uniform', -64, 64], discard: 1 },
   { stone: 'emerald_ore', deep: 'deepslate_emerald_ore', size: 3, count: 100, height: ['trapezoid', -16, 480], biomes: [B.windswept_hills, B.windswept_forest, B.windswept_gravelly_hills, B.meadow, B.grove, B.snowy_slopes, B.jagged_peaks, B.frozen_peaks, B.stony_peaks, B.cherry_grove] },
 ];
+
+const COPPER_LARGE: OreSpec = { ...ORES.find((o) => o.stone === 'copper_ore')!, size: 20 };
 
 function sampleHeight(r: Rand, h: OreSpec['height']): number {
   const [type, lo, hi] = h;
@@ -247,8 +250,9 @@ export class Decorator {
     ctx.computeHeightmaps();
     // --- lakes (vanilla LAKES step)
     this.lavaLakes(ctx, new Rand(hash2(ctx.cx, ctx.cz, this.seed ^ 0x1a4e), 2));
-    // --- amethyst geodes (vanilla LOCAL_MODIFICATIONS step)
+    // --- amethyst geodes and large dripstone (vanilla LOCAL_MODIFICATIONS step)
     this.geodes?.place(ctx);
+    largeDripstones(ctx, new Rand(hash2(ctx.cx, ctx.cz, this.seed ^ 0x1d51), 8));
     // --- mineshafts, then monster rooms (vanilla UNDERGROUND_STRUCTURES step)
     this.mineshafts?.place(ctx, new Rand(hash2(ctx.cx, ctx.cz, this.seed ^ 0x51ae), 5));
     this.monsterRooms(ctx, new Rand(hash2(ctx.cx, ctx.cz, this.seed ^ 0xd06e), 4));
@@ -264,13 +268,16 @@ export class Decorator {
         const x = ctx.x0 + r.nextInt(16), z = ctx.z0 + r.nextInt(16);
         const y = sampleHeight(r, spec.height);
         if (y < MIN_Y || y >= 320) continue;
-        placeOre(ctx, r, spec, x, y, z);
+        // dripstone caves grow the large copper ore (vanilla ore_copper_large, size 20)
+        placeOre(ctx, r, spec.stone === 'copper_ore' && ctx.biomeAt3(x, y, z) === B.dripstone_caves ? COPPER_LARGE : spec, x, y, z);
       }
     }
     // --- disks (sand/clay/gravel under water)
     if (DECO[centerBiome]?.disks || centerBiome === B.swamp || centerBiome === B.beach || centerBiome === B.plains || centerBiome === B.forest) {
       this.disks(ctx, r);
     }
+    // --- dripstone clusters and pointed dripstone (vanilla UNDERGROUND_DECORATION step)
+    dripstoneDecoration(ctx, new Rand(hash2(ctx.cx, ctx.cz, this.seed ^ 0xd21f), 9));
     // --- springs (vanilla FLUID_SPRINGS step)
     this.springs(ctx, new Rand(hash2(ctx.cx, ctx.cz, this.seed ^ 0x5b41), 3));
     ctx.computeHeightmaps();

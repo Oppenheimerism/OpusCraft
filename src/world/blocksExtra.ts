@@ -701,6 +701,23 @@ export function registerExtraBlocks(): void {
         model: (s) => ({ model: m, ...TURN[s.get('facing') as string] }),
       });
     }
+    // vanilla PointedDripstoneBlock: a cross model per thickness, shapes narrowing towards the tip
+    const DRIP_SHAPES: Record<string, (up: boolean) => Box> = {
+      tip_merge: () => bx(5, 0, 5, 11, 16, 11),
+      tip: (up) => (up ? bx(5, 0, 5, 11, 11, 11) : bx(5, 5, 5, 11, 16, 11)),
+      frustum: () => bx(4, 0, 4, 12, 16, 12),
+      middle: () => bx(3, 0, 3, 13, 16, 13),
+      base: () => bx(2, 0, 2, 14, 16, 14),
+    };
+    const dripModels: Record<string, ModelDef> = {};
+    for (const th of Object.keys(DRIP_SHAPES)) for (const d of ['up', 'down']) dripModels[`${d}_${th}`] = cross(`pointed_dripstone_${d}_${th}`);
+    registerBlock('pointed_dripstone', {
+      props: [enumProp('vertical_direction', ['up', 'down']), enumProp('thickness', ['tip_merge', 'tip', 'frustum', 'middle', 'base']), P.waterlogged],
+      defaults: { vertical_direction: 'up', thickness: 'tip' }, hardness: 1.5, resistance: 3, sound: 'pointed_dripstone', tool: 'pickaxe',
+      randomTicks: true, offset: 'xz', maxOffset: 0.125, layer: Layer.CUTOUT, opaque: false, aoCaster: false, opacity: 0,
+      collision: (s) => [DRIP_SHAPES[s.get('thickness') as string](s.get('vertical_direction') === 'up')],
+      model: (s) => ({ model: dripModels[`${s.get('vertical_direction')}_${s.get('thickness')}`] }),
+    });
     registerBlock('smooth_basalt', { hardness: 1.25, resistance: 4.2, sound: 'basalt', tool: 'pickaxe', requiresTool: true, model: () => ({ model: cubeAll('smooth_basalt') }) });
     // vanilla TintedGlassBlock: see-through but blocks all light, and drops itself
     registerBlock('tinted_glass', {

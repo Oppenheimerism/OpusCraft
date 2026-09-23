@@ -14,6 +14,29 @@ function isSturdyFace(st: number, face: number): boolean {
   return ((FACE_OCC[st] >> face) & 1) === 1;
 }
 
+/** vanilla PointedDripstoneBlock.isPointedDripstoneWithDirection */
+export function isDripstoneFacing(st: number, dir: 'up' | 'down'): boolean {
+  const b = blk(st);
+  return b.name === 'pointed_dripstone' && b.get(st, 'vertical_direction') === dir;
+}
+
+/** vanilla isValidPointedDripstonePlacement: a sturdy face behind the base, or more dripstone pointing the same way */
+export function dripstoneSupported(world: World, x: number, y: number, z: number, dir: 'up' | 'down'): boolean {
+  const behind = world.getState(x, y + (dir === 'up' ? -1 : 1), z);
+  return isSturdyFace(behind, dir === 'up' ? UP : DOWN) || isDripstoneFacing(behind, dir);
+}
+
+/** vanilla PointedDripstoneBlock.calculateDripstoneThickness: tip, frustum behind it, middle, and base against the rock */
+export function dripstoneThickness(world: World, x: number, y: number, z: number, dir: 'up' | 'down', tipMerge: boolean): string {
+  const dy = dir === 'up' ? 1 : -1, opp = dir === 'up' ? 'down' : 'up';
+  const ahead = world.getState(x, y + dy, z);
+  if (isDripstoneFacing(ahead, opp)) return !tipMerge && blk(ahead).get(ahead, 'thickness') !== 'tip_merge' ? 'tip' : 'tip_merge';
+  if (!isDripstoneFacing(ahead, dir)) return 'tip';
+  const th = blk(ahead).get(ahead, 'thickness');
+  if (th === 'tip' || th === 'tip_merge') return 'frustum';
+  return isDripstoneFacing(world.getState(x, y - dy, z), dir) ? 'middle' : 'base';
+}
+
 /** the four amethyst growth stages (vanilla AmethystClusterBlock) */
 export const AMETHYST_BUD = /^(small_amethyst_bud|medium_amethyst_bud|large_amethyst_bud|amethyst_cluster)$/;
 
@@ -49,6 +72,7 @@ export function canSurvive(world: World, x: number, y: number, z: number, state:
   }
   if (n.endsWith('_carpet')) return !(FLAGS[below] & F_AIR);
   if (n === 'glow_lichen') return MULTIFACE.some(([d]) => b.get(state, d) && multifaceSupported(world, x, y, z, d));
+  if (n === 'pointed_dripstone') return dripstoneSupported(world, x, y, z, b.get(state, 'vertical_direction') as 'up' | 'down');
   if (AMETHYST_BUD.test(n)) {
     // vanilla AmethystClusterBlock.canSurvive: the block it grows out of has a full face towards it
     const d = DIR_NAMES.indexOf(b.get(state, 'facing') as (typeof DIR_NAMES)[number]);
@@ -231,6 +255,15 @@ export function placementState(block: Block, ctx: PlaceContext): number | null {
     const hanging = ctx.face === DOWN;
     st = block.with(st, 'hanging', hanging);
     if (!canSurvive(ctx.world, ctx.x, ctx.y, ctx.z, st)) st = block.with(st, 'hanging', !hanging);
+  } else if (n === 'pointed_dripstone') {
+    // vanilla getStateForPlacement: tip away from where the player looks (up when looking down),
+    // or the other way if only that side can hold it; sneaking stops it merging with a facing tip
+    let dir: 'up' | 'down' = ctx.pitch > 0 ? 'up' : 'down';
+    if (!dripstoneSupported(ctx.world, ctx.x, ctx.y, ctx.z, dir)) {
+      dir = dir === 'up' ? 'down' : 'up';
+      if (!dripstoneSupported(ctx.world, ctx.x, ctx.y, ctx.z, dir)) return null;
+    }
+    st = block.state({ vertical_direction: dir, thickness: dripstoneThickness(ctx.world, ctx.x, ctx.y, ctx.z, dir, !ctx.sneaking) });
   } else if (AMETHYST_BUD.test(n)) {
     st = block.with(st, 'facing', DIR_NAMES[ctx.face]);
   } else if (block.propIndex('facing') >= 0) {

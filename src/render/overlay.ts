@@ -347,5 +347,5 @@ export function debugLines(game: Game): string[] {
 import { BIOMES } from '../world/gen/biomes';
 function BIOME_NAME(game: Game): string {
   const p = game.player;
-  return BIOMES[game.world.getBiome(Math.floor(p.x), Math.floor(p.z))]?.name ?? '?';
+  return BIOMES[game.world.getBiome3(Math.floor(p.x), Math.floor(p.y), Math.floor(p.z))]?.name ?? '?';
 }
