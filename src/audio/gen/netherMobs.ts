@@ -1,4 +1,4 @@
-// Nether mob vocalisations and foley: zombified piglin, ghast, strider, hoglin (formant synthesis,
+// Nether mob vocalisations and foley: zombified piglin, ghast, strider, hoglin, piglin (formant synthesis,
 // swept noise and cavernous reverb, in the style of mobs.ts).
 
 import type { SoundGen } from '../synth';
@@ -910,20 +910,26 @@ function hoglinHurt(c: Ctx): Float32Array {
 
 /** Hoglin death: a long, groaning squeal that sinks into a rattling grunt. */
 function hoglinDeath(c: Ctx): Float32Array {
-  const { sr, rng, v } = c;
-  const d = [0.9, 1.05, 0.8][v % 3];
-  const f = rng.range(150, 175);
-  const peak = [1.3, 1.45, 1.2][v % 3];
+  const { rng, v } = c;
+  return deathGroan(c, rng.range(150, 175), 0.78, [0.9, 1.05, 0.8][v % 3], [1.3, 1.45, 1.2][v % 3], 700);
+}
+
+/**
+ * A pig-family death: a groaning squeal that lifts to `peak` x its starting pitch, then sinks
+ * to less than half of it as the voice gives out, ending on a last snorting breath.
+ */
+function deathGroan(c: Ctx, f: number, fs: number, d: number, peak: number, snort: number): Float32Array {
+  const { sr, rng } = c;
   const out = alloc(d + 0.25, sr);
   layer(out, 1, (b) => {
-    const F = vowelGlide(rng.pick(['a', 'ae']), 'uh', 0, d, 0.78);
+    const F = vowelGlide(rng.pick(['a', 'ae']), 'uh', 0, d, fs);
     voice(b, sr, rng, {
       dur: d,
       f0: (t) => f * envExpPts(t / d, [0, 1, 0.15, peak, 0.5, 0.9, 1, 0.4]),
       amp: (t) => envPts(t / d, [0, 0, 0.05, 1, 0.45, 0.8, 1, 0]),
       formants: [
         { f: F[0], bw: 140, g: 1 },
-        { f: 900, bw: 90, g: 0.2 },
+        { f: 1150 * fs, bw: 90, g: 0.2 },
         { f: F[1], bw: 180, g: 0.65 },
         { f: F[2], bw: 270, g: 0.25 },
       ],
@@ -936,7 +942,7 @@ function hoglinDeath(c: Ctx): Float32Array {
       growl: [rng.range(18, 24), 0.5],
     });
   });
-  layer(out, 0.3, (b) => snortInto(b, c, d * 0.8, 0.22, 700));
+  layer(out, 0.3, (b) => snortInto(b, c, d * 0.8, 0.22, snort));
   lowpass(out, 3800, sr);
   return out;
 }
@@ -1001,6 +1007,245 @@ function converted(c: Ctx, th: Throat, base: number): Float32Array {
   return out;
 }
 
+// ------------------------------------------------------------------ piglin
+
+/** A person-sized pig: nasal and snouty, lighter and less rough than its zombified kin. */
+const PIGLIN: Throat = { fs: 0.95, rough: 0.35, sub: 0.06, breath: 0.3, oq: 0.5, growl: [30, 40, 0.3], jitter: 0.05, shimmer: 0.2, nasal: 0.8 };
+/** Shouting: pressed and rough. */
+const PIGLIN_SHOUT: Throat = { ...PIGLIN, rough: 0.45, sub: 0.08, breath: 0.35, oq: 0.36, growl: [32, 40, 0.35] };
+
+/** Piglin idle: nasal, curious grunts, "hm?", "hng-hng", a sniff and a mutter. */
+function piglinAmbient(c: Ctx): Float32Array {
+  const { sr, rng, v } = c;
+  const out = alloc(0.8, sr);
+  const base = rng.range(115, 140);
+  const gs: Grunt[] = [];
+  const sniffs: number[] = [];
+  switch (v) {
+    case 0: // "hm?"
+      gs.push({ t: 0, d: 0.22, f0: (x) => base * (0.95 + 0.3 * x * x), open: 0.2 });
+      break;
+    case 1: // "hng-hng"
+      gs.push({ t: 0, d: 0.12, f0: (x) => base * 1.1 * (1 - 0.1 * x), open: 0.3 });
+      gs.push({ t: 0.18, d: 0.14, f0: (x) => base * (1 - 0.15 * x), open: 0.3, a: 0.85 });
+      break;
+    case 2: // two sniffs, then a mutter
+      sniffs.push(0, 0.11);
+      gs.push({ t: 0.25, d: 0.2, f0: (x) => base * (1.05 - 0.15 * x), open: 0.4 });
+      break;
+    case 3: // a drawn-out, wondering "hrrm?"
+      gs.push({ t: 0, d: 0.35, f0: (x) => base * (1 + 0.25 * Math.sin(Math.PI * Math.pow(x, 0.8))), open: 0.5 });
+      break;
+    default: // "huh-hng"
+      gs.push({ t: 0, d: 0.14, f0: (x) => base * 1.2 * (1 - 0.15 * x), open: 0.8 });
+      gs.push({ t: 0.2, d: 0.2, f0: (x) => base * (0.95 + 0.15 * x), open: 0.3, a: 0.8 });
+  }
+  layer(out, 1, (b) => {
+    for (const g of gs) gruntInto(b, c, PIGLIN, g);
+  });
+  layer(out, 0.14, (b) => {
+    for (const g of gs) snortInto(b, c, g.t, Math.min(0.06, g.d * 0.4), 1600);
+  });
+  if (sniffs.length) {
+    layer(out, 0.5, (b) => {
+      for (const t of sniffs) snortInto(b, c, t, 0.07, rng.range(1300, 1700), true);
+    });
+  }
+  lowpass(out, 4000, sr);
+  return out;
+}
+
+/** A nasal "hmm" through a closed snout: interest, admiration or disapproval by its contour. */
+function hmmInto(b: Float32Array, c: Ctx, t0: number, d: number, f0: (x: number) => number, a = 1): void {
+  const { sr, rng } = c;
+  voice(b, sr, rng, {
+    t: t0,
+    dur: d,
+    f0: (t) => f0(t / d),
+    amp: (t) => envBump(t, Math.min(0.06, d * 0.2), d - Math.min(0.06, d * 0.2)),
+    formants: [
+      { f: 290, bw: 70, g: 1 },
+      { f: 1100, bw: 110, g: 0.3 },
+      { f: 2300, bw: 250, g: 0.08 },
+    ],
+    jitter: 0.03,
+    shimmer: 0.1,
+    rough: 0.2,
+    sub: 0.03,
+    breath: 0.12,
+    oq: 0.6,
+    growl: [rng.range(28, 36), 0.15],
+    vib: [6, 0.012],
+    gain: a,
+  });
+}
+
+/** Piglin admiring an item: a pleased, interested "hmmm", sometimes with a satisfied grunt. */
+function piglinAdmire(c: Ctx): Float32Array {
+  const { sr, rng, v } = c;
+  const base = rng.range(120, 138);
+  const out = alloc(1, sr);
+  layer(out, 1, (b) => {
+    switch (v % 4) {
+      case 0: // "hmm" rising and falling: "ooh, nice"
+        hmmInto(b, c, 0, 0.6, (x) => base * (1 + 0.28 * Math.sin(Math.PI * Math.pow(x, 0.7))));
+        break;
+      case 1: // a long, satisfied, falling "hmmm"
+        hmmInto(b, c, 0, 0.75, (x) => base * 1.25 * (1 - 0.3 * x));
+        break;
+      case 2: // "hm-hmm!"
+        hmmInto(b, c, 0, 0.18, (x) => base * (1.1 + 0.1 * x));
+        hmmInto(b, c, 0.25, 0.4, (x) => base * (1.3 - 0.35 * x));
+        break;
+      default: // an intrigued "hmm?" and a pleased grunt
+        hmmInto(b, c, 0, 0.45, (x) => base * (0.95 + 0.4 * x * x));
+        gruntInto(b, c, PIGLIN, { t: 0.52, d: 0.14, f0: (x) => base * 1.15 * (1 - 0.1 * x), open: 0.4, a: 0.6 });
+    }
+  });
+  lowpass(out, 3000, sr);
+  return out;
+}
+
+/** Piglin angry: shouted, snarling grunts. */
+function piglinAngry(c: Ctx): Float32Array {
+  const { sr, rng, v } = c;
+  const out = alloc(0.9, sr);
+  const base = rng.range(150, 180);
+  const gs: Grunt[] = [];
+  switch (v) {
+    case 0: // "HRAH!"
+      gs.push({ t: 0, d: 0.3, f0: (x) => base * envExpPts(x, [0, 1, 0.3, 1.35, 1, 1]), open: 1 });
+      break;
+    case 1: // "HRAH-HRAH!"
+      gs.push({ t: 0, d: 0.2, f0: (x) => base * envExpPts(x, [0, 1, 0.3, 1.3, 1, 1.05]), open: 1, a: 0.85 });
+      gs.push({ t: 0.26, d: 0.26, f0: (x) => base * envExpPts(x, [0, 1.1, 0.3, 1.45, 1, 1.1]), open: 1 });
+      break;
+    case 2: // a long "HRRRAGH"
+      gs.push({ t: 0, d: 0.55, f0: (x) => base * envExpPts(x, [0, 1, 0.25, 1.45, 0.7, 1.3, 1, 1]), open: 0.9 });
+      break;
+    default: // "huh-RAAH"
+      gs.push({ t: 0, d: 0.12, f0: (x) => base * (1 - 0.1 * x), open: 0.5, a: 0.7 });
+      gs.push({ t: 0.16, d: 0.35, f0: (x) => base * envExpPts(x, [0, 1.05, 0.35, 1.5, 1, 1.15]), open: 1 });
+  }
+  layer(out, 1, (b) => {
+    for (const g of gs) gruntInto(b, c, PIGLIN_SHOUT, g);
+  });
+  layer(out, 0.22, (b) => {
+    for (const g of gs) {
+      const d = g.d;
+      sweep(b, sr, rng, { t: g.t, dur: d, f: (t) => 1100 + 600 * Math.sin((Math.PI * t) / d), q: 1.3, amp: (t) => envBump(t, d * 0.2, d * 0.8), color: 'pink' });
+    }
+  });
+  lowpass(out, 4500, sr);
+  return out;
+}
+
+/** Piglin celebrate: a run of quick, excited cheering grunts, climbing in pitch. */
+function piglinCelebrate(c: Ctx): Float32Array {
+  const { sr, rng, v } = c;
+  const out = alloc(1, sr);
+  const base = rng.range(150, 170);
+  const n = [4, 3, 5, 2][v % 4];
+  layer(out, 1, (b) => {
+    let t = 0;
+    for (let k = 0; k < n; k++) {
+      const last = k === n - 1;
+      const d = v % 4 === 3 ? rng.range(0.22, 0.28) : last ? rng.range(0.2, 0.26) : rng.range(0.09, 0.13);
+      const f = base * (1 + 0.12 * k) * rng.range(0.97, 1.03);
+      const lift = last ? 1.35 : 1.15;
+      gruntInto(b, c, PIGLIN_SHOUT, { t, d, f0: (x) => f * envExpPts(x, [0, 1, 0.4, lift, 1, lift * 0.92]), open: last ? 1 : 0.8, a: last ? 1 : 0.8 });
+      t += d + rng.range(0.035, 0.06);
+    }
+  });
+  lowpass(out, 4500, sr);
+  return out;
+}
+
+/** Piglin jealous (you took its gold): an annoyed "hmph!" with a snort. */
+function piglinJealous(c: Ctx): Float32Array {
+  const { sr, rng, v } = c;
+  const out = alloc(0.7, sr);
+  const base = rng.range(125, 145);
+  layer(out, 1, (b) => {
+    if (v === 0) {
+      // "hmph!"
+      hmmInto(b, c, 0, 0.16, (x) => base * 1.2 * (1 - 0.2 * x));
+    } else if (v === 1) {
+      // a low, disapproving "hrrm"
+      gruntInto(b, c, PIGLIN, { t: 0, d: 0.32, f0: (x) => base * 0.85 * (1.05 - 0.2 * x), open: 0.2 });
+    } else {
+      // "hng-HMPH"
+      gruntInto(b, c, PIGLIN, { t: 0, d: 0.1, f0: (x) => base * (1 - 0.05 * x), open: 0.3, a: 0.7 });
+      hmmInto(b, c, 0.15, 0.2, (x) => base * 1.3 * (1 - 0.25 * x));
+    }
+  });
+  const t = v === 1 ? 0.3 : v === 0 ? 0.14 : 0.33;
+  layer(out, 0.45, (b) => snortInto(b, c, t, 0.14, rng.range(1100, 1400)));
+  lowpass(out, 3800, sr);
+  return out;
+}
+
+/** Piglin retreat (scared off by soul fire or a zombified crowd): a fearful squeal. */
+function piglinRetreat(c: Ctx): Float32Array {
+  const { sr, rng, v } = c;
+  const out = alloc(0.8, sr);
+  const f = rng.range(250, 290);
+  layer(out, 1, (b) => {
+    yelpInto(b, c, 0, rng.range(0.28, 0.34), f, 0.55 + 0.1 * v, 1.05, 0.3);
+    if (v === 1) yelpInto(b, c, 0.36, 0.22, f * 1.1, 0.5, 1.05, 0.3, 0.75);
+  });
+  layer(out, 0.3, (b) => snortInto(b, c, 0, 0.06, 1600, true));
+  lowpass(out, 5000, sr);
+  return out;
+}
+
+/** Piglin hurt: a pained, nasal grunt-squeal. */
+function piglinHurt(c: Ctx): Float32Array {
+  const { sr, rng, v } = c;
+  const d = rng.range(0.2, 0.28);
+  const out = alloc(d + 0.2, sr);
+  const f = rng.range(165, 195) * (1 + 0.06 * v);
+  layer(out, 1, (b) => {
+    yelpInto(b, c, 0, d, f, 0.55 + 0.1 * v, 0.95, 0.4);
+    gruntInto(b, c, PIGLIN, { t: d * 0.7, d: 0.12, f0: (x) => f * 0.6 * (1 - 0.1 * x), a: 0.4 });
+  });
+  layer(out, 0.25, (b) => snortInto(b, c, 0, 0.05, 1500));
+  lowpass(out, 4500, sr);
+  return out;
+}
+
+/** Piglin step: a light hoof on netherrack, with a little grit. */
+function piglinStep(c: Ctx): Float32Array {
+  const { sr, rng } = c;
+  const out = alloc(0.22, sr);
+  const f = rng.range(170, 230);
+  layer(out, 1, (b) =>
+    impact(b, sr, rng, {
+      modes: [f, 1, 0.04, f * 2.3, 0.5, 0.03, f * 4.1, 0.25, 0.02, 1300, 0.1, 0.01],
+      jitter: 0.05,
+      noise: 0.6,
+      noiseTau: 0.003,
+      noiseBp: [1600, 0.8],
+    }),
+  );
+  layer(out, 0.45, (b) => thump(b, sr, { f0: 130, f1: 75, tau: 0.025 }));
+  layer(out, 0.4, (b) =>
+    phisem(b, sr, rng, {
+      dur: 0.16,
+      rate: 5000,
+      energy: twoBump(0.004, 0.02, rng.range(0.03, 0.05), 0.4, 0.006, 0.025),
+      grain: 0.0006,
+      heavy: 2.5,
+      bands: [
+        { f: 3000, q: 1.2, g: 1, spread: 0.35 },
+        { f: 1500, q: 1.2, g: 0.6, spread: 0.3 },
+      ],
+    }),
+  );
+  lowpass(out, 6000, sr);
+  return out;
+}
+
 // ------------------------------------------------------------------ registry
 
 export function netherMobSounds(): Record<string, SoundGen> {
@@ -1035,5 +1280,16 @@ export function netherMobSounds(): Record<string, SoundGen> {
     'entity.hoglin.step': sound('entity.hoglin.step', 4, hoglinStep),
     'entity.hoglin.retreat': sound('entity.hoglin.retreat', 3, hoglinRetreat),
     'entity.hoglin.converted_to_zombified': sound('entity.hoglin.converted_to_zombified', 3, (c) => converted(c, HOGLIN_ROAR, c.rng.range(75, 88))),
+
+    'entity.piglin.ambient': sound('entity.piglin.ambient', 5, piglinAmbient),
+    'entity.piglin.angry': sound('entity.piglin.angry', 4, piglinAngry),
+    'entity.piglin.admiring_item': sound('entity.piglin.admiring_item', 4, piglinAdmire),
+    'entity.piglin.celebrate': sound('entity.piglin.celebrate', 4, piglinCelebrate),
+    'entity.piglin.jealous': sound('entity.piglin.jealous', 3, piglinJealous),
+    'entity.piglin.retreat': sound('entity.piglin.retreat', 3, piglinRetreat),
+    'entity.piglin.hurt': sound('entity.piglin.hurt', 3, piglinHurt),
+    'entity.piglin.death': sound('entity.piglin.death', 3, (c) => deathGroan(c, c.rng.range(210, 240), 0.95, [0.8, 0.95, 0.7][c.v % 3], [1.3, 1.4, 1.25][c.v % 3], 1100)),
+    'entity.piglin.step': sound('entity.piglin.step', 5, piglinStep),
+    'entity.piglin.converted_to_zombified': sound('entity.piglin.converted_to_zombified', 3, (c) => converted(c, PIGLIN_SHOUT, c.rng.range(115, 130))),
   };
 }
