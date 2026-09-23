@@ -1,12 +1,13 @@
 // Nether mob vocalisations and foley, second batch: blaze (breath through hot metal pipes), wither
-// skeleton (deep, hollow bony rattles) and piglin brute (the piglin's throat, bigger and angrier), in
-// the style of netherMobs.ts, whose pig-family throats and grunts they share.
+// skeleton (deep, hollow bony rattles), piglin brute (the piglin's throat, bigger and angrier) and
+// zoglin (the hoglin's, rotten and wet), in the style of netherMobs.ts, whose pig-family throats and
+// grunts they share.
 
 import type { SoundGen } from '../synth';
 import { type Rng, SVF, TAU, alloc, clamp, envAD, envBump, envExpPts, envPts, highpass, layer, lowpass, smooth } from './dsp';
 import { type Ctx, sound } from './registry';
-import { type Grunt, type Throat, converted, deathGroan, gruntInto, snortInto, yelpInto } from './netherMobs';
-import { burst, creak, fireCrackles, impact, phisem, sweep, thump, ticks, twoBump } from './texture';
+import { type Grunt, HOGLIN, type Throat, converted, deathGroan, gruntInto, gurgleInto, snortInto, yelpInto } from './netherMobs';
+import { bubble, burst, creak, fireCrackles, impact, phisem, sweep, thump, ticks, twoBump } from './texture';
 import { reverbHalf, worldSounds } from './world';
 
 // ------------------------------------------------------------------ blaze
@@ -673,6 +674,179 @@ function bruteStep(c: Ctx): Float32Array {
   return out;
 }
 
+// ------------------------------------------------------------------ zoglin
+
+/**
+ * The hoglin's throat, rotten: as the zombified piglin is to the piglin, lower in formants,
+ * rougher and breathier, with a slow, wet, sagging flutter and hardly any snout left.
+ */
+const ZOGLIN: Throat = { ...HOGLIN, fs: 0.62, rough: 0.68, sub: 0.18, breath: 0.5, oq: 0.43, growl: [13, 20, 0.6], jitter: 0.08, shimmer: 0.34, nasal: 0.15 };
+/** The same rotten throat pushed hard. */
+const ZOGLIN_ROAR: Throat = { ...ZOGLIN, rough: 0.72, oq: 0.35, breath: 0.55, growl: [18, 26, 0.6] };
+
+/** A wet snort: a snort through a nose full of phlegm, with a few bubbles bursting in it. */
+function wetSnortInto(b: Float32Array, c: Ctx, t0: number, d: number, fc: number, inhale = false, a = 1): void {
+  const { sr, rng } = c;
+  snortInto(b, c, t0, d, fc, inhale, a);
+  const n = 2 + rng.int(3);
+  for (let k = 0; k < n; k++) bubble(b, sr, t0 + rng.range(0.1, 0.9) * d, rng.logRange(300, 900), a * rng.range(0.15, 0.4), undefined, rng.range(0.3, 0.7));
+}
+
+/** Render zoglin grunts: the rotten voice with phlegm gurgling in it, and a wet snort on each grunt. */
+function zoglinGrunts(c: Ctx, th: Throat, gs: Grunt[], len: number, gurgle: number, lp: number): Float32Array {
+  const { sr } = c;
+  const out = alloc(len, sr);
+  layer(out, 1, (b) => {
+    for (const g of gs) gruntInto(b, c, th, g);
+  });
+  layer(out, gurgle, (b) => {
+    for (const g of gs) gurgleInto(b, c, g.t, g.d, 40);
+  });
+  layer(out, 0.14, (b) => {
+    for (const g of gs) snortInto(b, c, g.t, Math.min(0.08, g.d * 0.4), 800);
+  });
+  lowpass(out, lp, sr);
+  return out;
+}
+
+/** Zoglin idle: deep, rotten boar grunts, gurgling and snorting wetly; five different takes. */
+function zoglinAmbient(c: Ctx): Float32Array {
+  const { sr, rng, v } = c;
+  const base = rng.range(56, 68);
+  const gs: Grunt[] = [];
+  const snorts: [number, number, boolean][] = []; // [start, length, inhale]
+  switch (v) {
+    case 0: // one deep, wet "HRRGH"
+      gs.push({ t: 0, d: 0.32, f0: (x) => base * (1.15 + 0.1 * Math.sin(Math.PI * x) - 0.3 * x), open: 0.6 });
+      break;
+    case 1: // a gurgling snort in, then a rotten grunt
+      snorts.push([0, 0.14, true]);
+      gs.push({ t: 0.2, d: 0.3, f0: (x) => base * (1.1 - 0.22 * x), open: 0.5 });
+      break;
+    case 2: // "hrm-HRRGH"
+      gs.push({ t: 0, d: 0.15, f0: (x) => base * (1 - 0.1 * x), open: 0.3, a: 0.7 });
+      gs.push({ t: 0.21, d: 0.32, f0: (x) => base * (1.25 - 0.38 * x), open: 0.8 });
+      break;
+    case 3: // a long, bubbling grunt that sags
+      gs.push({ t: 0, d: 0.62, f0: (x) => base * (1.1 + 0.15 * Math.sin(Math.PI * Math.min(1, 1.6 * x)) - 0.4 * x), open: 0.5 });
+      break;
+    default: // a grunt, then a wet, rattling snort out
+      gs.push({ t: 0, d: 0.24, f0: (x) => base * (1.2 - 0.25 * x), open: 0.7 });
+      snorts.push([0.27, 0.2, false]);
+  }
+  const out = zoglinGrunts(c, ZOGLIN, gs, 1, 0.32, 3000);
+  if (snorts.length) {
+    layer(out, 0.55, (b) => {
+      for (const [t, d, inhale] of snorts) wetSnortInto(b, c, t, d, rng.range(600, 850), inhale);
+    });
+    lowpass(out, 3200, sr);
+  }
+  return out;
+}
+
+/** Zoglin angry: a rotten, gurgling roar that swells and breaks. */
+function zoglinAngry(c: Ctx): Float32Array {
+  const { sr, rng, v } = c;
+  const base = rng.range(68, 80);
+  const gs: Grunt[] = [];
+  let sn = -1;
+  switch (v) {
+    case 0: // a wet snort, then the roar
+      sn = 0;
+      gs.push({ t: 0.13, d: 0.72, f0: (x) => base * envExpPts(x, [0, 1, 0.35, 1.7, 1, 1.1]), open: 1 });
+      break;
+    case 1: // a long roar with two swells
+      gs.push({ t: 0, d: 0.9, f0: (x) => base * (1.3 + 0.35 * Math.sin(Math.PI * x) + 0.15 * Math.sin(TAU * 2 * x)), open: 0.9 });
+      break;
+    default: // a grunt, then the roar, sagging at the end
+      gs.push({ t: 0, d: 0.16, f0: (x) => base * (1.1 - 0.1 * x), open: 0.5, a: 0.7 });
+      gs.push({ t: 0.2, d: 0.68, f0: (x) => base * envExpPts(x, [0, 1.2, 0.3, 1.9, 0.8, 1.35, 1, 1]), open: 1 });
+  }
+  const out = zoglinGrunts(c, ZOGLIN_ROAR, gs, 1.2, 0.3, 3800);
+  // the breath of the roar
+  layer(out, 0.3, (b) => {
+    for (const g of gs) {
+      const d = g.d;
+      sweep(b, sr, rng, { t: g.t, dur: d, f: (t) => 700 + 450 * Math.sin((Math.PI * t) / d), q: 1.2, amp: (t) => envBump(t, d * 0.2, d * 0.8), color: 'pink' });
+    }
+  });
+  if (sn >= 0) layer(out, 0.65, (b) => wetSnortInto(b, c, sn, 0.13, 700, true));
+  return out;
+}
+
+/** Zoglin attack: the heavy, gurgling grunt of a headbutt, with the thud of the toss. */
+function zoglinAttack(c: Ctx): Float32Array {
+  const { sr, rng, v } = c;
+  const base = rng.range(74, 88) * (v === 0 ? 1 : 0.9);
+  const d = v === 0 ? rng.range(0.2, 0.24) : rng.range(0.26, 0.3);
+  const out = zoglinGrunts(c, ZOGLIN_ROAR, [{ t: 0, d, f0: (x) => base * envExpPts(x, [0, 1.2, 0.25, 1.35, 1, 0.85]), open: 0.9 }], 0.5, 0.25, 3600);
+  layer(out, 0.55, (b) => thump(b, sr, { t: 0.02, f0: 100, f1: 45, tau: 0.06, attack: 0.003 }));
+  layer(out, 0.35, (b) => wetSnortInto(b, c, d * 0.8, 0.14, 750));
+  return out;
+}
+
+/** Zoglin hurt: a deep, pained squeal-grunt that chokes off into a wet rattle; three different shapes. */
+function zoglinHurt(c: Ctx): Float32Array {
+  const { sr, rng, v } = c;
+  const d = rng.range(0.26, 0.34);
+  const out = alloc(d + 0.3, sr);
+  const f = rng.range(110, 130);
+  layer(out, 1, (b) => {
+    if (v === 0) {
+      // a squeal that sinks into a choking grunt
+      yelpInto(b, c, 0, d, f, 0.6, 0.72, 0.6);
+      gruntInto(b, c, ZOGLIN, { t: d * 0.7, d: 0.18, f0: (x) => 64 * (1 - 0.15 * x), a: 0.5 });
+    } else if (v === 1) {
+      // "hrk-EEGH": a caught grunt, then the squeal
+      gruntInto(b, c, ZOGLIN_ROAR, { t: 0, d: 0.1, f0: (x) => 80 * (1 + 0.1 * x), open: 0.7, a: 0.8 });
+      yelpInto(b, c, 0.09, d, f * 1.1, 0.72, 0.72, 0.6);
+    } else {
+      // a short, sharp yelp and a gurgle
+      yelpInto(b, c, 0, d * 0.7, f * 1.18, 0.5, 0.72, 0.65);
+    }
+  });
+  layer(out, 0.28, (b) => gurgleInto(b, c, d * 0.5, 0.25, 45));
+  layer(out, 0.3, (b) => snortInto(b, c, 0, 0.06, 850));
+  lowpass(out, 4000, sr);
+  return out;
+}
+
+/** Zoglin death: a long, groaning squeal that sinks and drowns in a bubbling, rotten gurgle. */
+function zoglinDeath(c: Ctx): Float32Array {
+  const { sr, rng, v } = c;
+  const d = [0.95, 1.1, 0.85][v % 3];
+  const groan = deathGroan(c, rng.range(135, 158), 0.72, d, [1.3, 1.45, 1.2][v % 3], 650);
+  const out = alloc(groan.length / sr, sr);
+  layer(out, 1, (b) => b.set(groan));
+  layer(out, 0.4, (b) => gurgleInto(b, c, d * 0.35, d * 0.65, 50));
+  lowpass(out, 3600, sr);
+  return out;
+}
+
+/** Zoglin step: a heavy cloven hoof coming down hard on rotting flesh, a dull thud with a wet squelch. */
+function zoglinStep(c: Ctx): Float32Array {
+  const { sr, rng } = c;
+  const out = alloc(0.32, sr);
+  const f = rng.range(90, 120);
+  layer(out, 1, (b) =>
+    impact(b, sr, rng, {
+      modes: [f, 1, 0.07, f * 2.2, 0.45, 0.05, f * 3.9, 0.2, 0.03, 850, 0.1, 0.012],
+      jitter: 0.05,
+      noise: 0.45,
+      noiseTau: 0.004,
+      noiseBp: [1100, 0.8],
+    }),
+  );
+  layer(out, 0.8, (b) => thump(b, sr, { f0: 105, f1: 48, tau: 0.045, attack: 0.002 }));
+  layer(out, 0.45, (b) => sweep(b, sr, rng, { t: 0.005, dur: 0.2, f: (t) => 800 * Math.pow(0.45, t / 0.12), q: 2.4, amp: (t) => envAD(t, 0.006, 0.035) }));
+  layer(out, 0.25, (b) => {
+    const n = 1 + rng.int(2);
+    for (let k = 0; k < n; k++) bubble(b, sr, rng.range(0.01, 0.07), rng.range(300, 700), 1, undefined, 0.5);
+  });
+  lowpass(out, 4000, sr);
+  return out;
+}
+
 // ------------------------------------------------------------------ registry
 
 export function netherMobSounds2(): Record<string, SoundGen> {
@@ -696,5 +870,12 @@ export function netherMobSounds2(): Record<string, SoundGen> {
     'entity.piglin_brute.death': sound('entity.piglin_brute.death', 3, (c) => deathGroan(c, c.rng.range(170, 195), 0.86, [0.85, 1, 0.75][c.v % 3], [1.3, 1.4, 1.25][c.v % 3], 950)),
     'entity.piglin_brute.step': sound('entity.piglin_brute.step', 4, bruteStep),
     'entity.piglin_brute.converted_to_zombified': sound('entity.piglin_brute.converted_to_zombified', 3, (c) => converted(c, BRUTE_SHOUT, c.rng.range(92, 104)), { trimStartDb: -26 }),
+
+    'entity.zoglin.ambient': sound('entity.zoglin.ambient', 5, zoglinAmbient),
+    'entity.zoglin.angry': sound('entity.zoglin.angry', 3, zoglinAngry),
+    'entity.zoglin.attack': sound('entity.zoglin.attack', 2, zoglinAttack),
+    'entity.zoglin.hurt': sound('entity.zoglin.hurt', 3, zoglinHurt),
+    'entity.zoglin.death': sound('entity.zoglin.death', 3, zoglinDeath),
+    'entity.zoglin.step': sound('entity.zoglin.step', 4, zoglinStep),
   };
 }
