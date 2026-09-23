@@ -35,6 +35,12 @@ const TAGS: Record<string, string[]> = {
   wooden_slabs: WOODS.map((w) => `${w}_slab`),
 };
 for (const w of WOODS) TAGS[`${w}_logs`] = [`${w}_log`, `${w}_wood`, `stripped_${w}_log`, `stripped_${w}_wood`];
+/** the nether woods: planks like any other, but (vanilla #non_flammable_wood) no good as fuel */
+const NETHER_WOODS = ['crimson', 'warped'];
+for (const w of NETHER_WOODS) {
+  TAGS.planks.push(`${w}_planks`);
+  TAGS[`${w}_stems`] = [`${w}_stem`, `${w}_hyphae`, `stripped_${w}_stem`, `stripped_${w}_hyphae`];
+}
 
 export type Ingredient = Ing;
 
@@ -65,6 +71,11 @@ for (const w of WOODS) {
   shaped(`stripped_${w}_wood`, 3, ['##', '##'], { '#': `stripped_${w}_log` });
   shaped(`${w}_slab`, 6, ['###'], { '#': `${w}_planks` });
   shaped(`${w}_stairs`, 4, ['#  ', '## ', '###'], { '#': `${w}_planks` });
+}
+for (const w of NETHER_WOODS) {
+  shapeless(`${w}_planks`, 4, `#${w}_stems`);
+  shaped(`${w}_hyphae`, 3, ['##', '##'], { '#': `${w}_stem` });
+  shaped(`stripped_${w}_hyphae`, 3, ['##', '##'], { '#': `stripped_${w}_stem` });
 }
 shaped('stick', 4, ['#', '#'], { '#': '#planks' });
 shaped('crafting_table', 1, ['##', '##'], { '#': '#planks' });
@@ -404,6 +415,7 @@ export function fuelTime(s: ItemStack | null): number {
   if (id.endsWith('_boat')) return 1200;
   if (id.endsWith('_wool')) return 100;
   if (id.endsWith('_sapling')) return 100;
+  if (NETHER_WOODS.some((w) => id.startsWith(w + '_'))) return 0;
   if (TAGS.logs.includes(id) || TAGS.planks.includes(id) || /_(stairs)$/.test(id) && WOODS.some((w) => id.startsWith(w))) return 300;
   if (id.endsWith('_slab') && WOODS.some((w) => id.startsWith(w))) return 150;
   return s.item.fuel ?? 0;
