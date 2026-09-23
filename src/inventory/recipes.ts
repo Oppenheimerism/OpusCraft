@@ -74,6 +74,8 @@ for (const w of WOODS) {
   shaped(`${w}_stairs`, 4, ['#  ', '## ', '###'], { '#': `${w}_planks` });
 }
 for (const w of NETHER_WOODS) {
+  shaped(`${w}_door`, 3, ['##', '##', '##'], { '#': `${w}_planks` });
+  shaped(`${w}_trapdoor`, 2, ['###', '###'], { '#': `${w}_planks` });
   shaped(`${w}_slab`, 6, ['###'], { '#': `${w}_planks` });
   shaped(`${w}_stairs`, 4, ['#  ', '## ', '###'], { '#': `${w}_planks` });
   shaped(`${w}_fence`, 3, ['W#W', 'W#W'], { W: `${w}_planks`, '#': 'stick' });

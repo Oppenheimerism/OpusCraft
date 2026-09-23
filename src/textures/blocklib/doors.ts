@@ -5,6 +5,7 @@
 import { TexImage, img, setPx } from '../tex';
 import { N, rng, idx, fbm, quantize } from './core';
 import { WOOD, WoodDef } from './wood';
+import { NETHER_WOOD } from './netherFlora';
 
 // Tone indices into a 6-entry ramp: 0 gap/outline .. 5 highlight
 const HOLE = -1;
@@ -304,6 +305,17 @@ export const DOORS: Record<string, { top: DoorSpec; bottom: DoorSpec; trapdoor: 
     bottom: { boards: [8], panels: [[3, 1, 10, 6], [3, 9, 10, 5]], handle: H, edgeBottom: true },
     trapdoor: { boards: [8], mask: CHERRY_FLOWER, edgeTop: true, edgeBottom: true },
   },
+  // (the nether woods: crimson with little square lights in a lattice, warped with tall slots)
+  crimson: {
+    top: { boards: [5, 10], windows: [[3, 3, 2, 2], [7, 3, 2, 2], [11, 3, 2, 2], [5, 7, 2, 2], [9, 7, 2, 2], [3, 11, 2, 2], [7, 11, 2, 2], [11, 11, 2, 2]], edgeTop: true },
+    bottom: { boards: [5, 10], panels: [[3, 1, 10, 6], [3, 9, 10, 5]], handle: H, edgeBottom: true },
+    trapdoor: { boards: [5, 10], windows: [[3, 3, 2, 2], [7, 3, 2, 2], [11, 3, 2, 2], [5, 7, 2, 2], [9, 7, 2, 2], [3, 11, 2, 2], [7, 11, 2, 2], [11, 11, 2, 2]], edgeTop: true, edgeBottom: true },
+  },
+  warped: {
+    top: { boards: [8], windows: [[3, 2, 2, 6], [11, 2, 2, 6]], rails: [[10, 1, 14]], edgeTop: true },
+    bottom: { boards: [8], panels: [[3, 1, 4, 13], [9, 1, 4, 13]], handle: H, edgeBottom: true },
+    trapdoor: { boards: [8], windows: [[3, 3, 2, 4], [11, 3, 2, 4], [3, 9, 2, 4], [11, 9, 2, 4]], rails: [[7, 1, 14]], edgeTop: true, edgeBottom: true },
+  },
   iron: {
     top: { metal: true, windows: [[4, 2, 3, 3], [9, 2, 3, 3]], rails: [[7, 1, 14]], rivets: [[2, 9], [12, 9], [2, 13], [12, 13]], edgeTop: true },
     bottom: { metal: true, rails: [[3, 1, 14], [11, 1, 14]], rivets: [[2, 1], [12, 1], [2, 13], [12, 13]], handle: H, edgeBottom: true },
@@ -320,6 +332,7 @@ export const DOORS: Record<string, { top: DoorSpec; bottom: DoorSpec; trapdoor: 
 
 function palFor(name: string): number[] {
   if (name === 'iron') return IRON_RAMP;
+  if (name === 'crimson' || name === 'warped') return NETHER_WOOD[name].wood;
   const w: WoodDef = WOOD[name];
   return w.wood;
 }

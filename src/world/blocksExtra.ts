@@ -469,8 +469,10 @@ function wallBoxes(s: StateView, h: number): Box[] {
 export function registerExtraBlocks(): void {
   // doors & trapdoors
   for (const w of WOODS) registerDoor(`${w}_door`, `${w}_door`, 3, w === 'cherry' ? 'cherry_wood' : 'wood', 'axe');
+  for (const w of ['crimson', 'warped']) registerDoor(`${w}_door`, `${w}_door`, 3, 'nether_wood', 'axe');
   registerDoor('iron_door', 'iron_door', 5, 'metal', 'pickaxe');
   for (const w of WOODS) registerTrapdoor(`${w}_trapdoor`, `${w}_trapdoor`, 3, w === 'cherry' ? 'cherry_wood' : 'wood', 'axe');
+  for (const w of ['crimson', 'warped']) registerTrapdoor(`${w}_trapdoor`, `${w}_trapdoor`, 3, 'nether_wood', 'axe');
   registerTrapdoor('iron_trapdoor', 'iron_trapdoor', 5, 'metal', 'pickaxe');
   // fences & gates
   for (const w of WOODS) {
