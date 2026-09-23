@@ -12,6 +12,7 @@ import { DOWN, UP } from '../world/dir';
 import { fluidStateOf } from './fluidTicks';
 import { canBurn } from './fire';
 import type { Level } from './level';
+import { BOOKSHELF_OFFSETS, isValidBookshelf } from '../world/blocksEnchanting';
 
 const enum K {
   NONE,
@@ -22,13 +23,14 @@ const enum K {
   LEAVES,
   FALLING,
   DRIPSTONE,
+  ENCHANTING_TABLE,
   SPORE_BLOSSOM,
   PORTAL,
 }
 
 let KIND: Uint8Array | null = null;
 /** vanilla FallingBlock.getDustColor */
-const DUST: Record<string, number> = { sand: 0xdbd3a0, red_sand: 0xa95821, gravel: 0x807c7b };
+const DUST: Record<string, number> = { sand: 0xdbd3a0, red_sand: 0xa95821, gravel: 0x807c7b, anvil: 0xa7a7a7, chipped_anvil: 0xa7a7a7, damaged_anvil: 0xa7a7a7 };
 
 function kindOf(st: number): number {
   if (!KIND) {
@@ -43,6 +45,7 @@ function kindOf(st: number): number {
         : n.endsWith('_leaves') ? K.LEAVES
         : n in DUST || n.endsWith('_concrete_powder') ? K.FALLING
         : n === 'pointed_dripstone' ? K.DRIPSTONE
+        : n === 'enchanting_table' ? K.ENCHANTING_TABLE
         : n === 'spore_blossom' ? K.SPORE_BLOSSOM
         : n === 'nether_portal' ? K.PORTAL
         : K.NONE;
@@ -177,6 +180,14 @@ export class AmbientTicker {
       case K.DRIPSTONE:
         this.dripstone(x, y, z, st);
         break;
+      case K.ENCHANTING_TABLE: {
+        // vanilla EnchantingTableBlock.animateTick: runes drift from each powering bookshelf into the table
+        const get = (xx: number, yy: number, zz: number) => w.getState(xx, yy, zz);
+        for (const [ox, oy, oz] of BOOKSHELF_OFFSETS)
+          if (Math.floor(r() * 16) === 0 && isValidBookshelf(get, x, y, z, ox, oy, oz))
+            this.level.particles.spawn?.('enchant', x + 0.5, y + 2, z + 0.5, ox + r() - 0.5, oy - r() - 1, oz + r() - 0.5);
+        break;
+      }
       case K.SPORE_BLOSSOM:
         this.sporeBlossom(x, y, z);
         break;

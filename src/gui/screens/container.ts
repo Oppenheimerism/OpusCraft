@@ -7,22 +7,24 @@ import type { GuiGraphics } from '../guiGraphics';
 import { ContainerMenu, Slot, canItemQuickReplace, quickCraftPlaceCount, quickcraftMask, ClickType } from '../../inventory/container';
 import { InventoryMenu, CraftingMenu, FurnaceMenu, ChestMenu } from '../../inventory/menus';
 import { ItemStack, RARITY_COLOR } from '../../item/item';
-import { enchantmentLine } from '../../item/enchantments';
+import { enchantmentLine, tooltipOrder } from '../../item/enchantments';
 import { KEYS } from '../../game/input';
 import { RecipeBookComponent } from '../recipeBookComponent';
 import { MobEffectInstance, compareEffects, effectDisplayName, formatEffectDuration } from '../../entity/effects';
 
 const LABEL = 0x404040;
 
-/** vanilla ItemStack.getTooltipLines: name in its rarity colour, component lines, attribute modifiers */
+/** vanilla ItemStack.getTooltipLines: name in its rarity colour (italic when renamed), component lines, attribute modifiers */
 export function itemTooltip(s: ItemStack): string[] {
   const it = s.item;
   const rarity = s.rarity();
-  const lines = [rarity === 'common' ? it.name : `§${RARITY_COLOR[rarity]}${it.name}`];
+  const italic = s.tag?.customName !== undefined ? '§o' : '';
+  const lines = [rarity === 'common' ? `${italic}${s.displayName()}` : `§${RARITY_COLOR[rarity]}${italic}${s.displayName()}`];
   if (it.lore) for (const l of it.lore) lines.push(`§7${l}`);
+  // stored then held enchantments, each in #tooltip_order (ItemEnchantments.addToTooltip)
   for (const ench of [s.tag?.stored, s.tag?.enchantments])
     if (ench)
-      for (const [id, lvl] of Object.entries(ench)) {
+      for (const [id, lvl] of tooltipOrder(ench)) {
         const e = enchantmentLine(id, lvl);
         lines.push((e.curse ? '§c' : '§7') + e.text);
       }

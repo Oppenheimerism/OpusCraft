@@ -92,9 +92,10 @@ export class Hud {
     }
     // selected item name
     if (this.toolHighlightTimer > 0 && p.inventory.selectedItem) {
-      // vanilla Gui.renderSelectedItemName: coloured by rarity
+      // vanilla Gui.renderSelectedItemName: coloured by rarity, italic when renamed
       const sel = p.inventory.selectedItem, rarity = sel.rarity();
-      const name = rarity === 'common' ? sel.item.name : `§${RARITY_COLOR[rarity]}${sel.item.name}`;
+      const italic = sel.tag?.customName !== undefined ? '§o' : '';
+      const name = rarity === 'common' ? `${italic}${sel.displayName()}` : `§${RARITY_COLOR[rarity]}${italic}${sel.displayName()}`;
       const alpha = Math.min(255, Math.floor((this.toolHighlightTimer * 256) / 10)) / 255;
       const w = g.textWidth(name);
       const x = Math.floor((W - w) / 2);

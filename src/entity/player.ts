@@ -13,6 +13,7 @@ import { Arrow } from './arrow';
 import { BLOCKS, STATE_BLOCK } from '../world/block';
 import { wrapDegrees } from '../core/math';
 import { findStandUpPosition } from '../game/sleep';
+import { hurtAndBreak, oxygenBonus } from '../item/enchantHelper';
 
 export type GameMode = 'survival' | 'creative' | 'adventure' | 'spectator';
 
@@ -62,6 +63,8 @@ export class Player extends LivingEntity {
   xpLevel = 0;
   xpProgress = 0;
   xpTotal = 0;
+  /** vanilla enchantmentSeed (saved as XpSeed): fixes the enchanting table's offers until the next enchant */
+  enchantmentSeed = 0;
   air = 300;
   usingItemTicks = 0;
   /** vanilla takeXpDelay: one orb every 2 ticks */
@@ -372,7 +375,9 @@ export class Player extends LivingEntity {
     if (this.eyeFluid === FLUID_WATER) {
       // vanilla LivingEntity.baseTick: water breathing (and invulnerability) hold the air supply
       if (this.invulnerable || this.hasWaterBreathing()) return;
-      this.air--;
+      // vanilla decreaseAirSupply: OXYGEN_BONUS (respiration) keeps the breath with chance L/(L+1)
+      const o = oxygenBonus(this);
+      if (!(o > 0 && Math.random() >= 1 / (o + 1))) this.air--;
       if (this.air === -20) {
         this.air = 0;
         // vanilla LivingEntity.baseTick: a burst of bubbles as you take drowning damage
@@ -524,19 +529,29 @@ export class Player extends LivingEntity {
     return t;
   }
 
-  /** vanilla Inventory.hurtArmor: each piece loses max(1, dmg/4) durability */
+  /** vanilla doHurtEquipment: each armour piece loses max(1, dmg/4) durability */
   protected override hurtArmor(amount: number): void {
     if (amount <= 0) return;
     const d = Math.max(1, Math.floor(amount / 4));
+    for (let i = 0; i < 4; i++) if (this.inventory.armor[i]?.item.armor) this.damageArmorSlot(i, d);
+  }
+
+  /** vanilla hurtHelmet: falling blocks wear the helmet the same way */
+  protected override hurtHelmet(amount: number): boolean {
+    const s = this.inventory.armor[3];
+    if (!s || s.count <= 0) return false;
+    if (s.item.armor && amount > 0) this.damageArmorSlot(3, Math.max(1, Math.floor(amount / 4)));
+    return true;
+  }
+
+  /** vanilla ItemStack.hurtAndBreak on an armour slot (0 feet … 3 head): unbreaking, then breaking */
+  damageArmorSlot(i: number, amount: number): void {
     const inv = this.inventory;
-    for (let i = 0; i < 4; i++) {
-      const s = inv.armor[i];
-      if (!s?.item.armor || !s.item.maxDamage) continue;
-      s.damage += d;
-      if (s.damage >= s.item.maxDamage) {
-        inv.armor[i] = null;
-        this.level.sound.play('entity.item.break', this.x, this.y, this.z, 0.8, 0.8 + Math.random() * 0.4);
-      }
+    const s = inv.armor[i];
+    if (!s?.item.maxDamage) return;
+    if (hurtAndBreak(s, amount, this.gameMode === 'creative')) {
+      inv.armor[i] = null;
+      this.level.sound.play('entity.item.break', this.x, this.y, this.z, 0.8, 0.8 + Math.random() * 0.4);
     }
     inv.version++;
   }
@@ -594,6 +609,22 @@ export class Player extends LivingEntity {
     }
   }
   onLevelUp: ((p: Player) => void) | null = null;
+
+  /** vanilla Player.giveExperienceLevels (spending levels leaves the point total alone) */
+  giveExperienceLevels(n: number): void {
+    this.xpLevel += n;
+    if (this.xpLevel < 0) {
+      this.xpLevel = 0;
+      this.xpProgress = 0;
+      this.xpTotal = 0;
+    }
+  }
+
+  /** vanilla Player.onEnchantmentPerformed: pay the levels and roll a new enchantment seed */
+  onEnchantmentPerformed(levels: number): void {
+    this.giveExperienceLevels(-levels);
+    this.enchantmentSeed = (Math.random() * 4294967296) | 0;
+  }
 
   /** vanilla getCurrentItemAttackStrengthDelay: 20 / ATTACK_SPEED (haste / mining fatigue apply) */
   attackStrengthDelay(): number {

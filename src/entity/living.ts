@@ -6,6 +6,7 @@ import { wrapDegrees } from '../core/math';
 import { FLAGS, F_AIR, F_OPAQUE, F_FULL_COLLISION, BLOCKS, STATE_BLOCK } from '../world/block';
 import { clipBlocks } from '../game/raycast';
 import { MobEffectInstance, SavedEffect, saveEffect, loadEffect } from './effects';
+import { burningTimeFactor, damageAfterProtection, damageProtection, waterMovementEfficiency } from '../item/enchantHelper';
 
 /** damage sources that ignore armor (vanilla #bypasses_armor) */
 const BYPASSES_ARMOR = new Set(['onFire', 'inWall', 'drown', 'starve', 'fall', 'stalagmite', 'void', 'genericKill', 'magic', 'wither', 'generic', 'cramming', 'flyIntoWall']);
@@ -13,6 +14,8 @@ const BYPASSES_ARMOR = new Set(['onFire', 'inWall', 'drown', 'starve', 'fall', '
 const NO_KNOCKBACK = new Set(['explosion', 'playerExplosion', 'badRespawnPoint', 'fall', 'stalagmite', 'drown', 'starve', 'onFire', 'inFire', 'lava', 'inWall', 'void', 'genericKill', 'magic', 'wither', 'cactus', 'sweetBerryBush', 'generic']);
 /** vanilla #bypasses_resistance */
 const BYPASSES_RESISTANCE = new Set(['void', 'genericKill']);
+/** vanilla #damages_helmet */
+const DAMAGES_HELMET = new Set(['anvil', 'fallingBlock', 'fallingStalactite']);
 export const FIRE_SOURCES = new Set(['onFire', 'inFire', 'lava', 'hotFloor', 'fireball']);
 /** vanilla Player.getDestroySpeed: mining fatigue multiplier per amplifier (capped at IV) */
 const FATIGUE_DIG = [0.3, 0.09, 0.0027, 8.1e-4];
@@ -515,12 +518,17 @@ export abstract class LivingEntity extends Entity {
     if (this.inWater && this.isAffectedByFluids()) {
       const y0 = this.y;
       let slow = this.sprinting ? 0.9 : this.waterSlowDown();
-      const f5 = 0.02;
-      void slow;
+      let f5 = 0.02;
+      // WATER_MOVEMENT_EFFICIENCY (depth strider), half as strong off the ground
+      let f6 = waterMovementEfficiency(this);
+      if (!this.onGround) f6 *= 0.5;
+      if (f6 > 0) {
+        slow += (0.54600006 - slow) * f6;
+        f5 += (this.movementSpeed() - f5) * f6;
+      }
       this.moveRelative(f5, sx, sy, sz);
       this.move(this.dx, this.dy, this.dz);
       if (this.horizontalCollision && this.onClimbable()) this.dy = 0.2;
-      slow = this.sprinting ? 0.9 : this.waterSlowDown();
       this.dx *= slow;
       this.dy *= 0.8;
       this.dz *= slow;
@@ -681,6 +689,8 @@ export abstract class LivingEntity extends Entity {
     if (FIRE_SOURCES.has(source) && (this.fireImmune() || this.hasEffect('fire_resistance'))) return false;
     this.noActionTime = 0;
     if (amount < 0) amount = 0;
+    // falling anvils, blocks and stalactites wear the helmet, which takes a quarter off the hit
+    if (DAMAGES_HELMET.has(source) && this.hurtHelmet(amount)) amount *= 0.75;
     let fresh = true;
     if (this.invulnerableTime > 10 && source !== 'genericKill' && source !== 'void') {
       if (amount <= this.lastHurt) return false;
@@ -734,11 +744,28 @@ export abstract class LivingEntity extends Entity {
     this.applyDamage(this.damageAfterMagicAbsorb(source, amount));
   }
 
-  /** vanilla getDamageAfterMagicAbsorb: resistance blocks 20% per level (starvation bypasses effects) */
+  /**
+   * vanilla getDamageAfterMagicAbsorb: resistance blocks 20% per level, then the protection enchantments 4% per
+   * point (at most 20 points); starvation bypasses both
+   */
   protected damageAfterMagicAbsorb(source: string, amount: number): number {
+    if (source === 'starve') return amount;
     const r = this.effectAmp('resistance');
-    if (r >= 0 && source !== 'starve' && !BYPASSES_RESISTANCE.has(source)) amount = Math.max((amount * (25 - (r + 1) * 5)) / 25, 0);
-    return amount;
+    if (r >= 0 && !BYPASSES_RESISTANCE.has(source)) amount = Math.max((amount * (25 - (r + 1) * 5)) / 25, 0);
+    if (amount <= 0) return 0;
+    const f = damageProtection(this, source);
+    return f > 0 ? damageAfterProtection(amount, f) : amount;
+  }
+
+  /** vanilla hurtHelmet: wear whatever is on the head; false when nothing is */
+  protected hurtHelmet(_amount: number): boolean {
+    return false;
+  }
+
+  /** vanilla LivingEntity.igniteForTicks: the BURNING_TIME attribute (fire protection) shortens it */
+  override igniteForSeconds(s: number): void {
+    const t = Math.ceil(Math.floor(s * 20) * burningTimeFactor(this));
+    if (this.remainingFireTicks < t) this.remainingFireTicks = t;
   }
 
   protected playHurtSound(_source: string): void {}

@@ -42,6 +42,8 @@ import { DEFAULT_GAME_RULES } from './gameRules';
 import { ItemEntity } from '../entity/itemEntity';
 import { GuiEntityRenderer } from '../render/guiEntity';
 import { InventoryMenu, CraftingMenu, FurnaceMenu, ChestMenu } from '../inventory/menus';
+import { EnchantmentMenu, AnvilMenu, GrindstoneMenu } from '../inventory/enchantMenus';
+import { hasVanishing } from '../item/enchantHelper';
 import { ChestBlockEntity, FurnaceBlockEntity } from '../world/blockEntity';
 import { useBed, findRespawn, BED_YROT, MSG, SleepHost } from './sleep';
 import { AmbientTicker } from './animateTick';
@@ -451,6 +453,7 @@ export class Game {
       this.player.xpLevel = pd.xpLevel;
       this.player.xpProgress = pd.xpProgress;
       this.player.xpTotal = pd.xpTotal;
+      this.player.enchantmentSeed = pd.xpSeed ?? 0;
       this.player.setGameMode(pd.gameMode as GameMode);
       this.player.flying = pd.flying && this.player.mayFly;
       this.player.inventory.selected = pd.selected;
@@ -518,7 +521,7 @@ export class Game {
     m.player = {
       x: p.x, y: p.y, z: p.z, yaw: p.yaw, pitch: p.pitch,
       health: p.health, food: p.food.level, saturation: p.food.saturation, exhaustion: p.food.exhaustion,
-      xpLevel: p.xpLevel, xpProgress: p.xpProgress, xpTotal: p.xpTotal,
+      xpLevel: p.xpLevel, xpProgress: p.xpProgress, xpTotal: p.xpTotal, xpSeed: p.enchantmentSeed,
       gameMode: p.gameMode, flying: p.flying, selected: p.inventory.selected,
       inventory: p.inventory.main.map(st), armor: p.inventory.armor.map(st),
       spawn: [p.spawnX, p.spawnY, p.spawnZ],
@@ -701,7 +704,7 @@ export class Game {
     };
   }
 
-  containerScreenFactory: ((menu: InventoryMenu | CraftingMenu | FurnaceMenu | ChestMenu) => Screen) | null = null;
+  containerScreenFactory: ((menu: InventoryMenu | CraftingMenu | FurnaceMenu | ChestMenu | EnchantmentMenu | AnvilMenu | GrindstoneMenu) => Screen) | null = null;
 
   /** right-clicked a block with a menu */
   openContainer(kind: string, x: number, y: number, z: number): void {
@@ -719,7 +722,12 @@ export class Game {
       be.unpackLoot();
       this.setScreen(this.containerScreenFactory(new ChestMenu(p, be)));
       if (be.openCount++ === 0) this.sound.play('block.chest.open', x + 0.5, y + 0.5, z + 0.5, 0.5, Math.random() * 0.1 + 0.9);
-    }
+    } else if (kind === 'enchanting_table') {
+      const m = new EnchantmentMenu(p, [x, y, z]);
+      m.onEnchanted = () => this.advancements.trigger('enchanted_item');
+      this.setScreen(this.containerScreenFactory(m));
+    } else if (kind.endsWith('anvil')) this.setScreen(this.containerScreenFactory(new AnvilMenu(p, [x, y, z])));
+    else if (kind === 'grindstone') this.setScreen(this.containerScreenFactory(new GrindstoneMenu(p, [x, y, z])));
   }
 
   /** right-clicked a chest minecart or chest boat (vanilla ContainerEntity.interactWithContainerVehicle: no sound, no lid) */
@@ -798,17 +806,23 @@ export class Game {
         return `${n} was impaled on a stalagmite`;
       case 'fallingStalactite':
         return `${n} was skewered by a falling stalactite`;
+      case 'anvil':
+        return `${n} was squashed by a falling anvil`;
+      case 'fallingBlock':
+        return `${n} was squashed by a falling block`;
+      case 'thorns':
+        return `${n} was killed while trying to hurt ${kn}`;
       default:
         return `${n} died`;
     }
   }
 
-  /** vanilla Inventory.dropAll: every stack flung in a random direction */
+  /** vanilla Player.dropEquipment: curse of vanishing items are destroyed, then Inventory.dropAll flings every stack */
   private dropAllItems(): void {
     const p = this.player;
     const inv = p.inventory;
     const drop = (s: ItemStack | null) => {
-      if (!s) return;
+      if (!s || hasVanishing(s)) return;
       const e = new ItemEntity(this.level, s);
       e.moveTo(p.x, p.y + p.eyeHeight - 0.3, p.z);
       e.pickupDelay = 40;
@@ -826,6 +840,8 @@ export class Game {
       drop(inv.armor[i]);
       inv.armor[i] = null;
     }
+    drop(inv.offhand);
+    inv.offhand = null;
     inv.version++;
   }
 

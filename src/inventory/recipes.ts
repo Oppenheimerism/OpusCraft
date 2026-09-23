@@ -92,6 +92,9 @@ shaped('torch', 4, ['X', '#'], { X: '#coals', '#': 'stick' });
 shaped('ladder', 3, ['# #', '###', '# #'], { '#': 'stick' });
 shaped('bowl', 4, ['# #', ' # '], { '#': '#planks' });
 shaped('bookshelf', 1, ['###', 'XXX', '###'], { '#': '#planks', X: 'book' });
+shaped('enchanting_table', 1, [' B ', 'D#D', '###'], { B: 'book', D: 'diamond', '#': 'obsidian' });
+shaped('anvil', 1, ['III', ' i ', 'iii'], { I: 'iron_block', i: 'iron_ingot' });
+shaped('grindstone', 1, ['I-I', '# #'], { I: 'stick', '-': 'stone_slab', '#': '#planks' });
 shaped('oak_sign', 3, ['###', '###', ' X '], { '#': 'oak_planks', X: 'stick' });
 // vanilla boat recipes: planks in a U, and a chest added to a boat
 for (const w of WOODS) {

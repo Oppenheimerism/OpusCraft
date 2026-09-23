@@ -13,6 +13,7 @@ import { blockDrops } from './blockRules';
 import { ItemEntity } from '../entity/itemEntity';
 import { ItemStack } from '../item/item';
 import { PrimedTnt } from '../entity/tnt';
+import { explosionKnockbackResistance } from '../item/enchantHelper';
 
 export type ExplosionKind = 'tnt' | 'mob' | 'block';
 
@@ -97,7 +98,8 @@ export function explode(level: Level, source: Entity | null, x: number, y: numbe
     const dmg = ((d1 * d1 + d1) / 2) * 7 * f2 + 1;
     e.hurt(dmg, damageSource ?? (attacker && attacker !== source ? 'playerExplosion' : 'explosion'), attacker ?? null, source);
     let k = (1 - dist) * seen;
-    if (e instanceof LivingEntity) k *= 1 - e.knockbackResistance();
+    // vanilla EXPLOSION_KNOCKBACK_RESISTANCE: blast protection (plain knockback resistance doesn't count)
+    if (e instanceof LivingEntity) k *= 1 - explosionKnockbackResistance(e);
     const p = e as { gameMode?: string; flying?: boolean };
     if (p.gameMode === 'spectator' || (p.gameMode === 'creative' && p.flying)) continue;
     e.dx += dx * k;

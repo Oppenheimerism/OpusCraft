@@ -119,20 +119,24 @@ export class BitmapFont {
     let cx = x;
     let col = color;
     let bold = false;
+    let italic = false;
     const prevAlpha = ctx.globalAlpha;
     ctx.globalAlpha = prevAlpha * alpha;
     for (let i = 0; i < s.length; i++) {
       const ch = s[i];
       if (ch === '§' && i + 1 < s.length) {
         const code = s[++i].toLowerCase();
-        // vanilla: a colour code also resets formatting; §l is bold, §r resets everything
+        // vanilla: a colour code also resets formatting; §l is bold, §o italic, §r resets everything
         if (COLOR_CODES[code] !== undefined) {
           col = COLOR_CODES[code];
           bold = false;
+          italic = false;
         } else if (code === 'l') bold = true;
+        else if (code === 'o') italic = true;
         else if (code === 'r') {
           col = color;
           bold = false;
+          italic = false;
         }
         continue;
       }
@@ -143,9 +147,16 @@ export class BitmapFont {
       }
       if (g.w > 0 && ch !== ' ') {
         const src = this.tint(col & 0xffffff);
-        ctx.drawImage(src, g.x, 0, g.w, 8, Math.round(cx * scale), Math.round((y - 0) * scale), g.w * scale, 8 * scale);
+        const py = Math.round((y - 0) * scale);
+        // vanilla BakedGlyph italic: the top leans 1 px right and the bottom 1 px left
+        if (italic) {
+          ctx.save();
+          ctx.transform(1, 0, -0.25, 1, scale + 0.25 * py, 0);
+        }
+        ctx.drawImage(src, g.x, 0, g.w, 8, Math.round(cx * scale), py, g.w * scale, 8 * scale);
         // vanilla bold: the glyph again one pixel to the right
-        if (bold) ctx.drawImage(src, g.x, 0, g.w, 8, Math.round((cx + 1) * scale), Math.round((y - 0) * scale), g.w * scale, 8 * scale);
+        if (bold) ctx.drawImage(src, g.x, 0, g.w, 8, Math.round((cx + 1) * scale), py, g.w * scale, 8 * scale);
+        if (italic) ctx.restore();
       }
       cx += g.w + 1 + (bold ? 1 : 0);
     }

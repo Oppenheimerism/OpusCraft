@@ -33,7 +33,8 @@ import type { Player } from '../entity/player';
 import { MOB_TEXTURES, FIRE_TEXTURES } from '../textures/mobs';
 import { FLAGS, F_FULL_COLLISION, F_AIR, OUTLINE, S } from '../world/block';
 import type { ItemStack } from '../item/item';
-import { SpawnerBlockEntity } from '../world/blockEntity';
+import { SpawnerBlockEntity, EnchantingTableBlockEntity } from '../world/blockEntity';
+import { bookModel, bookTexture, renderTableBook } from './bookRenderer';
 import { createMob } from '../game/spawner';
 
 export interface EntityRenderOptions {
@@ -167,6 +168,7 @@ export class EntityRenderDispatcher {
     this.rendered = drawn;
     this.renderWaterPatches(b);
     this.renderSpawners(b, level, cam, partial, frustum);
+    this.renderEnchantingBooks(b, level, cam, partial, frustum);
     b.setOverlay(0, 0, 0, 0);
     b.flush();
     if (this.shadows.length) this.renderShadows(b, level, cam);
@@ -202,6 +204,26 @@ export class EntityRenderDispatcher {
       b.lightB = (l & 15) * 16;
       this.renderMob(b, mob, 0, 0, 0, partial);
       this.base = null;
+    }
+  }
+
+  private readonly book = bookModel();
+  private bookTex: WebGLTexture | null = null;
+
+  /** vanilla EnchantTableRenderer (block entity view distance 64) */
+  private renderEnchantingBooks(b: EntityBatch, level: Level, cam: Camera, partial: number, frustum: Frustum): void {
+    for (const be of level.world.blockEntities.values()) {
+      if (!(be instanceof EnchantingTableBlockEntity) || be.removed) continue;
+      const dx = be.x - cam.x, dy = be.y - cam.y, dz = be.z - cam.z;
+      if ((dx + 0.5) ** 2 + (dy + 0.5) ** 2 + (dz + 0.5) ** 2 > 64 * 64) continue;
+      if (!frustum.testBox(dx, dy + 0.5, dz, dx + 1, dy + 1.5, dz + 1)) continue;
+      this.bookTex ??= bookTexture(this.gl);
+      const l = level.world.getLight(be.x, be.y, be.z);
+      b.lightS = (l >> 4) * 16;
+      b.lightB = (l & 15) * 16;
+      b.setOverlay(0, 0, 0, 0);
+      b.begin(this.state(this.bookTex));
+      renderTableBook(b, this.pose, this.book, be, dx, dy, dz, partial);
     }
   }
 

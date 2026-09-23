@@ -9,6 +9,7 @@ import type { Camera } from './renderer';
 import type { SpriteRect } from '../world/models';
 import { AABB, collideWithBoxes } from '../core/aabb';
 import { fluidHeight, fluidType, FLUID_WATER, FLUID_LAVA } from '../world/fluids';
+import { SGA_SPRITES } from '../textures/sga';
 
 interface Particle {
   x: number; y: number; z: number;
@@ -54,6 +55,8 @@ interface SpriteParticle {
   target?: { x: number; y: number; z: number; width: number; height: number };
   /** portal particles move along a curve from their start point */
   portal?: { x: number; y: number; z: number };
+  /** enchant particles fly from a bookshelf back to this point (vanilla EnchantmentTableParticle) */
+  enchant?: { x: number; y: number; z: number };
   /** sub-rectangle of the sprite (fractions), e.g. item crumbs */
   sub?: [number, number, number, number];
   /** squid ink sinks slowly in air */
@@ -61,7 +64,7 @@ interface SpriteParticle {
   /** vanilla bounding-box width: the position is the box's bottom centre (drips, bubbles, dust) */
   bbw?: number;
   /** vanilla getLightColor overrides: flames brighten as they age, lava glows */
-  lightMode?: 'flame' | 'lava';
+  lightMode?: 'flame' | 'lava' | 'enchant';
   /** vanilla getQuadSize curves */
   sizeCurve?: 'flame' | 'lava';
   /** DripParticle stage: hangs, falls, then lands/splashes */
@@ -413,6 +416,27 @@ export class ParticleEngine {
         this.addSprite(p);
         break;
       }
+      case 'enchant': {
+        // vanilla EnchantmentTableParticle: a rune that starts out at (x, y, z) + speed and homes in on (x, y, z),
+        // dropping 1.2 blocks at the very end
+        const p = this.base(kind, x + xd, y + yd, z + zd);
+        p.enchant = { x, y, z };
+        p.dx = xd;
+        p.dy = yd;
+        p.dz = zd;
+        p.size = 0.1 * (Math.random() * 0.5 + 0.2);
+        const f = Math.random() * 0.6 + 0.4;
+        p.r = 0.9 * f;
+        p.g = 0.9 * f;
+        p.b = f;
+        p.physics = false;
+        p.lifetime = Math.floor(Math.random() * 10) + 30;
+        p.frames = SGA_SPRITES;
+        p.frame = Math.floor(Math.random() * SGA_SPRITES.length);
+        p.lightMode = 'enchant';
+        this.addSprite(p);
+        break;
+      }
       case 'squid_ink': {
         // vanilla SquidInkParticle
         const p = this.base(kind, x, y, z);
@@ -722,6 +746,17 @@ export class ParticleEngine {
         list[w++] = p;
         continue;
       }
+      if (p.enchant) {
+        const f = 1 - p.age / p.lifetime;
+        let f1 = 1 - f;
+        f1 *= f1;
+        f1 *= f1;
+        p.x = p.enchant.x + p.dx * f;
+        p.y = p.enchant.y + p.dy * f - f1 * 1.2;
+        p.z = p.enchant.z + p.dz * f;
+        list[w++] = p;
+        continue;
+      }
       if (p.portal) {
         const f = p.age / p.lifetime;
         const f1 = -f + f * f * 2;
@@ -1004,6 +1039,13 @@ export class ParticleEngine {
       // vanilla FlameParticle / LavaParticle.getLightColor
       if (p.lightMode === 'lava') batch.lightB = 240;
       else if (p.lightMode === 'flame') batch.lightB = Math.min(240, batch.lightB + Math.floor(Math.max(0, Math.min(1, (p.age + partial) / p.lifetime)) * 15 * 16));
+      else if (p.lightMode === 'enchant') {
+        // vanilla EnchantmentTableParticle.getLightColor: brightens (sky part) as it nears the table
+        let f = p.age / p.lifetime;
+        f *= f;
+        f *= f;
+        batch.lightS = Math.min(240, batch.lightS + Math.floor(f * 15 * 16));
+      }
     }
     let s = p.size;
     if (p.grow) s *= Math.max(0, Math.min(1, ((p.age + partial) / p.lifetime) * 32));

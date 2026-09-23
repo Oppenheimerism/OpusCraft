@@ -44,7 +44,7 @@ const SLOT_SHADOW = 0x373737;
 type Col = number | [number, number] | null;
 
 /** Draw a character pattern; chars missing from the palette are skipped, null clears. */
-function pat(t: TexImage, x0: number, y0: number, rows: string[], pal: Record<string, Col>): void {
+export function pat(t: TexImage, x0: number, y0: number, rows: string[], pal: Record<string, Col>): void {
   for (let y = 0; y < rows.length; y++)
     for (let x = 0; x < rows[y].length; x++) {
       const c = pal[rows[y][x]];
@@ -524,7 +524,7 @@ G['slot_highlight_front'] = () => {
 // Container screens
 
 /** Standard GUI panel: black outline with cut corners, 2 px white/dark bevel, #C6C6C6 face. */
-function panel(w: number, h: number, face = PANEL, hi = WHITE, lo = PANEL_SHADOW): TexImage {
+export function panel(w: number, h: number, face = PANEL, hi = WHITE, lo = PANEL_SHADOW): TexImage {
   const t = img(w, h);
   for (let y = 0; y < h; y++)
     for (let x = 0; x < w; x++) {
@@ -559,7 +559,7 @@ G['effect_background_small'] = () => panel(32, 32);
 Object.assign(G, MOB_EFFECT_TEXTURES);
 
 /** Inset box: dark top/left edge, white bottom/right edge (vanilla slot look). */
-function inset(t: TexImage, x: number, y: number, w: number, h: number, inner = SLOT): void {
+export function inset(t: TexImage, x: number, y: number, w: number, h: number, inner = SLOT): void {
   rect(t, x, y, w, h, inner);
   for (let i = 0; i < w - 1; i++) plot(t, x + i, y, SLOT_SHADOW);
   for (let j = 0; j < h - 1; j++) plot(t, x, y + j, SLOT_SHADOW);
@@ -567,21 +567,21 @@ function inset(t: TexImage, x: number, y: number, w: number, h: number, inner = 
   for (let j = 1; j < h; j++) plot(t, x + w - 1, y + j, WHITE);
 }
 /** 18x18 slot for an item drawn at (ix, iy). */
-function slotAt(t: TexImage, ix: number, iy: number): void {
+export function slotAt(t: TexImage, ix: number, iy: number): void {
   inset(t, ix - 1, iy - 1, 18, 18);
 }
 /** 26x26 result slot for an item drawn at (ix, iy). */
-function bigSlotAt(t: TexImage, ix: number, iy: number): void {
+export function bigSlotAt(t: TexImage, ix: number, iy: number): void {
   inset(t, ix - 5, iy - 5, 26, 26);
 }
 /** Player inventory: 3 rows starting at item y = top, hotbar at top + 58. */
-function playerInventory(t: TexImage, top: number, left = 8): void {
+export function playerInventory(t: TexImage, top: number, left = 8): void {
   for (let r = 0; r < 3; r++) for (let c = 0; c < 9; c++) slotAt(t, left + 18 * c, top + 18 * r);
   for (let c = 0; c < 9; c++) slotAt(t, left + 18 * c, top + 58);
 }
 
 /** Right-pointing arrow: shaft of `shaft` rows, triangular head `h` tall. */
-function arrowMask(len: number, h: number, shaft: number): boolean[][] {
+export function arrowMask(len: number, h: number, shaft: number): boolean[][] {
   const head = (h + 1) >> 1;
   const mid = (h - 1) / 2;
   const m: boolean[][] = [];
@@ -596,7 +596,7 @@ function arrowMask(len: number, h: number, shaft: number): boolean[][] {
   }
   return m;
 }
-function drawMask(t: TexImage, x0: number, y0: number, m: boolean[][], c: number): void {
+export function drawMask(t: TexImage, x0: number, y0: number, m: boolean[][], c: number): void {
   for (let y = 0; y < m.length; y++) for (let x = 0; x < m[y].length; x++) if (m[y][x]) plot(t, x0 + x, y0 + y, c);
 }
 

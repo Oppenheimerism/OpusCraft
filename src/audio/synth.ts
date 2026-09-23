@@ -8,6 +8,7 @@ import { MUSIC_TRACKS, MUSIC_TRACK_NAMES, renderMenuMusic, renderMusicTrack } fr
 import { playerSounds } from './gen/player';
 import { worldSounds } from './gen/world';
 import { minecartSounds } from './gen/minecart';
+import { enchantingSounds } from './gen/enchanting';
 import { boatSounds } from './gen/boat';
 import { netherBlockSounds } from './gen/netherBlocks';
 import { netherSounds } from './gen/nether';
@@ -28,6 +29,7 @@ export const SOUNDS: Record<string, SoundGen> = {
   ...worldSounds(),
   ...mobSounds(),
   ...minecartSounds(),
+  ...enchantingSounds(),
   ...boatSounds(),
   ...netherBlockSounds(),
   ...netherSounds(),
@@ -158,6 +160,8 @@ const VOLUMES: Record<string, number> = {
   'item.hoe.till': 1,
   'item.bone_meal.use': 1,
   'entity.player.teleport': 1,
+  // anvil level events (vanilla LevelRenderer.levelEvent 1029-1031)
+  'block.anvil.land': 0.3,
   // nether portal (ambient: from the block, 1 in 100 animate ticks; trigger / travel: non-positional)
   'block.portal.ambient': 0.5,
   'block.portal.trigger': 0.25,
