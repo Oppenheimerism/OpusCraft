@@ -166,8 +166,20 @@ export function playerModel(slim = false): ModelPart {
   return root;
 }
 
-/** vanilla HumanoidModel.setupAnim (walking/idle/swing subset) */
-export function animateHumanoid(root: ModelPart, limbSwing: number, limbAmount: number, age: number, headYaw: number, headPitch: number, attackTime: number, crouching: boolean): void {
+/** vanilla HumanoidModel riding pose: arms raised a little, legs stretched forward and apart */
+export function sitHumanoid(ra: ModelPart, la: ModelPart, rl: ModelPart, ll: ModelPart): void {
+  ra.xRot += -Math.PI / 5;
+  la.xRot += -Math.PI / 5;
+  rl.xRot = -1.4137167;
+  rl.yRot = Math.PI / 10;
+  rl.zRot = 0.07853982;
+  ll.xRot = -1.4137167;
+  ll.yRot = -Math.PI / 10;
+  ll.zRot = -0.07853982;
+}
+
+/** vanilla HumanoidModel.setupAnim (walking/riding/idle/swing subset) */
+export function animateHumanoid(root: ModelPart, limbSwing: number, limbAmount: number, age: number, headYaw: number, headPitch: number, attackTime: number, crouching: boolean, riding = false): void {
   root.resetPose();
   const head = root.child('head'), body = root.child('body');
   const ra = root.child('right_arm'), la = root.child('left_arm'), rl = root.child('right_leg'), ll = root.child('left_leg');
@@ -177,6 +189,7 @@ export function animateHumanoid(root: ModelPart, limbSwing: number, limbAmount: 
   la.xRot = Math.cos(limbSwing * 0.6662) * 2 * limbAmount * 0.5;
   rl.xRot = Math.cos(limbSwing * 0.6662) * 1.4 * limbAmount;
   ll.xRot = Math.cos(limbSwing * 0.6662 + Math.PI) * 1.4 * limbAmount;
+  if (riding) sitHumanoid(ra, la, rl, ll);
   // idle arm sway (AnimationUtils.bobModelPart)
   ra.zRot += Math.cos(age * 0.09) * 0.05 + 0.05;
   la.zRot -= Math.cos(age * 0.09) * 0.05 + 0.05;

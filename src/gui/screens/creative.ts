@@ -24,7 +24,7 @@ interface Tab {
 const REDSTONE = new Set(['redstone', 'redstone_block', 'tnt']);
 const FUNCTIONAL = new Set(['oak_sign', 'painting', 'item_frame', 'red_bed', 'jack_o_lantern', 'carved_pumpkin']);
 const BUILDING = new Set(['oak_door', 'iron_door']);
-const TOOLS = new Set(['minecart', 'oak_boat', 'saddle', 'lead', 'name_tag', 'filled_map', 'map', 'milk_bucket', 'experience_bottle']);
+const TOOLS = new Set(['minecart', 'chest_minecart', 'oak_boat', 'saddle', 'lead', 'name_tag', 'filled_map', 'map', 'milk_bucket', 'experience_bottle']);
 /** vanilla lists seeds with the natural blocks */
 const NATURAL = new Set(['wheat_seeds', 'cocoa_beans', 'pumpkin_seeds', 'melon_seeds', 'beetroot_seeds']);
 

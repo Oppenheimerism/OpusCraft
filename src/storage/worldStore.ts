@@ -41,6 +41,8 @@ export interface WorldMeta {
     advancements?: Record<string, string[]>;
     recipeBook?: import('../inventory/recipeBook').RecipeBookSave;
     dead?: boolean;
+    /** the minecart the player sits in (vanilla RootVehicle), kept out of chunk storage */
+    vehicle?: SavedEntity | null;
     /** vanilla active_effects */
     effects?: import('../entity/effects').SavedEffect[];
   } | null;

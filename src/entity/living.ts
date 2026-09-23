@@ -365,10 +365,37 @@ export abstract class LivingEntity extends Entity {
     return this.isAlive;
   }
 
-  /** vanilla pushEntities: separate from overlapping pushable entities */
+  /** vanilla pushEntities → doPush: overlapping pushable entities (mobs, minecarts) get pushed apart */
   protected pushEntities(): void {
-    const list = this.level.getEntities(this.bb, (e) => e instanceof LivingEntity && e.isPushable(), this);
-    for (const e of list) this.pushAgainst(e);
+    const list = this.level.getEntities(this.bb, (e) => e.isPushable(), this);
+    for (const e of list) e.pushAgainst(this);
+  }
+
+  /** vanilla LivingEntity.stopRiding: step off where the vehicle says */
+  override stopRiding(): void {
+    const v = this.vehicle;
+    super.stopRiding();
+    if (v && v !== this.vehicle) this.dismountVehicle(v);
+  }
+
+  /** vanilla dismountVehicle: if the vehicle is gone, stays put (no lower than the vehicle was) */
+  dismountVehicle(v: Entity): void {
+    if (this.removed) return;
+    const [x, y, z] = v.removed ? [this.x, Math.max(this.y, v.y), this.z] : v.dismountLocation(this);
+    this.moveTo(x, y, z);
+  }
+
+  /** bounding-box heights this can get off in, best first (vanilla getDismountPoses) */
+  dismountHeights(): number[] {
+    return [this.height];
+  }
+
+  /** got off in the pose of that height (vanilla setPose) */
+  setDismountHeight(_h: number): void {}
+
+  override rideTick(): void {
+    super.rideTick();
+    this.fallDistance = 0;
   }
 
   override tick(): void {

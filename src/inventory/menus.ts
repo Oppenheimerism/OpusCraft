@@ -250,9 +250,17 @@ export class FurnaceMenu extends ContainerMenu {
   }
 }
 
+/** a container that isn't a block (vanilla ContainerEntity: chest minecarts) */
+export interface ContainerEntity {
+  readonly container: SimpleContainer;
+  /** vanilla Container.stillValid */
+  containerStillValid(p: Player): boolean;
+}
+
 export class ChestMenu extends ContainerMenu {
   readonly rows: number;
-  constructor(player: Player, readonly chest: ChestBlockEntity) {
+  /** `title` is the container's display name (vanilla MenuProvider.getDisplayName) */
+  constructor(player: Player, readonly chest: ChestBlockEntity | ContainerEntity, readonly title = 'Chest') {
     super(player);
     this.rows = 3;
     const c = chest.container;
@@ -262,6 +270,7 @@ export class ChestMenu extends ContainerMenu {
   }
   override stillValid(p: Player): boolean {
     const c = this.chest;
+    if ('containerStillValid' in c) return c.containerStillValid(p);
     return !c.removed && p.distanceToSqr(c.x + 0.5, c.y + 0.5, c.z + 0.5) <= 64;
   }
   quickMoveStack(_p: Player, index: number): ItemStack | null {

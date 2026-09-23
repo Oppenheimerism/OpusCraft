@@ -258,8 +258,9 @@ export abstract class Mob extends LivingEntity {
     return false;
   }
 
+  /** vanilla Mob.requiresCustomPersistence: riding something keeps a mob from despawning */
   requiresCustomPersistence(): boolean {
-    return false;
+    return this.vehicle !== null;
   }
 
   /** vanilla Mob.checkDespawn */

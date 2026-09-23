@@ -1,6 +1,6 @@
 // Mob models (vanilla LayerDefinitions) and their setupAnim animations.
 
-import { ModelPart, Cube } from './model';
+import { ModelPart, Cube, sitHumanoid } from './model';
 
 const PI = Math.PI;
 
@@ -145,8 +145,8 @@ function bobArms(ra: ModelPart, la: ModelPart, age: number): void {
   la.xRot -= Math.sin(age * 0.067) * 0.05;
 }
 
-/** vanilla HumanoidModel.setupAnim (mob subset: walking, arm poses, attack swing, idle bob) */
-export function animateHumanoidMob(root: ModelPart, limbSwing: number, limbAmount: number, age: number, headYaw: number, headPitch: number, attackTime: number, rightPose: ArmPose): void {
+/** vanilla HumanoidModel.setupAnim (mob subset: walking, riding, arm poses, attack swing, idle bob) */
+export function animateHumanoidMob(root: ModelPart, limbSwing: number, limbAmount: number, age: number, headYaw: number, headPitch: number, attackTime: number, rightPose: ArmPose, riding = false): void {
   root.resetPose();
   const head = root.child('head'), body = root.child('body');
   const ra = root.child('right_arm'), la = root.child('left_arm'), rl = root.child('right_leg'), ll = root.child('left_leg');
@@ -160,6 +160,7 @@ export function animateHumanoidMob(root: ModelPart, limbSwing: number, limbAmoun
   ll.yRot = -0.005;
   rl.zRot = 0.005;
   ll.zRot = -0.005;
+  if (riding) sitHumanoid(ra, la, rl, ll);
   if (rightPose === 'item') {
     ra.xRot = ra.xRot * 0.5 - PI / 10;
     ra.yRot = 0;
@@ -400,4 +401,25 @@ export function slimeOuterModel(): MobModelDef {
   const root = new ModelPart();
   root.add('cube', part([{ x: -4, y: 16, z: -4, w: 8, h: 8, d: 8, u: 0, v: 0 }]));
   return { root, texW: 64, texH: 32 };
+}
+
+// ---------------------------------------------------------------------------
+// minecart (not a mob, but the same kind of layer definition)
+
+/** vanilla MinecartModel.createBodyLayer: a 20x16 floor, four 8-high walls and the dark inner plate */
+export function minecartModel(): MobModelDef {
+  const root = new ModelPart();
+  const wall: Cube = { x: -8, y: -9, z: -1, w: 16, h: 8, d: 2, u: 0, v: 0 };
+  root.add('bottom', part([{ x: -10, y: -8, z: -1, w: 20, h: 16, d: 2, u: 0, v: 10 }], [0, 4, 0], [PI / 2, 0, 0]));
+  root.add('front', part([wall], [-9, 4, 0], [0, PI * 1.5, 0]));
+  root.add('back', part([wall], [9, 4, 0], [0, PI / 2, 0]));
+  root.add('left', part([wall], [0, 4, -7], [0, PI, 0]));
+  root.add('right', part([wall], [0, 4, 7]));
+  root.add('contents', part([{ x: -9, y: -7, z: -1, w: 18, h: 14, d: 1, u: 44, v: 10 }], [0, 4, 0], [-PI / 2, 0, 0]));
+  return { root, texW: 64, texH: 32 };
+}
+
+/** vanilla MinecartModel.setupAnim (the renderer passes ageInTicks = -0.1) */
+export function animateMinecart(root: ModelPart, age: number): void {
+  root.child('contents').y = 4 - age;
 }

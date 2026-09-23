@@ -22,6 +22,8 @@ import { createMob } from './spawner';
 import { SpawnerBlockEntity } from '../world/blockEntity';
 import { playerAttack } from './combat';
 import { canPlaceFire, fireStateAt, placeFire } from './fire';
+import { Minecart, MinecartChest, createMinecart } from '../entity/minecart';
+import { isRail, railShape, isAscending } from './rails';
 import { MobEffectInstance, MOB_EFFECTS } from '../entity/effects';
 
 export class Interaction {
@@ -68,7 +70,9 @@ export class Interaction {
     const x1 = ex + dx * d2, y1 = ey + dy * d2, z1 = ez + dz * d2;
     const box = p.bb.expandTowards(dx * d2, dy * d2, dz * d2).inflate(1);
     let best: Entity | null = null, bestD = d4;
-    for (const e of this.level.getEntities(box, (e) => e.isPickable() && e !== p, p)) {
+    // vanilla ProjectileUtil.getEntityHitResult: never the vehicle you're riding
+    const root = p.rootVehicle();
+    for (const e of this.level.getEntities(box, (e) => e.isPickable() && e !== p && e.rootVehicle() !== root, p)) {
       const eb = e.bb.inflate(e.pickRadius());
       if (eb.contains(ex, ey, ez)) {
         if (bestD >= 0) {
@@ -258,6 +262,17 @@ export class Interaction {
         return;
       }
       if (e instanceof Creeper && e.interact(p, stack)) {
+        p.swing();
+        return;
+      }
+      // vanilla Minecart.interact (climb in) / MinecartChest.interact (ContainerEntity.interactWithContainerVehicle)
+      if (e instanceof Minecart && e.interact(p)) {
+        this.onMounted?.();
+        p.swing();
+        return;
+      }
+      if (e instanceof MinecartChest) {
+        this.onOpenEntityContainer?.(e);
         p.swing();
         return;
       }
@@ -464,6 +479,15 @@ export class Interaction {
       p.swing();
       return true;
     }
+    // vanilla MinecartItem.useOn: a cart on the clicked rail (half a block up on a slope)
+    if ((id === 'minecart' || id === 'chest_minecart') && isRail(st)) {
+      const cart = createMinecart(id, lvl)!;
+      cart.moveTo(h.x + 0.5, h.y + 0.0625 + (isAscending(railShape(st)) ? 0.5 : 0), h.z + 0.5, 0, 0);
+      lvl.addEntity(cart);
+      if (p.gameMode !== 'creative') p.inventory.consumeSelected(1);
+      p.swing();
+      return true;
+    }
     // vanilla FlintAndSteelItem.useOn: light a fire on the clicked face
     if (id === 'flint_and_steel' || id === 'fire_charge') {
       const fx = h.x + DX[h.face], fy = h.y + DY[h.face], fz = h.z + DZ[h.face];
@@ -484,6 +508,10 @@ export class Interaction {
   }
 
   onUseBed: ((x: number, y: number, z: number) => void) | null = null;
+  /** the player climbed into a vehicle (vanilla "mount.onboard" hint) */
+  onMounted: (() => void) | null = null;
+  /** right-clicked a container entity (a chest minecart) */
+  onOpenEntityContainer: ((e: MinecartChest) => void) | null = null;
   /** a block was placed by the player (advancements: planted seeds) */
   onPlaced: ((name: string) => void) | null = null;
   /** food or a drink was finished */
@@ -718,13 +746,14 @@ export class Interaction {
     this.level.sound.play('entity.arrow.shoot', p.x, p.y, p.z, 1, 1 / (Math.random() * 0.4 + 1.2) + f * 0.5);
   }
 
-  /** Middle click: pick block (creative puts it in the hotbar). */
+  /** Middle click: pick block (creative puts it in the hotbar; there an entity gives its item, vanilla getPickResult). */
   pickBlock(): void {
     const h = this.hit;
-    if (!h) return;
     const p = this.player;
-    const b = BLOCKS[STATE_BLOCK[h.state]];
-    const it = itemForBlock(b.name) ?? (b.name === 'water' ? getItem('water_bucket') : undefined);
+    const picked = this.entityHit && p.gameMode === 'creative' ? this.entityHit.pickResult() : null;
+    if (!h && !picked) return;
+    const b = h ? BLOCKS[STATE_BLOCK[h.state]] : null;
+    const it = picked ? getItem(picked) : itemForBlock(b!.name) ?? (b!.name === 'water' ? getItem('water_bucket') : undefined);
     if (!it) return;
     const inv = p.inventory;
     for (let i = 0; i < 9; i++) {

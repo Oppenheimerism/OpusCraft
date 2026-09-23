@@ -3,8 +3,28 @@
 import type { GameOptions } from '../game/options';
 import type { Player } from '../entity/player';
 import type { Game } from '../game/game';
+import { MinecartSounds } from './minecartSounds';
 
 const SR = 44100;
+
+/** a looping sound its owner updates every tick (vanilla AbstractTickableSoundInstance) */
+export class LoopSound {
+  x = 0;
+  y = 0;
+  z = 0;
+  volume = 0;
+  pitch = 1;
+  /** vanilla Attenuation.NONE + relative: heard at full volume wherever the listener is */
+  relative = false;
+  stopped = false;
+  src: AudioBufferSourceNode | null = null;
+  gain: GainNode | null = null;
+  pan: StereoPannerNode | null = null;
+  constructor(readonly name: string) {}
+  stop(): void {
+    this.stopped = true;
+  }
+}
 
 type Category = 'master' | 'music' | 'blocks' | 'weather' | 'hostile' | 'friendly' | 'players' | 'ambient';
 
@@ -50,6 +70,8 @@ export class SoundManager {
   private moodiness = 0;
   private active: { src: AudioBufferSourceNode; gain: GainNode; pan: StereoPannerNode; x: number; y: number; z: number; vol: number; range: number; cat: Category; ui: boolean }[] = [];
   private musicLoading = false;
+  private readonly loops: LoopSound[] = [];
+  private readonly minecarts = new MinecartSounds(this);
 
   constructor() {
     const unlock = () => this.ensure();
@@ -202,13 +224,83 @@ export class SoundManager {
       this.listener.yaw = p.yaw;
     }
     for (const e of this.active) this.applySpatial(e);
+    this.updateLoops();
     if (this.musicGain) this.musicGain.gain.value = this.catVolume('music') * 0.9;
+  }
+
+  /** start a looping sound, silent until its owner turns the volume up */
+  loop(name: string): LoopSound {
+    const s = new LoopSound(name);
+    this.loops.push(s);
+    return s;
+  }
+
+  /** per frame: loop volumes and positions (a silent loop holds no audio node) */
+  private updateLoops(): void {
+    for (let i = this.loops.length - 1; i >= 0; i--) {
+      const s = this.loops[i];
+      let g = 0, p = 0;
+      if (!s.stopped) {
+        g = Math.min(1, s.volume) * this.catVolume(categoryOf(s.name));
+        if (!s.relative) {
+          const l = this.listener;
+          const dx = s.x - l.x, dy = s.y - l.y, dz = s.z - l.z;
+          const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+          g *= Math.max(0, 1 - d / (16 * Math.max(1, s.volume)));
+          const yr = (l.yaw * Math.PI) / 180;
+          if (d > 0.01) p = Math.max(-1, Math.min(1, ((-dx * Math.cos(yr) - dz * Math.sin(yr)) / d) * 0.8));
+        }
+      }
+      if (g <= 0) {
+        if (s.src) {
+          try {
+            s.src.stop();
+          } catch {
+            /* already stopped */
+          }
+          s.src.disconnect();
+          s.src = null;
+        }
+        if (s.stopped) this.loops.splice(i, 1);
+        continue;
+      }
+      if (!s.src && !this.startLoop(s)) continue;
+      s.gain!.gain.value = g;
+      s.pan!.pan.value = p;
+      s.src!.playbackRate.value = Math.max(0.5, Math.min(2, s.pitch));
+    }
+  }
+
+  private startLoop(s: LoopSound): boolean {
+    if (!this.ctx || !this.master) return false;
+    const name = this.resolveName(s.name);
+    if (!this.variants[name]) return false;
+    const buf = this.buffers.get(name + '#0');
+    if (!buf) {
+      this.load(name, 0);
+      return false;
+    }
+    const ctx = this.ctx;
+    if (!s.gain || !s.pan) {
+      s.gain = ctx.createGain();
+      s.pan = ctx.createStereoPanner();
+      s.gain.connect(s.pan).connect(this.master);
+    }
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.loop = true;
+    src.connect(s.gain);
+    // somewhere into the loop, so carts that start together don't play in phase
+    src.start(0, Math.random() * buf.duration);
+    s.src = src;
+    return true;
   }
 
   /** per game tick: music scheduling and ambience */
   tick(game: Game): void {
     if (!this.ctx) return;
     const p = game.player;
+    this.minecarts.tick(game.level, p);
     // game music (vanilla MusicManager: 12000..24000 tick gaps)
     if (!this.musicPlaying && !this.musicLoading && this.musicCount > 0) {
       if (--this.nextSongDelay <= 0) {
@@ -292,6 +384,8 @@ export class SoundManager {
       }
     }
     this.active.length = 0;
+    for (const s of this.loops) s.stop();
+    this.updateLoops();
     this.stopMusic();
   }
 }

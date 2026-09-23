@@ -227,6 +227,42 @@ export class Player extends LivingEntity {
     return this.crouching;
   }
 
+  override isShiftKeyDown(): boolean {
+    return this.input.sneak;
+  }
+
+  /** vanilla Player.DEFAULT_VEHICLE_ATTACHMENT: seated 0.6 above the feet */
+  override vehicleAttachmentY(): number {
+    return 0.6;
+  }
+
+  /** vanilla Player.getDismountPoses: standing, else crouching */
+  override dismountHeights(): number[] {
+    return [1.8, 1.5];
+  }
+
+  override setDismountHeight(h: number): void {
+    this.crouching = h < 1.8;
+    this.setSize(0.6, h);
+  }
+
+  /** vanilla Player.rideTick: the sneak key gets you off; riders don't bob */
+  override rideTick(): void {
+    if (this.isShiftKeyDown() && this.vehicle) {
+      this.stopRiding();
+      return;
+    }
+    super.rideTick();
+    this.bobO = this.bob;
+    this.bob = 0;
+  }
+
+  /** vanilla Player.removeVehicle: players may climb straight back in */
+  override removeVehicle(): void {
+    super.removeVehicle();
+    this.boardingCooldown = 0;
+  }
+
   override tick(): void {
     // vanilla LocalPlayer.aiStep input handling happens in serverAiStep via input state
     this.bobO = this.bob;
@@ -353,8 +389,8 @@ export class Player extends LivingEntity {
       fwd *= 0.2;
       left *= 0.2;
     }
-    // sprinting: double-tap forward or sprint key (vanilla canStartSprinting: not while blind)
-    const canSprint = this.food.level > 6 || this.mayFly;
+    // sprinting: double-tap forward or sprint key (vanilla canStartSprinting: not while blind or riding, vehicleCanSprint)
+    const canSprint = (this.food.level > 6 || this.mayFly) && !this.vehicle;
     const forwardDown = inp.forward;
     if (this.sprintTriggerTime > 0) this.sprintTriggerTime--;
     if (!this.sprinting && canSprint && fwd >= 0.8 && !this.crouching && this.usingItemTicks === 0 && !this.hasEffect('blindness')) {
@@ -389,7 +425,7 @@ export class Player extends LivingEntity {
   }
 
   override travel(sx: number, sy: number, sz: number): void {
-    if (this.flying) {
+    if (this.flying && !this.vehicle) {
       const d0 = this.dy;
       super.travel(sx, sy, sz);
       this.dy = d0 * 0.6;

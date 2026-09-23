@@ -77,7 +77,7 @@ export function playerAttack(level: Level, p: Player, target: Entity, damageHeld
       }
     }
   }
-  // tool durability (vanilla Item.hurtEnemy: swords 1, other tools 2)
-  if (held?.item.tool && p.gameMode !== 'creative') damageHeld(held.item.tool.type === 'sword' ? 1 : 2);
+  // tool durability (vanilla Item.hurtEnemy, living targets only: swords 1, other tools 2)
+  if (held?.item.tool && p.gameMode !== 'creative' && target instanceof LivingEntity) damageHeld(held.item.tool.type === 'sword' ? 1 : 2);
   p.food.addExhaustion(0.1);
 }
