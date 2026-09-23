@@ -40,6 +40,7 @@ const NETHER_WOODS = ['crimson', 'warped'];
 for (const w of NETHER_WOODS) {
   TAGS.planks.push(`${w}_planks`);
   TAGS[`${w}_stems`] = [`${w}_stem`, `${w}_hyphae`, `stripped_${w}_stem`, `stripped_${w}_hyphae`];
+  TAGS.wooden_slabs.push(`${w}_slab`);
 }
 
 export type Ingredient = Ing;
@@ -73,6 +74,10 @@ for (const w of WOODS) {
   shaped(`${w}_stairs`, 4, ['#  ', '## ', '###'], { '#': `${w}_planks` });
 }
 for (const w of NETHER_WOODS) {
+  shaped(`${w}_slab`, 6, ['###'], { '#': `${w}_planks` });
+  shaped(`${w}_stairs`, 4, ['#  ', '## ', '###'], { '#': `${w}_planks` });
+  shaped(`${w}_fence`, 3, ['W#W', 'W#W'], { W: `${w}_planks`, '#': 'stick' });
+  shaped(`${w}_fence_gate`, 1, ['#W#', '#W#'], { W: `${w}_planks`, '#': 'stick' });
   shapeless(`${w}_planks`, 4, `#${w}_stems`);
   shaped(`${w}_hyphae`, 3, ['##', '##'], { '#': `${w}_stem` });
   shaped(`stripped_${w}_hyphae`, 3, ['##', '##'], { '#': `stripped_${w}_stem` });

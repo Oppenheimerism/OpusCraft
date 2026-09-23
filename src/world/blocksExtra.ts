@@ -477,6 +477,10 @@ export function registerExtraBlocks(): void {
     registerFence(`${w}_fence`, `${w}_planks`, 2, w === 'cherry' ? 'cherry_wood' : 'wood', 'axe');
     registerFenceGate(`${w}_fence_gate`, `${w}_planks`);
   }
+  for (const w of ['crimson', 'warped']) {
+    registerFence(`${w}_fence`, `${w}_planks`, 2, 'nether_wood', 'axe');
+    registerFenceGate(`${w}_fence_gate`, `${w}_planks`);
+  }
   // panes and bars
   registerPane('glass_pane', 'glass', 'glass_pane_top', { sound: 'glass', hardness: 0.3, layer: Layer.CUTOUT, noDrop: true });
   registerPane('iron_bars', 'iron_bars', 'iron_bars', { sound: 'metal', hardness: 5, layer: Layer.CUTOUT, tool: 'pickaxe' });

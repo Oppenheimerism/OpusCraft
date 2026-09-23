@@ -494,6 +494,8 @@ const SLAB_MATERIALS: [string, string, string, string, string, number][] = [
   ['dark_oak', 'dark_oak_planks', 'dark_oak_planks', 'dark_oak_planks', 'wood', 2],
   ['mangrove', 'mangrove_planks', 'mangrove_planks', 'mangrove_planks', 'wood', 2],
   ['cherry', 'cherry_planks', 'cherry_planks', 'cherry_planks', 'wood', 2],
+  ['crimson', 'crimson_planks', 'crimson_planks', 'crimson_planks', 'nether_wood', 2],
+  ['warped', 'warped_planks', 'warped_planks', 'warped_planks', 'nether_wood', 2],
   ['mossy_cobblestone', 'mossy_cobblestone', 'mossy_cobblestone', 'mossy_cobblestone', 'stone', 2],
   ['mossy_stone_brick', 'mossy_stone_bricks', 'mossy_stone_bricks', 'mossy_stone_bricks', 'stone', 1.5],
   ['granite', 'granite', 'granite', 'granite', 'stone', 1.5],
@@ -515,7 +517,7 @@ const SLAB_MATERIALS: [string, string, string, string, string, number][] = [
 /** materials with a slab but no stairs in vanilla */
 const SLAB_ONLY = new Set(['smooth_stone', 'cut_sandstone']);
 for (const [name, bottom, top, side, sound, hardness] of SLAB_MATERIALS) {
-  const tool = sound === 'wood' ? 'axe' : 'pickaxe';
+  const tool = sound === 'wood' || sound === 'nether_wood' ? 'axe' : 'pickaxe';
   const bm = slabBottom(bottom, top, side), tm = slabTop(bottom, top, side), dm = cubeBottomTop(side, bottom, top);
   registerBlock(`${name}_slab`, {
     props: [P.slabType, P.waterlogged], defaults: { type: 'bottom' }, hardness, resistance: 6, sound, tool, requiresTool: tool === 'pickaxe', flammable: sound === 'wood',
