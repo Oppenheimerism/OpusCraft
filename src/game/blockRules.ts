@@ -133,7 +133,7 @@ export function canSurvive(world: World, x: number, y: number, z: number, state:
     const hi = up[shape];
     return !hi || isSturdyFace(world.getState(x + hi[0], y, z + hi[1]), UP);
   }
-  if (n === 'lantern') {
+  if (n === 'lantern' || n === 'soul_lantern') {
     if (b.get(state, 'hanging')) {
       const above = world.getState(x, y + 1, z);
       return isSturdyFace(above, DOWN) || blk(above).name === 'chain' || blk(above).name.endsWith('_fence') || blk(above).name.endsWith('_wall');
@@ -169,8 +169,8 @@ export function canSurvive(world: World, x: number, y: number, z: number, state:
     }
     return bn === 'cactus' || bn === 'sand' || bn === 'red_sand';
   }
-  if (n === 'torch') return isSturdyFace(below, UP) || /fence|wall|glass/.test(bn);
-  if (n === 'wall_torch') {
+  if (n === 'torch' || n === 'soul_torch') return isSturdyFace(below, UP) || /fence|wall|glass/.test(bn);
+  if (n === 'wall_torch' || n === 'soul_wall_torch') {
     const f = b.get<string>(state, 'facing');
     const d = DIR_NAMES.indexOf(f as (typeof DIR_NAMES)[number]);
     const sx = x - DX[d], sz = z - DZ[d];
@@ -294,10 +294,10 @@ export function placementState(block: Block, ctx: PlaceContext): number | null {
   } else if (n.endsWith('_slab')) {
     const top = ctx.face === DOWN || (ctx.face !== UP && ctx.hitY > 0.5);
     st = block.with(st, 'type', top ? 'top' : 'bottom');
-  } else if (n === 'torch') {
+  } else if (n === 'torch' || n === 'soul_torch') {
     if (ctx.face === UP) return st;
     if (ctx.face === DOWN) return null;
-    const wt = getBlock('wall_torch');
+    const wt = getBlock(n === 'torch' ? 'wall_torch' : 'soul_wall_torch');
     return wt.state({ facing: DIR_NAMES[ctx.face] });
   } else if (n === 'ladder') {
     if (ctx.face === UP || ctx.face === DOWN) return null;
@@ -319,7 +319,7 @@ export function placementState(block: Block, ctx: PlaceContext): number | null {
   } else if (n.endsWith('_fence_gate') || n.endsWith('_bed')) {
     st = block.with(st, 'facing', facingH);
     if (n.endsWith('_bed')) st = block.with(st, 'part', 'foot');
-  } else if (n === 'lantern') {
+  } else if (n === 'lantern' || n === 'soul_lantern') {
     // vanilla: prefer the vertical direction the player looks toward
     const hanging = ctx.face === DOWN;
     st = block.with(st, 'hanging', hanging);
@@ -544,6 +544,7 @@ export function blockDrops(state: number, tool: Item | null, r: Rand, silk = fal
     case 'amethyst_cluster': return stacks('amethyst_shard', tool?.tool?.type === 'pickaxe' ? oreDrops(r, 4, fortune) : 2);
     case 'small_amethyst_bud': case 'medium_amethyst_bud': case 'large_amethyst_bud': return [];
     case 'wall_torch': return stacks('torch', 1);
+    case 'soul_wall_torch': return stacks('soul_torch', 1);
     // vanilla cave vines loot: a glow berry if it has one; hanging roots and small dripleaf need shears
     case 'cave_vines': case 'cave_vines_plant': return b.get(state, 'berries') ? stacks('glow_berries', 1) : [];
     case 'hanging_roots': case 'nether_sprouts': return shears ? stacks(n, 1) : [];

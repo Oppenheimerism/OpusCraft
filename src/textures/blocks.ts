@@ -316,6 +316,7 @@ T['kelp_plant'] = () => PL.kelp(false);
 for (let s = 0; s < 4; s++) T[`sweet_berry_bush_stage${s}`] = () => PL.berryBush(s);
 for (let s = 0; s < 8; s++) T[`wheat_stage${s}`] = () => PL.wheat(s);
 T['torch'] = () => PL.torch();
+T['soul_torch'] = () => PL.torch(true);
 T['cobweb'] = () => PL.cobweb();
 T['ladder'] = () => PL.ladder();
 
@@ -430,6 +431,7 @@ T['attached_melon_stem'] = () => CR.attachedStem('attached_melon_stem');
 // Lantern, chain, campfire
 
 T['lantern'] = () => DC.lantern();
+T['soul_lantern'] = () => DC.lantern(true);
 T['chain'] = () => DC.chain();
 T['fire_0'] = FIRE_TEXTURES.fire_0;
 T['fire_1'] = FIRE_TEXTURES.fire_1;

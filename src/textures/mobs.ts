@@ -1115,7 +1115,7 @@ function pixelSprite(rows: readonly string[], inks: Record<string, number>): Tex
   return t;
 }
 
-function flameParticle(): TexImage {
+function flameParticle(soul = false): TexImage {
   const t = img(8, 8);
   draw(t, 0, 0, [
     '....r...',
@@ -1126,7 +1126,7 @@ function flameParticle(): TexImage {
     '.oyWWyo.',
     '.ryWWyr.',
     '..roor..',
-  ], { r: 0xd8501a, o: 0xf08a1e, y: 0xffc836, W: 0xfff4a8 }, new Rand(1));
+  ], soul ? { r: 0x0f8a96, o: 0x2ab8c4, y: 0x72e4ea, W: 0xdcffff } : { r: 0xd8501a, o: 0xf08a1e, y: 0xffc836, W: 0xfff4a8 }, new Rand(1));
   return t;
 }
 
@@ -1303,7 +1303,8 @@ MOB_PARTICLE_TEXTURES['enchanted_hit'] = () =>
 MOB_PARTICLE_TEXTURES['damage'] = () => heartParticle(0x000000, 0x5a0000, 0x8c0a0a, 0x420000);
 MOB_PARTICLE_TEXTURES['heart'] = () => heartParticle(0x3c0404, 0xe41c1c, 0xffffff, 0xae0f0f);
 for (let i = 0; i < 8; i++) MOB_PARTICLE_TEXTURES['sweep_' + i] = () => sweepFrame(i);
-MOB_PARTICLE_TEXTURES['flame'] = flameParticle;
+MOB_PARTICLE_TEXTURES['flame'] = () => flameParticle();
+MOB_PARTICLE_TEXTURES['soul_fire_flame'] = () => flameParticle(true);
 MOB_PARTICLE_TEXTURES['lava'] = () => pixelSprite([
   '........',
   '..rrrr..',

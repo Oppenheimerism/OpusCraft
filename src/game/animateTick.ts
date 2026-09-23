@@ -39,8 +39,8 @@ function kindOf(st: number): number {
     BLOCKS.forEach((b, i) => {
       const n = b.name;
       KIND![i] =
-        n === 'torch' ? K.TORCH
-        : n === 'wall_torch' ? K.WALL_TORCH
+        n === 'torch' || n === 'soul_torch' ? K.TORCH
+        : n === 'wall_torch' || n === 'soul_wall_torch' ? K.WALL_TORCH
         : n === 'fire' ? K.FIRE
         : n === 'furnace' ? K.FURNACE
         : n.endsWith('_leaves') ? K.LEAVES
@@ -146,13 +146,13 @@ export class AmbientTicker {
     if (st === 0) return;
     switch (kindOf(st)) {
       case K.TORCH:
-        this.torch(x + 0.5, y + 0.7, z + 0.5);
+        this.torch(x + 0.5, y + 0.7, z + 0.5, st);
         break;
       case K.WALL_TORCH: {
         // vanilla WallTorchBlock: the flame sits out from the wall
         const b = BLOCKS[STATE_BLOCK[st]];
         const [fx, fz] = STEP[b.get<string>(st, 'facing')];
-        this.torch(x + 0.5 - 0.27 * fx, y + 0.7 + 0.22, z + 0.5 - 0.27 * fz);
+        this.torch(x + 0.5 - 0.27 * fx, y + 0.7 + 0.22, z + 0.5 - 0.27 * fz, st);
         break;
       }
       case K.FIRE:
@@ -274,10 +274,11 @@ export class AmbientTicker {
     this.level.particles.spawn?.(fluid === 'lava' ? 'dripping_dripstone_lava' : 'dripping_dripstone_water', x + 0.5 + ox, y + 1 - 0.6875 - 0.0625, z + 0.5 + oz, 0, 0, 0);
   }
 
-  private torch(x: number, y: number, z: number): void {
+  /** vanilla TorchBlock.animateTick: smoke and its flame (a soul torch's is soul fire's) */
+  private torch(x: number, y: number, z: number, st: number): void {
     const ps = this.level.particles;
     ps.spawn?.('smoke', x, y, z, 0, 0, 0);
-    ps.spawn?.('flame', x, y, z, 0, 0, 0);
+    ps.spawn?.(BLOCKS[STATE_BLOCK[st]].name.startsWith('soul') ? 'soul_fire_flame' : 'flame', x, y, z, 0, 0, 0);
   }
 
   /** vanilla BaseFireBlock.animateTick */

@@ -861,7 +861,8 @@ export function sugarCane(): TexImage {
   return t;
 }
 
-export function torch(): TexImage {
+/** a torch; the soul torch burns with soul fire's pale cyan flame */
+export function torch(soul = false): TexImage {
   return sprite(
     [
       '.......wY.......',
@@ -875,7 +876,7 @@ export function torch(): TexImage {
       '.......lb.......',
       '.......lB.......',
     ],
-    { w: 0xfffbd0, Y: 0xffd84a, O: 0xf59d2a, L: 0x9c7a4b, l: 0x866741, b: 0x6b5132, B: 0x5a4329 },
+    { w: soul ? 0xe0ffff : 0xfffbd0, Y: soul ? 0x6fe6ee : 0xffd84a, O: soul ? 0x1d9aa8 : 0xf59d2a, L: 0x9c7a4b, l: 0x866741, b: 0x6b5132, B: 0x5a4329 },
     img(), 0, 6,
   );
 }

@@ -471,7 +471,8 @@ export class ParticleEngine {
         this.addSprite(p);
         break;
       }
-      case 'flame': {
+      case 'flame':
+      case 'soul_fire_flame': {
         // vanilla FlameParticle (RisingParticle): flickers in place, shrinking, brightening
         const p = this.base(kind, x, y, z);
         this.withSpeed(p, xd, yd, zd);
@@ -487,7 +488,7 @@ export class ParticleEngine {
         p.zo = p.z;
         p.lifetime = Math.floor(8 / (Math.random() * 0.8 + 0.2)) + 4;
         p.physics = false;
-        p.frames = ['flame'];
+        p.frames = [kind];
         p.frame = 0;
         p.lightMode = 'flame';
         p.sizeCurve = 'flame';

@@ -30,6 +30,7 @@ const TAGS: Record<string, string[]> = {
   stone_tool_materials: ['cobblestone', 'cobbled_deepslate'],
   stone_crafting_materials: ['cobblestone', 'cobbled_deepslate'],
   coals: ['coal', 'charcoal'],
+  soul_fire_base_blocks: ['soul_sand', 'soul_soil'],
   wool: COLORS.map((c) => `${c}_wool`),
   sand: ['sand', 'red_sand'],
   wooden_slabs: WOODS.map((w) => `${w}_slab`),
@@ -89,6 +90,8 @@ shaped('crafting_table', 1, ['##', '##'], { '#': '#planks' });
 shaped('chest', 1, ['###', '# #', '###'], { '#': '#planks' });
 shaped('furnace', 1, ['###', '# #', '###'], { '#': '#stone_crafting_materials' });
 shaped('torch', 4, ['X', '#'], { X: '#coals', '#': 'stick' });
+shaped('soul_torch', 4, ['X', '#', 'S'], { X: '#coals', '#': 'stick', S: '#soul_fire_base_blocks' });
+shaped('soul_lantern', 1, ['XXX', 'X#X', 'XXX'], { X: 'iron_nugget', '#': 'soul_torch' });
 shaped('ladder', 3, ['# #', '###', '# #'], { '#': 'stick' });
 shaped('bowl', 4, ['# #', ' # '], { '#': '#planks' });
 shaped('bookshelf', 1, ['###', 'XXX', '###'], { '#': '#planks', X: 'book' });

@@ -599,8 +599,7 @@ export function registerExtraBlocks(): void {
   registerWall('nether_brick_wall', 'nether_bricks', 2, 'nether_bricks');
   registerWall('red_nether_brick_wall', 'red_nether_bricks', 2, 'nether_bricks');
   // lantern & chain
-  {
-    const L = 'lantern';
+  for (const [L, light] of [['lantern', 15], ['soul_lantern', 10]] as [string, number][]) {
     const lantern = (hanging: boolean): ModelDef => {
       const o = hanging ? 1 : 0;
       const els: ElementDef[] = [
@@ -617,12 +616,14 @@ export function registerExtraBlocks(): void {
       return { ao: false, particle: L, elements: els };
     };
     const standing = lantern(false), hanging = lantern(true);
-    registerBlock('lantern', {
+    registerBlock(L, {
       props: [boolProp('hanging'), P.waterlogged], hardness: 3.5, sound: 'lantern', tool: 'pickaxe', requiresTool: true, layer: Layer.CUTOUT, opaque: false,
-      aoCaster: false, opacity: 0, light: 15,
+      aoCaster: false, opacity: 0, light,
       collision: (s) => (s.get('hanging') ? [bx(5, 1, 5, 11, 8, 11), bx(6, 8, 6, 10, 10, 10)] : [bx(5, 0, 5, 11, 7, 11), bx(6, 7, 6, 10, 9, 10)]),
       model: (s) => ({ model: s.get('hanging') ? hanging : standing }),
     });
+  }
+  {
     const C = 'chain';
     const chain: ModelDef = {
       ao: false,

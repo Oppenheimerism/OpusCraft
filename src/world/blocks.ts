@@ -397,16 +397,18 @@ registerBlock('glass', {
   hardness: 0.3, sound: 'glass', layer: Layer.CUTOUT, opaque: false, cullSame: true, aoCaster: false, viewBlocking: false, opacity: 0,
   model: one(cubeAll('glass')), noDrop: true,
 });
-{
-  const torch = torchModel('torch');
-  const wall = wallTorchModel('torch');
-  registerBlock('torch', {
-    hardness: 0, sound: 'wood', collision: 'none', layer: Layer.CUTOUT, opaque: false, light: 14,
-    outline: [bx(6, 0, 6, 10, 10, 10)], model: one(torch), item: 'torch',
+// torches, and (vanilla SOUL_TORCH: light 10) their soul fire kind
+for (const [t, light] of [['torch', 14], ['soul_torch', 10]] as [string, number][]) {
+  const wallName = t === 'torch' ? 'wall_torch' : 'soul_wall_torch';
+  const torch = torchModel(t);
+  const wall = wallTorchModel(t);
+  registerBlock(t, {
+    hardness: 0, sound: 'wood', collision: 'none', layer: Layer.CUTOUT, opaque: false, light,
+    outline: [bx(6, 0, 6, 10, 10, 10)], model: one(torch), item: t,
   });
   const WALL_Y: Record<string, number> = { east: 0, south: 90, west: 180, north: 270 };
-  registerBlock('wall_torch', {
-    props: [P.facingH], hardness: 0, sound: 'wood', collision: 'none', layer: Layer.CUTOUT, opaque: false, light: 14, item: 'torch',
+  registerBlock(wallName, {
+    props: [P.facingH], hardness: 0, sound: 'wood', collision: 'none', layer: Layer.CUTOUT, opaque: false, light, item: t,
     outline: (s) => {
       switch (s.get('facing')) {
         case 'north': return [bx(5.5, 3, 11, 10.5, 13, 16)];
