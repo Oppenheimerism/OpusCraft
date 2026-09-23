@@ -423,3 +423,164 @@ export function minecartModel(): MobModelDef {
 export function animateMinecart(root: ModelPart, age: number): void {
   root.child('contents').y = 4 - age;
 }
+
+// ---------------------------------------------------------------------------
+// keyframe animations (vanilla AnimationDefinition / KeyframeAnimations, linear channels)
+
+type Vec3 = [number, number, number];
+
+interface AnimChannel {
+  bone: string;
+  /** rotation keys are in degrees (KeyframeAnimations.degreeVec), position keys in pixels with +y up (posVec) */
+  target: 'rotation' | 'position';
+  keys: [number, Vec3][];
+}
+
+export interface AnimationDef {
+  length: number;
+  looping: boolean;
+  channels: AnimChannel[];
+}
+
+/** vanilla KeyframeAnimations.animate: offsets each bone's pose by its channels at `seconds` */
+export function applyAnimation(root: ModelPart, def: AnimationDef, seconds: number): void {
+  const t = def.looping ? seconds % def.length : seconds;
+  for (const ch of def.channels) {
+    const p = root.find(ch.bone);
+    if (!p) continue;
+    const k = ch.keys;
+    // vanilla: the last key at or before t, blended linearly towards the next
+    let j = 0;
+    while (j < k.length && !(t <= k[j][0])) j++;
+    const i = Math.max(0, j - 1), n = Math.min(k.length - 1, i + 1);
+    const f = n !== i ? Math.max(0, Math.min(1, (t - k[i][0]) / (k[n][0] - k[i][0]))) : 0;
+    const a = k[i][1], b = k[n][1];
+    const x = a[0] + (b[0] - a[0]) * f, y = a[1] + (b[1] - a[1]) * f, z = a[2] + (b[2] - a[2]) * f;
+    if (ch.target === 'rotation') {
+      p.xRot += (x * PI) / 180;
+      p.yRot += (y * PI) / 180;
+      p.zRot += (z * PI) / 180;
+    } else {
+      p.x += x;
+      p.y -= y;
+      p.z += z;
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// bat (the 1.20.3+ model: small body, big ears, two-part wings, feet)
+
+/** vanilla BatModel.createBodyLayer (32x32) */
+export function batModel(): MobModelDef {
+  const root = new ModelPart();
+  const body = root.add('body', part([{ x: -1.5, y: 0, z: -1, w: 3, h: 5, d: 2, u: 0, v: 0 }], [0, 17, 0]));
+  const head = root.add('head', part([{ x: -2, y: -3, z: -1, w: 4, h: 3, d: 2, u: 0, v: 7 }], [0, 17, 0]));
+  head.add('right_ear', part([{ x: -2.5, y: -4, z: 0, w: 3, h: 5, d: 0, u: 1, v: 15 }], [-1.5, -2, 0]));
+  head.add('left_ear', part([{ x: -0.1, y: -3, z: 0, w: 3, h: 5, d: 0, u: 8, v: 15 }], [1.1, -3, 0]));
+  const rw = body.add('right_wing', part([{ x: -2, y: -2, z: 0, w: 2, h: 7, d: 0, u: 12, v: 0 }], [-1.5, 0, 0]));
+  rw.add('right_wing_tip', part([{ x: -6, y: -2, z: 0, w: 6, h: 8, d: 0, u: 16, v: 0 }], [-2, 0, 0]));
+  const lw = body.add('left_wing', part([{ x: 0, y: -2, z: 0, w: 2, h: 7, d: 0, u: 12, v: 7 }], [1.5, 0, 0]));
+  lw.add('left_wing_tip', part([{ x: 0, y: -2, z: 0, w: 6, h: 8, d: 0, u: 16, v: 8 }], [2, 0, 0]));
+  body.add('feet', part([{ x: -1.5, y: 0, z: 0, w: 3, h: 2, d: 0, u: 16, v: 16 }], [0, 5, 0]));
+  return { root, texW: 32, texH: 32 };
+}
+
+const still = (bone: string, target: AnimChannel['target'], v: Vec3): AnimChannel => ({ bone, target, keys: [[0, v]] });
+
+/** vanilla BatAnimation.BAT_RESTING: hanging upside down by the feet, wings wrapped round the body */
+export const BAT_RESTING: AnimationDef = {
+  length: 0.5,
+  looping: true,
+  channels: [
+    still('body', 'rotation', [180, 0, 0]),
+    still('body', 'position', [0, 0.5, 0]),
+    still('head', 'rotation', [180, 0, 0]),
+    still('head', 'position', [0, 0.5, 0]),
+    still('right_wing', 'rotation', [0, -160, 0]),
+    still('right_wing_tip', 'rotation', [0, -140, 0]),
+    still('left_wing', 'rotation', [0, 160, 0]),
+    still('left_wing_tip', 'rotation', [0, 140, 0]),
+  ],
+};
+
+/** vanilla BatAnimation.BAT_FLYING: one wingbeat every half second (Bat.TICKS_PER_FLAP), body pitched forward */
+export const BAT_FLYING: AnimationDef = {
+  length: 0.5,
+  looping: true,
+  channels: [
+    { bone: 'head', target: 'rotation', keys: [[0, [20, 0, 0]], [0.5, [20, 0, 0]]] },
+    { bone: 'head', target: 'position', keys: [[0, [0, 0, 0]], [0.125, [0, 1, 0]], [0.25, [0, 0, 0]], [0.375, [0, -0.5, 0]], [0.5, [0, 0, 0]]] },
+    { bone: 'body', target: 'rotation', keys: [[0, [40, 0, 0]], [0.5, [40, 0, 0]]] },
+    { bone: 'body', target: 'position', keys: [[0, [0, 0, 0]], [0.125, [0, 1, 0]], [0.25, [0, 0, 0]], [0.375, [0, -0.5, 0]], [0.5, [0, 0, 0]]] },
+    { bone: 'right_wing', target: 'rotation', keys: [[0, [0, 85, 0]], [0.125, [0, -55, 0]], [0.25, [0, 50, 0]], [0.375, [0, 70, 0]], [0.5, [0, 85, 0]]] },
+    { bone: 'right_wing_tip', target: 'rotation', keys: [[0, [0, 10, 0]], [0.125, [0, -65, 0]], [0.25, [0, 35, 0]], [0.375, [0, 60, 0]], [0.5, [0, 10, 0]]] },
+    { bone: 'left_wing', target: 'rotation', keys: [[0, [0, -85, 0]], [0.125, [0, 55, 0]], [0.25, [0, -50, 0]], [0.375, [0, -70, 0]], [0.5, [0, -85, 0]]] },
+    { bone: 'left_wing_tip', target: 'rotation', keys: [[0, [0, -10, 0]], [0.125, [0, 65, 0]], [0.25, [0, -35, 0]], [0.375, [0, -60, 0]], [0.5, [0, -10, 0]]] },
+    { bone: 'feet', target: 'rotation', keys: [[0, [10, 0, 0]], [0.125, [-21.25, 0, 0]], [0.25, [10, 0, 0]], [0.5, [10, 0, 0]]] },
+  ],
+};
+
+/**
+ * vanilla BatModel.setupAnim: reset, turn the head while hanging, then play whichever of the
+ * fly / rest loops is running (`flySeconds` / `restSeconds` < 0 = stopped)
+ */
+export function animateBat(root: ModelPart, resting: boolean, netHeadYaw: number, flySeconds: number, restSeconds: number): void {
+  root.resetPose();
+  if (resting) root.child('head').yRot = (netHeadYaw * PI) / 180;
+  if (flySeconds >= 0) applyAnimation(root, BAT_FLYING, flySeconds);
+  if (restSeconds >= 0) applyAnimation(root, BAT_RESTING, restSeconds);
+}
+
+// ---------------------------------------------------------------------------
+// boats (vanilla BoatModel / ChestBoatModel, 128x64 and 128x128)
+
+function boatParts(root: ModelPart): void {
+  root.add('bottom', part([{ x: -14, y: -9, z: -3, w: 28, h: 16, d: 3, u: 0, v: 0 }], [0, 3, 1], [PI / 2, 0, 0]));
+  root.add('back', part([{ x: -13, y: -7, z: -1, w: 18, h: 6, d: 2, u: 0, v: 19 }], [-15, 4, 4], [0, PI * 1.5, 0]));
+  root.add('front', part([{ x: -8, y: -7, z: -1, w: 16, h: 6, d: 2, u: 0, v: 27 }], [15, 4, 0], [0, PI / 2, 0]));
+  root.add('right', part([{ x: -14, y: -7, z: -1, w: 28, h: 6, d: 2, u: 0, v: 35 }], [0, 4, -9], [0, PI, 0]));
+  root.add('left', part([{ x: -14, y: -7, z: -1, w: 28, h: 6, d: 2, u: 0, v: 43 }], [0, 4, 9]));
+  root.add('left_paddle', part([{ x: -1, y: 0, z: -5, w: 2, h: 2, d: 18, u: 62, v: 0 }, { x: -1.001, y: -3, z: 8, w: 1, h: 6, d: 7, u: 62, v: 0 }], [3, -5, 9], [0, 0, PI / 16]));
+  root.add('right_paddle', part([{ x: -1, y: 0, z: -5, w: 2, h: 2, d: 18, u: 62, v: 20 }, { x: 0.001, y: -3, z: 8, w: 1, h: 6, d: 7, u: 62, v: 20 }], [3, -5, -9], [0, PI, PI / 16]));
+}
+
+/** the hull the water mask covers (vanilla WaterPatchModel.waterPatch, drawn depth-only) */
+function waterPatch(): ModelPart {
+  return part([{ x: -14, y: -9, z: -3, w: 28, h: 16, d: 3, u: 0, v: 0 }], [0, -3, 1], [PI / 2, 0, 0]);
+}
+
+export interface BoatModelDef extends MobModelDef {
+  waterPatch: ModelPart;
+}
+
+/** vanilla BoatModel.createBodyModel */
+export function boatModel(): BoatModelDef {
+  const root = new ModelPart();
+  boatParts(root);
+  return { root, texW: 128, texH: 64, waterPatch: waterPatch() };
+}
+
+/** vanilla ChestBoatModel.createBodyModel: the boat plus a chest in the back seat */
+export function chestBoatModel(): BoatModelDef {
+  const root = new ModelPart();
+  boatParts(root);
+  root.add('chest_bottom', part([{ x: 0, y: 0, z: 0, w: 12, h: 8, d: 12, u: 0, v: 76 }], [-2, -5, -6], [0, -PI / 2, 0]));
+  root.add('chest_lid', part([{ x: 0, y: 0, z: 0, w: 12, h: 4, d: 12, u: 0, v: 59 }], [-2, -9, -6], [0, -PI / 2, 0]));
+  root.add('chest_lock', part([{ x: 0, y: 0, z: 0, w: 2, h: 4, d: 1, u: 0, v: 59 }], [-1, -6, -1], [0, -PI / 2, 0]));
+  return { root, texW: 128, texH: 128, waterPatch: waterPatch() };
+}
+
+/** vanilla BoatModel.animatePaddle: `rowing` = Boat.getRowingTime for that side */
+function animatePaddle(p: ModelPart, side: number, rowing: number): void {
+  const lerp = (a: number, b: number, t: number) => (t < 0 ? a : t > 1 ? b : a + (b - a) * t);
+  p.xRot = lerp(-PI / 3, -PI / 12, (Math.sin(-rowing) + 1) / 2);
+  p.yRot = lerp(-PI / 4, PI / 4, (Math.sin(-rowing + 1) + 1) / 2);
+  if (side === 1) p.yRot = PI - p.yRot;
+}
+
+/** vanilla BoatModel.setupAnim */
+export function animateBoat(root: ModelPart, leftRowing: number, rightRowing: number): void {
+  animatePaddle(root.child('left_paddle'), 0, leftRowing);
+  animatePaddle(root.child('right_paddle'), 1, rightRowing);
+}

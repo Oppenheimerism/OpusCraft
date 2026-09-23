@@ -53,6 +53,7 @@ import { keyDisplayName } from './input';
 import { LivingEntity } from '../entity/living';
 import { Monster } from '../entity/monsters';
 import type { MinecartChest } from '../entity/minecart';
+import { ChestBoat } from '../entity/boat';
 import { nightVisionScale, blindnessFog, applyNausea } from '../render/effectVisuals';
 
 export type { GameOptions } from './options';
@@ -266,8 +267,13 @@ export class Game {
           return true;
         }
         if (e.code === KEYS.inventory && !e.repeat) {
-          if (this.inventoryScreenFactory) this.setScreen(this.inventoryScreenFactory());
-          this.tutorial.onOpenInventory();
+          // vanilla isServerControlledInventory: in a chest boat the key opens its chest
+          const v = this.player.vehicle;
+          if (v instanceof ChestBoat) this.openEntityContainer(v);
+          else {
+            if (this.inventoryScreenFactory) this.setScreen(this.inventoryScreenFactory());
+            this.tutorial.onOpenInventory();
+          }
           return true;
         }
         if (e.code === KEYS.advancements && !e.repeat && this.advancementsScreenFactory) {
@@ -690,8 +696,8 @@ export class Game {
     }
   }
 
-  /** right-clicked a chest minecart (vanilla ContainerEntity.interactWithContainerVehicle: no sound, no lid) */
-  openEntityContainer(e: MinecartChest): void {
+  /** right-clicked a chest minecart or chest boat (vanilla ContainerEntity.interactWithContainerVehicle: no sound, no lid) */
+  openEntityContainer(e: MinecartChest | ChestBoat): void {
     if (!this.containerScreenFactory) return;
     e.unpackLoot();
     this.setScreen(this.containerScreenFactory(new ChestMenu(this.player, e, entityDisplayName(e))));
@@ -967,8 +973,14 @@ export class Game {
     if (this.spawned && inp.locked && !this.screen) {
       const s = this.opts.sensitivity * 0.6 + 0.2;
       const k = s * s * s * 8;
-      this.player.yaw += mx * k * 0.15;
-      this.player.pitch = clamp(this.player.pitch + my * k * 0.15 * (this.opts.invertMouse ? -1 : 1), -90, 90);
+      // vanilla Entity.turn: last tick's angles turn too (a rider's view lerps between ticks), and a
+      // boat clamps how far its riders look round
+      const p = this.player, dyaw = mx * k * 0.15, dpitch = my * k * 0.15 * (this.opts.invertMouse ? -1 : 1);
+      p.yaw += dyaw;
+      p.yawO += dyaw;
+      p.pitch = clamp(p.pitch + dpitch, -90, 90);
+      p.pitchO = clamp(p.pitchO + dpitch, -90, 90);
+      if ((mx || my) && p.vehicle) p.vehicle.onPassengerTurned(p);
       if (mx || my) this.tutorial.onMouse(mx * k, my * k);
     }
     if (this.spawned) {
@@ -1175,7 +1187,8 @@ export class Game {
       fov /= (1 - 500 / (f + 500)) * 2 + 1;
     }
     let cx = ex, cy = ey, cz = ez;
-    let yaw = p.yaw, pitch = p.pitch;
+    // vanilla LocalPlayer.getViewYRot: a rider's view turns smoothly with the vehicle
+    let yaw = p.vehicle ? p.yawO + (p.yaw - p.yawO) * partial : p.yaw, pitch = p.pitch;
     const bed = p.bedOrientation();
     if (this.thirdPerson === 0 && bed) {
       // vanilla Camera.setup: asleep, look down the bed from the pillow

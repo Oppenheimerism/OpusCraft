@@ -1082,6 +1082,63 @@ function batSqueak(c: Ctx): Float32Array {
   return out;
 }
 
+/** A falling squeal with a rough, fluttering edge (bat hurt / death). */
+function batShriek(b: Float32Array, sr: number, t: number, d: number, fa: number, fb: number, rough: number): void {
+  const am = (x: number) => envBump(x, d * 0.12, d * 0.88) * (1 - rough + rough * Math.abs(Math.sin(TAU * 95 * x)));
+  const f = (x: number) => fa * Math.pow(fb / fa, x / d);
+  addOsc(b, sr, t, d, f, am);
+  addOsc(b, sr, t, d, (x) => 1.5 * f(x), (x) => 0.3 * am(x));
+  addOsc(b, sr, t, d, (x) => 0.5 * f(x), (x) => 0.45 * am(x));
+}
+
+/** Bat hurt: two or three shrill, rough shrieks in quick succession. */
+function batHurt(c: Ctx): Float32Array {
+  const { sr, rng } = c;
+  const out = alloc(0.4, sr);
+  layer(out, 1, (b) => {
+    let t = 0;
+    const n = 2 + rng.int(2);
+    for (let k = 0; k < n && t < 0.3; k++) {
+      const d = rng.range(0.05, 0.09);
+      const fa = rng.range(4300, 5600);
+      batShriek(b, sr, t, d, fa, fa * rng.range(0.55, 0.7), 0.35);
+      t += d + rng.range(0.012, 0.035);
+    }
+  });
+  layer(out, 0.2, (b) => burst(b, sr, rng, { dur: 0.12, attack: 0.002, tau: 0.03, bp: [5200, 1.4] }));
+  return out;
+}
+
+/** Bat death: a long falling squeal that breaks up at the end. */
+function batDeath(c: Ctx): Float32Array {
+  const { sr, rng } = c;
+  const out = alloc(0.75, sr);
+  layer(out, 1, (b) => {
+    batShriek(b, sr, 0, 0.32, 5600, 2600, 0.45);
+    batShriek(b, sr, 0.34, 0.14, 3600, 2100, 0.6);
+    batShriek(b, sr, 0.5, 0.1, 2900, 1800, 0.7);
+  });
+  layer(out, 0.15, (b) => burst(b, sr, rng, { dur: 0.3, attack: 0.004, tau: 0.08, bp: [4200, 1.2] }));
+  return out;
+}
+
+/** Bat takeoff: a burst of leathery wingbeats, fast at first and fading. */
+function batTakeoff(c: Ctx): Float32Array {
+  const { sr, rng } = c;
+  const out = alloc(0.8, sr);
+  layer(out, 1, (b) => {
+    let t = 0.002;
+    for (let k = 0; t < 0.62; k++) {
+      const a = Math.exp(-t / 0.35) * rng.range(0.7, 1);
+      const d = rng.range(0.035, 0.05);
+      sweep(b, sr, rng, { t, dur: d, f: (x) => 900 + 1600 * (x / d), q: 1.1, amp: (x) => a * envBump(x, d * 0.3, d * 0.7), color: 'pink' });
+      burst(b, sr, rng, { t, dur: d, attack: 0.003, tau: 0.012, amp: 0.35 * a, lp: 600, color: 'brown' });
+      t += rng.range(0.055, 0.075) + k * 0.004;
+    }
+  });
+  return out;
+}
+
 function villagerHmm(c: Ctx): Float32Array {
   const { sr, rng } = c;
   const d = rng.range(0.5, 0.75);
@@ -1184,6 +1241,9 @@ export function mobSounds(): Record<string, SoundGen> {
     'entity.slime.hurt_small': sound('entity.slime.hurt_small', 5, (c) => slimeHurt(c, SMALL_P, SMALL_T)),
     'entity.slime.death_small': sound('entity.slime.death_small', 5, (c) => slimeDeath(c, SMALL_P, SMALL_T)),
     'entity.bat.ambient': sound('entity.bat.ambient', 4, batSqueak),
+    'entity.bat.hurt': sound('entity.bat.hurt', 4, batHurt),
+    'entity.bat.death': sound('entity.bat.death', 1, batDeath),
+    'entity.bat.takeoff': sound('entity.bat.takeoff', 1, batTakeoff),
     'entity.villager.ambient': sound('entity.villager.ambient', 3, villagerHmm),
   };
 }

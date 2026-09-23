@@ -73,6 +73,25 @@ for (const [w, c] of Object.entries(WOODS)) {
   }
 }
 
+// Chest boats: the boat with a chest in the back seat, peeking over the rim
+// prettier-ignore
+const BOAT_CHEST = [
+  '................',
+  '................',
+  '.......######...',
+  '.......#tttt#...',
+  '.......#TTTT#...',
+  '.......#fllf#...',
+  '.......#ffff#...',
+];
+const CHEST_INK = { '#': 0x2a1a0a, t: 0xb08450, T: 0x9a7040, f: 0x9a6c34, l: 0xc8c8c8 };
+const OAK_BOAT = { '#': 0x3a2810, 5: 0xc4a066, 4: 0xb08c56, 3: 0x947244, 2: 0x7a5c34, i: 0x5a4220 };
+for (const w of ['oak', 'spruce', 'birch', 'jungle', 'acacia', 'dark_oak', 'mangrove', 'cherry']) {
+  const c = WOODS[w];
+  const pal = c ? { '#': c.o, 5: c.light, 4: c.base, 3: c.mid, 2: c.dark, i: mixC(c.dark, 0x000000, 0.3) } : OAK_BOAT;
+  V[`${w}_chest_boat`] = () => over(spr(BOAT, pal, `${w}_chest_boat`), BOAT_CHEST, CHEST_INK);
+}
+
 // ---------------------------------------------------------------------------
 // Minecart variants: a block peeking out of the cart
 

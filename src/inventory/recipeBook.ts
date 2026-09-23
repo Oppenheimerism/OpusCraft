@@ -73,7 +73,7 @@ function craftingGroup(result: string, r: CraftingRecipe): string {
   if (result.endsWith('_planks')) return 'planks';
   if (result.endsWith('_wood')) return 'bark';
   if (wood) {
-    for (const [suffix, g] of [['_slab', 'wooden_slab'], ['_stairs', 'wooden_stairs'], ['_door', 'wooden_door'], ['_trapdoor', 'wooden_trapdoor'], ['_fence_gate', 'wooden_fence_gate'], ['_fence', 'wooden_fence'], ['_sign', 'wooden_sign'], ['_boat', 'boat'], ['_pressure_plate', 'wooden_pressure_plate'], ['_button', 'wooden_button']] as const) {
+    for (const [suffix, g] of [['_slab', 'wooden_slab'], ['_stairs', 'wooden_stairs'], ['_door', 'wooden_door'], ['_trapdoor', 'wooden_trapdoor'], ['_fence_gate', 'wooden_fence_gate'], ['_fence', 'wooden_fence'], ['_sign', 'wooden_sign'], ['_chest_boat', 'chest_boat'], ['_boat', 'boat'], ['_pressure_plate', 'wooden_pressure_plate'], ['_button', 'wooden_button']] as const) {
       if (result.endsWith(suffix)) return g;
     }
   }

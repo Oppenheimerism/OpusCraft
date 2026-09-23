@@ -16,6 +16,7 @@ import { ExperienceOrb } from '../entity/xpOrb';
 import { Arrow } from '../entity/arrow';
 import { createMob, entityDisplayName, summonableTypes } from './spawner';
 import { createMinecart, MINECART_TYPES } from '../entity/minecart';
+import { createBoat, BOAT_TYPES, BOAT_WOODS } from '../entity/boat';
 import { MOB_EFFECTS, MobEffect, MobEffectInstance, mobEffect } from '../entity/effects';
 
 class CommandError extends Error {
@@ -497,6 +498,12 @@ export const COMMANDS: Record<string, CommandDef> = {
         const cart = createMinecart(type, lvl)!;
         cart.moveTo(x, y, z, 0, 0);
         e = cart;
+      } else if (BOAT_TYPES.includes(type)) {
+        // the wood is entity data in 1.21: /summon boat ~ ~ ~ {Type:"spruce"}
+        const wood = c.args[4] ? /Type:\s*"?([a-z_]+)"?/.exec(c.line.slice(c.args[4].pos))?.[1] : undefined;
+        const boat = createBoat(type, lvl, wood && BOAT_WOODS.includes(wood) ? wood : 'oak')!;
+        boat.moveTo(x, y, z, 0, 0);
+        e = boat;
       } else {
         const m = createMob(type, lvl);
         if (!m) throw new CommandError(`Can't find element 'minecraft:${type}' of type 'minecraft:entity_type'`, c.args[0].pos);

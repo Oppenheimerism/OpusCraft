@@ -1,6 +1,7 @@
 // Items: block items + regular items with vanilla stats.
 
 import { BLOCKS, Block, ToolType, getBlock } from '../world/block';
+import { WOODS } from '../world/blocksExtra';
 
 export interface ToolInfo {
   type: ToolType;
@@ -258,6 +259,12 @@ const MISC: [string, number?, number?][] = [
 for (const [id, stack, fuel] of MISC) {
   if (ITEMS.has(id)) continue;
   reg({ id, texture: id, maxStack: stack ?? 64, fuel });
+  // vanilla BoatItem: every wood's boat and boat with chest, listed where the oak boat is
+  if (id === 'oak_boat')
+    for (const w of WOODS) {
+      if (w !== 'oak') reg({ id: `${w}_boat`, texture: `${w}_boat`, maxStack: 1, creativeTab: 'tools' });
+      reg({ id: `${w}_chest_boat`, name: `${prettyName(w)} Boat with Chest`, texture: `${w}_chest_boat`, maxStack: 1, creativeTab: 'tools' });
+    }
 }
 Object.assign(ITEMS.get('experience_bottle')!, { rarity: 'uncommon', glint: true });
 reg({ id: 'enchanted_book', texture: 'enchanted_book', maxStack: 1, rarity: 'uncommon', glint: true });
@@ -270,7 +277,7 @@ for (const c of ['white', 'orange', 'magenta', 'light_blue', 'yellow', 'lime', '
   reg({ id: `${c}_dye`, texture: `${c}_dye` });
 }
 // spawn eggs (creative tab order is alphabetical, like vanilla)
-for (const m of ['cave_spider', 'chicken', 'cow', 'creeper', 'enderman', 'pig', 'sheep', 'skeleton', 'slime', 'spider', 'squid', 'zombie']) {
+for (const m of ['bat', 'cave_spider', 'chicken', 'cow', 'creeper', 'enderman', 'pig', 'sheep', 'skeleton', 'slime', 'spider', 'squid', 'zombie']) {
   reg({ id: `${m}_spawn_egg`, texture: `${m}_spawn_egg`, creativeTab: 'spawn_eggs' });
 }
 // sugar cane item places the block
