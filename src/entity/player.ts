@@ -16,6 +16,9 @@ import { findStandUpPosition } from '../game/sleep';
 
 export type GameMode = 'survival' | 'creative' | 'adventure' | 'spectator';
 
+/** damage types with 0 exhaustion (vanilla damage_type/*.json "exhaustion": 0.0) */
+const NO_EXHAUSTION = new Set(['magic', 'wither', 'onFire', 'fall', 'drown', 'starve', 'inWall', 'cramming', 'void', 'genericKill', 'generic', 'flyIntoWall']);
+
 export interface PlayerInput {
   forward: boolean;
   back: boolean;
@@ -102,6 +105,9 @@ export class Player extends LivingEntity {
   sleepingPos: [number, number, number] | null = null;
   /** vanilla sleepCounter: climbs to 100 asleep, then 100..110 fades back after waking */
   sleepCounter = 0;
+  /** vanilla LocalPlayer.spinningEffectIntensity: the nausea wobble, 0..1 */
+  spinningEffectIntensity = 0;
+  oSpinningEffectIntensity = 0;
   onStepSound: ((p: Player) => void) | null = null;
   onSwimSound: ((p: Player) => void) | null = null;
   onHurtSound: ((p: Player, source: string) => void) | null = null;
@@ -272,6 +278,11 @@ export class Player extends LivingEntity {
     }
     this.eyeHeightCamO = this.eyeHeightCam;
     this.eyeHeightCam += (this.eyeHeight - this.eyeHeightCam) * 0.5;
+    // vanilla LocalPlayer.handleConfusionTransitionEffect: nausea fades in over 7.5 s, out in its last 3 s
+    this.oSpinningEffectIntensity = this.spinningEffectIntensity;
+    const nausea = this.getEffect('nausea');
+    if (nausea && !nausea.endsWithin(60)) this.spinningEffectIntensity = Math.min(1, this.spinningEffectIntensity + 0.006666667);
+    else if (this.spinningEffectIntensity > 0) this.spinningEffectIntensity = Math.max(0, this.spinningEffectIntensity - 0.05);
     // vanilla Player.tick: the sleep timer; morning (or a thunderstorm ending) wakes you
     if (this.sleepingPos) {
       if (++this.sleepCounter > 100) this.sleepCounter = 100;
@@ -326,7 +337,9 @@ export class Player extends LivingEntity {
   }
 
   private tickAir(): void {
-    if (this.eyeFluid === FLUID_WATER && !this.invulnerable) {
+    if (this.eyeFluid === FLUID_WATER) {
+      // vanilla LivingEntity.baseTick: water breathing (and invulnerability) hold the air supply
+      if (this.invulnerable || this.hasWaterBreathing()) return;
       this.air--;
       if (this.air === -20) {
         this.air = 0;
@@ -376,11 +389,11 @@ export class Player extends LivingEntity {
       fwd *= 0.2;
       left *= 0.2;
     }
-    // sprinting: double-tap forward or sprint key (not while riding: vanilla vehicleCanSprint)
+    // sprinting: double-tap forward or sprint key (vanilla canStartSprinting: not while blind or riding, vehicleCanSprint)
     const canSprint = (this.food.level > 6 || this.mayFly) && !this.vehicle;
     const forwardDown = inp.forward;
     if (this.sprintTriggerTime > 0) this.sprintTriggerTime--;
-    if (!this.sprinting && canSprint && fwd >= 0.8 && !this.crouching && this.usingItemTicks === 0) {
+    if (!this.sprinting && canSprint && fwd >= 0.8 && !this.crouching && this.usingItemTicks === 0 && !this.hasEffect('blindness')) {
       if (forwardDown && !this.wasForward && (this.onGround || this.flying || this.inWater)) {
         if (this.sprintTriggerTime > 0) this.sprinting = true;
         else this.sprintTriggerTime = 7;
@@ -449,11 +462,25 @@ export class Player extends LivingEntity {
     this.lastDamageSource = source;
     this.lastDamageAttacker = attacker ?? null;
     const ok = super.hurt(amount, source, attacker, direct);
-    if (ok) this.food.addExhaustion(0.1);
+    if (ok && !NO_EXHAUSTION.has(source)) this.food.addExhaustion(0.1);
     return ok;
   }
 
   lastDamageAttacker: Entity | null = null;
+
+  /** vanilla Player.causeFoodExhaustion (creative players don't get hungry) */
+  override causeFoodExhaustion(v: number): void {
+    if (!this.invulnerable) this.food.addExhaustion(v);
+  }
+
+  override isDiscrete(): boolean {
+    return this.crouching;
+  }
+
+  /** vanilla getArmorCoverPercentage: worn pieces out of 4 */
+  override armorCoverPercentage(): number {
+    return this.inventory.armor.filter((s) => s && s.count > 0).length / 4;
+  }
 
   override armorValue(): number {
     return this.inventory.armorValue();
@@ -536,9 +563,10 @@ export class Player extends LivingEntity {
   }
   onLevelUp: ((p: Player) => void) | null = null;
 
+  /** vanilla getCurrentItemAttackStrengthDelay: 20 / ATTACK_SPEED (haste / mining fatigue apply) */
   attackStrengthDelay(): number {
     const it = this.inventory.selectedItem?.item;
-    const speed = it ? it.attackSpeed : 4;
+    const speed = (it ? it.attackSpeed : 4) * this.attackSpeedEffectFactor();
     return 20 / speed;
   }
 

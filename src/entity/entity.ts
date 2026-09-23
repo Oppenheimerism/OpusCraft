@@ -46,6 +46,9 @@ export abstract class Entity {
   walkDistO = 0;
   moveDist = 0;
   private nextStep = 1;
+  /** vanilla crystalSoundIntensity / lastCrystalSoundPlayTick (amethyst chimes while walking) */
+  private crystalSoundIntensity = 0;
+  private lastCrystalSoundTick = 0;
   invulnerableTime = 0;
   /** vanilla starts at -getFireImmuneTicks(): standing in fire takes that long to catch */
   remainingFireTicks = -1;
@@ -413,7 +416,11 @@ export abstract class Entity {
       if (this.moveDist > this.nextStep && (onState !== 0 || this.inWater || climbing) && this.makesStepSounds()) {
         this.nextStep = Math.floor(this.moveDist) + 1;
         if (this.inWater) this.playSwimSound();
-        else if (this.onGround || climbing) this.playStepSound();
+        else if (this.onGround || climbing) {
+          this.playStepSound();
+          const on = BLOCKS[STATE_BLOCK[onState]].name;
+          if ((on === 'amethyst_block' || on === 'budding_amethyst') && this.tickCount >= this.lastCrystalSoundTick + 20) this.playAmethystStepSound();
+        }
       }
     }
     const touchingFire = this.checkInsideBlocks();
@@ -461,7 +468,7 @@ export abstract class Entity {
           else if (kind === INSIDE_FIRE) {
             fire = true;
             this.insideFire();
-          } else if (kind === INSIDE_COBWEB) this.makeStuckInBlock(0.25, 0.05, 0.25);
+          } else if (kind === INSIDE_COBWEB) this.insideCobweb();
           else if (kind === INSIDE_BERRY_BUSH) this.insideBerryBush(st);
           else if (kind === INSIDE_CACTUS) this.hurt(1, 'cactus');
           if (this.removed) return fire;
@@ -481,6 +488,11 @@ export abstract class Entity {
   /** vanilla SweetBerryBushBlock.entityInside (living things only) */
   protected insideBerryBush(_st: number): void {}
 
+  /** vanilla WebBlock.entityInside */
+  protected insideCobweb(): void {
+    this.makeStuckInBlock(0.25, 0.05, 0.25);
+  }
+
   protected onLand(): void {
     this.dy = 0;
   }
@@ -490,6 +502,16 @@ export abstract class Entity {
   }
 
   protected playStepSound(): void {}
+
+  /** vanilla playAmethystStepSound: the chime gets louder and higher the longer the walk goes on */
+  private playAmethystStepSound(): void {
+    this.crystalSoundIntensity *= Math.pow(0.997, this.tickCount - this.lastCrystalSoundTick);
+    this.crystalSoundIntensity = Math.min(1, this.crystalSoundIntensity + 0.07);
+    const pitch = 0.5 + this.crystalSoundIntensity * Math.random() * 1.2;
+    const volume = 0.1 + this.crystalSoundIntensity * 1.2;
+    this.level.sound.play('block.amethyst_block.chime', this.x, this.y, this.z, volume, pitch);
+    this.lastCrystalSoundTick = this.tickCount;
+  }
   protected playSwimSound(): void {}
 
   protected isSneakingForEdges(): boolean {

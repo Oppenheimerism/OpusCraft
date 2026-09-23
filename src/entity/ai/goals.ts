@@ -422,7 +422,8 @@ export class NearestAttackablePlayerGoal extends TargetGoal {
     this.found = null;
     const p = m.level.player;
     if (!p || !m.canAttack(p)) return false;
-    const vis = p.crouching ? 0.8 : 1;
+    // vanilla TargetingConditions: range scaled by getVisibilityPercent (sneaking, invisibility)
+    const vis = p.visibilityPercent(m);
     const range = Math.max(m.followRange * vis, 2);
     if (Math.abs(p.y - m.y) > 4 + range) return false;
     if (m.distanceToSqr(p.x, p.y, p.z) > range * range) return false;

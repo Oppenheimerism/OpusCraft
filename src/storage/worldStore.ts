@@ -43,6 +43,8 @@ export interface WorldMeta {
     dead?: boolean;
     /** the minecart the player sits in (vanilla RootVehicle), kept out of chunk storage */
     vehicle?: SavedEntity | null;
+    /** vanilla active_effects */
+    effects?: import('../entity/effects').SavedEffect[];
   } | null;
   version: number;
   /** quick-test worlds are never written to storage */

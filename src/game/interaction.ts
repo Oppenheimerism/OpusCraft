@@ -3,7 +3,7 @@
 import type { Level } from './level';
 import type { Player } from '../entity/player';
 import { raycast, BlockHit } from './raycast';
-import { destroyProgress, placementState, canReplace, canSurvive, isCorrectTool, blockExperience } from './blockRules';
+import { destroyProgress, placementState, canReplace, canSurvive, isCorrectTool, blockExperience, hasVacantFace } from './blockRules';
 import { BLOCKS, STATE_BLOCK, FLAGS, F_AIR, F_WATER, F_OPAQUE, F_REPLACEABLE, COLLISION, FACE_OCC, OUTLINE, getBlock, S } from '../world/block';
 import { updateShape, hasShapeUpdates } from './shapeUpdates';
 import { DX, DY, DZ, DIR_NAMES, dirFromYaw } from '../world/dir';
@@ -24,6 +24,7 @@ import { playerAttack } from './combat';
 import { canPlaceFire, fireStateAt, placeFire } from './fire';
 import { Minecart, MinecartChest, createMinecart } from '../entity/minecart';
 import { isRail, railShape, isAscending } from './rails';
+import { MobEffectInstance, MOB_EFFECTS } from '../entity/effects';
 
 export class Interaction {
   hit: BlockHit | null = null;
@@ -126,7 +127,7 @@ export class Interaction {
     }
     if (!this.destroying || !this.same(h)) {
       const held = p.inventory.selectedItem?.item ?? null;
-      const prog = destroyProgress(h.state, held, p.eyeFluid === FLUID_WATER, p.onGround);
+      const prog = destroyProgress(h.state, held, p.eyeFluid === FLUID_WATER, p.onGround, p.digSpeedEffectFactor());
       if (prog >= 1) {
         this.destroyBlock(h.x, h.y, h.z);
       } else {
@@ -181,7 +182,7 @@ export class Interaction {
       return;
     }
     const item = p.inventory.selectedItem?.item ?? null;
-    this.destroyProgress += destroyProgress(st, item, p.eyeFluid === FLUID_WATER, p.onGround);
+    this.destroyProgress += destroyProgress(st, item, p.eyeFluid === FLUID_WATER, p.onGround, p.digSpeedEffectFactor());
     const b = BLOCKS[STATE_BLOCK[st]];
     this.onDestroyProgress?.(b.name, Math.min(1, this.destroyProgress));
     if (this.destroyTicks % 4 === 0) {
@@ -353,7 +354,9 @@ export class Interaction {
     let x = h.x, y = h.y, z = h.z;
     const clicked = world.getState(x, y, z);
     const clickedBlock = BLOCKS[STATE_BLOCK[clicked]];
-    const replaceClicked = FLAGS[clicked] & F_REPLACEABLE && clickedBlock !== block && !(clickedBlock.name === 'water' && block.name !== 'water');
+    const replaceClicked =
+      (FLAGS[clicked] & F_REPLACEABLE && clickedBlock !== block && !(clickedBlock.name === 'water' && block.name !== 'water')) ||
+      (clickedBlock === block && block.name === 'glow_lichen' && hasVacantFace(clicked));
     // slab merging into a double slab
     if (clickedBlock === block && block.name.endsWith('_slab')) {
       const type = block.get(clicked, 'type');
@@ -382,7 +385,7 @@ export class Interaction {
       return false;
     }
     let st = placementState(block, {
-      world, x, y, z, face: replaceClicked ? 1 : h.face, hitY: h.hy - h.y, hitX: h.hx - x, hitZ: h.hz - z, yaw: p.yaw, pitch: p.pitch, sneaking: p.crouching, clickedState: clicked,
+      world, x, y, z, face: replaceClicked ? 1 : h.face, hitY: h.hy - h.y, hitX: h.hx - x, hitZ: h.hz - z, yaw: p.yaw, pitch: p.pitch, sneaking: p.crouching, clickedState: clicked, replaceClicked: !!replaceClicked,
     });
     if (st === null) return false;
     if (!canSurvive(world, x, y, z, st)) return false;
@@ -694,6 +697,11 @@ export class Interaction {
       this.itemUseEffects(s);
       p.food.eat(it.food.nutrition, it.food.saturation);
       this.level.sound.play('entity.player.burp', p.x, p.y, p.z, 0.5, Math.random() * 0.1 + 0.9);
+      // vanilla LivingEntity.addEatEffect: each food effect rolls its probability
+      for (const [id, ticks, amp, chance] of it.food.effects ?? []) {
+        const e = MOB_EFFECTS[id];
+        if (e && Math.random() < chance) p.addEffect(new MobEffectInstance(e, ticks, amp));
+      }
       if (p.gameMode !== 'creative') {
         p.inventory.consumeSelected(1);
         const rem = it.food.remainder;
@@ -705,6 +713,8 @@ export class Interaction {
       }
       p.inventory.version++;
     } else if (it.id === 'milk_bucket') {
+      // vanilla MilkBucketItem.finishUsingItem
+      p.removeAllEffects();
       if (p.gameMode !== 'creative') p.inventory.setSelectedItem(ItemStack.of('bucket'));
     }
   }

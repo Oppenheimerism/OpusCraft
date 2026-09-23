@@ -8,9 +8,10 @@ import {
   FloatGoal, WaterAvoidingRandomStrollGoal, LookAtPlayerGoal, RandomLookAroundGoal, MeleeAttackGoal,
   NearestAttackablePlayerGoal, HurtByTargetGoal, RestrictSunGoal, FleeSunGoal, LeapAtTargetGoal,
 } from './ai/goals';
-import type { LivingEntity } from './living';
+import { LivingEntity } from './living';
 import type { Player } from './player';
 import type { Entity } from './entity';
+import { MobEffectInstance, MOB_EFFECTS } from './effects';
 import { ItemStack, ITEMS } from '../item/item';
 import { BLOCKS, STATE_BLOCK, FLAGS, F_OPAQUE, F_FULL_COLLISION, F_AIR, F_COLLIDE, F_WATER } from '../world/block';
 import { Arrow } from './arrow';
@@ -134,6 +135,9 @@ export class Zombie extends Monster {
   }
   override isBaby(): boolean {
     return this.baby;
+  }
+  override isUndead(): boolean {
+    return true;
   }
   setBaby(b: boolean): void {
     this.baby = b;
@@ -324,6 +328,9 @@ export class Skeleton extends Monster {
   override get eyeHeight(): number {
     return 1.74;
   }
+  override isUndead(): boolean {
+    return true;
+  }
   override aiStep(): void {
     if (this.isAlive && this.isSunBurnTick()) this.igniteForSeconds(8);
     super.aiStep();
@@ -496,7 +503,7 @@ class SpiderTargetGoal extends NearestAttackablePlayerGoal {
 }
 
 export class Spider extends Monster {
-  readonly type = 'spider';
+  readonly type: string = 'spider';
   constructor(level: Level) {
     super(level);
     this.setSize(1.4, 0.9);
@@ -522,6 +529,12 @@ export class Spider extends Monster {
   override onClimbable(): boolean {
     return this.horizontalCollision;
   }
+  /** vanilla Spider.canBeAffected: immune to poison */
+  override canBeAffected(inst: MobEffectInstance): boolean {
+    return inst.id !== 'poison' && super.canBeAffected(inst);
+  }
+  /** vanilla Spider.makeStuckInBlock: cobwebs don't slow spiders */
+  protected override insideCobweb(): void {}
   override ambientSound(): string {
     return 'entity.spider.ambient';
   }
@@ -539,6 +552,31 @@ export class Spider extends Monster {
       { item: 'string', min: 0, max: 2 },
       { item: 'spider_eye', min: -1, max: 1, player: true },
     ];
+  }
+}
+
+/**
+ * vanilla CaveSpider: a small (0.7 x 0.5), 12-health spider that only comes from spawners; its bite
+ * poisons for 7 s on normal and 15 s on hard. Same sounds, drops and AI as the spider.
+ */
+export class CaveSpider extends Spider {
+  override readonly type: string = 'cave_spider';
+  constructor(level: Level) {
+    super(level);
+    this.setSize(0.7, 0.5);
+    this.maxHealth = this.health = 12;
+  }
+  override get eyeHeight(): number {
+    return 0.45;
+  }
+  override doHurtTarget(target: Entity): boolean {
+    if (!super.doHurtTarget(target)) return false;
+    if (target instanceof LivingEntity) {
+      const d = this.level.difficulty;
+      const secs = d === 'normal' ? 7 : d === 'hard' ? 15 : 0;
+      if (secs > 0) target.addEffect(new MobEffectInstance(MOB_EFFECTS.poison, secs * 20, 0), this);
+    }
+    return true;
   }
 }
 

@@ -7,7 +7,7 @@ import { Mob, MobCategory, SavedEntity } from '../entity/mob';
 import { ItemEntity } from '../entity/itemEntity';
 import { ItemStack, ITEMS, cloneTag } from '../item/item';
 import { Pig, Cow, Sheep, Chicken, Animal } from '../entity/animals';
-import { Zombie, Skeleton, Creeper, Spider, Enderman, Slime, Monster, validSpawnBlock } from '../entity/monsters';
+import { Zombie, Skeleton, Creeper, Spider, CaveSpider, Enderman, Slime, Monster, validSpawnBlock } from '../entity/monsters';
 import { Squid, WaterAnimal } from '../entity/water';
 import { AbstractMinecart, createMinecart, MINECART_TYPES } from '../entity/minecart';
 import { moonPhase } from '../render/environment';
@@ -26,6 +26,8 @@ export const MOB_TYPES: Record<string, (l: Level) => Mob> = {
   skeleton: (l) => new Skeleton(l),
   creeper: (l) => new Creeper(l),
   spider: (l) => new Spider(l),
+  // spawners only: no natural spawn entries
+  cave_spider: (l) => new CaveSpider(l),
   enderman: (l) => new Enderman(l),
   slime: (l) => new Slime(l),
   squid: (l) => new Squid(l),
@@ -104,7 +106,7 @@ export function isChunkSaved(e: Entity): boolean {
 
 const ENTITY_NAMES: Record<string, string> = {
   pig: 'Pig', cow: 'Cow', sheep: 'Sheep', chicken: 'Chicken', zombie: 'Zombie', skeleton: 'Skeleton', creeper: 'Creeper', spider: 'Spider',
-  enderman: 'Enderman', slime: 'Slime', squid: 'Squid',
+  cave_spider: 'Cave Spider', enderman: 'Enderman', slime: 'Slime', squid: 'Squid',
   arrow: 'Arrow', tnt: 'Primed TNT', item: 'Item', experience_orb: 'Experience Orb', falling_block: 'Falling Block', player: 'Player',
   egg: 'Thrown Egg', snowball: 'Snowball', ender_pearl: 'Thrown Ender Pearl',
   minecart: 'Minecart', chest_minecart: 'Minecart with Chest',

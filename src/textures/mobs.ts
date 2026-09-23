@@ -534,11 +534,25 @@ const SPIDER_EYES = [
   '........',
 ];
 
-function spider(): TexImage {
+interface SpiderLook {
+  seed: number;
+  /** body shades, dark to light, and their coverage */
+  pal: Pal;
+  w: Pal;
+  /** abdomen / leg markings: a = speckle, h = lighter hair */
+  a: number;
+  h: number;
+}
+
+const SPIDER_LOOK: SpiderLook = { seed: 0x5b1de4, pal: [0x1a1511, 0x221c17, 0x2a241e, 0x332c26, 0x3b342d, 0x474036, 0x574d43], w: [2, 4, 6, 7, 4, 2, 1], a: 0x4a4038, h: 0x5a4e44 };
+/** vanilla cave_spider.png: the spider layout in dark blue-teal with pale teal hair */
+const CAVE_SPIDER_LOOK: SpiderLook = { seed: 0xca5e5b, pal: [0x07161a, 0x0a1e23, 0x0e272d, 0x123139, 0x173c45, 0x1f4c57, 0x2a606b], w: [2, 4, 6, 7, 4, 2, 1], a: 0x2c6a74, h: 0x3f8490 };
+
+function spider(look: SpiderLook = SPIDER_LOOK): TexImage {
   const t = img(64, 32);
-  const r = new Rand(0x5b1de4);
-  const SP = [0x1a1511, 0x221c17, 0x2a241e, 0x332c26, 0x3b342d, 0x474036, 0x574d43];
-  const SPW = [2, 4, 6, 7, 4, 2, 1];
+  const r = new Rand(look.seed);
+  const SP = look.pal;
+  const SPW = look.w;
   const head = boxFaces(32, 4, 8, 8, 8);
   const neck = boxFaces(0, 0, 6, 6, 6);
   const abdomen = boxFaces(0, 12, 10, 8, 12);
@@ -559,8 +573,8 @@ function spider(): TexImage {
     '..a....a..',
     '....hh....',
     '..........',
-  ], { a: 0x4a4038, h: 0x5a4e44 }, r);
-  for (const k of SIDES) fleck(t, leg[k], r, 0.1, [0x4a4038, 0x5a4e44]);
+  ], { a: look.a, h: look.h }, r);
+  for (const k of SIDES) fleck(t, leg[k], r, 0.1, [look.a, look.h]);
   return t;
 }
 
@@ -1052,7 +1066,8 @@ export const MOB_TEXTURES: Record<string, () => TexImage> = {
   zombie,
   skeleton,
   creeper,
-  spider,
+  spider: () => spider(),
+  cave_spider: () => spider(CAVE_SPIDER_LOOK),
   spider_eyes: spiderEyes,
   enderman,
   enderman_eyes: endermanEyes,
@@ -1135,6 +1150,19 @@ MOB_PARTICLE_TEXTURES['bubble'] = () => pixelSprite([
   '........',
   '........',
 ], { b: 0xa9c6f2, W: 0xffffff, w: 0xdce8ff });
+// status effect swirls (vanilla effect_0..7): white, tinted with the effect colour; effect_7 is the
+// first frame, a wide swirl that tightens down to a dot
+const EFFECT_SWIRL = [
+  ['........', '........', '........', '...W....', '........', '........', '........', '........'],
+  ['........', '........', '........', '...WW...', '...WW...', '........', '........', '........'],
+  ['........', '........', '...ww...', '..wWWw..', '..wWWw..', '...ww...', '........', '........'],
+  ['........', '........', '...WW...', '..WwwW..', '..WwwW..', '...WW...', '........', '........'],
+  ['........', '........', '...WW...', '..W..W..', '..W..w..', '...Ww...', '........', '........'],
+  ['........', '........', '..wWWw..', '..W..W..', '..W.WW..', '..wW....', '........', '........'],
+  ['........', '...WW...', '.w....w.', '.W.ww.W.', '.W.W..W.', '.w..WW..', '...W....', '........'],
+  ['...WW...', '.w....w.', '.W.ww.W.', 'W.W..W.W', 'W.W.W..W', '.W..W.w.', '.w..W...', '...W....'],
+];
+EFFECT_SWIRL.forEach((rows, i) => (MOB_PARTICLE_TEXTURES['effect_' + i] = () => pixelSprite(rows, { W: 0xffffff, w: 0xbdbdbd })));
 // happy villager / bone meal sparkle (vanilla glint)
 MOB_PARTICLE_TEXTURES['glint'] = () => pixelSprite([
   '........',
@@ -1148,6 +1176,7 @@ MOB_PARTICLE_TEXTURES['glint'] = () => pixelSprite([
 ], { g: 0x2f8f2f, G: 0x5ad65a, W: 0xc8ffc8 });
 
 const EGGS: [string, number, number][] = [
+  ['cave_spider', 0x0c424e, 0xa80e0e],
   ['pig', 0xf0a5a2, 0xdb635f],
   ['cow', 0x443626, 0xa1a1a1],
   ['sheep', 0xe7e7e7, 0xffb5b5],

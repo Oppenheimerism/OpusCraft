@@ -5,6 +5,7 @@ import { Entity } from './entity';
 import type { Level } from '../game/level';
 import { LivingEntity } from './living';
 import { clipBlocks } from '../game/raycast';
+import { onProjectileHit } from '../game/blockRules';
 import { ItemStack, ITEMS } from '../item/item';
 import { Chicken } from './animals';
 import type { Player } from './player';
@@ -78,6 +79,7 @@ export class ThrownItem extends Entity {
       return;
     }
     if (bh) {
+      onProjectileHit(this.level, bh.x, bh.y, bh.z);
       this.onHit(bh.px, bh.py, bh.pz);
       return;
     }

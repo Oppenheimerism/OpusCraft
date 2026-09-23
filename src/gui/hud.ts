@@ -6,6 +6,7 @@ import type { Game } from '../game/game';
 import { debugLines } from '../render/overlay';
 import { FLUID_WATER } from '../world/fluids';
 import { RARITY_COLOR } from '../item/item';
+import { compareEffects } from '../entity/effects';
 
 export class Hud {
   private tickCount = 0;
@@ -61,6 +62,7 @@ export class Hud {
     const W = g.width, H = g.height;
     if (p.gameMode === 'spectator') {
       this.renderCrosshair(g, game);
+      this.renderEffects(g, game);
       return;
     }
     const cx = Math.floor(W / 2);
@@ -100,6 +102,7 @@ export class Hud {
       if (!survival) y += 14;
       g.text(name, x, y, 0xffffff, true, alpha);
     }
+    this.renderEffects(g, game);
     // vanilla Gui sleep overlay: darkens over 100 ticks asleep, clears over 10 after waking
     if (p.sleepCounter > 0) {
       let f = p.sleepCounter / 100;
@@ -197,6 +200,10 @@ export class Hud {
     const rows = Math.ceil((maxH + absorb) / 2 / 10);
     const rowH = Math.max(10 - (rows - 2), 3);
     const armorY = y - (rows - 1) * rowH - 10;
+    // vanilla Gui.renderPlayerHealth: regeneration sends a bump along the hearts
+    const regenHeart = p.hasEffect('regeneration') ? tick % Math.ceil(maxH + 5) : -1;
+    // vanilla Gui.HeartType.forPlayer
+    const type = p.hasEffect('poison') ? 'poisoned' : p.hasEffect('wither') ? 'withered' : '';
     // armor
     const armor = p.inventory.armorValue();
     if (armor > 0)
@@ -206,34 +213,38 @@ export class Hud {
         else if (i * 2 + 1 === armor) g.sprite('armor_half', x, armorY, 9, 9);
         else g.sprite('armor_empty', x, armorY, 9, 9);
       }
-    // hearts
+    // hearts (vanilla Gui.renderHearts)
     const n = Math.ceil(maxH / 2);
     const na = Math.ceil(absorb / 2);
     const hardcore = false;
+    const heart = (kind: string, half: boolean, blinking: boolean) => `heart${kind ? '_' + kind : ''}${hardcore ? '_hardcore' : ''}_${half ? 'half' : 'full'}${blinking ? '_blinking' : ''}`;
     for (let l = n + na - 1; l >= 0; l--) {
       const row = Math.floor(l / 10), col = l % 10;
       const hx = lx + col * 8;
       let hy = y - row * rowH;
       if (health + absorb <= 4) hy += Math.floor(this.rand.next() * 2);
+      if (l < n && l === regenHeart) hy -= 2;
       g.sprite(blink ? 'heart_container_blinking' : 'heart_container', hx, hy, 9, 9);
       const i2 = l * 2;
       if (l >= n) {
+        // absorption hearts turn black too while withering
         const a = i2 - n * 2;
-        if (a < absorb) g.sprite(a + 1 === absorb ? 'heart_absorbing_half' : 'heart_absorbing_full', hx, hy, 9, 9);
+        if (a < absorb) g.sprite(heart(type === 'withered' ? type : 'absorbing', a + 1 === absorb, false), hx, hy, 9, 9);
         continue;
       }
-      if (blink && i2 < this.displayHealth) g.sprite(i2 + 1 === this.displayHealth ? 'heart_half_blinking' : 'heart_full_blinking', hx, hy, 9, 9);
-      if (i2 < health) g.sprite(i2 + 1 === health ? (hardcore ? 'heart_hardcore_half' : 'heart_half') : hardcore ? 'heart_hardcore_full' : 'heart_full', hx, hy, 9, 9);
+      if (blink && i2 < this.displayHealth) g.sprite(heart(type, i2 + 1 === this.displayHealth, true), hx, hy, 9, 9);
+      if (i2 < health) g.sprite(heart(type, i2 + 1 === health, false), hx, hy, 9, 9);
     }
-    // food
+    // food (vanilla Gui.renderFood: green shanks while hungry)
     const food = p.food.level;
+    const hunger = p.hasEffect('hunger') ? '_hunger' : '';
     for (let i = 0; i < 10; i++) {
       let fy = y;
       if (p.food.saturation <= 0 && tick % (food * 3 + 1) === 0) fy = y + Math.floor(this.rand.next() * 3) - 1;
       const fx = rx - i * 8 - 9;
-      g.sprite('food_empty', fx, fy, 9, 9);
-      if (i * 2 + 1 < food) g.sprite('food_full', fx, fy, 9, 9);
-      if (i * 2 + 1 === food) g.sprite('food_half', fx, fy, 9, 9);
+      g.sprite('food_empty' + hunger, fx, fy, 9, 9);
+      if (i * 2 + 1 < food) g.sprite('food_full' + hunger, fx, fy, 9, 9);
+      if (i * 2 + 1 === food) g.sprite('food_half' + hunger, fx, fy, 9, 9);
     }
     // air
     const maxAir = 300;
@@ -246,6 +257,40 @@ export class Hud {
         g.sprite(i < full ? 'air' : 'air_bursting', bx, ay, 9, 9);
       }
     }
+  }
+
+  /**
+   * vanilla Gui.renderEffects: beneficial effects along the top-right edge, the rest in a row below,
+   * longest first from the right; they fade and blink through their last 10 seconds. Hidden while an
+   * inventory screen lists them beside itself.
+   */
+  private renderEffects(g: GuiGraphics, game: Game): void {
+    const p = game.player;
+    if (!p.activeEffects.size) return;
+    if ((game.screen as { canSeeEffects?(): boolean } | null)?.canSeeEffects?.()) return;
+    const icons: [string, number, number, number][] = [];
+    let good = 0, bad = 0;
+    // vanilla Ordering.natural().reverse()
+    for (const inst of [...p.activeEffects.values()].sort((x, y) => compareEffects(y, x))) {
+      if (!inst.showIcon) continue;
+      let x = g.width, y = 1;
+      if (inst.effect.category === 'beneficial') x -= 25 * ++good;
+      else {
+        x -= 25 * ++bad;
+        y += 26;
+      }
+      let a = 1;
+      if (inst.ambient) g.sprite('effect_background_ambient', x, y, 24, 24);
+      else {
+        g.sprite('effect_background', x, y, 24, 24);
+        if (inst.endsWithin(200)) {
+          const k = inst.duration, l = 10 - Math.trunc(k / 20);
+          a = Math.max(0, Math.min(0.5, (k / 10 / 5) * 0.5)) + Math.cos((k * Math.PI) / 5) * Math.max(0, Math.min(0.25, (l / 10) * 0.25));
+        }
+      }
+      icons.push(['mob_effect_' + inst.id, x + 3, y + 3, a]);
+    }
+    for (const [name, x, y, a] of icons) g.sprite(name, x, y, 18, 18, 0, 0, 18, 18, Math.max(0, a));
   }
 
   private renderChat(g: GuiGraphics, game: Game, open: boolean): void {

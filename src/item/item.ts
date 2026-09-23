@@ -15,6 +15,8 @@ export interface FoodInfo {
   alwaysEat?: boolean;
   fast?: boolean;
   remainder?: string;
+  /** vanilla FoodProperties.effects: [effect, ticks, amplifier, probability] */
+  effects?: [string, number, number, number][];
 }
 
 export interface Item {
@@ -223,7 +225,7 @@ const FOOD: [string, number, number, Partial<FoodInfo>?][] = [
   ['baked_potato', 5, 0.6], ['beef', 3, 0.3], ['cooked_beef', 8, 0.8], ['porkchop', 3, 0.3], ['cooked_porkchop', 8, 0.8],
   ['chicken', 2, 0.3], ['cooked_chicken', 6, 0.6], ['mutton', 2, 0.3], ['cooked_mutton', 6, 0.8], ['cod', 2, 0.1],
   ['cooked_cod', 5, 0.6], ['salmon', 2, 0.1], ['cooked_salmon', 6, 0.8], ['cookie', 2, 0.1], ['melon_slice', 2, 0.3],
-  ['sweet_berries', 2, 0.1], ['rotten_flesh', 4, 0.1], ['mushroom_stew', 6, 0.6, { remainder: 'bowl' }],
+  ['sweet_berries', 2, 0.1], ['rotten_flesh', 4, 0.1], ['spider_eye', 2, 0.8], ['mushroom_stew', 6, 0.6, { remainder: 'bowl' }],
   ['beetroot', 1, 0.6], ['beetroot_soup', 6, 0.6, { remainder: 'bowl' }], ['golden_carrot', 6, 1.2], ['poisonous_potato', 2, 0.3],
   ['pumpkin_pie', 8, 0.3],
 ];
@@ -232,6 +234,16 @@ for (const [id, n, s, extra] of FOOD) {
 }
 ITEMS.get('golden_apple')!.rarity = 'rare';
 reg({ id: 'enchanted_golden_apple', texture: 'enchanted_golden_apple', creativeTab: 'food', rarity: 'epic', glint: true, food: { nutrition: 4, saturation: 1.2, alwaysEat: true } });
+// vanilla Foods: status effects when eaten
+const EAT_EFFECTS: Record<string, [string, number, number, number][]> = {
+  golden_apple: [['regeneration', 100, 1, 1], ['absorption', 2400, 0, 1]],
+  enchanted_golden_apple: [['regeneration', 400, 1, 1], ['resistance', 6000, 0, 1], ['fire_resistance', 6000, 0, 1], ['absorption', 2400, 3, 1]],
+  chicken: [['hunger', 600, 0, 0.3]],
+  rotten_flesh: [['hunger', 600, 0, 0.8]],
+  poisonous_potato: [['poison', 100, 0, 0.6]],
+  spider_eye: [['poison', 100, 0, 1]],
+};
+for (const [id, fx] of Object.entries(EAT_EFFECTS)) ITEMS.get(id)!.food!.effects = fx;
 
 // Materials & misc
 const MISC: [string, number?, number?][] = [
@@ -241,7 +253,7 @@ const MISC: [string, number?, number?][] = [
   ['clay_ball'], ['brick'], ['paper'], ['book'], ['sugar'], ['egg', 16], ['snowball', 16], ['slime_ball'], ['ender_pearl', 16],
   ['blaze_rod', 64, 2400], ['glowstone_dust'], ['bowl', 64, 100], ['glass_bottle'], ['experience_bottle'], ['saddle', 1],
   ['name_tag'], ['lead'], ['painting'], ['item_frame'], ['minecart', 1], ['chest_minecart', 1], ['oak_boat', 1], ['oak_sign', 16], ['oak_door'], ['iron_door'],
-  ['red_bed', 1], ['filled_map'], ['ink_sac'], ['cocoa_beans'],
+  ['red_bed', 1], ['filled_map'], ['ink_sac'], ['cocoa_beans'], ['amethyst_shard'],
 ];
 for (const [id, stack, fuel] of MISC) {
   if (ITEMS.has(id)) continue;
@@ -258,7 +270,7 @@ for (const c of ['white', 'orange', 'magenta', 'light_blue', 'yellow', 'lime', '
   reg({ id: `${c}_dye`, texture: `${c}_dye` });
 }
 // spawn eggs (creative tab order is alphabetical, like vanilla)
-for (const m of ['chicken', 'cow', 'creeper', 'enderman', 'pig', 'sheep', 'skeleton', 'slime', 'spider', 'squid', 'zombie']) {
+for (const m of ['cave_spider', 'chicken', 'cow', 'creeper', 'enderman', 'pig', 'sheep', 'skeleton', 'slime', 'spider', 'squid', 'zombie']) {
   reg({ id: `${m}_spawn_egg`, texture: `${m}_spawn_egg`, creativeTab: 'spawn_eggs' });
 }
 // sugar cane item places the block
@@ -280,10 +292,16 @@ for (const b of BLOCKS) {
     if (n.endsWith('_bed')) it.maxStack = 1;
   }
   if (n === 'glass_pane') it.texture = 'block:glass';
+  if (n === 'glow_lichen') {
+    it.texture = 'block:glow_lichen';
+    it.creativeTab = 'natural';
+  }
   if (n === 'rail') {
     it.texture = 'block:rail';
     it.creativeTab = 'tools';
   }
+  if (/_amethyst_bud$|^amethyst_cluster$/.test(n)) it.texture = 'block:' + n;
+  if (/amethyst/.test(n)) it.creativeTab = 'natural';
   if (n === 'iron_bars') it.texture = 'block:iron_bars';
   if (n.endsWith('_stained_glass_pane')) it.texture = 'block:' + n.replace('_pane', '');
 }

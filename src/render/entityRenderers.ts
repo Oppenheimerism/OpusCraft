@@ -86,6 +86,7 @@ export class EntityRenderDispatcher {
       skeleton: M.skeletonModel(),
       creeper: M.creeperModel(),
       spider: M.spiderModel(),
+      cave_spider: M.spiderModel(),
       enderman: M.endermanModel(),
       squid: M.squidModel(),
       slime: M.slimeInnerModel(),
@@ -152,7 +153,7 @@ export class EntityRenderDispatcher {
       if (!frustum.testBox(dx - hw, dy - 0.5, dz - hw, dx + hw, dy + h, dz + hw)) continue;
       this.renderEntity(b, level, e, x, y, z, dx, dy, dz, partial, cam);
       drawn++;
-      if (opts.shadows) {
+      if (opts.shadows && !(e instanceof LivingEntity && e.isInvisible())) {
         const r = shadowRadius(e);
         if (r > 0) this.shadows.push({ x, y, z, radius: r, strength: e instanceof ItemEntity || e instanceof ExperienceOrb ? 0.75 : 1 });
       }
@@ -328,7 +329,10 @@ export class EntityRenderDispatcher {
       scale = (pose) => pose.scale(f2, f3, f2);
       white = Math.floor(sw * 10) % 2 === 0 ? 0 : Math.max(0.5, Math.min(1, sw));
     }
-    const a = this.setupLiving(e, dx + jx, dy, dz + jz, p, type === 'spider' ? 180 : 90, scale);
+    // vanilla CaveSpiderRenderer.scale
+    if (type === 'cave_spider') scale = (pose) => pose.scale(0.7, 0.7, 0.7);
+    const spiderLike = type === 'spider' || type === 'cave_spider';
+    const a = this.setupLiving(e, dx + jx, dy, dz + jz, p, spiderLike ? 180 : 90, scale);
     const attack = attackAnim(e, p);
     let armPose: M.ArmPose = 'empty';
     switch (type) {
@@ -365,6 +369,7 @@ export class EntityRenderDispatcher {
         M.animateCreeper(def.root, a.limbSwing, a.limbAmount, a.headYaw, a.headPitch);
         break;
       case 'spider':
+      case 'cave_spider':
         M.animateSpider(def.root, a.limbSwing, a.limbAmount, a.headYaw, a.headPitch);
         break;
       case 'enderman': {
@@ -374,10 +379,9 @@ export class EntityRenderDispatcher {
       }
     }
     this.overlay(b, e, white);
-    b.begin(this.state(tex));
-    this.drawModel(b, def, baby);
-    // layers
-    if (e instanceof Sheep && !e.sheared) {
+    this.drawBody(b, e, def, tex, baby);
+    // layers (vanilla draws them even for invisible mobs: an invisible spider still shows its eyes)
+    if (e instanceof Sheep && !e.sheared && !e.isInvisible()) {
       const fur = this.models.sheep_fur, ft = this.tex('sheep_fur');
       if (fur && ft) {
         copyPose(def.root, fur.root);
@@ -386,12 +390,12 @@ export class EntityRenderDispatcher {
         this.drawModel(b, fur, baby, r, g, bl);
       }
     }
-    if (type === 'spider') this.drawEyes(b, def, 'spider_eyes', baby);
+    if (spiderLike) this.drawEyes(b, def, 'spider_eyes', baby);
     if (e instanceof Enderman) {
       this.drawEyes(b, def, 'enderman_eyes', false);
       if (e.carried) this.drawCarriedBlock(b, e.carried);
     }
-    if (e instanceof Slime) {
+    if (e instanceof Slime && !e.isInvisible()) {
       const outer = this.models.slime_outer;
       if (outer) {
         this.overlay(b, e);
@@ -403,6 +407,21 @@ export class EntityRenderDispatcher {
     if (e.mainHand && (e instanceof Zombie || e instanceof Skeleton)) {
       b.setOverlay(0, 0, 0, 0);
       this.drawHeldItem(b, def.root, e.mainHand, baby, e.usingItem ? e.useItemTicks + p : -1);
+    }
+  }
+
+  /**
+   * vanilla LivingEntityRenderer body pass: invisible entities skip it (their layers still draw), and a
+   * spectator sees them at 15% opacity
+   */
+  private drawBody(b: EntityBatch, e: LivingEntity, def: MobModelDef, tex: WebGLTexture, baby: boolean): void {
+    if (!e.isInvisible()) {
+      b.begin(this.state(tex));
+      this.drawModel(b, def, baby);
+    } else if (e.level.player?.gameMode === 'spectator') {
+      b.begin(this.state(tex, { blend: true, cutoff: 0.01, depthWrite: false }));
+      this.drawModel(b, def, baby, 1, 1, 1, 38 / 255);
+      b.flush();
     }
   }
 
@@ -443,8 +462,7 @@ export class EntityRenderDispatcher {
     pose.translate(0, -1.501, 0);
     M.animateSquid(def.root, e.oldTentacleAngle + (e.tentacleAngle - e.oldTentacleAngle) * p);
     this.overlay(b, e);
-    b.begin(this.state(tex));
-    this.drawModel(b, def, false);
+    this.drawBody(b, e, def, tex, false);
   }
 
   private drawEyes(b: EntityBatch, def: MobModelDef, texName: string, baby: boolean): void {
@@ -493,8 +511,11 @@ export class EntityRenderDispatcher {
       ra.xRot = ra.xRot * 0.5 - Math.PI / 10;
     }
     this.overlay(b, e);
-    b.begin(this.state(this.skin));
-    m.render(b, this.pose, 64, 64);
+    // vanilla: an invisible player's body isn't drawn, the held item still is
+    if (!e.isInvisible()) {
+      b.begin(this.state(this.skin));
+      m.render(b, this.pose, 64, 64);
+    }
     if (held) {
       b.setOverlay(0, 0, 0, 0);
       this.pose.push();
@@ -836,6 +857,9 @@ function shadowRadius(e: Entity): number {
       break;
     case 'spider':
       r = 0.8;
+      break;
+    case 'cave_spider':
+      r = 0.8 * 0.7;
       break;
     case 'minecart':
     case 'chest_minecart':

@@ -18,6 +18,7 @@ import * as DR from './blocklib/doors';
 import * as DC from './blocklib/decor';
 import * as CR from './blocklib/crops';
 import * as RL from './blocklib/rails';
+import * as CV from './blocklib/caves';
 import * as IB from './blocklib/iconblocks';
 import { FIRE_TEXTURES } from './mobs';
 
@@ -338,6 +339,12 @@ T['chest_latch'] = () => UT.chestLatch();
 T['spawner'] = () => UT.spawner();
 T['rail'] = () => RL.rail();
 T['rail_corner'] = () => RL.railCorner();
+T['glow_lichen'] = () => CV.glowLichen();
+T['amethyst_block'] = () => CV.amethystBlock();
+T['budding_amethyst'] = () => CV.buddingAmethyst();
+for (const b of ['small_amethyst_bud', 'medium_amethyst_bud', 'large_amethyst_bud', 'amethyst_cluster']) T[b] = () => CV.amethystBud(b);
+T['smooth_basalt'] = () => CV.smoothBasalt();
+T['tinted_glass'] = () => CV.tintedGlass();
 
 // ---------------------------------------------------------------------------
 // Doors & trapdoors (window pixels are fully transparent; cutout layer)

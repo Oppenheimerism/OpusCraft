@@ -344,7 +344,6 @@ const CRYSTALS = [
   '................',
 ];
 E['prismarine_crystals'] = () => spr(CRYSTALS, { '#': 0x3a6a62, w: 0xf2fcf8, c: 0xb4e6d8 }, 'prismarine_crystals');
-E['amethyst_shard'] = () => spr(CRYSTALS, { '#': 0x3a1e5a, w: 0xe6c8fa, c: 0xa878d8 }, 'amethyst_shard');
 
 // Small hides and feet
 // prettier-ignore

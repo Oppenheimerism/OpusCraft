@@ -752,6 +752,124 @@ function lanternPlace(c: Ctx): Float32Array {
   return out;
 }
 
+// ------------------------------------------------------------------ amethyst
+
+/** crystal bar partials (free-free bar modes 1 : 2.76 : 5.40 : 8.93): glassy and bell-like */
+const CRYSTAL = [1, 2.76, 5.4];
+
+/** Amethyst block steps: a couple of small glassy clinks over a soft stony contact. */
+function amethystStep(c: Ctx): Float32Array {
+  const { sr, rng } = c;
+  const out = alloc(0.4, sr);
+  layer(out, 1, (b) =>
+    ticks(b, sr, rng, {
+      dur: 0.08,
+      rate: 55,
+      energy: (t) => Math.exp(-t / 0.04),
+      f: [1300, 3000],
+      t60: [0.12, 0.32],
+      ratios: CRYSTAL,
+      weights: [1, 0.35, 0.12],
+      heavy: 1.2,
+      click: 0.2,
+    }),
+  );
+  layer(out, 0.3, (b) => thump(b, sr, { f0: 280, f1: 190, tau: 0.01 }));
+  return out;
+}
+
+/** Breaking / placing amethyst: a crunch of crystal with a spray of ringing chips. */
+function amethystBreak(c: Ctx, place: boolean): Float32Array {
+  const { sr, rng } = c;
+  const out = alloc(0.8, sr);
+  layer(out, 0.6, (b) => burst(b, sr, rng, { dur: 0.07, attack: 0.0005, tau: place ? 0.01 : 0.018, bp: [2800, 0.7] }));
+  layer(out, 1, (b) =>
+    ticks(b, sr, rng, {
+      dur: place ? 0.14 : 0.32,
+      rate: place ? 55 : 110,
+      energy: (t) => Math.exp(-t / (place ? 0.05 : 0.1)),
+      f: [1100, 4200],
+      t60: [0.15, 0.5],
+      ratios: CRYSTAL,
+      weights: [1, 0.4, 0.15],
+      heavy: 1.5,
+      click: 0.25,
+    }),
+  );
+  layer(out, 0.35, (b) => thump(b, sr, { f0: 230, f1: 150, tau: 0.02 }));
+  return out;
+}
+
+/** The amethyst chime: a struck crystal ringing out, with a softer second strike. */
+function amethystChime(c: Ctx): Float32Array {
+  const { sr, rng } = c;
+  const out = alloc(1.8, sr);
+  const f = rng.range(650, 1050);
+  layer(out, 1, (b) =>
+    impact(b, sr, rng, {
+      modes: [f, 1, 1.4, f * 2.76, 0.5, 0.75, f * 5.4, 0.22, 0.4, f * 8.93, 0.08, 0.2],
+      jitter: 0.01,
+      noise: 0.12,
+      noiseTau: 0.001,
+      noiseBp: [5000, 1],
+    }),
+  );
+  const g = f * rng.range(1.2, 1.5);
+  layer(out, 0.4, (b) => impact(b, sr, rng, { t: rng.range(0.03, 0.09), modes: [g, 1, 1.1, g * 2.76, 0.4, 0.55, g * 5.4, 0.15, 0.3] }));
+  return out;
+}
+
+/** Clusters and buds: sharper, higher crystal tinks; size 0 (small bud) .. 3 (cluster). */
+function clusterStep(c: Ctx): Float32Array {
+  const { sr, rng } = c;
+  const out = alloc(0.3, sr);
+  layer(out, 1, (b) =>
+    ticks(b, sr, rng, {
+      dur: 0.06,
+      rate: 70,
+      energy: (t) => Math.exp(-t / 0.03),
+      f: [2200, 4800],
+      t60: [0.08, 0.2],
+      ratios: CRYSTAL,
+      weights: [1, 0.3, 0.1],
+      heavy: 1.3,
+      click: 0.3,
+    }),
+  );
+  return out;
+}
+
+function clusterBreak(c: Ctx, size: number, place: boolean): Float32Array {
+  const { sr, rng } = c;
+  const out = alloc(0.7, sr);
+  const up = 1.35 - size * 0.12; // smaller buds ring higher
+  const f = rng.range(1800, 2600) * up;
+  layer(out, 1, (b) =>
+    impact(b, sr, rng, {
+      modes: [f, 1, 0.35 + size * 0.06, f * 2.76, 0.45, 0.2, f * 5.4, 0.2, 0.12],
+      jitter: 0.02,
+      noise: place ? 0.4 : 0.8,
+      noiseTau: 0.002,
+      noiseBp: [4500, 0.9],
+    }),
+  );
+  layer(out, place ? 0.5 : 0.8, (b) =>
+    ticks(b, sr, rng, {
+      t: 0.005,
+      dur: place ? 0.08 : 0.12 + size * 0.05,
+      rate: 60 + size * 20,
+      energy: (t) => Math.exp(-t / 0.05),
+      f: [2000 * up, 5500 * up],
+      t60: [0.08, 0.25],
+      ratios: CRYSTAL,
+      weights: [1, 0.35, 0.12],
+      heavy: 1.4,
+      click: 0.3,
+    }),
+  );
+  return out;
+}
+
 // ------------------------------------------------------------------ registry
 
 export function blockSounds(): Record<string, SoundGen> {
@@ -819,5 +937,16 @@ export function blockSounds(): Record<string, SoundGen> {
   const lanternStepS = sound('block.lantern.step', 6, lanternStep);
   set('lantern', sound('block.lantern.break', 4, lanternBreak), lanternStepS, sound('block.lantern.place', 4, lanternPlace));
   S['block.lantern.fall'] = pitched(lanternStepS, 0.75);
+
+  // amethyst: the block, and the cluster sounds the four growth stages share for steps and hits
+  const amStepS = sound('block.amethyst_block.step', 6, amethystStep);
+  set('amethyst_block', sound('block.amethyst_block.break', 4, (c) => amethystBreak(c, false)), amStepS, sound('block.amethyst_block.place', 4, (c) => amethystBreak(c, true)));
+  S['block.amethyst_block.fall'] = pitched(amStepS, 0.75);
+  S['block.amethyst_block.chime'] = sound('block.amethyst_block.chime', 6, amethystChime);
+  const clStepS = sound('block.amethyst_cluster.step', 6, clusterStep);
+  ['small_amethyst_bud', 'medium_amethyst_bud', 'large_amethyst_bud', 'amethyst_cluster'].forEach((n, size) => {
+    set(n, sound(`block.${n}.break`, 4, (c) => clusterBreak(c, size, false)), clStepS, sound(`block.${n}.place`, 4, (c) => clusterBreak(c, size, true)), pitched(clStepS, 0.5));
+    S[`block.${n}.fall`] = pitched(clStepS, 0.75);
+  });
   return S;
 }

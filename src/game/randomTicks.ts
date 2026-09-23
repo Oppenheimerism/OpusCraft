@@ -6,11 +6,14 @@ import { MIN_Y, SECTIONS } from '../world/constants';
 import { placeTree, TreeKind } from '../world/gen/trees';
 import { canSurvive } from './blockRules';
 import { lavaRandomTick } from './fire';
+import { DX, DY, DZ, DIR_NAMES } from '../world/dir';
 
 const SAPLING_TREE: Record<string, TreeKind> = {
   oak_sapling: 'oak', spruce_sapling: 'spruce', birch_sapling: 'birch', jungle_sapling: 'jungle',
   acacia_sapling: 'acacia', dark_oak_sapling: 'dark_oak', cherry_sapling: 'cherry',
 };
+
+const AMETHYST_NEXT: Record<string, string> = { small_amethyst_bud: 'medium_amethyst_bud', medium_amethyst_bud: 'large_amethyst_bud', large_amethyst_bud: 'amethyst_cluster' };
 
 export class RandomTicker {
   speed = 3;
@@ -76,6 +79,24 @@ export class RandomTicker {
           }
         }
       }
+      return;
+    }
+    if (n === 'budding_amethyst') {
+      // vanilla BuddingAmethystBlock.randomTick: 1 in 5 ticks, start a bud on a random side or grow the one there
+      if (Math.random() * 5 >= 1) return;
+      const d = Math.floor(Math.random() * 6);
+      const tx = x + DX[d], ty = y + DY[d], tz = z + DZ[d];
+      const t = lvl.getState(tx, ty, tz);
+      const tb = BLOCKS[STATE_BLOCK[t]];
+      const face = DIR_NAMES[d];
+      const level = tb.name === 'water' ? tb.get<number>(t, 'level') : -1;
+      let next: string | undefined;
+      // canClusterGrowAtState: air, or still or falling water
+      if (FLAGS[t] & F_AIR || level === 0 || level >= 8) next = 'small_amethyst_bud';
+      else if (tb.propIndex('facing') >= 0 && tb.get(t, 'facing') === face) next = AMETHYST_NEXT[tb.name];
+      if (!next) return;
+      const water = level === 0 || (tb.propIndex('waterlogged') >= 0 && tb.get<boolean>(t, 'waterlogged'));
+      lvl.setBlock(tx, ty, tz, getBlock(next).state({ facing: face, waterlogged: water }));
       return;
     }
     if (b.s.isLeaves) {
