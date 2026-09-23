@@ -423,7 +423,7 @@ function fireUp(tex: string, alt: boolean): ModelDef {
 
 const wallSideProp = (n: string) => enumProp(n, ['none', 'low', 'tall']);
 
-function registerWall(name: string, tex: string, hardness: number): void {
+function registerWall(name: string, tex: string, hardness: number, sound = 'stone'): void {
   const t = tex;
   const post: ModelDef = { particle: t, elements: [box([4, 0, 4], [12, 16, 12], t)] };
   const side: ModelDef = { particle: t, elements: [{ from: [5, 0, 0], to: [11, 14, 8], faces: { down: f(t, undefined, 'down'), up: f(t), north: f(t, undefined, 'north'), west: f(t), east: f(t) } }] };
@@ -431,7 +431,7 @@ function registerWall(name: string, tex: string, hardness: number): void {
   registerBlock(name, {
     props: [boolProp('up'), wallSideProp('north'), wallSideProp('east'), wallSideProp('south'), wallSideProp('west'), P.waterlogged],
     defaults: { up: true, east: 'low', west: 'low' },
-    hardness, resistance: 6, sound: 'stone', tool: 'pickaxe', requiresTool: true, opaque: false, aoCaster: false, opacity: 0,
+    hardness, resistance: 6, sound, tool: 'pickaxe', requiresTool: true, opaque: false, aoCaster: false, opacity: 0,
     collision: (s) => wallBoxes(s, 24),
     outline: (s) => wallBoxes(s, 16),
     model: (s) => {
@@ -483,6 +483,8 @@ export function registerExtraBlocks(): void {
     registerFence(`${w}_fence`, `${w}_planks`, 2, 'nether_wood', 'axe');
     registerFenceGate(`${w}_fence_gate`, `${w}_planks`);
   }
+  // (vanilla: it joins only its own kind, never the wooden fences)
+  registerFence('nether_brick_fence', 'nether_bricks', 2, 'nether_bricks', 'pickaxe');
   // panes and bars
   registerPane('glass_pane', 'glass', 'glass_pane_top', { sound: 'glass', hardness: 0.3, layer: Layer.CUTOUT, noDrop: true });
   registerPane('iron_bars', 'iron_bars', 'iron_bars', { sound: 'metal', hardness: 5, layer: Layer.CUTOUT, tool: 'pickaxe' });
@@ -594,6 +596,8 @@ export function registerExtraBlocks(): void {
     ['cobbled_deepslate_wall', 'cobbled_deepslate', 3.5], ['polished_deepslate_wall', 'polished_deepslate', 3.5], ['deepslate_brick_wall', 'deepslate_bricks', 3.5],
     ['deepslate_tile_wall', 'deepslate_tiles', 3.5],
   ] as [string, string, number][]) registerWall(name, tex, h);
+  registerWall('nether_brick_wall', 'nether_bricks', 2, 'nether_bricks');
+  registerWall('red_nether_brick_wall', 'red_nether_bricks', 2, 'nether_bricks');
   // lantern & chain
   {
     const L = 'lantern';

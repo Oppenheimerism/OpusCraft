@@ -192,6 +192,10 @@ shapeless('mossy_stone_bricks', 1, 'stone_bricks', ['vine', 'moss_block']);
 shapeless('mossy_cobblestone', 1, 'cobblestone', ['vine', 'moss_block']);
 shaped('moss_carpet', 3, ['##'], { '#': 'moss_block' });
 shaped('chiseled_stone_bricks', 1, ['#', '#'], { '#': 'stone_brick_slab' });
+shaped('nether_bricks', 1, ['##', '##'], { '#': 'nether_brick' });
+shaped('red_nether_bricks', 1, ['NW', 'WN'], { N: 'nether_brick', W: 'nether_wart' });
+shaped('nether_brick_fence', 6, ['#-#', '#-#'], { '#': 'nether_bricks', '-': 'nether_brick' });
+shaped('chiseled_nether_bricks', 1, ['#', '#'], { '#': 'nether_brick_slab' });
 shaped('sandstone', 1, ['##', '##'], { '#': 'sand' });
 shaped('cut_sandstone', 4, ['##', '##'], { '#': 'sandstone' });
 shaped('chiseled_sandstone', 1, ['#', '#'], { '#': 'sandstone_slab' });
@@ -236,6 +240,8 @@ const SLABS: [string, string][] = [
   ['smooth_red_sandstone', 'smooth_red_sandstone'],
   ['smooth_stone', 'smooth_stone'],
   ['cut_sandstone', 'cut_sandstone'],
+  ['nether_brick', 'nether_bricks'],
+  ['red_nether_brick', 'red_nether_bricks'],
 ];
 for (const [n, mat] of SLABS) {
   shaped(`${n}_slab`, 6, ['###'], { '#': mat });
@@ -247,6 +253,7 @@ for (const [wall, mat] of [
   ['mossy_stone_brick_wall', 'mossy_stone_bricks'], ['brick_wall', 'bricks'], ['granite_wall', 'granite'], ['diorite_wall', 'diorite'],
   ['andesite_wall', 'andesite'], ['sandstone_wall', 'sandstone'], ['red_sandstone_wall', 'red_sandstone'], ['cobbled_deepslate_wall', 'cobbled_deepslate'],
   ['polished_deepslate_wall', 'polished_deepslate'], ['deepslate_brick_wall', 'deepslate_bricks'], ['deepslate_tile_wall', 'deepslate_tiles'],
+  ['nether_brick_wall', 'nether_bricks'], ['red_nether_brick_wall', 'red_nether_bricks'],
 ]) shaped(wall, 6, ['###', '###'], { '#': mat });
 // doors, trapdoors, fences, gates
 for (const w of WOODS) {
@@ -386,6 +393,8 @@ function smelt(inputs: string[], result: string, xp: number): void {
   else for (const i of ok) SMELTING.push({ inputs: [i], result, xp });
 }
 smelt(['iron_ore', 'deepslate_iron_ore', 'raw_iron'], 'iron_ingot', 0.7);
+smelt(['netherrack'], 'nether_brick', 0.1);
+smelt(['nether_bricks'], 'cracked_nether_bricks', 0.1);
 smelt(['gold_ore', 'deepslate_gold_ore', 'raw_gold'], 'gold_ingot', 1.0);
 smelt(['copper_ore', 'deepslate_copper_ore', 'raw_copper'], 'copper_ingot', 0.7);
 smelt(['diamond_ore', 'deepslate_diamond_ore'], 'diamond', 1.0);

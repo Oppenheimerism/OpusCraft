@@ -64,6 +64,7 @@ stoneLike('dripstone_block', 1.5, 1, 'dripstone_block', { sound: 'dripstone_bloc
 stoneLike('cobblestone', 2, 6);
 stoneLike('mossy_cobblestone', 2, 6);
 stoneLike('stone_bricks', 1.5, 6);
+for (const n of ['nether_bricks', 'red_nether_bricks', 'cracked_nether_bricks', 'chiseled_nether_bricks']) stoneLike(n, 2, 6, n, { sound: 'nether_bricks' });
 stoneLike('mossy_stone_bricks', 1.5, 6);
 stoneLike('cracked_stone_bricks', 1.5, 6);
 stoneLike('chiseled_stone_bricks', 1.5, 6);
@@ -495,6 +496,8 @@ const SLAB_MATERIALS: [string, string, string, string, string, number][] = [
   ['dark_oak', 'dark_oak_planks', 'dark_oak_planks', 'dark_oak_planks', 'wood', 2],
   ['mangrove', 'mangrove_planks', 'mangrove_planks', 'mangrove_planks', 'wood', 2],
   ['cherry', 'cherry_planks', 'cherry_planks', 'cherry_planks', 'wood', 2],
+  ['nether_brick', 'nether_bricks', 'nether_bricks', 'nether_bricks', 'nether_bricks', 2],
+  ['red_nether_brick', 'red_nether_bricks', 'red_nether_bricks', 'red_nether_bricks', 'nether_bricks', 2],
   ['crimson', 'crimson_planks', 'crimson_planks', 'crimson_planks', 'nether_wood', 2],
   ['warped', 'warped_planks', 'warped_planks', 'warped_planks', 'nether_wood', 2],
   ['mossy_cobblestone', 'mossy_cobblestone', 'mossy_cobblestone', 'mossy_cobblestone', 'stone', 2],

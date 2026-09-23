@@ -112,16 +112,32 @@ export function smoothStone(): TexImage {
   return t;
 }
 
-/** Red clay bricks: 4 rows of 8x4 bricks with light mortar. */
-export function bricks(): TexImage {
-  const r = rng('bricks');
+const CLAY_BRICKS = [
+  [0x773428, 0x8a4031, 0x96493a, 0xa25243, 0xaf6050],
+  [0x70302a, 0x833b31, 0x8f4439, 0x9a4d41, 0xa7594d],
+  [0x7b3a2f, 0x8e473b, 0x995043, 0xa55b4d, 0xb46a5b],
+];
+const CLAY_MORTAR = [0x9a948c, 0xaaa49c, 0x86817a];
+
+/** the Nether's fired netherrack bricks: dark maroon, set in near-black mortar */
+export const NETHER_BRICKS = [
+  [0x251014, 0x2f161b, 0x381b21, 0x422127, 0x502a30],
+  [0x2a1318, 0x34191e, 0x3d1e24, 0x48252b, 0x562e35],
+  [0x231013, 0x2c1519, 0x351a1f, 0x3f2026, 0x4c282e],
+];
+export const NETHER_MORTAR = [0x120709, 0x1a0b0e, 0x0d0506];
+/** red nether bricks: nether wart fired in, a deep blood red */
+export const RED_NETHER_BRICKS = [
+  [0x3a0507, 0x480709, 0x55090c, 0x620d10, 0x731417],
+  [0x36050a, 0x44080b, 0x520a0e, 0x5e0e12, 0x6e1519],
+  [0x3d0608, 0x4b080a, 0x590b0d, 0x671012, 0x781719],
+];
+export const RED_NETHER_MORTAR = [0x220304, 0x2c0405, 0x180203];
+
+/** Bricks: 4 rows of 8x4 bricks set in mortar (red clay ones by default). */
+export function bricks(seed = 'bricks', brickCols = CLAY_BRICKS, mortar = CLAY_MORTAR): TexImage {
+  const r = rng(seed);
   const t = img();
-  const mortar = [0x9a948c, 0xaaa49c, 0x86817a];
-  const brickCols = [
-    [0x773428, 0x8a4031, 0x96493a, 0xa25243, 0xaf6050],
-    [0x70302a, 0x833b31, 0x8f4439, 0x9a4d41, 0xa7594d],
-    [0x7b3a2f, 0x8e473b, 0x995043, 0xa55b4d, 0xb46a5b],
-  ];
   const nz = white(r);
   for (let row = 0; row < 4; row++) {
     const y0 = row * 4;
@@ -147,6 +163,60 @@ export function bricks(): TexImage {
     }
     for (let x = 0; x < N; x++) setPx(t, x, y0 + 3, mortar[r.chance(0.35) ? 1 : r.chance(0.3) ? 2 : 0]);
   }
+  return t;
+}
+
+/** cracked nether bricks: the same bricks split by dark cracks, a few of them chipped paler along the break */
+export function crackedNetherBricks(): TexImage {
+  const t = bricks('cracked_nether_bricks', NETHER_BRICKS, NETHER_MORTAR);
+  const d = 0x0b0405, e = 0x5c3238;
+  const cracks: [number, number][][] = [
+    [[3, 0], [3, 1], [4, 2], [4, 4], [5, 5], [5, 6]],
+    [[11, 4], [10, 5], [10, 6], [11, 8], [12, 9]],
+    [[6, 9], [7, 10], [7, 12], [6, 13], [6, 14]],
+    [[13, 12], [14, 13], [14, 14], [15, 15]],
+  ];
+  for (const c of cracks)
+    c.forEach(([x, y]) => {
+      setPx(t, x, y, d);
+      setPx(t, wrap(x + 1), y, mixC(getPx(t, wrap(x + 1), y), e, 0.45));
+    });
+  return t;
+}
+
+/**
+ * chiseled nether bricks: a band of bricks above and below, and between them a carved block with a grim face (two
+ * deep eyes over a clenched mouth), lit from the top left
+ */
+export function chiseledNetherBricks(): TexImage {
+  const t = bricks('chiseled_nether_bricks', NETHER_BRICKS, NETHER_MORTAR);
+  const pal = NETHER_BRICKS[1], hi = 0x643840, lo = 0x0f0608;
+  const r = rng('chiseled_nether_bricks_face');
+  for (let y = 4; y < 12; y++)
+    for (let x = 0; x < N; x++) setPx(t, x, y, pal[1 + (r.chance(0.3) ? 1 : 0) + (r.chance(0.15) ? 1 : 0)]);
+  for (let x = 0; x < N; x++) {
+    setPx(t, x, 4, hi);
+    setPx(t, x, 11, lo);
+  }
+  for (let y = 4; y < 12; y++) {
+    setPx(t, 0, y, hi);
+    setPx(t, 15, y, lo);
+  }
+  // the face
+  for (const [x0, x1] of [[3, 6], [10, 13]]) {
+    for (let x = x0; x < x1; x++) {
+      setPx(t, x, 6, lo);
+      setPx(t, x, 7, lo);
+      setPx(t, x, 5, mixC(getPx(t, x, 5), lo, 0.4));
+      setPx(t, x, 8, hi);
+    }
+  }
+  for (let x = 5; x < 11; x++) {
+    setPx(t, x, 9, lo);
+    setPx(t, x, 10, x % 2 ? hi : pal[3]);
+  }
+  setPx(t, 7, 8, pal[4]);
+  setPx(t, 8, 8, pal[4]);
   return t;
 }
 

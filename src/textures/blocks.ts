@@ -129,6 +129,10 @@ T['cracked_stone_bricks'] = () => BL.crackedStoneBricks();
 T['chiseled_stone_bricks'] = () => BL.chiseledStoneBricks();
 T['smooth_stone'] = () => BL.smoothStone();
 T['bricks'] = () => BL.bricks();
+T['nether_bricks'] = () => BL.bricks('nether_bricks', BL.NETHER_BRICKS, BL.NETHER_MORTAR);
+T['red_nether_bricks'] = () => BL.bricks('red_nether_bricks', BL.RED_NETHER_BRICKS, BL.RED_NETHER_MORTAR);
+T['cracked_nether_bricks'] = () => BL.crackedNetherBricks();
+T['chiseled_nether_bricks'] = () => BL.chiseledNetherBricks();
 
 // Sandstone
 T['sandstone_top'] = () => BL.sandstoneTop('sandstone_top', BL.SANDSTONE);
