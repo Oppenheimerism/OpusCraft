@@ -3,6 +3,7 @@
 import '../world/blocks';
 import { ChunkGenerator, type GenOutput } from '../world/gen/generator';
 import { NetherGenerator } from '../world/gen/nether';
+import { EndGenerator } from '../world/gen/theEnd';
 import type { DimensionId } from '../world/dimension';
 import { initMesher, meshSection, MeshInput } from '../render/mesher';
 import type { SpriteRect } from '../world/models';
@@ -14,7 +15,7 @@ const gens: Partial<Record<DimensionId, { generate(cx: number, cz: number): GenO
 /** each dimension's generator, made the first time it's asked for */
 function genFor(dim: DimensionId): { generate(cx: number, cz: number): GenOutput } {
   let g = gens[dim];
-  if (!g) gens[dim] = g = dim === 'the_nether' ? new NetherGenerator(seed) : new ChunkGenerator(seed);
+  if (!g) gens[dim] = g = dim === 'the_nether' ? new NetherGenerator(seed) : dim === 'the_end' ? new EndGenerator(seed) : new ChunkGenerator(seed);
   return g;
 }
 

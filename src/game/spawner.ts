@@ -211,9 +211,13 @@ const NETHER_SPAWNS: Record<string, { monster: SpawnerData[]; creature: SpawnerD
 /** vanilla NetherFortressStructure.FORTRESS_ENEMIES: the monsters of a fortress */
 const FORTRESS_ENEMIES = [S_('blaze', 10, 2, 3), S_('zombified_piglin', 5, 4, 4), S_('wither_skeleton', 8, 5, 5), S_('skeleton', 2, 5, 5), S_('magma_cube', 3, 4, 4)];
 
+/** vanilla BiomeDefaultFeatures.endSpawns: the End's biomes have endermen, in fours, and nothing else */
+const END_SPAWN_BIOMES = new Set(['the_end', 'end_highlands', 'end_midlands', 'small_end_islands', 'end_barrens']);
+
 function settingsFor(name: string): MobSettings {
   const nether = NETHER_SPAWNS[name];
   if (nether) return { ...nether, creatureProbability: 0.1, water: [], ambient: [] };
+  if (END_SPAWN_BIOMES.has(name)) return { monster: [S_('enderman', 10, 4, 4)], creature: [], water: [], ambient: [], creatureProbability: 0.1 };
   const base = settingsForLand(name);
   let water: SpawnerData[] = [];
   if (name === 'river' || name === 'frozen_river') water = SQUID(2);

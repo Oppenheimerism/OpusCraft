@@ -1264,7 +1264,6 @@ export class Game {
     this.ambient?.tick(p.x, p.y, p.z);
     this.ambient?.tickRain(p.x, p.y + p.eyeHeight, p.z, this.opts.graphics >= 1);
     if (this.freezeTime) this.level.dayTime--;
-    if (p.y < this.world.dim.minY - 64 && p.health > 0) p.hurt(4, 'void');
     this.atlas.tick();
     this.renderer.lightmap.tick();
     this.renderer.hand.tick(p);

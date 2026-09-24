@@ -138,6 +138,8 @@ export abstract class Entity {
       this.lavaHurt();
       this.fallDistance *= 0.5;
     }
+    // vanilla checkBelowWorld: 64 blocks under the bottom of the world
+    if (this.y < this.level.world.dim.minY - 64) this.onBelowWorld();
     if (this.invulnerableTime > 0) this.invulnerableTime--;
     if (this.boardingCooldown > 0) this.boardingCooldown--;
   }
@@ -826,6 +828,11 @@ export abstract class Entity {
 
   /** vanilla Entity.kill (/kill): gone for good */
   kill(): void {
+    this.remove();
+  }
+
+  /** vanilla Entity.onBelowWorld: fallen out of the world, gone (living things take the void's damage instead) */
+  protected onBelowWorld(): void {
     this.remove();
   }
 

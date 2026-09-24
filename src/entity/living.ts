@@ -119,6 +119,11 @@ export abstract class LivingEntity extends Entity {
     return 1;
   }
 
+  /** vanilla LivingEntity.onBelowWorld: the void hurts, 4 a tick, whatever the armour */
+  protected override onBelowWorld(): void {
+    if (this.health > 0) this.hurt(4, 'void');
+  }
+
   override baseTick(): void {
     super.baseTick();
     this.bodyYawO = this.bodyYaw;
