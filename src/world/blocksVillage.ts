@@ -5,7 +5,7 @@
 // What they do is in game/villageBlocks.
 
 import { registerBlock, P, Box, enumProp, intProp, StateView } from './block';
-import { cubeBottomTop, type ModelDef, type FaceDef, type UV4, type ElementDef, type Variant } from './models';
+import { cubeBottomTop, orientable, type ModelDef, type FaceDef, type UV4, type ElementDef, type Variant } from './models';
 import type { DirName } from './dir';
 
 const px = (v: number) => v / 16;
@@ -171,6 +171,18 @@ export function registerVillageBlocks(): void {
         const level = s.get<number>('level');
         return level ? { parts: [{ model: base }, { model: contents[level] }] } : { model: base };
       },
+    });
+  }
+  // Smoker and blast furnace (vanilla SmokerBlock, BlastFurnaceBlock: furnaces with their own recipes; block/smoker is
+  // orientable_with_bottom, block/blast_furnace orientable, each with an _on front)
+  for (const [name, bottom] of [['smoker', 'smoker_bottom'], ['blast_furnace', 'blast_furnace_top']]) {
+    const off = orientable(`${name}_front`, `${name}_side`, `${name}_top`, bottom);
+    const on = orientable(`${name}_front_on`, `${name}_side`, `${name}_top`, bottom);
+    // (vanilla: strength 3.5, a pickaxe to drop, light 13 while lit)
+    registerBlock(name, {
+      props: [P.facingH, P.lit], hardness: 3.5, sound: 'stone', tool: 'pickaxe', requiresTool: true, mapColor: 0x707070,
+      light: (s) => (s.get('lit') ? 13 : 0),
+      model: (s) => ({ model: s.get('lit') ? on : off, y: HOR_ROT[s.get<string>('facing')] }),
     });
   }
 }

@@ -734,7 +734,7 @@ export class Game {
     if (!this.containerScreenFactory) return;
     const p = this.player;
     if (kind === 'crafting_table') this.setScreen(this.containerScreenFactory(new CraftingMenu(p, [x, y, z])));
-    else if (kind === 'furnace') {
+    else if (kind === 'furnace' || kind === 'smoker' || kind === 'blast_furnace') {
       const be = this.world.getBlockEntity(x, y, z);
       if (be instanceof FurnaceBlockEntity) this.setScreen(this.containerScreenFactory(new FurnaceMenu(p, be)));
     } else if (kind === 'chest') {
@@ -1576,7 +1576,7 @@ export class Game {
   /** vanilla RecipeToast.addOrUpdate for each newly unlocked recipe */
   private onRecipesUnlocked(rs: BookRecipe[]): void {
     for (const r of rs) {
-      const symbol = r.type === 'furnace' ? 'furnace' : 'crafting_table';
+      const symbol = r.type === 'crafting' ? 'crafting_table' : r.type;
       const t = this.toasts.get<RecipeToast>('recipe');
       if (t) t.addItem(r.result, symbol);
       else this.toasts.add(new RecipeToast(r.result, symbol));

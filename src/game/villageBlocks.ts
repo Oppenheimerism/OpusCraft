@@ -264,3 +264,29 @@ export function fillHeld(p: Player, filled: ItemStack): void {
     drops: (st) => (levelOf(st) === 8 ? [ItemStack.of('composter'), ItemStack.of('bone_meal')] : [ItemStack.of('composter')]),
   });
 }
+
+// ---------------------------------------------------------------------------
+// Smoker and blast furnace (vanilla SmokerBlock / BlastFurnaceBlock.animateTick; the cooking is FurnaceBlockEntity's)
+{
+  const lit = (st: number) => blk(st).get(st, 'lit') === true;
+  // the smoker puffs smoke out of its flue
+  registerBehavior('smoker', {
+    animateTick(level, x, y, z, st) {
+      if (!lit(st)) return;
+      if (Math.random() < 0.1) level.sound.play('block.smoker.smoke', x + 0.5, y, z + 0.5, 1, 1);
+      level.particles.spawn?.('smoke', x + 0.5, y + 1.1, z + 0.5, 0, 0, 0);
+    },
+  });
+  // the blast furnace's smoke curls out of the vents in its front
+  registerBehavior('blast_furnace', {
+    animateTick(level, x, y, z, st) {
+      if (!lit(st)) return;
+      if (Math.random() < 0.1) level.sound.play('block.blast_furnace.fire_crackle', x + 0.5, y, z + 0.5, 1, 1);
+      const f = facingOf(st);
+      const d4 = Math.random() * 0.6 - 0.3;
+      const dx = DX[f] !== 0 ? DX[f] * 0.52 : d4;
+      const dz = DZ[f] !== 0 ? DZ[f] * 0.52 : d4;
+      level.particles.spawn?.('smoke', x + 0.5 + dx, y + (Math.random() * 9) / 16, z + 0.5 + dz, 0, 0, 0);
+    },
+  });
+}

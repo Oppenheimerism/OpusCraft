@@ -3,7 +3,7 @@
 
 import { SimpleContainer, isEmpty } from '../inventory/container';
 import { ItemStack, ITEMS, ItemTag, cloneTag } from '../item/item';
-import { smeltingResult, fuelTime } from '../inventory/recipes';
+import { cookingResult, cookingTime, burnDuration, type CookingKind } from '../inventory/recipes';
 import { BLOCKS, STATE_BLOCK } from './block';
 import type { Level } from '../game/level';
 import type { Entity } from '../entity/entity';
@@ -110,15 +110,21 @@ export class BarrelBlockEntity extends ChestBlockEntity {
   }
 }
 
+/**
+ * vanilla AbstractFurnaceBlockEntity, and its smoker and blast furnace (SmokerBlockEntity, BlastFurnaceBlockEntity:
+ * their own recipes, cooked in half the time on fuel that lasts half as long)
+ */
 export class FurnaceBlockEntity extends BlockEntity {
-  readonly id = 'furnace';
+  readonly id: CookingKind;
   litTime = 0;
   litDuration = 0;
   cookingProgress = 0;
-  cookingTotalTime = 200;
+  cookingTotalTime: number;
   storedXp = 0;
-  constructor(x: number, y: number, z: number) {
+  constructor(x: number, y: number, z: number, kind: CookingKind = 'furnace') {
     super(x, y, z, 3);
+    this.id = kind;
+    this.cookingTotalTime = cookingTime(kind);
   }
   get isLit(): boolean {
     return this.litTime > 0;
@@ -130,13 +136,13 @@ export class FurnaceBlockEntity extends BlockEntity {
     this.litTime = Number(d.litTime ?? 0);
     this.litDuration = Number(d.litDuration ?? 0);
     this.cookingProgress = Number(d.cook ?? 0);
-    this.cookingTotalTime = Number(d.cookTotal ?? 200);
+    this.cookingTotalTime = Number(d.cookTotal ?? cookingTime(this.id));
     this.storedXp = Number(d.xp ?? 0);
   }
 
   private canBurn(): boolean {
     const input = this.container.get(0);
-    const r = smeltingResult(input);
+    const r = cookingResult(this.id, input);
     if (!r) return false;
     const out = this.container.get(2);
     if (isEmpty(out)) return true;
@@ -146,7 +152,7 @@ export class FurnaceBlockEntity extends BlockEntity {
 
   private burn(): void {
     const input = this.container.get(0)!;
-    const r = smeltingResult(input)!;
+    const r = cookingResult(this.id, input)!;
     const out = this.container.get(2);
     if (isEmpty(out)) this.container.items[2] = ItemStack.of(r.result, 1);
     else out.count++;
@@ -164,7 +170,7 @@ export class FurnaceBlockEntity extends BlockEntity {
     const input = this.container.get(0);
     if (this.isLit || (!isEmpty(fuel) && !isEmpty(input))) {
       if (!this.isLit && this.canBurn()) {
-        this.litTime = fuelTime(fuel);
+        this.litTime = burnDuration(this.id, fuel);
         this.litDuration = this.litTime;
         if (this.isLit && fuel) {
           const id = fuel.item.id;
@@ -177,7 +183,7 @@ export class FurnaceBlockEntity extends BlockEntity {
         this.cookingProgress++;
         if (this.cookingProgress >= this.cookingTotalTime) {
           this.cookingProgress = 0;
-          this.cookingTotalTime = 200;
+          this.cookingTotalTime = cookingTime(this.id);
           this.burn();
         }
       } else this.cookingProgress = 0;
@@ -187,7 +193,7 @@ export class FurnaceBlockEntity extends BlockEntity {
     if (wasLit !== this.isLit) {
       const st = level.getState(this.x, this.y, this.z);
       const b = BLOCKS[STATE_BLOCK[st]];
-      if (b.name === 'furnace') level.setBlock(this.x, this.y, this.z, b.with(st, 'lit', this.isLit), false);
+      if (b.name === this.id) level.setBlock(this.x, this.y, this.z, b.with(st, 'lit', this.isLit), false);
     }
   }
 
@@ -318,7 +324,7 @@ export class BellBlockEntity extends BlockEntity {
 export function createBlockEntity(name: string, x: number, y: number, z: number): BlockEntity | null {
   if (name === 'chest') return new ChestBlockEntity(x, y, z);
   if (name === 'enchanting_table') return new EnchantingTableBlockEntity(x, y, z);
-  if (name === 'furnace') return new FurnaceBlockEntity(x, y, z);
+  if (name === 'furnace' || name === 'smoker' || name === 'blast_furnace') return new FurnaceBlockEntity(x, y, z, name);
   if (name === 'spawner') return new SpawnerBlockEntity(x, y, z);
   if (name === 'bell') return new BellBlockEntity(x, y, z);
   if (name === 'barrel') return new BarrelBlockEntity(x, y, z);

@@ -4,7 +4,7 @@
 import { ContainerMenu, Slot, SimpleContainer, PlayerContainer, Container, isEmpty } from './container';
 import { ItemStack } from '../item/item';
 import type { Player } from '../entity/player';
-import { findRecipe, craftingRemainder, smeltingResult, fuelTime, CraftingRecipe } from './recipes';
+import { findRecipe, craftingRemainder, cookingResult, fuelTime, CraftingRecipe } from './recipes';
 import type { ChestBlockEntity, FurnaceBlockEntity } from '../world/blockEntity';
 import { hasBinding } from '../item/enchantHelper';
 import { equipSound } from '../item/equipment';
@@ -271,7 +271,7 @@ export class FurnaceMenu extends ContainerMenu {
       if (!this.moveItemStackTo(s, 3, 39, true)) return null;
       slot.onQuickCraft(s, before);
     } else if (index !== 1 && index !== 0) {
-      if (smeltingResult(s)) {
+      if (cookingResult(this.furnace.id, s)) {
         if (!this.moveItemStackTo(s, 0, 1, false)) return null;
       } else if (fuelTime(s) > 0) {
         if (!this.moveItemStackTo(s, 1, 2, false)) return null;

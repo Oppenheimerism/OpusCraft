@@ -1,10 +1,11 @@
 // Village block sounds: vanilla block/bell/bell_use01-02 (the bell struck), block/barrel/open1-2 and close
-// (the lid), block/composter/fill1-4, fill_success1-4, empty1-3 and ready1-4.
+// (the lid), block/composter/fill1-4, fill_success1-4, empty1-3 and ready1-4, block/smoker/smoke1-6 and
+// block/blast_furnace/fire_crackle1-5.
 
 import type { SoundGen } from '../synth';
 import { alloc, layer, envBump } from './dsp';
 import { type Ctx, sound } from './registry';
-import { impact, thump, creak, phisem, burst, ticks, bubble, type Band } from './texture';
+import { impact, thump, creak, phisem, burst, ticks, bubble, fireCrackles, type Band } from './texture';
 
 // ------------------------------------------------------------------ bell
 
@@ -172,6 +173,29 @@ function composterReady(c: Ctx): Float32Array {
   return out;
 }
 
+// ------------------------------------------------------------------ smoker, blast furnace
+
+/** the smoker at work: a soft breath of smoke through the flue over a low, sizzling crackle */
+function smokerSmoke(c: Ctx): Float32Array {
+  const { sr, rng } = c;
+  const d = rng.range(1.1, 1.5);
+  const out = alloc(d, sr);
+  layer(out, 0.55, (b) => burst(b, sr, rng, { dur: d, attack: 0.25, tau: d, bp: [900, 0.6], env: (t) => envBump(t, 0.3, d - 0.3) }));
+  layer(out, 0.35, (b) => burst(b, sr, rng, { dur: d, attack: 0.2, tau: d, hp: 3000, env: (t) => envBump(t, 0.25, d - 0.25) * (0.7 + 0.3 * Math.sin(t * 23)) }));
+  layer(out, 1, (b) => fireCrackles(b, sr, rng, 0.05, d - 0.1, rng.range(8, 14), 0.15));
+  return out;
+}
+
+/** the blast furnace roaring: hard, quick crackles over the rumble of a forced fire */
+function blastFurnaceCrackle(c: Ctx): Float32Array {
+  const { sr, rng } = c;
+  const d = rng.range(1.0, 1.4);
+  const out = alloc(d, sr);
+  layer(out, 1, (b) => fireCrackles(b, sr, rng, 0.005, d - 0.05, rng.range(25, 38), 0.35));
+  layer(out, 0.4, (b) => burst(b, sr, rng, { dur: d, attack: 0.1, tau: d, lp: 260, color: 'brown', env: (t) => envBump(t, 0.15, d - 0.15) }));
+  return out;
+}
+
 export function villageSounds(): Record<string, SoundGen> {
   return {
     'block.bell.use': sound('block.bell.use', 2, bellUse),
@@ -181,5 +205,7 @@ export function villageSounds(): Record<string, SoundGen> {
     'block.composter.fill_success': sound('block.composter.fill_success', 4, (c) => composterFill(c, true)),
     'block.composter.empty': sound('block.composter.empty', 3, composterEmpty),
     'block.composter.ready': sound('block.composter.ready', 4, composterReady),
+    'block.smoker.smoke': sound('block.smoker.smoke', 6, smokerSmoke),
+    'block.blast_furnace.fire_crackle': sound('block.blast_furnace.fire_crackle', 5, blastFurnaceCrackle),
   };
 }
