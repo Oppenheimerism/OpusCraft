@@ -306,6 +306,12 @@ reg({ id: 'ender_eye', texture: 'ender_eye', creativeTab: 'tools' });
 // (vanilla CreativeModeTabs.COMBAT lists the end crystal after the totem and TNT)
 reg({ id: 'end_crystal', texture: 'end_crystal', creativeTab: 'combat', rarity: 'rare', glint: true });
 ITEMS.get('end_portal_frame')!.creativeTab = 'functional';
+// the outer End: chorus fruit (vanilla ChorusFruitItem: always edible, and it teleports its eater, game/chorus.ts) and
+// the popped fruit smelted from it; the chorus plant and flower are natural blocks, the end rod a functional one
+reg({ id: 'chorus_fruit', texture: 'chorus_fruit', creativeTab: 'food', food: { nutrition: 4, saturation: 0.3, alwaysEat: true } });
+reg({ id: 'popped_chorus_fruit', texture: 'popped_chorus_fruit' });
+for (const id of ['chorus_plant', 'chorus_flower']) ITEMS.get(id)!.creativeTab = 'natural';
+ITEMS.get('end_rod')!.creativeTab = 'functional';
 Object.assign(ITEMS.get('dragon_egg')!, { rarity: 'epic', creativeTab: 'functional' });
 reg({ id: 'enchanted_book', texture: 'enchanted_book', maxStack: 1, rarity: 'uncommon', glint: true });
 // vanilla SmithingTemplateItem.createNetheriteUpgradeTemplate: its hover text is the upgrade, what it applies to and needs

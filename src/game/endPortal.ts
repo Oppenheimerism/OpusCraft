@@ -19,6 +19,7 @@ import { registerItemBehavior } from './itemBehavior';
 import { raycast } from './raycast';
 import './endBlocks';
 import './gatewayTravel';
+import './chorus';
 
 /** vanilla Block.UPDATE_CLIENTS (the frame and the portal blocks are set without telling the neighbours) */
 const UPDATE_CLIENTS = 2;

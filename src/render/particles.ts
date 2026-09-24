@@ -79,6 +79,9 @@ interface SpriteParticle {
   stopped?: boolean;
   /** its friction slows it across but not up and down (vanilla DragonBreathParticle, till it lands) */
   keepYSpeed?: boolean;
+  /** vanilla SimpleAnimatedParticle: past half its life it fades out, and (with a fade colour) toward that colour */
+  animated?: boolean;
+  fade?: [number, number, number];
 }
 
 export interface SpriteRectUV {
@@ -101,6 +104,8 @@ const GUST = Array.from({ length: 12 }, (_, i) => `gust_${i}`);
 const DRAGON_BREATH = ['generic_2', 'generic_1', 'generic_0'];
 /** vanilla particles/campfire_cosy_smoke.json and campfire_signal_smoke.json */
 const BIG_SMOKE = Array.from({ length: 12 }, (_, i) => `big_smoke_${i}`);
+/** vanilla particles/end_rod.json (and firework.json): glitter_7 down to glitter_0 */
+const GLITTER = Array.from({ length: 8 }, (_, i) => `glitter_${7 - i}`);
 
 export class ParticleEngine {
   private readonly list: Particle[] = [];
@@ -487,6 +492,27 @@ export class ParticleEngine {
         p.frames = SGA_SPRITES;
         p.frame = Math.floor(Math.random() * SGA_SPRITES.length);
         p.lightMode = 'enchant';
+        this.addSprite(p);
+        break;
+      }
+      case 'end_rod': {
+        // vanilla EndRodParticle (a SimpleAnimatedParticle): a glittering mote, full bright, drifting as sent through
+        // everything and barely sinking, dwindling through the glitter frames; past half its life it fades out, and
+        // from white toward a warm cream
+        const p = this.base(kind, x, y, z);
+        p.dx = xd;
+        p.dy = yd;
+        p.dz = zd;
+        p.gravity = 0.0125;
+        p.friction = 0.91;
+        p.size *= 0.75;
+        p.lifetime = 60 + Math.floor(Math.random() * 12);
+        p.physics = false;
+        p.fullBright = true;
+        p.frames = GLITTER;
+        p.alpha = 1;
+        p.animated = true;
+        p.fade = [0xf2 / 255, 0xde / 255, 0xc9 / 255];
         this.addSprite(p);
         break;
       }
@@ -960,6 +986,14 @@ export class ParticleEngine {
       }
       p.g *= p.gDecay;
       p.b *= p.bDecay;
+      if (p.animated && p.age > Math.floor(p.lifetime / 2)) {
+        p.alpha = 1 - (p.age - Math.floor(p.lifetime / 2)) / p.lifetime;
+        if (p.fade) {
+          p.r += (p.fade[0] - p.r) * 0.2;
+          p.g += (p.fade[1] - p.g) * 0.2;
+          p.b += (p.fade[2] - p.b) * 0.2;
+        }
+      }
       // vanilla LavaParticle.tick: embers trail smoke while young
       if (p.kind === 'lava' && Math.random() > p.age / p.lifetime) this.spawn('smoke', p.x, p.y, p.z, p.dx, p.dy, p.dz);
       list[w++] = p;

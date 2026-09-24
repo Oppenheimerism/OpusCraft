@@ -54,6 +54,13 @@ export interface BlockBehavior {
   neighborChanged?(level: Level, x: number, y: number, z: number, state: number, source: number, fx: number, fy: number, fz: number, moving: boolean): void;
   /** vanilla tick: a scheduled block tick */
   tick?(level: Level, x: number, y: number, z: number, state: number): void;
+  /** vanilla randomTick: one of the random ticks a chunk's blocks get (for a block registered with randomTicks) */
+  randomTick?(level: Level, x: number, y: number, z: number, state: number): void;
+  /**
+   * vanilla updateShape scheduling the block's own tick when it can no longer stay (chorus plants): it breaks that many
+   * ticks later, in its tick, rather than at once
+   */
+  breakDelay?: number;
   /** vanilla isSignalSource */
   isSignalSource?(state: number): boolean;
   /** vanilla getSignal: the (weak) power toward whoever asks; `dir` points from the asker to this block */

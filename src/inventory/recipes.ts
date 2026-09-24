@@ -256,6 +256,13 @@ shaped('polished_deepslate', 4, ['SS', 'SS'], { S: 'cobbled_deepslate' });
 shaped('deepslate_bricks', 4, ['SS', 'SS'], { S: 'polished_deepslate' });
 shaped('deepslate_tiles', 4, ['SS', 'SS'], { S: 'deepslate_bricks' });
 shaped('end_stone_bricks', 4, ['##', '##'], { '#': 'end_stone' });
+// the outer End: purpur from popped chorus fruit, its pillar from two slabs, its stairs and slab from the block or
+// the pillar; end rods from a blaze rod on a popped fruit
+shaped('purpur_block', 4, ['FF', 'FF'], { F: 'popped_chorus_fruit' });
+shaped('purpur_pillar', 1, ['#', '#'], { '#': 'purpur_slab' });
+shaped('purpur_stairs', 4, ['#  ', '## ', '###'], { '#': ['purpur_block', 'purpur_pillar'] });
+shaped('purpur_slab', 6, ['###'], { '#': ['purpur_block', 'purpur_pillar'] });
+shaped('end_rod', 4, ['/', '#'], { '/': 'blaze_rod', '#': 'popped_chorus_fruit' });
 shaped('bricks', 1, ['##', '##'], { '#': 'brick' });
 shaped('clay', 1, ['##', '##'], { '#': 'clay_ball' });
 shaped('snow_block', 1, ['##', '##'], { '#': 'snowball' });
@@ -467,6 +474,7 @@ smelt(['lapis_ore', 'deepslate_lapis_ore'], 'lapis_lazuli', 0.2);
 smelt(['redstone_ore', 'deepslate_redstone_ore'], 'redstone', 0.7);
 smelt(['coal_ore', 'deepslate_coal_ore'], 'coal', 0.1);
 smelt(TAGS.logs, 'charcoal', 0.15);
+smelt(['chorus_fruit'], 'popped_chorus_fruit', 0.1);
 smelt(['sand', 'red_sand'], 'glass', 0.1);
 smelt(['cobblestone'], 'stone', 0.1);
 smelt(['stone'], 'smooth_stone', 0.1);

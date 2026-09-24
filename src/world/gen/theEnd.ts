@@ -12,8 +12,9 @@
 // density at the chunk's middle.
 //
 // Decoration (vanilla EndBiomes): small end islands in their biome (RAW_GENERATION),
-// the obsidian spikes on the main island (SURFACE_STRUCTURES, endSpikes.ts). The
-// decoration randomness is this game's own (seeded per chunk), not vanilla's.
+// the obsidian spikes on the main island (SURFACE_STRUCTURES, endSpikes.ts), chorus
+// plants in the highlands (VEGETAL_DECORATION, chorusPlant.ts). The decoration
+// randomness is this game's own (seeded per chunk), not vanilla's.
 
 import { BlendedNoise, type SeedSource } from './noise';
 import { LegacyRandom, SimplexNoise, seedLong } from './legacyRandom';
@@ -21,6 +22,7 @@ import { squeeze } from './router';
 import { GenContext } from './context';
 import { B } from './biomes';
 import { placeEndPlatform, placeEndSpikes } from './endFeatures';
+import { generateChorusPlant } from './chorusPlant';
 import { S } from '../block';
 import { COLUMN_VOLUME, colIndex } from '../constants';
 import { Rand, hash2, hash32 } from '../../core/rng';
@@ -247,6 +249,16 @@ export class EndGenerator {
     if (ctx.biomes[0] === B.the_end || this.biomeOfChunk(ctx.cx, ctx.cz) === B.the_end) {
       placeEndSpikes(ctx, this.seed, rand(4));
       placeEndPlatform(ctx);
+    }
+    // VEGETAL_DECORATION — vanilla end_highlands: CHORUS_PLANT, 0..4 tries, each somewhere in the chunk on its
+    // motion-blocking surface, a plant growing there if that's the highlands and it's on end stone
+    {
+      const r = rand(7);
+      const n = r.nextInt(5);
+      for (let i = 0; i < n; i++) {
+        const x = ctx.x0 + r.nextInt(16), z = ctx.z0 + r.nextInt(16);
+        if (this.biomeAt(x, z) === B.end_highlands) generateChorusPlant(ctx, r, x, ctx.heightMotion(x, z), z, 8);
+      }
     }
   }
 

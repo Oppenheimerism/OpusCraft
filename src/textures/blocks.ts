@@ -27,6 +27,7 @@ import * as EN from './blocklib/end';
 import { FIRE_TEXTURES } from './mobs';
 import { registerEnchantingTextures } from './blocklib/enchanting';
 import { registerVillageTextures } from './blocklib/village';
+import { registerOuterEndTextures } from './blocklib/outerEnd';
 
 type Gen = () => TexDef;
 export const BLOCK_TEXTURES: Record<string, Gen> = {};
@@ -536,6 +537,7 @@ T['end_portal_frame_top'] = () => EN.endPortalFrameTop();
 T['end_portal_frame_side'] = () => EN.endPortalFrameSide(endStoneBase());
 T['end_portal_frame_eye'] = () => EN.endPortalFrameEye();
 T['dragon_egg'] = () => EN.dragonEgg();
+registerOuterEndTextures(T);
 
 // Missing texture (vanilla's magenta/black checkerboard)
 T['missing'] = () => {
