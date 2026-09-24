@@ -12,6 +12,8 @@ import { SmithingMenu } from '../../inventory/smithingMenu';
 import { SmithingScreen } from './smithing';
 import { LecternMenu } from '../../inventory/lecternMenu';
 import { BookEditScreen, BookViewScreen, LecternScreen, bookPages } from './book';
+import { LoomMenu } from '../../inventory/loomMenu';
+import { LoomScreen } from './loom';
 
 export function installJobSiteScreens(game: Game): void {
   setJobSiteScreens((kind, x, y, z): Screen | null => {
@@ -22,6 +24,8 @@ export function installJobSiteScreens(game: Game): void {
         return new StonecutterScreen(game, new StonecutterMenu(p, pos));
       case 'smithing_table':
         return new SmithingScreen(game, new SmithingMenu(p, pos));
+      case 'loom':
+        return new LoomScreen(game, new LoomMenu(p, pos));
       case 'lectern': {
         const be = p.level.world.getBlockEntity(x, y, z);
         return be instanceof LecternBlockEntity ? new LecternScreen(game, new LecternMenu(p, be)) : null;

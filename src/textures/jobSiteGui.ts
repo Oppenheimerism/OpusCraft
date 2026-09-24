@@ -1,7 +1,7 @@
-// GUI sprites of the job sites' screens (vanilla container/stonecutter.png, smithing.png and the sprites in
-// gui/sprites/container/{stonecutter,smithing}): backgrounds at vanilla slot positions, the recipe buttons and
-// scrollers, and the smithing table's empty-slot icons (vanilla item/empty_slot_*); and the book the lectern and
-// books open (vanilla gui/book.png and the widget/page_* arrows).
+// GUI sprites of the job sites' screens (vanilla container/stonecutter.png, smithing.png, loom.png and the sprites in
+// gui/sprites/container/{stonecutter,smithing,loom}): backgrounds at vanilla slot positions, the recipe and pattern
+// buttons and scrollers, and the empty-slot icons (vanilla item/empty_slot_*, container/slot/banner and the rest);
+// and the book the lectern and books open (vanilla gui/book.png and the widget/page_* arrows).
 
 import { TexImage, img, plot, rect, mixC } from './tex';
 import { GUI_TEXTURES, panel, inset, slotAt, bigSlotAt, playerInventory, arrowMask, drawMask } from './gui';
@@ -320,6 +320,98 @@ const SMITHING_SLOT_ICONS: Record<string, string[]> = {
   ],
 };
 for (const [name, rows] of Object.entries(SMITHING_SLOT_ICONS)) G[`slot_${name}`] = () => debossed(rows);
+
+// ---------------------------------------------------------------------------
+// Loom
+
+G['container_loom'] = () => {
+  const t = panel(176, 166);
+  slotAt(t, 13, 26); // banner
+  slotAt(t, 33, 26); // dye
+  slotAt(t, 23, 45); // banner pattern
+  inset(t, 59, 12, 58, 58); // the patterns, 4 × 4 buttons of 14 × 14 from (60, 13)
+  inset(t, 118, 12, 14, 58); // the scroller's track (12 × 15 at 119, 13..54)
+  inset(t, 140, 7, 22, 42); // the banner as it will come out (20 × 40 at 141, 8)
+  slotAt(t, 143, 58); // result
+  playerInventory(t, 84);
+  return t;
+};
+G['loom_pattern'] = () => bevelled(14, 14, { face: 0xc6c6c6, hi: WHITE, lo: 0x555555 });
+G['loom_pattern_highlighted'] = () => bevelled(14, 14, { face: 0xdcdcf0, hi: WHITE, lo: 0x7a7a9a });
+G['loom_pattern_selected'] = () => bevelled(14, 14, { face: 0x7f7f7f, hi: 0x373737, lo: WHITE });
+G['loom_scroller'] = () => G['scroller']();
+G['loom_scroller_disabled'] = () => G['scroller_disabled']();
+/** over the result slot when the banner can take no more layers: a red cross */
+G['loom_error'] = () => {
+  const t = img(26, 26);
+  for (let i = 0; i < 16; i++) {
+    const x = 5 + i, y = 5 + i;
+    for (const [dx, c] of [[-2, 0x000000], [-1, 0xff5555], [0, 0xd81e1e], [1, 0xa01010], [2, 0x000000]] as [number, number][]) {
+      plot(t, x + dx, y, c);
+      plot(t, 20 - i + dx, y, c);
+    }
+  }
+  return t;
+};
+
+// prettier-ignore
+const LOOM_SLOT_ICONS: Record<string, string[]> = {
+  banner: [
+    '................',
+    '..############..',
+    '...##########...',
+    '...##########...',
+    '...##########...',
+    '...##########...',
+    '...##########...',
+    '...##########...',
+    '...##########...',
+    '...##########...',
+    '...####..####...',
+    '...###....###...',
+    '...##......##...',
+    '................',
+    '................',
+    '................',
+  ],
+  dye: [
+    '................',
+    '................',
+    '.......##.......',
+    '......####......',
+    '.....######.....',
+    '....########....',
+    '...##########...',
+    '...##########...',
+    '..############..',
+    '..############..',
+    '..############..',
+    '...##########...',
+    '....########....',
+    '......####......',
+    '................',
+    '................',
+  ],
+  banner_pattern: [
+    '................',
+    '...#########....',
+    '...##########...',
+    '...###########..',
+    '...###########..',
+    '...###########..',
+    '...###########..',
+    '...###########..',
+    '...###########..',
+    '...###########..',
+    '...###########..',
+    '...###########..',
+    '...###########..',
+    '...###########..',
+    '................',
+    '................',
+  ],
+};
+for (const [name, rows] of Object.entries(LOOM_SLOT_ICONS)) G[`slot_${name}`] = () => debossed(rows);
 
 // ---------------------------------------------------------------------------
 // Books
