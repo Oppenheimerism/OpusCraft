@@ -63,6 +63,7 @@ import { ChestBoat } from '../entity/boat';
 import { nightVisionScale, blindnessFog, applyNausea } from '../render/effectVisuals';
 import { OVERWORLD, THE_NETHER, dimensionById, teleportationScale, type DimensionType } from '../world/dimension';
 import { PortalPoi, portalRectangle, relativePortalPosition, portalExit, createPortal, isPortal, portalAxis, type PortalRect } from './portal';
+import { setVillageMenuHook } from './villageBlocks';
 
 export type { GameOptions } from './options';
 
@@ -397,6 +398,7 @@ export class Game {
     this.level.addEntity(this.player);
     this.interaction = new Interaction(this.level, this.player);
     this.interaction.onOpenContainer = (kind, x, y, z) => this.openContainer(kind, x, y, z);
+    setVillageMenuHook((kind, x, y, z) => this.openContainer(kind, x, y, z));
     this.interaction.onOpenEntityContainer = (e) => this.openEntityContainer(e);
     this.interaction.onMounted = () => this.hud.setOverlayMessage(`Press ${keyDisplayName(KEYS.sneak)} to Dismount`);
     this.interaction.onUseBed = (x, y, z) => useBed(this.sleepHost(), x, y, z);
@@ -758,6 +760,8 @@ export class Game {
       this.setScreen(this.containerScreenFactory(m));
     } else if (kind.endsWith('anvil')) this.setScreen(this.containerScreenFactory(new AnvilMenu(p, [x, y, z])));
     else if (kind === 'grindstone') this.setScreen(this.containerScreenFactory(new GrindstoneMenu(p, [x, y, z])));
+    // (cartography_table, loom, stonecutter, smithing_table, brewing_stand and a lectern's book come here too, from
+    // game/villageBlocks: their screens are still to come)
   }
 
   /** right-clicked a chest minecart or chest boat (vanilla ContainerEntity.interactWithContainerVehicle: no sound, no lid) */

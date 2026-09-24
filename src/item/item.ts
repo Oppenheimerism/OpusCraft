@@ -203,6 +203,8 @@ reg({ id: 'warped_fungus_on_a_stick', maxStack: 1, creativeTab: 'tools', texture
 reg({ id: 'compass', creativeTab: 'tools', texture: 'compass' });
 reg({ id: 'clock', creativeTab: 'tools', texture: 'clock' });
 reg({ id: 'map', creativeTab: 'tools', texture: 'map' });
+// vanilla WritableBookItem: a lectern takes it (writing in it is still to come)
+reg({ id: 'writable_book', name: 'Book and Quill', maxStack: 1, creativeTab: 'tools', texture: 'writable_book' });
 reg({ id: 'bucket', maxStack: 16, creativeTab: 'tools', texture: 'bucket' });
 reg({ id: 'water_bucket', maxStack: 1, creativeTab: 'tools', texture: 'water_bucket' });
 reg({ id: 'lava_bucket', maxStack: 1, creativeTab: 'tools', texture: 'lava_bucket', fuel: 20000 });
@@ -299,7 +301,7 @@ for (const b of BLOCKS) {
   const it = ITEMS.get(b.name);
   if (!it || !it.block) continue;
   const n = b.name;
-  if (n.endsWith('_door') || n.endsWith('_bed') || n === 'lantern' || n === 'soul_lantern' || n === 'chain' || n === 'bell' || n === 'cauldron') {
+  if (n.endsWith('_door') || n.endsWith('_bed') || n === 'lantern' || n === 'soul_lantern' || n === 'chain' || n === 'bell' || n === 'cauldron' || n === 'brewing_stand') {
     it.texture = n;
     if (n.endsWith('_bed')) it.maxStack = 1;
   }

@@ -10,7 +10,7 @@ import { LivingEntity } from '../entity/living';
 import { registerBehavior, type ItemUseResult, type UseContext } from './blockBehavior';
 import type { PlaceContext } from './blockRules';
 import { hasNeighborSignal } from './redstone/signal';
-import { BellBlockEntity } from '../world/blockEntity';
+import { BellBlockEntity, LecternBlockEntity } from '../world/blockEntity';
 import { composterFloor, cauldronContentTop } from '../world/blocksVillage';
 import { isDyeable } from '../item/dyedColor';
 import type { Entity } from '../entity/entity';
@@ -371,5 +371,91 @@ export function fillHeld(p: Player, filled: ItemStack): void {
       if (inContent(e, y, 15 / 16)) (e as unknown as { lavaHurt(): void }).lavaHurt();
     },
     drops,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// The job sites' menus (vanilla useWithoutItem opening CartographyTableMenu, LoomMenu, StonecutterMenu, SmithingMenu,
+// BrewingStandMenu, and LecternMenu for a lectern's book): the game opens whichever it has a screen for
+
+type MenuOpener = (kind: string, x: number, y: number, z: number) => void;
+let openMenu: MenuOpener | null = null;
+
+/** the game's container screens (Game.openContainer), which open the job sites' menus by block name */
+export function setVillageMenuHook(fn: MenuOpener | null): void {
+  openMenu = fn;
+}
+
+for (const name of ['cartography_table', 'loom', 'stonecutter', 'smithing_table', 'brewing_stand']) {
+  registerBehavior(name, {
+    use(_level, x, y, z) {
+      openMenu?.(name, x, y, z);
+      return true;
+    },
+  });
+}
+
+// vanilla BrewingStandBlock.animateTick: a wisp of smoke, always
+registerBehavior('brewing_stand', {
+  animateTick(level, x, y, z) {
+    level.particles.spawn?.('smoke', x + 0.4 + Math.random() * 0.2, y + 0.7 + Math.random() * 0.3, z + 0.4 + Math.random() * 0.2, 0, 0, 0);
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Lectern (vanilla LecternBlock): a book and quill (or a written book) laid on it; turning its pages sends a pulse
+// down into the block beneath
+
+const lectern = getBlock('lectern');
+
+/** vanilla LecternBlock.changePowered + updateBelow */
+function lecternPowered(level: Level, x: number, y: number, z: number, st: number, on: boolean): void {
+  level.setBlock(x, y, z, lectern.with(st, 'powered', on));
+  level.updateNeighborsAt(x, y - 1, z, lectern.id);
+}
+
+/** vanilla LecternBlock.signalPageChange: a page turned (by the lectern's screen) — a 2-tick pulse and the rustle */
+export function lecternPageTurned(level: Level, x: number, y: number, z: number): void {
+  const st = level.getState(x, y, z);
+  if (STATE_BLOCK[st] !== lectern.id) return;
+  lecternPowered(level, x, y, z, st, true);
+  level.scheduleBlockTick(x, y, z, lectern.id, 2);
+  level.sound.play('item.book.page_turn', x + 0.5, y + 0.5, z + 0.5, 1, Math.random() * 0.1 + 0.9);
+}
+
+{
+  const LECTERN_BOOKS = new Set(['writable_book', 'written_book']);
+  registerBehavior('lectern', {
+    // vanilla LecternBlock.useItemOn / tryPlaceBook / placeBook: a book goes on an empty lectern; anything else is
+    // the item's business
+    useItemOn(level, x, y, z, st, stack, ctx) {
+      if (lectern.get(st, 'has_book')) return 'pass';
+      if (!LECTERN_BOOKS.has(stack.item.id)) return 'skip';
+      const be = level.world.getBlockEntity(x, y, z);
+      if (be instanceof LecternBlockEntity) {
+        be.setBook(stack.copyWithCount(1));
+        consumeHeld(ctx.player);
+        // vanilla resetBookState
+        level.setBlock(x, y, z, lectern.with(lectern.with(st, 'powered', false), 'has_book', true));
+        level.updateNeighborsAt(x, y - 1, z, lectern.id);
+        level.sound.play('item.book.put', x + 0.5, y + 0.5, z + 0.5, 1, 1);
+      }
+      return 'success';
+    },
+    // vanilla LecternBlock.useWithoutItem: its book opens to be read; without one the click is simply spent
+    use(_level, x, y, z, st) {
+      if (lectern.get(st, 'has_book')) openMenu?.('lectern', x, y, z);
+      return true;
+    },
+    tick(level, x, y, z, st) {
+      lecternPowered(level, x, y, z, st, false);
+    },
+    isSignalSource: () => true,
+    getSignal: (_w, _x, _y, _z, st) => (lectern.get(st, 'powered') ? 15 : 0),
+    getDirectSignal: (_w, _x, _y, _z, st, dir) => (dir === UP && lectern.get(st, 'powered') ? 15 : 0),
+    // (vanilla popBook: the book comes off with the lectern — here it is its block entity's one slot, spilt with it)
+    onRemove(level, x, y, z, st, now) {
+      if (STATE_BLOCK[now] !== lectern.id && lectern.get(st, 'powered')) level.updateNeighborsAt(x, y - 1, z, lectern.id);
+    },
   });
 }

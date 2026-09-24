@@ -321,6 +321,72 @@ export class BellBlockEntity extends BlockEntity {
   }
 }
 
+/**
+ * vanilla LecternBlockEntity: the book on the lectern (its one slot, so breaking the lectern drops it) and the page
+ * it lies open at
+ */
+export class LecternBlockEntity extends BlockEntity {
+  readonly id = 'lectern';
+  page = 0;
+  constructor(x: number, y: number, z: number) {
+    super(x, y, z, 1);
+  }
+  get book(): ItemStack | null {
+    return this.container.get(0);
+  }
+  /** vanilla setBook: a new book opens at its first page */
+  setBook(s: ItemStack | null): void {
+    this.container.items[0] = s;
+    this.page = 0;
+    this.container.changed();
+  }
+  protected override saveData(): Record<string, number> {
+    return { page: this.page };
+  }
+  protected override loadData(d: Record<string, number | string>): void {
+    this.page = Number(d.page ?? 0);
+  }
+}
+
+/**
+ * vanilla BrewingStandBlockEntity: three bottles (slots 0-2), the ingredient (3) and blaze powder for fuel (4); the
+ * block shows a bottle on each arm whose slot is filled. (No potions yet, so nothing brews: its menu is to come.)
+ */
+export class BrewingStandBlockEntity extends BlockEntity {
+  readonly id = 'brewing_stand';
+  brewTime = 0;
+  fuel = 0;
+  private lastBottles: boolean[] | null = null;
+  constructor(x: number, y: number, z: number) {
+    super(x, y, z, 5);
+  }
+  /** vanilla serverTick: blaze powder tops up the fuel; the arms follow the bottle slots */
+  override tick(level: Level): void {
+    const powder = this.container.get(4);
+    if (this.fuel <= 0 && powder && powder.item.id === 'blaze_powder') {
+      this.fuel = 20;
+      if (--powder.count <= 0) this.container.items[4] = null;
+      this.container.changed();
+    }
+    const bits = [0, 1, 2].map((i) => !isEmpty(this.container.get(i)));
+    if (this.lastBottles && bits.every((b, i) => b === this.lastBottles![i])) return;
+    this.lastBottles = bits;
+    const st = level.getState(this.x, this.y, this.z);
+    const b = BLOCKS[STATE_BLOCK[st]];
+    if (b.name !== 'brewing_stand') return;
+    let now = st;
+    bits.forEach((v, i) => (now = b.with(now, `has_bottle_${i}`, v)));
+    if (now !== st) level.setBlock(this.x, this.y, this.z, now, 2);
+  }
+  protected override saveData(): Record<string, number> {
+    return { brewTime: this.brewTime, fuel: this.fuel };
+  }
+  protected override loadData(d: Record<string, number | string>): void {
+    this.brewTime = Number(d.brewTime ?? 0);
+    this.fuel = Number(d.fuel ?? 0);
+  }
+}
+
 export function createBlockEntity(name: string, x: number, y: number, z: number): BlockEntity | null {
   if (name === 'chest') return new ChestBlockEntity(x, y, z);
   if (name === 'enchanting_table') return new EnchantingTableBlockEntity(x, y, z);
@@ -328,6 +394,8 @@ export function createBlockEntity(name: string, x: number, y: number, z: number)
   if (name === 'spawner') return new SpawnerBlockEntity(x, y, z);
   if (name === 'bell') return new BellBlockEntity(x, y, z);
   if (name === 'barrel') return new BarrelBlockEntity(x, y, z);
+  if (name === 'lectern') return new LecternBlockEntity(x, y, z);
+  if (name === 'brewing_stand') return new BrewingStandBlockEntity(x, y, z);
   return null;
 }
 

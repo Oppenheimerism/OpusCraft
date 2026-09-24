@@ -5,8 +5,9 @@
 import { TexImage, TexDef, AnimTex, img, setPx, getPx, mixC, mulC, anim, clear, Rand } from '../tex';
 import { N, rng, fbm, quantize, paint, white } from './core';
 import { planks, WOOD, WoodDef } from './wood';
-import { speckled } from './terrain';
+import { speckled, stone } from './terrain';
 import { smoothStone } from './building';
+import { sprite } from './plants';
 import { BELL_GOLD } from '../bellBody';
 
 type Reg = Record<string, () => TexDef>;
@@ -371,6 +372,356 @@ export function cauldronBottom(): TexImage {
   return t;
 }
 
+// ---------------------------------------------------------------------------
+// Workstations: lectern (oak), cartography table (dark oak and paper), fletching table (birch), smithing table
+// (dark oak and iron), loom, stonecutter (stone, iron and a spinning saw), brewing stand
+
+/** a table's side: the top's edge along rows 0-1, legs down both sides, boards between */
+function tableSide(seed: string, w: WoodDef, rim: number, rimShade: number): TexImage {
+  const pal = w.wood;
+  const t = planks(seed, w);
+  for (let x = 0; x < N; x++) {
+    setPx(t, x, 0, rim);
+    setPx(t, x, 1, rimShade);
+    setPx(t, x, 2, pal[0]);
+  }
+  for (let y = 3; y < N; y++) {
+    setPx(t, 0, y, pal[1]);
+    setPx(t, 1, y, pal[4]);
+    setPx(t, 14, y, pal[2]);
+    setPx(t, 15, y, pal[1]);
+  }
+  for (let x = 0; x < N; x++) setPx(t, x, 15, pal[1]);
+  return t;
+}
+
+/** a bevelled frame round the edge of `t` (lit top and left, shadowed bottom and right) */
+function frame(t: TexImage, hi: number, lo: number, inset = 0): void {
+  const a = inset, b = 15 - inset;
+  for (let i = a; i <= b; i++) {
+    setPx(t, i, a, hi);
+    setPx(t, a, i, hi);
+    setPx(t, i, b, lo);
+    setPx(t, b, i, lo);
+  }
+}
+
+const OAKW = WOOD.oak;
+const DARK_OAK = WOOD.dark_oak;
+const BIRCH = WOOD.birch;
+
+export function lecternTop(): TexImage {
+  const pal = OAKW.wood;
+  const t = planks('lectern_top', OAKW);
+  frame(t, pal[1], pal[0]);
+  frame(t, pal[5], pal[2], 1);
+  return t;
+}
+
+export function lecternSides(): TexImage {
+  const pal = OAKW.wood;
+  const t = planks('lectern_sides', OAKW);
+  // rows 0-7: the reading board's edges (its front, then its sides and back); rows 8-15: the post's sides
+  for (let x = 0; x < N; x++) {
+    setPx(t, x, 0, pal[5]);
+    setPx(t, x, 3, pal[1]);
+    setPx(t, x, 4, pal[4]);
+    setPx(t, x, 7, pal[0]);
+    setPx(t, x, 8, pal[1]);
+    setPx(t, x, 15, pal[1]);
+  }
+  for (let y = 8; y < N; y++) {
+    setPx(t, 2, y, pal[1]);
+    setPx(t, 14, y, pal[1]);
+  }
+  return t;
+}
+
+export function lecternFront(): TexImage {
+  const pal = OAKW.wood;
+  const t = staves('lectern_front', pal, 4);
+  // the post's front (x 0-7, rows 0-12) and back (x 8-15, rows 3-15), a frame round each
+  for (let y = 0; y < 13; y++) {
+    setPx(t, 0, y, pal[4]);
+    setPx(t, 7, y, pal[1]);
+  }
+  for (let x = 0; x < 8; x++) {
+    setPx(t, x, 0, pal[5]);
+    setPx(t, x, 12, pal[1]);
+  }
+  for (let y = 3; y < N; y++) {
+    setPx(t, 8, y, pal[4]);
+    setPx(t, 15, y, pal[1]);
+  }
+  for (let x = 8; x < N; x++) {
+    setPx(t, x, 3, pal[5]);
+    setPx(t, x, 15, pal[1]);
+  }
+  return t;
+}
+
+export function lecternBase(): TexImage {
+  const pal = OAKW.wood;
+  const t = planks('lectern_base', OAKW);
+  frame(t, pal[4], pal[1]);
+  // (rows 6-7 and 14-15 double as the base's edges)
+  for (let x = 0; x < N; x++) {
+    setPx(t, x, 6, pal[4]);
+    setPx(t, x, 7, pal[1]);
+    setPx(t, x, 14, pal[4]);
+  }
+  return t;
+}
+
+const PAPER = [0xb8a67c, 0xcdbd92, 0xdccda4, 0xe8dcb8, 0xf2e9ca];
+
+export function cartographyTop(): TexImage {
+  const pal = DARK_OAK.wood;
+  const r = rng('cartography_table_top');
+  const t = img();
+  // a sheet of map on a dark oak frame
+  for (let y = 0; y < N; y++)
+    for (let x = 0; x < N; x++) {
+      const d = Math.min(x, y, 15 - x, 15 - y);
+      if (d < 2) setPx(t, x, y, d === 0 ? pal[1] : pal[3]);
+      else setPx(t, x, y, PAPER[2 + (r.chance(0.25) ? 1 : 0)]);
+    }
+  sprite(
+    [
+      '..gggg.....',
+      '.gGGGgg..b.',
+      '.gGGggg.bb.',
+      '..gg.l..bbb',
+      '....ll..bb.',
+      '.....llll..',
+      '..s.....l..',
+      '.sss....l.g',
+      '..s....ggGg',
+      '.......gGGg',
+      '........gg.',
+    ],
+    { g: 0x7c9a4a, G: 0x5d7c34, b: 0x5d86b8, l: 0x8a6a3c, s: 0x9c8a6a },
+    t, 2, 2,
+  );
+  // the paper's edge, lit where it lifts off the frame
+  for (let i = 2; i < 14; i++) {
+    setPx(t, i, 2, PAPER[4]);
+    setPx(t, 2, i, PAPER[4]);
+    setPx(t, i, 13, PAPER[0]);
+    setPx(t, 13, i, PAPER[0]);
+  }
+  return t;
+}
+
+export function cartographySide(kind: 1 | 2 | 3): TexImage {
+  const t = tableSide(`cartography_table_side${kind}`, DARK_OAK, PAPER[3], PAPER[1]);
+  if (kind === 1) {
+    // a rolled map tucked under the top
+    sprite(['.pppppppp.', 'pPPPPPPPPp', 'pPPPPPPPPp', '.pppppppp.'], { p: PAPER[1], P: PAPER[3] }, t, 3, 4);
+  } else if (kind === 2) {
+    // an ink bottle and a quill
+    sprite(['......w', '.....w.', '..kk.w.', '.kKKkw.', '.kKKk..', '.kkkk..'], { k: 0x1c1c28, K: 0x3a3a58, w: 0xf0f0f0 }, t, 5, 6);
+  } else {
+    // a compass hung on a nail
+    sprite(['.ii.', 'iRwi', 'iwRi', '.ii.'], { i: 0x8a8a8a, R: 0xc02020, w: 0xdadada }, t, 6, 5);
+  }
+  return t;
+}
+
+export function fletchingTop(): TexImage {
+  const pal = BIRCH.wood;
+  const t = planks('fletching_table_top', BIRCH);
+  frame(t, pal[5], pal[1]);
+  // an arrow laid across the table, fletched and tipped with flint
+  sprite(
+    [
+      '............ff',
+      '...........fFf',
+      '..........sff.',
+      '.........s....',
+      '........s.....',
+      '.......s......',
+      '......s.......',
+      '.....s........',
+      '....s.........',
+      '...s..........',
+      '.kk...........',
+      'kKk...........',
+      'kk............',
+    ],
+    { s: 0x7a5a30, f: 0xe8e8e8, F: 0xc0c0c0, k: 0x3a3a3a, K: 0x6a6a6a },
+    t, 1, 1,
+  );
+  return t;
+}
+
+export function fletchingFront(): TexImage {
+  const t = tableSide('fletching_table_front', BIRCH, BIRCH.wood[5], BIRCH.wood[3]);
+  // feathered shafts and flint heads pinned up on the front
+  sprite(
+    ['.f..f..f.', 'fFffFffFf', '.s..s..s.', '.s..s..s.', '.s..s..s.', '.k..k..k.', 'kKk.kKk.k'],
+    { f: 0xe8e8e8, F: 0xb0b0b0, s: 0x7a5a30, k: 0x3a3a3a, K: 0x6a6a6a },
+    t, 3, 4,
+  );
+  return t;
+}
+
+export function fletchingSide(): TexImage {
+  return tableSide('fletching_table_side', BIRCH, BIRCH.wood[5], BIRCH.wood[3]);
+}
+
+const SMITH_IRON = [0x202024, 0x2e2e33, 0x3c3c42, 0x4c4c53, 0x5e5e66, 0x74747c];
+
+export function smithingTop(): TexImage {
+  const t = img();
+  ironPlate(t, 'smithing_table_top', 0, 0, 15, 15, SMITH_IRON, true);
+  // the working face across the middle, with a hardy hole
+  for (let y = 5; y <= 10; y++) for (let x = 2; x <= 13; x++) setPx(t, x, y, y === 5 ? SMITH_IRON[5] : y === 10 ? SMITH_IRON[1] : SMITH_IRON[3]);
+  for (const [x, y] of [[11, 7], [12, 7], [11, 8], [12, 8]]) setPx(t, x, y, 0x101012);
+  return t;
+}
+
+export function smithingFront(): TexImage {
+  const t = tableSide('smithing_table_front', DARK_OAK, SMITH_IRON[5], SMITH_IRON[2]);
+  // a hammer and tongs hung on the front
+  sprite(
+    ['.iiI...t..t.', '.iiI...t..t.', '..w.....tt..', '..w.....tt..', '..w....t..t.', '..w....t..t.'],
+    { i: SMITH_IRON[4], I: SMITH_IRON[2], w: 0x6a4a2a, t: SMITH_IRON[5] },
+    t, 2, 5,
+  );
+  return t;
+}
+
+export function smithingSide(): TexImage {
+  const t = tableSide('smithing_table_side', DARK_OAK, SMITH_IRON[5], SMITH_IRON[2]);
+  // an iron band round the middle
+  for (let x = 0; x < N; x++) {
+    setPx(t, x, 8, SMITH_IRON[4]);
+    setPx(t, x, 9, SMITH_IRON[2]);
+  }
+  return t;
+}
+
+export function smithingBottom(): TexImage {
+  return planks('smithing_table_bottom', DARK_OAK);
+}
+
+const LOOM_WOOD = WOOD.oak;
+const YARN = [0xc8c0b0, 0xe8e2d4, 0xfaf6ec];
+
+export function loomTop(): TexImage {
+  const pal = LOOM_WOOD.wood;
+  const t = planks('loom_top', LOOM_WOOD);
+  frame(t, pal[4], pal[1]);
+  // the warp threads running over the beam
+  for (let y = 5; y <= 10; y++) for (let x = 1; x < 15; x++) if (x % 2 === 1) setPx(t, x, y, YARN[y === 5 ? 2 : 1]);
+  for (let x = 1; x < 15; x++) {
+    setPx(t, x, 4, pal[1]);
+    setPx(t, x, 11, pal[1]);
+  }
+  return t;
+}
+
+export function loomFront(): TexImage {
+  const pal = LOOM_WOOD.wood;
+  const t = tableSide('loom_front', LOOM_WOOD, pal[5], pal[3]);
+  // the heddles: threads strung top to bottom in the frame, a half-woven cloth low down
+  for (let y = 3; y < 13; y++) for (let x = 3; x < 13; x++) setPx(t, x, y, x % 2 === 1 ? YARN[1] : mixC(getPx(t, x, y), 0x000000, 0.35));
+  for (let y = 10; y < 13; y++) for (let x = 3; x < 13; x++) setPx(t, x, y, (x + y) % 2 === 0 ? 0xb03030 : 0xd84848);
+  for (let x = 2; x < 14; x++) {
+    setPx(t, x, 3, pal[1]);
+    setPx(t, x, 13, pal[1]);
+  }
+  return t;
+}
+
+export function loomSide(): TexImage {
+  const pal = LOOM_WOOD.wood;
+  const t = tableSide('loom_side', LOOM_WOOD, pal[5], pal[3]);
+  // the frame's crossbar, and a spool of yarn on its peg
+  for (let x = 2; x < 14; x++) setPx(t, x, 8, pal[1]);
+  sprite(['.yyy.', 'yYYYy', 'yYYYy', '.yyy.'], { y: YARN[0], Y: YARN[2] }, t, 6, 4);
+  return t;
+}
+
+export function loomBottom(): TexImage {
+  return planks('loom_bottom', LOOM_WOOD);
+}
+
+export function stonecutterTop(): TexImage {
+  const t = img();
+  ironPlate(t, 'stonecutter_top', 0, 0, 15, 15, IRON.map((c) => mulC(c, 1.6)), true);
+  // the slot the blade comes up through
+  for (let x = 1; x < 15; x++) {
+    setPx(t, x, 7, 0x0c0c0c);
+    setPx(t, x, 8, 0x181818);
+  }
+  return t;
+}
+
+export function stonecutterSide(): TexImage {
+  // (rows 7-15 are used: the iron top's edge, then stone)
+  const t = stone('stonecutter_side');
+  for (let x = 0; x < N; x++) {
+    setPx(t, x, 7, 0x8c8c8c);
+    setPx(t, x, 8, 0x5a5a5a);
+    setPx(t, x, 9, 0x3e3e3e);
+  }
+  return t;
+}
+
+export function stonecutterBottom(): TexImage {
+  return stone('stonecutter_bottom');
+}
+
+/** the saw blade: the top half of a spinning disc (rows 9-15 show), its teeth running round (vanilla's is animated) */
+export function stonecutterSaw(): AnimTex {
+  const STEEL = [0x5a5a5a, 0x7c7c7c, 0xa0a0a0, 0xc4c4c4, 0xe4e4e4];
+  return anim(N, N, 4, 1, (fr) => {
+    const t = img();
+    for (let y = 9; y < N; y++)
+      for (let x = 1; x < 15; x++) {
+        const dx = x + 0.5 - 8, dy = y + 0.5 - 16.5;
+        const d = Math.hypot(dx, dy);
+        if (d > 7.2) continue;
+        if (d > 6) {
+          // teeth every other step round the rim, moving on a little each frame
+          const a = Math.atan2(dy, dx);
+          if (Math.floor(((a + Math.PI) / (2 * Math.PI)) * 24 + fr * 0.5) % 2) setPx(t, x, y, STEEL[4]);
+          continue;
+        }
+        setPx(t, x, y, d < 1.5 ? STEEL[0] : STEEL[1 + ((Math.floor(d) + fr) % 3)]);
+      }
+    return t;
+  });
+}
+
+/** the brewing stand: its blaze-rod post up the middle, an arm each side, a bottle hung from the left one */
+export function brewingStand(): TexImage {
+  const t = img();
+  const ROD = [0x8c4a08, 0xc87c10, 0xf0a818, 0xffd84a, 0xfff0a0];
+  for (let y = 2; y < N; y++) {
+    setPx(t, 7, y, ROD[y % 4 === 0 ? 3 : 2]);
+    setPx(t, 8, y, ROD[y % 4 === 2 ? 1 : 0]);
+  }
+  setPx(t, 7, 1, ROD[4]);
+  setPx(t, 8, 1, ROD[3]);
+  const ARM = [0x3c3c3c, 0x6a6a6a, 0x8a8a8a];
+  for (let x = 2; x < 7; x++) setPx(t, x, 5, ARM[x === 2 ? 2 : 1]);
+  for (let x = 9; x < 14; x++) setPx(t, x, 5, ARM[x === 13 ? 2 : 1]);
+  // left: a glass bottle hung from its arm
+  sprite(['.gg.', '.gg.', 'gGGg', 'gWGg', 'gGGg', '.gg.'], { g: 0xa8c0d4, G: 0xd0e4f0, W: 0xf8fcff }, t, 1, 7);
+  setPx(t, 2, 6, ARM[0]);
+  setPx(t, 3, 6, ARM[0]);
+  // right: the empty holder, a little ring
+  for (const [x, y] of [[12, 6], [14, 6], [12, 7], [14, 7], [13, 8]]) setPx(t, x, y, ARM[1]);
+  return t;
+}
+
+export function brewingStandBase(): TexImage {
+  return speckled('brewing_stand_base', FURN_STONE, { oct: [[4, 4, 0.4], [2, 2, 0.4]], white: 0.4, weights: [0, 0.6, 2.5, 5, 2.5, 0.6, 0], mode: 1, dark: 5, darkSize: [1, 2], light: 4, lightSize: [1, 2] });
+}
+
 export function registerVillageTextures(T: Reg): void {
   T['bell_bottom'] = bellBottom;
   T['barrel_side'] = barrelSide;
@@ -395,4 +746,29 @@ export function registerVillageTextures(T: Reg): void {
   T['cauldron_top'] = cauldronTop;
   T['cauldron_inner'] = cauldronInner;
   T['cauldron_bottom'] = cauldronBottom;
+  T['lectern_top'] = lecternTop;
+  T['lectern_sides'] = lecternSides;
+  T['lectern_front'] = lecternFront;
+  T['lectern_base'] = lecternBase;
+  T['cartography_table_top'] = cartographyTop;
+  T['cartography_table_side1'] = () => cartographySide(1);
+  T['cartography_table_side2'] = () => cartographySide(2);
+  T['cartography_table_side3'] = () => cartographySide(3);
+  T['fletching_table_top'] = fletchingTop;
+  T['fletching_table_front'] = fletchingFront;
+  T['fletching_table_side'] = fletchingSide;
+  T['smithing_table_top'] = smithingTop;
+  T['smithing_table_front'] = smithingFront;
+  T['smithing_table_side'] = smithingSide;
+  T['smithing_table_bottom'] = smithingBottom;
+  T['loom_top'] = loomTop;
+  T['loom_front'] = loomFront;
+  T['loom_side'] = loomSide;
+  T['loom_bottom'] = loomBottom;
+  T['stonecutter_top'] = stonecutterTop;
+  T['stonecutter_side'] = stonecutterSide;
+  T['stonecutter_bottom'] = stonecutterBottom;
+  T['stonecutter_saw'] = stonecutterSaw;
+  T['brewing_stand'] = brewingStand;
+  T['brewing_stand_base'] = brewingStandBase;
 }

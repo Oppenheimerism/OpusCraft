@@ -1,5 +1,6 @@
 // Block entity renderers of the village blocks: vanilla BellRenderer (the bell under its frame, swinging after a
-// ring). Drawn with the entity batch after the entities, like the spawner's mob and the enchanting table's book.
+// ring) and LecternRenderer (the open book on a lectern). Drawn with the entity batch after the entities, like the
+// spawner's mob and the enchanting table's book.
 
 import type { GL } from './gl';
 import { createTexture } from './gl';
@@ -8,8 +9,10 @@ import { ModelPart } from './model';
 import type { Camera } from './renderer';
 import type { Frustum } from '../core/math';
 import type { Level } from '../game/level';
-import { BellBlockEntity } from '../world/blockEntity';
+import { BellBlockEntity, LecternBlockEntity } from '../world/blockEntity';
+import { BLOCKS, STATE_BLOCK } from '../world/block';
 import { NORTH, SOUTH, WEST, EAST } from '../world/dir';
+import { bookModel, bookTexture, setupBookAnim, BOOK_TEX_W, BOOK_TEX_H, type BookModel } from './bookRenderer';
 import { bellBodyTexture } from '../textures/bellBody';
 import type { TexImage } from '../textures/tex';
 
@@ -47,6 +50,20 @@ export function renderBell(b: EntityBatch, pose: PoseStack, m: BellModel, be: Be
   m.root.render(b, pose, 32, 32);
 }
 
+/** vanilla Direction.getClockWise().toYRot() for each facing */
+const CLOCKWISE_YROT: Record<string, number> = { north: 270, east: 0, south: 90, west: 180 };
+
+/** vanilla LecternRenderer.render: the book lying open on the board, tilted toward whoever faces the lectern */
+export function renderLecternBook(b: EntityBatch, pose: PoseStack, m: BookModel, facing: string, dx: number, dy: number, dz: number): void {
+  pose.reset();
+  pose.translate(dx + 0.5, dy + 1.0625, dz + 0.5);
+  pose.rotY(-CLOCKWISE_YROT[facing]);
+  pose.rotZ(67.5);
+  pose.translate(0, -0.125, 0);
+  setupBookAnim(m, 0, 0.1, 0.9, 1.2);
+  m.root.render(b, pose, BOOK_TEX_W, BOOK_TEX_H);
+}
+
 function upload(gl: GL, t: TexImage): WebGLTexture {
   return createTexture(gl, t.w, t.h, new Uint8Array(t.data.buffer, t.data.byteOffset, t.data.byteLength));
 }
@@ -55,6 +72,8 @@ export class VillageBlockRenderers {
   private readonly pose = new PoseStack();
   private readonly bell = bellModel();
   private bellTex: WebGLTexture | null = null;
+  private readonly book = bookModel();
+  private bookTex: WebGLTexture | null = null;
 
   constructor(private readonly gl: GL) {}
 
@@ -64,17 +83,27 @@ export class VillageBlockRenderers {
 
   render(b: EntityBatch, level: Level, cam: Camera, partial: number, frustum: Frustum): void {
     for (const be of level.world.blockEntities.values()) {
-      if (be.removed || !(be instanceof BellBlockEntity)) continue;
+      const bell = be instanceof BellBlockEntity;
+      if (be.removed || !(bell || be instanceof LecternBlockEntity)) continue;
       const dx = be.x - cam.x, dy = be.y - cam.y, dz = be.z - cam.z;
       if ((dx + 0.5) ** 2 + (dy + 0.5) ** 2 + (dz + 0.5) ** 2 > VIEW_DISTANCE * VIEW_DISTANCE) continue;
-      if (!frustum.testBox(dx, dy, dz, dx + 1, dy + 1, dz + 1)) continue;
+      if (!frustum.testBox(dx, dy, dz, dx + 1, dy + 1.5, dz + 1)) continue;
+      const st = level.getState(be.x, be.y, be.z);
+      const block = BLOCKS[STATE_BLOCK[st]];
+      if (!bell && (block.name !== 'lectern' || !block.get(st, 'has_book'))) continue;
       const l = level.world.getLight(be.x, be.y, be.z);
       b.lightS = (l >> 4) * 16;
       b.lightB = (l & 15) * 16;
       b.setOverlay(0, 0, 0, 0);
-      this.bellTex ??= upload(this.gl, bellBodyTexture());
-      b.begin(this.state(this.bellTex));
-      renderBell(b, this.pose, this.bell, be, dx, dy, dz, partial);
+      if (be instanceof BellBlockEntity) {
+        this.bellTex ??= upload(this.gl, bellBodyTexture());
+        b.begin(this.state(this.bellTex));
+        renderBell(b, this.pose, this.bell, be, dx, dy, dz, partial);
+      } else {
+        this.bookTex ??= bookTexture(this.gl);
+        b.begin(this.state(this.bookTex));
+        renderLecternBook(b, this.pose, this.book, block.get<string>(st, 'facing'), dx, dy, dz);
+      }
     }
   }
 }

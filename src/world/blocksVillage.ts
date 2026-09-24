@@ -4,8 +4,8 @@
 // campfire). Models mirror vanilla's block model JSONs and blockstate files; shapes are vanilla's VoxelShapes.
 // What they do is in game/villageBlocks.
 
-import { registerBlock, P, Box, enumProp, intProp, StateView } from './block';
-import { cubeBottomTop, orientable, type ModelDef, type FaceDef, type UV4, type ElementDef, type Variant } from './models';
+import { registerBlock, P, Box, enumProp, intProp, boolProp, StateView, Layer } from './block';
+import { cube, cubeBottomTop, orientable, type ModelDef, type FaceDef, type UV4, type ElementDef, type Variant } from './models';
 import type { DirName } from './dir';
 
 const px = (v: number) => v / 16;
@@ -177,6 +177,112 @@ function cauldronModel(content?: { tex: string; top: number; tint?: boolean }): 
   return { particle: side, elements };
 }
 
+// ---------------------------------------------------------------------------
+// Lectern (vanilla LecternBlock; block/lectern: the base, the post and the sloping board; LecternRenderer draws the
+// book on it)
+
+/** vanilla LecternBlock.SHAPE_COMMON: the base and the post (all it collides with: SHAPE_TOP_PLATE is flat, so empty) */
+const LECTERN_COMMON: Box[] = [bx(0, 0, 0, 16, 2, 16), bx(4, 2, 4, 12, 14, 12)];
+/** vanilla LecternBlock.SHAPE_NORTH's board, three steps rising away from the reader */
+const LECTERN_BOARD_NORTH: Box[] = [bx(0, 10, 1, 16, 14, 16 / 3), bx(0, 12, 16 / 3, 16, 16, 29 / 3), bx(0, 14, 29 / 3, 16, 18, 14)];
+
+function lecternModel(): ModelDef {
+  return {
+    particle: 'lectern_sides',
+    elements: [
+      {
+        from: [0, 0, 0], to: [16, 2, 16],
+        faces: {
+          north: f('lectern_base', [0, 14, 16, 16], 'north'), east: f('lectern_base', [0, 6, 16, 8], 'east'),
+          south: f('lectern_base', [0, 6, 16, 8], 'south'), west: f('lectern_base', [0, 6, 16, 8], 'west'),
+          up: f('lectern_base', [0, 0, 16, 16], undefined, 180), down: f('oak_planks', [0, 0, 16, 16], 'down'),
+        },
+      },
+      {
+        from: [4, 2, 4], to: [12, 15, 12],
+        faces: {
+          north: f('lectern_front', [0, 0, 8, 13]), east: f('lectern_sides', [2, 16, 15, 8], undefined, 90),
+          south: f('lectern_front', [8, 3, 16, 16]), west: f('lectern_sides', [2, 8, 15, 16], undefined, 90),
+        },
+      },
+      {
+        from: [0.0125, 12, 3], to: [15.9875, 16, 16],
+        rot: { origin: [8, 8, 8], axis: 'x', angle: -22.5 },
+        faces: {
+          north: f('lectern_sides', [0, 0, 16, 4]), east: f('lectern_sides', [0, 4, 13, 8]),
+          south: f('lectern_sides', [0, 4, 16, 8]), west: f('lectern_sides', [0, 4, 13, 8]),
+          up: f('lectern_top', [0, 1, 16, 14], undefined, 180), down: f('oak_planks', [0, 0, 16, 13]),
+        },
+      },
+    ],
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Stonecutter (vanilla StonecutterBlock; block/stonecutter: a slab of a table and the saw's blade standing up out of it)
+
+function stonecutterModel(): ModelDef {
+  const side = (d: DirName) => f('stonecutter_side', [0, 7, 16, 16], d);
+  return {
+    particle: 'stonecutter_bottom',
+    elements: [
+      { from: [0, 0, 0], to: [16, 9, 16], faces: { down: f('stonecutter_bottom', [0, 0, 16, 16], 'down'), up: f('stonecutter_top', [0, 0, 16, 16]), north: side('north'), south: side('south'), west: side('west'), east: side('east') } },
+      { from: [1, 9, 8], to: [15, 16, 8], faces: { north: f('stonecutter_saw', [1, 9, 15, 16]), south: f('stonecutter_saw', [15, 9, 1, 16]) } },
+    ],
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Brewing stand (vanilla BrewingStandBlock; block/brewing_stand, and a bottle, or an empty holder, on each arm:
+// brewing_stand_bottle0-2 / brewing_stand_empty0-2)
+
+export const HAS_BOTTLE = [boolProp('has_bottle_0'), boolProp('has_bottle_1'), boolProp('has_bottle_2')];
+
+function brewingStandModels(): { stand: ModelDef; arms: [ModelDef, ModelDef][] } {
+  const base = (x0: number, z0: number, x1: number, z1: number): ElementDef => ({
+    from: [x0, 0, z0], to: [x1, 2, z1],
+    faces: {
+      down: f('brewing_stand_base', [x0, z0, x1, z1], 'down'), up: f('brewing_stand_base', [x0, z0, x1, z1]),
+      north: f('brewing_stand_base', [x0, 14, x1, 16]), south: f('brewing_stand_base', [x0, 14, x1, 16]),
+      west: f('brewing_stand_base', [z0, 14, z1, 16]), east: f('brewing_stand_base', [z0, 14, z1, 16]),
+    },
+  });
+  const stand: ModelDef = {
+    particle: 'brewing_stand',
+    elements: [
+      {
+        from: [7, 0, 7], to: [9, 14, 9],
+        faces: {
+          down: f('brewing_stand', [7, 7, 9, 9]), up: f('brewing_stand', [7, 7, 9, 9]),
+          north: f('brewing_stand', [7, 2, 9, 16]), south: f('brewing_stand', [7, 2, 9, 16]), west: f('brewing_stand', [7, 2, 9, 16]), east: f('brewing_stand', [7, 2, 9, 16]),
+        },
+      },
+      base(9, 5, 15, 11), base(2, 1, 8, 7), base(2, 9, 8, 15),
+    ],
+  };
+  // each arm a flat panel from the post out over its base plate (the east one straight, the others turned 45 degrees)
+  const arm = (east: boolean, angle: number, bottle: boolean): ModelDef => {
+    const uv: [number, number, number, number] = bottle ? [0, 0, 8, 16] : [16, 0, 8, 16];
+    const back: [number, number, number, number] = [uv[2], uv[1], uv[0], uv[3]];
+    return {
+      particle: 'brewing_stand',
+      elements: [{
+        from: east ? [8, 0, 8] : [0, 0, 8], to: east ? [16, 16, 8] : [8, 16, 8],
+        rot: angle ? { origin: [8, 8, 8], axis: 'y', angle } : undefined, shade: false,
+        faces: east ? { north: f('brewing_stand', back), south: f('brewing_stand', uv) } : { north: f('brewing_stand', uv), south: f('brewing_stand', back) },
+      }],
+    };
+  };
+  return {
+    stand,
+    arms: [
+      [arm(true, 0, true), arm(true, 0, false)],
+      [arm(false, 45, true), arm(false, 45, false)],
+      [arm(false, -45, true), arm(false, -45, false)],
+    ],
+  };
+}
+
 /** face bits (1 << dir) of the four sides and the bottom: full faces for neighbours to cull against and hang things on */
 const SIDES_AND_BOTTOM = 0b111101;
 
@@ -231,6 +337,55 @@ export function registerVillageBlocks(): void {
     });
     const lava = cauldronModel({ tex: 'lava_still', top: 15 });
     registerBlock('lava_cauldron', { ...base, light: 15, item: false, model: () => ({ model: lava }) });
+  }
+  {
+    const model = lecternModel();
+    // (vanilla Blocks.LECTERN: strength 2.5, wood, set alight by lava)
+    registerBlock('lectern', {
+      props: [P.facingH, P.powered, boolProp('has_book')], defaults: { facing: 'north' },
+      hardness: 2.5, sound: 'wood', tool: 'axe', flammable: true, mapColor: 0x8f7748,
+      opaque: false, aoCaster: false, opacity: 0, faceOcclusion: 1 << 0,
+      collision: LECTERN_COMMON,
+      outline: (s) => [...LECTERN_BOARD_NORTH.map((b) => turn(b, s.get<string>('facing'))), ...LECTERN_COMMON],
+      model: (s) => ({ model, y: HOR_ROT[s.get<string>('facing')] }),
+    });
+  }
+  // the job site tables (vanilla CartographyTableBlock, FletchingTableBlock, SmithingTableBlock: plain cubes of wood,
+  // strength 2.5, set alight by lava)
+  {
+    const table = (name: string, t: Record<DirName, string>, particle: string) =>
+      registerBlock(name, { hardness: 2.5, sound: 'wood', tool: 'axe', flammable: true, mapColor: 0x8f7748, model: () => ({ model: cube(t, { particle }) }) });
+    table('cartography_table', { down: 'dark_oak_planks', up: 'cartography_table_top', north: 'cartography_table_side3', east: 'cartography_table_side3', south: 'cartography_table_side1', west: 'cartography_table_side2' }, 'cartography_table_side3');
+    table('fletching_table', { down: 'birch_planks', up: 'fletching_table_top', north: 'fletching_table_front', south: 'fletching_table_front', east: 'fletching_table_side', west: 'fletching_table_side' }, 'fletching_table_front');
+    table('smithing_table', { down: 'smithing_table_bottom', up: 'smithing_table_top', north: 'smithing_table_front', south: 'smithing_table_front', east: 'smithing_table_side', west: 'smithing_table_side' }, 'smithing_table_front');
+  }
+  {
+    // (vanilla LoomBlock: orientable_with_bottom, facing the player)
+    const model = orientable('loom_front', 'loom_side', 'loom_top', 'loom_bottom');
+    registerBlock('loom', {
+      props: [P.facingH], hardness: 2.5, sound: 'wood', tool: 'axe', flammable: true, mapColor: 0x8f7748,
+      model: (s) => ({ model, y: HOR_ROT[s.get<string>('facing')] }),
+    });
+  }
+  {
+    // (vanilla StonecutterBlock: strength 3.5, a pickaxe to drop; its blade is cut out)
+    const model = stonecutterModel();
+    registerBlock('stonecutter', {
+      props: [P.facingH], hardness: 3.5, sound: 'stone', tool: 'pickaxe', requiresTool: true, mapColor: 0x707070,
+      layer: Layer.CUTOUT, opaque: false, aoCaster: false, opacity: 0, faceOcclusion: 1 << 0,
+      collision: [bx(0, 0, 0, 16, 9, 16)],
+      model: (s) => ({ model, y: HOR_ROT[s.get<string>('facing')] }),
+    });
+  }
+  {
+    // (vanilla Blocks.BREWING_STAND: strength 0.5, a pickaxe to drop, a glimmer of light, see-through)
+    const { stand, arms } = brewingStandModels();
+    registerBlock('brewing_stand', {
+      props: HAS_BOTTLE, hardness: 0.5, sound: 'stone', tool: 'pickaxe', requiresTool: true, mapColor: 0xa7a7a7,
+      light: 1, layer: Layer.CUTOUT, opaque: false, aoCaster: false, opacity: 0,
+      collision: [bx(1, 0, 1, 15, 2, 15), bx(7, 0, 7, 9, 14, 9)],
+      model: (s) => ({ parts: [{ model: stand }, ...arms.map(([full, empty], i) => ({ model: s.get(`has_bottle_${i}`) ? full : empty }))] }),
+    });
   }
   // Smoker and blast furnace (vanilla SmokerBlock, BlastFurnaceBlock: furnaces with their own recipes; block/smoker is
   // orientable_with_bottom, block/blast_furnace orientable, each with an _on front)

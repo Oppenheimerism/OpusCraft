@@ -1,6 +1,6 @@
 // Village block sounds: vanilla block/bell/bell_use01-02 (the bell struck), block/barrel/open1-2 and close
 // (the lid), block/composter/fill1-4, fill_success1-4, empty1-3 and ready1-4, block/smoker/smoke1-6 and
-// block/blast_furnace/fire_crackle1-5.
+// block/blast_furnace/fire_crackle1-5, item/book/close_put1 and open_flip1-3 (a book laid down, a page turned).
 
 import type { SoundGen } from '../synth';
 import { alloc, layer, envBump } from './dsp';
@@ -196,6 +196,38 @@ function blastFurnaceCrackle(c: Ctx): Float32Array {
   return out;
 }
 
+// ------------------------------------------------------------------ books
+
+/** a book laid down on the lectern: the soft slap of its cover, and its pages settling */
+function bookPut(c: Ctx): Float32Array {
+  const { sr, rng } = c;
+  const out = alloc(0.4, sr);
+  layer(out, 1, (b) => burst(b, sr, rng, { dur: 0.08, attack: 0.002, tau: 0.018, bp: [700, 0.7] }));
+  layer(out, 0.6, (b) => thump(b, sr, { f0: 170, f1: 110, tau: 0.03 }));
+  layer(out, 0.35, (b) =>
+    phisem(b, sr, rng, {
+      t: 0.02, dur: 0.2, rate: 2500, energy: (t) => Math.exp(-t / 0.05), grain: 0.0012, heavy: 2,
+      bands: [{ f: 3200, q: 1.2, g: 1, spread: 0.3 }, { f: 1600, q: 1.4, g: 0.6, spread: 0.3 }],
+    }),
+  );
+  return out;
+}
+
+/** a page turned: a papery swish that lifts and falls */
+function bookPageTurn(c: Ctx): Float32Array {
+  const { sr, rng } = c;
+  const d = rng.range(0.22, 0.32);
+  const out = alloc(d + 0.05, sr);
+  layer(out, 1, (b) =>
+    phisem(b, sr, rng, {
+      dur: d, rate: 7000, energy: (t) => envBump(t, d * 0.4, d * 0.6), grain: 0.0008, heavy: 2.4,
+      bands: [{ f: 4200, q: 1.1, g: 1, spread: 0.35 }, { f: 2200, q: 1.3, g: 0.7, spread: 0.3 }, { f: 7000, q: 1.2, g: 0.3, spread: 0.2 }],
+    }),
+  );
+  layer(out, 0.25, (b) => burst(b, sr, rng, { dur: d, attack: d * 0.4, tau: d, bp: [1800, 0.8], env: (t) => envBump(t, d * 0.4, d * 0.6) }));
+  return out;
+}
+
 export function villageSounds(): Record<string, SoundGen> {
   return {
     'block.bell.use': sound('block.bell.use', 2, bellUse),
@@ -207,5 +239,7 @@ export function villageSounds(): Record<string, SoundGen> {
     'block.composter.ready': sound('block.composter.ready', 4, composterReady),
     'block.smoker.smoke': sound('block.smoker.smoke', 6, smokerSmoke),
     'block.blast_furnace.fire_crackle': sound('block.blast_furnace.fire_crackle', 5, blastFurnaceCrackle),
+    'item.book.put': sound('item.book.put', 1, bookPut),
+    'item.book.page_turn': sound('item.book.page_turn', 3, bookPageTurn),
   };
 }
