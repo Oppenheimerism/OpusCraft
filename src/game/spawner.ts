@@ -20,6 +20,7 @@ import { Witch } from '../entity/witch';
 import { Pillager, Vindicator } from '../entity/illagers';
 import { Evoker, Vex } from '../entity/evoker';
 import { Ravager } from '../entity/ravager';
+import { PatrolSpawner } from './patrolSpawner';
 import { Husk, Stray } from '../entity/biomeMonsters';
 import { IronGolem } from '../entity/ironGolem';
 import { ZombieVillager } from '../entity/zombieVillager';
@@ -353,6 +354,8 @@ export class NaturalSpawner {
   private readonly rand = new Rand(0x5eed);
   /** world spawn (no natural spawns within 24 blocks) */
   spawnPos: [number, number, number] | null = null;
+  /** (Stage 4: patrols) */
+  readonly patrols = new PatrolSpawner();
 
   constructor(readonly level: Level, readonly worldSeed: number) {}
 
@@ -377,6 +380,8 @@ export class NaturalSpawner {
     // and water creatures every tick
     const spawnFriendlies = lvl.gameTime % 400 === 0;
     const spawnEnemies = lvl.difficulty !== 'peaceful';
+    // (Stage 4: patrols) vanilla ServerLevel.tickCustomSpawners
+    this.patrols.tick(lvl, spawnEnemies);
     const pcx = Math.floor(p.x) >> 4, pcz = Math.floor(p.z) >> 4;
     const r = Math.min(8, lvl.simulationDistance);
     const chunks: [number, number][] = [];
