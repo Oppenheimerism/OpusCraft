@@ -4,6 +4,7 @@
 import type { TexImage } from '../textures/tex';
 import type { FontData } from '../textures/font';
 import type { ItemStack } from '../item/item';
+import { crossbowTexture } from '../item/crossbow';
 
 export const COLOR_CODES: Record<string, number> = {
   '0': 0x000000, '1': 0x0000aa, '2': 0x00aa00, '3': 0x00aaaa, '4': 0xaa0000, '5': 0xaa00aa, '6': 0xffaa00, '7': 0xaaaaaa,
@@ -370,10 +371,15 @@ export class GuiGraphics {
     return this.icons.drawIcon(this.ctx, id, Math.round(x * this.scale), Math.round(y * this.scale), 16 * this.scale);
   }
 
-  /** an item stack's icon, with the enchantment glint when it has one (vanilla renderItem + foil) */
-  stack(s: ItemStack, x: number, y: number): boolean {
-    const ok = this.item(s.item.id, x, y);
-    if (ok && s.hasGlint()) this.icons?.drawGlint?.(this.ctx, s.item.id, Math.round(x * this.scale), Math.round(y * this.scale), 16 * this.scale);
+  /**
+   * an item stack's icon, with the enchantment glint when it has one (vanilla renderItem + foil); `ticksUsing`:
+   * how long the player has been using this very stack (-1: not in use), for the model overrides that
+   * follow it (vanilla renders GUI items with the player as the entity: a crossbow drawn in the hotbar)
+   */
+  stack(s: ItemStack, x: number, y: number, ticksUsing = -1): boolean {
+    const id = s.item.id === 'crossbow' ? crossbowTexture(s, ticksUsing) ?? s.item.id : s.item.id;
+    const ok = this.item(id, x, y);
+    if (ok && s.hasGlint()) this.icons?.drawGlint?.(this.ctx, id, Math.round(x * this.scale), Math.round(y * this.scale), 16 * this.scale);
     return ok;
   }
 

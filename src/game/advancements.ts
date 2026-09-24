@@ -15,6 +15,13 @@ export type Criterion =
   | { t: 'consume'; item: string | '*' }
   | { t: 'breed'; type: string | '*' }
   | { t: 'shoot_arrow' }
+  /** vanilla shot_crossbow: fired a crossbow */
+  | { t: 'shot_crossbow' }
+  /**
+   * vanilla killed_by_crossbow: what one crossbow arrow has killed — at least `uniqueTypes` different kinds,
+   * and/or a distinct victim for each type in `victims`
+   */
+  | { t: 'killed_by_crossbow'; uniqueTypes?: number; victims?: string[] }
   | { t: 'biome'; biome: string }
   /** vanilla PlayerTrigger LOCATION with LocationPredicate.inStructure: standing in one of its pieces */
   | { t: 'structure'; structure: string }
@@ -168,7 +175,7 @@ const A: AdvancementDef[] = [
   { id: 'adventure/trade', parent: 'adventure/root', title: 'What a Deal!', description: 'Successfully trade with a Villager', icon: 'emerald', frame: 'task', criteria: one(never) },
   { id: 'adventure/trim_with_any_armor_pattern', parent: 'adventure/root', title: 'Crafting a New Look', description: 'Craft a trimmed armor at a Smithing Table', icon: 'dune_armor_trim_smithing_template', frame: 'task', criteria: one(never) },
   { id: 'adventure/honey_block_slide', parent: 'adventure/root', title: 'Sticky Situation', description: 'Jump into a Honey Block to break your fall', icon: 'honey_block', frame: 'task', criteria: one(never) },
-  { id: 'adventure/ol_betsy', parent: 'adventure/root', title: "Ol' Betsy", description: 'Shoot a Crossbow', icon: 'crossbow', frame: 'task', criteria: one(never) },
+  { id: 'adventure/ol_betsy', parent: 'adventure/root', title: "Ol' Betsy", description: 'Shoot a Crossbow', icon: 'crossbow', frame: 'task', criteria: one({ t: 'shot_crossbow' }) },
   { id: 'adventure/lightning_rod_with_villager_no_fire', parent: 'adventure/root', title: 'Surge Protector', description: 'Protect a Villager from an undesired shock without starting a fire', icon: 'lightning_rod', frame: 'task', criteria: one(never) },
   { id: 'adventure/fall_from_world_height', parent: 'adventure/root', title: 'Caves & Cliffs', description: 'Free fall from the top of the world (build limit) to the bottom of the world and survive', icon: 'water_bucket', frame: 'task', criteria: one({ t: 'fall_from_height' }) },
   { id: 'adventure/salvage_sherd', parent: 'adventure/root', title: 'Respecting the Remnants', description: 'Brush a Suspicious block to obtain a Pottery Sherd', icon: 'brush', frame: 'task', criteria: one(never) },
@@ -183,9 +190,9 @@ const A: AdvancementDef[] = [
   { id: 'adventure/summon_iron_golem', parent: 'adventure/trade', title: 'Hired Help', description: 'Summon an Iron Golem to help defend a village', icon: 'carved_pumpkin', frame: 'goal', criteria: one(never) },
   { id: 'adventure/trade_at_world_height', parent: 'adventure/trade', title: 'Star Trader', description: 'Trade with a Villager at the build height limit', icon: 'emerald', frame: 'task', criteria: one(never) },
   { id: 'adventure/trim_with_all_exclusive_armor_patterns', parent: 'adventure/trim_with_any_armor_pattern', title: 'Smithing with Style', description: 'Apply these smithing templates at least once: Spire, Snout, Rib, Ward, Silence, Vex, Tide, Wayfinder', icon: 'silence_armor_trim_smithing_template', frame: 'challenge', criteria: one(never) },
-  { id: 'adventure/two_birds_one_arrow', parent: 'adventure/ol_betsy', title: 'Two Birds, One Arrow', description: 'Kill two Phantoms with a piercing Arrow', icon: 'crossbow', frame: 'challenge', criteria: one(never) },
+  { id: 'adventure/two_birds_one_arrow', parent: 'adventure/ol_betsy', title: 'Two Birds, One Arrow', description: 'Kill two Phantoms with a piercing Arrow', icon: 'crossbow', frame: 'challenge', criteria: one({ t: 'killed_by_crossbow', victims: ['phantom', 'phantom'] }) },
   { id: 'adventure/whos_the_pillager_now', parent: 'adventure/ol_betsy', title: "Who's the Pillager Now?", description: 'Give a Pillager a taste of their own medicine', icon: 'crossbow', frame: 'task', criteria: one(never) },
-  { id: 'adventure/arbalistic', parent: 'adventure/ol_betsy', title: 'Arbalistic', description: 'Kill five unique mobs with one crossbow shot', icon: 'crossbow', frame: 'challenge', hidden: true, criteria: one(never) },
+  { id: 'adventure/arbalistic', parent: 'adventure/ol_betsy', title: 'Arbalistic', description: 'Kill five unique mobs with one crossbow shot', icon: 'crossbow', frame: 'challenge', hidden: true, criteria: one({ t: 'killed_by_crossbow', uniqueTypes: 5 }) },
   { id: 'adventure/craft_decorated_pot_using_only_sherds', parent: 'adventure/salvage_sherd', title: 'Careful Restoration', description: 'Make a Decorated Pot out of 4 Pottery Sherds', icon: 'decorated_pot', frame: 'task', criteria: one(never) },
   { id: 'adventure/adventuring_time', parent: 'adventure/sleep_in_bed', title: 'Adventuring Time', description: 'Discover every biome', icon: 'diamond_boots', frame: 'challenge', criteria: each(OVERWORLD_BIOMES, (b) => ({ t: 'biome', biome: b })) },
   { id: 'adventure/play_jukebox_in_meadows', parent: 'adventure/sleep_in_bed', title: 'Sound of Music', description: 'Make the Meadows come alive with the sound of music from a Jukebox', icon: 'jukebox', frame: 'task', criteria: one(never) },
@@ -411,6 +418,8 @@ export interface TriggerPayload {
   lavaRide?: { vehicle: string; distance: number; dimension: string };
   /** how a piglin was given gold (distract_piglin) */
   distract?: 'thrown' | 'directly';
+  /** the types of everything one crossbow arrow has killed (killed_by_crossbow) */
+  crossbowKills?: string[];
 }
 
 export class PlayerAdvancements {
@@ -537,9 +546,23 @@ function matches(c: Criterion, p: TriggerPayload): boolean {
       return !!p.dimension && (!c.from || c.from === p.dimension.from) && (!c.to || c.to === p.dimension.to);
     case 'nether_travel':
       return p.netherTravel !== undefined && p.netherTravel >= c.distance;
+    case 'killed_by_crossbow': {
+      // vanilla KilledByCrossbowTrigger.TriggerInstance.matches: each victim predicate takes its own kill
+      const k = p.crossbowKills;
+      if (!k) return false;
+      if (c.uniqueTypes !== undefined && new Set(k).size < c.uniqueTypes) return false;
+      const left = [...k];
+      for (const v of c.victims ?? []) {
+        const i = left.indexOf(v);
+        if (i < 0) return false;
+        left.splice(i, 1);
+      }
+      return true;
+    }
     case 'killed_by':
     case 'slept':
     case 'shoot_arrow':
+    case 'shot_crossbow':
     case 'fall_from_height':
     case 'enchanted_item':
       return true;

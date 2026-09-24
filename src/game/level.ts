@@ -213,6 +213,8 @@ export class Level {
   onPlayerArrowHit: ((target: Entity) => void) | null = null;
   /** a mob picked up an item a player had thrown (vanilla thrown_item_picked_up_by_entity) */
   onThrownItemPickedUp: ((stack: ItemStack, by: Entity) => void) | null = null;
+  /** a crossbow arrow the player shot killed something: all it has killed so far (vanilla killed_by_crossbow) */
+  onPlayerCrossbowKill: ((killed: Entity[]) => void) | null = null;
   /** an entity's time in a nether portal came up (the portal block it was in) */
   onPortal: ((e: Entity, x: number, y: number, z: number) => void) | null = null;
 

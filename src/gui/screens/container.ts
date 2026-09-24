@@ -6,7 +6,7 @@ import { Screen, Button } from '../screen';
 import type { GuiGraphics } from '../guiGraphics';
 import { ContainerMenu, Slot, canItemQuickReplace, quickCraftPlaceCount, quickcraftMask, ClickType } from '../../inventory/container';
 import { InventoryMenu, CraftingMenu, FurnaceMenu, ChestMenu } from '../../inventory/menus';
-import { ItemStack, RARITY_COLOR } from '../../item/item';
+import { ItemStack, ITEMS, RARITY_COLOR } from '../../item/item';
 import { enchantmentLine, tooltipOrder } from '../../item/enchantments';
 import { KEYS } from '../../game/input';
 import { RecipeBookComponent } from '../recipeBookComponent';
@@ -20,6 +20,9 @@ export function itemTooltip(s: ItemStack): string[] {
   const rarity = s.rarity();
   const italic = s.tag?.customName !== undefined ? '§o' : '';
   const lines = [rarity === 'common' ? `${italic}${s.displayName()}` : `§${RARITY_COLOR[rarity]}${italic}${s.displayName()}`];
+  // vanilla CrossbowItem.appendHoverText: the first charged projectile, as its [display name]
+  const shot = s.tag?.charged?.[0];
+  if (shot) lines.push(`§fProjectile: [${ITEMS.get(shot.id)?.name ?? shot.id}]`);
   if (it.lore) for (const l of it.lore) lines.push(`§7${l}`);
   // stored then held enchantments, each in #tooltip_order (ItemEnchantments.addToTooltip)
   for (const ench of [s.tag?.stored, s.tag?.enchantments])

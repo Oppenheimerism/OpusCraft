@@ -25,6 +25,7 @@ import type { Path } from './ai/pathfinder';
 import { ItemStack, ITEMS, saveStack, loadStack, SavedStack } from '../item/item';
 import { BLOCKS, STATE_BLOCK } from '../world/block';
 import { Rand } from '../core/rng';
+import { isCrossbow, isCharged, chargeDuration, releaseUsing, performShooting, MOB_ARROW_POWER, mobInaccuracy, CROSSBOW_RANGE } from '../item/crossbow';
 
 /** vanilla #piglin_loved (with #gold_ores; what isn't in the game yet simply never turns up) */
 export const PIGLIN_LOVED = new Set([
@@ -869,19 +870,61 @@ export class Piglin extends AbstractPiglin {
 
   /** vanilla BehaviorUtils.isWithinAttackRange: a crossbow's 8 blocks (less the cooldown), else arm's length */
   private withinAttackRange(t: LivingEntity, cooldown: number): boolean {
-    if (this.mainHand?.item.id === 'crossbow') {
-      const r = 8 - cooldown;
+    if (isCrossbow(this.mainHand)) {
+      const r = CROSSBOW_RANGE - cooldown;
       return t.distanceToSqr(this.x, this.y, this.z) < r * r;
     }
     return this.isWithinMeleeAttackRange(t);
   }
 
-  /** vanilla CrossbowAttack (charged by the crossbow module once it's in; for now it just holds its fire) */
-  private crossbowAttack(_t: LivingEntity, _seen: boolean): void {}
+  /**
+   * vanilla CrossbowAttack: while it holds a crossbow and sees its target within 8 blocks, eyes on it: draw for the
+   * charge time, load, wait 1-2 s, shoot (1.6 blocks a tick, 14 - 4 × difficulty degrees off), and again
+   */
+  private crossbowAttack(t: LivingEntity, seen: boolean): void {
+    const s = this.mainHand;
+    if (!isCrossbow(s) || !seen || !this.withinAttackRange(t, 0)) {
+      if (this.xbowRunning) this.stopCrossbowAttack();
+      return;
+    }
+    this.xbowRunning = true;
+    this.setLook(t);
+    switch (this.xbowState) {
+      case 'uncharged':
+        this.startUsingItem();
+        this.xbowState = 'charging';
+        this.chargingCrossbow = true;
+        break;
+      case 'charging':
+        if (!this.usingItem) this.xbowState = 'uncharged';
+        if (this.useItemTicks >= chargeDuration(s)) {
+          // (vanilla LivingEntity.releaseUsingItem → CrossbowItem.releaseUsing: loaded, a Monster never short of arrows)
+          releaseUsing(this.level, this, s, this.useItemTicks);
+          this.stopUsingItem();
+          this.xbowState = 'charged';
+          this.xbowDelay = 20 + this.random.nextInt(20);
+          this.chargingCrossbow = false;
+        }
+        break;
+      case 'charged':
+        if (--this.xbowDelay === 0) this.xbowState = 'ready';
+        break;
+      case 'ready':
+        // vanilla Piglin.performRangedAttack → CrossbowAttackMob.performCrossbowAttack
+        performShooting(this.level, this, s, MOB_ARROW_POWER, mobInaccuracy(this.level), t);
+        this.noActionTime = 0;
+        this.xbowState = 'uncharged';
+        break;
+    }
+  }
 
+  /**
+   * vanilla CrossbowAttack.stop: it stops drawing (what it had loaded stays loaded: vanilla clears the charge of the
+   * item in use, which by then is nothing)
+   */
   private stopCrossbowAttack(): void {
     this.xbowRunning = false;
-    this.xbowState = 'uncharged';
+    if (this.usingItem) this.stopUsingItem();
     this.chargingCrossbow = false;
   }
 
@@ -1285,7 +1328,7 @@ export class Piglin extends AbstractPiglin {
     if (isLovedItem(this.offHand)) return 'admiring_item';
     if (this.aggressive && this.mainHand?.item.tool) return 'attacking_with_melee_weapon';
     if (this.chargingCrossbow) return 'crossbow_charge';
-    return this.mainHand?.item.id === 'crossbow' && false ? 'crossbow_hold' : 'default';
+    return isCrossbow(this.mainHand) && isCharged(this.mainHand) ? 'crossbow_hold' : 'default';
   }
 
   // --- the rest --------------------------------------------------------------

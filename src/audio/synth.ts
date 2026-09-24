@@ -15,6 +15,7 @@ import { netherSounds } from './gen/nether';
 import { netherMobSounds } from './gen/netherMobs';
 import { netherMobSounds2 } from './gen/netherMobs2';
 import { NETHER_MUSIC_POOLS, renderNetherMusic } from './gen/netherMusic';
+import { crossbowSounds } from './gen/crossbow';
 
 export const SAMPLE_RATE = 44100;
 
@@ -37,6 +38,7 @@ export const SOUNDS: Record<string, SoundGen> = {
   ...netherSounds(),
   ...netherMobSounds(),
   ...netherMobSounds2(),
+  ...crossbowSounds(),
 };
 
 /** Number of in-game (overworld) music tracks. */

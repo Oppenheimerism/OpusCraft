@@ -9,6 +9,7 @@ import { steveSkin } from '../textures/skin';
 import { mat4, perspective, DEG, Mat4 } from '../core/math';
 import type { Player } from '../entity/player';
 import type { ItemStack } from '../item/item';
+import { chargeDuration, crossbowTexture, isCharged } from '../item/crossbow';
 
 export class HandRenderer {
   private mainHandHeight = 0;
@@ -41,6 +42,11 @@ export class HandRenderer {
     if (this.mainHandHeight < 0.1) this.mainHandItem = cur;
   }
 
+  /** vanilla itemUsed: an item use went through, the held item drops and comes back up */
+  itemUsed(): void {
+    this.mainHandHeight = 0;
+  }
+
   /** Called after the world is drawn. `bob` = view bob/hurt matrix (camera space). */
   render(batch: EntityBatch, p: Player, partial: number, width: number, height: number, fovMul: number, bob: Mat4, lightB: number, lightS: number, viewRot: Mat4): void {
     perspective(this.proj, 70 * fovMul * DEG, width / height, 0.05, 100);
@@ -71,6 +77,8 @@ export class HandRenderer {
     // vanilla renderArmWithItem: no bare arm while invisible
     if (!item) {
       if (!p.isInvisible()) this.renderArm(batch, pose, equip, swing);
+    } else if (item.item.id === 'crossbow') {
+      this.renderCrossbow(batch, pose, p, item, using, partial, equip, swing);
     } else if (using) {
       const it = item.item;
       let tex: string | undefined;
@@ -126,6 +134,48 @@ export class HandRenderer {
       this.items.render(batch, pose, item, 'firstperson_righthand');
     }
     batch.flush();
+  }
+
+  /**
+   * vanilla renderArmWithItem, the crossbow (main hand, right arm: i = 1). Drawing it: pulled in and turned
+   * aside, shaking once past 10 % and pulled closer and longer with the charge (f13); it stops showing as
+   * drawn when the use duration (charge + 3 ticks) runs out, still held. Otherwise the usual swing, and a
+   * loaded one sits further left and turned 10° when not swinging.
+   */
+  private renderCrossbow(batch: EntityBatch, pose: PoseStack, p: Player, item: ItemStack, using: boolean, partial: number, equip: number, swing: number): void {
+    if (using) {
+      pose.translate(0.56, -0.52 + equip * -0.6, -0.72);
+      pose.translate(-0.4785682, -0.094387, 0.05731531);
+      pose.rotX(-11.935);
+      pose.rotY(65.3);
+      pose.rotZ(-9.785);
+      const f9 = p.useDuration - (p.useItemRemaining - partial + 1);
+      let f13 = f9 / chargeDuration(item);
+      if (f13 > 1) f13 = 1;
+      if (f13 > 0.1) {
+        const f16 = Math.sin((f9 - 0.1) * 1.3);
+        pose.translate(0, f16 * (f13 - 0.1) * 0.004, 0);
+      }
+      pose.translate(0, 0, f13 * 0.04);
+      pose.scale(1, 1, 1 + f13 * 0.2);
+      pose.rotY(-45);
+    } else {
+      const sq = Math.sqrt(swing);
+      pose.translate(-0.4 * Math.sin(sq * Math.PI), 0.2 * Math.sin(sq * Math.PI * 2), -0.2 * Math.sin(swing * Math.PI));
+      // applyItemArmTransform + applyItemArmAttackTransform
+      pose.translate(0.56, -0.52 + equip * -0.6, -0.72);
+      const f = Math.sin(swing * swing * Math.PI);
+      pose.rotY(45 + f * -20);
+      const f1 = Math.sin(sq * Math.PI);
+      pose.rotZ(f1 * -20);
+      pose.rotX(f1 * -80);
+      pose.rotY(-45);
+      if (isCharged(item) && swing < 0.001) {
+        pose.translate(-0.641864, 0, 0);
+        pose.rotY(10);
+      }
+    }
+    this.items.render(batch, pose, item, 'firstperson_righthand', false, crossbowTexture(item, p.useItem === item ? p.ticksUsingItem() : -1));
   }
 
   private renderArm(batch: EntityBatch, pose: PoseStack, equip: number, swing: number): void {

@@ -33,6 +33,7 @@ import { Boat, ChestBoat, boatItemInfo, useBoatItem } from '../entity/boat';
 import { isRail, railShape, isAscending } from './rails';
 import { MobEffectInstance, MOB_EFFECTS } from '../entity/effects';
 import { levelOf, miningEfficiency, submergedMiningSpeed, hurtAndBreak } from '../item/enchantHelper';
+import { isCharged, performShooting, shootingPower, PLAYER_INACCURACY, playerProjectile, useDuration, crossbowUseTick, releaseUsing as releaseCrossbow } from '../item/crossbow';
 
 export class Interaction {
   hit: BlockHit | null = null;
@@ -598,6 +599,10 @@ export class Interaction {
   onItemDurability: ((item: string, vehicle: string | null) => void) | null = null;
   /** food or a drink was finished */
   onConsumed: ((id: string) => void) | null = null;
+  /** the player fired a crossbow (vanilla shot_crossbow) */
+  onShotCrossbow: (() => void) | null = null;
+  /** an item use went through (vanilla ItemInHandRenderer.itemUsed: the held item dips and comes back up) */
+  onItemUsed: (() => void) | null = null;
   /** mining progress on the targeted block (tutorial) */
   onDestroyProgress: ((name: string, progress: number) => void) | null = null;
 
@@ -849,6 +854,17 @@ export class Interaction {
       }
       return;
     }
+    // vanilla CrossbowItem.use: loaded, it fires everything charged (and the hand dips as the used stack
+    // changes); empty, it starts drawing when there's something to load (offhand, inventory, or creative)
+    if (it.id === 'crossbow') {
+      if (isCharged(stack)) {
+        performShooting(this.level, p, stack, shootingPower(stack), PLAYER_INACCURACY, null);
+        this.onShotCrossbow?.();
+      } else if (playerProjectile(p)) p.startUsingItem(stack, useDuration(stack));
+      else return;
+      this.onItemUsed?.();
+      return;
+    }
     // vanilla BowItem.use: needs arrows unless creative
     if (it.id === 'bow') {
       if (p.gameMode === 'creative' || p.inventory.findSlot((s) => s.item.id === 'arrow') >= 0) p.startUsingItem(stack, 72000);
@@ -908,7 +924,10 @@ export class Interaction {
       const used = p.useDuration - p.useItemRemaining;
       if (used > Math.floor(p.useDuration * 0.21875) && p.useItemRemaining % 4 === 0) this.itemUseEffects(u);
     }
-    if (--p.useItemRemaining === 0) this.completeUsingItem();
+    // vanilla CrossbowItem.onUseTick: the loading sounds
+    if (u.item.id === 'crossbow') crossbowUseTick(this.level, p, u, p.ticksUsingItem());
+    // vanilla useOnRelease (the crossbow): it only finishes when let go, the countdown runs on below zero
+    if (--p.useItemRemaining === 0 && u.item.id !== 'crossbow') this.completeUsingItem();
   }
 
   private itemUseEffects(s: ItemStack): void {
@@ -950,12 +969,23 @@ export class Interaction {
     }
   }
 
-  /** vanilla releaseUsingItem → BowItem.releaseUsing */
+  /** vanilla releaseUsingItem → BowItem.releaseUsing / CrossbowItem.releaseUsing */
   releaseUsingItem(): void {
     const p = this.player;
     const s = p.useItem;
     const used = p.ticksUsingItem();
     p.stopUsingItem();
+    if (s?.item.id === 'crossbow') {
+      // fully drawn it loads from the offhand or inventory (in creative nothing is used up)
+      const ammo = playerProjectile(p);
+      if (releaseCrossbow(this.level, p, s, used, ammo, p.gameMode === 'creative')) {
+        const inv = p.inventory;
+        if (inv.offhand && inv.offhand.count <= 0) inv.offhand = null;
+        for (let i = 0; i < inv.main.length; i++) if (inv.main[i] && inv.main[i]!.count <= 0) inv.main[i] = null;
+        inv.version++;
+      }
+      return;
+    }
     if (!s || s.item.id !== 'bow') return;
     const creative = p.gameMode === 'creative';
     const slot = p.inventory.findSlot((x) => x.item.id === 'arrow');

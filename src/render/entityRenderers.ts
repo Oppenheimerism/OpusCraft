@@ -39,6 +39,7 @@ import type { Player } from '../entity/player';
 import { MOB_TEXTURES, FIRE_TEXTURES } from '../textures/mobs';
 import { FLAGS, F_FULL_COLLISION, F_AIR, OUTLINE, S } from '../world/block';
 import type { ItemStack } from '../item/item';
+import { crossbowTexture, crossbowChargeProgress, isCharged } from '../item/crossbow';
 import { SpawnerBlockEntity, EnchantingTableBlockEntity } from '../world/blockEntity';
 import { bookModel, bookTexture, renderTableBook } from './bookRenderer';
 import { createMob } from '../game/spawner';
@@ -426,7 +427,7 @@ export class EntityRenderDispatcher {
       case 'piglin':
         M.animateHumanoidMob(def.root, a.limbSwing, a.limbAmount, a.age, a.headYaw, a.headPitch, attack, 'empty', !!e.vehicle);
         M.animatePiglinEars(def.root, a.limbSwing, a.limbAmount, a.age);
-        M.animatePiglinPose(def.root, (e as Piglin).armPose(), a.age, attack);
+        M.animatePiglinPose(def.root, (e as Piglin).armPose(), a.age, attack, crossbowChargeProgress(e.mainHand, e.useItemTicks));
         break;
       case 'skeleton':
       case 'wither_skeleton': {
@@ -614,6 +615,8 @@ export class EntityRenderDispatcher {
       const pull = useTicks / 20;
       tex = pull >= 0.9 ? 'bow_pulling_2' : pull >= 0.65 ? 'bow_pulling_1' : 'bow_pulling_0';
     }
+    // a mob's crossbow: drawn (useTicks: how long it's been using it) or loaded
+    if (stack.item.id === 'crossbow') tex = crossbowTexture(stack, useTicks);
     this.items.render(b, pose, stack, 'thirdperson_righthand', left, tex);
     pose.pop();
   }
@@ -622,9 +625,12 @@ export class EntityRenderDispatcher {
     const crouch = e.crouching && !e.flying;
     const a = this.setupLiving(e, dx, dy + (crouch ? -0.125 : 0), dz, p, 90, (pose) => pose.scale(0.9375, 0.9375, 0.9375));
     const m = this.player;
-    animateHumanoid(m, a.limbSwing, a.limbAmount, a.age, a.headYaw, a.headPitch, attackAnim(e, p), crouch, !!e.vehicle);
     const held = e.inventory.selectedItem;
-    if (held) {
+    // vanilla PlayerRenderer.getArmPose: CROSSBOW_CHARGE while drawing one, CROSSBOW_HOLD holding a loaded one (not mid-swing)
+    const drawing = !!held && e.useItem === held && e.useItemRemaining > 0;
+    const xbow = held?.item.id === 'crossbow' ? (drawing ? 'charge' : !e.swinging && isCharged(held) ? 'hold' : null) : null;
+    animateHumanoid(m, a.limbSwing, a.limbAmount, a.age, a.headYaw, a.headPitch, attackAnim(e, p), crouch, !!e.vehicle, xbow, xbow === 'charge' ? crossbowChargeProgress(held, e.ticksUsingItem()) : 0);
+    if (held && !xbow) {
       const ra = m.child('right_arm');
       ra.xRot = ra.xRot * 0.5 - Math.PI / 10;
     }
@@ -642,7 +648,7 @@ export class EntityRenderDispatcher {
       this.pose.rotX(-90);
       this.pose.rotY(180);
       this.pose.translate(1 / 16, 0.125, -0.625);
-      this.items.render(b, this.pose, held, 'thirdperson_righthand');
+      this.items.render(b, this.pose, held, 'thirdperson_righthand', false, held.item.id === 'crossbow' ? crossbowTexture(held, e.useItem === held ? e.ticksUsingItem() : -1) : undefined);
       this.pose.pop();
     }
   }

@@ -193,6 +193,9 @@ for (const [mat, t] of Object.entries(TIERS)) {
 reg({ id: 'shears', maxStack: 1, creativeTab: 'tools', texture: 'shears', tool: { type: 'shears', tier: 0, speed: 1.5, durability: 238 } });
 reg({ id: 'flint_and_steel', maxStack: 1, creativeTab: 'tools', texture: 'flint_and_steel', maxDamage: 64 });
 reg({ id: 'bow', maxStack: 1, creativeTab: 'combat', texture: 'bow', maxDamage: 384 });
+// vanilla CrossbowItem (models/item/crossbow.json: layer0 crossbow_standby); its recipe needs a tripwire hook,
+// which the game doesn't have yet, so it isn't craftable (creative, /give)
+reg({ id: 'crossbow', maxStack: 1, creativeTab: 'combat', texture: 'crossbow_standby', maxDamage: 465 });
 reg({ id: 'arrow', creativeTab: 'combat', texture: 'arrow' });
 reg({ id: 'fishing_rod', maxStack: 1, creativeTab: 'tools', texture: 'fishing_rod', maxDamage: 64 });
 reg({ id: 'carrot_on_a_stick', maxStack: 1, creativeTab: 'tools', texture: 'carrot_on_a_stick', maxDamage: 25 });
@@ -359,6 +362,14 @@ export interface ItemTag {
   customName?: string;
   /** minecraft:repair_cost: the anvil's prior work penalty */
   repairCost?: number;
+  /** minecraft:charged_projectiles: what a loaded crossbow will fire (see item/crossbow.ts) */
+  charged?: ChargedProjectile[];
+}
+
+/** one of a crossbow's charged projectiles: the item, and vanilla INTANGIBLE_PROJECTILE (multishot's copies, creative's) */
+export interface ChargedProjectile {
+  id: string;
+  intangible?: boolean;
 }
 
 export function cloneTag(t: ItemTag | null): ItemTag | null {
@@ -368,7 +379,15 @@ export function cloneTag(t: ItemTag | null): ItemTag | null {
   if (t.stored) o.stored = { ...t.stored };
   if (t.customName !== undefined) o.customName = t.customName;
   if (t.repairCost) o.repairCost = t.repairCost;
+  if (t.charged?.length) o.charged = t.charged.map((p) => ({ ...p }));
   return o;
+}
+
+function sameCharged(a: ChargedProjectile[] | undefined, b: ChargedProjectile[] | undefined): boolean {
+  const la = a?.length ?? 0;
+  if (la !== (b?.length ?? 0)) return false;
+  for (let i = 0; i < la; i++) if (a![i].id !== b![i].id || !a![i].intangible !== !b![i].intangible) return false;
+  return true;
 }
 
 function sameEnchants(a: Record<string, number> | undefined, b: Record<string, number> | undefined): boolean {
@@ -402,7 +421,7 @@ export class ItemStack {
   sameItem(o: ItemStack | null): boolean {
     if (!o || o.item !== this.item || o.damage !== this.damage) return false;
     const a = this.tag, b = o.tag;
-    return sameEnchants(a?.enchantments, b?.enchantments) && sameEnchants(a?.stored, b?.stored) && a?.customName === b?.customName && (a?.repairCost ?? 0) === (b?.repairCost ?? 0);
+    return sameEnchants(a?.enchantments, b?.enchantments) && sameEnchants(a?.stored, b?.stored) && a?.customName === b?.customName && (a?.repairCost ?? 0) === (b?.repairCost ?? 0) && sameCharged(a?.charged, b?.charged);
   }
   /** vanilla getHoverName: the custom name, or the item's name */
   displayName(): string {
