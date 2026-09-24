@@ -1,6 +1,6 @@
 // Block entity renderers of the village blocks: vanilla BellRenderer (the bell under its frame, swinging after a
-// ring) and LecternRenderer (the open book on a lectern). Drawn with the entity batch after the entities, like the
-// spawner's mob and the enchanting table's book.
+// ring), LecternRenderer (the open book on a lectern) and BannerRenderer (render/bannerRenderer.ts). Drawn with the
+// entity batch after the entities, like the spawner's mob and the enchanting table's book.
 
 import type { GL } from './gl';
 import { createTexture } from './gl';
@@ -9,7 +9,8 @@ import { ModelPart } from './model';
 import type { Camera } from './renderer';
 import type { Frustum } from '../core/math';
 import type { Level } from '../game/level';
-import { BellBlockEntity, LecternBlockEntity } from '../world/blockEntity';
+import { BellBlockEntity, LecternBlockEntity, BannerBlockEntity } from '../world/blockEntity';
+import { BannerRenderer } from './bannerRenderer';
 import { BLOCKS, STATE_BLOCK } from '../world/block';
 import { NORTH, SOUTH, WEST, EAST } from '../world/dir';
 import { bookModel, bookTexture, setupBookAnim, BOOK_TEX_W, BOOK_TEX_H, type BookModel } from './bookRenderer';
@@ -74,8 +75,11 @@ export class VillageBlockRenderers {
   private bellTex: WebGLTexture | null = null;
   private readonly book = bookModel();
   private bookTex: WebGLTexture | null = null;
+  private readonly banners: BannerRenderer;
 
-  constructor(private readonly gl: GL) {}
+  constructor(private readonly gl: GL) {
+    this.banners = new BannerRenderer(gl);
+  }
 
   private state(tex: WebGLTexture): DrawState {
     return { texture: tex, cutoff: 0.1, blend: false, cull: false, lit: true, useLightmap: true };
@@ -83,6 +87,10 @@ export class VillageBlockRenderers {
 
   render(b: EntityBatch, level: Level, cam: Camera, partial: number, frustum: Frustum): void {
     for (const be of level.world.blockEntities.values()) {
+      if (be instanceof BannerBlockEntity) {
+        this.renderBanner(b, level, be, cam, frustum, partial);
+        continue;
+      }
       const bell = be instanceof BellBlockEntity;
       if (be.removed || !(bell || be instanceof LecternBlockEntity)) continue;
       const dx = be.x - cam.x, dy = be.y - cam.y, dz = be.z - cam.z;
@@ -105,5 +113,20 @@ export class VillageBlockRenderers {
         renderLecternBook(b, this.pose, this.book, block.get<string>(st, 'facing'), dx, dy, dz);
       }
     }
+  }
+
+  /** a banner, standing (two blocks tall) or hanging (down into the block below) */
+  private renderBanner(b: EntityBatch, level: Level, be: BannerBlockEntity, cam: Camera, frustum: Frustum, partial: number): void {
+    if (be.removed) return;
+    const dx = be.x - cam.x, dy = be.y - cam.y, dz = be.z - cam.z;
+    if ((dx + 0.5) ** 2 + (dy + 0.5) ** 2 + (dz + 0.5) ** 2 > VIEW_DISTANCE * VIEW_DISTANCE) return;
+    const st = level.getState(be.x, be.y, be.z);
+    const standing = BLOCKS[STATE_BLOCK[st]].propIndex('rotation') >= 0;
+    if (!frustum.testBox(dx, standing ? dy : dy - 1, dz, dx + 1, dy + 2, dz + 1)) return;
+    const l = level.world.getLight(be.x, be.y, be.z);
+    b.lightS = (l >> 4) * 16;
+    b.lightB = (l & 15) * 16;
+    b.setOverlay(0, 0, 0, 0);
+    this.banners.renderBlockEntity(b, be, st, dx, dy, dz, level.gameTime, partial);
   }
 }

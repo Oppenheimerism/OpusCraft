@@ -116,7 +116,7 @@ G['slot_lapis_lazuli'] = () => {
 // Anvil
 
 /** the smith's hammer in the corner of the anvil screen */
-function hammer(t: TexImage, x0: number, y0: number): void {
+export function hammer(t: TexImage, x0: number, y0: number): void {
   const H = [
     '..........OOOOO.....',
     '.........OhhhhhO....',

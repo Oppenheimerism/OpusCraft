@@ -67,6 +67,7 @@ import { nightVisionScale, blindnessFog, applyNausea } from '../render/effectVis
 import { OVERWORLD, THE_NETHER, THE_END, dimensionById, teleportationScale, type DimensionType } from '../world/dimension';
 import { PortalPoi, portalRectangle, relativePortalPosition, portalExit, createPortal, isPortal, portalAxis, type PortalRect } from './portal';
 import { setVillageMenuHook } from './villageBlocks';
+import { openJobSite } from './jobSites';
 import { endPortalTravel, PortalArrivals } from './endTravel';
 import { EndDragonFight, ARENA_TICKET_LEVEL } from './endDragonFight';
 import { gatewayTravel } from './gatewayTravel';
@@ -802,8 +803,9 @@ export class Game {
       this.setScreen(this.containerScreenFactory(m));
     } else if (kind.endsWith('anvil')) this.setScreen(this.containerScreenFactory(new AnvilMenu(p, [x, y, z])));
     else if (kind === 'grindstone') this.setScreen(this.containerScreenFactory(new GrindstoneMenu(p, [x, y, z])));
-    // (cartography_table, loom, stonecutter, smithing_table, brewing_stand and a lectern's book come here too, from
-    // game/villageBlocks: their screens are still to come)
+    // the job sites' menus, from game/villageBlocks: stonecutter, smithing table, loom, cartography table, a lectern's
+    // book (game/jobSites; the brewing stand's is still to come)
+    else openJobSite(this, kind, x, y, z);
   }
 
   /** a villager started trading with the player (vanilla Merchant.openTradingScreen) */

@@ -19,6 +19,10 @@ export interface ItemBehavior {
   useAnim?: 'drink' | 'eat';
   /** vanilla Item.finishUsingItem: the use has run its course (the drink is drunk) */
   finishUsing?(level: Level, p: Player, stack: ItemStack): void;
+  /** vanilla Item.inventoryTick: every tick it's in a player's inventory (`selected`: its slot's index is the hotbar's pick) */
+  inventoryTick?(level: Level, p: Player, stack: ItemStack, slot: number, selected: boolean): void;
+  /** vanilla Item.onCraftedBy: taken from a crafting result (a map zoomed out or locked becomes a new map) */
+  onCraftedBy?(level: Level, p: Player, stack: ItemStack): void;
 }
 
 const ITEM_BEHAVIORS = new Map<string, ItemBehavior>();
@@ -30,4 +34,9 @@ export function registerItemBehavior(id: string, b: ItemBehavior): void {
 
 export function itemBehaviorOf(id: string): ItemBehavior | undefined {
   return ITEM_BEHAVIORS.get(id);
+}
+
+/** vanilla ItemStack.onCraftedBy */
+export function craftedBy(p: Player, stack: ItemStack): void {
+  ITEM_BEHAVIORS.get(stack.item.id)?.onCraftedBy?.(p.level, p, stack);
 }

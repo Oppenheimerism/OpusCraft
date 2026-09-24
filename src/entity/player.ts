@@ -383,7 +383,7 @@ export class Player extends LivingEntity {
     this.bob += (f - this.bob) * 0.4;
     this.food.tick(this);
     this.tickAir();
-    this.inventory.tick();
+    this.inventory.tick(this);
     if (this.takeXpDelay > 0) this.takeXpDelay--;
     this.turtleHelmetTick();
     for (const [k, v] of this.cooldowns) {

@@ -1,6 +1,8 @@
 // Player inventory: 36 main slots (0-8 hotbar), 4 armor, 1 offhand.
 
 import { ItemStack } from './item';
+import type { Player } from '../entity/player';
+import { itemBehaviorOf } from '../game/itemBehavior';
 
 /** vanilla InteractionHand */
 export type Hand = 'main' | 'off';
@@ -84,11 +86,21 @@ export class Inventory {
     return remaining;
   }
 
-  /** vanilla Inventory.tick → ItemStack.inventoryTick: the bounces wind down */
-  tick(): void {
+  /**
+   * vanilla Inventory.tick → ItemStack.inventoryTick: the bounces wind down, and what does something while carried
+   * does it (a map in hand draws itself). Each part is ticked by its own slot numbers, so "selected" is a slot
+   * numbered as the hotbar's pick in any of them, as vanilla's
+   */
+  tick(owner?: Player): void {
     for (const s of this.main) if (s && s.popTime > 0) s.popTime--;
     for (const s of this.armor) if (s && s.popTime > 0) s.popTime--;
     if (this.offhand && this.offhand.popTime > 0) this.offhand.popTime--;
+    if (!owner) return;
+    for (const part of [this.main, this.armor, [this.offhand]])
+      for (let i = 0; i < part.length; i++) {
+        const s = part[i];
+        if (s) itemBehaviorOf(s.item.id)?.inventoryTick?.(owner.level, owner, s, i, i === this.selected);
+      }
   }
 
   /** Remove `count` from the stack in the hand in use. */

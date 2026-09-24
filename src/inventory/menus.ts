@@ -10,6 +10,8 @@ import { contentsOf, isBrewingIngredient } from '../item/potions';
 import { hasBinding } from '../item/enchantHelper';
 import { equipSound } from '../item/equipment';
 import { applyDyes, dyeColorName, isDyeable } from '../item/dyedColor';
+import { customRecipeFor, type CustomRecipe } from './customRecipes';
+import { craftedBy } from '../game/itemBehavior';
 
 const ARMOR_ICONS = ['slot_boots', 'slot_leggings', 'slot_chestplate', 'slot_helmet'];
 const ARMOR_SLOT_OF: Record<string, number> = { feet: 0, legs: 1, chest: 2, head: 3 };
@@ -61,13 +63,17 @@ export class ResultSlot extends Slot {
     this.set(null);
     return it;
   }
-  override onTake(p: Player, _s: ItemStack): void {
+  override onTake(p: Player, taken: ItemStack): void {
+    // (vanilla checkTakeAchievements → ItemStack.onCraftedBy: a zoomed-out map becomes its new map)
+    craftedBy(p, taken);
     const c = this.craft;
+    // (a special recipe's own remainders: the book or banner copied from stays)
+    const rest = this.menu.custom?.remaining?.(c.items, this.menu.gridW) ?? null;
     this.menu.suppressUpdate = true;
     for (let i = 0; i < c.size; i++) {
       const s = c.items[i];
       if (!s) continue;
-      const rem = craftingRemainder(s);
+      const rem = rest ? rest[i] : craftingRemainder(s);
       s.count--;
       if (s.count <= 0) c.items[i] = null;
       if (rem) {
@@ -88,6 +94,8 @@ export class ResultSlot extends Slot {
 interface CraftingLike {
   suppressUpdate: boolean;
   slotsChanged(): void;
+  custom?: CustomRecipe | null;
+  gridW: number;
 }
 
 /**
@@ -130,6 +138,8 @@ export abstract class CraftingMenuBase extends ContainerMenu implements Crafting
   readonly result = new SimpleContainer(1);
   suppressUpdate = false;
   recipe: CraftingRecipe | null = null;
+  /** the special recipe (inventory/customRecipes) the result comes from */
+  custom: CustomRecipe | null = null;
   constructor(player: Player, readonly gridW: number) {
     super(player);
     this.craft = new SimpleContainer(gridW * gridW);
@@ -139,7 +149,9 @@ export abstract class CraftingMenuBase extends ContainerMenu implements Crafting
   }
   slotsChanged(): void {
     this.recipe = findRecipe(this.craft.items, this.gridW, this.gridW);
-    this.result.items[0] = this.recipe ? ItemStack.of(this.recipe.result, this.recipe.count) : armorDye(this.craft.items) ?? tippedArrow(this.craft.items, this.gridW);
+    const special = this.recipe ? null : customRecipeFor(this.craft.items, this.gridW);
+    this.custom = special?.recipe ?? null;
+    this.result.items[0] = this.recipe ? ItemStack.of(this.recipe.result, this.recipe.count) : (armorDye(this.craft.items) ?? tippedArrow(this.craft.items, this.gridW) ?? special?.result ?? null);
   }
   override canTakeItemForPickAll(_s: ItemStack | null, slot: Slot): boolean {
     return slot.container !== this.result;
@@ -173,6 +185,7 @@ export class InventoryMenu extends CraftingMenuBase {
     const before = s.copy();
     const armor = s.item.armor ? ARMOR_SLOT_OF[s.item.armor.slot] : -1;
     if (index === 0) {
+      craftedBy(p, s);
       if (!this.moveItemStackTo(s, 9, 45, true)) return null;
       slot.onQuickCraft(s, before);
     } else if (index >= 1 && index < 5) {
@@ -218,6 +231,7 @@ export class CraftingMenu extends CraftingMenuBase {
     if (!s) return null;
     const before = s.copy();
     if (index === 0) {
+      craftedBy(p, s);
       if (!this.moveItemStackTo(s, 10, 46, true)) return null;
       slot.onQuickCraft(s, before);
     } else if (index >= 10 && index < 46) {

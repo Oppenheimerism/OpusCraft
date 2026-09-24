@@ -722,6 +722,8 @@ export class Interaction {
       return true;
     }
     this.level.setBlock(x, y, z, st);
+    // (vanilla BlockItem.updateBlockEntityComponents: a banner's patterns go onto its block entity)
+    this.level.world.getBlockEntity(x, y, z)?.applyComponents(stack);
     this.onPlaced?.(BLOCKS[STATE_BLOCK[st]].name);
     const isBucket = stack.item.id.endsWith('_bucket');
     if (isBucket) this.level.sound.play(stack.item.id === 'lava_bucket' ? 'item.bucket.empty_lava' : 'item.bucket.empty', x + 0.5, y + 0.5, z + 0.5, 1, 1);

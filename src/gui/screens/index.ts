@@ -13,6 +13,7 @@ import { EnchantmentScreen, AnvilScreen, GrindstoneScreen } from './enchanting';
 import { MerchantMenu } from '../../inventory/merchantMenu';
 import { MerchantScreen } from './merchant';
 import { WinScreen } from './winScreen';
+import { installJobSiteScreens } from './jobSites';
 
 export function installScreens(game: Game): void {
   game.titleScreenFactory = () => new TitleScreen(game, false);
@@ -41,4 +42,5 @@ export function installScreens(game: Game): void {
     if (menu instanceof MerchantMenu) return new MerchantScreen(game, menu);
     return new InventoryScreen(game, menu as InventoryMenu);
   };
+  installJobSiteScreens(game);
 }

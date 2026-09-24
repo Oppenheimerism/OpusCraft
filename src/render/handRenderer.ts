@@ -11,6 +11,7 @@ import type { Player } from '../entity/player';
 import type { ItemStack } from '../item/item';
 import type { Hand } from '../item/inventory';
 import { chargeDuration, crossbowTexture, isCharged } from '../item/crossbow';
+import { MapRenderer } from './mapRenderer';
 
 export class HandRenderer {
   private mainHandHeight = 0;
@@ -25,11 +26,13 @@ export class HandRenderer {
   private readonly model: ModelPart;
   private readonly pose = new PoseStack();
   private readonly proj = mat4();
+  private readonly maps: MapRenderer;
 
   constructor(gl: GL, private readonly items: ItemRenderer) {
     const s = steveSkin();
     this.skin = createTexture(gl, s.w, s.h, new Uint8Array(s.data.buffer));
     this.model = playerModel(false);
+    this.maps = new MapRenderer(gl);
   }
 
   get skinTexture(): WebGLTexture {
@@ -91,24 +94,30 @@ export class HandRenderer {
     if (hands.main) {
       const equip = 1 - (this.oMainHandHeight + (this.mainHandHeight - this.oMainHandHeight) * partial);
       pose.push();
-      this.renderArmWithItem(batch, pose, p, 'main', mainArm, p.swingingArm === 'main' ? swing : 0, this.mainHandItem, equip, partial);
+      this.renderArmWithItem(batch, pose, p, 'main', mainArm, p.swingingArm === 'main' ? swing : 0, this.mainHandItem, equip, partial, pitch);
       pose.pop();
     }
     if (hands.off) {
       const equip = 1 - (this.oOffHandHeight + (this.offHandHeight - this.oOffHandHeight) * partial);
       pose.push();
-      this.renderArmWithItem(batch, pose, p, 'off', offArm, p.swingingArm === 'off' ? swing : 0, this.offHandItem, equip, partial);
+      this.renderArmWithItem(batch, pose, p, 'off', offArm, p.swingingArm === 'off' ? swing : 0, this.offHandItem, equip, partial, pitch);
       pose.pop();
     }
     batch.flush();
   }
 
   /** vanilla renderArmWithItem: one hand, on the `arm` side (i = 1 right, -1 left: every sideways move and turn mirrors) */
-  private renderArmWithItem(batch: EntityBatch, pose: PoseStack, p: Player, hand: Hand, arm: Arm, swing: number, item: ItemStack | null, equip: number, partial: number): void {
+  private renderArmWithItem(batch: EntityBatch, pose: PoseStack, p: Player, hand: Hand, arm: Arm, swing: number, item: ItemStack | null, equip: number, partial: number, pitch: number): void {
     const i = arm === 'right' ? 1 : -1;
     // vanilla: the bare arm only for an empty main hand, and not while invisible
     if (!item) {
       if (hand === 'main' && !p.isInvisible()) this.renderArm(batch, pose, equip, swing, i);
+      return;
+    }
+    // vanilla: a map in the main hand with nothing in the other is held up in both; otherwise in its own hand
+    if (item.item.id === 'filled_map') {
+      if (hand === 'main' && !this.offHandItem) this.renderTwoHandedMap(batch, pose, p, pitch, equip, swing);
+      else this.renderOneHandedMap(batch, pose, p, equip, i, swing, item);
       return;
     }
     const using = p.useItem === item && p.useItemRemaining > 0 && p.useHand === hand;
@@ -257,8 +266,12 @@ export class HandRenderer {
     pose.rotX(200);
     pose.rotY(f * -135);
     pose.translate(f * 5.6, 0, 0);
+    this.drawArm(batch, pose, i > 0);
+  }
+
+  /** vanilla PlayerRenderer.renderRightHand / renderLeftHand */
+  private drawArm(batch: EntityBatch, pose: PoseStack, right: boolean): void {
     // PlayerRenderer.renderHand: the arm as setupAnim leaves it at age 0 (bobArms tilts it out by 0.1), xRot 0
-    const right = i > 0;
     const arm = this.model.child(right ? 'right_arm' : 'left_arm');
     arm.resetPose();
     arm.xRot = 0;
@@ -266,6 +279,64 @@ export class HandRenderer {
     batch.begin({ texture: this.skin, cutoff: 0.1, blend: false, cull: true, lit: true, useLightmap: true });
     arm.render(batch, pose, 64, 64);
     arm.child(right ? 'right_sleeve' : 'left_sleeve').visible = true;
+  }
+
+  /**
+   * vanilla renderTwoHandedMap: held up in front in both hands, lowered and tipped away while you look ahead and
+   * raised to face you as you look down (calculateMapTilt), bobbing with a swing
+   */
+  private renderTwoHandedMap(batch: EntityBatch, pose: PoseStack, p: Player, pitch: number, equip: number, swing: number): void {
+    const f = Math.sqrt(swing);
+    const f1 = -0.2 * Math.sin(swing * Math.PI);
+    const f2 = -0.4 * Math.sin(f * Math.PI);
+    pose.translate(0, -f1 / 2, f2);
+    const f3 = mapTilt(pitch);
+    pose.translate(0, 0.04 + equip * -1.2 + f3 * -0.5, -0.72);
+    pose.rotX(f3 * -85);
+    if (!p.isInvisible()) {
+      pose.push();
+      pose.rotY(90);
+      this.renderMapHand(batch, pose, 1);
+      this.renderMapHand(batch, pose, -1);
+      pose.pop();
+    }
+    pose.rotX(Math.sin(f * Math.PI) * 20);
+    pose.scale(2, 2, 2);
+    this.maps.renderMap(batch, pose, this.mainHandItem!);
+  }
+
+  /** vanilla renderMapHand: an arm reaching in from each side to hold the map's edge */
+  private renderMapHand(batch: EntityBatch, pose: PoseStack, f: number): void {
+    pose.push();
+    pose.rotY(92);
+    pose.rotX(45);
+    pose.rotZ(f * -41);
+    pose.translate(f * 0.3, -1.1, 0.45);
+    this.drawArm(batch, pose, f > 0);
+    pose.pop();
+  }
+
+  /** vanilla renderOneHandedMap: the arm, and the map held out beside it on that side */
+  private renderOneHandedMap(batch: EntityBatch, pose: PoseStack, p: Player, equip: number, f: number, swing: number, item: ItemStack): void {
+    pose.translate(f * 0.125, -0.125, 0);
+    if (!p.isInvisible()) {
+      pose.push();
+      pose.rotZ(f * 10);
+      this.renderArm(batch, pose, equip, swing, f);
+      pose.pop();
+    }
+    pose.push();
+    pose.translate(f * 0.51, -0.08 + equip * -1.2, -0.75);
+    const f1 = Math.sqrt(swing);
+    const f2 = Math.sin(f1 * Math.PI);
+    const f3 = -0.5 * f2;
+    const f4 = 0.4 * Math.sin(f1 * Math.PI * 2);
+    const f5 = -0.3 * Math.sin(swing * Math.PI);
+    pose.translate(f * f3, f4 - 0.3 * f2, f5);
+    pose.rotX(f2 * -45);
+    pose.rotY(f * f2 * -30);
+    this.maps.renderMap(batch, pose, item);
+    pose.pop();
   }
 }
 
@@ -286,6 +357,12 @@ function whichHandsToRender(p: Player): { main: boolean; off: boolean } {
     return { main: p.useHand === 'main', off: p.useHand === 'off' };
   }
   return { main: true, off: !charged(main) };
+}
+
+/** vanilla calculateMapTilt: 1 looking level or up, easing to 0 as you look 45°+ down */
+function mapTilt(pitch: number): number {
+  const f = Math.max(0, Math.min(1, 1 - pitch / 45 + 0.1));
+  return -Math.cos(f * Math.PI) * 0.5 + 0.5;
 }
 
 function sameItem(a: ItemStack | null, b: ItemStack | null): boolean {

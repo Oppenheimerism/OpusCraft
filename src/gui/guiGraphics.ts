@@ -173,6 +173,14 @@ export interface IconSource {
   drawGlint?(ctx: CanvasRenderingContext2D, id: string, px: number, py: number, size: number): void;
 }
 
+/** stacks drawn by something other than their icon (vanilla BlockEntityWithoutLevelRenderer's items: banners) */
+type StackIconHook = (g: GuiGraphics, s: ItemStack, x: number, y: number) => boolean;
+let stackIconHook: StackIconHook | null = null;
+
+export function setStackIconHook(f: StackIconHook | null): void {
+  stackIconHook = f;
+}
+
 export class GuiGraphics {
   scale = 1;
   width = 1;
@@ -387,6 +395,7 @@ export class GuiGraphics {
    * follow it (vanilla renders GUI items with the player as the entity: a crossbow drawn in the hotbar)
    */
   stack(s: ItemStack, x: number, y: number, ticksUsing = -1): boolean {
+    if (stackIconHook?.(this, s, x, y)) return true;
     let id = s.item.id === 'crossbow' ? crossbowTexture(s, ticksUsing) ?? s.item.id : s.item.id;
     // (a dyed stack's or a potion's colour tints its icon: vanilla ItemColors)
     if (itemLayers(s.item)) id += `#${layerTint(s).toString(16)}`;

@@ -189,6 +189,8 @@ shapeless('fire_charge', 3, 'gunpowder', 'blaze_powder', ['coal', 'charcoal']);
 shapeless('magma_cream', 1, 'blaze_powder', 'slime_ball');
 shapeless('ender_eye', 1, 'ender_pearl', 'blaze_powder');
 shaped('end_crystal', 1, ['GGG', 'GEG', 'GTG'], { G: 'glass', E: 'ender_eye', T: 'ghast_tear' });
+// vanilla copySmithingTemplate: a template copied with seven diamonds and the block it's made of
+shaped('netherite_upgrade_smithing_template', 2, ['#S#', '#C#', '###'], { '#': 'diamond', C: 'netherrack', S: 'netherite_upgrade_smithing_template' });
 
 // ---------------------------------------------------------------------------
 // Food
@@ -336,7 +338,13 @@ for (const c of COLORS) {
   shaped(`${c}_stained_glass_pane`, 8, ['###', '#X#', '###'], { '#': 'glass_pane', X: `${c}_dye` });
   shaped(`${c}_carpet`, 3, ['##'], { '#': `${c}_wool` });
   shaped(`${c}_bed`, 1, ['###', 'XXX'], { '#': `${c}_wool`, X: '#planks' });
+  shaped(`${c}_banner`, 1, ['###', '###', ' | '], { '#': `${c}_wool`, '|': 'stick' });
 }
+// banner patterns: paper and the charge's emblem (the creeper's and wither skeleton's heads aren't in the game yet)
+shapeless('flower_banner_pattern', 1, 'paper', 'oxeye_daisy');
+shapeless('creeper_banner_pattern', 1, 'paper', 'creeper_head');
+shapeless('skull_banner_pattern', 1, 'paper', 'wither_skeleton_skull');
+shapeless('mojang_banner_pattern', 1, 'paper', 'enchanted_golden_apple');
 
 // ---------------------------------------------------------------------------
 // Wool, dyes and colored blocks

@@ -11,6 +11,7 @@ import { oreDrops, uniformBonus, tableBonus } from '../item/enchantHelper';
 import { behaviorOf, behaviorOfBlock, type ProjectileHit } from './blockBehavior';
 import { hasNeighborSignal } from './redstone/signal';
 import type { Entity } from '../entity/entity';
+import type { BlockEntity } from '../world/blockEntity';
 
 const blk = (st: number): Block => BLOCKS[STATE_BLOCK[st]];
 
@@ -512,13 +513,16 @@ const JUNGLE_SAPLING_CHANCES = [0.025, 0.027777778, 0.03125, 0.041666668, 0.1];
 const STICK_CHANCES = [0.02, 0.022222223, 0.025, 0.033333335, 0.1];
 const APPLE_CHANCES = [0.005, 0.0055555557, 0.00625, 0.008333334, 0.025];
 
-/** a block's loot; `silk` / `fortune` = the breaking tool's silk touch and fortune levels */
-export function blockDrops(state: number, tool: Item | null, r: Rand, silk = false, fortune = 0): ItemStack[] {
+/**
+ * a block's loot; `silk` / `fortune` = the breaking tool's silk touch and fortune levels, `be` the block entity it had
+ * (vanilla LootContextParams.BLOCK_ENTITY: a banner's patterns go on its drop)
+ */
+export function blockDrops(state: number, tool: Item | null, r: Rand, silk = false, fortune = 0, be: BlockEntity | null = null): ItemStack[] {
   const b = blk(state);
   const n = b.name;
   if (b.requiresTool && !isCorrectTool(tool, b)) return [];
   const own = behaviorOf(state)?.drops;
-  if (own) return own(state, tool, r, silk, fortune);
+  if (own) return own(state, tool, r, silk, fortune, be);
   const shears = tool?.tool?.type === 'shears';
   if (silk && !SILK_IGNORED.has(n) && (SILK_TABLES.has(n) || n.endsWith('_ore') || b.s.isLeaves || b.s.noDrop)) {
     // (vanilla loot tables that drop nothing even with silk touch)

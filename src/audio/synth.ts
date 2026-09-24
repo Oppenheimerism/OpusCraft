@@ -28,6 +28,7 @@ import { brewingSounds } from './gen/brewing';
 import { witchSounds } from './gen/witch';
 import { biomeMobSounds } from './gen/biomeMobs';
 import { tridentSounds } from './gen/trident';
+import { jobSiteSounds } from './gen/jobSites';
 
 export const SAMPLE_RATE = 44100;
 
@@ -62,6 +63,7 @@ export const SOUNDS: Record<string, SoundGen> = {
   ...witchSounds(),
   ...biomeMobSounds(),
   ...tridentSounds(),
+  ...jobSiteSounds(),
 };
 
 /** Number of in-game (overworld) music tracks. */
