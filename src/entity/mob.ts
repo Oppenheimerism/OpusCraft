@@ -26,7 +26,12 @@ import type { DifficultyInstance } from '../game/difficulty';
 import { doPostAttackEffects } from '../game/enchantEffects';
 import { crossbowUseTick } from '../item/crossbow';
 
-export type MobCategory = 'monster' | 'creature' | 'ambient' | 'water_creature' | 'misc';
+export type MobCategory = 'monster' | 'creature' | 'ambient' | 'water_creature' | 'misc' | 'axolotls' | 'underground_water_creature' | 'water_ambient';
+
+/** (Stage 5: ocean) vanilla MobCategory.getDespawnDistance: 128 blocks, but fish (water_ambient) go at 64 */
+export function despawnDistance(c: MobCategory): number {
+  return c === 'water_ambient' ? 64 : 128;
+}
 
 export interface SavedEntity {
   id: string;
@@ -424,7 +429,9 @@ export abstract class Mob extends LivingEntity {
     const p = this.level.player;
     if (!p || p.gameMode === 'spectator') return;
     const d0 = p.distanceToSqr(this.x, this.y, this.z);
-    if (d0 > 128 * 128 && this.removeWhenFarAway(d0)) {
+    // (Stage 5: ocean) the category's despawn distance
+    const far = despawnDistance(this.category);
+    if (d0 > far * far && this.removeWhenFarAway(d0)) {
       this.remove();
       return;
     }

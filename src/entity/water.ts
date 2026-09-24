@@ -8,6 +8,8 @@ import { reducedTickDelay } from './ai/goal';
 import type { Entity } from './entity';
 import { FLAGS, F_WATER, BLOCKS, STATE_BLOCK } from '../world/block';
 import { SEA_LEVEL } from '../world/constants';
+import type { Player } from './player';
+import type { ItemStack } from '../item/item';
 
 export abstract class WaterAnimal extends Mob {
   readonly category: MobCategory = 'water_creature';
@@ -38,6 +40,16 @@ export abstract class WaterAnimal extends Mob {
 
   override ambientSoundInterval(): number {
     return 120;
+  }
+
+  /** (Stage 5: ocean) vanilla WaterAnimal.checkSpawnObstruction: only other entities get in its way, not the water */
+  override checkSpawnObstruction(): boolean {
+    return true;
+  }
+
+  /** (Stage 5: ocean) vanilla mobInteract (a fish scooped up in a bucket, a dolphin fed); true if the click was used */
+  interact(_p: Player, _stack: ItemStack | null): boolean {
+    return false;
   }
 
   /** vanilla checkSurfaceWaterAnimalSpawnRules */
@@ -110,7 +122,7 @@ class SquidFleeGoal extends Goal {
 }
 
 export class Squid extends WaterAnimal {
-  readonly type = 'squid';
+  readonly type: string = 'squid';
   xBodyRot = 0;
   xBodyRotO = 0;
   zBodyRot = 0;
@@ -203,14 +215,22 @@ export class Squid extends WaterAnimal {
   override hurt(amount: number, source: string, attacker?: Entity | null, direct?: Entity | null): boolean {
     const ok = super.hurt(amount, source, attacker, direct);
     if (ok && attacker) {
-      this.playSound('entity.squid.squirt', this.soundVolume(), this.voicePitch());
+      this.playSound(this.squirtSound(), this.soundVolume(), this.voicePitch());
       // vanilla spawnInk: squirt a cloud of ink
       for (let i = 0; i < 30; i++) {
         const r = this.random;
-        this.level.particles.spawn?.('squid_ink', this.x, this.y + this.height * 0.5, this.z, (r.nextFloat() - 0.5) * 0.2, (r.nextFloat() - 0.5) * 0.2, (r.nextFloat() - 0.5) * 0.2);
+        this.level.particles.spawn?.(this.inkParticle(), this.x, this.y + this.height * 0.5, this.z, (r.nextFloat() - 0.5) * 0.2, (r.nextFloat() - 0.5) * 0.2, (r.nextFloat() - 0.5) * 0.2);
       }
     }
     return ok;
+  }
+
+  /** (Stage 5: ocean) vanilla getSquirtSound / getInkParticle (the glow squid's are its own) */
+  protected squirtSound(): string {
+    return 'entity.squid.squirt';
+  }
+  protected inkParticle(): string {
+    return 'squid_ink';
   }
 
   override lootTable(): LootEntry[] {
