@@ -429,6 +429,60 @@ export class EndPortalBlockEntity extends BlockEntity {
   }
 }
 
+/**
+ * vanilla TheEndGatewayBlockEntity: how old it is (its magenta beam rises for the first 10 seconds), its cooldown
+ * (the purple flash each time something goes through, and every two minutes anyway), and where it leads — unknown
+ * till something first goes through one of the gateways round the main island, found then
+ */
+export class EndGatewayBlockEntity extends BlockEntity {
+  readonly id = 'end_gateway';
+  age = 0;
+  teleportCooldown = 0;
+  exitPortal: [number, number, number] | null = null;
+  exactTeleport = false;
+  constructor(x: number, y: number, z: number) {
+    super(x, y, z, 0);
+  }
+  /** vanilla isSpawning: the first 10 seconds */
+  isSpawning(): boolean {
+    return this.age < 200;
+  }
+  isCoolingDown(): boolean {
+    return this.teleportCooldown > 0;
+  }
+  /** vanilla getSpawnPercent */
+  spawnPercent(partial: number): number {
+    return Math.max(0, Math.min(1, (this.age + partial) / 200));
+  }
+  /** vanilla getCooldownPercent */
+  cooldownPercent(partial: number): number {
+    return 1 - Math.max(0, Math.min(1, (this.teleportCooldown - partial) / 40));
+  }
+  /** vanilla TheEndGatewayBlockEntity.portalTick: older by a tick; the cooldown runs down, or every 2 minutes starts */
+  override tick(): void {
+    this.age++;
+    if (this.teleportCooldown > 0) this.teleportCooldown--;
+    else if (this.age % 2400 === 0) this.teleportCooldown = 40;
+  }
+  /** vanilla triggerCooldown (and the block event that tells the client) */
+  triggerCooldown(): void {
+    this.teleportCooldown = 40;
+  }
+  protected override saveData(): Record<string, number | string> {
+    const d: Record<string, number | string> = { Age: this.age };
+    if (this.exitPortal) {
+      [d.ExitX, d.ExitY, d.ExitZ] = this.exitPortal;
+      if (this.exactTeleport) d.ExactTeleport = 1;
+    }
+    return d;
+  }
+  protected override loadData(d: Record<string, number | string>): void {
+    this.age = Number(d.Age ?? 0);
+    this.exitPortal = d.ExitX !== undefined ? [Number(d.ExitX), Number(d.ExitY), Number(d.ExitZ)] : null;
+    this.exactTeleport = d.ExactTeleport === 1;
+  }
+}
+
 export function createBlockEntity(name: string, x: number, y: number, z: number): BlockEntity | null {
   if (name === 'chest') return new ChestBlockEntity(x, y, z);
   if (name === 'enchanting_table') return new EnchantingTableBlockEntity(x, y, z);
@@ -440,6 +494,7 @@ export function createBlockEntity(name: string, x: number, y: number, z: number)
   if (name === 'brewing_stand') return new BrewingStandBlockEntity(x, y, z);
   if (name === 'campfire' || name === 'soul_campfire') return new CampfireBlockEntity(x, y, z);
   if (name === 'end_portal') return new EndPortalBlockEntity(x, y, z);
+  if (name === 'end_gateway') return new EndGatewayBlockEntity(x, y, z);
   return null;
 }
 

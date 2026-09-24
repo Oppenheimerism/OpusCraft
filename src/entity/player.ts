@@ -18,7 +18,7 @@ import { hurtAndBreak, oxygenBonus } from '../item/enchantHelper';
 export type GameMode = 'survival' | 'creative' | 'adventure' | 'spectator';
 
 /** damage types with 0 exhaustion (vanilla damage_type/*.json "exhaustion": 0.0) */
-const NO_EXHAUSTION = new Set(['magic', 'wither', 'onFire', 'fall', 'drown', 'starve', 'inWall', 'cramming', 'void', 'genericKill', 'generic', 'flyIntoWall']);
+const NO_EXHAUSTION = new Set(['magic', 'indirectMagic', 'wither', 'onFire', 'fall', 'drown', 'starve', 'inWall', 'cramming', 'void', 'genericKill', 'generic', 'flyIntoWall']);
 
 export interface PlayerInput {
   forward: boolean;

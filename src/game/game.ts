@@ -873,6 +873,9 @@ export class Game {
         return `${n} was killed`;
       case 'magic':
         return `${n} was killed by magic`;
+      case 'indirectMagic':
+        // (vanilla death.attack.indirectMagic: whoever's cloud or potion it was — the dragon's breath is the dragon's)
+        return `${n} was killed by ${kn || 'Area Effect Cloud'} using magic`;
       case 'wither':
         return `${n} withered away`;
       case 'stalagmite':

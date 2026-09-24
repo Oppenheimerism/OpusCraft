@@ -19,6 +19,7 @@ import { AbstractMinecart, createMinecart, MINECART_TYPES } from '../entity/mine
 import { Bat } from '../entity/bat';
 import { Boat, createBoat, BOAT_TYPES } from '../entity/boat';
 import { EndCrystal } from '../entity/endCrystal';
+import { EnderDragon } from '../entity/enderDragon';
 import { moonPhase } from '../render/environment';
 import { tickInhabitedTime } from './difficulty';
 import { BIOMES } from '../world/gen/biomes';
@@ -53,6 +54,7 @@ export const MOB_TYPES: Record<string, (l: Level) => Mob> = {
   strider: (l) => new Strider(l),
   piglin: (l) => new Piglin(l),
   villager: (l) => new Villager(l),
+  ender_dragon: (l) => new EnderDragon(l),
 };
 
 export function createMob(type: string, level: Level): Mob | null {
@@ -142,6 +144,7 @@ const ENTITY_NAMES: Record<string, string> = {
   arrow: 'Arrow', tnt: 'Primed TNT', lightning_bolt: 'Lightning Bolt', item: 'Item', experience_orb: 'Experience Orb', falling_block: 'Falling Block', player: 'Player',
   egg: 'Thrown Egg', snowball: 'Snowball', ender_pearl: 'Thrown Ender Pearl',
   minecart: 'Minecart', chest_minecart: 'Minecart with Chest', boat: 'Boat', chest_boat: 'Boat with Chest', end_crystal: 'End Crystal',
+  ender_dragon: 'Ender Dragon', dragon_fireball: 'Dragon Fireball', area_effect_cloud: 'Area Effect Cloud',
 };
 
 /** vanilla entity type display names (death messages, commands) */

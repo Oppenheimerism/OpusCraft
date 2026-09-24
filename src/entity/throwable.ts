@@ -64,7 +64,7 @@ export class ThrownItem extends Entity {
     // entity hits (vanilla ProjectileUtil.getEntityHitResult, margin 0.3)
     let hit: Entity | null = null, best = Infinity;
     const box = this.bb.expandTowards(this.dx, this.dy, this.dz).inflate(1);
-    for (const e of this.level.getEntities(box, (e) => (e instanceof LivingEntity || e.type === 'end_crystal') && e.isPickable(), this)) {
+    for (const e of this.level.getEntities(box, (e) => (e instanceof LivingEntity || e.type === 'end_crystal' || e.type === 'ender_dragon') && e.isPickable(), this)) {
       if (e === this.owner && !this.leftOwner) continue;
       if (e.type === 'player' && (e as Player).gameMode === 'spectator') continue;
       const h = e.bb.inflate(0.3).clip(x0, y0, z0, x1, y1, z1);

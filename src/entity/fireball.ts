@@ -62,7 +62,7 @@ export abstract class Fireball extends Entity {
       z1 = bh.pz;
     }
     let hit: Entity | null = null, best = Infinity;
-    for (const e of lvl.getEntities(this.bb.expandTowards(this.dx, this.dy, this.dz).inflate(1), (e) => (e instanceof LivingEntity || e.type === 'end_crystal') && e.isPickable(), this)) {
+    for (const e of lvl.getEntities(this.bb.expandTowards(this.dx, this.dy, this.dz).inflate(1), (e) => (e instanceof LivingEntity || e.type === 'end_crystal' || e.type === 'ender_dragon') && e.isPickable(), this)) {
       if (e === this.owner && !this.leftOwner) continue;
       if (e.type === 'player' && (e as Player).gameMode === 'spectator') continue;
       const h = e.bb.inflate(0.3).clip(x0, y0, z0, x1, y1, z1);
@@ -88,8 +88,14 @@ export abstract class Fireball extends Entity {
     this.dx = (this.dx + (this.dx / v) * 0.1) * f;
     this.dy = (this.dy + (this.dy / v) * 0.1) * f;
     this.dz = (this.dz + (this.dz / v) * 0.1) * f;
-    lvl.particles.spawn?.('smoke', nx, ny + 0.5, nz, 0, 0, 0);
+    const trail = this.trailParticle();
+    if (trail) lvl.particles.spawn?.(trail, nx, ny + 0.5, nz, 0, 0, 0);
     this.setPos(nx, ny, nz);
+  }
+
+  /** vanilla getTrailParticle */
+  protected trailParticle(): string | null {
+    return 'smoke';
   }
 
   /** vanilla Projectile.mayInteract: a mob's fireball changes the world only while mobs may grief */

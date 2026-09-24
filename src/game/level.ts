@@ -34,6 +34,7 @@ import { AABB } from '../core/aabb';
 import type { DimensionType } from '../world/dimension';
 import { NetherGenerator } from '../world/gen/nether';
 import type { NetherFortresses } from '../world/gen/fortress';
+import type { EndDragonFight } from './endDragonFight';
 import { behaviorOf } from './blockBehavior';
 import { NeighborUpdater } from './neighborUpdater';
 import { LevelTicks } from './ticks';
@@ -119,6 +120,8 @@ export class Level {
   gameRules: GameRules = { ...DEFAULT_GAME_RULES };
   /** vanilla ServerLevel.getPoiManager: the beds, workstations and bells villagers claim */
   readonly poi: PoiManager;
+  /** vanilla ServerLevel.dragonFight: the End's (game/endDragonFight.ts), null elsewhere */
+  dragonFight: EndDragonFight | null = null;
 
   constructor(world: World, seed: string) {
     this.fluids = new FluidTicker(this);
@@ -145,12 +148,22 @@ export class Level {
   /** entities whose bounding box intersects `box` */
   getEntities(box: AABB, filter?: (e: Entity) => boolean, except?: Entity | null): Entity[] {
     const out: Entity[] = [];
+    let dragons = false;
     for (const e of this.entities) {
       if (e.removed || e === except) continue;
+      if ((e as { subEntities?: Entity[] }).subEntities) dragons = true;
       if (!e.bb.intersects(box)) continue;
       if (filter && !filter(e)) continue;
       out.push(e);
     }
+    // vanilla Level.getEntities: the ender dragon's parts come after, wherever the dragon's own box is (not those of
+    // `except`'s own dragon)
+    if (dragons)
+      for (const e of this.entities) {
+        const parts = (e as { subEntities?: Entity[] }).subEntities;
+        if (!parts || e.removed || e === except) continue;
+        for (const p of parts) if (p !== except && p.bb.intersects(box) && (!filter || filter(p))) out.push(p);
+      }
     return out;
   }
 
@@ -355,6 +368,8 @@ export class Level {
   isEntityTicking(x: number, z: number): boolean {
     const bx = Math.floor(x), bz = Math.floor(z);
     if (!this.world.isLoaded(bx, bz)) return false;
+    // (vanilla TicketType.DRAGON: the dragon fight keeps the island's middle ticking while a player is near)
+    if (this.dragonFight?.ticksChunk(bx >> 4, bz >> 4)) return true;
     const p = this.player;
     if (!p) return true;
     const dx = (bx >> 4) - (Math.floor(p.x) >> 4), dz = (bz >> 4) - (Math.floor(p.z) >> 4);
@@ -369,6 +384,8 @@ export class Level {
     else this.tickWeatherLevels();
     tickSleeping(this);
     this.updateSkyBrightness();
+    // (vanilla ServerLevel.tick: the dragon fight just before the entities)
+    this.dragonFight?.tick();
     for (let i = 0; i < this.entities.length; i++) {
       const e = this.entities[i];
       if (e.removed || e.vehicle) continue;

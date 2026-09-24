@@ -10,7 +10,7 @@ import { MobEffectInstance, SavedEffect, saveEffect, loadEffect } from './effect
 import { burningTimeFactor, damageAfterProtection, damageProtection, waterMovementEfficiency } from '../item/enchantHelper';
 
 /** damage sources that ignore armor (vanilla #bypasses_armor) */
-const BYPASSES_ARMOR = new Set(['onFire', 'inWall', 'drown', 'starve', 'fall', 'stalagmite', 'void', 'genericKill', 'magic', 'wither', 'generic', 'cramming', 'flyIntoWall']);
+const BYPASSES_ARMOR = new Set(['onFire', 'inWall', 'drown', 'starve', 'fall', 'stalagmite', 'void', 'genericKill', 'magic', 'indirectMagic', 'wither', 'generic', 'cramming', 'flyIntoWall']);
 /** damage sources that never knock back (vanilla #no_knockback) */
 const NO_KNOCKBACK = new Set(['explosion', 'playerExplosion', 'badRespawnPoint', 'fall', 'stalagmite', 'drown', 'starve', 'onFire', 'inFire', 'campfire', 'lava', 'lightningBolt', 'inWall', 'void', 'genericKill', 'magic', 'wither', 'cactus', 'sweetBerryBush', 'generic']);
 /** vanilla #bypasses_resistance */
@@ -768,12 +768,14 @@ export abstract class LivingEntity extends Entity {
       this.hurtDir = 0;
       if (!NO_KNOCKBACK.has(source) && (attacker || direct)) {
         let kx: number, kz: number;
-        if (direct && direct !== attacker) {
+        if (direct && direct !== attacker && direct.type !== 'area_effect_cloud') {
           kx = -direct.dx;
           kz = -direct.dz;
         } else {
-          kx = attacker!.x - this.x;
-          kz = attacker!.z - this.z;
+          // (vanilla getSourcePosition: where the direct cause is — a lingering cloud's middle)
+          const src = direct ?? attacker!;
+          kx = src.x - this.x;
+          kz = src.z - this.z;
         }
         this.knockback(0.4, kx, kz);
         // vanilla indicateDamage

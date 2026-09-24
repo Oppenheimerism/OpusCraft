@@ -535,6 +535,7 @@ T['end_stone_bricks'] = () => EN.endStoneBricks();
 T['end_portal_frame_top'] = () => EN.endPortalFrameTop();
 T['end_portal_frame_side'] = () => EN.endPortalFrameSide(endStoneBase());
 T['end_portal_frame_eye'] = () => EN.endPortalFrameEye();
+T['dragon_egg'] = () => EN.dragonEgg();
 
 // Missing texture (vanilla's magenta/black checkerboard)
 T['missing'] = () => {

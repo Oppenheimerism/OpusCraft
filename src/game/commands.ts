@@ -606,7 +606,7 @@ export const COMMANDS: Record<string, CommandDef> = {
             p.health = 0;
             p.die('genericKill');
           }
-        } else if (e instanceof LivingEntity) {
+        } else if (e instanceof LivingEntity && e.type !== 'ender_dragon') {
           e.invulnerableTime = 0;
           e.hurt(Number.MAX_VALUE / 2, 'genericKill');
         } else e.kill();
