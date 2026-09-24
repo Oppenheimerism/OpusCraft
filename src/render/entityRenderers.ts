@@ -10,8 +10,8 @@ import type { ItemRenderer } from './itemRenderer';
 import type { Camera } from './renderer';
 import type { Frustum } from '../core/math';
 import { wrapDegrees } from '../core/math';
-import { ModelPart, playerModel, animateHumanoid, twoHanded, type HumanoidArmPose } from './model';
-import type { Hand } from '../item/inventory';
+import { ModelPart, playerModel, animateHumanoid } from './model';
+import { drawArmItem, drawPlayerHeldItems, playerArms } from './playerPose';
 import * as M from './mobModels';
 import type { MobModelDef } from './mobModels';
 import type { Level } from '../game/level';
@@ -52,10 +52,22 @@ export interface EntityRenderOptions {
   /** draw the local player (third-person views) */
   drawPlayer: boolean;
   distanceScale: number;
-  skinParts?: Record<string, boolean>;
+  skinParts?: SkinParts;
   /** the player's main arm (options: Main Hand) */
   mainArm?: 'left' | 'right';
 }
+
+/** options: Skin Customization (vanilla PlayerModelPart; the cape aside) */
+export interface SkinParts {
+  hat: boolean;
+  jacket: boolean;
+  leftSleeve: boolean;
+  rightSleeve: boolean;
+  leftPants: boolean;
+  rightPants: boolean;
+}
+
+const ALL_SKIN_PARTS: SkinParts = { hat: true, jacket: true, leftSleeve: true, rightSleeve: true, leftPants: true, rightPants: true };
 
 const RAD = Math.PI / 180;
 
@@ -91,6 +103,7 @@ export class EntityRenderDispatcher {
   private readonly spawnerPose = new PoseStack();
   private whiteTex: WebGLTexture | null = null;
   private mainArm: 'left' | 'right' = 'right';
+  private skinParts = ALL_SKIN_PARTS;
   /** vanilla ItemPickupParticle: what was just picked up, flying to whoever took it */
   private readonly pickups: { e: Entity; target: Entity; life: number; tx: number; ty: number; tz: number; txo: number; tyo: number; tzo: number }[] = [];
   private readonly boatModels: Record<string, M.BoatModelDef> = { boat: M.boatModel(), chest_boat: M.chestBoatModel() };
@@ -173,6 +186,7 @@ export class EntityRenderDispatcher {
   render(b: EntityBatch, level: Level, cam: Camera, partial: number, frustum: Frustum, opts: EntityRenderOptions): void {
     this.shadows.length = 0;
     this.mainArm = opts.mainArm ?? 'right';
+    this.skinParts = opts.skinParts ?? ALL_SKIN_PARTS;
     let drawn = 0;
     for (const e of level.entities) {
       if (e.removed) continue;
@@ -317,7 +331,24 @@ export class EntityRenderDispatcher {
     else if (e instanceof Fireball) this.renderFireball(b, e, dx, dy, dz, cam);
     else if (e instanceof AbstractMinecart) this.renderMinecart(b, e, x, y, z, dx, dy, dz, p);
     else if (e instanceof Boat) this.renderBoat(b, e, dx, dy, dz, p);
-    if (e.isOnFire() && !(e instanceof ItemEntity) && !(e instanceof ExperienceOrb)) this.renderFlame(b, e, dx, dy, dz, cam, level.gameTime);
+    // (at the renderer's offset: a crouching player's flames sink with it)
+    if (e.isOnFire() && !(e instanceof ItemEntity) && !(e instanceof ExperienceOrb)) this.renderFlame(b, e, dx, dy + renderOffsetY(e), dz, cam.yaw, level.gameTime);
+  }
+
+  /**
+   * vanilla InventoryScreen.renderEntityInInventory: the player as the dispatcher draws it anywhere (at partial
+   * tick 1, full bright), from the screen's matrix `base`, at whatever angles the screen has given it; the camera
+   * looks at it head on, so its flames face the screen
+   */
+  renderPlayerInGui(b: EntityBatch, e: Player, base: Float32Array, opts: EntityRenderOptions): void {
+    this.mainArm = opts.mainArm ?? 'right';
+    this.skinParts = opts.skinParts ?? ALL_SKIN_PARTS;
+    this.base = base;
+    b.lightB = b.lightS = 240;
+    this.renderPlayer(b, e, 0, 0, 0, 1);
+    if (e.isOnFire()) this.renderFlame(b, e, 0, renderOffsetY(e), 0, 0, e.level.gameTime);
+    this.base = null;
+    b.setOverlay(0, 0, 0, 0);
   }
 
   // -------------------------------------------------------------------------
@@ -728,68 +759,37 @@ export class EntityRenderDispatcher {
 
   /** vanilla ItemInHandLayer (the right hand, or the left) */
   private drawHeldItem(b: EntityBatch, root: ModelPart, stack: ItemStack, baby: boolean, useTicks: number, left = false): void {
-    const pose = this.pose;
-    pose.push();
-    if (baby) {
-      pose.translate(0, 0.75, 0);
-      pose.scale(0.5, 0.5, 0.5);
-    }
-    root.translateAndRotate(pose);
-    root.child(left ? 'left_arm' : 'right_arm').translateAndRotate(pose);
-    pose.rotX(-90);
-    pose.rotY(180);
-    pose.translate((left ? -1 : 1) / 16, 0.125, -0.625);
-    let tex: string | undefined;
-    if (stack.item.id === 'bow' && useTicks >= 0) {
-      const pull = useTicks / 20;
-      tex = pull >= 0.9 ? 'bow_pulling_2' : pull >= 0.65 ? 'bow_pulling_1' : 'bow_pulling_0';
-    }
-    // a mob's crossbow: drawn (useTicks: how long it's been using it) or loaded
-    if (stack.item.id === 'crossbow') tex = crossbowTexture(stack, useTicks);
-    this.items.render(b, pose, stack, left ? 'thirdperson_lefthand' : 'thirdperson_righthand', left, tex);
-    pose.pop();
+    drawArmItem(b, this.items, this.pose, root, stack, left, useTicks, baby);
   }
 
   private renderPlayer(b: EntityBatch, e: Player, dx: number, dy: number, dz: number, p: number): void {
     const crouch = e.crouching && !e.flying;
-    const a = this.setupLiving(e, dx, dy + (crouch ? -0.125 : 0), dz, p, 90, (pose) => pose.scale(0.9375, 0.9375, 0.9375));
+    const a = this.setupLiving(e, dx, dy + renderOffsetY(e), dz, p, 90, (pose) => pose.scale(0.9375, 0.9375, 0.9375));
     const m = this.player;
-    const inv = e.inventory;
-    const mainArm = this.mainArm, offArm = mainArm === 'right' ? 'left' : 'right';
-    // vanilla PlayerRenderer.getArmPose: drawing a bow or crossbow, holding a loaded crossbow (not mid-swing), or just holding something
-    const armPose = (hand: Hand): HumanoidArmPose => {
-      const s = inv.inHand(hand);
-      if (!s) return 'empty';
-      if (e.useHand === hand && e.useItem === s && e.useItemRemaining > 0) {
-        if (s.item.id === 'bow') return 'bow';
-        if (s.item.id === 'crossbow') return 'crossbow_charge';
-      } else if (!e.swinging && s.item.id === 'crossbow' && isCharged(s)) return 'crossbow_hold';
-      return 'item';
-    };
-    const mainPose = armPose('main');
-    // (a two-handed pose in the main hand leaves the other arm just holding what it holds)
-    const offPose: HumanoidArmPose = twoHanded(mainPose) ? (inv.inHand('off') ? 'item' : 'empty') : armPose('off');
-    const using = e.isUsingItem() ? (e.useHand === 'main' ? mainArm : offArm) : null;
-    animateHumanoid(m, a.limbSwing, a.limbAmount, a.age, a.headYaw, a.headPitch, attackAnim(e, p), crouch, !!e.vehicle, {
-      right: mainArm === 'right' ? mainPose : offPose,
-      left: mainArm === 'right' ? offPose : mainPose,
-      mainArm,
-      usingArm: using,
-      attackArm: e.swingingArm === 'main' ? mainArm : offArm,
-      charge: e.useItem?.item.id === 'crossbow' ? crossbowChargeProgress(e.useItem, e.ticksUsingItem()) : 0,
-    });
+    // vanilla PlayerRenderer.setModelProperties: the skin's outer layer as the options have it; a spectator is
+    // only a head
+    const spectator = e.gameMode === 'spectator', sp = this.skinParts;
+    for (const [name, part] of m.children) part.visible = !spectator || name === 'head';
+    m.child('head').child('hat').visible = spectator || sp.hat;
+    m.child('body').child('jacket').visible = sp.jacket;
+    m.child('right_arm').child('right_sleeve').visible = sp.rightSleeve;
+    m.child('left_arm').child('left_sleeve').visible = sp.leftSleeve;
+    m.child('right_leg').child('right_pants').visible = sp.rightPants;
+    m.child('left_leg').child('left_pants').visible = sp.leftPants;
+    animateHumanoid(m, a.limbSwing, a.limbAmount, a.age, a.headYaw, a.headPitch, attackAnim(e, p), crouch, !!e.vehicle, playerArms(e, this.mainArm));
     this.overlay(b, e);
-    // vanilla: an invisible player's body isn't drawn, the held items still are
+    // vanilla: an invisible player's body isn't drawn (a spectator's is, faintly, to the spectator: themselves), the
+    // held items still are; a spectator has no layers at all
     if (!e.isInvisible()) {
       b.begin(this.state(this.skin));
       m.render(b, this.pose, 64, 64);
+    } else if (e.level.player?.gameMode === 'spectator') {
+      b.begin(this.state(this.skin, { blend: true, cutoff: 0.01, depthWrite: false }));
+      m.render(b, this.pose, 64, 64, 1, 1, 1, 38 / 255);
+      b.flush();
     }
-    // vanilla PlayerItemInHandLayer: the right arm's item, then the left's
     b.setOverlay(0, 0, 0, 0);
-    for (const arm of ['right', 'left'] as const) {
-      const s = inv.inHand(arm === mainArm ? 'main' : 'off');
-      if (s) this.drawHeldItem(b, m, s, false, e.useItem === s ? e.ticksUsingItem() : -1, arm === 'left');
-    }
+    if (!spectator) drawPlayerHeldItems(b, this.items, this.pose, m, e, this.mainArm);
   }
 
   // -------------------------------------------------------------------------
@@ -1026,17 +1026,17 @@ export class EntityRenderDispatcher {
   }
 
   /** vanilla EntityRenderDispatcher.renderFlame */
-  private renderFlame(b: EntityBatch, e: Entity, dx: number, dy: number, dz: number, cam: Camera, time: number): void {
+  private renderFlame(b: EntityBatch, e: Entity, dx: number, dy: number, dz: number, camYaw: number, time: number): void {
     const t = this.fire();
     if (!t) return;
     b.setOverlay(0, 0, 0, 0);
     const pose = this.pose;
-    pose.reset();
+    pose.reset(this.base ?? undefined);
     pose.translate(dx, dy, dz);
     const f = e.width * 1.4;
     pose.scale(f, f, f);
     let f1 = 0.5, f3 = e.height / f, f4 = 0, f5 = 0;
-    pose.rotY(-cam.yaw + 180);
+    pose.rotY(-camYaw + 180);
     pose.translate(0, 0, 0.3 - Math.floor(f3) * 0.02);
     const lb = b.lightB, ls = b.lightS;
     b.lightB = b.lightS = 240;
@@ -1156,6 +1156,11 @@ function minecartJitter(id: number): [number, number, number] {
 }
 
 /** vanilla LivingEntity.getAttackAnim */
+/** vanilla EntityRenderer.getRenderOffset (PlayerRenderer: a crouching player sinks 2 pixels) */
+function renderOffsetY(e: Entity): number {
+  return e.type === 'player' && (e as Player).crouching && !(e as Player).flying ? -0.125 : 0;
+}
+
 function attackAnim(e: LivingEntity, p: number): number {
   let f = e.attackAnim - e.attackAnimO;
   if (f < 0) f++;

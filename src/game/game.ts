@@ -43,6 +43,7 @@ import { DEFAULT_GAME_RULES } from './gameRules';
 import { ItemEntity } from '../entity/itemEntity';
 import { ExperienceOrb } from '../entity/xpOrb';
 import { GuiEntityRenderer } from '../render/guiEntity';
+import type { SkinParts } from '../render/entityRenderers';
 import { InventoryMenu, CraftingMenu, FurnaceMenu, ChestMenu } from '../inventory/menus';
 import { EnchantmentMenu, AnvilMenu, GrindstoneMenu } from '../inventory/enchantMenus';
 import { hasVanishing } from '../item/enchantHelper';
@@ -766,10 +767,16 @@ export class Game {
 
   private guiEntity: GuiEntityRenderer | null = null;
 
+  /** options: Skin Customization, as the player model shows it */
+  private skinParts(): SkinParts {
+    const o = this.opts;
+    return { hat: o.skinHat, jacket: o.skinJacket, leftSleeve: o.skinLeftSleeve, rightSleeve: o.skinRightSleeve, leftPants: o.skinLeftPants, rightPants: o.skinRightPants };
+  }
+
   /** vanilla InventoryScreen.renderEntityInInventoryFollowsMouse */
   renderEntityInInventory(g: GuiGraphics, x1: number, y1: number, x2: number, y2: number, scale: number, yOffset: number, mx: number, my: number): void {
-    this.guiEntity ??= new GuiEntityRenderer(this.gl, this.renderer.batch, this.renderer.hand.skinTexture);
-    const c = this.guiEntity.render(this.player, this.opts, g.scale, x1, y1, x2, y2, scale, yOffset, mx, my, this.ticks);
+    this.guiEntity ??= new GuiEntityRenderer(this.gl, this.renderer.batch, this.renderer.entities);
+    const c = this.guiEntity.render(this.player, { shadows: false, drawPlayer: true, distanceScale: 1, skinParts: this.skinParts(), mainArm: this.opts.mainHand }, g.scale, x1, y1, x2, y2, scale, yOffset, mx, my);
     const ctx = g.ctx;
     ctx.save();
     ctx.imageSmoothingEnabled = false;
@@ -1423,7 +1430,7 @@ export class Game {
       dim: w.dim,
       biomeColors: blendBiomeColors(cam.x, cam.y, cam.z, (qx, qy, qz) => BIOMES[w.getBiome3(qx * 4 + 2, qy * 4 + 2, qz * 4 + 2)] ?? b),
       level: this.level,
-      entityOptions: { shadows: this.opts.entityShadows, drawPlayer: this.thirdPerson > 0 && !camOverride, distanceScale: this.opts.entityDistanceScaling, mainArm: this.opts.mainHand },
+      entityOptions: { shadows: this.opts.entityShadows, drawPlayer: this.thirdPerson > 0 && !camOverride, distanceScale: this.opts.entityDistanceScaling, skinParts: this.skinParts(), mainArm: this.opts.mainHand },
     });
     if (camOverride) return;
     const hit = this.interaction.hit;

@@ -243,6 +243,15 @@ export class Player extends LivingEntity {
     return this.input.sneak;
   }
 
+  /** vanilla ServerPlayer.updateInvisibilityStatus: a spectator is invisible, effects or not */
+  override isInvisible(): boolean {
+    return this.gameMode === 'spectator' || super.isInvisible();
+  }
+
+  protected override hidesEffectParticles(): boolean {
+    return this.gameMode === 'spectator';
+  }
+
   /** vanilla Player.DEFAULT_VEHICLE_ATTACHMENT: seated 0.6 above the feet */
   override vehicleAttachmentY(): number {
     return 0.6;

@@ -234,7 +234,7 @@ export abstract class LivingEntity extends Entity {
       this.effectsDirty = false;
     }
     // swirls in a visible effect's colour: rarer when invisible, rarer and fainter when all are ambient
-    if (this.effectParticles.length) {
+    if (this.effectParticles.length && !this.hidesEffectParticles()) {
       const i = this.isInvisible() ? 15 : 4, j = this.effectsAmbient ? 5 : 1;
       if (Math.floor(Math.random() * i * j) === 0) {
         const c = this.effectParticles[Math.floor(Math.random() * this.effectParticles.length)];
@@ -301,6 +301,11 @@ export abstract class LivingEntity extends Entity {
   /** vanilla isInvisible (the invisibility effect) */
   isInvisible(): boolean {
     return this.activeEffects.has('invisibility');
+  }
+
+  /** (vanilla ServerPlayer.updateInvisibilityStatus: a spectator's effects give off no swirls) */
+  protected hidesEffectParticles(): boolean {
+    return false;
   }
 
   /** vanilla MobEffectUtil.hasWaterBreathing */

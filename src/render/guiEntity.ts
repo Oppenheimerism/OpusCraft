@@ -1,13 +1,13 @@
 // Player model preview in inventory screens (vanilla
 // InventoryScreen.renderEntityInInventoryFollowsMouse), rendered offscreen and
-// copied onto the 2D GUI canvas.
+// copied onto the 2D GUI canvas. The player is drawn by the entity dispatcher,
+// as it is in the world: held items, the hurt flash, flames and all.
 
 import type { GL } from './gl';
 import { EntityBatch, PoseStack } from './entityRenderer';
-import { playerModel, animateHumanoid, ModelPart } from './model';
+import type { EntityRenderDispatcher, EntityRenderOptions } from './entityRenderers';
 import { mat4, ortho } from '../core/math';
 import type { Player } from '../entity/player';
-import type { GameOptions } from '../game/options';
 
 export class GuiEntityRenderer {
   private fb: WebGLFramebuffer | null = null;
@@ -15,13 +15,12 @@ export class GuiEntityRenderer {
   private depth: WebGLRenderbuffer | null = null;
   private w = 0;
   private h = 0;
-  private readonly model: ModelPart = playerModel(false);
   private readonly pose = new PoseStack();
   private readonly proj = mat4();
   private readonly out = document.createElement('canvas');
   private pixels = new Uint8Array(0);
 
-  constructor(private readonly gl: GL, private readonly batch: EntityBatch, private readonly skin: WebGLTexture) {}
+  constructor(private readonly gl: GL, private readonly batch: EntityBatch, private readonly entities: EntityRenderDispatcher) {}
 
   private ensure(w: number, h: number): void {
     if (this.fb && w === this.w && h === this.h) return;
@@ -53,7 +52,7 @@ export class GuiEntityRenderer {
    * Draw the player into the GUI rect (x1,y1)-(x2,y2) (GUI pixels), `scale` GUI pixels per block,
    * looking toward the mouse. Returns a canvas to blit at (x1, y1).
    */
-  render(p: Player, opts: GameOptions, guiScale: number, x1: number, y1: number, x2: number, y2: number, scale: number, yOffset: number, mx: number, my: number, ticks: number): HTMLCanvasElement {
+  render(p: Player, opts: EntityRenderOptions, guiScale: number, x1: number, y1: number, x2: number, y2: number, scale: number, yOffset: number, mx: number, my: number): HTMLCanvasElement {
     const W = Math.max(1, Math.round((x2 - x1) * guiScale)), H = Math.max(1, Math.round((y2 - y1) * guiScale));
     this.ensure(W, H);
     const gl = this.gl;
@@ -75,35 +74,25 @@ export class GuiEntityRenderer {
     b.lightS = 240;
     b.light0 = [0.2, -1, 1];
     b.light1 = [-0.2, -1, 0];
-    // model pose (vanilla setupAnim with the preview's head/body angles)
-    const m = this.model;
-    const bodyRot = 180 + f2 * 20;
-    const headRot = 180 + f2 * 40;
-    animateHumanoid(m, 0, 0, ticks, headRot - bodyRot, -f3 * 20, 0, p.crouching && !p.flying);
-    m.child('head').child('hat').visible = opts.skinHat;
-    m.child('body').child('jacket').visible = opts.skinJacket;
-    m.child('right_arm').child('right_sleeve').visible = opts.skinRightSleeve;
-    m.child('left_arm').child('left_sleeve').visible = opts.skinLeftSleeve;
-    m.child('right_leg').child('right_pants').visible = opts.skinRightPants;
-    m.child('left_leg').child('left_pants').visible = opts.skinLeftPants;
-    // vanilla transform chain: T(center) S(s,s,-s) T(0, h/2 + off) Rz(180) Rx(f3*20) | Ry(180-body) S(-1,-1,1) S(0.9375) T(0,-1.501,0)
+    // vanilla: the player turned to face the mouse for the draw (partial tick 1 sees just these), then put back
+    const bodyYaw = p.bodyYaw, headYaw = p.headYaw, yaw = p.yaw, pitch = p.pitch;
+    p.bodyYaw = 180 + f2 * 20;
+    p.yaw = p.headYaw = 180 + f2 * 40;
+    p.pitch = -f3 * 20;
+    // vanilla transform chain: T(center) S(s,s,-s) T(0, h/2 + off) Rz(180) Rx(f3*20), then the dispatcher's own
     const pose = this.pose;
     pose.reset();
     pose.translate(cx, cy, 50);
     pose.scale(scale, scale, -scale);
-    pose.translate(0, 0.9 + yOffset, 0);
+    pose.translate(0, p.height / 2 + yOffset, 0);
     pose.rotZ(180);
     pose.rotX(f3 * 20);
-    pose.rotY(180 - bodyRot);
-    pose.scale(-1, -1, 1);
-    pose.scale(0.9375, 0.9375, 0.9375);
-    pose.translate(0, -1.501, 0);
-    // vanilla: an invisible player leaves the preview empty
-    if (!p.isInvisible()) {
-      b.begin({ texture: this.skin, cutoff: 0.1, blend: false, cull: false, lit: true, useLightmap: false });
-      m.render(b, pose, 64, 64);
-      b.flush();
-    }
+    this.entities.renderPlayerInGui(b, p, pose.m, opts);
+    b.flush();
+    p.bodyYaw = bodyYaw;
+    p.headYaw = headYaw;
+    p.yaw = yaw;
+    p.pitch = pitch;
     gl.readPixels(0, 0, W, H, gl.RGBA, gl.UNSIGNED_BYTE, this.pixels);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     const ctx = this.out.getContext('2d')!;

@@ -1,7 +1,7 @@
 // Passive animals (vanilla AgeableMob / Animal / Pig / Cow / Sheep / Chicken)
 // with their goals: tempting, breeding, following parents, eating grass.
 
-import { Mob, LootEntry, MobCategory } from './mob';
+import { Mob, LootEntry, MobCategory, type SpawnGroup, type SpawnReason } from './mob';
 import type { Level } from '../game/level';
 import { Goal, Flag, reducedTickDelay } from './ai/goal';
 import { FloatGoal, PanicGoal, WaterAvoidingRandomStrollGoal, LookAtPlayerGoal, RandomLookAroundGoal } from './ai/goals';
@@ -55,6 +55,17 @@ export abstract class Animal extends Mob {
     const wasBaby = this.isBaby();
     this.age = a;
     if (wasBaby !== this.isBaby() || this.width === 0.6) this.refreshSize();
+  }
+
+  /**
+   * vanilla AgeableMob.finalizeSpawn: in a spawn pack every animal after the first may come as a baby, 1 in 20
+   * unless the pack's record (a kind's own finalizeSpawn may start it) says otherwise; alone (a spawn egg, /summon)
+   * it never does
+   */
+  override finalizeSpawn(_reason: SpawnReason, group?: SpawnGroup): void {
+    const a = ((group ?? {}).ageable ??= { size: 0, babyChance: 0.05 });
+    if (a.size > 0 && this.random.nextFloat() <= a.babyChance) this.setAge(-24000);
+    a.size++;
   }
 
   refreshSize(): void {
@@ -681,10 +692,11 @@ export class Sheep extends Animal {
     const baby = this.level.entities.find((e) => !before.has(e)) as Sheep | undefined;
     if (baby && partner instanceof Sheep) baby.color = offspringColor(this.color, partner.color, this.random.nextBool());
   }
-  override finalizeSpawn(): void {
+  override finalizeSpawn(reason: SpawnReason, group?: SpawnGroup): void {
     // vanilla Sheep.getRandomSheepColor
     const i = this.random.nextInt(100);
     this.color = i < 5 ? 15 : i < 10 ? 7 : i < 15 ? 8 : i < 18 ? 12 : this.random.nextInt(500) === 0 ? 6 : 0;
+    super.finalizeSpawn(reason, group);
   }
   override ambientSound(): string {
     return 'entity.sheep.ambient';
