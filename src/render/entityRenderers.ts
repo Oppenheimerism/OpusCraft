@@ -26,6 +26,7 @@ import { Sheep, Chicken, sheepFurColor } from '../entity/animals';
 import { Zombie, Skeleton, Creeper, Enderman, Slime, MagmaCube } from '../entity/monsters';
 import { Ghast } from '../entity/ghast';
 import { Blaze } from '../entity/blaze';
+import { Hoglin, Zoglin } from '../entity/hoglin';
 import { Fireball, LargeFireball } from '../entity/fireball';
 import { Squid } from '../entity/water';
 import { ThrownItem } from '../entity/throwable';
@@ -107,6 +108,8 @@ export class EntityRenderDispatcher {
       wither_skeleton: M.skeletonModel(),
       minecart: M.minecartModel(),
       bat: M.batModel(),
+      hoglin: M.hoglinModel(),
+      zoglin: M.hoglinModel(),
     };
     // vanilla textures/misc/shadow.png: soft black disc
     const n = 32, data = new Uint8Array(n * n * 4);
@@ -278,7 +281,7 @@ export class EntityRenderDispatcher {
       pose.rotY(SLEEP_ROT[bed]);
       pose.rotZ(flip);
       pose.rotY(270);
-    } else pose.rotY(180 - bodyYaw);
+    } else pose.rotY(180 - bodyYaw - shakeYaw(e));
     if (e.deathTime > 0) {
       let f = ((e.deathTime + p - 1) / 20) * 1.6;
       f = Math.sqrt(Math.max(0, f));
@@ -443,6 +446,10 @@ export class EntityRenderDispatcher {
         M.animateMagmaCube(def.root, mc.oSquish + (mc.squish - mc.oSquish) * p);
         break;
       }
+      case 'hoglin':
+      case 'zoglin':
+        M.animateHoglin(def.root, a.limbSwing, a.limbAmount, a.headYaw, (e as Hoglin | Zoglin).attackAnimationRemainingTicks, baby);
+        break;
       case 'bat': {
         // vanilla AnimationState: seconds since each loop started (a tick is 50 ms)
         const bat = e as Bat;
@@ -973,6 +980,11 @@ function attackAnim(e: LivingEntity, p: number): number {
   return e.attackAnimO + f * p;
 }
 
+/** vanilla LivingEntityRenderer.isShaking (HoglinRenderer: while it's turning into a zoglin): the body twitches ±1.26° */
+function shakeYaw(e: LivingEntity): number {
+  return e instanceof Hoglin && e.isConverting() ? Math.cos(e.tickCount * 3.25) * Math.PI * 0.4 : 0;
+}
+
 /** vanilla renderer shadow radii (babies half) */
 function shadowRadius(e: Entity): number {
   let r = 0;
@@ -996,6 +1008,10 @@ function shadowRadius(e: Entity): number {
       r = 0.7;
       break;
     case 'squid':
+      r = 0.7;
+      break;
+    case 'hoglin':
+    case 'zoglin':
       r = 0.7;
       break;
     case 'bat':

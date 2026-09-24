@@ -833,6 +833,161 @@ function zombifiedPiglin(): TexImage {
 }
 
 // ---------------------------------------------------------------------------
+// Hoglin and zoglin (128x64, vanilla HoglinModel). The body is not turned: its "top" is the spine (front edge at
+// the bottom row), its sides run rump → shoulders on the right face and shoulders → rump on the left. The head
+// hangs at 50°, so its "top" is the face (forehead at row 0, the nose at the bottom) and its "front" the snout's
+// tip. The mane is a flat sheet: only its two 19x10 sides show, the top 7 rows above the spine.
+
+interface HoglinLook {
+  seed: number;
+  hide: Pal;
+  hideW: Pal;
+  belly: Pal;
+  mane: Pal;
+  face: Pal;
+  snout: Pal;
+  nostril: number;
+  eye: number;
+  tusk: Pal;
+  tuskBase: number;
+  hoof: Pal;
+  ear: Pal;
+  /** rotted: bare flesh and bone showing through */
+  rot?: { flesh: Pal; bone: Pal };
+}
+
+const HOGLIN_LOOK: HoglinLook = {
+  seed: 0x406117,
+  hide: [0x8f5443, 0xa3624d, 0xb36f57, 0xc07c62, 0xcb8a6d, 0xd69a7c],
+  hideW: [1, 2, 4, 5, 3, 1],
+  belly: [0xb77a64, 0xc4876f, 0xcf957c],
+  mane: [0x4f2716, 0x62311c, 0x773d22, 0x8a4a2a, 0x9c5733],
+  face: [0x86472d, 0x965335, 0xa55f3d, 0xb36b46],
+  snout: [0xc68576, 0xd39584, 0xdea592],
+  nostril: 0x3a1a12,
+  eye: 0x160d0a,
+  tusk: [0xd8c79c, 0xe4d6ae, 0xeee3c2],
+  tuskBase: 0xb49d72,
+  hoof: [0x34241e, 0x413028, 0x4e3a30],
+  ear: [0xa9654f, 0xb87259, 0xc47f65],
+};
+
+const ZOGLIN_LOOK: HoglinLook = {
+  seed: 0x2091a,
+  hide: [0x9d8580, 0xae9691, 0xbea6a1, 0xcab3ad, 0xd6c0ba, 0xe2cec8],
+  hideW: [1, 2, 4, 5, 3, 1],
+  belly: [0xc9b3ad, 0xd4bfb9, 0xdecbc5],
+  mane: [0x9a918d, 0xb1a8a3, 0xc6beb8, 0xd9d2cc, 0xe8e2dc],
+  face: [0x94807b, 0xa38e89, 0xb19c96, 0xbea9a3],
+  snout: [0xc49c98, 0xd1aba6, 0xdcb8b3],
+  nostril: 0x3b1f22,
+  eye: 0x1c1212,
+  tusk: [0xe4ddcc, 0xefe9dc, 0xf8f5ec],
+  tuskBase: 0xc8bfa9,
+  hoof: [0x463f3d, 0x544b48, 0x625855],
+  ear: [0xb09a95, 0xbea8a3, 0xcab5af],
+  rot: { flesh: [0x7c2c34, 0x923b45, 0xa64d55, 0xb8636a], bone: [0xcfc6b2, 0xded6c4, 0xebe5d8] },
+};
+
+function hoglinSkin(k: HoglinLook): TexImage {
+  const t = img(128, 64);
+  const r = new Rand(k.seed);
+  const body = boxFaces(1, 1, 16, 14, 26);
+  const head = boxFaces(61, 1, 14, 6, 19);
+  const mane = boxFaces(90, 33, 0, 10, 19);
+  const earR = boxFaces(1, 1, 6, 1, 4), earL = boxFaces(1, 6, 6, 1, 4);
+  const hornR = boxFaces(10, 13, 2, 11, 2), hornL = boxFaces(1, 13, 2, 11, 2);
+  const legs = [boxFaces(66, 42, 6, 14, 6), boxFaces(41, 42, 6, 14, 6), boxFaces(21, 45, 5, 11, 5), boxFaces(0, 45, 5, 11, 5)];
+  const bristle = { w: k.hideW, cell: 1, white: 0.6 };
+  noiseBox(t, body, r, k.hide, bristle);
+  noiseBox(t, head, r, k.hide, bristle);
+  for (const l of legs) noiseBox(t, l, r, k.hide, bristle);
+  noiseFace(t, body.bottom, r, k.belly, { cell: 1 });
+  const maneInk = () => pick(r, k.mane, [1, 2, 3, 2, 1]);
+  // bristles: dark hairs streaking down the flanks, thickest over the shoulders and along the spine
+  for (const side of ['right', 'left'] as FaceName[]) {
+    paintFace(t, body[side], (x, y, c, w) => {
+      const front = side === 'right' ? x / (w - 1) : 1 - x / (w - 1);
+      const reach = 2 + front * 6 + (r.chance(0.5) ? 1 : 0);
+      if (y < reach) return maneInk();
+      if ((x * 5 + y * 3) % 7 === 0 && r.chance(0.5)) return mixC(c, k.mane[1], 0.45);
+      return undefined;
+    });
+  }
+  paintFace(t, body.top, (x, y, c, w, h) => {
+    const mid = Math.abs(x - (w - 1) / 2);
+    const front = y / (h - 1);
+    if (mid < 2 + front * 3 + (r.chance(0.4) ? 1 : 0)) return maneInk();
+    return r.chance(0.12) ? mixC(c, k.mane[2], 0.5) : undefined;
+  });
+  paintFace(t, body.front, (x, y) => (y < 4 + (r.chance(0.5) ? 1 : 0) ? maneInk() : undefined));
+  // the mane: a ragged crest of long bristles, tallest over the neck
+  for (const side of ['right', 'left'] as FaceName[]) {
+    paintFace(t, mane[side], (x, y, _c, w) => {
+      const front = side === 'right' ? x / (w - 1) : 1 - x / (w - 1);
+      const top = Math.round(3 - front * 3) + (x % 2 === 0 ? 1 : 0) + (r.chance(0.3) ? 1 : 0);
+      return y < top ? null : maneInk();
+    });
+  }
+  // the face: darker, with small deep-set eyes, and a paler nose at the end of the snout
+  noiseBox(t, head, r, k.face, { cell: 1, white: 0.6 }, ['top', 'right', 'left']);
+  paintFace(t, head.top, (x, y, c, w, h) => (y >= h - 4 ? pick(r, k.snout) : y < 2 && r.chance(0.6) ? maneInk() : undefined));
+  drawFace(t, head.top, ['..............', '..............', '..............', '.bKb......bKb.', '..............'], { K: k.eye, b: mixC(k.face[0], k.eye, 0.4) }, r);
+  noiseFace(t, head.front, r, k.snout, { cell: 1 });
+  drawFace(t, head.front, ['..............', '....KK..KK....', '....KK..KK....', '..............'], { K: k.nostril }, r);
+  // the mouth runs along each side of the snout
+  for (const side of ['right', 'left'] as FaceName[]) {
+    paintFace(t, head[side], (x, y, c, w, h) => {
+      const front = side === 'right' ? x / (w - 1) : 1 - x / (w - 1);
+      if (y === h - 2 && front > 0.35) return mixC(c, k.nostril, 0.55);
+      return front > 0.8 && y >= h - 3 ? pick(r, k.snout) : undefined;
+    });
+  }
+  noiseFace(t, head.bottom, r, k.belly, { cell: 1 });
+  // tusks: ivory, darker where they leave the jaw
+  for (const hb of [hornR, hornL]) {
+    noiseBox(t, hb, r, k.tusk, { cell: 1 });
+    for (const s of SIDES) paintFace(t, hb[s], (_x, y, c, _w, h) => (y >= h - 3 ? mixC(c, k.tuskBase, (y - (h - 4)) / 3) : undefined));
+  }
+  // ears: the hide outside, pinker within
+  for (const eb of [earR, earL]) {
+    noiseBox(t, eb, r, k.ear, { cell: 1 });
+    noiseFace(t, eb.bottom, r, k.snout, { cell: 1 });
+  }
+  // hooves
+  for (const l of legs) {
+    for (const s of SIDES) paintFace(t, l[s], (_x, y, _c, _w, h) => (y >= h - 2 ? pick(r, k.hoof) : y === h - 3 && r.chance(0.5) ? pick(r, k.mane) : undefined));
+    noiseFace(t, l.bottom, r, k.hoof);
+  }
+  if (k.rot) {
+    // rotted through: raw patches with bone at their hearts, on the flanks, the face and the legs
+    const rot = k.rot;
+    const sore = (f: Face, cx: number, cy: number, rad: number) =>
+      paintFace(t, f, (x, y) => {
+        const d = Math.hypot(x - cx, (y - cy) * 1.2) + r.next() * 1.4;
+        if (d >= rad) return undefined;
+        if (d < rad * 0.45 && r.chance(0.55)) return pick(r, rot.bone);
+        return pick(r, rot.flesh, d < rad * 0.6 ? [3, 3, 1, 0] : [0, 1, 3, 3]);
+      });
+    sore(body.right, 7, 8, 4.6);
+    sore(body.right, 20, 4, 3);
+    sore(body.left, 16, 8, 5);
+    sore(body.left, 4, 3, 2.8);
+    sore(body.top, 4, 8, 3.4);
+    sore(body.top, 11, 18, 2.6);
+    sore(body.back, 10, 6, 3.4);
+    sore(body.bottom, 8, 14, 3.6);
+    // half the face has rotted down to the skull
+    sore(head.top, 10, 9, 4);
+    sore(head.right, 11, 3, 3);
+    sore(legs[0].front, 2, 6, 2.6);
+    sore(legs[3].left, 2, 4, 2.4);
+    for (const k2 of FACES) fleck(t, body[k2], r, 0.04, rot.flesh);
+  }
+  return t;
+}
+
+// ---------------------------------------------------------------------------
 // Magma cube (64x32, vanilla LavaSlimeModel): eight 8x1x8 slices whose side strips sit at rows 8-15 (u 0) and,
 // for the eyes' rows 2 and 3, at rows 18 and 27 (u 24); their tops and bottoms overlap one another, as in
 // vanilla's sheet. A dark, cooled crust veined with glowing lava, round a molten core.
@@ -1399,6 +1554,8 @@ export const MOB_TEXTURES: Record<string, () => TexImage> = {
   magma_cube: magmaCube,
   blaze,
   zombified_piglin: zombifiedPiglin,
+  hoglin: () => hoglinSkin(HOGLIN_LOOK),
+  zoglin: () => hoglinSkin(ZOGLIN_LOOK),
   ghast: () => ghast(false),
   ghast_shooting: () => ghast(true),
   bat,
@@ -1525,6 +1682,8 @@ const EGGS: [string, number, number][] = [
   ['ghast', 0xf9f9f9, 0xbcbcbc],
   ['blaze', 0xf6b201, 0xfff87e],
   ['wither_skeleton', 0x141414, 0x474d4d],
+  ['hoglin', 0xc66e55, 0x5f6464],
+  ['zoglin', 0xc66e55, 0xe6e6e6],
 ];
 
 export const SPAWN_EGG_TEXTURES: Record<string, () => TexImage> = {};

@@ -9,6 +9,7 @@ import { ItemStack, ITEMS, cloneTag } from '../item/item';
 import { Pig, Cow, Sheep, Chicken, Animal } from '../entity/animals';
 import { Ghast } from '../entity/ghast';
 import { Blaze } from '../entity/blaze';
+import { Hoglin, Zoglin } from '../entity/hoglin';
 import { Zombie, ZombifiedPiglin, Skeleton, WitherSkeleton, Creeper, Spider, CaveSpider, Enderman, Slime, MagmaCube, Monster, validSpawnBlock } from '../entity/monsters';
 import { Squid, WaterAnimal } from '../entity/water';
 import { AbstractMinecart, createMinecart, MINECART_TYPES } from '../entity/minecart';
@@ -41,6 +42,8 @@ export const MOB_TYPES: Record<string, (l: Level) => Mob> = {
   wither_skeleton: (l) => new WitherSkeleton(l),
   squid: (l) => new Squid(l),
   bat: (l) => new Bat(l),
+  hoglin: (l) => new Hoglin(l),
+  zoglin: (l) => new Zoglin(l),
 };
 
 export function createMob(type: string, level: Level): Mob | null {
@@ -121,7 +124,7 @@ export function isChunkSaved(e: Entity): boolean {
 
 const ENTITY_NAMES: Record<string, string> = {
   pig: 'Pig', cow: 'Cow', sheep: 'Sheep', chicken: 'Chicken', zombie: 'Zombie', skeleton: 'Skeleton', creeper: 'Creeper', spider: 'Spider',
-  cave_spider: 'Cave Spider', enderman: 'Enderman', slime: 'Slime', magma_cube: 'Magma Cube', zombified_piglin: 'Zombified Piglin', ghast: 'Ghast', blaze: 'Blaze', wither_skeleton: 'Wither Skeleton', squid: 'Squid', bat: 'Bat',
+  cave_spider: 'Cave Spider', enderman: 'Enderman', slime: 'Slime', magma_cube: 'Magma Cube', zombified_piglin: 'Zombified Piglin', ghast: 'Ghast', blaze: 'Blaze', wither_skeleton: 'Wither Skeleton', squid: 'Squid', bat: 'Bat', hoglin: 'Hoglin', zoglin: 'Zoglin',
   arrow: 'Arrow', tnt: 'Primed TNT', item: 'Item', experience_orb: 'Experience Orb', falling_block: 'Falling Block', player: 'Player',
   egg: 'Thrown Egg', snowball: 'Snowball', ender_pearl: 'Thrown Ender Pearl',
   minecart: 'Minecart', chest_minecart: 'Minecart with Chest', boat: 'Boat', chest_boat: 'Boat with Chest',
@@ -463,6 +466,9 @@ export class NaturalSpawner {
       case 'blaze':
         // vanilla Monster.checkAnyLightMonsterSpawnRules
         return lvl.difficulty !== 'peaceful';
+      case 'hoglin':
+        // vanilla Hoglin.checkHoglinSpawnRules: any light, just not on a nether wart block
+        return BLOCKS[STATE_BLOCK[lvl.world.getState(x, y - 1, z)]].name !== 'nether_wart_block';
       case 'pig':
       case 'cow':
       case 'sheep':
