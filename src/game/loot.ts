@@ -68,6 +68,19 @@ export const LOOT_TABLES: Record<string, LootPool[]> = {
     },
     { rolls: 1, entries: [e('', 14), e('rib_armor_trim_smithing_template', 1)] },
   ],
+  // temples
+  'chests/desert_pyramid': [
+    {
+      rolls: [2, 4],
+      entries: [
+        e('diamond', 5, [1, 3]), e('iron_ingot', 15, [1, 5]), e('gold_ingot', 15, [2, 7]), e('emerald', 15, [1, 3]), e('bone', 25, [4, 6]),
+        e('spider_eye', 25, [1, 3]), e('rotten_flesh', 25, [3, 7]), e('saddle', 20), e('iron_horse_armor', 15), e('golden_horse_armor', 10),
+        e('diamond_horse_armor', 5), e('book', 20, undefined, true), e('golden_apple', 20), e('enchanted_golden_apple', 2), e('', 15),
+      ],
+    },
+    { rolls: 4, entries: [e('bone', 10, [1, 8]), e('gunpowder', 10, [1, 8]), e('rotten_flesh', 10, [1, 8]), e('string', 10, [1, 8]), e('sand', 10, [1, 8])] },
+    { rolls: 1, entries: [e('', 6), e('dune_armor_trim_smithing_template', 1, [2, 2])] },
+  ],
   // villages (chests/village/*)
   'chests/village/village_weaponsmith': [
     {

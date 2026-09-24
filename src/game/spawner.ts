@@ -35,6 +35,7 @@ import { fluidType, FLUID_LAVA } from '../world/fluids';
 import { MIN_Y } from '../world/constants';
 import { AABB } from '../core/aabb';
 import { Rand, hash2 } from '../core/rng';
+import { structureMobsAt } from './structureSpawns';
 
 export const MOB_TYPES: Record<string, (l: Level) => Mob> = {
   pig: (l) => new Pig(l),
@@ -461,6 +462,9 @@ export class NaturalSpawner {
       const f = this.level.fortresses().at(x, y, z);
       if (f && (BLOCKS[STATE_BLOCK[w.getState(x, y - 1, z)]].name === 'nether_bricks' || f.pieces.some((p) => p.box.isInside(x, y, z)))) return FORTRESS_ENEMIES;
     }
+    // a structure's spawn_overrides (bounding_box piece | full) where it stands (game/structureSpawns)
+    const o = structureMobsAt(this.level, cat, x, y, z);
+    if (o) return o;
     const bs = biomeSettings(w.getBiome3(x, y, z));
     return cat === 'monster' ? bs.monster : cat === 'water_creature' ? bs.water : cat === 'ambient' ? bs.ambient : bs.creature;
   }

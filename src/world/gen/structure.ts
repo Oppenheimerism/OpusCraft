@@ -72,17 +72,32 @@ const RAIL_CW: Record<string, string> = {
 };
 const RAIL_FLIP: Record<string, string> = { ascending_north: 'ascending_south', ascending_south: 'ascending_north', north_east: 'south_east', south_east: 'north_east', north_west: 'south_west', south_west: 'north_west' };
 
+// vanilla StairBlock.mirror: a stair facing along z swaps its corners' left and right
+const STAIR_FLIP: Record<string, string> = { inner_left: 'inner_right', inner_right: 'inner_left', outer_left: 'outer_right', outer_right: 'outer_left' };
+
 /** vanilla BlockState.mirror(LEFT_RIGHT) then rotate(CLOCKWISE_90), for the properties pieces use */
 function transformState(st: number, flip: boolean, rot: boolean): number {
   const b = blockOf(st);
   if (b.propIndex('facing') >= 0) {
     let f = b.get<string>(st, 'facing') as Dir4;
     if (f in CW) {
+      if (flip && (f === 'north' || f === 'south') && b.name.endsWith('_stairs')) st = b.with(st, 'shape', STAIR_FLIP[b.get<string>(st, 'shape')] ?? 'straight');
       if (flip) f = FLIP_NS[f];
       if (rot) f = CW[f];
       st = b.with(st, 'facing', f);
     }
   }
+  // vanilla VineBlock, TripWireBlock, RedStoneWireBlock, CrossCollisionBlock...: a property per side, turned with the block
+  if (b.propIndex('north') >= 0 && b.propIndex('east') >= 0 && b.propIndex('south') >= 0 && b.propIndex('west') >= 0) {
+    let n = b.get(st, 'north'), e = b.get(st, 'east'), s = b.get(st, 'south'), w = b.get(st, 'west');
+    if (flip) [n, s] = [s, n];
+    if (rot) [n, e, s, w] = [w, n, e, s];
+    st = b.with(b.with(b.with(b.with(st, 'north', n), 'east', e), 'south', s), 'west', w);
+  }
+  // vanilla RotatedPillarBlock.rotate: a quarter turn swaps x and z
+  if (rot && b.propIndex('axis') >= 0 && b.get(st, 'axis') !== 'y') st = b.with(st, 'axis', b.get(st, 'axis') === 'x' ? 'z' : 'x');
+  // vanilla DoorBlock.mirror: the hinge goes to the other side
+  if (flip && b.propIndex('hinge') >= 0) st = b.with(st, 'hinge', b.get(st, 'hinge') === 'left' ? 'right' : 'left');
   if (b.name === 'rail') {
     let s = b.get<string>(st, 'shape');
     if (flip) s = RAIL_FLIP[s] ?? s;
