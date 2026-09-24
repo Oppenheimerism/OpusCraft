@@ -69,6 +69,11 @@ export interface BlockBehavior {
   getDirectSignal?(world: World, x: number, y: number, z: number, state: number, dir: Dir): number;
   /** vanilla useWithoutItem: true if it did something, 'consume' if the click is spent without the arm swinging */
   use?(level: Level, x: number, y: number, z: number, state: number, ctx: UseContext): boolean | 'consume';
+  /**
+   * vanilla playerWillDestroy: `player` is about to break the block (in any game mode), before it goes (a shulker box
+   * broken in creative drops itself with what's in it)
+   */
+  playerWillDestroy?(level: Level, x: number, y: number, z: number, state: number, player: Player): void;
   /** vanilla attack: a survival player starts breaking the block (a dragon egg jumps away) */
   attack?(level: Level, x: number, y: number, z: number, state: number, player: Player): void;
   /** vanilla useItemOn: `stack` (in ctx.hand) used on the block, before the block's own use and the item's */

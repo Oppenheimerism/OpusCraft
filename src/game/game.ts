@@ -67,6 +67,7 @@ import { nightVisionScale, blindnessFog, applyNausea } from '../render/effectVis
 import { OVERWORLD, THE_NETHER, THE_END, dimensionById, teleportationScale, type DimensionType } from '../world/dimension';
 import { PortalPoi, portalRectangle, relativePortalPosition, portalExit, createPortal, isPortal, portalAxis, type PortalRect } from './portal';
 import { setVillageMenuHook } from './villageBlocks';
+import { setShulkerBoxMenuHook } from './shulkerBox';
 import { openJobSite } from './jobSites';
 import { endPortalTravel, PortalArrivals } from './endTravel';
 import { EndDragonFight, ARENA_TICKET_LEVEL } from './endDragonFight';
@@ -414,6 +415,7 @@ export class Game {
     this.interaction = new Interaction(this.level, this.player);
     this.interaction.onOpenContainer = (kind, x, y, z) => this.openContainer(kind, x, y, z);
     setVillageMenuHook((kind, x, y, z) => this.openContainer(kind, x, y, z));
+    setShulkerBoxMenuHook((menu) => this.containerScreenFactory && this.setScreen(this.containerScreenFactory(menu)));
     this.interaction.onOpenEntityContainer = (e) => this.openEntityContainer(e);
     this.interaction.onMounted = () => this.hud.setOverlayMessage(`Press ${keyDisplayName(KEYS.sneak)} to Dismount`);
     this.interaction.onUseBed = (x, y, z) => useBed(this.sleepHost(), x, y, z);

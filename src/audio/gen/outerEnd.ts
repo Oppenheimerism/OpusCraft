@@ -1,11 +1,11 @@
 // The outer End's sounds: a chorus flower growing (vanilla block.chorus_flower.grow, four takes) and dying
-// (block.chorus_flower.death, three takes). (Chorus fruit teleports with the enderman's portal samples, as in
+// (block.chorus_flower.death, three takes); a shulker box opening and shutting (block.shulker_box.open, .close). (Chorus fruit teleports with the enderman's portal samples, as in
 // vanilla's sounds.json: soundManager's aliases.)
 
 import type { SoundGen } from '../synth';
 import { TAU, addOsc, alloc, envAD, envBump, layer } from './dsp';
 import { type Ctx, sound } from './registry';
-import { burst, bubble, phisem, sweep, thump } from './texture';
+import { burst, bubble, impact, phisem, sweep, thump } from './texture';
 import { reverbHalf } from './world';
 
 /**
@@ -74,9 +74,57 @@ function flowerDeath(c: Ctx): Float32Array {
   return reverbHalf(out, sr, { t60: 0.55, hf: 0.45, wet: 0.28, dry: 1, tail: 0.3, pre: 0.01 });
 }
 
+/** a shulker's shell: hollow, a little glassy (its body's ring, [f, amp, t60]) */
+const SHELL = [230, 1, 0.16, 520, 0.7, 0.11, 890, 0.45, 0.08, 1480, 0.25, 0.05, 2350, 0.12, 0.03];
+
+/**
+ * A shulker box opening: the lid comes unstuck from the rim with a soft hollow knock, and slides up and round with a
+ * breathy rising hiss over the shell's ring.
+ */
+function boxOpen(c: Ctx): Float32Array {
+  const { sr, rng } = c;
+  const out = alloc(0.7, sr);
+  layer(out, 1, (b) => impact(b, sr, rng, { modes: SHELL, jitter: 0.03, noise: 0.6, noiseTau: 0.004, noiseBp: [900, 0.8] }));
+  layer(out, 0.45, (b) => thump(b, sr, { f0: 170, f1: 120, glide: 0.02, tau: 0.035, h2: 0.3 }));
+  layer(out, 0.5, (b) =>
+    sweep(b, sr, rng, {
+      t: 0.03,
+      dur: 0.42,
+      f: (t) => 700 * Math.pow(2600 / 700, Math.min(1, t / 0.36)),
+      q: 2.2,
+      amp: (t) => envBump(t, 0.12, 0.28),
+      color: 'pink',
+    }),
+  );
+  layer(out, 0.3, (b) => impact(b, sr, rng, { t: 0.36, modes: SHELL.map((v, i) => (i % 3 === 0 ? v * 1.12 : v)), jitter: 0.03, noise: 0.3, noiseTau: 0.003, noiseBp: [1500, 0.8] }));
+  return reverbHalf(out, sr, { t60: 0.45, hf: 0.5, wet: 0.2, dry: 1, tail: 0.25, pre: 0.008 });
+}
+
+/** A shulker box shutting: the lid sliding down and round, then seating on the rim with a firm hollow clunk. */
+function boxClose(c: Ctx): Float32Array {
+  const { sr, rng } = c;
+  const out = alloc(0.7, sr);
+  const hit = 0.3;
+  layer(out, 0.4, (b) =>
+    sweep(b, sr, rng, {
+      dur: hit + 0.02,
+      f: (t) => 2200 * Math.pow(600 / 2200, Math.min(1, t / hit)),
+      q: 2,
+      amp: (t) => envBump(t, 0.1, hit - 0.08),
+      color: 'pink',
+    }),
+  );
+  layer(out, 1, (b) => impact(b, sr, rng, { t: hit, modes: SHELL.map((v, i) => (i % 3 === 0 ? v * 0.9 : v)), jitter: 0.03, noise: 0.8, noiseTau: 0.005, noiseBp: [700, 0.8] }));
+  layer(out, 0.6, (b) => thump(b, sr, { t: hit, f0: 150, f1: 95, glide: 0.025, tau: 0.05, h2: 0.3 }));
+  layer(out, 0.2, (b) => burst(b, sr, rng, { t: hit, dur: 0.06, attack: 0.002, tau: 0.012, bp: [2400, 1] }));
+  return reverbHalf(out, sr, { t60: 0.45, hf: 0.5, wet: 0.2, dry: 1, tail: 0.25, pre: 0.008 });
+}
+
 export function outerEndSounds(): Record<string, SoundGen> {
   return {
     'block.chorus_flower.grow': sound('block.chorus_flower.grow', 4, flowerGrow, { fadeOut: 0.15 }),
     'block.chorus_flower.death': sound('block.chorus_flower.death', 3, flowerDeath, { fadeOut: 0.15 }),
+    'block.shulker_box.open': sound('block.shulker_box.open', 1, boxOpen, { fadeOut: 0.1 }),
+    'block.shulker_box.close': sound('block.shulker_box.close', 1, boxClose, { fadeOut: 0.1 }),
   };
 }

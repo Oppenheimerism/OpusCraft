@@ -64,6 +64,7 @@ import { crossbowTexture, crossbowChargeProgress, isCharged } from '../item/cros
 import { SpawnerBlockEntity, EnchantingTableBlockEntity } from '../world/blockEntity';
 import { bookModel, bookTexture, renderTableBook } from './bookRenderer';
 import { VillageBlockRenderers } from './villageRenderers';
+import { ShulkerRenderers } from './shulkerRenderer';
 import { createMob } from '../game/spawner';
 import { ArmorLayer, renderHeadItem, PIGLIN_HEAD_ITEM_SCALE } from './armorLayer';
 import type { ArmorModelSet } from './armorLayer';
@@ -138,10 +139,13 @@ export class EntityRenderDispatcher {
   private readonly village: VillageBlockRenderers;
   private readonly endCrystals: EndCrystalRenderer;
   private readonly dragons: EnderDragonRenderer;
+  /** shulker boxes (and the shulkers themselves) */
+  private readonly shulkers: ShulkerRenderers;
 
   constructor(private readonly gl: GL, private readonly items: ItemRenderer, private readonly skin: WebGLTexture) {
     this.armor = new ArmorLayer(gl);
     this.village = new VillageBlockRenderers(gl);
+    this.shulkers = new ShulkerRenderers(gl);
     this.endCrystals = new EndCrystalRenderer(gl);
     this.dragons = new EnderDragonRenderer(gl, this.endCrystals.beam);
     this.models = {
@@ -305,6 +309,7 @@ export class EntityRenderDispatcher {
     this.renderSpawners(b, level, cam, partial, frustum);
     this.renderEnchantingBooks(b, level, cam, partial, frustum);
     this.village.render(b, level, cam, partial, frustum);
+    this.shulkers.renderBlockEntities(b, level, cam, partial, frustum);
     b.setOverlay(0, 0, 0, 0);
     b.flush();
     if (this.shadows.length) this.renderShadows(b, level, cam);

@@ -3,6 +3,8 @@
 import { BLOCKS, BLOCK_BY_NAME, Block, ToolType, getBlock } from '../world/block';
 import { WOODS } from '../world/blocksExtra';
 import type { SavedEffect } from '../entity/effects';
+import type { ItemEntity } from '../entity/itemEntity';
+import { SHULKER_BOXES } from '../world/blocksShulker';
 
 export interface ToolInfo {
   type: ToolType;
@@ -51,6 +53,8 @@ export interface Item {
   creativeStacks?: () => ItemStack[];
   /** vanilla Item.craftingRemainingItem: what's left of it in a crafting grid or brewing stand (dragon's breath: the bottle) */
   remainder?: string;
+  /** vanilla Item.onDestroyed: a dropped stack of it was burnt up or blown apart (a shulker box spills what it held) */
+  onDestroyed?: (e: ItemEntity) => void;
 }
 
 export type Rarity = 'common' | 'uncommon' | 'rare' | 'epic';
@@ -312,6 +316,10 @@ reg({ id: 'chorus_fruit', texture: 'chorus_fruit', creativeTab: 'food', food: { 
 reg({ id: 'popped_chorus_fruit', texture: 'popped_chorus_fruit' });
 for (const id of ['chorus_plant', 'chorus_flower']) ITEMS.get(id)!.creativeTab = 'natural';
 ITEMS.get('end_rod')!.creativeTab = 'functional';
+// the shulker's shell, and the boxes made from it: one to a stack (what's in one shows in its tooltip,
+// game/shulkerBox.ts)
+reg({ id: 'shulker_shell', texture: 'shulker_shell', creativeTab: 'ingredients' });
+for (const [id] of SHULKER_BOXES) Object.assign(ITEMS.get(id)!, { maxStack: 1, creativeTab: 'colored' });
 Object.assign(ITEMS.get('dragon_egg')!, { rarity: 'epic', creativeTab: 'functional' });
 reg({ id: 'enchanted_book', texture: 'enchanted_book', maxStack: 1, rarity: 'uncommon', glint: true });
 // vanilla SmithingTemplateItem.createNetheriteUpgradeTemplate: its hover text is the upgrade, what it applies to and needs
@@ -452,6 +460,17 @@ export interface ItemTag {
   pages?: string[];
   /** minecraft:written_book_content: a signed book */
   book?: WrittenBook;
+  /** minecraft:container: what a shulker box holds, slot by slot (the filled ones) */
+  container?: ContainerSlot[];
+}
+
+/** one filled slot of minecraft:container (vanilla ItemContainerContents.Slot) */
+export interface ContainerSlot {
+  slot: number;
+  id: string;
+  count: number;
+  damage?: number;
+  tag?: ItemTag;
 }
 
 /** vanilla PotionContents: the potion (a registry id; none for an uncraftable one), a custom colour, custom effects */
@@ -516,6 +535,7 @@ export function cloneTag(t: ItemTag | null): ItemTag | null {
   if (t.trim) o.trim = { ...t.trim };
   if (t.pages) o.pages = [...t.pages];
   if (t.book) o.book = { ...t.book, pages: [...t.book.pages] };
+  if (t.container?.length) o.container = t.container.map((c) => ({ ...c, ...(c.tag ? { tag: cloneTag(c.tag)! } : {}) }));
   return o;
 }
 
@@ -528,7 +548,8 @@ export function sameTag(a: ItemTag | null | undefined, b: ItemTag | null | undef
     sameEnchants(a?.enchantments, b?.enchantments) && sameEnchants(a?.stored, b?.stored) && a?.customName === b?.customName && (a?.repairCost ?? 0) === (b?.repairCost ?? 0) &&
     sameCharged(a?.charged, b?.charged) && a?.dyedColor === b?.dyedColor && !a?.dyedHidden === !b?.dyedHidden && samePotion(a?.potion, b?.potion) &&
     a?.itemName === b?.itemName && a?.rarity === b?.rarity && !a?.hideAdditional === !b?.hideAdditional && sameData(a?.patterns?.length ? a.patterns : null, b?.patterns?.length ? b.patterns : null) &&
-    a?.mapId === b?.mapId && a?.mapPostProcessing === b?.mapPostProcessing && sameData(a?.trim, b?.trim) && sameData(a?.pages, b?.pages) && sameData(a?.book, b?.book)
+    a?.mapId === b?.mapId && a?.mapPostProcessing === b?.mapPostProcessing && sameData(a?.trim, b?.trim) && sameData(a?.pages, b?.pages) && sameData(a?.book, b?.book) &&
+    sameData(a?.container?.length ? a.container : null, b?.container?.length ? b.container : null)
   );
 }
 

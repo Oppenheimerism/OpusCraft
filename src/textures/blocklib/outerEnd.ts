@@ -1,8 +1,11 @@
 // The outer End's block textures (vanilla block/purpur_block, purpur_pillar(_top), end_rod, chorus_plant,
-// chorus_flower(_dead)) and the glitter an end rod gives off (vanilla particle/glitter_0..7).
+// chorus_flower(_dead), the shulker boxes' from textures/shulker.ts) and the glitter an end rod gives off (vanilla
+// particle/glitter_0..7).
 
 import { TexImage, TexDef, img, setPx, getPx, mixC, mulC } from '../tex';
 import { N, rng, fbm, quantize, paint, noise } from './core';
+import { registerShulkerBoxTextures } from '../shulker';
+import { SHULKER_BOXES } from '../../world/blocksShulker';
 
 type Reg = Record<string, () => TexDef>;
 
@@ -190,4 +193,5 @@ export function registerOuterEndTextures(T: Reg): void {
   T['chorus_plant'] = chorusPlant;
   T['chorus_flower'] = () => chorusFlower(false);
   T['chorus_flower_dead'] = () => chorusFlower(true);
+  registerShulkerBoxTextures(T, SHULKER_BOXES);
 }

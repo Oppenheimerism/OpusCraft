@@ -238,6 +238,7 @@ export class Interaction {
     // vanilla BaseFireBlock.playerWillDestroy: punching out fire fizzes
     if (b.name === 'fire') this.level.sound.play('block.fire.extinguish', x + 0.5, y + 0.5, z + 0.5, 0.5, 2.6 + (Math.random() - Math.random()) * 0.8);
     const silk = levelOf(held, 'silk_touch') > 0;
+    behaviorOf(st)?.playerWillDestroy?.(this.level, x, y, z, st, p);
     this.level.destroyBlock(x, y, z, survival, held?.item ?? null, true, held);
     if (survival && this.level.gameRules.doTileDrops) {
       const xp = blockExperience(st, held?.item ?? null, this.level.random, silk);

@@ -1,11 +1,12 @@
 // The outer End's blocks (vanilla 1.9+): the chorus plant and its flower, purpur (the block, its pillar; its
-// stairs and slab are in blocks.ts's shared table) and end rods. What the chorus does (growing, branching,
+// stairs and slab are in blocks.ts's shared table), end rods, and the shulker boxes (world/blocksShulker.ts). What the chorus does (growing, branching,
 // breaking) and what end rods give off is in game/chorus.ts.
 
 import { registerBlock, getBlock, P, Box, StateView, Layer, boolProp, intProp } from './block';
 import type { ModelDef, ModelChoice, Variant, ElementDef, FaceDef, UV4 } from './models';
 import { cubeAll, cubeColumn } from './models';
 import type { DirName } from './dir';
+import { registerShulkerBoxBlocks } from './blocksShulker';
 
 const px = (v: number) => v / 16;
 const bx = (x0: number, y0: number, z0: number, x1: number, y1: number, z1: number): Box => [px(x0), px(y0), px(z0), px(x1), px(y1), px(z1)];
@@ -159,4 +160,6 @@ export function registerOuterEndBlocks(): void {
     hardness: 0.4, sound: 'wood', tool: 'axe', layer: Layer.CUTOUT, randomTicks: true, opaque: false, aoCaster: false, opacity: 1, faceOcclusion: 0,
     model: (s: StateView): ModelChoice => ({ model: s.get<number>('age') === 5 ? dead : live }),
   });
+
+  registerShulkerBoxBlocks();
 }

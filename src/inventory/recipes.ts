@@ -263,6 +263,8 @@ shaped('purpur_pillar', 1, ['#', '#'], { '#': 'purpur_slab' });
 shaped('purpur_stairs', 4, ['#  ', '## ', '###'], { '#': ['purpur_block', 'purpur_pillar'] });
 shaped('purpur_slab', 6, ['###'], { '#': ['purpur_block', 'purpur_pillar'] });
 shaped('end_rod', 4, ['/', '#'], { '/': 'blaze_rod', '#': 'popped_chorus_fruit' });
+// a shulker box: a chest between two shells (dyeing one is a special recipe, game/shulkerBox.ts)
+shaped('shulker_box', 1, ['-', '#', '-'], { '-': 'shulker_shell', '#': 'chest' });
 shaped('bricks', 1, ['##', '##'], { '#': 'brick' });
 shaped('clay', 1, ['##', '##'], { '#': 'clay_ball' });
 shaped('snow_block', 1, ['##', '##'], { '#': 'snowball' });
