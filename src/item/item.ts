@@ -347,6 +347,8 @@ reg({ id: 'ominous_bottle', creativeTab: 'food', texture: 'ominous_bottle', rari
 // (Stage 5: ocean) vanilla Items.PRISMARINE_SHARD / PRISMARINE_CRYSTALS (guardians', sea lanterns'); the wet sponge sits by the sponge
 for (const id of ['prismarine_shard', 'prismarine_crystals']) reg({ id, texture: id });
 ITEMS.get('wet_sponge')!.creativeTab = 'functional';
+// (Stage 5: ocean) the guardians' eggs
+for (const m of ['elder_guardian', 'guardian']) reg({ id: `${m}_spawn_egg`, texture: `${m}_spawn_egg`, creativeTab: 'spawn_eggs' });
 // sugar cane item places the block
 {
   const sc = ITEMS.get('sugar_cane');

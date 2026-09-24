@@ -18,6 +18,8 @@ import { BANNER_ITEMS } from './itemlib/banners';
 import { SPAWN_EGG_TEXTURES } from './mobs';
 // (Stage 4: illagers)
 import { ILLAGER_ITEMS } from './itemlib/illagers';
+// (Stage 5: ocean)
+import { OCEAN_ITEMS } from './itemlib/ocean';
 
 export const ITEM_TEXTURES: Record<string, () => TexImage> = {
   ...SPAWN_EGG_TEXTURES,
@@ -34,4 +36,5 @@ export const ITEM_TEXTURES: Record<string, () => TexImage> = {
   ...SMITHING_ITEMS,
   ...BANNER_ITEMS,
   ...ILLAGER_ITEMS,
+  ...OCEAN_ITEMS,
 };
