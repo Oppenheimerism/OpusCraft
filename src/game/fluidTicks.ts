@@ -76,6 +76,9 @@ export class FluidTicker {
     }
     const b = BLOCKS[STATE_BLOCK[st]];
     if (b.name === 'ladder' || b.name.endsWith('_sign') || b.name.endsWith('_door')) return false;
+    // vanilla SimpleWaterloggedBlock.canPlaceLiquid: only water itself (a source) gets in, never a flow, and never
+    // lava, so rails, glow lichen and the like stand in the way of a flow rather than wash away
+    if (b.propIndex('waterlogged') >= 0) return false;
     // vanilla !blocksMotion(): a flower pot's little shape isn't "solid" (BlockStateBase.calculateSolid wants an
     // average size of 0.73 or a full height), so flowing water pops it off with its plant
     if (b.name === 'flower_pot' || b.name.startsWith('potted_')) return true;
