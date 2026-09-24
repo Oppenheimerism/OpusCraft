@@ -8,6 +8,7 @@ import { ContainerMenu, Slot, canItemQuickReplace, quickCraftPlaceCount, quickcr
 import { InventoryMenu, CraftingMenu, FurnaceMenu, ChestMenu } from '../../inventory/menus';
 import { ItemStack, ITEMS, RARITY_COLOR } from '../../item/item';
 import { enchantmentLine, tooltipOrder } from '../../item/enchantments';
+import { hoverText } from '../../item/hoverText';
 import { KEYS } from '../../game/input';
 import { RecipeBookComponent } from '../recipeBookComponent';
 import { MobEffectInstance, compareEffects, effectDisplayName, formatEffectDuration } from '../../entity/effects';
@@ -24,6 +25,7 @@ export function itemTooltip(s: ItemStack): string[] {
   const shot = s.tag?.charged?.[0];
   if (shot) lines.push(`§fProjectile: [${ITEMS.get(shot.id)?.name ?? shot.id}]`);
   if (it.lore) for (const l of it.lore) lines.push(`§7${l}`);
+  lines.push(...hoverText(s));
   // stored then held enchantments, each in #tooltip_order (ItemEnchantments.addToTooltip)
   for (const ench of [s.tag?.stored, s.tag?.enchantments])
     if (ench)

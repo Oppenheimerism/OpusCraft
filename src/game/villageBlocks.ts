@@ -19,6 +19,8 @@ import { ItemEntity } from '../entity/itemEntity';
 import type { Player } from '../entity/player';
 import { lookingDirections } from './blockRules';
 import type { Level } from './level';
+// (books' uses, tooltips and copying, loaded with the lectern that holds them)
+import './books';
 
 const blk = (st: number): Block => BLOCKS[STATE_BLOCK[st]];
 
@@ -436,7 +438,54 @@ export function lecternPageTurned(level: Level, x: number, y: number, z: number)
   if (STATE_BLOCK[st] !== lectern.id) return;
   lecternPowered(level, x, y, z, st, true);
   level.scheduleBlockTick(x, y, z, lectern.id, 2);
-  level.sound.play('item.book.page_turn', x + 0.5, y + 0.5, z + 0.5, 1, Math.random() * 0.1 + 0.9);
+  // (level event 1043)
+  level.sound.play('item.book.page_turn', x + 0.5, y + 0.5, z + 0.5, 1, 1);
+}
+
+/** vanilla LecternBlockEntity.getPageCount: a signed book's pages, or a book and quill's */
+export function bookPageCount(s: ItemStack | null): number {
+  return s?.tag?.book?.pages.length ?? s?.tag?.pages?.length ?? 0;
+}
+
+/** vanilla LecternBlockEntity.setPage: the book opened at a page (Mth.clamp to its pages); a new page signals */
+export function lecternSetPage(level: Level, be: LecternBlockEntity, page: number): void {
+  const last = bookPageCount(be.book) - 1;
+  const i = page < 0 ? 0 : Math.min(page, last);
+  if (i === be.page) return;
+  be.page = i;
+  be.container.changed();
+  lecternPageTurned(level, be.x, be.y, be.z);
+}
+
+/**
+ * vanilla LecternMenu's Take Book button (bookAccess.removeItemNoUpdate, onBookItemRemove → LecternBlock.resetBookState):
+ * the book comes off, the lectern shows none and stops powering
+ */
+export function lecternTakeBook(level: Level, be: LecternBlockEntity): ItemStack | null {
+  const s = be.book;
+  be.container.items[0] = null;
+  be.page = 0;
+  be.container.changed();
+  const st = level.getState(be.x, be.y, be.z);
+  if (STATE_BLOCK[st] === lectern.id) {
+    level.setBlock(be.x, be.y, be.z, lectern.with(lectern.with(st, 'powered', false), 'has_book', false));
+    level.updateNeighborsAt(be.x, be.y - 1, be.z, lectern.id);
+  }
+  return s;
+}
+
+/**
+ * vanilla LecternBlock.getAnalogOutputSignal (LecternBlockEntity.getRedstoneSignal): how far through its book the
+ * lectern is open, 1 on the first page to 15 on the last, 0 with no book. For a comparator (none in the game yet)
+ */
+export function lecternAnalogOutput(level: Level, x: number, y: number, z: number): number {
+  const st = level.getState(x, y, z);
+  if (STATE_BLOCK[st] !== lectern.id || !lectern.get(st, 'has_book')) return 0;
+  const be = level.world.getBlockEntity(x, y, z);
+  if (!(be instanceof LecternBlockEntity)) return 0;
+  const n = bookPageCount(be.book);
+  const f = n > 1 ? be.page / (n - 1) : 1;
+  return Math.floor(f * 14) + (be.book ? 1 : 0);
 }
 
 {

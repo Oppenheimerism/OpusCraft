@@ -204,8 +204,9 @@ reg({ id: 'warped_fungus_on_a_stick', maxStack: 1, creativeTab: 'tools', texture
 reg({ id: 'compass', creativeTab: 'tools', texture: 'compass' });
 reg({ id: 'clock', creativeTab: 'tools', texture: 'clock' });
 reg({ id: 'map', creativeTab: 'tools', texture: 'map' });
-// vanilla WritableBookItem: a lectern takes it (writing in it is still to come)
+// vanilla WritableBookItem and WrittenBookItem (screens in gui/screens/book, uses in game/books): a lectern takes either
 reg({ id: 'writable_book', name: 'Book and Quill', maxStack: 1, creativeTab: 'tools', texture: 'writable_book' });
+reg({ id: 'written_book', maxStack: 16, creativeTab: 'tools', texture: 'written_book', glint: true });
 reg({ id: 'bucket', maxStack: 16, creativeTab: 'tools', texture: 'bucket' });
 reg({ id: 'water_bucket', maxStack: 1, creativeTab: 'tools', texture: 'water_bucket' });
 reg({ id: 'lava_bucket', maxStack: 1, creativeTab: 'tools', texture: 'lava_bucket', fuel: 20000 });

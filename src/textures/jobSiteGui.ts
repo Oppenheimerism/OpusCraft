@@ -1,8 +1,9 @@
 // GUI sprites of the job sites' screens (vanilla container/stonecutter.png, smithing.png and the sprites in
 // gui/sprites/container/{stonecutter,smithing}): backgrounds at vanilla slot positions, the recipe buttons and
-// scrollers, and the smithing table's empty-slot icons (vanilla item/empty_slot_*).
+// scrollers, and the smithing table's empty-slot icons (vanilla item/empty_slot_*); and the book the lectern and
+// books open (vanilla gui/book.png and the widget/page_* arrows).
 
-import { TexImage, img, plot } from './tex';
+import { TexImage, img, plot, rect, mixC } from './tex';
 import { GUI_TEXTURES, panel, inset, slotAt, bigSlotAt, playerInventory, arrowMask, drawMask } from './gui';
 import { hammer } from './enchantingGui';
 
@@ -319,3 +320,43 @@ const SMITHING_SLOT_ICONS: Record<string, string[]> = {
   ],
 };
 for (const [name, rows] of Object.entries(SMITHING_SLOT_ICONS)) G[`slot_${name}`] = () => debossed(rows);
+
+// ---------------------------------------------------------------------------
+// Books
+
+/** 192x192: a leather-bound book open at one cream page (text at 36..150 × 32..158, arrows at y 159) */
+G['book'] = () => {
+  const t = img(192, 192);
+  // the cover
+  rect(t, 18, 1, 150, 180, 0x2b1606);
+  rect(t, 19, 2, 148, 178, 0x7a4a25);
+  rect(t, 19, 2, 148, 1, 0x9a6537);
+  rect(t, 19, 2, 1, 178, 0x8c5a2f);
+  rect(t, 19, 179, 148, 1, 0x4e2d14);
+  rect(t, 166, 2, 1, 178, 0x4e2d14);
+  // the page, darker where it goes into the binding
+  rect(t, 24, 6, 139, 171, 0xb8a988);
+  rect(t, 25, 7, 137, 169, 0xf2ead6);
+  for (let x = 0; x < 5; x++) rect(t, 25 + x, 7, 1, 169, mixC(0xc9bc9c, 0xf2ead6, x / 5));
+  rect(t, 25, 175, 137, 1, 0xe0d6bf);
+  rect(t, 161, 7, 1, 169, 0xe0d6bf);
+  return t;
+};
+
+/** a page-turning arrow, 23x13 (vanilla PageButton), pointing right unless mirrored */
+function pageArrow(forward: boolean, fill: number, edge: number): TexImage {
+  const t = img(23, 13);
+  const m = arrowMask(22, 13, 5);
+  const at = (x: number, y: number) => y >= 0 && y < 13 && x >= 0 && x < 22 && m[y][x];
+  for (let y = 0; y < 13; y++)
+    for (let x = 0; x < 22; x++) {
+      if (!at(x, y)) continue;
+      const border = !at(x - 1, y) || !at(x + 1, y) || !at(x, y - 1) || !at(x, y + 1);
+      plot(t, forward ? x : 22 - x, y, border ? edge : fill);
+    }
+  return t;
+}
+G['page_forward'] = () => pageArrow(true, 0xb89b72, 0x3a2412);
+G['page_forward_highlighted'] = () => pageArrow(true, 0xf0d48e, 0x3a2412);
+G['page_backward'] = () => pageArrow(false, 0xb89b72, 0x3a2412);
+G['page_backward_highlighted'] = () => pageArrow(false, 0xf0d48e, 0x3a2412);

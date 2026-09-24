@@ -9,6 +9,7 @@ import type { ChestBlockEntity, FurnaceBlockEntity } from '../world/blockEntity'
 import { hasBinding } from '../item/enchantHelper';
 import { equipSound } from '../item/equipment';
 import { applyDyes, dyeColorName, isDyeable } from '../item/dyedColor';
+import { customRecipeFor, type CustomRecipe } from './customRecipes';
 
 const ARMOR_ICONS = ['slot_boots', 'slot_leggings', 'slot_chestplate', 'slot_helmet'];
 const ARMOR_SLOT_OF: Record<string, number> = { feet: 0, legs: 1, chest: 2, head: 3 };
@@ -62,11 +63,13 @@ export class ResultSlot extends Slot {
   }
   override onTake(p: Player, _s: ItemStack): void {
     const c = this.craft;
+    // (a special recipe's own remainders: the book or banner copied from stays)
+    const rest = this.menu.custom?.remaining?.(c.items, this.menu.gridW) ?? null;
     this.menu.suppressUpdate = true;
     for (let i = 0; i < c.size; i++) {
       const s = c.items[i];
       if (!s) continue;
-      const rem = craftingRemainder(s);
+      const rem = rest ? rest[i] : craftingRemainder(s);
       s.count--;
       if (s.count <= 0) c.items[i] = null;
       if (rem) {
@@ -87,6 +90,8 @@ export class ResultSlot extends Slot {
 interface CraftingLike {
   suppressUpdate: boolean;
   slotsChanged(): void;
+  custom?: CustomRecipe | null;
+  gridW: number;
 }
 
 /**
@@ -115,6 +120,8 @@ export abstract class CraftingMenuBase extends ContainerMenu implements Crafting
   readonly result = new SimpleContainer(1);
   suppressUpdate = false;
   recipe: CraftingRecipe | null = null;
+  /** the special recipe (inventory/customRecipes) the result comes from */
+  custom: CustomRecipe | null = null;
   constructor(player: Player, readonly gridW: number) {
     super(player);
     this.craft = new SimpleContainer(gridW * gridW);
@@ -124,7 +131,9 @@ export abstract class CraftingMenuBase extends ContainerMenu implements Crafting
   }
   slotsChanged(): void {
     this.recipe = findRecipe(this.craft.items, this.gridW, this.gridW);
-    this.result.items[0] = this.recipe ? ItemStack.of(this.recipe.result, this.recipe.count) : armorDye(this.craft.items);
+    const special = this.recipe ? null : customRecipeFor(this.craft.items, this.gridW);
+    this.custom = special?.recipe ?? null;
+    this.result.items[0] = this.recipe ? ItemStack.of(this.recipe.result, this.recipe.count) : (armorDye(this.craft.items) ?? special?.result ?? null);
   }
   override canTakeItemForPickAll(_s: ItemStack | null, slot: Slot): boolean {
     return slot.container !== this.result;

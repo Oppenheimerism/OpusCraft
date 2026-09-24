@@ -82,7 +82,8 @@ export class StonecutterScreen extends AbstractContainerScreen<StonecutterMenu> 
         const i1 = l - this.startIndex;
         const d0 = mx - (i + (i1 % COLUMNS) * 16), d1 = my - (j + Math.floor(i1 / COLUMNS) * 18);
         if (d0 >= 0 && d1 >= 0 && d0 < 16 && d1 < 18 && this.menu.clickMenuButton(l)) {
-          this.game.sound.playUI('ui.stonecutter.select_recipe', 1, 1);
+          // (SimpleSoundInstance.forUI: a quarter volume)
+          this.game.sound.playUI('ui.stonecutter.select_recipe', 0.25, 1);
           return true;
         }
       }
