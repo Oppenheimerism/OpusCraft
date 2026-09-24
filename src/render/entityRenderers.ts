@@ -68,6 +68,7 @@ import { EnderDragonRenderer } from './enderDragonRenderer';
 import { RaiderRenderers, RAIDER_SHADOW_RADII } from './illagerRenderers';
 // (Stage 5: ocean)
 import { OceanRenderers, OCEAN_SHADOW_RADII } from './oceanRenderers';
+import { HorseRenderers, HORSE_SHADOW_RADII } from './horseRenderer';
 import { Guardian } from '../entity/guardian';
 import { EvokerFangs } from '../entity/evoker';
 import type { Bat } from '../entity/bat';
@@ -163,6 +164,8 @@ export class EntityRenderDispatcher {
   private readonly raiders: RaiderRenderers;
   /** (Stage 5: ocean) the guardians, their lasers, the elder's ghostly face */
   private readonly ocean: OceanRenderers;
+  /** (Stage 6: tameable animals) horses, donkeys and mules, their markings and armour */
+  private readonly horses: HorseRenderers;
 
   constructor(private readonly gl: GL, private readonly items: ItemRenderer, private readonly skin: WebGLTexture) {
     this.armor = new ArmorLayer(gl);
@@ -178,11 +181,14 @@ export class EntityRenderDispatcher {
       setupLiving: (e, dx, dy, dz, p, flip, scale) => this.setupLiving(e, dx, dy, dz, p, flip, scale),
       overlay: (b, e, white) => this.overlay(b, e, white),
       drawBody: (b, e, def, t, baby, extra) => this.drawBody(b, e, def, t, baby, extra),
+      drawModel: (b, def, baby, r, g, bl, a) => this.drawModel(b, def, baby, r, g, bl, a),
       state: (t, extra) => this.state(t, extra),
       attackAnim,
     });
     // (Stage 5: ocean) lent the same steps
     this.ocean = new OceanRenderers(gl, this.raiders.kit);
+    // (Stage 6: tameable animals) and again
+    this.horses = new HorseRenderers(this.raiders.kit);
     this.models = {
       pig: M.pigModel(),
       pig_saddle: M.pigModel(0.5),
@@ -469,6 +475,17 @@ export class EntityRenderDispatcher {
    * tick 1, full bright), from the screen's matrix `base`, at whatever angles the screen has given it; the camera
    * looks at it head on, so its flames face the screen
    */
+  /** an entity in a screen (the player in its inventory, a horse in its own), drawn as in the world */
+  renderInGui(b: EntityBatch, e: LivingEntity, base: Float32Array, opts: EntityRenderOptions): void {
+    if (e.type === 'player') return this.renderPlayerInGui(b, e as Player, base, opts);
+    if (!(e instanceof Mob)) return;
+    this.base = base;
+    b.lightB = b.lightS = 240;
+    this.renderMob(b, e, 0, 0, 0, 1);
+    this.base = null;
+    b.setOverlay(0, 0, 0, 0);
+  }
+
   renderPlayerInGui(b: EntityBatch, e: Player, base: Float32Array, opts: EntityRenderOptions): void {
     this.mainArm = opts.mainArm ?? 'right';
     this.skinParts = opts.skinParts ?? ALL_SKIN_PARTS;
@@ -583,6 +600,8 @@ export class EntityRenderDispatcher {
     if (this.raiders.render(b, e, dx, dy, dz, p)) return;
     // (Stage 5: ocean)
     if (this.ocean.render(b, e, dx, dy, dz, p)) return;
+    // (Stage 6: tameable animals)
+    if (this.horses.render(b, e, dx, dy, dz, p)) return;
     const type = e.type;
     const def = this.models[type];
     // (vanilla GhastRenderer.getTextureLocation: its face while charging a shot)
@@ -1533,7 +1552,8 @@ function shadowRadius(e: Entity): number {
   if (RAIDER_SHADOW_RADII[e.type] !== undefined) return RAIDER_SHADOW_RADII[e.type];
   // (Stage 5: ocean)
   if (OCEAN_SHADOW_RADII[e.type] !== undefined) return OCEAN_SHADOW_RADII[e.type];
-  let r = 0;
+  // (Stage 6: tameable animals; a foal's is half)
+  let r = HORSE_SHADOW_RADII[e.type] ?? 0;
   switch (e.type) {
     case 'pig':
     case 'cow':

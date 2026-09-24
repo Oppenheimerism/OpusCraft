@@ -32,6 +32,14 @@ export interface PlayerInput {
   sprint: boolean;
 }
 
+/** vanilla PlayerRideableJumping: a mount the player makes leap with a charged jump */
+export interface RideableJumping {
+  canJump(): boolean;
+  onPlayerJump(power: number): void;
+  handleStartJump(power: number): void;
+  jumpCooldown(): number;
+}
+
 export class Player extends LivingEntity {
   readonly type = 'player';
   gameMode: GameMode = 'survival';
@@ -46,6 +54,9 @@ export class Player extends LivingEntity {
   private jumpTriggerTime = 0;
   private wasForward = false;
   private wasJump = false;
+  /** vanilla LocalPlayer jumpRidingTicks and jumpRidingScale: how long jump's been held on a mount that leaps, and the charge */
+  jumpRidingTicks = 0;
+  jumpRidingScale = 0;
   /** view bobbing */
   bob = 0;
   bobO = 0;
@@ -512,9 +523,10 @@ export class Player extends LivingEntity {
     }
     if (this.sprinting && (fwd < 0.8 || (this.horizontalCollision && !this.flying) || !canSprint || this.crouching && !this.flying)) this.sprinting = false;
     this.wasForward = forwardDown;
-    // flying toggle: double-tap jump
+    this.rideJump(inp.jump);
+    // flying toggle: double-tap jump (not on a mount)
     if (this.jumpTriggerTime > 0) this.jumpTriggerTime--;
-    if (inp.jump && !this.wasJump && this.mayFly) {
+    if (inp.jump && !this.wasJump && this.mayFly && !this.vehicle) {
       if (this.jumpTriggerTime === 0) this.jumpTriggerTime = 7;
       else if (this.gameMode !== 'spectator') {
         this.flying = !this.flying;
@@ -532,6 +544,39 @@ export class Player extends LivingEntity {
     this.xxa = left;
     this.zza = fwd;
     this.jumping = inp.jump && !this.flying;
+  }
+
+  /** vanilla jumpableVehicle: the mount you're steering, if it leaps (a saddled horse) */
+  jumpableVehicle(): RideableJumping | null {
+    const v = this.vehicle as (Entity & Partial<RideableJumping>) | null;
+    return v && v.controllingPassenger() === this && v.onPlayerJump && v.canJump?.() ? (v as unknown as RideableJumping) : null;
+  }
+
+  /**
+   * vanilla LocalPlayer.aiStep's riding jump: on a mount that leaps, holding jump charges it (a tenth a tick, up to
+   * 0.9, then easing back to 0.8 the longer it's held) and letting go leaps with the charge; after that, a
+   * half-second pause before the next
+   */
+  private rideJump(jump: boolean): void {
+    const mount = this.jumpableVehicle();
+    if (!mount || mount.jumpCooldown() !== 0) {
+      this.jumpRidingScale = 0;
+      return;
+    }
+    if (this.jumpRidingTicks < 0 && ++this.jumpRidingTicks === 0) this.jumpRidingScale = 0;
+    if (this.wasJump && !jump) {
+      this.jumpRidingTicks = -10;
+      const power = Math.floor(this.jumpRidingScale * 100);
+      mount.onPlayerJump(power);
+      // (vanilla sendRidingJump: and the server starts the leap)
+      if (power > 0) mount.handleStartJump(power);
+    } else if (!this.wasJump && jump) {
+      this.jumpRidingTicks = 0;
+      this.jumpRidingScale = 0;
+    } else if (this.wasJump) {
+      this.jumpRidingTicks++;
+      this.jumpRidingScale = this.jumpRidingTicks < 10 ? this.jumpRidingTicks * 0.1 : 0.8 + (2 / (this.jumpRidingTicks - 9)) * 0.1;
+    }
   }
 
   override travel(sx: number, sy: number, sz: number): void {

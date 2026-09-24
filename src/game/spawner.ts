@@ -32,6 +32,7 @@ import { Silverfish } from '../entity/silverfish';
 import { Wolf, wolfSpawnRulesOk } from '../entity/wolf';
 import { Cat, catHooks } from '../entity/cat';
 import { Ocelot } from '../entity/ocelot';
+import { Horse, Donkey, Mule } from '../entity/horse';
 import { CatSpawner } from './catSpawner';
 import { IronGolem } from '../entity/ironGolem';
 import { ZombieVillager } from '../entity/zombieVillager';
@@ -90,6 +91,9 @@ export const MOB_TYPES: Record<string, (l: Level) => Mob> = {
   wolf: (l) => new Wolf(l),
   cat: (l) => new Cat(l),
   ocelot: (l) => new Ocelot(l),
+  horse: (l) => new Horse(l),
+  donkey: (l) => new Donkey(l),
+  mule: (l) => new Mule(l),
   ender_dragon: (l) => new EnderDragon(l),
 };
 
@@ -198,7 +202,7 @@ export function isChunkSaved(e: Entity): boolean {
 const ENTITY_NAMES: Record<string, string> = {
   pig: 'Pig', cow: 'Cow', sheep: 'Sheep', chicken: 'Chicken', zombie: 'Zombie', zombie_villager: 'Zombie Villager', skeleton: 'Skeleton', creeper: 'Creeper', spider: 'Spider',
   villager: 'Villager', iron_golem: 'Iron Golem', cave_spider: 'Cave Spider', enderman: 'Enderman', slime: 'Slime', magma_cube: 'Magma Cube', zombified_piglin: 'Zombified Piglin', ghast: 'Ghast', blaze: 'Blaze', wither_skeleton: 'Wither Skeleton', squid: 'Squid', bat: 'Bat', hoglin: 'Hoglin', zoglin: 'Zoglin', strider: 'Strider', piglin: 'Piglin',
-  witch: 'Witch', husk: 'Husk', stray: 'Stray', drowned: 'Drowned', silverfish: 'Silverfish', wolf: 'Wolf', cat: 'Cat', ocelot: 'Ocelot', fireball: 'Fireball', small_fireball: 'Small Fireball',
+  witch: 'Witch', husk: 'Husk', stray: 'Stray', drowned: 'Drowned', silverfish: 'Silverfish', wolf: 'Wolf', cat: 'Cat', ocelot: 'Ocelot', horse: 'Horse', donkey: 'Donkey', mule: 'Mule', fireball: 'Fireball', small_fireball: 'Small Fireball',
   arrow: 'Arrow', tnt: 'Primed TNT', lightning_bolt: 'Lightning Bolt', item: 'Item', experience_orb: 'Experience Orb', falling_block: 'Falling Block', player: 'Player',
   egg: 'Thrown Egg', snowball: 'Snowball', ender_pearl: 'Thrown Ender Pearl', potion: 'Potion', trident: 'Trident',
   minecart: 'Minecart', chest_minecart: 'Minecart with Chest', boat: 'Boat', chest_boat: 'Boat with Chest', end_crystal: 'End Crystal',
@@ -336,8 +340,19 @@ function settingsForLand(name: string): Omit<MobSettings, 'water' | 'ambient'> {
     case 'mushroom_fields':
     case 'deep_dark':
       return { creature: [], monster: [], creatureProbability: 0.1 };
+    // vanilla BiomeDefaultFeatures.plainsSpawns: herds of horses, and a few donkeys
     case 'plains':
     case 'sunflower_plains':
+      return { creature: [...farmAnimals(), S_('horse', 5, 2, 6), S_('donkey', 1, 1, 3)], monster: monsters(), creatureProbability: 0.1 };
+    // vanilla OverworldBiomes.savanna: a few horses and donkeys (and armadillos, not in the game yet: picked, and nothing comes)
+    case 'savanna':
+    case 'savanna_plateau':
+    case 'windswept_savanna':
+      return { creature: [...farmAnimals(), S_('horse', 1, 2, 6), S_('donkey', 1, 1, 1), S_('armadillo', 10, 2, 3)], monster: monsters(), creatureProbability: 0.1 };
+    // vanilla OverworldBiomes.meadowOrCherryGrove: donkeys (pigs in a cherry grove), rabbits (not yet: the same) and sheep
+    case 'meadow':
+    case 'cherry_grove':
+      return { creature: [S_(name === 'meadow' ? 'donkey' : 'pig', 1, 1, 2), S_('rabbit', 2, 2, 6), S_('sheep', 2, 2, 4)], monster: monsters(), creatureProbability: 0.1 };
     case 'forest':
     case 'flower_forest':
     case 'birch_forest':
@@ -353,11 +368,6 @@ function settingsForLand(name: string): Omit<MobSettings, 'water' | 'ambient'> {
     case 'windswept_gravelly_hills':
     case 'windswept_forest':
     case 'swamp':
-    case 'savanna':
-    case 'savanna_plateau':
-    case 'windswept_savanna':
-    case 'meadow':
-    case 'cherry_grove':
       return { creature: farmAnimals(), monster: monsters(), creatureProbability: 0.1 };
     case 'jungle':
     case 'sparse_jungle':
@@ -648,7 +658,10 @@ export class NaturalSpawner {
       case 'pig':
       case 'cow':
       case 'sheep':
-      case 'chicken': {
+      case 'chicken':
+      case 'horse':
+      case 'donkey':
+      case 'mule': {
         const below = BLOCKS[STATE_BLOCK[lvl.world.getState(x, y - 1, z)]].name;
         return below === 'grass_block' && lvl.rawBrightness(x, y, z, 0) > 8;
       }

@@ -15,6 +15,7 @@ import { MerchantScreen } from './merchant';
 import { WinScreen } from './winScreen';
 import { installJobSiteScreens } from './jobSites';
 import { installDispenserScreen } from './dispenser';
+import { installHorseScreen } from './horse';
 
 export function installScreens(game: Game): void {
   game.titleScreenFactory = () => new TitleScreen(game, false);
@@ -45,4 +46,5 @@ export function installScreens(game: Game): void {
   };
   installJobSiteScreens(game);
   installDispenserScreen(game);
+  installHorseScreen(game);
 }

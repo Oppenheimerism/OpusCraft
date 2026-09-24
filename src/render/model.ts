@@ -13,6 +13,8 @@ export interface Cube {
   u: number;
   v: number;
   inflate?: number;
+  /** vanilla CubeDeformation(growX, growY, growZ): each axis its own, in place of `inflate` (the texture keeps the box's size) */
+  grow?: [number, number, number];
   mirror?: boolean;
 }
 
@@ -100,9 +102,10 @@ export class ModelPart {
 /** vanilla ModelPart.Cube polygon construction → 6 faces × (4 × xyzuv + normal) */
 function bakeCube(c: Cube, texW: number, texH: number): Float32Array {
   const g = c.inflate ?? 0;
-  let x0 = c.x - g, y0 = c.y - g, z0 = c.z - g;
-  let x1 = c.x + c.w + g;
-  const y1 = c.y + c.h + g, z1 = c.z + c.d + g;
+  const [gx, gy, gz] = c.grow ?? [g, g, g];
+  let x0 = c.x - gx, y0 = c.y - gy, z0 = c.z - gz;
+  let x1 = c.x + c.w + gx;
+  const y1 = c.y + c.h + gy, z1 = c.z + c.d + gz;
   if (c.mirror) [x0, x1] = [x1, x0];
   const V = [
     [x0, y0, z0], [x1, y0, z0], [x1, y1, z0], [x0, y1, z0],

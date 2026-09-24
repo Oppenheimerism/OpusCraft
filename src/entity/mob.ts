@@ -113,6 +113,8 @@ export interface SpawnGroup {
   ageable?: { size: number; babyChance: number };
   /** vanilla Wolf.WolfPackData: the coat the pack shares */
   wolfVariant?: string;
+  /** vanilla Horse.HorseGroupData: the coat the herd shares */
+  horseColor?: string;
 }
 
 export abstract class Mob extends LivingEntity {
@@ -137,7 +139,7 @@ export abstract class Mob extends LivingEntity {
   followRange = 16;
   private baseAttackDamage = 2;
   attackKnockback = 0;
-  private baseMoveSpeed = 0.25;
+  protected baseMoveSpeed = 0.25;
   baseArmor = 0;
   kbResist = 0;
   aggressive = false;

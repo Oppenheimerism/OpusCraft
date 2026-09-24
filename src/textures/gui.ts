@@ -165,6 +165,24 @@ G['experience_bar_progress'] = () => {
 };
 
 // ===========================================================================
+// HUD: a mount's jump bar (vanilla hud/jump_bar_background, _cooldown and _progress), where the experience bar goes
+
+const bar = (fill: readonly number[]) => () => {
+  const t = img(182, 5);
+  for (let x = 0; x < 182; x++)
+    for (let y = 0; y < 5; y++) {
+      const edgeX = x === 0 || x === 181, edgeY = y === 0 || y === 4;
+      if (edgeX && edgeY) continue;
+      if (edgeX || edgeY) plot(t, x, y, BLACK);
+      else plot(t, x, y, fill[y - 1]);
+    }
+  return t;
+};
+G['jump_bar_background'] = bar([0x3b3f55, 0x2e3144, 0x252837]);
+G['jump_bar_cooldown'] = bar([0x6d5d63, 0x5a4b51, 0x4a3d42]);
+G['jump_bar_progress'] = bar([0xc8c0ff, 0x9f92ff, 0x7461e6]);
+
+// ===========================================================================
 // HUD: hearts (9x9)
 
 const HEART_OUTLINE = [

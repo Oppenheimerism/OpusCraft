@@ -310,6 +310,8 @@ export class Game {
           // vanilla isServerControlledInventory: in a chest boat the key opens its chest
           const v = this.player.vehicle;
           if (v instanceof ChestBoat) this.openEntityContainer(v);
+          // (vanilla HasCustomInventoryScreen: on a horse, its inventory, or nothing if it won't have you)
+          else if (v && 'openInventory' in v) (v as Entity & { openInventory(p: Player): void }).openInventory(this.player);
           else {
             if (this.inventoryScreenFactory) this.setScreen(this.inventoryScreenFactory());
             this.tutorial.onOpenInventory();
@@ -856,9 +858,9 @@ export class Game {
   }
 
   /** vanilla InventoryScreen.renderEntityInInventoryFollowsMouse */
-  renderEntityInInventory(g: GuiGraphics, x1: number, y1: number, x2: number, y2: number, scale: number, yOffset: number, mx: number, my: number): void {
+  renderEntityInInventory(g: GuiGraphics, x1: number, y1: number, x2: number, y2: number, scale: number, yOffset: number, mx: number, my: number, e: LivingEntity = this.player): void {
     this.guiEntity ??= new GuiEntityRenderer(this.gl, this.renderer.batch, this.renderer.entities);
-    const c = this.guiEntity.render(this.player, { shadows: false, drawPlayer: true, distanceScale: 1, skinParts: this.skinParts(), mainArm: this.opts.mainHand }, g.scale, x1, y1, x2, y2, scale, yOffset, mx, my);
+    const c = this.guiEntity.render(e, { shadows: false, drawPlayer: true, distanceScale: 1, skinParts: this.skinParts(), mainArm: this.opts.mainHand }, g.scale, x1, y1, x2, y2, scale, yOffset, mx, my);
     const ctx = g.ctx;
     ctx.save();
     ctx.imageSmoothingEnabled = false;
