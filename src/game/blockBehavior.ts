@@ -61,6 +61,8 @@ export interface BlockBehavior {
   getDirectSignal?(world: World, x: number, y: number, z: number, state: number, dir: Dir): number;
   /** vanilla useWithoutItem: true if it did something, 'consume' if the click is spent without the arm swinging */
   use?(level: Level, x: number, y: number, z: number, state: number, ctx: UseContext): boolean | 'consume';
+  /** vanilla attack: a survival player starts breaking the block (a dragon egg jumps away) */
+  attack?(level: Level, x: number, y: number, z: number, state: number, player: Player): void;
   /** vanilla useItemOn: `stack` (in ctx.hand) used on the block, before the block's own use and the item's */
   useItemOn?(level: Level, x: number, y: number, z: number, state: number, stack: ItemStack, ctx: UseContext): ItemUseResult;
   /** vanilla onProjectileHit: `projectile` struck the block */

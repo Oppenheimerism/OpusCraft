@@ -280,6 +280,7 @@ reg({ id: 'ender_eye', texture: 'ender_eye', creativeTab: 'tools' });
 // (vanilla CreativeModeTabs.COMBAT lists the end crystal after the totem and TNT)
 reg({ id: 'end_crystal', texture: 'end_crystal', creativeTab: 'combat', rarity: 'rare', glint: true });
 ITEMS.get('end_portal_frame')!.creativeTab = 'functional';
+Object.assign(ITEMS.get('dragon_egg')!, { rarity: 'epic', creativeTab: 'functional' });
 reg({ id: 'enchanted_book', texture: 'enchanted_book', maxStack: 1, rarity: 'uncommon', glint: true });
 for (const m of ['iron', 'golden', 'diamond']) reg({ id: `${m}_horse_armor`, texture: `${m}_horse_armor`, maxStack: 1, creativeTab: 'combat' });
 // vanilla 1.21 jukebox songs: disc name + "C418 - title" description

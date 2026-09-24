@@ -143,6 +143,8 @@ export class Interaction {
       return;
     }
     if (!this.destroying || !this.same(h)) {
+      // vanilla ServerPlayerGameMode.handleBlockBreakAction: the block hears the first blow (not in adventure mode)
+      if (p.gameMode === 'survival') behaviorOf(h.state)?.attack?.(this.level, h.x, h.y, h.z, h.state, p);
       const held = p.inventory.selectedItem?.item ?? null;
       const prog = destroyProgress(h.state, held, p.eyeFluid === FLUID_WATER, p.onGround, p.digSpeedEffectFactor(), miningEfficiency(p), submergedMiningSpeed(p));
       if (prog >= 1) {

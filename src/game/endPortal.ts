@@ -18,6 +18,7 @@ import type { ItemStack } from '../item/item';
 import { registerBehavior } from './blockBehavior';
 import { registerItemBehavior } from './itemBehavior';
 import { raycast } from './raycast';
+import './endBlocks';
 
 /** vanilla Block.UPDATE_CLIENTS (the frame and the portal blocks are set without telling the neighbours) */
 const UPDATE_CLIENTS = 2;

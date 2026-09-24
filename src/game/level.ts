@@ -486,7 +486,8 @@ export class Level {
       const st = this.world.getState(nx, ny, nz);
       const f = FLAGS[st];
       if (f & (F_WATER | F_LAVA) && BLOCKS[STATE_BLOCK[st]].s.fluid) this.scheduleTick(nx, ny, nz, fluidStateOf(st).type === 1 ? 5 : this.world.dim.ultraWarm ? 10 : 30);
-      else if (isGravityBlock(st)) this.scheduleTick(nx, ny, nz, 2);
+      // (vanilla FallingBlock.getDelayAfterPlace: 2, the dragon egg's 5)
+      else if (isGravityBlock(st)) this.scheduleTick(nx, ny, nz, BLOCKS[STATE_BLOCK[st]].name === 'dragon_egg' ? 5 : 2);
     }
   }
 
@@ -727,5 +728,5 @@ function fireId(): number {
 
 function isGravityBlock(st: number): boolean {
   const n = BLOCKS[STATE_BLOCK[st]].name;
-  return n === 'sand' || n === 'red_sand' || n === 'gravel' || n.endsWith('concrete_powder') || n.endsWith('anvil');
+  return n === 'sand' || n === 'red_sand' || n === 'gravel' || n.endsWith('concrete_powder') || n.endsWith('anvil') || n === 'dragon_egg';
 }
