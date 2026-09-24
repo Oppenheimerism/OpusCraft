@@ -51,6 +51,7 @@ import { MerchantMenu } from '../inventory/merchantMenu';
 import type { Villager } from '../entity/villager';
 import { hasVanishing } from '../item/enchantHelper';
 import { ChestBlockEntity, FurnaceBlockEntity, BarrelBlockEntity, BrewingStandBlockEntity } from '../world/blockEntity';
+import { catSittingOn } from '../entity/cat';
 import { useBed, findRespawn, BED_YROT, MSG, SleepHost } from './sleep';
 import { AmbientTicker } from './animateTick';
 import { ToastComponent, AdvancementToast, RecipeToast } from '../gui/toasts';
@@ -783,8 +784,8 @@ export class Game {
     } else if (kind === 'chest') {
       const be = this.world.getBlockEntity(x, y, z);
       if (!(be instanceof ChestBlockEntity)) return;
-      // a solid block above keeps the lid shut (vanilla ChestBlock.isChestBlockedAt)
-      if (FLAGS[this.world.getState(x, y + 1, z)] & F_OPAQUE) return;
+      // a solid block above keeps the lid shut, and so does a cat sitting on it (vanilla ChestBlock.isChestBlockedAt)
+      if (FLAGS[this.world.getState(x, y + 1, z)] & F_OPAQUE || catSittingOn(this.level, x, y, z)) return;
       be.unpackLoot();
       this.setScreen(this.containerScreenFactory(new ChestMenu(p, be)));
       if (be.openCount++ === 0) this.sound.play('block.chest.open', x + 0.5, y + 0.5, z + 0.5, 0.5, Math.random() * 0.1 + 0.9);

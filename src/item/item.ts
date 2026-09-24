@@ -302,6 +302,8 @@ Object.assign(ITEMS.get('experience_bottle')!, { rarity: 'uncommon', glint: true
 ITEMS.get('nautilus_shell')!.rarity = 'uncommon';
 // brewing ingredients (vanilla Items: the glistering melon, the fermented eye, the rabbit's foot and the rest)
 for (const id of ['fermented_spider_eye', 'glistering_melon_slice', 'rabbit_foot', 'phantom_membrane', 'turtle_scute', 'breeze_rod']) reg({ id, texture: id });
+// vanilla Items.RABBIT_HIDE (four make a piece of leather)
+reg({ id: 'rabbit_hide', texture: 'rabbit_hide' });
 // vanilla Items.DRAGON_BREATH: uncommon, 64 to a stack, and its bottle is left over when it's brewed
 reg({ id: 'dragon_breath', name: "Dragon's Breath", texture: 'dragon_breath', rarity: 'uncommon', remainder: 'glass_bottle' });
 // the End: vanilla EnderEyeItem, and EndCrystalItem (rare, with the enchantment glint); the portal frame is a functional block
@@ -337,7 +339,7 @@ reg({ id: 'potion', maxStack: 1, creativeTab: 'food', texture: 'potion' });
 reg({ id: 'splash_potion', maxStack: 1, creativeTab: 'food', texture: 'splash_potion' });
 reg({ id: 'lingering_potion', maxStack: 1, creativeTab: 'food', texture: 'lingering_potion' });
 // spawn eggs (creative tab order is alphabetical, like vanilla)
-for (const m of ['bat', 'blaze', 'cave_spider', 'chicken', 'cow', 'creeper', 'drowned', 'enderman', 'ghast', 'hoglin', 'husk', 'iron_golem', 'magma_cube', 'pig', 'piglin', 'sheep', 'silverfish', 'skeleton', 'slime', 'spider', 'squid', 'stray', 'strider', 'villager', 'witch', 'wither_skeleton', 'wolf', 'zoglin', 'zombie', 'zombie_villager', 'zombified_piglin']) {
+for (const m of ['bat', 'blaze', 'cat', 'cave_spider', 'chicken', 'cow', 'creeper', 'drowned', 'enderman', 'ghast', 'hoglin', 'husk', 'iron_golem', 'magma_cube', 'pig', 'piglin', 'sheep', 'silverfish', 'skeleton', 'slime', 'spider', 'squid', 'stray', 'strider', 'villager', 'witch', 'wither_skeleton', 'wolf', 'zoglin', 'zombie', 'zombie_villager', 'zombified_piglin']) {
   reg({ id: `${m}_spawn_egg`, texture: `${m}_spawn_egg`, creativeTab: 'spawn_eggs' });
 }
 // (Stage 4: illagers) the raiders' eggs and the ominous bottle (vanilla OminousBottleItem: uncommon; drinking it for

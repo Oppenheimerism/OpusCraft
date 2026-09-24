@@ -27,6 +27,8 @@ import { Husk, Stray } from '../entity/biomeMonsters';
 import { Drowned, isInWaterPositionOk, drownedNaturalSpawnRules } from '../entity/drowned';
 import { Silverfish } from '../entity/silverfish';
 import { Wolf, wolfSpawnRulesOk } from '../entity/wolf';
+import { Cat } from '../entity/cat';
+import { CatSpawner } from './catSpawner';
 import { IronGolem } from '../entity/ironGolem';
 import { ZombieVillager } from '../entity/zombieVillager';
 import { Zombie, ZombifiedPiglin, Skeleton, WitherSkeleton, Creeper, Spider, CaveSpider, Enderman, Slime, MagmaCube, Monster, validSpawnBlock } from '../entity/monsters';
@@ -78,6 +80,7 @@ export const MOB_TYPES: Record<string, (l: Level) => Mob> = {
   drowned: (l) => new Drowned(l),
   silverfish: (l) => new Silverfish(l),
   wolf: (l) => new Wolf(l),
+  cat: (l) => new Cat(l),
   ender_dragon: (l) => new EnderDragon(l),
 };
 
@@ -181,7 +184,7 @@ export function isChunkSaved(e: Entity): boolean {
 const ENTITY_NAMES: Record<string, string> = {
   pig: 'Pig', cow: 'Cow', sheep: 'Sheep', chicken: 'Chicken', zombie: 'Zombie', zombie_villager: 'Zombie Villager', skeleton: 'Skeleton', creeper: 'Creeper', spider: 'Spider',
   villager: 'Villager', iron_golem: 'Iron Golem', cave_spider: 'Cave Spider', enderman: 'Enderman', slime: 'Slime', magma_cube: 'Magma Cube', zombified_piglin: 'Zombified Piglin', ghast: 'Ghast', blaze: 'Blaze', wither_skeleton: 'Wither Skeleton', squid: 'Squid', bat: 'Bat', hoglin: 'Hoglin', zoglin: 'Zoglin', strider: 'Strider', piglin: 'Piglin',
-  witch: 'Witch', husk: 'Husk', stray: 'Stray', drowned: 'Drowned', silverfish: 'Silverfish', wolf: 'Wolf', fireball: 'Fireball', small_fireball: 'Small Fireball',
+  witch: 'Witch', husk: 'Husk', stray: 'Stray', drowned: 'Drowned', silverfish: 'Silverfish', wolf: 'Wolf', cat: 'Cat', fireball: 'Fireball', small_fireball: 'Small Fireball',
   arrow: 'Arrow', tnt: 'Primed TNT', lightning_bolt: 'Lightning Bolt', item: 'Item', experience_orb: 'Experience Orb', falling_block: 'Falling Block', player: 'Player',
   egg: 'Thrown Egg', snowball: 'Snowball', ender_pearl: 'Thrown Ender Pearl', potion: 'Potion', trident: 'Trident',
   minecart: 'Minecart', chest_minecart: 'Minecart with Chest', boat: 'Boat', chest_boat: 'Boat with Chest', end_crystal: 'End Crystal',
@@ -389,6 +392,8 @@ export class NaturalSpawner {
   spawnPos: [number, number, number] | null = null;
   /** (Stage 4: patrols) */
   readonly patrols = new PatrolSpawner();
+  /** vanilla CatSpawner */
+  readonly cats = new CatSpawner();
 
   constructor(readonly level: Level, readonly worldSeed: number) {}
 
@@ -415,6 +420,7 @@ export class NaturalSpawner {
     const spawnEnemies = lvl.difficulty !== 'peaceful';
     // (Stage 4: patrols) vanilla ServerLevel.tickCustomSpawners
     this.patrols.tick(lvl, spawnEnemies);
+    this.cats.tick(lvl);
     const pcx = Math.floor(p.x) >> 4, pcz = Math.floor(p.z) >> 4;
     const r = Math.min(8, lvl.simulationDistance);
     const chunks: [number, number][] = [];

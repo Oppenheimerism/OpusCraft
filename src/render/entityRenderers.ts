@@ -42,6 +42,10 @@ import { silverfishModel, animateSilverfish } from './silverfishModel';
 import '../textures/wolf';
 import { wolfModel, animateWolf } from './wolfModel';
 import { Wolf } from '../entity/wolf';
+import '../textures/cat';
+import { catModel, animateCat } from './catModel';
+import { Cat } from '../entity/cat';
+import { AABB } from '../core/aabb';
 import { DYE_DIFFUSE } from '../entity/animals';
 import { Witch } from '../entity/witch';
 import { villagerTexture, zombieVillagerTexture } from '../textures/villager';
@@ -203,6 +207,8 @@ export class EntityRenderDispatcher {
       drowned_outer: M.drownedModel(0.25),
       silverfish: silverfishModel(),
       wolf: wolfModel(),
+      cat: catModel(),
+      cat_collar: catModel(0.01),
     };
     // vanilla textures/misc/shadow.png: soft black disc
     const n = 32, data = new Uint8Array(n * n * 4);
@@ -483,6 +489,17 @@ export class EntityRenderDispatcher {
       pose.rotX(-90 - e.pitch);
       pose.rotY((e.tickCount + p) * -75);
     }
+    // vanilla CatRenderer.setupRotations: lying down, it rolls onto its side (a touch further over by a sleeper)
+    if (e instanceof Cat) {
+      const j = e.lieDown(p);
+      if (j > 0) {
+        pose.translate(0.4 * j, 0.15 * j, 0.1 * j);
+        pose.rotZ(90 * j);
+        const bx = Math.floor(e.x), by = Math.floor(e.y), bz = Math.floor(e.z);
+        const pl = e.level.player;
+        if (pl?.isSleeping() && pl.bb.intersects(new AABB(bx - 2, by - 2, bz - 2, bx + 3, by + 3, bz + 3))) pose.translate(0.15 * j, 0, 0);
+      }
+    }
     // vanilla DrownedRenderer.setupRotations: swimming, it leans into its look, about the middle of its body
     if (e.type === 'drowned') {
       const swim = e.swimAmountAt(p);
@@ -546,7 +563,7 @@ export class EntityRenderDispatcher {
     const def = this.models[type];
     // (vanilla GhastRenderer.getTextureLocation: its face while charging a shot)
     // (vanilla StriderRenderer.getTextureLocation: purple while it's cold)
-    const tex = e instanceof Villager ? this.villagerTex(e) : e instanceof ZombieVillager ? this.zombieVillagerTex(e) : this.tex(e instanceof Ghast && e.charging ? 'ghast_shooting' : e instanceof Strider && e.suffocating ? 'strider_cold' : e instanceof Wolf ? e.texture() : type);
+    const tex = e instanceof Villager ? this.villagerTex(e) : e instanceof ZombieVillager ? this.zombieVillagerTex(e) : this.tex(e instanceof Ghast && e.charging ? 'ghast_shooting' : e instanceof Strider && e.suffocating ? 'strider_cold' : e instanceof Wolf || e instanceof Cat ? e.texture() : type);
     if (!def || !tex) return;
     const baby = e.isBaby();
     let white = 0;
@@ -593,6 +610,8 @@ export class EntityRenderDispatcher {
     if (type === 'wither_skeleton') scale = (pose) => pose.scale(1.2, 1.2, 1.2);
     // vanilla StriderRenderer.scale: a baby is the whole model at half size
     if (type === 'strider' && baby) scale = (pose) => pose.scale(0.5, 0.5, 0.5);
+    // vanilla CatRenderer.scale
+    if (type === 'cat') scale = (pose) => pose.scale(0.8, 0.8, 0.8);
     // vanilla HuskRenderer.scale: 17/16
     if (type === 'husk') scale = (pose) => pose.scale(1.0625, 1.0625, 1.0625);
     // vanilla WitchRenderer.scale: 15/16
@@ -716,6 +735,14 @@ export class EntityRenderDispatcher {
         });
         break;
       }
+      case 'cat': {
+        const c = e as Cat;
+        animateCat(def.root, {
+          limbSwing: a.limbSwing, limbAmount: a.limbAmount, headYaw: a.headYaw, headPitch: a.headPitch,
+          crouching: c.crouching, sprinting: c.sprinting, sitting: c.inSittingPose, lieDown: c.lieDown(p), lieDownTail: c.lieDownTail(p), relaxStateOne: c.relaxStateOneAt(p),
+        });
+        break;
+      }
       case 'bat': {
         // vanilla AnimationState: seconds since each loop started (a tick is 50 ms)
         const bat = e as Bat;
@@ -761,6 +788,16 @@ export class EntityRenderDispatcher {
         const c = DYE_DIFFUSE[e.collarColor];
         b.begin(this.state(ct));
         this.drawModel(b, def, baby, ((c >> 16) & 255) / 255, ((c >> 8) & 255) / 255, (c & 255) / 255);
+      }
+    }
+    // vanilla CatCollarLayer: a tame cat's collar in its dye colour, on a hair-bigger copy of the model
+    if (e instanceof Cat && e.isTame() && !e.isInvisible()) {
+      const cm = this.models.cat_collar, ct = this.tex('cat_collar');
+      if (cm && ct) {
+        const c = DYE_DIFFUSE[e.collarColor];
+        copyPose(def.root, cm.root);
+        b.begin(this.state(ct));
+        this.drawModel(b, cm, baby, ((c >> 16) & 255) / 255, ((c >> 8) & 255) / 255, (c & 255) / 255);
       }
     }
     // vanilla SkeletonClothingLayer: the stray's rags over its bones, posed as they are
@@ -1488,6 +1525,9 @@ function shadowRadius(e: Entity): number {
     case 'hoglin':
     case 'zoglin':
       r = 0.7;
+      break;
+    case 'cat':
+      r = 0.4;
       break;
     case 'wolf':
     case 'strider':

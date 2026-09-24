@@ -246,9 +246,9 @@ export abstract class Mob extends LivingEntity {
     this.baseAttackDamage = v;
   }
 
-  /** MOVEMENT_SPEED attribute value: assign the base, read it with speed / slowness applied */
+  /** MOVEMENT_SPEED attribute value: assign the base, read it with speed / slowness (and a sprint's +30%) applied */
   get moveSpeedAttr(): number {
-    return Math.max(0, this.baseMoveSpeed * this.speedEffectFactor());
+    return Math.max(0, this.baseMoveSpeed * (this.sprinting ? 1.3 : 1) * this.speedEffectFactor());
   }
   set moveSpeedAttr(v: number) {
     this.baseMoveSpeed = v;

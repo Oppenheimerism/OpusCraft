@@ -202,6 +202,7 @@ shapeless('mushroom_stew', 1, 'brown_mushroom', 'red_mushroom', 'bowl');
 shapeless('sugar', 1, 'sugar_cane');
 shaped('paper', 3, ['###'], { '#': 'sugar_cane' });
 shapeless('book', 1, 'paper', 'paper', 'paper', 'leather');
+shaped('leather', 1, ['##', '##'], { '#': 'rabbit_hide' });
 
 // ---------------------------------------------------------------------------
 // Storage blocks and nuggets

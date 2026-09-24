@@ -101,6 +101,7 @@ const HOSTILE = [
 ];
 /** vanilla husbandry/whole_pack: one of each wolf variant */
 const WOLF_VARIANT_IDS = ['ashen', 'black', 'chestnut', 'pale', 'rusty', 'snowy', 'spotted', 'striped', 'woods'];
+const CAT_VARIANT_IDS = ['all_black', 'black', 'british_shorthair', 'calico', 'jellie', 'persian', 'ragdoll', 'red', 'siamese', 'tabby', 'white'];
 
 const BREEDABLE = [
   'horse', 'donkey', 'mule', 'sheep', 'cow', 'mooshroom', 'pig', 'chicken', 'wolf', 'ocelot', 'rabbit', 'llama', 'cat', 'turtle', 'fox',
@@ -276,7 +277,7 @@ const A: AdvancementDef[] = [
   { id: 'husbandry/bred_all_animals', parent: 'husbandry/breed_an_animal', title: 'Two by Two', description: 'Breed all the animals!', icon: 'golden_carrot', frame: 'challenge', criteria: each(BREEDABLE, (n) => ({ t: 'breed', type: n })) },
   { id: 'husbandry/allay_deliver_cake_to_note_block', parent: 'husbandry/allay_deliver_item_to_player', title: 'Birthday Song', description: 'Have an Allay drop a Cake at a Note Block', icon: 'note_block', frame: 'task', criteria: one(never) },
   { id: 'husbandry/whole_pack', parent: 'husbandry/tame_an_animal', title: 'The Whole Pack', description: 'Tame one of each Wolf variant', icon: 'bone', frame: 'challenge', criteria: each(WOLF_VARIANT_IDS, (v) => ({ t: 'tame', type: 'wolf', variant: v })) },
-  { id: 'husbandry/complete_catalogue', parent: 'husbandry/tame_an_animal', title: 'A Complete Catalogue', description: 'Tame all Cat variants!', icon: 'cod', frame: 'challenge', criteria: one(never) },
+  { id: 'husbandry/complete_catalogue', parent: 'husbandry/tame_an_animal', title: 'A Complete Catalogue', description: 'Tame all Cat variants!', icon: 'cod', frame: 'challenge', criteria: each(CAT_VARIANT_IDS, (v) => ({ t: 'tame', type: 'cat', variant: v })) },
   { id: 'husbandry/remove_wolf_armor', parent: 'husbandry/tame_an_animal', title: 'Shear Brilliance', description: 'Remove Wolf Armor from a Wolf using Shears', icon: 'shears', frame: 'task', criteria: one(never) },
   { id: 'husbandry/tactical_fishing', parent: 'husbandry/fishy_business', title: 'Tactical Fishing', description: 'Catch a Fish... without a Fishing Rod!', icon: 'pufferfish_bucket', frame: 'task', criteria: one(never) },
   { id: 'husbandry/leash_all_frog_variants', parent: 'husbandry/tadpole_in_a_bucket', title: 'When the Squad Hops into Town', description: 'Get each Frog variant on a Lead', icon: 'lead', frame: 'task', criteria: one(never) },
