@@ -9,14 +9,20 @@ import { LookControl, MoveControl, JumpControl, BodyRotationControl, eyeY } from
 import { PathNavigation } from './ai/navigation';
 import { PathType, DEFAULT_MALUS } from './ai/pathfinder';
 import { clipBlocks } from '../game/raycast';
-import { ItemStack, ITEMS, SavedStack, saveStack, loadStack } from '../item/item';
+import { ItemStack, ITEMS, SavedStack, saveStack, loadStack, blockForItem } from '../item/item';
+import type { Item } from '../item/item';
 import { ItemEntity } from './itemEntity';
 import { AABB } from '../core/aabb';
 import { Rand } from '../core/rng';
 import { BLOCKS, STATE_BLOCK, FLAGS, F_WATER } from '../world/block';
 import { FLUID_WATER } from '../world/fluids';
 import type { SavedEffect } from './effects';
-import { damageBonus, entityLevel, hasVanishing, levelOf, lootingBonus } from '../item/enchantHelper';
+import { damageBonus, entityLevel, hasBinding, hasVanishing, hurtAndBreak, levelOf, lootingBonus, enchantMobSpawnEquipment } from '../item/enchantHelper';
+import type { EquipSlot } from '../item/enchantHelper';
+import { ARMOR_SLOTS, armorIndex, equipableSlot, equipmentForSlot, equipmentSlotForItem, equipSound, isArmorSlot } from '../item/equipment';
+import type { ArmorSlot } from '../item/equipment';
+import { currentDifficultyAt } from '../game/difficulty';
+import type { DifficultyInstance } from '../game/difficulty';
 import { doPostAttackEffects } from '../game/enchantEffects';
 import { crossbowUseTick } from '../item/crossbow';
 
@@ -36,6 +42,16 @@ export interface SavedEntity {
   fire: number;
   persistent?: boolean;
   hand?: SavedStack | null;
+  /** vanilla HandDropChances[0] when it isn't the default */
+  handDrop?: number;
+  /** vanilla HandItems[1] and HandDropChances[1] */
+  offhand?: SavedStack | null;
+  offDrop?: number;
+  /** vanilla ArmorItems (feet, legs, chest, head) and ArmorDropChances */
+  armor?: (SavedStack | null)[];
+  armorDrop?: number[];
+  /** vanilla CanPickUpLoot */
+  loot?: boolean;
   data?: Record<string, number | string | boolean>;
   /** vanilla active_effects */
   effects?: SavedEffect[];
@@ -76,7 +92,14 @@ export interface LootEntry {
   lootingChance?: [number, number];
 }
 
-export type SpawnReason = 'natural' | 'chunk' | 'egg' | 'command' | 'breeding' | 'spawner' | 'jockey';
+export type SpawnReason = 'natural' | 'chunk' | 'egg' | 'command' | 'breeding' | 'spawner' | 'jockey' | 'structure';
+
+/** vanilla Mob.DEFAULT_EQUIPMENT_DROP_CHANCE; 2 (a sure drop, kept as it was) once it's something the mob picked up */
+export const DEFAULT_DROP_CHANCE = 0.085;
+/** vanilla EquipmentSlot order: the hands, then the armour from the feet up (drops and equipment go in this order) */
+export const EQUIPMENT_SLOTS: readonly EquipSlot[] = ['mainhand', 'offhand', 'feet', 'legs', 'chest', 'head'];
+/** vanilla DiggerItem: pickaxes, axes, shovels and hoes */
+const isDigger = (it: Item) => it.tool?.type === 'pickaxe' || it.tool?.type === 'axe' || it.tool?.type === 'shovel' || it.tool?.type === 'hoe';
 
 /** vanilla SpawnGroupData: what one spawn pack's members pass along to each other */
 export interface SpawnGroup {
@@ -108,7 +131,16 @@ export abstract class Mob extends LivingEntity {
   kbResist = 0;
   aggressive = false;
   mainHand: ItemStack | null = null;
-  handDropChance = 0.085;
+  handDropChance = DEFAULT_DROP_CHANCE;
+  /** vanilla handItems[OFFHAND] (a piglin's: the gold it admires) */
+  offHand: ItemStack | null = null;
+  offHandDropChance = DEFAULT_DROP_CHANCE;
+  /** vanilla armorItems: feet, legs, chest, head (the order of the player's inventory.armor) */
+  readonly armorItems: (ItemStack | null)[] = [null, null, null, null];
+  /** vanilla armorDropChances */
+  readonly armorDropChances: number[] = [DEFAULT_DROP_CHANCE, DEFAULT_DROP_CHANCE, DEFAULT_DROP_CHANCE, DEFAULT_DROP_CHANCE];
+  /** vanilla canPickUpLoot: walks over items and takes what it wants (zombies and skeletons at spawn, piglins always) */
+  canPickUpLoot = false;
   air = 300;
   usingItem = false;
   useItemTicks = 0;
@@ -220,8 +252,24 @@ export abstract class Mob extends LivingEntity {
   maxHeadYRot(): number {
     return 75;
   }
+  /** vanilla ARMOR attribute (at most 30): the base, and each worn piece's defense in its own slot */
   override armorValue(): number {
-    return this.baseArmor;
+    let v = this.baseArmor;
+    for (let i = 0; i < 4; i++) v += this.wornArmor(i)?.defense ?? 0;
+    return Math.floor(Math.min(30, v));
+  }
+
+  /** vanilla ARMOR_TOUGHNESS attribute (at most 20) */
+  override armorToughness(): number {
+    let v = 0;
+    for (let i = 0; i < 4; i++) v += this.wornArmor(i)?.toughness ?? 0;
+    return Math.min(20, v);
+  }
+
+  /** the armour item in slot i, when it's one for that slot (vanilla ArmorItem modifiers are slot-bound) */
+  private wornArmor(i: number): Item['armor'] | null {
+    const a = this.armorItems[i]?.item.armor;
+    return a && a.slot === ARMOR_SLOTS[i] ? a : null;
   }
   override knockbackResistance(): number {
     return this.kbResist;
@@ -321,6 +369,14 @@ export abstract class Mob extends LivingEntity {
       // vanilla LivingEntity.updateUsingItem → CrossbowItem.onUseTick: a mob drawing a crossbow makes the loading sounds too
       if (this.mainHand?.item.id === 'crossbow') crossbowUseTick(this.level, this, this.mainHand, this.useItemTicks);
       this.useItemTicks++;
+    }
+    // vanilla Mob.aiStep "looting": the items it wants within a block round it (getPickupReach: not above or below)
+    if (this.canPickUpLoot && this.isAlive && !this.dead && this.level.gameRules.mobGriefing) {
+      for (const e of this.level.getEntities(this.bb.inflate(1, 0, 1), (e) => e instanceof ItemEntity)) {
+        const it = e as ItemEntity;
+        if (it.removed || it.stack.count <= 0 || it.pickupDelay > 0 || !this.wantsToPickUp(it.stack)) continue;
+        this.pickUpItem(it);
+      }
     }
   }
 
@@ -442,6 +498,253 @@ export abstract class Mob extends LivingEntity {
     this.useItemTicks = 0;
   }
 
+  // --- equipment (vanilla Mob hand and armour items, drop chances, item pickup) ---------------------------
+
+  getItemBySlot(slot: EquipSlot): ItemStack | null {
+    if (slot === 'mainhand') return this.mainHand;
+    if (slot === 'offhand') return this.offHand;
+    return this.armorItems[armorIndex(slot)];
+  }
+
+  /** vanilla Mob.setItemSlot (→ LivingEntity.onEquipItem) */
+  setItemSlot(slot: EquipSlot, s: ItemStack | null): void {
+    const stack = s && s.count > 0 ? s : null;
+    const old = this.getItemBySlot(slot);
+    if (slot === 'mainhand') this.mainHand = stack;
+    else if (slot === 'offhand') this.offHand = stack;
+    else this.armorItems[armorIndex(slot)] = stack;
+    this.onEquipItem(slot, old, stack);
+  }
+
+  /**
+   * vanilla LivingEntity.onEquipItem: something put on in its own slot plays its equip sound, unless it's the very
+   * same stack (enchanting spawn equipment) or the mob hasn't ticked yet (vanilla firstTick: spawning, loading)
+   */
+  protected onEquipItem(slot: EquipSlot, old: ItemStack | null, cur: ItemStack | null): void {
+    if (!cur || (old && old.sameItem(cur)) || this.tickCount === 0) return;
+    if (equipableSlot(cur.item) !== slot) return;
+    const snd = equipSound(cur.item);
+    if (snd) this.playSound(snd, 1, 1);
+  }
+
+  /** vanilla getEquipmentDropChance */
+  equipmentDropChance(slot: EquipSlot): number {
+    if (slot === 'mainhand') return this.handDropChance;
+    if (slot === 'offhand') return this.offHandDropChance;
+    return this.armorDropChances[armorIndex(slot)];
+  }
+
+  /** vanilla setDropChance */
+  setDropChance(slot: EquipSlot, f: number): void {
+    if (slot === 'mainhand') this.handDropChance = f;
+    else if (slot === 'offhand') this.offHandDropChance = f;
+    else this.armorDropChances[armorIndex(slot)] = f;
+  }
+
+  /** vanilla setGuaranteedDrop: drops for sure, and as it is (no wear rolled on) */
+  setGuaranteedDrop(slot: EquipSlot): void {
+    this.setDropChance(slot, 2);
+  }
+
+  /** vanilla setItemSlotAndDropWhenKilled: what a mob took for itself it keeps, drops, and stays around for */
+  setItemSlotAndDropWhenKilled(slot: EquipSlot, s: ItemStack): void {
+    this.setItemSlot(slot, s);
+    this.setGuaranteedDrop(slot);
+    this.persistenceRequired = true;
+  }
+
+  /** vanilla Mob.wantsToPickUp */
+  wantsToPickUp(s: ItemStack): boolean {
+    return this.canHoldItem(s);
+  }
+
+  /** vanilla Mob.canHoldItem */
+  canHoldItem(_s: ItemStack): boolean {
+    return true;
+  }
+
+  /** vanilla Mob.pickUpItem: as much of the stack as went on (all of it into a hand, one piece of armour) */
+  protected pickUpItem(it: ItemEntity): void {
+    const src = it.stack;
+    const got = this.equipItemIfPossible(src.copy());
+    if (!got) return;
+    this.onItemPickup(it);
+    this.take(it);
+    src.count -= got.count;
+    if (src.count <= 0) it.remove();
+  }
+
+  /** vanilla Mob.onItemPickup: thrown_item_picked_up_by_entity for the player who threw it */
+  protected onItemPickup(it: ItemEntity): void {
+    if (it.thrower?.type === 'player') this.level.onThrownItemPickedUp?.(it.stack, this);
+  }
+
+  /** vanilla LivingEntity.take: the pop the client plays for any pickup */
+  protected take(it: ItemEntity): void {
+    const r = this.random;
+    this.level.sound.play('entity.item.pickup', it.x, it.y, it.z, 0.2, ((r.nextFloat() - r.nextFloat()) * 0.7 + 1) * 2);
+  }
+
+  /**
+   * vanilla Mob.equipItemIfPossible: into the item's own slot if it beats what's there (armour it won't swap goes to
+   * an empty hand instead); what it had drops as it would on death (always, if it picked that up itself) and the
+   * new item is kept for good. Returns what went on, or null
+   */
+  equipItemIfPossible(stack: ItemStack): ItemStack | null {
+    let slot = equipmentSlotForItem(stack.item);
+    let cur = this.getItemBySlot(slot);
+    let ok = this.canReplaceCurrentItem(stack, cur);
+    if (isArmorSlot(slot) && !ok) {
+      slot = 'mainhand';
+      cur = this.getItemBySlot(slot);
+      ok = !cur;
+    }
+    if (!ok || !this.canHoldItem(stack)) return null;
+    if (cur && Math.max(this.random.nextFloat() - 0.1, 0) < this.equipmentDropChance(slot)) this.spawnAtLocation(cur);
+    // (vanilla EquipmentSlot.limit: an armour slot holds one)
+    const put = isArmorSlot(slot) ? stack.split(1) : stack;
+    this.setItemSlotAndDropWhenKilled(slot, put);
+    return put;
+  }
+
+  /**
+   * vanilla Mob.canReplaceCurrentItem: anything beats nothing; a sword beats what isn't one, else the harder
+   * hitting one wins; a bow or crossbow only replaces its own kind; armour goes by defense, then toughness (never
+   * over a piece with curse of binding); a digging tool beats a block, else the harder hitting tool. Ties go to
+   * canReplaceEqualItem
+   */
+  canReplaceCurrentItem(s: ItemStack, cur: ItemStack | null): boolean {
+    if (!cur) return true;
+    const a = s.item, b = cur.item;
+    const sword = (it: Item) => it.tool?.type === 'sword';
+    // (vanilla getApproximateAttackDamageWithItem: the same base plus each item's modifier, so the items' damage decides)
+    const harder = () => (a.attackDamage !== b.attackDamage ? a.attackDamage > b.attackDamage : this.canReplaceEqualItem(s, cur));
+    if (sword(a)) return !sword(b) || harder();
+    if ((a.id === 'bow' && b.id === 'bow') || (a.id === 'crossbow' && b.id === 'crossbow')) return this.canReplaceEqualItem(s, cur);
+    if (a.armor) {
+      if (hasBinding(cur)) return false;
+      if (!b.armor) return true;
+      if (a.armor.defense !== b.armor.defense) return a.armor.defense > b.armor.defense;
+      return a.armor.toughness !== b.armor.toughness ? a.armor.toughness > b.armor.toughness : this.canReplaceEqualItem(s, cur);
+    }
+    if (isDigger(a)) {
+      // (vanilla BlockItem: seeds and the like are block items too)
+      if (blockForItem(b)) return true;
+      if (isDigger(b)) return harder();
+    }
+    return false;
+  }
+
+  /** vanilla Mob.canReplaceEqualItem: less worn, or carrying data (enchantments, a name, a colour) where the other has none */
+  canReplaceEqualItem(s: ItemStack, cur: ItemStack): boolean {
+    if (s.damage < cur.damage) return true;
+    const extra = (x: ItemStack) => !!x.tag && Object.keys(x.tag).length > 0;
+    return extra(s) && !extra(cur);
+  }
+
+  /** vanilla LivingEntity.breakItem (onEquippedItemBroken's entity event): the item's snap, heard from the mob */
+  breakItem(_s: ItemStack): void {
+    this.level.sound.play('entity.item.break', this.x, this.y, this.z, 0.8, 0.8 + Math.random() * 0.4);
+  }
+
+  /** wear an armour slot (0 feet .. 3 head) with unbreaking (vanilla ItemStack.hurtAndBreak: thorns' own wear) */
+  damageArmorSlot(i: number, amount: number): void {
+    const s = this.armorItems[i];
+    if (!s?.item.maxDamage) return;
+    if (hurtAndBreak(s, amount, false, () => this.random.nextFloat())) {
+      this.breakItem(s);
+      this.armorItems[i] = null;
+    }
+  }
+
+  /**
+   * vanilla LivingEntity.hurt with #damages_helmet: whatever is on the head takes a quarter off the hit (without
+   * wearing: only the player overrides hurtHelmet)
+   */
+  protected override hurtHelmet(_amount: number): boolean {
+    return !!this.armorItems[3];
+  }
+
+  /**
+   * vanilla Zombie / AbstractSkeleton.aiStep: a sun-burning tick sets the mob alight, unless something is on its
+   * head; a helmet takes 0-1 damage instead (straight onto its damage: unbreaking doesn't help) and breaks worn out
+   */
+  protected burnInSunUnlessHelmeted(): void {
+    if (!this.isSunBurnTick()) return;
+    const head = this.armorItems[3];
+    if (!head) {
+      this.igniteForSeconds(8);
+      return;
+    }
+    if (!head.item.maxDamage) return;
+    head.damage += this.random.nextInt(2);
+    if (head.damage >= head.item.maxDamage) {
+      this.breakItem(head);
+      this.setItemSlot('head', null);
+    }
+  }
+
+  /**
+   * vanilla Mob.populateDefaultEquipmentSlots: with chance 0.15 × the special multiplier, a suit of one tier
+   * (0-1, raised by up to three 9.5% rolls: leather, gold, chain, iron, diamond) from the feet up, each piece after
+   * the first ending the suit with chance 0.1 on hard (0.25 otherwise); only empty slots are filled
+   */
+  protected populateDefaultEquipmentSlots(d: DifficultyInstance): void {
+    const r = this.random;
+    if (r.nextFloat() >= Math.fround(0.15 * d.specialMultiplier())) return;
+    let tier = r.nextInt(2);
+    const stop = this.level.difficulty === 'hard' ? 0.1 : 0.25;
+    if (r.nextFloat() < 0.095) tier++;
+    if (r.nextFloat() < 0.095) tier++;
+    if (r.nextFloat() < 0.095) tier++;
+    let first = true;
+    for (const slot of ARMOR_SLOTS) {
+      const cur = this.getItemBySlot(slot);
+      if (!first && r.nextFloat() < stop) break;
+      first = false;
+      if (cur) continue;
+      const id = equipmentForSlot(slot, tier);
+      const it = id ? ITEMS.get(id) : undefined;
+      if (it) this.setItemSlot(slot, new ItemStack(it));
+    }
+  }
+
+  /** vanilla Mob.populateDefaultEquipmentEnchantments: the weapon with chance 0.25 × special, each armour piece 0.5 × */
+  protected populateDefaultEquipmentEnchantments(d: DifficultyInstance): void {
+    this.enchantSpawnedWeapon(d);
+    for (const slot of ARMOR_SLOTS) this.enchantSpawnedArmor(slot, d);
+  }
+
+  protected enchantSpawnedWeapon(d: DifficultyInstance): void {
+    this.enchantSpawnedEquipment('mainhand', 0.25, d);
+  }
+
+  protected enchantSpawnedArmor(slot: ArmorSlot, d: DifficultyInstance): void {
+    this.enchantSpawnedEquipment(slot, 0.5, d);
+  }
+
+  /** vanilla Mob.enchantSpawnedEquipment → EnchantmentHelper.enchantItemFromProvider(MOB_SPAWN_EQUIPMENT) */
+  private enchantSpawnedEquipment(slot: EquipSlot, chance: number, d: DifficultyInstance): void {
+    const s = this.getItemBySlot(slot);
+    if (!s || this.random.nextFloat() >= Math.fround(chance * d.specialMultiplier())) return;
+    enchantMobSpawnEquipment(s, d.specialMultiplier(), this.random);
+    this.setItemSlot(slot, s);
+  }
+
+  /**
+   * vanilla Zombie / AbstractSkeleton.finalizeSpawn: on Halloween (31 October, by the computer's clock) a quarter
+   * come with a carved pumpkin on the head (a tenth of those a jack o'lantern), which never drops
+   */
+  protected maybeHalloweenPumpkin(): void {
+    if (this.armorItems[3]) return;
+    const now = new Date();
+    if (now.getMonth() !== 9 || now.getDate() !== 31 || this.random.nextFloat() >= 0.25) return;
+    const it = ITEMS.get(this.random.nextFloat() < 0.1 ? 'jack_o_lantern' : 'carved_pumpkin');
+    if (!it) return;
+    this.setItemSlot('head', new ItemStack(it));
+    this.armorDropChances[3] = 0;
+  }
+
   // --- sounds ---------------------------------------------------------------
 
   ambientSoundInterval(): number {
@@ -510,10 +813,16 @@ export abstract class Mob extends LivingEntity {
     return [];
   }
 
-  /** vanilla getExperienceReward: base + 1-3 per equipped item */
+  /**
+   * vanilla Mob.getBaseExperienceReward: base + 1-3 for each piece of equipment still on it (what dropped doesn't
+   * count) that it didn't pick up itself (drop chance up to 1), the armour first
+   */
   experienceReward(): number {
     let i = this.xpReward;
-    if (i > 0 && this.mainHand) i += 1 + this.random.nextInt(3);
+    if (i <= 0) return i;
+    for (let j = 0; j < 4; j++) if (this.armorItems[j] && this.armorDropChances[j] <= 1) i += 1 + this.random.nextInt(3);
+    if (this.mainHand && this.handDropChance <= 1) i += 1 + this.random.nextInt(3);
+    if (this.offHand && this.offHandDropChance <= 1) i += 1 + this.random.nextInt(3);
     return i;
   }
 
@@ -526,17 +835,29 @@ export abstract class Mob extends LivingEntity {
     const looting = attacker instanceof LivingEntity ? entityLevel(attacker, 'looting') : 0;
     if (this.level.gameRules.doMobLoot) {
       this.dropLoot(byPlayer, looting);
-      // vanilla dropCustomDeathLoot: looting's equipment_drops (+1% per level, player kills only); curse of
-      // vanishing items never drop
-      const chance = this.handDropChance + (attacker?.type === 'player' ? 0.01 * looting : 0);
-      if (this.mainHand && !hasVanishing(this.mainHand) && this.random.nextFloat() < chance) {
-        const s = this.mainHand;
-        // (a guaranteed drop, something it picked up, comes back as it was)
-        if (s.item.maxDamage && chance <= 1) s.damage = s.item.maxDamage - 1 - this.random.nextInt(Math.max(1, s.item.maxDamage - 3));
-        this.spawnAtLocation(s);
-        this.mainHand = null;
-      }
+      this.dropCustomDeathLoot(attacker, byPlayer, looting);
       if (byPlayer) this.level.awardExperience?.(this.x, this.y, this.z, this.experienceReward());
+    }
+  }
+
+  /**
+   * vanilla Mob.dropCustomDeathLoot: each slot's item with its drop chance, the hands first, then the armour from
+   * the feet up. A sure drop (chance over 1: something it picked up) falls as it was, the rest only when a player
+   * hit it lately, and heavily worn; looting's equipment_drops adds 1% a level on a player's kill. A chance of 0 (a
+   * Halloween pumpkin) never drops, nor does anything with curse of vanishing
+   */
+  protected dropCustomDeathLoot(attacker: Entity | null, recentlyHit: boolean, looting: number): void {
+    for (const slot of EQUIPMENT_SLOTS) {
+      let f = this.equipmentDropChance(slot);
+      if (f === 0) continue;
+      const guaranteed = f > 1;
+      if (attacker?.type === 'player') f += 0.01 * looting;
+      const s = this.getItemBySlot(slot);
+      if (!s || hasVanishing(s) || !(recentlyHit || guaranteed) || this.random.nextFloat() >= f) continue;
+      const max = s.item.maxDamage;
+      if (!guaranteed && max > 0) s.damage = max - this.random.nextInt(1 + this.random.nextInt(Math.max(max - 3, 1)));
+      this.spawnAtLocation(s);
+      this.setItemSlot(slot, null);
     }
   }
 
@@ -580,6 +901,11 @@ export abstract class Mob extends LivingEntity {
   /** random per-spawn setup (sheep color, baby zombies...); `group` is shared by one spawn pack */
   finalizeSpawn(_reason: SpawnReason, _group?: SpawnGroup): void {}
 
+  /** the DifficultyInstance vanilla hands finalizeSpawn: Level.getCurrentDifficultyAt(the mob's block) */
+  protected spawnDifficulty(): DifficultyInstance {
+    return currentDifficultyAt(this.level, this.x, this.y, this.z);
+  }
+
   /** vanilla Mob.checkSpawnRules: walk target value must be non-negative */
   checkSpawnRules(): boolean {
     return this.walkTargetValue(Math.floor(this.x), Math.floor(this.y), Math.floor(this.z)) >= 0;
@@ -607,6 +933,12 @@ export abstract class Mob extends LivingEntity {
       fire: this.remainingFireTicks,
       persistent: this.persistenceRequired || undefined,
       hand: this.mainHand ? saveStack(this.mainHand) : null,
+      handDrop: this.handDropChance !== DEFAULT_DROP_CHANCE ? this.handDropChance : undefined,
+      offhand: this.offHand ? saveStack(this.offHand) : undefined,
+      offDrop: this.offHandDropChance !== DEFAULT_DROP_CHANCE ? this.offHandDropChance : undefined,
+      armor: this.armorItems.some((a) => a) ? this.armorItems.map((a) => (a ? saveStack(a) : null)) : undefined,
+      armorDrop: this.armorDropChances.some((f) => f !== DEFAULT_DROP_CHANCE) ? [...this.armorDropChances] : undefined,
+      loot: this.canPickUpLoot,
       data: this.saveData(),
       effects: this.activeEffects.size ? this.saveEffects() : undefined,
     };
@@ -622,7 +954,17 @@ export abstract class Mob extends LivingEntity {
     this.health = d.health;
     this.remainingFireTicks = d.fire;
     this.persistenceRequired = !!d.persistent;
+    // (straight into the slots: nothing plays on loading)
     this.mainHand = loadStack(d.hand);
+    if (typeof d.handDrop === 'number') this.handDropChance = d.handDrop;
+    this.offHand = loadStack(d.offhand);
+    if (typeof d.offDrop === 'number') this.offHandDropChance = d.offDrop;
+    for (let i = 0; i < 4; i++) {
+      this.armorItems[i] = loadStack(d.armor?.[i]);
+      this.armorDropChances[i] = d.armorDrop?.[i] ?? DEFAULT_DROP_CHANCE;
+    }
+    // (vanilla reads CanPickUpLoot only when it's there: older saves keep the mob's own default)
+    if (typeof d.loot === 'boolean') this.canPickUpLoot = d.loot;
     if (d.data) this.loadData(d.data);
   }
 

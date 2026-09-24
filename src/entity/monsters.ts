@@ -2,7 +2,10 @@
 // their combat goals.
 
 import { Mob, LootEntry, MobCategory } from './mob';
+import type { SpawnReason } from './mob';
 import type { Level } from '../game/level';
+import type { DifficultyInstance } from '../game/difficulty';
+import type { EquipSlot } from '../item/enchantHelper';
 import { Goal, Flag } from './ai/goal';
 import {
   FloatGoal, WaterAvoidingRandomStrollGoal, LookAtPlayerGoal, RandomLookAroundGoal, MeleeAttackGoal,
@@ -156,17 +159,29 @@ export class Zombie extends Monster {
   override vehicleAttachmentY(): number {
     return this.baby ? 0.35 : 0.7;
   }
+  /**
+   * vanilla Zombie.getBaseExperienceReward: a baby's base reward is made 2.5 times (as vanilla does it, on the field)
+   * before the equipment's is added
+   */
   override experienceReward(): number {
-    const x = super.experienceReward();
-    return this.baby ? Math.floor(x * 2.5) : x;
+    if (this.baby) this.xpReward = Math.trunc(this.xpReward * 2.5);
+    return super.experienceReward();
   }
   /** vanilla Zombie.isSunSensitive */
   protected isSunSensitive(): boolean {
     return true;
   }
   override aiStep(): void {
-    if (this.isAlive && this.isSunSensitive() && this.isSunBurnTick()) this.igniteForSeconds(8);
+    if (this.isAlive && this.isSunSensitive()) this.burnInSunUnlessHelmeted();
     super.aiStep();
+  }
+  /** vanilla Zombie.canHoldItem: a baby riding something leaves eggs be */
+  override canHoldItem(s: ItemStack): boolean {
+    return s.item.id === 'egg' && this.baby && !!this.vehicle ? false : super.canHoldItem(s);
+  }
+  /** vanilla Zombie.wantsToPickUp: not glow ink sacs */
+  override wantsToPickUp(s: ItemStack): boolean {
+    return s.item.id === 'glow_ink_sac' ? false : super.wantsToPickUp(s);
   }
   override doHurtTarget(target: Entity): boolean {
     const ok = super.doHurtTarget(target);
@@ -176,12 +191,25 @@ export class Zombie extends Monster {
     }
     return ok;
   }
-  override finalizeSpawn(): void {
+  /**
+   * vanilla Zombie.finalizeSpawn: picks up loot with chance 0.55 × the special multiplier, one in twenty is a baby,
+   * then the armour and weapon, their enchantments and the Halloween pumpkin (no leader zombies, knockback or
+   * follow range bonuses, door breaking or chicken jockeys here)
+   */
+  override finalizeSpawn(_reason?: SpawnReason): void {
+    const d = this.spawnDifficulty();
+    this.canPickUpLoot = this.random.nextFloat() < Math.fround(0.55 * d.specialMultiplier());
     if (this.random.nextFloat() < 0.05) this.setBaby(true);
-    const hard = this.level.difficulty === 'hard';
-    if (this.random.nextFloat() < (hard ? 0.05 : 0.01)) {
+    this.populateDefaultEquipmentSlots(d);
+    this.populateDefaultEquipmentEnchantments(d);
+    this.maybeHalloweenPumpkin();
+  }
+  /** vanilla Zombie.populateDefaultEquipmentSlots: the armour roll, then an iron sword or shovel 1% (hard: 5%) of the time */
+  protected override populateDefaultEquipmentSlots(d: DifficultyInstance): void {
+    super.populateDefaultEquipmentSlots(d);
+    if (this.random.nextFloat() < (this.level.difficulty === 'hard' ? 0.05 : 0.01)) {
       const it = ITEMS.get(this.random.nextInt(3) === 0 ? 'iron_sword' : 'iron_shovel');
-      if (it) this.mainHand = new ItemStack(it, 1);
+      if (it) this.setItemSlot('mainhand', new ItemStack(it, 1));
     }
   }
   override ambientSound(): string {
@@ -336,11 +364,14 @@ export class ZombifiedPiglin extends Zombie {
     if (this.isAngry()) this.lastHurtByPlayerTime = Math.max(this.lastHurtByPlayerTime, this.lastHurtByPlayer ? 100 : 0);
     super.customServerAiStep();
   }
-  /** vanilla populateDefaultEquipmentSlots: always a golden sword */
-  override finalizeSpawn(): void {
-    if (this.random.nextFloat() < 0.05) this.setBaby(true);
+  /** vanilla ZombifiedPiglin.populateDefaultEquipmentSlots: always a golden sword, never armour */
+  protected override populateDefaultEquipmentSlots(_d: DifficultyInstance): void {
     const it = ITEMS.get('golden_sword');
-    if (it) this.mainHand = new ItemStack(it, 1);
+    if (it) this.setItemSlot('mainhand', new ItemStack(it, 1));
+  }
+  /** vanilla ZombifiedPiglin.wantsToPickUp: whatever it can hold (glow ink sacs too) */
+  override wantsToPickUp(s: ItemStack): boolean {
+    return this.canHoldItem(s);
   }
   override ambientSound(): string {
     return this.isAngry() ? 'entity.zombified_piglin.angry' : 'entity.zombified_piglin.ambient';
@@ -381,7 +412,7 @@ export class ZombifiedPiglin extends Zombie {
     if (!validSpawnBlock(level, x, yy, z, true)) return;
     const m = new ZombifiedPiglin(level);
     m.moveTo(x + 0.5, yy + 1, z + 0.5, level.random.nextFloat() * 360, 0);
-    m.finalizeSpawn();
+    m.finalizeSpawn('structure');
     m.portalCooldown = 300;
     level.addEntity(m);
   }
@@ -518,12 +549,31 @@ export class Skeleton extends Monster {
     return true;
   }
   override aiStep(): void {
-    if (this.isAlive && this.isSunBurnTick()) this.igniteForSeconds(8);
+    if (this.isAlive) this.burnInSunUnlessHelmeted();
     super.aiStep();
   }
+  /** vanilla AbstractSkeleton.setItemSlot: a change of weapon changes how it fights */
+  override setItemSlot(slot: EquipSlot, s: ItemStack | null): void {
+    super.setItemSlot(slot, s);
+    this.reassessWeaponGoal();
+  }
+  /**
+   * vanilla AbstractSkeleton.finalizeSpawn: armour and a bow, their enchantments, the loot pickup roll (0.55 × the
+   * special multiplier) and the Halloween pumpkin
+   */
   override finalizeSpawn(): void {
+    const d = this.spawnDifficulty();
+    this.populateDefaultEquipmentSlots(d);
+    this.populateDefaultEquipmentEnchantments(d);
+    this.reassessWeaponGoal();
+    this.canPickUpLoot = this.random.nextFloat() < Math.fround(0.55 * d.specialMultiplier());
+    this.maybeHalloweenPumpkin();
+  }
+  /** vanilla AbstractSkeleton.populateDefaultEquipmentSlots: the armour roll, then a bow */
+  protected override populateDefaultEquipmentSlots(d: DifficultyInstance): void {
+    super.populateDefaultEquipmentSlots(d);
     const bow = ITEMS.get('bow');
-    if (bow) this.mainHand = new ItemStack(bow, 1);
+    if (bow) this.setItemSlot('mainhand', new ItemStack(bow, 1));
   }
   /** vanilla AbstractSkeleton.getArrow */
   protected getArrow(): Arrow {
@@ -582,11 +632,19 @@ export class WitherSkeleton extends Skeleton {
   override canBeAffected(inst: MobEffectInstance): boolean {
     return inst.effect !== MOB_EFFECTS.wither && super.canBeAffected(inst);
   }
+  /** vanilla WitherSkeleton.finalizeSpawn: the skeleton's, with a base attack damage of 4 */
   override finalizeSpawn(): void {
-    const sword = ITEMS.get('stone_sword');
-    if (sword) this.mainHand = new ItemStack(sword, 1);
+    super.finalizeSpawn();
     this.attackDamage = 4;
+    this.reassessWeaponGoal();
   }
+  /** vanilla WitherSkeleton.populateDefaultEquipmentSlots: a stone sword, never armour */
+  protected override populateDefaultEquipmentSlots(_d: DifficultyInstance): void {
+    const sword = ITEMS.get('stone_sword');
+    if (sword) this.setItemSlot('mainhand', new ItemStack(sword, 1));
+  }
+  /** vanilla WitherSkeleton.populateDefaultEquipmentEnchantments: none */
+  protected override populateDefaultEquipmentEnchantments(_d: DifficultyInstance): void {}
   override doHurtTarget(target: Entity): boolean {
     if (!super.doHurtTarget(target)) return false;
     if (target instanceof LivingEntity) target.addEffect(new MobEffectInstance(MOB_EFFECTS.wither, 200, 0), this);

@@ -30,6 +30,8 @@ export interface GenResult {
   caveBiomes?: Uint8Array | null;
   /** neighbours whose generation writes these blocks already have (a chunk loaded from a save) */
   baked?: number;
+  /** vanilla InhabitedTime (a chunk loaded from a save) */
+  inhabitedTime?: number;
 }
 
 /** the bit for the neighbour chunk (dx, dz) away */
@@ -220,6 +222,7 @@ export class World {
     c.caveBiomes = r.caveBiomes ?? null;
     c.genWrites = r.pending;
     c.baked = r.baked ?? 0;
+    c.inhabitedTime = r.inhabitedTime ?? 0;
     this.chunks.set(c.key, c);
     this.lastChunk = null;
     // generation writes across chunk borders go in once both chunks are here: this chunk's

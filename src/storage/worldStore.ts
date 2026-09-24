@@ -80,6 +80,8 @@ export interface SavedChunk {
   baked?: number;
   /** structure blocks still waiting for their neighbours to take their shape (packed lx, y, lz) */
   postProcess?: number[];
+  /** vanilla InhabitedTime: ticks a player has spent near the chunk (regional difficulty) */
+  inhabitedTime?: number;
 }
 
 const DB_NAME = 'mcreplica';
@@ -244,6 +246,7 @@ export function serializeChunk(worldId: string, c: Chunk, blockEntities: SavedBl
   }
   const out: SavedChunk = { key: chunkKey(worldId, c.cx, c.cz, prefix), sections, biomes: biomeNames, biomeData: bd, blockEntities };
   if (c.postProcess?.length) out.postProcess = c.postProcess.slice();
+  if (c.inhabitedTime) out.inhabitedTime = c.inhabitedTime;
   if (c.caveBiomes) {
     const names: string[] = [];
     const cmap = new Map<number, number>();
@@ -312,7 +315,7 @@ function unpackOps(a: Int32Array, state: (i: number) => number): PatchColumn[] {
 }
 
 /** Returns a full-column blocks array + biomes. */
-export function deserializeChunk(s: SavedChunk): { blocks: Uint16Array; biomes: Uint8Array; caveBiomes: Uint8Array | null; blockEntities: SavedBlockEntity[]; genWrites: PendingWrites[]; baked: number; postProcess?: number[] } {
+export function deserializeChunk(s: SavedChunk): { blocks: Uint16Array; biomes: Uint8Array; caveBiomes: Uint8Array | null; blockEntities: SavedBlockEntity[]; genWrites: PendingWrites[]; baked: number; postProcess?: number[]; inhabitedTime: number } {
   const blocks = new Uint16Array(SECTIONS * 4096);
   s.sections.forEach((sec, si) => {
     if (!sec) return;
@@ -335,7 +338,7 @@ export function deserializeChunk(s: SavedChunk): { blocks: Uint16Array; biomes: 
     return { cx: p.cx, cz: p.cz, data, ops: p.ops && unpackOps(p.ops, (i) => gp[i]), feats: p.feats && Array.from(p.feats) };
   });
   // (saves from before this was kept: the neighbours' writes were in, as far as can be known)
-  return { blocks, biomes, caveBiomes, blockEntities: s.blockEntities ?? [], genWrites, baked: s.baked ?? 0x1ef, postProcess: s.postProcess };
+  return { blocks, biomes, caveBiomes, blockEntities: s.blockEntities ?? [], genWrites, baked: s.baked ?? 0x1ef, postProcess: s.postProcess, inhabitedTime: s.inhabitedTime ?? 0 };
 }
 
 export async function saveChunks(list: SavedChunk[]): Promise<void> {
