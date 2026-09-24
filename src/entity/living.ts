@@ -1,6 +1,7 @@
 // LivingEntity: vanilla travel() physics, jumping, health, hurt/death, status effects.
 
 import { Entity } from './entity';
+import type { Hand } from '../item/inventory';
 import { FLUID_WATER, fluidType } from '../world/fluids';
 import { wrapDegrees } from '../core/math';
 import { FLAGS, F_AIR, F_OPAQUE, F_FULL_COLLISION, BLOCKS, STATE_BLOCK } from '../world/block';
@@ -11,7 +12,7 @@ import { burningTimeFactor, damageAfterProtection, damageProtection, waterMoveme
 /** damage sources that ignore armor (vanilla #bypasses_armor) */
 const BYPASSES_ARMOR = new Set(['onFire', 'inWall', 'drown', 'starve', 'fall', 'stalagmite', 'void', 'genericKill', 'magic', 'wither', 'generic', 'cramming', 'flyIntoWall']);
 /** damage sources that never knock back (vanilla #no_knockback) */
-const NO_KNOCKBACK = new Set(['explosion', 'playerExplosion', 'badRespawnPoint', 'fall', 'stalagmite', 'drown', 'starve', 'onFire', 'inFire', 'lava', 'inWall', 'void', 'genericKill', 'magic', 'wither', 'cactus', 'sweetBerryBush', 'generic']);
+const NO_KNOCKBACK = new Set(['explosion', 'playerExplosion', 'badRespawnPoint', 'fall', 'stalagmite', 'drown', 'starve', 'onFire', 'inFire', 'lava', 'lightningBolt', 'inWall', 'void', 'genericKill', 'magic', 'wither', 'cactus', 'sweetBerryBush', 'generic']);
 /** vanilla #bypasses_resistance */
 const BYPASSES_RESISTANCE = new Set(['void', 'genericKill']);
 /** vanilla #damages_helmet */
@@ -233,7 +234,7 @@ export abstract class LivingEntity extends Entity {
       this.effectsDirty = false;
     }
     // swirls in a visible effect's colour: rarer when invisible, rarer and fainter when all are ambient
-    if (this.effectParticles.length) {
+    if (this.effectParticles.length && !this.hidesEffectParticles()) {
       const i = this.isInvisible() ? 15 : 4, j = this.effectsAmbient ? 5 : 1;
       if (Math.floor(Math.random() * i * j) === 0) {
         const c = this.effectParticles[Math.floor(Math.random() * this.effectParticles.length)];
@@ -300,6 +301,11 @@ export abstract class LivingEntity extends Entity {
   /** vanilla isInvisible (the invisibility effect) */
   isInvisible(): boolean {
     return this.activeEffects.has('invisibility');
+  }
+
+  /** (vanilla ServerPlayer.updateInvisibilityStatus: a spectator's effects give off no swirls) */
+  protected hidesEffectParticles(): boolean {
+    return false;
   }
 
   /** vanilla MobEffectUtil.hasWaterBreathing */
@@ -431,10 +437,14 @@ export abstract class LivingEntity extends Entity {
     return f >= 0 ? 6 + (1 + f) * 2 : 6;
   }
 
-  swing(): void {
+  /** vanilla swingingArm: the hand the current swing is with */
+  swingingArm: Hand = 'main';
+
+  swing(hand: Hand = 'main'): void {
     if (!this.swinging || this.swingTime >= this.swingDuration() / 2 || this.swingTime < 0) {
       this.swingTime = -1;
       this.swinging = true;
+      this.swingingArm = hand;
     }
   }
 
@@ -804,6 +814,11 @@ export abstract class LivingEntity extends Entity {
   override igniteForSeconds(s: number): void {
     const t = Math.ceil(Math.floor(s * 20) * burningTimeFactor(this));
     if (this.remainingFireTicks < t) this.remainingFireTicks = t;
+  }
+
+  /** vanilla LivingEntity.take: tell the client this picked something up (it pops, and flies to them) */
+  take(e: Entity, amount: number): void {
+    if (!e.removed) this.level.onTake?.(e, this, amount);
   }
 
   protected playHurtSound(_source: string): void {}

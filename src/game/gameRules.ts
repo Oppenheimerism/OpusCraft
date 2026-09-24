@@ -32,6 +32,7 @@ export const DEFAULT_GAME_RULES: GameRules = {
   randomTickSpeed: 3,
   sendCommandFeedback: true,
   showDeathMessages: true,
+  snowAccumulationHeight: 1,
   spawnRadius: 10,
   universalAnger: false,
 };

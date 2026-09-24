@@ -296,9 +296,12 @@ export class Arrow extends Entity {
     let ok = false;
     if (this.pickup === 'allowed') {
       const it = ITEMS.get('arrow');
-      ok = !!it && p.inventory.add(new ItemStack(it, 1)) === 0;
+      ok = !!it && p.inventory.add(new ItemStack(it, 1), p.gameMode === 'creative') === 0;
     } else if (this.pickup === 'creative_only') ok = p.gameMode === 'creative';
-    if (ok) this.remove();
+    if (ok) {
+      p.take(this, 1);
+      this.remove();
+    }
     return ok;
   }
 }

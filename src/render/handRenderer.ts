@@ -9,14 +9,18 @@ import { steveSkin } from '../textures/skin';
 import { mat4, perspective, DEG, Mat4 } from '../core/math';
 import type { Player } from '../entity/player';
 import type { ItemStack } from '../item/item';
+import type { Hand } from '../item/inventory';
 import { chargeDuration, crossbowTexture, isCharged } from '../item/crossbow';
 
 export class HandRenderer {
   private mainHandHeight = 0;
+  private oMainHandHeight = 0;
+  private offHandHeight = 0;
+  private oOffHandHeight = 0;
   /** the dimension lights entities from above and below (the Nether) */
   netherLighting = false;
-  private oMainHandHeight = 0;
   private mainHandItem: ItemStack | null = null;
+  private offHandItem: ItemStack | null = null;
   readonly skin: WebGLTexture;
   private readonly model: ModelPart;
   private readonly pose = new PoseStack();
@@ -32,23 +36,34 @@ export class HandRenderer {
     return this.skin;
   }
 
+  /** vanilla ItemInHandRenderer.tick: each hand lowers to swap what it shows, then comes back up (the main one with the attack cooldown) */
   tick(p: Player): void {
     this.oMainHandHeight = this.mainHandHeight;
-    const cur = p.inventory.selectedItem;
+    this.oOffHandHeight = this.offHandHeight;
+    const cur = p.inventory.inHand('main'), off = p.inventory.inHand('off');
     if (sameItem(this.mainHandItem, cur)) this.mainHandItem = cur;
-    const f = p.attackStrengthScale(1);
-    const target = sameItem(this.mainHandItem, cur) && this.mainHandItem === cur ? f * f * f : 0;
-    this.mainHandHeight += Math.max(-0.4, Math.min(0.4, target - this.mainHandHeight));
+    if (sameItem(this.offHandItem, off)) this.offHandItem = off;
+    if (p.handsBusy) {
+      // (rowing: both hands are on the oars)
+      this.mainHandHeight = Math.max(0, Math.min(1, this.mainHandHeight - 0.4));
+      this.offHandHeight = Math.max(0, Math.min(1, this.offHandHeight - 0.4));
+    } else {
+      const f = p.attackStrengthScale(1);
+      this.mainHandHeight += Math.max(-0.4, Math.min(0.4, (this.mainHandItem === cur ? f * f * f : 0) - this.mainHandHeight));
+      this.offHandHeight += Math.max(-0.4, Math.min(0.4, (this.offHandItem === off ? 1 : 0) - this.offHandHeight));
+    }
     if (this.mainHandHeight < 0.1) this.mainHandItem = cur;
+    if (this.offHandHeight < 0.1) this.offHandItem = off;
   }
 
-  /** vanilla itemUsed: an item use went through, the held item drops and comes back up */
-  itemUsed(): void {
-    this.mainHandHeight = 0;
+  /** vanilla itemUsed: an item use went through, the item in that hand drops and comes back up */
+  itemUsed(hand: Hand = 'main'): void {
+    if (hand === 'main') this.mainHandHeight = 0;
+    else this.offHandHeight = 0;
   }
 
   /** Called after the world is drawn. `bob` = view bob/hurt matrix (camera space). */
-  render(batch: EntityBatch, p: Player, partial: number, width: number, height: number, fovMul: number, bob: Mat4, lightB: number, lightS: number, viewRot: Mat4): void {
+  render(batch: EntityBatch, p: Player, partial: number, width: number, height: number, fovMul: number, bob: Mat4, lightB: number, lightS: number, viewRot: Mat4, mainArm: Arm = 'right'): void {
     perspective(this.proj, 70 * fovMul * DEG, width / height, 0.05, 100);
     batch.proj = this.proj;
     batch.view = mat4();
@@ -71,24 +86,47 @@ export class HandRenderer {
     let swing = p.attackAnim - p.attackAnimO;
     if (swing < 0) swing += 1;
     swing = p.attackAnimO + swing * partial;
-    const equip = 1 - (this.oMainHandHeight + (this.mainHandHeight - this.oMainHandHeight) * partial);
-    const item = this.mainHandItem;
-    const using = !!item && p.useItem === item && p.useItemRemaining > 0;
-    // vanilla renderArmWithItem: no bare arm while invisible
+    const hands = whichHandsToRender(p);
+    const offArm: Arm = mainArm === 'right' ? 'left' : 'right';
+    if (hands.main) {
+      const equip = 1 - (this.oMainHandHeight + (this.mainHandHeight - this.oMainHandHeight) * partial);
+      pose.push();
+      this.renderArmWithItem(batch, pose, p, 'main', mainArm, p.swingingArm === 'main' ? swing : 0, this.mainHandItem, equip, partial);
+      pose.pop();
+    }
+    if (hands.off) {
+      const equip = 1 - (this.oOffHandHeight + (this.offHandHeight - this.oOffHandHeight) * partial);
+      pose.push();
+      this.renderArmWithItem(batch, pose, p, 'off', offArm, p.swingingArm === 'off' ? swing : 0, this.offHandItem, equip, partial);
+      pose.pop();
+    }
+    batch.flush();
+  }
+
+  /** vanilla renderArmWithItem: one hand, on the `arm` side (i = 1 right, -1 left: every sideways move and turn mirrors) */
+  private renderArmWithItem(batch: EntityBatch, pose: PoseStack, p: Player, hand: Hand, arm: Arm, swing: number, item: ItemStack | null, equip: number, partial: number): void {
+    const i = arm === 'right' ? 1 : -1;
+    // vanilla: the bare arm only for an empty main hand, and not while invisible
     if (!item) {
-      if (!p.isInvisible()) this.renderArm(batch, pose, equip, swing);
-    } else if (item.item.id === 'crossbow') {
-      this.renderCrossbow(batch, pose, p, item, using, partial, equip, swing);
-    } else if (using) {
+      if (hand === 'main' && !p.isInvisible()) this.renderArm(batch, pose, equip, swing, i);
+      return;
+    }
+    const using = p.useItem === item && p.useItemRemaining > 0 && p.useHand === hand;
+    const ctx = i > 0 ? 'firstperson_righthand' : 'firstperson_lefthand';
+    if (item.item.id === 'crossbow') {
+      this.renderCrossbow(batch, pose, p, item, using, partial, equip, swing, i, hand === 'main');
+      return;
+    }
+    if (using) {
       const it = item.item;
       let tex: string | undefined;
       if (it.id === 'bow') {
         // vanilla ItemInHandRenderer BOW use animation
-        pose.translate(0.56, -0.52 + equip * -0.6, -0.72);
-        pose.translate(-0.2785682, 0.18344387, 0.15731531);
+        pose.translate(i * 0.56, -0.52 + equip * -0.6, -0.72);
+        pose.translate(i * -0.2785682, 0.18344387, 0.15731531);
         pose.rotX(-13.935);
-        pose.rotY(35.3);
-        pose.rotZ(-9.785);
+        pose.rotY(i * 35.3);
+        pose.rotZ(i * -9.785);
         const f8 = p.useDuration - (p.useItemRemaining - partial + 1);
         let f12 = f8 / 20;
         f12 = (f12 * f12 + f12 * 2) / 3;
@@ -100,7 +138,7 @@ export class HandRenderer {
         }
         pose.translate(0, 0, f12 * 0.04);
         pose.scale(1, 1, 1 + f12 * 0.2);
-        pose.rotY(-45);
+        pose.rotY(i * -45);
         const pull = f8 / 20;
         tex = pull >= 0.9 ? 'bow_pulling_2' : pull >= 0.65 ? 'bow_pulling_1' : 'bow_pulling_0';
       } else {
@@ -109,46 +147,49 @@ export class HandRenderer {
         const f1 = f / p.useDuration;
         if (f1 < 0.8) pose.translate(0, Math.abs(Math.cos((f / 4) * Math.PI) * 0.1), 0);
         const f3 = 1 - Math.pow(f1, 27);
-        pose.translate(f3 * 0.6, f3 * -0.5, 0);
-        pose.rotY(f3 * 90);
+        pose.translate(f3 * 0.6 * i, f3 * -0.5, 0);
+        pose.rotY(i * f3 * 90);
         pose.rotX(f3 * 10);
-        pose.rotZ(f3 * 30);
-        pose.translate(0.56, -0.52 + equip * -0.6, -0.72);
+        pose.rotZ(i * f3 * 30);
+        pose.translate(i * 0.56, -0.52 + equip * -0.6, -0.72);
       }
-      this.items.render(batch, pose, item, 'firstperson_righthand', false, tex);
-    } else {
-      const sq = Math.sqrt(swing);
-      const f5 = -0.4 * Math.sin(sq * Math.PI);
-      const f6 = 0.2 * Math.sin(sq * Math.PI * 2);
-      const f10 = -0.2 * Math.sin(swing * Math.PI);
-      pose.translate(f5, f6, f10);
-      // applyItemArmTransform
-      pose.translate(0.56, -0.52 + equip * -0.6, -0.72);
-      // applyItemArmAttackTransform
-      const f = Math.sin(swing * swing * Math.PI);
-      pose.rotY(45 + f * -20);
-      const f1 = Math.sin(sq * Math.PI);
-      pose.rotZ(f1 * -20);
-      pose.rotX(f1 * -80);
-      pose.rotY(-45);
-      this.items.render(batch, pose, item, 'firstperson_righthand');
+      this.items.render(batch, pose, item, ctx, i < 0, tex);
+      return;
     }
-    batch.flush();
+    const sq = Math.sqrt(swing);
+    const f5 = -0.4 * Math.sin(sq * Math.PI);
+    const f6 = 0.2 * Math.sin(sq * Math.PI * 2);
+    const f10 = -0.2 * Math.sin(swing * Math.PI);
+    pose.translate(i * f5, f6, f10);
+    // applyItemArmTransform
+    pose.translate(i * 0.56, -0.52 + equip * -0.6, -0.72);
+    this.attackTransform(pose, i, swing);
+    this.items.render(batch, pose, item, ctx, i < 0);
+  }
+
+  /** vanilla applyItemArmAttackTransform */
+  private attackTransform(pose: PoseStack, i: number, swing: number): void {
+    const f = Math.sin(swing * swing * Math.PI);
+    pose.rotY(i * (45 + f * -20));
+    const f1 = Math.sin(Math.sqrt(swing) * Math.PI);
+    pose.rotZ(i * f1 * -20);
+    pose.rotX(f1 * -80);
+    pose.rotY(i * -45);
   }
 
   /**
-   * vanilla renderArmWithItem, the crossbow (main hand, right arm: i = 1). Drawing it: pulled in and turned
-   * aside, shaking once past 10 % and pulled closer and longer with the charge (f13); it stops showing as
-   * drawn when the use duration (charge + 3 ticks) runs out, still held. Otherwise the usual swing, and a
-   * loaded one sits further left and turned 10° when not swinging.
+   * vanilla renderArmWithItem, the crossbow. Drawing it: pulled in and turned aside, shaking once past 10 % and
+   * pulled closer and longer with the charge (f13); it stops showing as drawn when the use duration (charge + 3
+   * ticks) runs out, still held. Otherwise the usual swing, and a loaded one in the main hand sits further in
+   * and turned 10° when not swinging.
    */
-  private renderCrossbow(batch: EntityBatch, pose: PoseStack, p: Player, item: ItemStack, using: boolean, partial: number, equip: number, swing: number): void {
+  private renderCrossbow(batch: EntityBatch, pose: PoseStack, p: Player, item: ItemStack, using: boolean, partial: number, equip: number, swing: number, i: number, main: boolean): void {
     if (using) {
-      pose.translate(0.56, -0.52 + equip * -0.6, -0.72);
-      pose.translate(-0.4785682, -0.094387, 0.05731531);
+      pose.translate(i * 0.56, -0.52 + equip * -0.6, -0.72);
+      pose.translate(i * -0.4785682, -0.094387, 0.05731531);
       pose.rotX(-11.935);
-      pose.rotY(65.3);
-      pose.rotZ(-9.785);
+      pose.rotY(i * 65.3);
+      pose.rotZ(i * -9.785);
       const f9 = p.useDuration - (p.useItemRemaining - partial + 1);
       let f13 = f9 / chargeDuration(item);
       if (f13 > 1) f13 = 1;
@@ -158,28 +199,24 @@ export class HandRenderer {
       }
       pose.translate(0, 0, f13 * 0.04);
       pose.scale(1, 1, 1 + f13 * 0.2);
-      pose.rotY(-45);
+      pose.rotY(i * -45);
     } else {
       const sq = Math.sqrt(swing);
-      pose.translate(-0.4 * Math.sin(sq * Math.PI), 0.2 * Math.sin(sq * Math.PI * 2), -0.2 * Math.sin(swing * Math.PI));
+      pose.translate(i * -0.4 * Math.sin(sq * Math.PI), 0.2 * Math.sin(sq * Math.PI * 2), -0.2 * Math.sin(swing * Math.PI));
       // applyItemArmTransform + applyItemArmAttackTransform
-      pose.translate(0.56, -0.52 + equip * -0.6, -0.72);
-      const f = Math.sin(swing * swing * Math.PI);
-      pose.rotY(45 + f * -20);
-      const f1 = Math.sin(sq * Math.PI);
-      pose.rotZ(f1 * -20);
-      pose.rotX(f1 * -80);
-      pose.rotY(-45);
-      if (isCharged(item) && swing < 0.001) {
-        pose.translate(-0.641864, 0, 0);
-        pose.rotY(10);
+      pose.translate(i * 0.56, -0.52 + equip * -0.6, -0.72);
+      this.attackTransform(pose, i, swing);
+      if (isCharged(item) && swing < 0.001 && main) {
+        pose.translate(i * -0.641864, 0, 0);
+        pose.rotY(i * 10);
       }
     }
-    this.items.render(batch, pose, item, 'firstperson_righthand', false, crossbowTexture(item, p.useItem === item ? p.ticksUsingItem() : -1));
+    this.items.render(batch, pose, item, i > 0 ? 'firstperson_righthand' : 'firstperson_lefthand', i < 0, crossbowTexture(item, p.useItem === item ? p.ticksUsingItem() : -1));
   }
 
-  private renderArm(batch: EntityBatch, pose: PoseStack, equip: number, swing: number): void {
-    const f = 1;
+  /** vanilla renderPlayerArm, the bare arm on side i (PlayerRenderer.renderRightHand / renderLeftHand) */
+  private renderArm(batch: EntityBatch, pose: PoseStack, equip: number, swing: number, i: number): void {
+    const f = i;
     const f1 = Math.sqrt(swing);
     const f2 = -0.3 * Math.sin(f1 * Math.PI);
     const f3 = 0.4 * Math.sin(f1 * Math.PI * 2);
@@ -195,15 +232,35 @@ export class HandRenderer {
     pose.rotX(200);
     pose.rotY(f * -135);
     pose.translate(f * 5.6, 0, 0);
-    // PlayerRenderer.renderRightHand: arm with xRot 0, zRot 0; model is flipped (scale -1,-1,1)? vanilla renders the part directly
-    const arm = this.model.child('right_arm');
+    // PlayerRenderer.renderHand: the arm as setupAnim leaves it at age 0 (bobArms tilts it out by 0.1), xRot 0
+    const right = i > 0;
+    const arm = this.model.child(right ? 'right_arm' : 'left_arm');
     arm.resetPose();
     arm.xRot = 0;
-    arm.zRot = 0.1; // idle sway from setupAnim(age 0)
+    arm.zRot = right ? 0.1 : -0.1;
     batch.begin({ texture: this.skin, cutoff: 0.1, blend: false, cull: true, lit: true, useLightmap: true });
     arm.render(batch, pose, 64, 64);
-    arm.child('right_sleeve').visible = true;
+    arm.child(right ? 'right_sleeve' : 'left_sleeve').visible = true;
   }
+}
+
+type Arm = 'left' | 'right';
+
+/**
+ * vanilla evaluateWhichHandsToRender: both hands, except around bows and crossbows — drawing one shows only that
+ * hand, and a loaded crossbow in the main hand hides the other
+ */
+function whichHandsToRender(p: Player): { main: boolean; off: boolean } {
+  const main = p.inventory.inHand('main'), off = p.inventory.inHand('off');
+  const bowLike = (s: ItemStack | null) => s?.item.id === 'bow' || s?.item.id === 'crossbow';
+  const charged = (s: ItemStack | null) => s?.item.id === 'crossbow' && isCharged(s);
+  if (!bowLike(main) && !bowLike(off)) return { main: true, off: true };
+  if (p.isUsingItem()) {
+    const u = p.useItem;
+    if (!bowLike(u)) return { main: true, off: !(p.useHand === 'main' && charged(off)) };
+    return { main: p.useHand === 'main', off: p.useHand === 'off' };
+  }
+  return { main: true, off: !charged(main) };
 }
 
 function sameItem(a: ItemStack | null, b: ItemStack | null): boolean {

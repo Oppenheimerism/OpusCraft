@@ -397,10 +397,7 @@ export class Strider extends Animal {
         g.ageable = { size: 0, babyChance: 0 };
       } else g.ageable = { size: 0, babyChance: 0.5 };
     }
-    const a = (g.ageable ??= { size: 0, babyChance: 0.05 });
-    if (a.size > 0 && this.random.nextFloat() <= a.babyChance) this.setAge(-24000);
-    a.size++;
-    void reason;
+    super.finalizeSpawn(reason, g);
   }
 
   protected override saveData(): Record<string, number | string | boolean> {

@@ -5,7 +5,7 @@
 // Both run vanilla's brain (sensors every 20 ticks, memories with expiry, FIGHT / AVOID / IDLE activities) here as
 // a few goals plus the memory bookkeeping in customServerAiStep.
 
-import { Mob, LootEntry, MobCategory } from './mob';
+import { Mob, LootEntry, MobCategory, type SpawnGroup, type SpawnReason } from './mob';
 import type { Level } from '../game/level';
 import { Goal, Flag } from './ai/goal';
 import { landRandomPos, defaultRandomPosAway } from './ai/goals';
@@ -392,9 +392,10 @@ export class Hoglin extends Animal {
       this.xpReward = this.isBaby() ? 3 : 5;
     }
   }
-  /** vanilla Hoglin.finalizeSpawn: one in five is a piglet */
-  override finalizeSpawn(): void {
+  /** vanilla Hoglin.finalizeSpawn: one in five is a piglet (and after a pack's first, the usual 1 in 20 more) */
+  override finalizeSpawn(reason: SpawnReason, group?: SpawnGroup): void {
     if (this.random.nextFloat() < 0.2) this.setAge(-24000);
+    super.finalizeSpawn(reason, group);
   }
   /** vanilla Hoglin.isConverting: outside a piglin-safe dimension it rots */
   isConverting(): boolean {

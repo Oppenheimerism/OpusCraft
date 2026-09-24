@@ -10,6 +10,7 @@ import { NormalNoise } from './noise';
 import { UP, NORTH, SOUTH, WEST, EAST, DX, DY, DZ, DIR_NAMES } from '../dir';
 import { largeDripstones, dripstoneDecoration } from './dripstone';
 import { lushCaves } from './lush';
+import { biomeTemperature } from './temperature';
 
 // ---------------------------------------------------------------------------
 // Ores
@@ -244,7 +245,7 @@ export class Decorator {
   mineshafts: { place(ctx: GenContext, r: Rand): void } | null = null;
   geodes: { place(ctx: GenContext): void } | null = null;
 
-  constructor(readonly seed: number, patchNoise: NormalNoise, private readonly tempNoise: NormalNoise) {
+  constructor(readonly seed: number, patchNoise: NormalNoise) {
     this.patchNoise = patchNoise;
   }
 
@@ -847,13 +848,13 @@ export class Decorator {
         const x = ctx.x0 + lx, z = ctx.z0 + lz;
         const y = ctx.heightMotion(x, z); // first free block above
         const biome = BIOMES[ctx.biomes[(lz << 4) | lx]];
-        const temp = this.heightTemp(biome.temperature, x, y - 1, z, !!biome.frozen);
-        if (temp >= 0.15) continue;
+        // (vanilla: whether the water freezes goes by the temperature down at the water, snow by the one above it)
         const below = ctx.get(x, y - 1, z);
-        if (below >= 0 && blockOf(below).name === 'water' && blockOf(below).get(below, 'level') === 0 && y - 1 >= SEA_LEVEL - 1) {
+        if (this.heightTemp(biome.temperature, x, y - 1, z, !!biome.frozen) < 0.15 && below >= 0 && blockOf(below).name === 'water' && blockOf(below).get(below, 'level') === 0 && y - 1 >= SEA_LEVEL - 1) {
           ctx.set(x, y - 1, z, ice);
           continue;
         }
+        if (this.heightTemp(biome.temperature, x, y, z, !!biome.frozen) >= 0.15) continue;
         const at = ctx.get(x, y, z);
         if (at !== 0) {
           // plants: place snow above? vanilla replaces nothing; skip
@@ -874,19 +875,7 @@ export class Decorator {
   }
 
   heightTemp(base: number, x: number, y: number, z: number, frozen: boolean): number {
-    let t = base;
-    if (frozen) {
-      const d = this.tempNoise.getValue(x * 0.05, 0, z * 0.05) * 7;
-      if (d + (this.tempNoise.getValue(x * 0.2, 0, z * 0.2)) < 0.3) {
-        const d2 = this.tempNoise.getValue(x * 0.09, 0, z * 0.09);
-        if (d2 < 0.8) t = 0.2;
-      }
-    }
-    if (y > 80) {
-      const f1 = this.tempNoise.getValue(x / 8, 0, z / 8) * 8;
-      return t - ((f1 + y - 80) * 0.05) / 40;
-    }
-    return t;
+    return biomeTemperature(base, frozen, x, y, z);
   }
 }
 

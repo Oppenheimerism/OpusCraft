@@ -404,15 +404,21 @@ function sameEnchants(a: Record<string, number> | undefined, b: Record<string, n
 }
 
 export class ItemStack {
+  /** vanilla popTime: ticks left of the hotbar icon's bounce after items came into this stack */
+  popTime = 0;
   constructor(public item: Item, public count = 1, public damage = 0, public tag: ItemTag | null = null) {}
   static of(id: string, count = 1): ItemStack {
     return new ItemStack(getItem(id), count);
   }
   copy(): ItemStack {
-    return new ItemStack(this.item, this.count, this.damage, cloneTag(this.tag));
+    const s = new ItemStack(this.item, this.count, this.damage, cloneTag(this.tag));
+    s.popTime = this.popTime;
+    return s;
   }
   copyWithCount(n: number): ItemStack {
-    return new ItemStack(this.item, n, this.damage, cloneTag(this.tag));
+    const s = new ItemStack(this.item, n, this.damage, cloneTag(this.tag));
+    s.popTime = this.popTime;
+    return s;
   }
   /** remove up to n from this stack and return them as a new stack */
   split(n: number): ItemStack {

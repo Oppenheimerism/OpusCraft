@@ -1207,12 +1207,13 @@ export class Piglin extends AbstractPiglin {
     // vanilla Mob.onItemPickup: thrown_item_picked_up_by_entity ("Oh Shiny")
     this.onItemPickup(it);
     this.stopWalking();
-    this.take(it);
     let s: ItemStack;
     if (it.stack.item.id === 'gold_nugget') {
+      this.take(it, it.stack.count);
       s = it.stack;
       it.remove();
     } else {
+      this.take(it, 1);
       s = it.stack.copyWithCount(1);
       if (--it.stack.count <= 0) it.remove();
     }

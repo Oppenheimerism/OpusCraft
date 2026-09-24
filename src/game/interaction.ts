@@ -34,8 +34,12 @@ import { isRail, railShape, isAscending } from './rails';
 import { MobEffectInstance, MOB_EFFECTS } from '../entity/effects';
 import { levelOf, miningEfficiency, submergedMiningSpeed, hurtAndBreak, hasBinding } from '../item/enchantHelper';
 import { armorIndex, equipSound } from '../item/equipment';
+import type { Hand } from '../item/inventory';
 import { isCharged, performShooting, shootingPower, PLAYER_INACCURACY, playerProjectile, useDuration, crossbowUseTick, releaseUsing as releaseCrossbow } from '../item/crossbow';
 
+
+/** vanilla InteractionHand.values(): the order the hands get a go at a right click */
+const HANDS: readonly Hand[] = ['main', 'off'];
 export class Interaction {
   hit: BlockHit | null = null;
   /** entity under the crosshair (vanilla crosshairPickEntity) */
@@ -278,18 +282,41 @@ export class Interaction {
     this.rightClickDelay = 4;
     // vanilla Minecraft.startUseItem: not while rowing
     if (p.handsBusy) return;
+    // the main hand has its go, then the offhand, until one of them does something (or fails outright)
+    for (const hand of HANDS) {
+      const stack = p.inventory.inHand(hand), count = stack?.count ?? 0;
+      const r = p.inventory.withHand(hand, () => this.useHand(hand));
+      if (r === 'pass') continue;
+      // vanilla: the hand dips after an item's own use, or after using it on a block when that used some up (any, in creative)
+      if (r === 'success' && (this.usedOn === 'item' || (this.usedOn === 'block' && stack && stack.count > 0 && (stack.count !== count || p.gameMode === 'creative')))) this.onItemUsed?.(hand);
+      return;
+    }
+  }
+
+  /** what the last hand's use went to (vanilla startUseItem's hit result cases) */
+  private usedOn: 'entity' | 'block' | 'item' = 'item';
+
+  /**
+   * vanilla startUseItem for one hand: its item on the entity looked at, or the block (what the block does by
+   * itself only on the main hand's turn), else the item's own use. Inside, selectedItem and consumeSelected mean
+   * this hand's stack (Inventory.activeHand)
+   */
+  private useHand(hand: Hand): 'success' | 'pass' | 'fail' {
+    const p = this.player;
+    const main = hand === 'main';
     const stack = p.inventory.selectedItem;
+    this.usedOn = 'entity';
     // entity interaction (vanilla Player.interactOn → Mob.mobInteract)
     const e = this.entityHit;
     if (e && p.gameMode !== 'spectator') {
       if (e instanceof Animal && e.interact(p, stack)) {
         if (p.vehicle === e) this.onMounted?.();
         p.swing();
-        return;
+        return 'success';
       }
       if (e instanceof Creeper && e.interact(p, stack)) {
         p.swing();
-        return;
+        return 'success';
       }
       // vanilla PiglinAi.mobInteract: a gold ingot for a grown piglin to admire
       if (e instanceof Piglin) {
@@ -297,21 +324,21 @@ export class Interaction {
         if (e.interact(p, stack)) {
           this.onInteractedWithEntity?.(before, e);
           p.swing();
-          return;
+          return 'success';
         }
       }
       // vanilla Minecart.interact (climb in) / MinecartChest.interact (ContainerEntity.interactWithContainerVehicle)
       if (e instanceof Minecart && e.interact(p)) {
         this.onMounted?.();
         p.swing();
-        return;
+        return 'success';
       }
       if (e instanceof MinecartChest) {
         this.onOpenEntityContainer?.(e);
         // vanilla ContainerEntity.interactWithContainerVehicle
         Piglin.angerNearbyPiglins(p, true);
         p.swing();
-        return;
+        return 'success';
       }
       // vanilla Boat.interact (climb in) / ChestBoat.interact (sneaking or a full seat opens the chest)
       if (e instanceof Boat) {
@@ -323,7 +350,7 @@ export class Interaction {
         }
         if (r) {
           p.swing();
-          return;
+          return 'success';
         }
       }
       if (stack && stack.item.id.endsWith('_spawn_egg') && e instanceof Animal && e.type === stack.item.id.slice(0, -10)) {
@@ -334,22 +361,25 @@ export class Interaction {
         this.level.addEntity(baby);
         if (p.gameMode !== 'creative') p.inventory.consumeSelected(1);
         p.swing();
-        return;
+        return 'success';
       }
     }
     const h = this.hit;
-    // blocks with a menu (vanilla Block.useWithoutItem), skipped when sneaking with an item
-    if (h && !(p.crouching && stack) && p.gameMode !== 'spectator') {
+    this.usedOn = 'block';
+    // vanilla ServerPlayerGameMode.useItemOn: sneaking with something in either hand, the block does nothing itself
+    const secondary = p.crouching && !!(p.inventory.inHand('main') || p.inventory.inHand('off'));
+    // blocks with a menu (vanilla Block.useWithoutItem: only on the main hand's turn)
+    if (main && h && !secondary && p.gameMode !== 'spectator') {
       const name = BLOCKS[STATE_BLOCK[this.level.getState(h.x, h.y, h.z)]].name;
       if ((name === 'crafting_table' || name === 'furnace' || name === 'chest' || name === 'enchanting_table' || name === 'grindstone' || name.endsWith('anvil')) && this.onOpenContainer) {
         this.onOpenContainer(name, h.x, h.y, h.z);
         // vanilla ChestBlock.useWithoutItem: piglins who see a chest opened take it badly
         if (name === 'chest') Piglin.angerNearbyPiglins(p, true);
         p.swing();
-        return;
+        return 'success';
       }
     }
-    if (h && p.gameMode !== 'spectator' && this.useOnBlock(h, stack)) return;
+    if (h && p.gameMode !== 'spectator' && this.useOnBlock(h, stack, main, secondary)) return 'success';
     // vanilla TntBlock.useItemOn: flint and steel / fire charge primes TNT
     if (h && stack && (stack.item.id === 'flint_and_steel' || stack.item.id === 'fire_charge') && this.level.getBlockName(h.x, h.y, h.z) === 'tnt') {
       this.level.setBlock(h.x, h.y, h.z, 0);
@@ -359,7 +389,7 @@ export class Interaction {
         if (p.gameMode !== 'creative') this.damageHeld(1);
       } else if (p.gameMode !== 'creative') p.inventory.consumeSelected(1);
       p.swing();
-      return;
+      return 'success';
     }
     // vanilla SpawnEggItem.useOn
     if (h && stack && stack.item.id.endsWith('_spawn_egg') && p.gameMode !== 'spectator') {
@@ -370,7 +400,7 @@ export class Interaction {
         this.level.world.getChunk(h.x >> 4, h.z >> 4)!.modified = true;
         if (p.gameMode !== 'creative') p.inventory.consumeSelected(1);
         p.swing();
-        return;
+        return 'success';
       }
       const replace = FLAGS[h.state] & F_REPLACEABLE || COLLISION[h.state]?.length === 0;
       const x = replace ? h.x : h.x + DX[h.face], y = replace ? h.y : h.y + DY[h.face], z = replace ? h.z : h.z + DZ[h.face];
@@ -384,15 +414,18 @@ export class Interaction {
         if (p.gameMode !== 'creative') p.inventory.consumeSelected(1);
         p.swing();
       }
-      return;
+      return 'success';
     }
     if (h && stack) {
       if (this.placeBlock(h, stack)) {
         p.swing();
-        return;
+        return 'success';
       }
+      // vanilla BlockItem.place: a block that can't go there fails the click, and the other hand gets no turn
+      if (blockForItem(stack.item)) return 'fail';
     }
-    if (stack) this.useItem(stack);
+    this.usedOn = 'item';
+    return stack && this.useItem(stack) ? 'success' : 'pass';
   }
 
   private placeBlock(h: BlockHit, stack: ItemStack): boolean {
@@ -483,13 +516,14 @@ export class Interaction {
   }
 
   /** right-click actions on blocks (vanilla useWithoutItem / item useOn); true if handled */
-  private useOnBlock(h: BlockHit, stack: ItemStack | null): boolean {
+  private useOnBlock(h: BlockHit, stack: ItemStack | null, main: boolean, secondary: boolean): boolean {
     const p = this.player;
     const lvl = this.level;
     const st = lvl.getState(h.x, h.y, h.z);
     const b = BLOCKS[STATE_BLOCK[st]];
     const n = b.name;
-    const sneakingWithItem = p.crouching && !!stack;
+    // (what the block does by itself, vanilla useWithoutItem: the main hand's turn, not sneaking with an item)
+    const sneakingWithItem = secondary || !main;
     // doors, trapdoors, fence gates toggle by hand (iron ones need redstone)
     if (!sneakingWithItem && (n.endsWith('_door') || n.endsWith('_trapdoor') || n.endsWith('_fence_gate')) && !n.startsWith('iron_')) {
       let ns = b.with(st, 'open', !b.get(st, 'open'));
@@ -602,8 +636,8 @@ export class Interaction {
   onConsumed: ((id: string) => void) | null = null;
   /** the player fired a crossbow (vanilla shot_crossbow) */
   onShotCrossbow: (() => void) | null = null;
-  /** an item use went through (vanilla ItemInHandRenderer.itemUsed: the held item dips and comes back up) */
-  onItemUsed: (() => void) | null = null;
+  /** an item use went through (vanilla ItemInHandRenderer.itemUsed: the item in that hand dips and comes back up) */
+  onItemUsed: ((hand: Hand) => void) | null = null;
   /** mining progress on the targeted block (tutorial) */
   onDestroyProgress: ((name: string, progress: number) => void) | null = null;
 
@@ -811,21 +845,23 @@ export class Interaction {
     return true;
   }
 
-  private useItem(stack: ItemStack): void {
+  /** vanilla Item.use for the hand in use; false when nothing came of it (the other hand may try) */
+  private useItem(stack: ItemStack): boolean {
     const p = this.player;
     const it = stack.item;
     // food / drinks (vanilla Item.use → startUsingItem when edible)
     if (it.food) {
-      if (p.gameMode === 'creative' || it.food.alwaysEat || p.food.needsFood()) p.startUsingItem(stack, it.food.fast ? 16 : 32);
-      return;
+      if (!(p.gameMode === 'creative' || it.food.alwaysEat || p.food.needsFood())) return false;
+      p.startUsingItem(stack, it.food.fast ? 16 : 32);
+      return true;
     }
     if (it.id === 'milk_bucket') {
       p.startUsingItem(stack, 32);
-      return;
+      return true;
     }
     // vanilla EggItem / SnowballItem / EnderpearlItem.use
     if (it.id === 'egg' || it.id === 'snowball' || it.id === 'ender_pearl') {
-      if (it.id === 'ender_pearl' && p.cooldowns.get('ender_pearl')) return;
+      if (it.id === 'ender_pearl' && p.cooldowns.get('ender_pearl')) return false;
       const t = new ThrownItem(this.level, it.id as ThrownKind, p);
       t.shootFromRotation(p, p.pitch, p.yaw, 0, 1.5, 1);
       this.level.addEntity(t);
@@ -833,7 +869,7 @@ export class Interaction {
       if (it.id === 'ender_pearl') p.cooldowns.set('ender_pearl', 20);
       if (p.gameMode !== 'creative') p.inventory.consumeSelected(1);
       p.swing();
-      return;
+      return true;
     }
     // vanilla FoodOnAStickItem.use: riding the mount it steers (the warped fungus a strider, the carrot a pig), a
     // poke sends it off faster at a point of wear (seven for the carrot); worn out, it's a fishing rod again
@@ -852,8 +888,9 @@ export class Interaction {
         }
         p.inventory.version++;
         p.swing();
+        return true;
       }
-      return;
+      return false;
     }
     // vanilla CrossbowItem.use: loaded, it fires everything charged (and the hand dips as the used stack
     // changes); empty, it starts drawing when there's something to load (offhand, inventory, or creative)
@@ -862,27 +899,23 @@ export class Interaction {
         performShooting(this.level, p, stack, shootingPower(stack), PLAYER_INACCURACY, null);
         this.onShotCrossbow?.();
       } else if (playerProjectile(p)) p.startUsingItem(stack, useDuration(stack));
-      else return;
-      this.onItemUsed?.();
-      return;
+      else return false;
+      return true;
     }
     // vanilla ArmorItem.use → Equipable.swapWithEquipmentSlot
-    if (it.armor) {
-      this.swapWithEquipmentSlot(stack);
-      return;
-    }
+    if (it.armor) return this.swapWithEquipmentSlot(stack);
     // vanilla BowItem.use: needs arrows unless creative
     if (it.id === 'bow') {
-      if (p.gameMode === 'creative' || p.inventory.findSlot((s) => s.item.id === 'arrow') >= 0) p.startUsingItem(stack, 72000);
-      return;
+      if (!(p.gameMode === 'creative' || this.arrowSource())) return false;
+      p.startUsingItem(stack, 72000);
+      return true;
     }
     // vanilla BoatItem.use: a boat (or chest boat) where the eye ray meets a block or any fluid
     if (boatItemInfo(it.id)) {
-      if (useBoatItem(this.level, p, it.id, this.reach())) {
-        if (p.gameMode !== 'creative') p.inventory.consumeSelected(1);
-        p.swing();
-      }
-      return;
+      if (!useBoatItem(this.level, p, it.id, this.reach())) return false;
+      if (p.gameMode !== 'creative') p.inventory.consumeSelected(1);
+      p.swing();
+      return true;
     }
     // bucket pickup
     if (stack.item.id === 'bucket') {
@@ -900,6 +933,7 @@ export class Interaction {
           }
         }
         p.swing();
+        return true;
       } else if (h && BLOCKS[STATE_BLOCK[h.state]].name === 'lava' && BLOCKS[STATE_BLOCK[h.state]].get(h.state, 'level') === 0) {
         this.level.setBlock(h.x, h.y, h.z, 0);
         this.level.sound.play('item.bucket.fill_lava', h.x + 0.5, h.y + 0.5, h.z + 0.5, 1, 1);
@@ -911,28 +945,32 @@ export class Interaction {
           }
         }
         p.swing();
+        return true;
       }
     }
+    return false;
   }
 
   /**
    * vanilla Equipable.swapWithEquipmentSlot: the held piece goes on and what was worn there comes to hand (a creative
    * player puts on a copy, and keeps the held one if the slot was empty); nothing over curse of binding (but in
-   * creative) or over the very same stack. Putting it on plays its equip sound (LivingEntity.onEquipItem)
+   * creative) or over the very same stack, and then the other hand gets its turn. Putting it on plays its equip
+   * sound (LivingEntity.onEquipItem)
    */
-  private swapWithEquipmentSlot(stack: ItemStack): void {
+  private swapWithEquipmentSlot(stack: ItemStack): boolean {
     const p = this.player;
     const inv = p.inventory;
     const i = armorIndex(stack.item.armor!.slot);
     const cur = inv.armor[i];
     const creative = p.gameMode === 'creative';
-    if (cur && ((hasBinding(cur) && !creative) || (cur.count === stack.count && cur.sameItem(stack)))) return;
+    if (cur && ((hasBinding(cur) && !creative) || (cur.count === stack.count && cur.sameItem(stack)))) return false;
     inv.armor[i] = creative ? stack.copy() : stack;
     if (cur) inv.setSelectedItem(cur);
     else if (!creative) inv.setSelectedItem(null);
     inv.version++;
     if (!cur?.sameItem(stack)) this.level.sound.play(equipSound(stack.item) ?? 'item.armor.equip_generic', p.x, p.y, p.z, 1, 1);
     p.swing();
+    return true;
   }
 
   /** vanilla LivingEntity.updatingUsingItem (called every tick) */
@@ -940,7 +978,7 @@ export class Interaction {
     const p = this.player;
     const u = p.useItem;
     if (!u) return;
-    if (p.inventory.selectedItem !== u || p.health <= 0) {
+    if (p.inventory.inHand(p.useHand) !== u || p.health <= 0) {
       p.stopUsingItem();
       return;
     }
@@ -953,7 +991,7 @@ export class Interaction {
     // vanilla CrossbowItem.onUseTick: the loading sounds
     if (u.item.id === 'crossbow') crossbowUseTick(this.level, p, u, p.ticksUsingItem());
     // vanilla useOnRelease (the crossbow): it only finishes when let go, the countdown runs on below zero
-    if (--p.useItemRemaining === 0 && u.item.id !== 'crossbow') this.completeUsingItem();
+    if (--p.useItemRemaining === 0 && u.item.id !== 'crossbow') p.inventory.withHand(p.useHand, () => this.completeUsingItem());
   }
 
   private itemUseEffects(s: ItemStack): void {
@@ -995,8 +1033,13 @@ export class Interaction {
     }
   }
 
-  /** vanilla releaseUsingItem → BowItem.releaseUsing / CrossbowItem.releaseUsing */
+  /** vanilla releaseUsingItem → BowItem.releaseUsing / CrossbowItem.releaseUsing (in the hand that was using it) */
   releaseUsingItem(): void {
+    const p = this.player;
+    p.inventory.withHand(p.useHand, () => this.releaseUsing());
+  }
+
+  private releaseUsing(): void {
     const p = this.player;
     const s = p.useItem;
     const used = p.ticksUsingItem();
@@ -1014,18 +1057,19 @@ export class Interaction {
     }
     if (!s || s.item.id !== 'bow') return;
     const creative = p.gameMode === 'creative';
-    const slot = p.inventory.findSlot((x) => x.item.id === 'arrow');
-    if (slot < 0 && !creative) return;
+    const ammo = this.arrowSource();
+    if (!ammo && !creative) return;
     const f = bowPower(used);
     if (f < 0.1) return;
     // vanilla useAmmo: creative and infinity (ammo_use 0 for plain arrows) keep the arrow, and the shot one
     // can't be picked up (INTANGIBLE_PROJECTILE)
     const free = creative || levelOf(s, 'infinity') > 0;
-    if (!free && slot >= 0) {
-      const a = p.inventory.main[slot]!;
-      a.count--;
-      if (a.count <= 0) p.inventory.main[slot] = null;
-      p.inventory.version++;
+    if (!free && ammo) {
+      ammo.count--;
+      const inv = p.inventory;
+      if (inv.offhand && inv.offhand.count <= 0) inv.offhand = null;
+      for (let i = 0; i < inv.main.length; i++) if (inv.main[i] && inv.main[i]!.count <= 0) inv.main[i] = null;
+      inv.version++;
     }
     const arrow = new Arrow(this.level, p);
     arrow.pickup = free ? 'creative_only' : 'allowed';
@@ -1037,6 +1081,16 @@ export class Interaction {
     this.level.addEntity(arrow);
     if (!creative) this.damageHeld(1);
     this.level.sound.play('entity.arrow.shoot', p.x, p.y, p.z, 1, 1 / (Math.random() * 0.4 + 1.2) + f * 0.5);
+  }
+
+  /** vanilla Player.getProjectile for a bow: arrows in the offhand, then the main hand, then the inventory in order */
+  private arrowSource(): ItemStack | null {
+    const inv = this.player.inventory;
+    const isArrow = (x: ItemStack | null): x is ItemStack => !!x && x.item.id === 'arrow' && x.count > 0;
+    const off = inv.inHand('off'), main = inv.inHand('main');
+    if (isArrow(off)) return off;
+    if (isArrow(main)) return main;
+    return inv.main.find(isArrow) ?? null;
   }
 
   /** Middle click: pick block (creative puts it in the hotbar; there an entity gives its item, vanilla getPickResult). */
@@ -1077,6 +1131,18 @@ export class Interaction {
     }
     inv.selected = target;
     inv.setSlot(target, new ItemStack(it, 1));
+  }
+
+  /** vanilla SWAP_ITEM_WITH_OFFHAND (F): the two hands trade what they hold, and any use stops */
+  swapHands(): void {
+    const p = this.player;
+    if (p.gameMode === 'spectator') return;
+    const inv = p.inventory;
+    const off = inv.offhand;
+    inv.offhand = inv.main[inv.selected];
+    inv.main[inv.selected] = off;
+    inv.version++;
+    p.stopUsingItem();
   }
 
   /** Q: drop one (or the whole stack with ctrl) */

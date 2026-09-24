@@ -204,11 +204,35 @@ export function animateCrossbowCharge(ra: ModelPart, la: ModelPart, charge: numb
   off.xRot = off.xRot + (-Math.PI / 2 - off.xRot) * charge;
 }
 
+/** vanilla HumanoidModel.ArmPose, as a player's arms take them (PlayerRenderer.getArmPose) */
+export type HumanoidArmPose = 'empty' | 'item' | 'bow' | 'crossbow_charge' | 'crossbow_hold';
+
+/** vanilla ArmPose.isTwoHanded */
+export function twoHanded(pose: HumanoidArmPose): boolean {
+  return pose === 'bow' || pose === 'crossbow_charge' || pose === 'crossbow_hold';
+}
+
+export interface HumanoidArms {
+  right: HumanoidArmPose;
+  left: HumanoidArmPose;
+  /** the main arm: whose two-handed pose wins */
+  mainArm: 'right' | 'left';
+  /** the arm using an item: then only it is posed */
+  usingArm: 'right' | 'left' | null;
+  /** the arm the attack swing is with (vanilla getAttackArm) */
+  attackArm: 'right' | 'left';
+  /** a charging crossbow's progress (see item/crossbow.ts crossbowChargeProgress) */
+  charge: number;
+}
+
+const EMPTY_ARMS: HumanoidArms = { right: 'empty', left: 'empty', mainArm: 'right', usingArm: null, attackArm: 'right', charge: 0 };
+
 /**
- * vanilla HumanoidModel.setupAnim (walking/riding/idle/swing subset); `crossbow` = the two-handed crossbow arm
- * pose (PlayerRenderer.getArmPose), set before the swing, the crouch and the idle sway as vanilla does
+ * vanilla HumanoidModel.setupAnim (walking/riding/idle/swing subset), in its order: the arm poses first (only the
+ * using arm's while an item is in use; otherwise the off arm's first unless it's the two-handed one), then the
+ * attack swing on the swinging arm, the crouch, and the idle sway
  */
-export function animateHumanoid(root: ModelPart, limbSwing: number, limbAmount: number, age: number, headYaw: number, headPitch: number, attackTime: number, crouching: boolean, riding = false, crossbow: 'charge' | 'hold' | null = null, charge = 0): void {
+export function animateHumanoid(root: ModelPart, limbSwing: number, limbAmount: number, age: number, headYaw: number, headPitch: number, attackTime: number, crouching: boolean, riding = false, arms: HumanoidArms = EMPTY_ARMS): void {
   root.resetPose();
   const head = root.child('head'), body = root.child('body');
   const ra = root.child('right_arm'), la = root.child('left_arm'), rl = root.child('right_leg'), ll = root.child('left_leg');
@@ -219,15 +243,47 @@ export function animateHumanoid(root: ModelPart, limbSwing: number, limbAmount: 
   rl.xRot = Math.cos(limbSwing * 0.6662) * 1.4 * limbAmount;
   ll.xRot = Math.cos(limbSwing * 0.6662 + Math.PI) * 1.4 * limbAmount;
   if (riding) sitHumanoid(ra, la, rl, ll);
-  if (crossbow === 'charge') animateCrossbowCharge(ra, la, charge);
-  else if (crossbow === 'hold') animateCrossbowHold(ra, la, head);
-  // idle arm sway (AnimationUtils.bobModelPart)
-  ra.zRot += Math.cos(age * 0.09) * 0.05 + 0.05;
-  la.zRot -= Math.cos(age * 0.09) * 0.05 + 0.05;
-  ra.xRot += Math.sin(age * 0.067) * 0.05;
-  la.xRot -= Math.sin(age * 0.067) * 0.05;
+  // vanilla poseRightArm / poseLeftArm
+  const pose = (right: boolean) => {
+    const arm = right ? ra : la;
+    switch (right ? arms.right : arms.left) {
+      case 'item':
+        arm.xRot = arm.xRot * 0.5 - Math.PI / 10;
+        arm.yRot = 0;
+        break;
+      case 'bow':
+        ra.yRot = -0.1 + head.yRot - (right ? 0 : 0.4);
+        la.yRot = 0.1 + head.yRot + (right ? 0.4 : 0);
+        ra.xRot = -Math.PI / 2 + head.xRot;
+        la.xRot = -Math.PI / 2 + head.xRot;
+        break;
+      case 'crossbow_charge':
+        animateCrossbowCharge(ra, la, arms.charge, right);
+        break;
+      case 'crossbow_hold':
+        animateCrossbowHold(ra, la, head, right);
+        break;
+      default:
+        arm.yRot = 0;
+    }
+  };
+  if (arms.usingArm) pose(arms.usingArm === 'right');
+  else {
+    const rightMain = arms.mainArm === 'right';
+    if (rightMain !== twoHanded(rightMain ? arms.left : arms.right)) {
+      pose(false);
+      pose(true);
+    } else {
+      pose(true);
+      pose(false);
+    }
+  }
+  // vanilla setupAttackAnimation
   if (attackTime > 0) {
+    const left = arms.attackArm === 'left';
+    const arm = left ? la : ra;
     body.yRot = Math.sin(Math.sqrt(attackTime) * Math.PI * 2) * 0.2;
+    if (left) body.yRot *= -1;
     ra.z = Math.sin(body.yRot) * 5;
     ra.x = -Math.cos(body.yRot) * 5;
     la.z = -Math.sin(body.yRot) * 5;
@@ -241,9 +297,9 @@ export function animateHumanoid(root: ModelPart, limbSwing: number, limbAmount: 
     f = 1 - f;
     const f1 = Math.sin(f * Math.PI);
     const f2 = Math.sin(attackTime * Math.PI) * -(head.xRot - 0.7) * 0.75;
-    ra.xRot -= f1 * 1.2 + f2;
-    ra.yRot += body.yRot * 2;
-    ra.zRot += Math.sin(attackTime * Math.PI) * -0.4;
+    arm.xRot -= f1 * 1.2 + f2;
+    arm.yRot += body.yRot * 2;
+    arm.zRot += Math.sin(attackTime * Math.PI) * -0.4;
   }
   if (crouching) {
     body.xRot = 0.5;
@@ -258,4 +314,9 @@ export function animateHumanoid(root: ModelPart, limbSwing: number, limbAmount: 
     la.y = 5.2;
     ra.y = 5.2;
   }
+  // idle arm sway (AnimationUtils.bobModelPart)
+  ra.zRot += Math.cos(age * 0.09) * 0.05 + 0.05;
+  la.zRot -= Math.cos(age * 0.09) * 0.05 + 0.05;
+  ra.xRot += Math.sin(age * 0.067) * 0.05;
+  la.xRot -= Math.sin(age * 0.067) * 0.05;
 }

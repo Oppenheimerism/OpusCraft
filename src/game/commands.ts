@@ -16,6 +16,8 @@ import { ExperienceOrb } from '../entity/xpOrb';
 import { Arrow } from '../entity/arrow';
 import { createMob, entityDisplayName, summonableTypes } from './spawner';
 import type { Mob } from '../entity/mob';
+import { LightningBolt } from '../entity/lightning';
+import { Creeper } from '../entity/monsters';
 import { createMinecart, MINECART_TYPES } from '../entity/minecart';
 import { createBoat, BOAT_TYPES, BOAT_WOODS } from '../entity/boat';
 import { MOB_EFFECTS, MobEffect, MobEffectInstance, mobEffect } from '../entity/effects';
@@ -624,6 +626,11 @@ export const COMMANDS: Record<string, CommandDef> = {
       let e: Entity | null = null;
       if (type === 'tnt') e = new PrimedTnt(lvl, x, y, z, null);
       else if (type === 'experience_orb') e = new ExperienceOrb(lvl, x, y, z, 1);
+      else if (type === 'lightning_bolt') {
+        const bolt = new LightningBolt(lvl);
+        bolt.moveTo(x, y, z);
+        e = bolt;
+      }
       else if (type === 'arrow') {
         const a = new Arrow(lvl, null);
         a.moveTo(x, y, z);
@@ -647,6 +654,8 @@ export const COMMANDS: Record<string, CommandDef> = {
         const nbt = c.args[4] ? c.line.slice(c.args[4].pos) : '';
         if (nbt.trimStart().startsWith('{')) mobData(m, nbt);
         else m.finalizeSpawn('command');
+        // (entity data: a charged creeper is {powered:1b})
+        if (m instanceof Creeper && /powered:\s*(1b|true)/.test(nbt)) m.powered = true;
         e = m;
       }
       lvl.addEntity(e);

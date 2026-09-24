@@ -11,6 +11,7 @@ import type { Camera } from './renderer';
 import type { Frustum } from '../core/math';
 import { wrapDegrees } from '../core/math';
 import { ModelPart, playerModel, animateHumanoid } from './model';
+import { drawArmItem, drawPlayerHeldItems, playerArms } from './playerPose';
 import * as M from './mobModels';
 import type { MobModelDef } from './mobModels';
 import type { Level } from '../game/level';
@@ -30,6 +31,8 @@ import { Hoglin, Zoglin } from '../entity/hoglin';
 import { Strider } from '../entity/strider';
 import { Piglin } from '../entity/piglin';
 import { Fireball, LargeFireball } from '../entity/fireball';
+import { LightningBolt } from '../entity/lightning';
+import { Rand } from '../core/rng';
 import { Squid } from '../entity/water';
 import { ThrownItem } from '../entity/throwable';
 import { AbstractMinecart } from '../entity/minecart';
@@ -54,8 +57,22 @@ export interface EntityRenderOptions {
   /** draw the local player (third-person views) */
   drawPlayer: boolean;
   distanceScale: number;
-  skinParts?: Record<string, boolean>;
+  skinParts?: SkinParts;
+  /** the player's main arm (options: Main Hand) */
+  mainArm?: 'left' | 'right';
 }
+
+/** options: Skin Customization (vanilla PlayerModelPart; the cape aside) */
+export interface SkinParts {
+  hat: boolean;
+  jacket: boolean;
+  leftSleeve: boolean;
+  rightSleeve: boolean;
+  leftPants: boolean;
+  rightPants: boolean;
+}
+
+const ALL_SKIN_PARTS: SkinParts = { hat: true, jacket: true, leftSleeve: true, rightSleeve: true, leftPants: true, rightPants: true };
 
 const RAD = Math.PI / 180;
 
@@ -89,6 +106,11 @@ export class EntityRenderDispatcher {
   /** model matrix living renderers start from instead of identity (mobs drawn inside spawners) */
   private base: Float32Array | null = null;
   private readonly spawnerPose = new PoseStack();
+  private whiteTex: WebGLTexture | null = null;
+  private mainArm: 'left' | 'right' = 'right';
+  private skinParts = ALL_SKIN_PARTS;
+  /** vanilla ItemPickupParticle: what was just picked up, flying to whoever took it */
+  private readonly pickups: { e: Entity; target: Entity; life: number; tx: number; ty: number; tz: number; txo: number; tyo: number; tzo: number }[] = [];
   private readonly boatModels: Record<string, M.BoatModelDef> = { boat: M.boatModel(), chest_boat: M.chestBoatModel() };
   /** boat water masks, drawn once every entity is down so riders' legs aren't masked out */
   private readonly waterPatches: { m: Float32Array; part: ModelPart; tex: WebGLTexture; texW: number; texH: number }[] = [];
@@ -106,6 +128,7 @@ export class EntityRenderDispatcher {
       zombie: M.zombieModel(),
       skeleton: M.skeletonModel(),
       creeper: M.creeperModel(),
+      creeper_armor: M.creeperModel(2),
       spider: M.spiderModel(),
       cave_spider: M.spiderModel(),
       enderman: M.endermanModel(),
@@ -142,7 +165,8 @@ export class EntityRenderDispatcher {
     const gen = MOB_TEXTURES[name];
     if (!gen) return null;
     const img = gen();
-    t = createTexture(this.gl, img.w, img.h, new Uint8Array(img.data.buffer, img.data.byteOffset, img.data.byteLength));
+    // (the charged creeper's swirl scrolls, so its texture wraps)
+    t = createTexture(this.gl, img.w, img.h, new Uint8Array(img.data.buffer, img.data.byteOffset, img.data.byteLength), { clamp: name !== 'creeper_armor' });
     this.textures.set(name, t);
     return t;
   }
@@ -168,6 +192,8 @@ export class EntityRenderDispatcher {
   /** draw all entities; call between opaque and translucent terrain */
   render(b: EntityBatch, level: Level, cam: Camera, partial: number, frustum: Frustum, opts: EntityRenderOptions): void {
     this.shadows.length = 0;
+    this.mainArm = opts.mainArm ?? 'right';
+    this.skinParts = opts.skinParts ?? ALL_SKIN_PARTS;
     let drawn = 0;
     for (const e of level.entities) {
       if (e.removed) continue;
@@ -175,6 +201,12 @@ export class EntityRenderDispatcher {
       const x = e.lerpX(partial), y = e.lerpY(partial), z = e.lerpZ(partial);
       const dx = x - cam.x, dy = y - cam.y, dz = z - cam.z;
       const d2 = dx * dx + dy * dy + dz * dz;
+      if (e instanceof LightningBolt) {
+        // vanilla LightningBolt: never frustum culled (noCulling), but drawn only within 64 blocks
+        const md = 64 * opts.distanceScale;
+        if (d2 < md * md) this.renderLightning(b, e, dx, dy, dz);
+        continue;
+      }
       const bb = e.bb;
       let size = (bb.maxX - bb.minX + bb.maxY - bb.minY + bb.maxZ - bb.minZ) / 3 || 1;
       if (e instanceof Arrow) size *= 10;
@@ -190,12 +222,47 @@ export class EntityRenderDispatcher {
       }
     }
     this.rendered = drawn;
+    for (const pk of this.pickups) {
+      // (vanilla ItemPickupParticle.renderCustom: easing in over its three ticks, to halfway up the taker)
+      let f = (pk.life + partial) / 3;
+      f *= f;
+      const tx = pk.txo + (pk.tx - pk.txo) * partial, ty = pk.tyo + (pk.ty - pk.tyo) * partial, tz = pk.tzo + (pk.tz - pk.tzo) * partial;
+      const e = pk.e;
+      const x = e.x + (tx - e.x) * f, y = e.y + (ty - e.y) * f, z = e.z + (tz - e.z) * f;
+      this.renderEntity(b, level, e, x, y, z, x - cam.x, y - cam.y, z - cam.z, partial, cam);
+      if (opts.shadows) {
+        const r = shadowRadius(e);
+        if (r > 0) this.shadows.push({ x, y, z, radius: r, strength: e instanceof ItemEntity || e instanceof ExperienceOrb ? 0.75 : 1 });
+      }
+    }
     this.renderWaterPatches(b);
     this.renderSpawners(b, level, cam, partial, frustum);
     this.renderEnchantingBooks(b, level, cam, partial, frustum);
     b.setOverlay(0, 0, 0, 0);
     b.flush();
     if (this.shadows.length) this.renderShadows(b, level, cam);
+  }
+
+  /** vanilla ItemPickupParticle: `e` (a copy, for a dropped item) flies to `target` over the next three ticks */
+  addPickup(e: Entity, target: Entity): void {
+    const tx = target.x, ty = target.y + target.eyeHeight / 2, tz = target.z;
+    this.pickups.push({ e, target, life: 0, tx, ty, tz, txo: tx, tyo: ty, tzo: tz });
+  }
+
+  /** once a game tick (vanilla ItemPickupParticle.tick): following the taker, gone on its third */
+  tickPickups(): void {
+    let w = 0;
+    for (const pk of this.pickups) {
+      if (++pk.life >= 3) continue;
+      pk.txo = pk.tx;
+      pk.tyo = pk.ty;
+      pk.tzo = pk.tz;
+      pk.tx = pk.target.x;
+      pk.ty = pk.target.y + pk.target.eyeHeight / 2;
+      pk.tz = pk.target.z;
+      this.pickups[w++] = pk;
+    }
+    this.pickups.length = w;
   }
 
   /** vanilla SpawnerRenderer (block entity view distance 64): the spawner's mob spinning in the cage */
@@ -271,7 +338,24 @@ export class EntityRenderDispatcher {
     else if (e instanceof Fireball) this.renderFireball(b, e, dx, dy, dz, cam);
     else if (e instanceof AbstractMinecart) this.renderMinecart(b, e, x, y, z, dx, dy, dz, p);
     else if (e instanceof Boat) this.renderBoat(b, e, dx, dy, dz, p);
-    if (e.isOnFire() && !(e instanceof ItemEntity) && !(e instanceof ExperienceOrb)) this.renderFlame(b, e, dx, dy, dz, cam, level.gameTime);
+    // (at the renderer's offset: a crouching player's flames sink with it)
+    if (e.isOnFire() && !(e instanceof ItemEntity) && !(e instanceof ExperienceOrb)) this.renderFlame(b, e, dx, dy + renderOffsetY(e), dz, cam.yaw, level.gameTime);
+  }
+
+  /**
+   * vanilla InventoryScreen.renderEntityInInventory: the player as the dispatcher draws it anywhere (at partial
+   * tick 1, full bright), from the screen's matrix `base`, at whatever angles the screen has given it; the camera
+   * looks at it head on, so its flames face the screen
+   */
+  renderPlayerInGui(b: EntityBatch, e: Player, base: Float32Array, opts: EntityRenderOptions): void {
+    this.mainArm = opts.mainArm ?? 'right';
+    this.skinParts = opts.skinParts ?? ALL_SKIN_PARTS;
+    this.base = base;
+    b.lightB = b.lightS = 240;
+    this.renderPlayer(b, e, 0, 0, 0, 1);
+    if (e.isOnFire()) this.renderFlame(b, e, 0, renderOffsetY(e), 0, 0, e.level.gameTime);
+    this.base = null;
+    b.setOverlay(0, 0, 0, 0);
   }
 
   // -------------------------------------------------------------------------
@@ -511,6 +595,7 @@ export class EntityRenderDispatcher {
         this.drawModel(b, fur, baby, r, g, bl);
       }
     }
+    if (e instanceof Creeper && e.powered) this.drawPowerSwirl(b, e, def, p);
     if (spiderLike) this.drawEyes(b, def, 'spider_eyes', baby);
     if (e instanceof Enderman) {
       this.drawEyes(b, def, 'enderman_eyes', false);
@@ -529,8 +614,8 @@ export class EntityRenderDispatcher {
       b.setOverlay(0, 0, 0, 0);
       this.drawHeldItem(b, def.root, e.mainHand, baby, e.usingItem ? e.useItemTicks + p : -1);
     }
-    // (the piglin's offhand: the gold it's admiring)
-    if (e instanceof Piglin && e.offHand) {
+    // (the offhand in the left: a piglin's, the gold it's admiring)
+    if (e.offHand && (e instanceof Zombie || e instanceof Skeleton || e instanceof Piglin)) {
       b.setOverlay(0, 0, 0, 0);
       this.drawHeldItem(b, def.root, e.offHand, baby, -1, true);
     }
@@ -612,60 +697,117 @@ export class EntityRenderDispatcher {
     b.lightS = ls;
   }
 
+  /**
+   * vanilla CreeperPowerLayer (EnergySwirlLayer): the model blown up by 2 in creeper_armor, scrolling diagonally, added
+   * at half strength over whatever is behind — no lighting, no hurt flash, both sides
+   */
+  private drawPowerSwirl(b: EntityBatch, e: Creeper, def: MobModelDef, p: number): void {
+    const sm = this.models.creeper_armor, t = this.tex('creeper_armor');
+    if (!sm || !t) return;
+    copyPose(def.root, sm.root);
+    const f = e.tickCount + p;
+    const u = (f * 0.01) % 1;
+    b.setOverlay(0, 0, 0, 0);
+    b.begin(this.state(t, { cutoff: 0.1, blend: true, additive: true, lit: false, useLightmap: false, uvOffset: [u, u] }));
+    this.drawModel(b, sm, false, 0.5, 0.5, 0.5, 1);
+    b.flush();
+  }
+
+  /**
+   * vanilla LightningBoltRenderer: eight 16-block segments jittering down from the sky to the strike point, two
+   * branches off it, each drawn as four nested square tubes (the main one widening with height) in faint blue-white,
+   * added onto the scene
+   */
+  private renderLightning(b: EntityBatch, e: LightningBolt, dx: number, dy: number, dz: number): void {
+    this.whiteTex ??= createTexture(this.gl, 1, 1, new Uint8Array([255, 255, 255, 255]));
+    b.setOverlay(0, 0, 0, 0);
+    b.begin({ texture: this.whiteTex, cutoff: -1, blend: true, additive: true, cull: true, lit: false, useLightmap: false });
+    const xs = new Float32Array(8), zs = new Float32Array(8);
+    let fx = 0, fz = 0;
+    const r0 = new Rand(e.seed);
+    for (let i = 7; i >= 0; i--) {
+      xs[i] = fx;
+      zs[i] = fz;
+      fx += r0.nextInt(11) - 5;
+      fz += r0.nextInt(11) - 5;
+    }
+    // (vanilla blends SRC_ALPHA, ONE: colour 0.45, 0.45, 0.5 at alpha 0.3)
+    const cr = 0.45 * 0.3, cg = 0.45 * 0.3, cb = 0.5 * 0.3;
+    const quad = (x1: number, z1: number, j: number, x2: number, z2: number, o1: number, o2: number, e1: boolean, s1: boolean, e2: boolean, s2: boolean) => {
+      const y0 = dy + j * 16, y1 = dy + (j + 1) * 16;
+      const v = [
+        dx + x1 + (e1 ? o2 : -o2), y0, dz + z1 + (s1 ? o2 : -o2),
+        dx + x2 + (e1 ? o1 : -o1), y1, dz + z2 + (s1 ? o1 : -o1),
+        dx + x2 + (e2 ? o1 : -o1), y1, dz + z2 + (s2 ? o1 : -o1),
+        dx + x1 + (e2 ? o2 : -o2), y0, dz + z1 + (s2 ? o2 : -o2),
+      ];
+      for (const k of [0, 1, 2, 0, 2, 3]) b.vertexRaw(v[k * 3], v[k * 3 + 1], v[k * 3 + 2], 0, 0, cr, cg, cb, 0.3, 0, 1, 0);
+    };
+    for (let j = 0; j < 4; j++) {
+      const r1 = new Rand(e.seed);
+      for (let k = 0; k < 3; k++) {
+        const top = k > 0 ? 7 - k : 7;
+        const bottom = k > 0 ? top - 2 : 0;
+        let x = xs[top] - fx, z = zs[top] - fz;
+        for (let s = top; s >= bottom; s--) {
+          const px = x, pz = z;
+          if (k === 0) {
+            x += r1.nextInt(11) - 5;
+            z += r1.nextInt(11) - 5;
+          } else {
+            x += r1.nextInt(31) - 15;
+            z += r1.nextInt(31) - 15;
+          }
+          let o1 = 0.1 + j * 0.2;
+          if (k === 0) o1 *= s * 0.1 + 1;
+          let o2 = 0.1 + j * 0.2;
+          if (k === 0) o2 *= (s - 1) * 0.1 + 1;
+          quad(x, z, s, px, pz, o1, o2, false, false, true, false);
+          quad(x, z, s, px, pz, o1, o2, true, false, true, true);
+          quad(x, z, s, px, pz, o1, o2, true, true, false, true);
+          quad(x, z, s, px, pz, o1, o2, false, true, false, false);
+        }
+      }
+    }
+    b.flush();
+  }
+
   /** vanilla ItemInHandLayer (the right hand, or the left) */
   private drawHeldItem(b: EntityBatch, root: ModelPart, stack: ItemStack, baby: boolean, useTicks: number, left = false): void {
-    const pose = this.pose;
-    pose.push();
-    if (baby) {
-      pose.translate(0, 0.75, 0);
-      pose.scale(0.5, 0.5, 0.5);
-    }
-    root.translateAndRotate(pose);
-    root.child(left ? 'left_arm' : 'right_arm').translateAndRotate(pose);
-    pose.rotX(-90);
-    pose.rotY(180);
-    pose.translate((left ? -1 : 1) / 16, 0.125, -0.625);
-    let tex: string | undefined;
-    if (stack.item.id === 'bow' && useTicks >= 0) {
-      const pull = useTicks / 20;
-      tex = pull >= 0.9 ? 'bow_pulling_2' : pull >= 0.65 ? 'bow_pulling_1' : 'bow_pulling_0';
-    }
-    // a mob's crossbow: drawn (useTicks: how long it's been using it) or loaded
-    if (stack.item.id === 'crossbow') tex = crossbowTexture(stack, useTicks);
-    this.items.render(b, pose, stack, 'thirdperson_righthand', left, tex);
-    pose.pop();
+    drawArmItem(b, this.items, this.pose, root, stack, left, useTicks, baby);
   }
 
   private renderPlayer(b: EntityBatch, e: Player, dx: number, dy: number, dz: number, p: number): void {
     const crouch = e.crouching && !e.flying;
-    const a = this.setupLiving(e, dx, dy + (crouch ? -0.125 : 0), dz, p, 90, (pose) => pose.scale(0.9375, 0.9375, 0.9375));
+    const a = this.setupLiving(e, dx, dy + renderOffsetY(e), dz, p, 90, (pose) => pose.scale(0.9375, 0.9375, 0.9375));
     const m = this.player;
-    const held = e.inventory.selectedItem;
-    // vanilla PlayerRenderer.getArmPose: CROSSBOW_CHARGE while drawing one, CROSSBOW_HOLD holding a loaded one (not mid-swing)
-    const drawing = !!held && e.useItem === held && e.useItemRemaining > 0;
-    const xbow = held?.item.id === 'crossbow' ? (drawing ? 'charge' : !e.swinging && isCharged(held) ? 'hold' : null) : null;
-    animateHumanoid(m, a.limbSwing, a.limbAmount, a.age, a.headYaw, a.headPitch, attackAnim(e, p), crouch, !!e.vehicle, xbow, xbow === 'charge' ? crossbowChargeProgress(held, e.ticksUsingItem()) : 0);
-    if (held && !xbow) {
-      const ra = m.child('right_arm');
-      ra.xRot = ra.xRot * 0.5 - Math.PI / 10;
-    }
+    // vanilla PlayerRenderer.setModelProperties: the skin's outer layer as the options have it; a spectator is
+    // only a head
+    const spectator = e.gameMode === 'spectator', sp = this.skinParts;
+    for (const [name, part] of m.children) part.visible = !spectator || name === 'head';
+    m.child('head').child('hat').visible = spectator || sp.hat;
+    m.child('body').child('jacket').visible = sp.jacket;
+    m.child('right_arm').child('right_sleeve').visible = sp.rightSleeve;
+    m.child('left_arm').child('left_sleeve').visible = sp.leftSleeve;
+    m.child('right_leg').child('right_pants').visible = sp.rightPants;
+    m.child('left_leg').child('left_pants').visible = sp.leftPants;
+    animateHumanoid(m, a.limbSwing, a.limbAmount, a.age, a.headYaw, a.headPitch, attackAnim(e, p), crouch, !!e.vehicle, playerArms(e, this.mainArm));
     this.overlay(b, e);
-    // vanilla: an invisible player's body isn't drawn, the held item and the armour still are
+    // vanilla: an invisible player's body isn't drawn (a spectator's is, faintly, to the spectator: themselves), the
+    // armour and held items still are; a spectator has no layers at all
     if (!e.isInvisible()) {
       b.begin(this.state(this.skin));
       m.render(b, this.pose, 64, 64);
+    } else if (e.level.player?.gameMode === 'spectator') {
+      b.begin(this.state(this.skin, { blend: true, cutoff: 0.01, depthWrite: false }));
+      m.render(b, this.pose, 64, 64, 1, 1, 1, 38 / 255);
+      b.flush();
     }
-    this.armor.render(b, this.pose, m, e.inventory.armor, false);
-    if (held) {
-      b.setOverlay(0, 0, 0, 0);
-      this.pose.push();
-      m.translateAndRotate(this.pose);
-      m.child('right_arm').translateAndRotate(this.pose);
-      this.pose.rotX(-90);
-      this.pose.rotY(180);
-      this.pose.translate(1 / 16, 0.125, -0.625);
-      this.items.render(b, this.pose, held, 'thirdperson_righthand', false, held.item.id === 'crossbow' ? crossbowTexture(held, e.useItem === held ? e.ticksUsingItem() : -1) : undefined);
-      this.pose.pop();
+    b.setOverlay(0, 0, 0, 0);
+    // (vanilla PlayerRenderer's layers: HumanoidArmorLayer, then PlayerItemInHandLayer)
+    if (!spectator) {
+      this.armor.render(b, this.pose, m, e.inventory.armor, false);
+      drawPlayerHeldItems(b, this.items, this.pose, m, e, this.mainArm);
     }
   }
 
@@ -903,17 +1045,17 @@ export class EntityRenderDispatcher {
   }
 
   /** vanilla EntityRenderDispatcher.renderFlame */
-  private renderFlame(b: EntityBatch, e: Entity, dx: number, dy: number, dz: number, cam: Camera, time: number): void {
+  private renderFlame(b: EntityBatch, e: Entity, dx: number, dy: number, dz: number, camYaw: number, time: number): void {
     const t = this.fire();
     if (!t) return;
     b.setOverlay(0, 0, 0, 0);
     const pose = this.pose;
-    pose.reset();
+    pose.reset(this.base ?? undefined);
     pose.translate(dx, dy, dz);
     const f = e.width * 1.4;
     pose.scale(f, f, f);
     let f1 = 0.5, f3 = e.height / f, f4 = 0, f5 = 0;
-    pose.rotY(-cam.yaw + 180);
+    pose.rotY(-camYaw + 180);
     pose.translate(0, 0, 0.3 - Math.floor(f3) * 0.02);
     const lb = b.lightB, ls = b.lightS;
     b.lightB = b.lightS = 240;
@@ -1033,6 +1175,11 @@ function minecartJitter(id: number): [number, number, number] {
 }
 
 /** vanilla LivingEntity.getAttackAnim */
+/** vanilla EntityRenderer.getRenderOffset (PlayerRenderer: a crouching player sinks 2 pixels) */
+function renderOffsetY(e: Entity): number {
+  return e.type === 'player' && (e as Player).crouching && !(e as Player).flying ? -0.125 : 0;
+}
+
 function attackAnim(e: LivingEntity, p: number): number {
   let f = e.attackAnim - e.attackAnimO;
   if (f < 0) f++;

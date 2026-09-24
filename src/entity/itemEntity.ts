@@ -11,7 +11,6 @@ export class ItemEntity extends Entity {
   age = 0;
   health = 5;
   bobOffset = Math.random() * Math.PI * 2;
-  onPickup: ((e: ItemEntity, p: Player, count: number) => void) | null = null;
   /** who threw it (vanilla ItemEntity.thrower: a player's Q or click-out drop) */
   thrower: Entity | null = null;
 
@@ -95,15 +94,23 @@ export class ItemEntity extends Entity {
     return true;
   }
 
+  /** vanilla ItemEntity.playerTouch: into the inventory if any of it fits (in creative it all goes regardless) */
   playerTouch(p: Player): void {
     const before = this.stack.count;
-    const rem = p.inventory.add(this.stack);
-    const taken = before - rem;
-    if (taken > 0) {
-      this.onPickup?.(this, p, taken);
-      this.stack.count = rem;
-      if (rem <= 0) this.remove();
-    }
+    const rem = p.inventory.add(this.stack, p.gameMode === 'creative');
+    if (rem >= before) return;
+    p.take(this, before);
+    this.stack.count = rem;
+    if (rem <= 0) this.remove();
+  }
+
+  /** vanilla ItemEntity.copy: where it lies, as it looks now (what a pickup shows flying off) */
+  copy(): ItemEntity {
+    const e = new ItemEntity(this.level, this.stack.copy());
+    e.moveTo(this.x, this.y, this.z, this.yaw, this.pitch);
+    e.age = this.age;
+    e.bobOffset = this.bobOffset;
+    return e;
   }
 
   protected override makesStepSounds(): boolean {

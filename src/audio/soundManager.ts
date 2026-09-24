@@ -58,12 +58,19 @@ const ALIASES: [RegExp, string][] = [
   // the nether wart crop (vanilla SoundType.NETHER_WART): stone steps, its planting sound on place
   [/^block\.nether_wart\.(?=step|hit)/, 'block.stone.'],
   [/^block\.nether_wart\.place$/, 'item.nether_wart.plant'],
+  // vanilla sounds.json: a lightning strike's crack is the explosion samples (random/explode1-4), played low
+  [/^entity\.lightning_bolt\.impact$/, 'entity.generic.explode'],
 ];
+
+/** how late (ms) a sound that had to be generated first may still start */
+const WAIT_MS = 250;
 
 export class SoundManager {
   ctx: AudioContext | null = null;
   private master: GainNode | null = null;
   private readonly buffers = new Map<string, AudioBuffer | null>();
+  /** plays asked for while no take of the sound was loaded yet */
+  private readonly waiting = new Map<string, { cat: Category; volume: number; pitch: number; x: number; y: number; z: number; ui: boolean; t: number }[]>();
   private readonly pending = new Map<number, (d: Float32Array | null) => void>();
   private worker: Worker | null = null;
   private nextId = 1;
@@ -142,6 +149,12 @@ export class SoundManager {
       const b = this.ctx.createBuffer(1, d.length, SR);
       b.copyToChannel(d as Float32Array<ArrayBuffer>, 0);
       this.buffers.set(key, b);
+      // a sound asked for before any take of it was ready plays now, if it is still fresh (the first thunderclap)
+      const w = this.waiting.get(name);
+      if (!w) return;
+      this.waiting.delete(name);
+      const now = performance.now();
+      for (const p of w) if (now - p.t < WAIT_MS) this.startBuffer(b, p.cat, p.volume, p.pitch, p.x, p.y, p.z, p.ui);
     });
   }
 
@@ -174,6 +187,8 @@ export class SoundManager {
   private start(name: string, volume: number, pitch: number, x: number, y: number, z: number, ui: boolean): void {
     this.ensure();
     if (!this.ctx || !this.master) return;
+    // (the category is the event's own: an aliased take plays under the source that asked for it)
+    const cat = categoryOf(name);
     name = this.resolveName(name);
     const n = this.variants[name];
     if (!n) return;
@@ -185,14 +200,17 @@ export class SoundManager {
       // try another loaded variant
       for (let i = 0; i < n; i++) {
         const b2 = this.buffers.get(name + '#' + i);
-        if (b2) return this.startBuffer(b2, name, volume, pitch, x, y, z, ui);
+        if (b2) return this.startBuffer(b2, cat, volume, pitch, x, y, z, ui);
       }
+      let w = this.waiting.get(name);
+      if (!w) this.waiting.set(name, (w = []));
+      if (w.length < 4) w.push({ cat, volume, pitch, x, y, z, ui, t: performance.now() });
       return;
     }
-    this.startBuffer(buf, name, volume, pitch, x, y, z, ui);
+    this.startBuffer(buf, cat, volume, pitch, x, y, z, ui);
   }
 
-  private startBuffer(buf: AudioBuffer, name: string, volume: number, pitch: number, x: number, y: number, z: number, ui: boolean): void {
+  private startBuffer(buf: AudioBuffer, cat: Category, volume: number, pitch: number, x: number, y: number, z: number, ui: boolean): void {
     const ctx = this.ctx!;
     const src = ctx.createBufferSource();
     src.buffer = buf;
@@ -200,7 +218,6 @@ export class SoundManager {
     const gain = ctx.createGain();
     const pan = ctx.createStereoPanner();
     src.connect(gain).connect(pan).connect(this.master!);
-    const cat = categoryOf(name);
     const e = { src, gain, pan, x, y, z, vol: Math.min(1, volume), range: 16 * Math.max(1, volume), cat, ui };
     this.applySpatial(e);
     src.start();

@@ -16,6 +16,7 @@ import { mat4, translate, rotateX, rotateZ, rotateY, DEG, clamp } from '../core/
 import { BLOCKS, STATE_BLOCK, FLAGS, F_WATER, F_LAVA, F_OPAQUE, F_COLLIDE } from '../world/block';
 import { FLUID_WATER, FLUID_LAVA, fluidHeight } from '../world/fluids';
 import { BIOMES } from '../world/gen/biomes';
+import { biomeTemperature } from '../world/gen/temperature';
 import { ItemStack, ITEMS, saveStack, loadStack } from '../item/item';
 import { hasShapeUpdates, updateShape } from './shapeUpdates';
 import { MIN_Y, MAX_Y } from '../world/constants';
@@ -40,7 +41,9 @@ import { timeOfDay, skyDarkenInt, blendBiomeColors } from '../render/environment
 import { GameOptions, loadOptions, saveOptions } from './options';
 import { DEFAULT_GAME_RULES } from './gameRules';
 import { ItemEntity } from '../entity/itemEntity';
+import { ExperienceOrb } from '../entity/xpOrb';
 import { GuiEntityRenderer } from '../render/guiEntity';
+import type { SkinParts } from '../render/entityRenderers';
 import { InventoryMenu, CraftingMenu, FurnaceMenu, ChestMenu } from '../inventory/menus';
 import { EnchantmentMenu, AnvilMenu, GrindstoneMenu } from '../inventory/enchantMenus';
 import { hasVanishing } from '../item/enchantHelper';
@@ -400,6 +403,13 @@ export class Game {
     this.level.onPortal = (e, x, y, z) => {
       if (e === this.player) this.portalTravel(x, y, z);
     };
+    // vanilla ClientPacketListener.handleTakeItemEntity: the pop, and what was taken flying to whoever took it
+    this.level.onTake = (e, taker) => {
+      const r = Math.random;
+      if (e instanceof ExperienceOrb) this.level.sound.play('entity.experience_orb.pickup', e.x, e.y, e.z, 0.1, (r() - r()) * 0.35 + 0.9);
+      else this.level.sound.play('entity.item.pickup', e.x, e.y, e.z, 0.2, (r() - r()) * 1.4 + 2);
+      this.renderer.entities.addPickup(e instanceof ItemEntity ? e.copy() : e, taker);
+    };
     this.player.dropHandler = (s) => this.interaction.throwItem(s);
     this.applyGameRules();
     const world = this.world;
@@ -432,8 +442,7 @@ export class Game {
     this.ambient = new AmbientTicker(this.level);
     this.renderer.weather.tempAt = (biome, x, y, z) => {
       const b = BIOMES[biome];
-      if (y > 80) return b.temperature - ((Math.sin(x * 0.13 + z * 0.07) * 4 + y - 80) * 0.05) / 40;
-      return b.temperature;
+      return biomeTemperature(b.temperature, !!b.frozen, x, y, z);
     };
     this.hookPlayerSounds();
     this.hud = new Hud();
@@ -758,10 +767,16 @@ export class Game {
 
   private guiEntity: GuiEntityRenderer | null = null;
 
+  /** options: Skin Customization, as the player model shows it */
+  private skinParts(): SkinParts {
+    const o = this.opts;
+    return { hat: o.skinHat, jacket: o.skinJacket, leftSleeve: o.skinLeftSleeve, rightSleeve: o.skinRightSleeve, leftPants: o.skinLeftPants, rightPants: o.skinRightPants };
+  }
+
   /** vanilla InventoryScreen.renderEntityInInventoryFollowsMouse */
   renderEntityInInventory(g: GuiGraphics, x1: number, y1: number, x2: number, y2: number, scale: number, yOffset: number, mx: number, my: number): void {
-    this.guiEntity ??= new GuiEntityRenderer(this.gl, this.renderer.batch, this.renderer.hand.skinTexture);
-    const c = this.guiEntity.render(this.player, this.opts, g.scale, x1, y1, x2, y2, scale, yOffset, mx, my, this.ticks);
+    this.guiEntity ??= new GuiEntityRenderer(this.gl, this.renderer.batch, this.renderer.entities);
+    const c = this.guiEntity.render(this.player, { shadows: false, drawPlayer: true, distanceScale: 1, skinParts: this.skinParts(), mainArm: this.opts.mainHand }, g.scale, x1, y1, x2, y2, scale, yOffset, mx, my);
     const ctx = g.ctx;
     ctx.save();
     ctx.imageSmoothingEnabled = false;
@@ -803,6 +818,8 @@ export class Game {
         return `${n} went up in flames`;
       case 'onFire':
         return `${n} burned to death`;
+      case 'lightningBolt':
+        return `${n} was struck by lightning`;
       case 'inWall':
         return `${n} suffocated in a wall`;
       case 'cactus':
@@ -1196,6 +1213,7 @@ export class Game {
       else if (code === KEYS.hideGui) this.hideGui = !this.hideGui;
       else if (code === KEYS.togglePerspective) this.thirdPerson = (this.thirdPerson + 1) % 3;
       else if (code === KEYS.drop) this.interaction.drop(inp.isDown('ControlLeft') || inp.isDown('MetaLeft'));
+      else if (code === KEYS.swapHands) this.interaction.swapHands();
       else {
         for (let d = 1; d <= 9; d++)
           if (code === KEYS[`hotbar${d}` as keyof typeof KEYS]) {
@@ -1242,6 +1260,7 @@ export class Game {
     this.renderer.lightmap.tick();
     this.renderer.hand.tick(p);
     this.renderer.particles?.tick();
+    this.renderer.entities.tickPickups();
     this.hud.tick(this);
     this.sound.tick(this);
     if (++this.autosaveTimer >= 6000) {
@@ -1411,7 +1430,7 @@ export class Game {
       dim: w.dim,
       biomeColors: blendBiomeColors(cam.x, cam.y, cam.z, (qx, qy, qz) => BIOMES[w.getBiome3(qx * 4 + 2, qy * 4 + 2, qz * 4 + 2)] ?? b),
       level: this.level,
-      entityOptions: { shadows: this.opts.entityShadows, drawPlayer: this.thirdPerson > 0 && !camOverride, distanceScale: this.opts.entityDistanceScaling },
+      entityOptions: { shadows: this.opts.entityShadows, drawPlayer: this.thirdPerson > 0 && !camOverride, distanceScale: this.opts.entityDistanceScaling, skinParts: this.skinParts(), mainArm: this.opts.mainHand },
     });
     if (camOverride) return;
     const hit = this.interaction.hit;
@@ -1438,7 +1457,7 @@ export class Game {
       const l = this.world.getLight(Math.floor(ex), Math.floor(ey), Math.floor(ez));
       let hf = 1;
       if (eyeFluid === FLUID_WATER) hf *= 0.85714287;
-      this.renderer.hand.render(this.renderer.batch, p, partial, this.canvas.width, this.canvas.height, hf, handBob, (l & 15) * 16, (l >> 4) * 16, this.renderer.viewRot);
+      this.renderer.hand.render(this.renderer.batch, p, partial, this.canvas.width, this.canvas.height, hf, handBob, (l & 15) * 16, (l >> 4) * 16, this.renderer.viewRot, this.opts.mainHand);
     }
     if (this.thirdPerson === 0 && p.isOnFire() && p.gameMode !== 'spectator') {
       this.renderer.entities.renderScreenFire(this.renderer.batch, this.canvas.width, this.canvas.height, 70, this.level.gameTime);
@@ -1587,7 +1606,7 @@ export class Game {
     };
     lvl.onPlayerCrossbowKill = (killed) => this.advancements.trigger('killed_by_crossbow', { crossbowKills: killed.map((e) => e.type) });
     this.interaction.onShotCrossbow = () => this.advancements.trigger('shot_crossbow');
-    this.interaction.onItemUsed = () => this.renderer.hand.itemUsed();
+    this.interaction.onItemUsed = (hand) => this.renderer.hand.itemUsed(hand);
     this.interaction.onPlaced = (name) => this.advancements.trigger('place', { place: name });
     this.interaction.onConsumed = (id) => this.advancements.trigger('consume', { consume: id });
     this.interaction.onItemDurability = (item, vehicle) => this.advancements.trigger('item_durability', { durability: { item, vehicle } });

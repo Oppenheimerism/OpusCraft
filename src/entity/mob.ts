@@ -569,7 +569,7 @@ export abstract class Mob extends LivingEntity {
     const got = this.equipItemIfPossible(src.copy());
     if (!got) return;
     this.onItemPickup(it);
-    this.take(it);
+    this.take(it, got.count);
     src.count -= got.count;
     if (src.count <= 0) it.remove();
   }
@@ -577,12 +577,6 @@ export abstract class Mob extends LivingEntity {
   /** vanilla Mob.onItemPickup: thrown_item_picked_up_by_entity for the player who threw it */
   protected onItemPickup(it: ItemEntity): void {
     if (it.thrower?.type === 'player') this.level.onThrownItemPickedUp?.(it.stack, this);
-  }
-
-  /** vanilla LivingEntity.take: the pop the client plays for any pickup */
-  protected take(it: ItemEntity): void {
-    const r = this.random;
-    this.level.sound.play('entity.item.pickup', it.x, it.y, it.z, 0.2, ((r.nextFloat() - r.nextFloat()) * 0.7 + 1) * 2);
   }
 
   /**

@@ -7,7 +7,7 @@ import type { ItemStack } from '../item/item';
 import { World } from '../world/world';
 import type { Entity } from '../entity/entity';
 import type { Player } from '../entity/player';
-import type { LivingEntity } from '../entity/living';
+import { LivingEntity } from '../entity/living';
 import { Rand } from '../core/rng';
 import { BLOCKS, STATE_BLOCK, FLAGS, F_AIR, F_WATERLOGGED, S } from '../world/block';
 import { canSurvive, blockDrops, isDripstoneFacing, dripleafTick } from './blockRules';
@@ -21,11 +21,15 @@ import type { Item } from '../item/item';
 import { FluidTicker, fluidStateOf } from './fluidTicks';
 import { RandomTicker } from './randomTicks';
 import { FallingBlockEntity } from '../entity/fallingBlock';
+import { LightningBolt } from '../entity/lightning';
+import { isSolidBlock } from '../world/gen/patches';
+import { MIN_Y, MAX_Y } from '../world/constants';
 import { levelOf } from '../item/enchantHelper';
 import { F_WATER, F_LAVA, F_REPLACEABLE } from '../world/block';
 import { skyDarkenInt, timeOfDay } from '../render/environment';
 import { BIOMES } from '../world/gen/biomes';
-import type { AABB } from '../core/aabb';
+import { coldEnoughToSnow } from '../world/gen/temperature';
+import { AABB } from '../core/aabb';
 import type { DimensionType } from '../world/dimension';
 import { NetherGenerator } from '../world/gen/nether';
 import type { NetherFortresses } from '../world/gen/fortress';
@@ -195,13 +199,105 @@ export class Level {
     if (!this.isRaining() || !this.canSeeSky(x, y, z)) return false;
     const b = BIOMES[this.world.getBiome(x, z)];
     if (!b || !b.precipitation) return false;
-    return this.temperatureAt(b.temperature, y) >= 0.15;
+    return !coldEnoughToSnow(b.temperature, !!b.frozen, x, y, z);
   }
 
-  /** biome temperature with the vanilla height falloff above y=80 */
-  temperatureAt(base: number, y: number): number {
-    return y > 80 ? base - ((y - 80) * 0.05) / 40 : base;
+  /** vanilla Level.randValue: the cheap LCG behind getBlockRandomPos */
+  private randValue = (Math.random() * 0x7fffffff) | 0;
+
+  /** vanilla ServerLevel.tickChunk "thunder": in a thunderstorm one chunk in 100000 is struck each tick */
+  tickThunder(cx: number, cz: number): void {
+    if (!this.isRaining() || !this.isThundering() || this.random.nextInt(100000) !== 0) return;
+    this.randValue = (Math.imul(this.randValue, 3) + 1013904223) | 0;
+    const i = this.randValue >> 2;
+    const [x, y, z] = this.findLightningTargetAround(cx * 16 + (i & 15), cz * 16 + ((i >> 8) & 15));
+    if (!this.isRainingAt(x, y, z)) return;
+    // (the skeleton trap's visual-only bolt waits for horses)
+    const bolt = new LightningBolt(this);
+    bolt.moveTo(x + 0.5, y, z + 0.5);
+    this.addEntity(bolt);
   }
+
+  /**
+   * vanilla ServerLevel.tickPrecipitation: in the cold, still water at the edge of open water freezes over (rain
+   * or shine), and while it's snowing a layer of snow settles on whatever will hold it
+   */
+  tickPrecipitation(cx: number, cz: number): void {
+    this.randValue = (Math.imul(this.randValue, 3) + 1013904223) | 0;
+    const i = this.randValue >> 2;
+    const x = cx * 16 + (i & 15), z = cz * 16 + ((i >> 8) & 15);
+    const y = this.motionBlockingHeight(x, z);
+    const b = BIOMES[this.world.getBiome(x, z)];
+    if (!b) return;
+    if (this.shouldFreeze(b.temperature, !!b.frozen, x, y - 1, z)) this.setBlock(x, y - 1, z, S('ice'));
+    if (!this.isRaining()) return;
+    const h = Number(this.gameRules.snowAccumulationHeight);
+    if (h > 0 && this.shouldSnow(b.temperature, !!b.frozen, x, y, z)) {
+      const st = this.world.getState(x, y, z);
+      const sb = BLOCKS[STATE_BLOCK[st]];
+      if (sb.name === 'snow') {
+        const layers = sb.get<number>(st, 'layers');
+        if (layers < Math.min(h, 8)) {
+          // (vanilla Block.pushEntitiesUp: whatever stood in the snow now stands on it)
+          const top = y + (layers * 2) / 16;
+          for (const e of this.getEntities(new AABB(x, y, z, x + 1, top, z + 1))) if (e.y < top) e.moveTo(e.x, top, e.z);
+          this.setBlock(x, y, z, sb.with(st, 'layers', layers + 1));
+        }
+      } else this.setBlock(x, y, z, S('snow'));
+    }
+    // (cauldrons catching the rain or snow: no cauldrons yet)
+  }
+
+  /** vanilla Biome.shouldFreeze(level, pos, true): a still water source, dim, cold, at the edge of open water */
+  private shouldFreeze(base: number, frozen: boolean, x: number, y: number, z: number): boolean {
+    if (y < MIN_Y || y >= MAX_Y || !coldEnoughToSnow(base, frozen, x, y, z)) return false;
+    const w = this.world;
+    if ((w.getLight(x, y, z) & 15) >= 10) return false;
+    const st = w.getState(x, y, z);
+    const wb = BLOCKS[STATE_BLOCK[st]];
+    if (wb.name !== 'water' || wb.get<number>(st, 'level') !== 0) return false;
+    const wet = (a: number, c: number) => (FLAGS[w.getState(a, y, c)] & F_WATER) !== 0;
+    return !(wet(x - 1, z) && wet(x + 1, z) && wet(x, z - 1) && wet(x, z + 1));
+  }
+
+  /** vanilla Biome.shouldSnow: cold, dim, open air (or snow) where a snow layer could lie */
+  private shouldSnow(base: number, frozen: boolean, x: number, y: number, z: number): boolean {
+    if (y < MIN_Y || y >= MAX_Y || !coldEnoughToSnow(base, frozen, x, y, z)) return false;
+    const w = this.world;
+    if ((w.getLight(x, y, z) & 15) >= 10) return false;
+    const st = w.getState(x, y, z);
+    if (!(FLAGS[st] & F_AIR) && BLOCKS[STATE_BLOCK[st]].name !== 'snow') return false;
+    return canSurvive(w, x, y, z, S('snow'));
+  }
+
+  /** vanilla findLightningTargetAround: the top of the column, or something alive under the open sky close by */
+  private findLightningTargetAround(x: number, z: number): [number, number, number] {
+    let y = this.motionBlockingHeight(x, z);
+    // (no lightning rods yet)
+    const box = new AABB(x - 3, y - 3, z - 3, x + 4, MAX_Y + 4, z + 4);
+    const list = this.getEntities(box, (e) => e instanceof LivingEntity && e.isAlive && this.canSeeSky(Math.floor(e.x), Math.floor(e.y), Math.floor(e.z)));
+    if (list.length) {
+      const e = list[this.random.nextInt(list.length)];
+      return [Math.floor(e.x), Math.floor(e.y), Math.floor(e.z)];
+    }
+    if (y === MIN_Y - 1) y += 2;
+    return [x, y, z];
+  }
+
+  /** vanilla Heightmap.Types.MOTION_BLOCKING: above the highest block that stops movement or holds a fluid */
+  motionBlockingHeight(x: number, z: number): number {
+    const w = this.world;
+    for (let y = w.heightAt(x, z) - 1; y >= MIN_Y; y--) {
+      const st = w.getState(x, y, z);
+      if (FLAGS[st] & (F_WATER | F_LAVA)) return y + 1;
+      if (isSolidBlock(st)) {
+        const n = BLOCKS[STATE_BLOCK[st]].name;
+        if (n !== 'cobweb' && n !== 'bamboo_sapling') return y + 1;
+      }
+    }
+    return MIN_Y;
+  }
+
 
   /** called for every entity tick (spawner despawn checks etc.) */
   onEntityTick: ((e: Entity) => void) | null = null;
@@ -211,6 +307,8 @@ export class Level {
   onBred: ((child: Entity, cause: Entity | null) => void) | null = null;
   /** an arrow the player shot hurt something (vanilla "Take Aim") */
   onPlayerArrowHit: ((target: Entity) => void) | null = null;
+  /** vanilla LivingEntity.take: something alive picked up an item, arrow or orb (the pop, and it flying to them) */
+  onTake: ((e: Entity, taker: LivingEntity, amount: number) => void) | null = null;
   /** a mob picked up an item a player had thrown (vanilla thrown_item_picked_up_by_entity) */
   onThrownItemPickedUp: ((stack: ItemStack, by: Entity) => void) | null = null;
   /** a crossbow arrow the player shot killed something: all it has killed so far (vanilla killed_by_crossbow) */
