@@ -6,6 +6,7 @@ import { ItemStack, ITEMS, ItemTag, cloneTag } from '../item/item';
 import { smeltingResult, fuelTime } from '../inventory/recipes';
 import { BLOCKS, STATE_BLOCK } from './block';
 import type { Level } from '../game/level';
+import type { Entity } from '../entity/entity';
 import { fillContainer } from '../game/loot';
 
 export interface SavedBlockEntity {
@@ -254,11 +255,43 @@ export class EnchantingTableBlockEntity extends BlockEntity {
   }
 }
 
+/**
+ * vanilla BellBlockEntity: rung, the bell swings for 50 ticks (BellRenderer tips it away from the side it was struck
+ * on); the living things around it are remembered between rings, for 60 ticks
+ */
+export class BellBlockEntity extends BlockEntity {
+  readonly id = 'bell';
+  ticks = 0;
+  shaking = false;
+  /** the struck side (a Dir: 2 north, 3 south, 4 west, 5 east) */
+  clickDirection = 2;
+  lastRingTimestamp = -Infinity;
+  nearbyEntities: Entity[] | null = null;
+  constructor(x: number, y: number, z: number) {
+    super(x, y, z, 0);
+  }
+  /** vanilla onHit / triggerEvent(1): (re)start the swing */
+  onHit(dir: number): void {
+    this.clickDirection = dir;
+    this.ticks = 0;
+    this.shaking = true;
+  }
+  /** vanilla BellBlockEntity.tick (raiders nearby would make it resonate: there are none) */
+  override tick(): void {
+    if (this.shaking) this.ticks++;
+    if (this.ticks >= 50) {
+      this.shaking = false;
+      this.ticks = 0;
+    }
+  }
+}
+
 export function createBlockEntity(name: string, x: number, y: number, z: number): BlockEntity | null {
   if (name === 'chest') return new ChestBlockEntity(x, y, z);
   if (name === 'enchanting_table') return new EnchantingTableBlockEntity(x, y, z);
   if (name === 'furnace') return new FurnaceBlockEntity(x, y, z);
   if (name === 'spawner') return new SpawnerBlockEntity(x, y, z);
+  if (name === 'bell') return new BellBlockEntity(x, y, z);
   return null;
 }
 

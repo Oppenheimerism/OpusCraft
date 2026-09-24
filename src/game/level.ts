@@ -37,6 +37,7 @@ import { behaviorOf } from './blockBehavior';
 import { NeighborUpdater } from './neighborUpdater';
 import { LevelTicks } from './ticks';
 import './redstone/components';
+import './villageBlocks';
 
 export interface SoundSink {
   play(name: string, x: number, y: number, z: number, volume?: number, pitch?: number): void;

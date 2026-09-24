@@ -139,7 +139,7 @@ export function getItem(id: string): Item {
 const BLOCK_TAB: [RegExp, string][] = [
   [/_(ore)$|^(stone|granite|diorite|andesite|deepslate|tuff|calcite|dirt|coarse_dirt|podzol|mycelium|grass_block|sand|red_sand|gravel|clay|bedrock|obsidian|snow_block|ice|packed_ice|blue_ice|mud|rooted_dirt|moss_block|dripstone_block|magma_block|powder_snow|raw_.*_block|netherrack|soul_sand|soul_soil|basalt|blackstone|crimson_nylium|warped_nylium|nether_wart_block|warped_wart_block|ancient_debris|crimson_stem|warped_stem|crimson_fungus|warped_fungus|crimson_roots|warped_roots|nether_sprouts|weeping_vines|twisting_vines|shroomlight)$/, 'natural'],
   [/_log$|_wood$|_leaves$|_sapling$|^(short_grass|fern|dead_bush|tall_grass|large_fern|dandelion|poppy|blue_orchid|allium|azure_bluet|.*_tulip|oxeye_daisy|cornflower|lily_of_the_valley|sunflower|lilac|rose_bush|peony|brown_mushroom|red_mushroom|sugar_cane|cactus|pumpkin|melon|lily_pad|vine|seagrass|kelp|sweet_berry_bush|cobweb|carved_pumpkin|jack_o_lantern|hay_block|moss_carpet|azalea|flowering_azalea|hanging_roots|spore_blossom|big_dripleaf|small_dripleaf)$/, 'natural'],
-  [/^(crafting_table|furnace|chest|bookshelf|ladder|(soul_)?torch|glowstone|sea_lantern|spawner|tnt|sponge|(soul_)?lantern|chain|enchanting_table|grindstone|(chipped_|damaged_)?anvil)$|_bed$/, 'functional'],
+  [/^(crafting_table|furnace|chest|bookshelf|ladder|(soul_)?torch|glowstone|sea_lantern|spawner|tnt|sponge|(soul_)?lantern|chain|enchanting_table|grindstone|(chipped_|damaged_)?anvil|bell)$|_bed$/, 'functional'],
   [/_carpet$|_stained_glass$|_stained_glass_pane$/, 'colored'],
 ];
 
@@ -299,7 +299,7 @@ for (const b of BLOCKS) {
   const it = ITEMS.get(b.name);
   if (!it || !it.block) continue;
   const n = b.name;
-  if (n.endsWith('_door') || n.endsWith('_bed') || n === 'lantern' || n === 'soul_lantern' || n === 'chain') {
+  if (n.endsWith('_door') || n.endsWith('_bed') || n === 'lantern' || n === 'soul_lantern' || n === 'chain' || n === 'bell') {
     it.texture = n;
     if (n.endsWith('_bed')) it.maxStack = 1;
   }

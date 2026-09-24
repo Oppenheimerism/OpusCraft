@@ -9,6 +9,7 @@ import type { World } from '../world/world';
 import { fireCanSurvive, fireStateAt, isSoulFireBase } from './fire';
 import { MULTIFACE, multifaceSupported, dripstoneSupported, dripstoneThickness } from './blockRules';
 import { portalStillStands } from './portal';
+import { behaviorOf } from './blockBehavior';
 
 const blk = (st: number): Block => BLOCKS[STATE_BLOCK[st]];
 
@@ -151,6 +152,8 @@ function raisePost(c: Record<string, string>, above: number, face: Rect[]): bool
 /** Recompute a state from its neighbours; returns 0 if the block must break. */
 export function updateShape(world: World, x: number, y: number, z: number, st: number): number {
   if (FLAGS[st] & F_AIR) return st;
+  const own = behaviorOf(st)?.updateShape;
+  if (own) return own(world, x, y, z, st);
   const b = blk(st);
   const n = b.name;
   if (n.endsWith('_stairs')) return b.with(st, 'shape', stairsShape(world, x, y, z, st));
@@ -265,6 +268,7 @@ function plantOf(name: string): Block {
 
 /** blocks whose state depends on neighbours (skip the work for everything else) */
 export function hasShapeUpdates(st: number): boolean {
+  if (behaviorOf(st)?.updateShape) return true;
   const n = blk(st).name;
   return n === 'glow_lichen' || n === 'pointed_dripstone' || n === 'cave_vines' || n === 'cave_vines_plant' || n.endsWith('ing_vines') || n.endsWith('ing_vines_plant') || n === 'big_dripleaf' || n.endsWith('_stairs') || n.endsWith('_fence') || n.endsWith('_pane') || n === 'iron_bars' || n.endsWith('_wall') || n.endsWith('_fence_gate') || n.endsWith('_door') || n.endsWith('_bed') || n === 'grass_block' || n === 'podzol' || n === 'mycelium' || n.startsWith('attached_') || n === 'fire' || n === 'soul_fire' || n === 'nether_portal';
 }

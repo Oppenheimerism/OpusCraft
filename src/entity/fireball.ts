@@ -11,6 +11,7 @@ import { PrimedTnt } from './tnt';
 import { ItemStack, ITEMS } from '../item/item';
 import { explode } from '../game/explosion';
 import { clipBlocks } from '../game/raycast';
+import { onProjectileHit } from '../game/blockRules';
 import { fireStateAt, placeFire } from '../game/fire';
 import { FLAGS, F_AIR } from '../world/block';
 import { DX, DY, DZ } from '../world/dir';
@@ -72,7 +73,11 @@ export abstract class Fireball extends Entity {
     }
     if (hit || bh) {
       if (hit) this.hitEntity(hit);
-      else if (bh) this.hitBlock(bh.x, bh.y, bh.z, bh.face);
+      else if (bh) {
+        // (vanilla Projectile.onHitBlock: the block hears of it first)
+        onProjectileHit(lvl, bh.x, bh.y, bh.z, bh, this);
+        this.hitBlock(bh.x, bh.y, bh.z, bh.face);
+      }
       this.onHit();
       return;
     }

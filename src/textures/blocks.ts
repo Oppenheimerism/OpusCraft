@@ -25,6 +25,7 @@ import * as NF from './blocklib/netherFlora';
 import * as IB from './blocklib/iconblocks';
 import { FIRE_TEXTURES } from './mobs';
 import { registerEnchantingTextures } from './blocklib/enchanting';
+import { registerVillageTextures } from './blocklib/village';
 
 type Gen = () => TexDef;
 export const BLOCK_TEXTURES: Record<string, Gen> = {};
@@ -333,6 +334,7 @@ T['furnace_front'] = () => UT.furnaceFront(false);
 T['furnace_front_on'] = () => UT.furnaceFront(true);
 T['bookshelf'] = () => UT.bookshelf();
 registerEnchantingTextures(T);
+registerVillageTextures(T);
 T['glowstone'] = () => UT.glowstone();
 T['sea_lantern'] = () => UT.seaLantern();
 T['redstone_lamp'] = () => UT.redstoneLamp(false);

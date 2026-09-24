@@ -526,9 +526,22 @@ export class Interaction {
     const n = b.name;
     // (what the block does by itself, vanilla useWithoutItem: the main hand's turn, not sneaking with an item)
     const sneakingWithItem = secondary || !main;
+    const ctx = { player: p, face: h.face, hx: h.hx, hy: h.hy, hz: h.hz, hand: (main ? 'main' : 'off') as Hand };
+    // vanilla useItemOn: the held item on the block first, either hand (cauldrons, composters, lecterns, flower pots)
+    const useOn = behaviorOf(st)?.useItemOn;
+    let skipOwn = false;
+    if (!secondary && stack && useOn) {
+      const r = useOn(lvl, h.x, h.y, h.z, st, stack, ctx);
+      if (r === 'success') {
+        p.swing();
+        return true;
+      }
+      if (r === 'consume') return true;
+      skipOwn = r === 'skip';
+    }
     // levers and buttons
     const own = behaviorOf(st)?.use;
-    if (!sneakingWithItem && own && own(lvl, h.x, h.y, h.z, st, { player: p, face: h.face, hx: h.hx, hy: h.hy, hz: h.hz })) {
+    if (!sneakingWithItem && !skipOwn && own && own(lvl, h.x, h.y, h.z, st, ctx)) {
       p.swing();
       return true;
     }

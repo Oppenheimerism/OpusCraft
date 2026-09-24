@@ -8,6 +8,8 @@ import type { World } from '../world/world';
 import type { Level } from './level';
 import type { Entity } from '../entity/entity';
 import type { Player } from '../entity/player';
+import type { ItemStack } from '../item/item';
+import type { Hand } from '../item/inventory';
 import type { PlaceContext } from './blockRules';
 
 /** a right click on the block (vanilla BlockHitResult) */
@@ -18,7 +20,24 @@ export interface UseContext {
   hx: number;
   hy: number;
   hz: number;
+  /** the hand doing it (useItemOn; useWithoutItem is always the main hand's) */
+  hand?: Hand;
 }
+
+/** where a projectile struck the block (vanilla BlockHitResult) */
+export interface ProjectileHit {
+  face: number;
+  px: number;
+  py: number;
+  pz: number;
+}
+
+/**
+ * vanilla ItemInteractionResult: 'success' (the click did something), 'pass' (PASS_TO_DEFAULT_BLOCK_INTERACTION:
+ * the block's own use, then the item's, get their turn), 'skip' (SKIP_DEFAULT_BLOCK_INTERACTION: straight on to the
+ * item's own use), 'consume' (nothing happened, but the click is spent)
+ */
+export type ItemUseResult = 'success' | 'pass' | 'skip' | 'consume';
 
 export interface BlockBehavior {
   /** vanilla getStateForPlacement (null: can't go there) */
@@ -41,6 +60,14 @@ export interface BlockBehavior {
   getDirectSignal?(world: World, x: number, y: number, z: number, state: number, dir: Dir): number;
   /** vanilla useWithoutItem: true if it did something */
   use?(level: Level, x: number, y: number, z: number, state: number, ctx: UseContext): boolean;
+  /** vanilla useItemOn: `stack` (in ctx.hand) used on the block, before the block's own use and the item's */
+  useItemOn?(level: Level, x: number, y: number, z: number, state: number, stack: ItemStack, ctx: UseContext): ItemUseResult;
+  /** vanilla onProjectileHit: `projectile` struck the block */
+  projectileHit?(level: Level, x: number, y: number, z: number, state: number, hit: ProjectileHit, projectile: Entity): void;
+  /** vanilla updateShape, from all the neighbours at once: the state to become (0: it breaks) */
+  updateShape?(world: World, x: number, y: number, z: number, state: number): number;
+  /** vanilla LiquidBlockContainer.placeLiquid: a water bucket emptied into the block; true if it took it */
+  placeLiquid?(level: Level, x: number, y: number, z: number, state: number): boolean;
   /** vanilla entityInside: `e`'s box overlaps the block */
   entityInside?(level: Level, x: number, y: number, z: number, state: number, e: Entity): void;
   /** vanilla animateTick (client ambient effects) */

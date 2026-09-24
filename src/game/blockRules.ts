@@ -8,8 +8,9 @@ import type { World } from '../world/world';
 import type { Level } from './level';
 import { Rand } from '../core/rng';
 import { oreDrops, uniformBonus, tableBonus } from '../item/enchantHelper';
-import { behaviorOf, behaviorOfBlock } from './blockBehavior';
+import { behaviorOf, behaviorOfBlock, type ProjectileHit } from './blockBehavior';
 import { hasNeighborSignal } from './redstone/signal';
+import type { Entity } from '../entity/entity';
 
 const blk = (st: number): Block => BLOCKS[STATE_BLOCK[st]];
 
@@ -229,9 +230,17 @@ export function lookingDirections(yaw: number, pitch: number): number[] {
   return f7 > f10 ? arr(v, d, h) : f9 > f7 ? arr(d, h, v) : arr(d, v, h);
 }
 
-/** vanilla Block.onProjectileHit: amethyst (the block and every growth stage) rings when struck */
-export function onProjectileHit(level: Level, x: number, y: number, z: number): void {
+/**
+ * vanilla Block.onProjectileHit: amethyst (the block and every growth stage) rings when struck; blocks with their
+ * own (bells, campfires) are told where and by what
+ */
+export function onProjectileHit(level: Level, x: number, y: number, z: number, hit?: ProjectileHit, projectile?: Entity): void {
   const st = level.getState(x, y, z);
+  const own = behaviorOf(st)?.projectileHit;
+  if (own && hit && projectile) {
+    own(level, x, y, z, st, hit, projectile);
+    return;
+  }
   const n = blk(st).name;
   // vanilla BigDripleafBlock.onProjectileHit: the leaf tips right over
   if (n === 'big_dripleaf') {
