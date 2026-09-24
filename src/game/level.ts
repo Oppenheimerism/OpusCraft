@@ -34,6 +34,7 @@ import { AABB } from '../core/aabb';
 import type { DimensionType } from '../world/dimension';
 import { NetherGenerator } from '../world/gen/nether';
 import { villageLocator, type Villages } from '../world/gen/villages';
+import type { TamableAnimal } from '../entity/tamable';
 import { strongholdLocator, type Strongholds } from '../world/gen/stronghold';
 import type { NetherFortresses } from '../world/gen/fortress';
 import type { EndDragonFight } from './endDragonFight';
@@ -395,6 +396,10 @@ export class Level {
   onEntityDied: ((victim: LivingEntity, source: string, attacker: Entity | null) => void) | null = null;
   /** animals bred (the child, and who fed them) */
   onBred: ((child: Entity, cause: Entity | null) => void) | null = null;
+  /** a player tamed an animal (vanilla CriteriaTriggers.TAME_ANIMAL) */
+  onTamed: ((animal: TamableAnimal, by: Entity) => void) | null = null;
+  /** a tame animal died; its owner is told how (vanilla TamableAnimal.die) */
+  onTamedDeath: ((animal: TamableAnimal, source: string) => void) | null = null;
   /** an arrow the player shot hurt something (vanilla "Take Aim") */
   onPlayerArrowHit: ((target: Entity) => void) | null = null;
   /** a trident the player threw hurt something (vanilla "A Throwaway Joke") */

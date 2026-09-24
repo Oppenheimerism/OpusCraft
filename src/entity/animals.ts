@@ -196,11 +196,12 @@ export abstract class Animal extends AgeableMob {
     if (p.gameMode !== 'creative') p.inventory.consumeSelected(1);
   }
 
-  abstract makeBaby(): Animal;
+  /** vanilla getBreedOffspring (the other parent there too) */
+  abstract makeBaby(partner: Animal): Animal;
 
   /** vanilla Animal.spawnChildFromBreeding */
   spawnChildFromBreeding(partner: Animal): void {
-    const baby = this.makeBaby();
+    const baby = this.makeBaby(partner);
     baby.setAge(-24000);
     baby.moveTo(this.x, this.y, this.z, 0, 0);
     this.level.addEntity(baby);

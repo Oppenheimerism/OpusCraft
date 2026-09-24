@@ -67,7 +67,24 @@ export abstract class LivingEntity extends Entity {
   lastHurtByMob: LivingEntity | null = null;
   lastHurtByMobTimestamp = 0;
   lastHurtByPlayer: LivingEntity | null = null;
-  lastHurtMob: LivingEntity | null = null;
+  /** vanilla lastDamageSource and lastDamageStamp: what last hurt it, and when */
+  lastDamageSource: string | null = null;
+  lastDamageStamp = -1000;
+  /** vanilla getLastDamageSource: forgotten after 40 ticks */
+  recentDamageSource(): string | null {
+    return this.level.gameTime - this.lastDamageStamp > 40 ? null : this.lastDamageSource;
+  }
+  private lastHurtMobValue: LivingEntity | null = null;
+  /** vanilla lastHurtMobTimestamp: when it last hurt something (setLastHurtMob) */
+  lastHurtMobTimestamp = 0;
+  /** vanilla lastHurtMob: the last thing it hurt (setting it is vanilla setLastHurtMob, which notes when) */
+  get lastHurtMob(): LivingEntity | null {
+    return this.lastHurtMobValue;
+  }
+  set lastHurtMob(e: LivingEntity | null) {
+    this.lastHurtMobValue = e;
+    if (e) this.lastHurtMobTimestamp = this.tickCount;
+  }
   /** who dealt the killing blow and how (death messages, loot) */
   killer: Entity | null = null;
   /** vanilla autoSpinAttackTicks: ticks left of a riptide spin */
@@ -139,7 +156,7 @@ export abstract class LivingEntity extends Entity {
     if (this.health > 0 && this.isInWall()) this.hurt(1, 'inWall');
     if (this.lastHurtByPlayerTime > 0) this.lastHurtByPlayerTime--;
     else this.lastHurtByPlayer = null;
-    if (this.lastHurtMob && !this.lastHurtMob.isAlive) this.lastHurtMob = null;
+    if (this.lastHurtMobValue && !this.lastHurtMobValue.isAlive) this.lastHurtMobValue = null;
     if (this.lastHurtByMob) {
       if (!this.lastHurtByMob.isAlive || this.tickCount - this.lastHurtByMobTimestamp > 100) this.lastHurtByMob = null;
     }
@@ -850,6 +867,8 @@ export abstract class LivingEntity extends Entity {
       this.actuallyHurt(source, amount);
       this.hurtTime = this.hurtDuration = 10;
     }
+    this.lastDamageSource = source;
+    this.lastDamageStamp = this.level.gameTime;
     if (attacker instanceof LivingEntity && attacker !== this) {
       this.setLastHurtByMob(attacker);
       if (attacker.type === 'player') {

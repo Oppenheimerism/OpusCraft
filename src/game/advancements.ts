@@ -14,6 +14,8 @@ export type Criterion =
   | { t: 'place'; blocks: string[] }
   | { t: 'consume'; item: string | '*' }
   | { t: 'breed'; type: string | '*' }
+  /** vanilla TameAnimalTrigger: tamed that kind (and that variant) */
+  | { t: 'tame'; type: string | '*'; variant?: string }
   | { t: 'shoot_arrow' }
   /** vanilla player_hurt_entity, the damage's direct entity a trident */
   | { t: 'throw_trident' }
@@ -90,6 +92,9 @@ const HOSTILE = [
   'skeleton', 'slime', 'spider', 'stray', 'vex', 'vindicator', 'witch', 'wither', 'wither_skeleton', 'zoglin', 'zombie', 'zombie_villager',
   'zombified_piglin',
 ];
+/** vanilla husbandry/whole_pack: one of each wolf variant */
+const WOLF_VARIANT_IDS = ['ashen', 'black', 'chestnut', 'pale', 'rusty', 'snowy', 'spotted', 'striped', 'woods'];
+
 const BREEDABLE = [
   'horse', 'donkey', 'mule', 'sheep', 'cow', 'mooshroom', 'pig', 'chicken', 'wolf', 'ocelot', 'rabbit', 'llama', 'cat', 'turtle', 'fox',
   'panda', 'bee', 'hoglin', 'strider', 'goat', 'axolotl', 'frog', 'camel', 'sniffer', 'armadillo',
@@ -253,7 +258,7 @@ const A: AdvancementDef[] = [
   { id: 'husbandry/breed_an_animal', parent: 'husbandry/root', title: 'The Parrots and the Bats', description: 'Breed two animals together', icon: 'wheat', frame: 'task', criteria: one({ t: 'breed', type: '*' }) },
   { id: 'husbandry/allay_deliver_item_to_player', parent: 'husbandry/root', title: "You've Got a Friend in Me", description: 'Have an Allay deliver items to you', icon: 'cookie', frame: 'task', criteria: one(never) },
   { id: 'husbandry/ride_a_boat_with_a_goat', parent: 'husbandry/root', title: 'Whatever Floats Your Goat!', description: 'Get in a Boat and float with a Goat', icon: 'oak_boat', frame: 'task', criteria: one(never) },
-  { id: 'husbandry/tame_an_animal', parent: 'husbandry/root', title: 'Best Friends Forever', description: 'Tame an animal', icon: 'lead', frame: 'task', criteria: one(never) },
+  { id: 'husbandry/tame_an_animal', parent: 'husbandry/root', title: 'Best Friends Forever', description: 'Tame an animal', icon: 'lead', frame: 'task', criteria: one({ t: 'tame', type: '*' }) },
   { id: 'husbandry/make_a_sign_glow', parent: 'husbandry/root', title: 'Glow and Behold!', description: 'Make the text of any kind of sign glow', icon: 'glow_ink_sac', frame: 'task', criteria: one(never) },
   { id: 'husbandry/fishy_business', parent: 'husbandry/root', title: 'Fishy Business', description: 'Catch a fish', icon: 'fishing_rod', frame: 'task', criteria: one(never) },
   { id: 'husbandry/silk_touch_nest', parent: 'husbandry/root', title: 'Total Beelocation', description: 'Move a Bee Nest, with 3 Bees inside, using Silk Touch', icon: 'bee_nest', frame: 'task', criteria: one(never) },
@@ -263,7 +268,7 @@ const A: AdvancementDef[] = [
   { id: 'husbandry/wax_on', parent: 'husbandry/safely_harvest_honey', title: 'Wax On', description: 'Apply Honeycomb to a Copper block!', icon: 'honeycomb', frame: 'task', criteria: one(never) },
   { id: 'husbandry/bred_all_animals', parent: 'husbandry/breed_an_animal', title: 'Two by Two', description: 'Breed all the animals!', icon: 'golden_carrot', frame: 'challenge', criteria: each(BREEDABLE, (n) => ({ t: 'breed', type: n })) },
   { id: 'husbandry/allay_deliver_cake_to_note_block', parent: 'husbandry/allay_deliver_item_to_player', title: 'Birthday Song', description: 'Have an Allay drop a Cake at a Note Block', icon: 'note_block', frame: 'task', criteria: one(never) },
-  { id: 'husbandry/whole_pack', parent: 'husbandry/tame_an_animal', title: 'The Whole Pack', description: 'Tame one of each Wolf variant', icon: 'bone', frame: 'challenge', criteria: one(never) },
+  { id: 'husbandry/whole_pack', parent: 'husbandry/tame_an_animal', title: 'The Whole Pack', description: 'Tame one of each Wolf variant', icon: 'bone', frame: 'challenge', criteria: each(WOLF_VARIANT_IDS, (v) => ({ t: 'tame', type: 'wolf', variant: v })) },
   { id: 'husbandry/complete_catalogue', parent: 'husbandry/tame_an_animal', title: 'A Complete Catalogue', description: 'Tame all Cat variants!', icon: 'cod', frame: 'challenge', criteria: one(never) },
   { id: 'husbandry/remove_wolf_armor', parent: 'husbandry/tame_an_animal', title: 'Shear Brilliance', description: 'Remove Wolf Armor from a Wolf using Shears', icon: 'shears', frame: 'task', criteria: one(never) },
   { id: 'husbandry/tactical_fishing', parent: 'husbandry/fishy_business', title: 'Tactical Fishing', description: 'Catch a Fish... without a Fishing Rod!', icon: 'pufferfish_bucket', frame: 'task', criteria: one(never) },
@@ -443,6 +448,7 @@ export interface TriggerPayload {
   place?: string;
   consume?: string;
   breed?: string;
+  tame?: { type: string; variant?: string };
   biome?: string;
   /** the structures whose pieces the player stands in */
   structures?: string[];
@@ -583,6 +589,8 @@ function matches(c: Criterion, p: TriggerPayload): boolean {
       return !!p.consume && (c.item === '*' || c.item === p.consume);
     case 'breed':
       return !!p.breed && (c.type === '*' || c.type === p.breed);
+    case 'tame':
+      return !!p.tame && (c.type === '*' || c.type === p.tame.type) && (c.variant === undefined || c.variant === p.tame.variant);
     case 'biome':
       return p.biome === c.biome;
     case 'structure':

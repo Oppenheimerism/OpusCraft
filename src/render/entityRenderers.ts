@@ -39,6 +39,10 @@ import '../textures/biomeMobs';
 import '../textures/drowned';
 import '../textures/silverfish';
 import { silverfishModel, animateSilverfish } from './silverfishModel';
+import '../textures/wolf';
+import { wolfModel, animateWolf } from './wolfModel';
+import { Wolf } from '../entity/wolf';
+import { DYE_DIFFUSE } from '../entity/animals';
 import { Witch } from '../entity/witch';
 import { villagerTexture, zombieVillagerTexture } from '../textures/villager';
 import { ZombieVillager } from '../entity/zombieVillager';
@@ -182,6 +186,7 @@ export class EntityRenderDispatcher {
       drowned: M.drownedModel(),
       drowned_outer: M.drownedModel(0.25),
       silverfish: silverfishModel(),
+      wolf: wolfModel(),
     };
     // vanilla textures/misc/shadow.png: soft black disc
     const n = 32, data = new Uint8Array(n * n * 4);
@@ -522,7 +527,7 @@ export class EntityRenderDispatcher {
     const def = this.models[type];
     // (vanilla GhastRenderer.getTextureLocation: its face while charging a shot)
     // (vanilla StriderRenderer.getTextureLocation: purple while it's cold)
-    const tex = e instanceof Villager ? this.villagerTex(e) : e instanceof ZombieVillager ? this.zombieVillagerTex(e) : this.tex(e instanceof Ghast && e.charging ? 'ghast_shooting' : e instanceof Strider && e.suffocating ? 'strider_cold' : type);
+    const tex = e instanceof Villager ? this.villagerTex(e) : e instanceof ZombieVillager ? this.zombieVillagerTex(e) : this.tex(e instanceof Ghast && e.charging ? 'ghast_shooting' : e instanceof Strider && e.suffocating ? 'strider_cold' : e instanceof Wolf ? e.texture() : type);
     if (!def || !tex) return;
     const baby = e.isBaby();
     let white = 0;
@@ -684,6 +689,14 @@ export class EntityRenderDispatcher {
       case 'silverfish':
         animateSilverfish(def.root, a.age);
         break;
+      case 'wolf': {
+        const w = e as Wolf;
+        animateWolf(def.root, {
+          limbSwing: a.limbSwing, limbAmount: a.limbAmount, headYaw: a.headYaw, headPitch: a.headPitch,
+          angry: w.isAngry(), sitting: w.inSittingPose, tailAngle: w.tailAngle(), headRoll: w.headRollAngle(p), bodyRoll: (o) => w.bodyRollAngle(p, o),
+        });
+        break;
+      }
       case 'bat': {
         // vanilla AnimationState: seconds since each loop started (a tick is 50 ms)
         const bat = e as Bat;
@@ -694,7 +707,8 @@ export class EntityRenderDispatcher {
     }
     this.overlay(b, e, white);
     // vanilla BatModel renders entityCutout (culled: its flat wings have a front and a back side)
-    this.drawBody(b, e, def, tex, baby, type === 'bat' ? { cull: true } : undefined);
+    // (vanilla WolfRenderer.render: a wet wolf's coat is darker)
+    this.drawBody(b, e, def, tex, baby, type === 'bat' ? { cull: true } : undefined, e instanceof Wolf && e.wet ? e.wetShade(p) : 1);
     // vanilla SaddleLayer: the saddle texture over the same model (the pig's a half pixel bigger all round)
     if (e instanceof Strider && e.saddled && !e.isInvisible()) {
       const st = this.tex('strider_saddle');
@@ -719,6 +733,15 @@ export class EntityRenderDispatcher {
         const [r, g, bl] = sheepFurColor(e.color);
         b.begin(this.state(ft));
         this.drawModel(b, fur, baby, r, g, bl);
+      }
+    }
+    // vanilla WolfCollarLayer: a tame wolf's collar in its dye colour
+    if (e instanceof Wolf && e.isTame() && !e.isInvisible()) {
+      const ct = this.tex('wolf_collar');
+      if (ct) {
+        const c = DYE_DIFFUSE[e.collarColor];
+        b.begin(this.state(ct));
+        this.drawModel(b, def, baby, ((c >> 16) & 255) / 255, ((c >> 8) & 255) / 255, (c & 255) / 255);
       }
     }
     // vanilla SkeletonClothingLayer: the stray's rags over its bones, posed as they are
@@ -809,13 +832,13 @@ export class EntityRenderDispatcher {
    * vanilla LivingEntityRenderer body pass: invisible entities skip it (their layers still draw), and a
    * spectator sees them at 15% opacity
    */
-  private drawBody(b: EntityBatch, e: LivingEntity, def: MobModelDef, tex: WebGLTexture, baby: boolean, extra?: Partial<DrawState>): void {
+  private drawBody(b: EntityBatch, e: LivingEntity, def: MobModelDef, tex: WebGLTexture, baby: boolean, extra?: Partial<DrawState>, shade = 1): void {
     if (!e.isInvisible()) {
       b.begin(this.state(tex, extra));
-      this.drawModel(b, def, baby);
+      this.drawModel(b, def, baby, shade, shade, shade);
     } else if (e.level.player?.gameMode === 'spectator') {
       b.begin(this.state(tex, { blend: true, cutoff: 0.01, depthWrite: false }));
-      this.drawModel(b, def, baby, 1, 1, 1, 38 / 255);
+      this.drawModel(b, def, baby, shade, shade, shade, 38 / 255);
       b.flush();
     }
   }
@@ -1445,6 +1468,7 @@ function shadowRadius(e: Entity): number {
     case 'zoglin':
       r = 0.7;
       break;
+    case 'wolf':
     case 'strider':
     case 'villager':
     case 'end_crystal':

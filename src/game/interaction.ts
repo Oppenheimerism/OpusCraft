@@ -316,6 +316,17 @@ export class Interaction {
     // entity interaction (vanilla Player.interactOn → Mob.mobInteract)
     const e = this.entityHit;
     if (e && p.gameMode !== 'spectator') {
+      if (stack && stack.item.id.endsWith('_spawn_egg') && (e instanceof Animal || e instanceof Villager) && e.type === stack.item.id.slice(0, -10)) {
+        // spawn egg on a matching animal spawns a baby (vanilla SpawnEggItem.spawnOffspringFromSpawnEgg), before the
+        // animal's own use of the click (vanilla Mob.checkAndHandleImportantInteractions)
+        const baby = e instanceof Villager ? e.breedOffspring(e) : e.makeBaby(e);
+        baby.setAge(-24000);
+        baby.moveTo(e.x, e.y, e.z, 0, 0);
+        this.level.addEntity(baby);
+        if (p.gameMode !== 'creative') p.inventory.consumeSelected(1);
+        p.swing();
+        return 'success';
+      }
       if (e instanceof Animal && e.interact(p, stack)) {
         if (p.vehicle === e) this.onMounted?.();
         p.swing();
@@ -378,16 +389,6 @@ export class Interaction {
           p.swing();
           return 'success';
         }
-      }
-      if (stack && stack.item.id.endsWith('_spawn_egg') && (e instanceof Animal || e instanceof Villager) && e.type === stack.item.id.slice(0, -10)) {
-        // spawn egg on a matching animal spawns a baby (vanilla SpawnEggItem.spawnOffspringFromSpawnEgg)
-        const baby = e instanceof Villager ? e.breedOffspring(e) : e.makeBaby();
-        baby.setAge(-24000);
-        baby.moveTo(e.x, e.y, e.z, 0, 0);
-        this.level.addEntity(baby);
-        if (p.gameMode !== 'creative') p.inventory.consumeSelected(1);
-        p.swing();
-        return 'success';
       }
     }
     const h = this.hit;
