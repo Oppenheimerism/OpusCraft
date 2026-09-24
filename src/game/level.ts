@@ -58,6 +58,8 @@ import './potionEffects';
 import { Raids } from './raids';
 // (Stage 5: ocean)
 import './ocean';
+// (temples)
+import './archaeology';
 
 export interface SoundSink {
   play(name: string, x: number, y: number, z: number, volume?: number, pitch?: number): void;
@@ -93,6 +95,8 @@ export const UPDATE_CLIENTS = 2;
 export const UPDATE_KNOWN_SHAPE = 16;
 /** vanilla Block.UPDATE_ALL */
 export const UPDATE_ALL = UPDATE_NEIGHBORS | UPDATE_CLIENTS;
+/** vanilla Block.UPDATE_MOVE_BY_PISTON: onRemove and onPlace hear that a piston is moving the block (isMoving) */
+export const UPDATE_MOVE_BY_PISTON = 64;
 
 /**
  * a vanilla chunk ticket besides the player's and the dragon fight's (an end gateway's way out, the far side of one):
@@ -142,6 +146,10 @@ export class Level {
   readonly randomTicks: RandomTicker;
   /** scheduled block ticks (vanilla LevelTicks) */
   private readonly blockTicks = new LevelTicks();
+  /** vanilla ServerLevel.blockEvents: block events waiting for this tick's turn (a piston's push or pull), in order, once each */
+  private readonly blockEvents = new Map<string, [number, number, number, number, number, number]>();
+  /** vanilla ServerLevel.handlingTick: in the scheduled ticks and block events of a tick */
+  handlingTick = false;
   /** vanilla Level.neighborUpdater */
   private readonly neighborUpdater = new NeighborUpdater({
     runNeighborChanged: (x, y, z, source, fx, fy, fz, moving) => {
@@ -484,8 +492,11 @@ export class Level {
     for (let i = 0; i < this.entities.length; i++) if (!this.entities[i].removed) this.entities[w++] = this.entities[i];
     this.entities.length = w;
     if (this.skyFlash > 0) this.skyFlash--;
+    this.handlingTick = true;
     this.runScheduledTicks();
     if (this.player) this.randomTicks.tick(this.player.x, this.player.z, this.simulationDistance);
+    this.runBlockEvents();
+    this.handlingTick = false;
     // block entities (furnaces, spawners, the enchanting table's book)
     for (const be of this.world.blockEntities.values()) {
       if (be.removed) continue;
@@ -531,6 +542,34 @@ export class Level {
 
   hasScheduledTick(x: number, y: number, z: number, block: number): boolean {
     return this.blockTicks.hasScheduledTick(x, y, z, block);
+  }
+
+  /** vanilla LevelTicks.willTickThisTick: `block`'s tick at (x, y, z) is among those being run this tick */
+  willTickThisTick(x: number, y: number, z: number, block: number): boolean {
+    return this.blockTicks.willTickThisTick(x, y, z, block);
+  }
+
+  /** vanilla Level.blockEvent: `block` at (x, y, z) gets triggerEvent(a, b) in this tick's block events (or the next's) */
+  blockEvent(x: number, y: number, z: number, block: number, a: number, b: number): void {
+    const key = `${x},${y},${z},${block},${a},${b}`;
+    if (!this.blockEvents.has(key)) this.blockEvents.set(key, [x, y, z, block, a, b]);
+  }
+
+  /** vanilla ServerLevel.runBlockEvents: each in turn (new ones too) while the block's still there; unloaded ones wait */
+  private runBlockEvents(): void {
+    const later: [string, [number, number, number, number, number, number]][] = [];
+    while (this.blockEvents.size) {
+      const [key, e] = this.blockEvents.entries().next().value!;
+      this.blockEvents.delete(key);
+      const [x, y, z, block, a, b] = e;
+      if (!this.world.isLoaded(x, z)) {
+        later.push([key, e]);
+        continue;
+      }
+      const st = this.world.getState(x, y, z);
+      if (STATE_BLOCK[st] === block) behaviorOf(st)?.triggerEvent?.(this, x, y, z, st, a, b);
+    }
+    for (const [key, e] of later) this.blockEvents.set(key, e);
   }
 
   private runScheduledTicks(): void {
@@ -648,20 +687,24 @@ export class Level {
     const old = this.world.setState(x, y, z, state);
     if (old === state) return old;
     // vanilla LevelChunk.setBlockState: the old block's onRemove, then (if it's still there) the new one's onPlace
-    behaviorOf(old)?.onRemove?.(this, x, y, z, old, state, false);
+    const moving = (f & UPDATE_MOVE_BY_PISTON) !== 0;
+    behaviorOf(old)?.onRemove?.(this, x, y, z, old, state, moving);
     if (this.world.getState(x, y, z) !== state) return old;
     // vanilla BaseRailBlock.onPlace: a new rail connects up (reshaping itself notifies the neighbours)
     if (STATE_BLOCK[old] !== STATE_BLOCK[state] && isRail(state)) railOnPlace(this, x, y, z, state);
-    behaviorOf(state)?.onPlace?.(this, x, y, z, state, old, false);
+    behaviorOf(state)?.onPlace?.(this, x, y, z, state, old, moving);
     if (this.world.getState(x, y, z) !== state) return old;
     if (f & UPDATE_NEIGHBORS) this.updateNeighborsAt(x, y, z, STATE_BLOCK[old]);
     if (!(f & UPDATE_KNOWN_SHAPE) && this.world.getState(x, y, z) === state) this.updateNeighbors(x, y, z, old);
     return old;
   }
 
-  /** vanilla Level.updateNeighborsAt: the six neighbours of (x, y, z) hear that `source` (a block id) there changed */
-  updateNeighborsAt(x: number, y: number, z: number, source: number): void {
-    this.neighborUpdater.updateNeighborsAt(x, y, z, source);
+  /**
+   * vanilla Level.updateNeighborsAt: the six neighbours of (x, y, z) hear that `source` (a block id) there changed;
+   * `skip` leaves out the one toward that direction (updateNeighborsAtExceptFromFacing)
+   */
+  updateNeighborsAt(x: number, y: number, z: number, source: number, skip = -1): void {
+    this.neighborUpdater.updateNeighborsAt(x, y, z, source, skip);
   }
 
   /** vanilla Level.neighborChanged: just the block at (x, y, z) hears it */
@@ -676,7 +719,7 @@ export class Level {
     const b = BLOCKS[STATE_BLOCK[st]];
     if (effects) {
       this.particles.blockBreak(x, y, z, st);
-      this.sound.play(`block.${b.sound}.break`, x + 0.5, y + 0.5, z + 0.5, 1, 0.8);
+      this.sound.play(behaviorOf(st)?.breakSound?.(st) ?? `block.${b.sound}.break`, x + 0.5, y + 0.5, z + 0.5, 1, 0.8);
     }
     const replacement = FLAGS[st] & F_WATERLOGGED ? S('water') : 0;
     // containers spill their contents (vanilla Containers.dropContents)

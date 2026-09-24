@@ -154,7 +154,7 @@ for (const [m, x] of ARMOR_MATS) {
 }
 shaped('bow', 1, [' #X', '# X', ' #X'], { '#': 'stick', X: 'string' });
 shaped('shield', 1, ['WoW', 'WWW', ' W '], { W: '#planks', o: 'iron_ingot' });
-// vanilla crossbow ['#&#', '~$~', ' # ']: # stick, & iron ingot, ~ string, $ tripwire hook — left out, no tripwire hook yet
+shaped('crossbow', 1, ['#&#', '~$~', ' # '], { '#': 'stick', '&': 'iron_ingot', '~': 'string', $: 'tripwire_hook' });
 shaped('arrow', 4, ['X', '#', 'Y'], { X: 'flint', '#': 'stick', Y: 'feather' });
 shaped('bucket', 1, ['# #', ' # '], { '#': 'iron_ingot' });
 shaped('shears', 1, [' #', '# '], { '#': 'iron_ingot' });
@@ -182,6 +182,16 @@ shaped('polished_blackstone_pressure_plate', 1, ['##'], { '#': 'polished_blackst
 shaped('light_weighted_pressure_plate', 1, ['##'], { '#': 'gold_ingot' });
 shaped('heavy_weighted_pressure_plate', 1, ['##'], { '#': 'iron_ingot' });
 shaped('redstone_lamp', 1, [' R ', 'RGR', ' R '], { R: 'redstone', G: 'glowstone' });
+shaped('redstone_torch', 1, ['X', '#'], { X: 'redstone', '#': 'stick' });
+shaped('repeater', 1, ['#X#', 'III'], { '#': 'redstone_torch', X: 'redstone', I: 'stone' });
+shaped('tripwire_hook', 2, ['I', 'S', '#'], { I: 'iron_ingot', S: 'stick', '#': '#planks' });
+shaped('dispenser', 1, ['###', '#X#', '#R#'], { '#': 'cobblestone', X: 'bow', R: 'redstone' });
+shaped('dropper', 1, ['###', '# #', '#R#'], { '#': 'cobblestone', R: 'redstone' });
+shaped('piston', 1, ['TTT', '#X#', '#R#'], { T: '#planks', '#': '#stone_crafting_materials', X: 'iron_ingot', R: 'redstone' });
+shaped('sticky_piston', 1, ['S', 'P'], { S: 'slime_ball', P: 'piston' });
+// archaeology (a decorated pot of sherds is a special recipe: game/decoratedPot.ts)
+shaped('brush', 1, ['X', '#', 'I'], { X: 'feather', '#': 'copper_ingot', I: 'stick' });
+shaped('decorated_pot', 1, [' # ', '# #', ' # '], { '#': 'brick' });
 shaped('glass_bottle', 3, ['# #', ' # '], { '#': 'glass' });
 shaped('lead', 2, ['~~ ', '~O ', '  ~'], { '~': 'string', O: 'slime_ball' });
 shaped('magma_block', 1, ['##', '##'], { '#': 'magma_cream' });

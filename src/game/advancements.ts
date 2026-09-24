@@ -66,6 +66,10 @@ export type Criterion =
   | { t: 'killed_raid_captain' }
   /** vanilla hero_of_the_village (CriteriaTriggers.RAID_WIN): a raid won with the player among its heroes */
   | { t: 'raid_won' }
+  /** vanilla player_generates_container_loot: that loot table rolled for the player (a suspicious block's, brushed) */
+  | { t: 'container_loot'; table: string }
+  /** vanilla recipe_crafted: that recipe's result taken, each ingredient (an item, or a #tag) a different one of the grid's */
+  | { t: 'recipe_crafted'; recipe: string; ingredients: string[] }
   | { t: 'impossible' };
 
 export interface AdvancementDef {
@@ -99,6 +103,8 @@ const HOSTILE = [
   'skeleton', 'slime', 'spider', 'stray', 'vex', 'vindicator', 'witch', 'wither', 'wither_skeleton', 'zoglin', 'zombie', 'zombie_villager',
   'zombified_piglin',
 ];
+/** vanilla adventure/salvage_sherd: the archaeology loot tables, any one of them rolled */
+const ARCHAEOLOGY_TABLES = ['desert_pyramid', 'desert_well', 'ocean_ruin_cold', 'ocean_ruin_warm', 'trail_ruins_rare', 'trail_ruins_common'];
 /** vanilla husbandry/whole_pack: one of each wolf variant */
 const WOLF_VARIANT_IDS = ['ashen', 'black', 'chestnut', 'pale', 'rusty', 'snowy', 'spotted', 'striped', 'woods'];
 const CAT_VARIANT_IDS = ['all_black', 'black', 'british_shorthair', 'calico', 'jellie', 'persian', 'ragdoll', 'red', 'siamese', 'tabby', 'white'];
@@ -228,7 +234,7 @@ const A: AdvancementDef[] = [
   { id: 'adventure/ol_betsy', parent: 'adventure/root', title: "Ol' Betsy", description: 'Shoot a Crossbow', icon: 'crossbow', frame: 'task', criteria: one({ t: 'shot_crossbow' }) },
   { id: 'adventure/lightning_rod_with_villager_no_fire', parent: 'adventure/root', title: 'Surge Protector', description: 'Protect a Villager from an undesired shock without starting a fire', icon: 'lightning_rod', frame: 'task', criteria: one(never) },
   { id: 'adventure/fall_from_world_height', parent: 'adventure/root', title: 'Caves & Cliffs', description: 'Free fall from the top of the world (build limit) to the bottom of the world and survive', icon: 'water_bucket', frame: 'task', criteria: one({ t: 'fall_from_height' }) },
-  { id: 'adventure/salvage_sherd', parent: 'adventure/root', title: 'Respecting the Remnants', description: 'Brush a Suspicious block to obtain a Pottery Sherd', icon: 'brush', frame: 'task', criteria: one(never) },
+  { id: 'adventure/salvage_sherd', parent: 'adventure/root', title: 'Respecting the Remnants', description: 'Brush a Suspicious block to obtain a Pottery Sherd', icon: 'brush', frame: 'task', criteria: each(ARCHAEOLOGY_TABLES, (n) => ({ t: 'container_loot', table: `archaeology/${n}` })), requirements: [ARCHAEOLOGY_TABLES] },
   { id: 'adventure/avoid_vibration', parent: 'adventure/root', title: 'Sneak 100', description: 'Sneak near a Sculk Sensor or Warden to prevent it from detecting you', icon: 'sculk_sensor', frame: 'task', criteria: one(never) },
   { id: 'adventure/sleep_in_bed', parent: 'adventure/root', title: 'Sweet Dreams', description: 'Sleep in a Bed to change your respawn point', icon: 'red_bed', frame: 'task', criteria: one({ t: 'slept' }) },
   { id: 'adventure/minecraft_trials_edition', parent: 'adventure/root', title: 'Minecraft: Trial(s) Edition', description: 'Step foot in a Trial Chamber', icon: 'chiseled_tuff', frame: 'task', criteria: one(never) },
@@ -243,7 +249,7 @@ const A: AdvancementDef[] = [
   { id: 'adventure/two_birds_one_arrow', parent: 'adventure/ol_betsy', title: 'Two Birds, One Arrow', description: 'Kill two Phantoms with a piercing Arrow', icon: 'crossbow', frame: 'challenge', criteria: one({ t: 'killed_by_crossbow', victims: ['phantom', 'phantom'] }) },
   { id: 'adventure/whos_the_pillager_now', parent: 'adventure/ol_betsy', title: "Who's the Pillager Now?", description: 'Give a Pillager a taste of their own medicine', icon: 'crossbow', frame: 'task', criteria: one({ t: 'killed_by_crossbow', victims: ['pillager'] }) },
   { id: 'adventure/arbalistic', parent: 'adventure/ol_betsy', title: 'Arbalistic', description: 'Kill five unique mobs with one crossbow shot', icon: 'crossbow', frame: 'challenge', hidden: true, criteria: one({ t: 'killed_by_crossbow', uniqueTypes: 5 }) },
-  { id: 'adventure/craft_decorated_pot_using_only_sherds', parent: 'adventure/salvage_sherd', title: 'Careful Restoration', description: 'Make a Decorated Pot out of 4 Pottery Sherds', icon: 'decorated_pot', frame: 'task', criteria: one(never) },
+  { id: 'adventure/craft_decorated_pot_using_only_sherds', parent: 'adventure/salvage_sherd', title: 'Careful Restoration', description: 'Make a Decorated Pot out of 4 Pottery Sherds', icon: 'decorated_pot', frame: 'task', criteria: { pot_crafted_using_only_sherds: { t: 'recipe_crafted', recipe: 'decorated_pot', ingredients: Array(4).fill('#decorated_pot_sherds') } } },
   { id: 'adventure/adventuring_time', parent: 'adventure/sleep_in_bed', title: 'Adventuring Time', description: 'Discover every biome', icon: 'diamond_boots', frame: 'challenge', criteria: each(OVERWORLD_BIOMES, (b) => ({ t: 'biome', biome: b })) },
   { id: 'adventure/play_jukebox_in_meadows', parent: 'adventure/sleep_in_bed', title: 'Sound of Music', description: 'Make the Meadows come alive with the sound of music from a Jukebox', icon: 'jukebox', frame: 'task', criteria: one(never) },
   { id: 'adventure/walk_on_powder_snow_with_leather_boots', parent: 'adventure/sleep_in_bed', title: 'Light as a Rabbit', description: 'Walk on Powder Snow... without sinking in it', icon: 'leather_boots', frame: 'task', criteria: one(never) },
@@ -485,6 +491,10 @@ export interface TriggerPayload {
   effects?: Set<string>;
   /** the block the player stepped into (enter_block) */
   enteredBlock?: string;
+  /** the loot table rolled for the player (container_loot) */
+  lootTable?: string;
+  /** a recipe whose result the player took, and the items in its grid (recipe_crafted) */
+  crafted?: { recipe: string; ingredients: string[] };
 }
 
 export class PlayerAdvancements {
@@ -623,6 +633,18 @@ function matches(c: Criterion, p: TriggerPayload): boolean {
       return !!p.effects && c.effects.every((e) => p.effects!.has(e));
     case 'enter_block':
       return p.enteredBlock === c.block;
+    case 'container_loot':
+      return p.lootTable === c.table;
+    case 'recipe_crafted': {
+      if (!p.crafted || p.crafted.recipe !== c.recipe) return false;
+      // (vanilla RecipeCraftedTrigger: each ingredient takes the first of the grid's items it matches, each item once)
+      const left = [...p.crafted.ingredients];
+      return c.ingredients.every((ing) => {
+        const i = left.findIndex((id) => (ing === '#decorated_pot_sherds' ? id.endsWith('_pottery_sherd') : id === ing));
+        if (i >= 0) left.splice(i, 1);
+        return i >= 0;
+      });
+    }
     case 'nether_travel':
       return p.netherTravel !== undefined && p.netherTravel >= c.distance;
     case 'killed_by_crossbow': {

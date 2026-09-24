@@ -11,6 +11,7 @@ import { Carvers } from './carvers';
 import { Mineshafts } from './mineshaft';
 import { Geodes, SUB_AIR, SUB_SOLID, SUB_FLUID } from './geode';
 import { Villages } from './villages';
+import { Temples } from './temples';
 import { Strongholds, biomeAtY0, addBeards } from './stronghold';
 // (Stage 4: outposts)
 import { PillagerOutposts } from './outposts';
@@ -57,6 +58,8 @@ export class ChunkGenerator {
   /** aquifer for single-block terrain queries (substanceAt) */
   private readonly pointAquifer: Aquifer;
   readonly villages: Villages;
+  /** desert pyramids, jungle temples, swamp huts and igloos (world/gen/temples) */
+  readonly temples: Temples;
   readonly strongholds: Strongholds;
   /** (Stage 4: outposts) */
   readonly outposts: PillagerOutposts;
@@ -83,6 +86,13 @@ export class ChunkGenerator {
     // (Stage 5: ocean) monuments too (vanilla SURFACE_STRUCTURES, after the outposts)
     this.monuments = new OceanMonuments(worldSeed64(seed), (x, z) => this.quartBiome(x, z));
     this.decorator.villages = { place: (ctx) => (this.outposts.place(ctx), this.monuments.place(ctx), this.villages.place(ctx)) };
+    // (temples) desert pyramids, jungle temples, igloos and swamp huts, placed in the same step just before
+    this.temples = new Temples(worldSeed64(seed), {
+      firstFreeHeight: (x, z) => this.firstFreeHeight(x, z),
+      oceanFloorHeight: (x, z) => this.firstFreeHeight(x, z, true),
+      quartBiome: (x, z) => this.quartBiome(x, z),
+    });
+    this.decorator.temples = this.temples;
     this.strongholds = new Strongholds(worldSeed64(seed), biomeAtY0(this.router));
     this.decorator.strongholds = this.strongholds;
   }
@@ -113,9 +123,10 @@ export class ChunkGenerator {
 
   /**
    * vanilla getFirstFreeHeight(WORLD_SURFACE_WG): the first block above the bare noise terrain (water counts as
-   * terrain), read off one column exactly as generate() fills it, for structures laying themselves out
+   * terrain), read off one column exactly as generate() fills it, for structures laying themselves out;
+   * `oceanFloor`: OCEAN_FLOOR_WG, where water doesn't count
    */
-  firstFreeHeight(x: number, z: number): number {
+  firstFreeHeight(x: number, z: number, oceanFloor = false): number {
     const x0 = Math.floor(x / CELL_W) * CELL_W, z0 = Math.floor(z / CELL_W) * CELL_W;
     const cols = [this.heightCol(x0, z0), this.heightCol(x0 + CELL_W, z0), this.heightCol(x0, z0 + CELL_W), this.heightCol(x0 + CELL_W, z0 + CELL_W)];
     const prelim = this.router.preliminarySurface(cols[0].c);
@@ -155,7 +166,7 @@ export class ChunkGenerator {
       if (d > 0) return y + 1;
       if (y >= SEA_LEVEL && y > prelim + 16) continue;
       const sub = this.pointAquifer.substance(x, y, z, d);
-      if (sub === -1 || sub === FLUID_WATER || sub === FLUID_LAVA) return y + 1;
+      if (sub === -1 || (!oceanFloor && (sub === FLUID_WATER || sub === FLUID_LAVA))) return y + 1;
     }
     return MIN_Y;
   }

@@ -217,6 +217,11 @@ const COMPOSTABLES: Record<string, number> = {};
   add(1, 'cake', 'pumpkin_pie');
 }
 
+/** vanilla ComposterBlock.COMPOSTABLES.containsKey: whether `id` composts at all */
+export function isCompostable(id: string): boolean {
+  return COMPOSTABLES[id] !== undefined;
+}
+
 /** vanilla ComposterBlock.handleFill (level event 1500): the rustle, and green sparkles over what's in it */
 export function composterFillEffects(level: Level, x: number, y: number, z: number, st: number, success: boolean): void {
   level.sound.play(success ? 'block.composter.fill_success' : 'block.composter.fill', x + 0.5, y + 0.5, z + 0.5, 1, 1);

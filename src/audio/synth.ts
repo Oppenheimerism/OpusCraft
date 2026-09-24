@@ -30,6 +30,8 @@ import { biomeMobSounds } from './gen/biomeMobs';
 import { tridentSounds } from './gen/trident';
 import { drownedSounds } from './gen/drowned';
 import { jobSiteSounds } from './gen/jobSites';
+import { redstoneSounds } from './gen/redstone';
+import { archaeologySounds } from './gen/archaeology';
 import { silverfishSounds } from './gen/silverfish';
 import { wolfSounds } from './gen/wolf';
 import { catSounds } from './gen/cat';
@@ -79,6 +81,10 @@ export const SOUNDS: Record<string, SoundGen> = {
   // (Stage 5: ocean)
   ...oceanSounds(),
 };
+// (the redstone components' events, most of them on the samples above)
+Object.assign(SOUNDS, redstoneSounds(SOUNDS));
+// (suspicious sand and gravel, the brush, the decorated pot)
+Object.assign(SOUNDS, archaeologySounds());
 
 /** Number of in-game (overworld) music tracks. */
 export const MUSIC_TRACK_COUNT: number = MUSIC_TRACKS;

@@ -202,12 +202,13 @@ for (const [mat, t] of Object.entries(TIERS)) {
 }
 reg({ id: 'shears', maxStack: 1, creativeTab: 'tools', texture: 'shears', tool: { type: 'shears', tier: 0, speed: 1.5, durability: 238 } });
 reg({ id: 'flint_and_steel', maxStack: 1, creativeTab: 'tools', texture: 'flint_and_steel', maxDamage: 64 });
+// vanilla BrushItem (game/archaeology.ts): brushes suspicious sand and gravel away, 64 uses
+reg({ id: 'brush', maxStack: 1, creativeTab: 'tools', texture: 'brush', maxDamage: 64 });
 // vanilla TridentItem: 9 attack damage, and thrown it hits for 8 (entity/thrownTrident.ts); with riptide it carries
 // its wielder through water and rain instead
 reg({ id: 'trident', maxStack: 1, creativeTab: 'combat', texture: 'trident', maxDamage: 250, attackDamage: 9, attackSpeed: 1.1, rarity: 'epic' });
 reg({ id: 'bow', maxStack: 1, creativeTab: 'combat', texture: 'bow', maxDamage: 384 });
-// vanilla CrossbowItem (models/item/crossbow.json: layer0 crossbow_standby); its recipe needs a tripwire hook,
-// which the game doesn't have yet, so it isn't craftable (creative, /give)
+// vanilla CrossbowItem (models/item/crossbow.json: layer0 crossbow_standby); crafted with a tripwire hook
 reg({ id: 'crossbow', maxStack: 1, creativeTab: 'combat', texture: 'crossbow_standby', maxDamage: 465 });
 // vanilla ShieldItem: 336 uses, repaired with planks; held up to block (entity/shield.ts), decorated with a banner
 // (game/shields.ts); drawn as its model (render/shieldRenderer.ts), the flat sprite standing in where no renderer is
@@ -297,6 +298,13 @@ for (const [id, stack, fuel] of MISC) {
       reg({ id: `${w}_chest_boat`, name: `${prettyName(w)} Boat with Chest`, texture: `${w}_chest_boat`, maxStack: 1, creativeTab: 'tools' });
     }
 }
+// vanilla pottery sherds: what the desert pyramid's suspicious sand holds (archaeology/desert_pyramid), for the sides
+// of a decorated pot
+for (const s of ['archer', 'miner', 'prize', 'skull']) reg({ id: `${s}_pottery_sherd`, texture: `${s}_pottery_sherd` });
+// (the decorated pot is drawn by its block entity's renderer, render/archaeologyRenderers.ts: its sprite, the pot at the GUI's
+// angle, stands in only where nothing but the item's id is drawn)
+ITEMS.get('decorated_pot')!.texture = 'decorated_pot';
+for (const id of ['suspicious_sand', 'suspicious_gravel', 'decorated_pot']) ITEMS.get(id)!.creativeTab = 'functional';
 Object.assign(ITEMS.get('experience_bottle')!, { rarity: 'uncommon', glint: true });
 // vanilla Items.NAUTILUS_SHELL: uncommon
 ITEMS.get('nautilus_shell')!.rarity = 'uncommon';
@@ -398,6 +406,13 @@ for (const b of BLOCKS) {
   if (/^(tall_grass|large_fern|sunflower|lilac|rose_bush|peony)$/.test(b.name)) it.texture = 'block:' + b.name + (b.name === 'sunflower' ? '_front' : '_top');
 }
 
+// the redstone components' items (vanilla item/generated): the torch and tripwire hook as their block textures, the
+// repeater its own sprite
+for (const [id, tex] of [['redstone_torch', 'block:redstone_torch'], ['repeater', 'repeater'], ['tripwire_hook', 'block:tripwire_hook']]) {
+  const it = ITEMS.get(id);
+  if (it) it.texture = tex;
+}
+
 export function itemForBlock(name: string): Item | undefined {
   // (a block that is another's item's: a wall banner is its banner's)
   const own = BLOCK_BY_NAME.get(name)?.s.item;
@@ -423,6 +438,9 @@ export function blockForItem(it: Item): Block | undefined {
   if (it.id === 'melon_seeds') return getBlock('melon_stem');
   if (it.id === 'sweet_berries') return getBlock('sweet_berry_bush');
   if (it.id === 'glow_berries') return getBlock('cave_vines');
+  // (vanilla ItemNameBlockItem: redstone places redstone dust, string places tripwire)
+  if (it.id === 'redstone') return getBlock('redstone_wire');
+  if (it.id === 'string') return getBlock('tripwire');
   return it.block;
 }
 
@@ -466,6 +484,8 @@ export interface ItemTag {
   pages?: string[];
   /** minecraft:written_book_content: a signed book */
   book?: WrittenBook;
+  /** minecraft:pot_decorations: a decorated pot's sides, back, left, right and front ('brick' for a plain one) */
+  potDecorations?: string[];
 }
 
 /** vanilla PotionContents: the potion (a registry id; none for an uncraftable one), a custom colour, custom effects */
@@ -532,6 +552,7 @@ export function cloneTag(t: ItemTag | null): ItemTag | null {
   if (t.trim) o.trim = { ...t.trim };
   if (t.pages) o.pages = [...t.pages];
   if (t.book) o.book = { ...t.book, pages: [...t.book.pages] };
+  if (t.potDecorations) o.potDecorations = [...t.potDecorations];
   return o;
 }
 
@@ -545,7 +566,8 @@ export function sameTag(a: ItemTag | null | undefined, b: ItemTag | null | undef
     sameCharged(a?.charged, b?.charged) && a?.dyedColor === b?.dyedColor && !a?.dyedHidden === !b?.dyedHidden && samePotion(a?.potion, b?.potion) &&
     a?.itemName === b?.itemName && a?.rarity === b?.rarity && !a?.hideAdditional === !b?.hideAdditional && sameData(a?.patterns?.length ? a.patterns : null, b?.patterns?.length ? b.patterns : null) && a?.baseColor === b?.baseColor &&
     a?.ominousAmplifier === b?.ominousAmplifier &&
-    a?.mapId === b?.mapId && a?.mapPostProcessing === b?.mapPostProcessing && sameData(a?.trim, b?.trim) && sameData(a?.pages, b?.pages) && sameData(a?.book, b?.book)
+    a?.mapId === b?.mapId && a?.mapPostProcessing === b?.mapPostProcessing && sameData(a?.trim, b?.trim) && sameData(a?.pages, b?.pages) && sameData(a?.book, b?.book) &&
+    sameData(a?.potDecorations, b?.potDecorations)
   );
 }
 

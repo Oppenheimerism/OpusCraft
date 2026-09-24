@@ -68,6 +68,8 @@ import { nightVisionScale, blindnessFog, applyNausea } from '../render/effectVis
 import { OVERWORLD, THE_NETHER, THE_END, dimensionById, teleportationScale, type DimensionType } from '../world/dimension';
 import { PortalPoi, portalRectangle, relativePortalPosition, portalExit, createPortal, isPortal, portalAxis, type PortalRect } from './portal';
 import { setVillageMenuHook } from './villageBlocks';
+import { setGenerateLootListener } from './archaeology';
+import { setPotCraftedListener } from './decoratedPot';
 import { openJobSite } from './jobSites';
 import { endPortalTravel, PortalArrivals } from './endTravel';
 import { EndDragonFight, ARENA_TICKET_LEVEL } from './endDragonFight';
@@ -417,6 +419,13 @@ export class Game {
     this.interaction = new Interaction(this.level, this.player);
     this.interaction.onOpenContainer = (kind, x, y, z) => this.openContainer(kind, x, y, z);
     setVillageMenuHook((kind, x, y, z) => this.openContainer(kind, x, y, z));
+    // (the archaeology advancements: a suspicious block's loot rolled for the player, a pot made of four sherds)
+    setGenerateLootListener((p, table) => {
+      if (p === this.player) this.advancements.trigger('container_loot', { lootTable: table });
+    });
+    setPotCraftedListener((p, sides) => {
+      if (p === this.player) this.advancements.trigger('recipe_crafted', { crafted: { recipe: 'decorated_pot', ingredients: sides } });
+    });
     this.interaction.onOpenEntityContainer = (e) => this.openEntityContainer(e);
     this.interaction.onMounted = () => this.hud.setOverlayMessage(`Press ${keyDisplayName(KEYS.sneak)} to Dismount`);
     this.interaction.onUseBed = (x, y, z) => useBed(this.sleepHost(), x, y, z);

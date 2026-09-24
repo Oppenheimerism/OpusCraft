@@ -83,6 +83,18 @@ export interface BlockBehavior {
   entityInside?(level: Level, x: number, y: number, z: number, state: number, e: Entity): void;
   /** vanilla animateTick (client ambient effects) */
   animateTick?(level: Level, x: number, y: number, z: number, state: number): void;
+  /** vanilla setPlacedBy: a player placed it (after it's in the world) */
+  setPlacedBy?(level: Level, x: number, y: number, z: number, state: number, placer: Player): void;
+  /** vanilla playerWillDestroy: `player` is about to break it, holding `held` */
+  playerWillDestroy?(level: Level, x: number, y: number, z: number, state: number, player: Player, held: ItemStack | null): void;
+  /** vanilla triggerEvent: a block event queued for it (Level.blockEvent) comes up; true if it did something */
+  triggerEvent?(level: Level, x: number, y: number, z: number, state: number, id: number, param: number): boolean;
+  /** vanilla getCloneItemStack: the item a pick-block gives, when it depends on the state (a piston head's piston) */
+  cloneItem?(state: number): string;
+  /** vanilla getCloneItemStack, when it depends on the block entity (a decorated pot's sides); null: the usual */
+  cloneStack?(level: Level, x: number, y: number, z: number, state: number): ItemStack | null;
+  /** vanilla getSoundType(state).getBreakSound(), where it isn't the block's own (a cracked pot's shatter) */
+  breakSound?(state: number): string;
 }
 
 const BEHAVIORS: (BlockBehavior | undefined)[] = [];

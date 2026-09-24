@@ -29,6 +29,9 @@ import { registerEnchantingTextures } from './blocklib/enchanting';
 import { registerVillageTextures } from './blocklib/village';
 // (Stage 5: ocean)
 import { registerOceanTextures } from './blocklib/ocean';
+// (temples)
+import { registerRedstoneTextures } from './blocklib/redstone';
+import { registerArchaeologyTextures } from './blocklib/archaeology';
 
 type Gen = () => TexDef;
 export const BLOCK_TEXTURES: Record<string, Gen> = {};
@@ -340,6 +343,9 @@ registerEnchantingTextures(T);
 registerVillageTextures(T);
 // (Stage 5: ocean)
 registerOceanTextures(T);
+// (temples)
+registerRedstoneTextures(T);
+registerArchaeologyTextures(T);
 T['glowstone'] = () => UT.glowstone();
 T['sea_lantern'] = () => UT.seaLantern();
 T['redstone_lamp'] = () => UT.redstoneLamp(false);

@@ -10,6 +10,7 @@ import type { Block } from '../world/block';
 import { BakedModel, BakedQuad, bakeVariant, SpriteLookup, SpriteRect, Variant, ModelChoice } from '../world/models';
 import { mcPosSeed, hash3 } from '../core/rng';
 import { MIN_Y } from '../world/constants';
+import { redstoneColor } from '../world/redstoneColor';
 
 export const PAD = 2;
 export const PS = 16 + PAD * 2; // 20
@@ -282,6 +283,7 @@ function tintFor(state: number, colIdx: number, y: number): number {
     case 'spruce': return 0x619961;
     case 'lily': return 0x208030;
     case 'constant': return b.s.tintColor ?? 0xffffff;
+    case 'redstone': return redstoneColor(b.get<number>(state, 'power'));
     case 'stem': {
       const age = b.get<number>(state, 'age');
       return ((age * 32) << 16) | ((255 - age * 8) << 8) | (age * 4);

@@ -30,7 +30,7 @@ import { Husk, Stray } from '../entity/biomeMonsters';
 import { Drowned, isInWaterPositionOk, drownedNaturalSpawnRules } from '../entity/drowned';
 import { Silverfish } from '../entity/silverfish';
 import { Wolf, wolfSpawnRulesOk } from '../entity/wolf';
-import { Cat } from '../entity/cat';
+import { Cat, catHooks } from '../entity/cat';
 import { Ocelot } from '../entity/ocelot';
 import { CatSpawner } from './catSpawner';
 import { IronGolem } from '../entity/ironGolem';
@@ -50,6 +50,10 @@ import { fluidType, FLUID_LAVA } from '../world/fluids';
 import { MIN_Y } from '../world/constants';
 import { AABB } from '../core/aabb';
 import { Rand, hash2 } from '../core/rng';
+import { structureMobsAt, inSwampHut } from './structureSpawns';
+
+// (temples) a cat in a swamp hut is the witch's black cat (vanilla #cats_spawn_as_black), and cats keep coming to one
+catHooks.inSwampHut = inSwampHut;
 
 export const MOB_TYPES: Record<string, (l: Level) => Mob> = {
   pig: (l) => new Pig(l),
@@ -532,6 +536,9 @@ export class NaturalSpawner {
     // (Stage 5: ocean) a monument's guardians (game/monuments.ts)
     const mo = monumentSpawnsAt(this.level, cat, x, y, z);
     if (mo) return mo;
+    // a structure's spawn_overrides (bounding_box piece | full) where it stands (game/structureSpawns)
+    const o = structureMobsAt(this.level, cat, x, y, z);
+    if (o) return o;
     const bs = biomeSettings(w.getBiome3(x, y, z));
     return cat === 'monster' ? bs.monster : cat === 'water_creature' ? bs.water : cat === 'ambient' ? bs.ambient : bs.creature;
   }
