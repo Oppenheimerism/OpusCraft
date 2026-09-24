@@ -6,6 +6,7 @@ import { raycast, BlockHit } from './raycast';
 import { destroyProgress, placementState, canReplace, canSurvive, isCorrectTool, blockExperience, hasVacantFace } from './blockRules';
 import { behaviorOf } from './blockBehavior';
 import { lightCampfire, dowseCampfire } from './villageBlocks';
+import { itemBehaviorOf } from './itemBehavior';
 import { openSound } from './redstone/components';
 import { BLOCKS, BLOCK_BY_NAME, STATE_BLOCK, FLAGS, F_AIR, F_WATER, F_LAVA, F_OPAQUE, F_REPLACEABLE, COLLISION, FACE_OCC, getBlock, S } from '../world/block';
 import { boneMealParticles, performBoneMeal } from './boneMeal';
@@ -384,7 +385,8 @@ export class Interaction {
         return 'success';
       }
     }
-    if (h && p.gameMode !== 'spectator' && this.useOnBlock(h, stack, main, secondary)) return 'success';
+    const onBlock = h && p.gameMode !== 'spectator' ? this.useOnBlock(h, stack, main, secondary) : false;
+    if (onBlock) return onBlock === 'fail' ? 'fail' : 'success';
     // vanilla TntBlock.useItemOn: flint and steel / fire charge primes TNT
     if (h && stack && (stack.item.id === 'flint_and_steel' || stack.item.id === 'fire_charge') && this.level.getBlockName(h.x, h.y, h.z) === 'tnt') {
       this.level.setBlock(h.x, h.y, h.z, 0);
@@ -526,8 +528,8 @@ export class Interaction {
     return this.commitPlace(x, y, z, st, stack, block.sound);
   }
 
-  /** right-click actions on blocks (vanilla useWithoutItem / item useOn); true if handled */
-  private useOnBlock(h: BlockHit, stack: ItemStack | null, main: boolean, secondary: boolean): boolean {
+  /** right-click actions on blocks (vanilla useWithoutItem / item useOn); true if handled ('fail': refused, nothing else tried) */
+  private useOnBlock(h: BlockHit, stack: ItemStack | null, main: boolean, secondary: boolean): boolean | 'fail' {
     const p = this.player;
     const lvl = this.level;
     const st = lvl.getState(h.x, h.y, h.z);
@@ -593,6 +595,10 @@ export class Interaction {
     }
     if (!stack) return false;
     const id = stack.item.id;
+    // items with their own useOn (game/itemBehavior: eyes of ender in portal frames, end crystals)
+    const itemUseOn = itemBehaviorOf(id)?.useOn;
+    const itemUsed = itemUseOn ? itemUseOn(lvl, p, stack, h) : 'pass';
+    if (itemUsed !== 'pass') return itemUsed === 'fail' ? 'fail' : true;
     // vanilla HoeItem.useOn: grass/dirt/path → farmland (coarse dirt → dirt)
     if (stack.item.tool?.type === 'hoe' && h.face !== 0) {
       const above = lvl.getState(h.x, h.y + 1, h.z);
@@ -711,6 +717,9 @@ export class Interaction {
   private useItem(stack: ItemStack): boolean {
     const p = this.player;
     const it = stack.item;
+    // (an item's own use failing or passing gives the other hand its turn, as in vanilla startUseItem)
+    const itemUse = itemBehaviorOf(it.id)?.use;
+    if (itemUse) return itemUse(this.level, p, stack) === 'success';
     // food / drinks (vanilla Item.use → startUsingItem when edible)
     if (it.food) {
       if (!(p.gameMode === 'creative' || it.food.alwaysEat || p.food.needsFood())) return false;

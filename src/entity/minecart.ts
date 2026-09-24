@@ -18,7 +18,6 @@ import { dirFromYaw, DX, DZ, OPPOSITE, NORTH, SOUTH, WEST, EAST } from '../world
 import { ItemStack, ITEMS, ItemTag, cloneTag } from '../item/item';
 import { SimpleContainer } from '../inventory/container';
 import { fillContainer } from '../game/loot';
-import { MIN_Y } from '../world/constants';
 
 type Vec3i = [number, number, number];
 
@@ -113,11 +112,13 @@ export abstract class AbstractMinecart extends Entity {
     this.tickCount++;
     if (this.hurtTime > 0) this.hurtTime--;
     if (this.damage > 0) this.damage--;
-    // vanilla checkBelowWorld
-    if (this.y < MIN_Y - 64) {
+    // vanilla checkBelowWorld (64 under the dimension's floor)
+    if (this.y < this.level.world.dim.minY - 64) {
       this.remove();
       return;
     }
+    this.handlePortal();
+    if (this.removed) return;
     // vanilla applyGravity
     this.dy -= this.inWater ? 0.005 : 0.04;
     const w = this.level.world;

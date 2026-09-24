@@ -187,6 +187,8 @@ shaped('magma_block', 1, ['##', '##'], { '#': 'magma_cream' });
 shapeless('blaze_powder', 2, 'blaze_rod');
 shapeless('fire_charge', 3, 'gunpowder', 'blaze_powder', ['coal', 'charcoal']);
 shapeless('magma_cream', 1, 'blaze_powder', 'slime_ball');
+shapeless('ender_eye', 1, 'ender_pearl', 'blaze_powder');
+shaped('end_crystal', 1, ['GGG', 'GEG', 'GTG'], { G: 'glass', E: 'ender_eye', T: 'ghast_tear' });
 
 // ---------------------------------------------------------------------------
 // Food
@@ -251,6 +253,7 @@ shapeless('andesite', 2, 'diorite', 'cobblestone');
 shaped('polished_deepslate', 4, ['SS', 'SS'], { S: 'cobbled_deepslate' });
 shaped('deepslate_bricks', 4, ['SS', 'SS'], { S: 'polished_deepslate' });
 shaped('deepslate_tiles', 4, ['SS', 'SS'], { S: 'deepslate_bricks' });
+shaped('end_stone_bricks', 4, ['##', '##'], { '#': 'end_stone' });
 shaped('bricks', 1, ['##', '##'], { '#': 'brick' });
 shaped('clay', 1, ['##', '##'], { '#': 'clay_ball' });
 shaped('snow_block', 1, ['##', '##'], { '#': 'snowball' });
@@ -287,6 +290,7 @@ const SLABS: [string, string][] = [
   ['blackstone', 'blackstone'],
   ['polished_blackstone', 'polished_blackstone'],
   ['polished_blackstone_brick', 'polished_blackstone_bricks'],
+  ['end_stone_brick', 'end_stone_bricks'],
 ];
 for (const [n, mat] of SLABS) {
   shaped(`${n}_slab`, 6, ['###'], { '#': mat });
@@ -300,6 +304,7 @@ for (const [wall, mat] of [
   ['polished_deepslate_wall', 'polished_deepslate'], ['deepslate_brick_wall', 'deepslate_bricks'], ['deepslate_tile_wall', 'deepslate_tiles'],
   ['nether_brick_wall', 'nether_bricks'], ['red_nether_brick_wall', 'red_nether_bricks'],
   ['blackstone_wall', 'blackstone'], ['polished_blackstone_wall', 'polished_blackstone'], ['polished_blackstone_brick_wall', 'polished_blackstone_bricks'],
+  ['end_stone_brick_wall', 'end_stone_bricks'],
 ]) shaped(wall, 6, ['###', '###'], { '#': mat });
 // doors, trapdoors, fences, gates
 for (const w of WOODS) {

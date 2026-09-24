@@ -9,6 +9,9 @@ import { behaviorOf, behaviorOfBlock } from '../game/blockBehavior';
 
 let nextEntityId = 1;
 
+/** which portal an entity stands in (vanilla PortalProcessor.portal: NetherPortalBlock or EndPortalBlock) */
+export type PortalKind = 'nether' | 'end';
+
 /** vanilla LiquidBlock.STABLE_SHAPE's top: the half-block floor a lava-walker finds on still lava */
 const LAVA_FLOOR = 0.5;
 
@@ -138,12 +141,14 @@ export abstract class Entity {
       this.lavaHurt();
       this.fallDistance *= 0.5;
     }
+    // vanilla checkBelowWorld: 64 blocks under the bottom of the world
+    if (this.y < this.level.world.dim.minY - 64) this.onBelowWorld();
     if (this.invulnerableTime > 0) this.invulnerableTime--;
     if (this.boardingCooldown > 0) this.boardingCooldown--;
   }
 
-  /** vanilla PortalProcessor: the nether portal this is standing in and for how long */
-  portal: { x: number; y: number; z: number; time: number; inside: boolean } | null = null;
+  /** vanilla PortalProcessor: the portal (nether or end) this is standing in and for how long */
+  portal: { x: number; y: number; z: number; time: number; inside: boolean; kind: PortalKind } | null = null;
   /** vanilla portalCooldown: after using a portal, ticks until one takes this again (refreshed while still in one) */
   portalCooldown = 0;
 
@@ -162,24 +167,24 @@ export abstract class Entity {
     return false;
   }
 
-  /** vanilla Entity.setAsInsidePortal (NetherPortalBlock.entityInside, when canUsePortal: not while riding) */
-  private insidePortal(x: number, y: number, z: number): void {
+  /** vanilla Entity.setAsInsidePortal (Nether/EndPortalBlock.entityInside, when canUsePortal: not while riding) */
+  setAsInsidePortal(kind: PortalKind, x: number, y: number, z: number): void {
     if (this.vehicle || this.removed) return;
     if (this.portalCooldown > 0) {
       this.portalCooldown = this.dimensionChangingDelay();
       return;
     }
     const p = this.portal;
-    if (p) {
+    if (p && p.kind === kind) {
       p.x = x;
       p.y = y;
       p.z = z;
       p.inside = true;
-    } else this.portal = { x, y, z, time: 0, inside: true };
+    } else this.portal = { x, y, z, time: 0, inside: true, kind };
   }
 
   /** vanilla Entity.handlePortal: long enough in a portal takes you through; out of one, the count runs back down */
-  private handlePortal(): void {
+  protected handlePortal(): void {
     if (this.portalCooldown > 0) this.portalCooldown--;
     const p = this.portal;
     if (!p) return;
@@ -189,10 +194,13 @@ export abstract class Entity {
       return;
     }
     p.inside = false;
-    if (!this.canChangeDimensions() || p.time++ < this.portalWaitTime()) return;
+    // (an end portal takes anything alive at once — vanilla getPortalTransitionTime 0; only players use nether portals here)
+    const end = p.kind === 'end';
+    const can = end ? ((this as { isAlive?: boolean }).isAlive ?? !this.removed) && !this.vehicle : this.canChangeDimensions();
+    if (!can || p.time++ < (end ? 0 : this.portalWaitTime())) return;
     this.portalCooldown = this.dimensionChangingDelay();
     this.portal = null;
-    this.level.onPortal?.(this, p.x, p.y, p.z);
+    this.level.onPortal?.(this, p.x, p.y, p.z, p.kind);
   }
 
   protected lavaHurt(): void {
@@ -584,7 +592,7 @@ export abstract class Entity {
           else if (kind === INSIDE_BERRY_BUSH) this.insideBerryBush(st);
           else if (kind === INSIDE_CACTUS) this.hurt(1, 'cactus');
           else if (kind === INSIDE_DRIPLEAF) this.insideDripleaf(x, y, z, st);
-          else if (kind === INSIDE_PORTAL) this.insidePortal(x, y, z);
+          else if (kind === INSIDE_PORTAL) this.setAsInsidePortal('nether', x, y, z);
           else if (kind === INSIDE_BEHAVIOR) behaviorOf(st)!.entityInside!(this.level, x, y, z, st, this);
           if (this.removed) return fire;
         }
@@ -826,6 +834,11 @@ export abstract class Entity {
 
   /** vanilla Entity.kill (/kill): gone for good */
   kill(): void {
+    this.remove();
+  }
+
+  /** vanilla Entity.onBelowWorld: fallen out of the world, gone (living things take the void's damage instead) */
+  protected onBelowWorld(): void {
     this.remove();
   }
 

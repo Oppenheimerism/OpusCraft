@@ -18,6 +18,7 @@ import { Squid, WaterAnimal } from '../entity/water';
 import { AbstractMinecart, createMinecart, MINECART_TYPES } from '../entity/minecart';
 import { Bat } from '../entity/bat';
 import { Boat, createBoat, BOAT_TYPES } from '../entity/boat';
+import { EndCrystal } from '../entity/endCrystal';
 import { moonPhase } from '../render/environment';
 import { tickInhabitedTime } from './difficulty';
 import { BIOMES } from '../world/gen/biomes';
@@ -75,7 +76,7 @@ function saveWithPassengers(e: Entity): SavedEntity | null {
 
 function saveOne(e: Entity): SavedEntity | null {
   if (e instanceof Mob) return e.health > 0 && !e.removed ? e.save() : null;
-  if (e instanceof AbstractMinecart || e instanceof Boat) return e.removed ? null : e.save();
+  if (e instanceof AbstractMinecart || e instanceof Boat || e instanceof EndCrystal) return e.removed ? null : e.save();
   if (e instanceof ItemEntity && !e.removed) {
     const s = e.stack;
     return {
@@ -109,6 +110,11 @@ function loadOne(d: SavedEntity, level: Level): Entity | null {
     e.pickupDelay = Number(d.data?.pickupDelay ?? 0);
     return e;
   }
+  if (d.id === 'end_crystal') {
+    const c = new EndCrystal(level);
+    c.load(d);
+    return c;
+  }
   const cart = createMinecart(d.id, level);
   if (cart) {
     cart.load(d);
@@ -127,7 +133,7 @@ function loadOne(d: SavedEntity, level: Level): Entity | null {
 /** entities that belong to chunk storage (a cart or boat carrying the player is saved with the player) */
 export function isChunkSaved(e: Entity): boolean {
   if (e instanceof AbstractMinecart || e instanceof Boat) return !e.passengers.some((p) => p.type === 'player');
-  return e instanceof Mob || e instanceof ItemEntity;
+  return e instanceof Mob || e instanceof ItemEntity || e instanceof EndCrystal;
 }
 
 const ENTITY_NAMES: Record<string, string> = {
@@ -135,7 +141,7 @@ const ENTITY_NAMES: Record<string, string> = {
   villager: 'Villager', cave_spider: 'Cave Spider', enderman: 'Enderman', slime: 'Slime', magma_cube: 'Magma Cube', zombified_piglin: 'Zombified Piglin', ghast: 'Ghast', blaze: 'Blaze', wither_skeleton: 'Wither Skeleton', squid: 'Squid', bat: 'Bat', hoglin: 'Hoglin', zoglin: 'Zoglin', strider: 'Strider', piglin: 'Piglin',
   arrow: 'Arrow', tnt: 'Primed TNT', lightning_bolt: 'Lightning Bolt', item: 'Item', experience_orb: 'Experience Orb', falling_block: 'Falling Block', player: 'Player',
   egg: 'Thrown Egg', snowball: 'Snowball', ender_pearl: 'Thrown Ender Pearl',
-  minecart: 'Minecart', chest_minecart: 'Minecart with Chest', boat: 'Boat', chest_boat: 'Boat with Chest',
+  minecart: 'Minecart', chest_minecart: 'Minecart with Chest', boat: 'Boat', chest_boat: 'Boat with Chest', end_crystal: 'End Crystal',
 };
 
 /** vanilla entity type display names (death messages, commands) */
@@ -149,7 +155,7 @@ export function entityDisplayName(e: Entity | string): string {
 
 /** entity type ids accepted by /summon */
 export function summonableTypes(): string[] {
-  return [...Object.keys(MOB_TYPES), 'tnt', 'experience_orb', 'arrow', 'lightning_bolt', ...MINECART_TYPES, ...BOAT_TYPES];
+  return [...Object.keys(MOB_TYPES), 'tnt', 'experience_orb', 'arrow', 'lightning_bolt', ...MINECART_TYPES, ...BOAT_TYPES, 'end_crystal'];
 }
 
 /** vanilla MobCategory caps (per 289 spawnable chunks) */
@@ -215,9 +221,13 @@ const NETHER_SPAWNS: Record<string, { monster: SpawnerData[]; creature: SpawnerD
 /** vanilla NetherFortressStructure.FORTRESS_ENEMIES: the monsters of a fortress */
 const FORTRESS_ENEMIES = [S_('blaze', 10, 2, 3), S_('zombified_piglin', 5, 4, 4), S_('wither_skeleton', 8, 5, 5), S_('skeleton', 2, 5, 5), S_('magma_cube', 3, 4, 4)];
 
+/** vanilla BiomeDefaultFeatures.endSpawns: the End's biomes have endermen, in fours, and nothing else */
+const END_SPAWN_BIOMES = new Set(['the_end', 'end_highlands', 'end_midlands', 'small_end_islands', 'end_barrens']);
+
 function settingsFor(name: string): MobSettings {
   const nether = NETHER_SPAWNS[name];
   if (nether) return { ...nether, creatureProbability: 0.1, water: [], ambient: [] };
+  if (END_SPAWN_BIOMES.has(name)) return { monster: [S_('enderman', 10, 4, 4)], creature: [], water: [], ambient: [], creatureProbability: 0.1 };
   const base = settingsForLand(name);
   let water: SpawnerData[] = [];
   if (name === 'river' || name === 'frozen_river') water = SQUID(2);

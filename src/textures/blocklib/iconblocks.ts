@@ -1,5 +1,5 @@
 // Blocks that so far only appear as advancement cube icons (gui/iconCubes.ts):
-// end stone, note block, jukebox, target, honey block, bee nest, chiseled
+// note block, jukebox, target, honey block, bee nest, chiseled
 // bookshelf, crafter, chiseled tuff, oxidized copper bulb, verdant froglight.
 
 import { TexImage, img, setPx, getPx, mixC } from '../tex';
@@ -48,45 +48,6 @@ function recess(t: TexImage, seed: string, x0: number, y0: number, x1: number, y
       else if (y === y1 || x === x1) c = lit;
       setPx(t, x, y, c);
     }
-}
-
-// ---------------------------------------------------------------------------
-// End stone: pale cream-yellow, porous (small dark pits with a lit lower lip)
-
-const END_PAL = [0xa2a670, 0xb9bd82, 0xcacd92, 0xd5d99c, 0xdde0a6, 0xe5e8b0, 0xeff1bf];
-
-export function endStone(): TexImage {
-  const r = rng('end_stone');
-  const H = fbm(r, [[8, 8, 0.25], [4, 4, 0.35], [2, 2, 0.4]], 0.6);
-  const tones = quantize(H, [0, 0.7, 2.2, 4, 3, 1.2, 0.25]);
-  const pits: string[][] = [
-    ['D', 'L'],
-    ['Dd', 'LL'],
-    ['D', 'd', 'L'],
-    ['.D', 'Dd', 'LL'],
-    ['sDs', '.L.'],
-  ];
-  const tone: Record<string, number> = { D: 0, d: 1, s: 2, L: 6 };
-  const taken = new Set<number>();
-  let placed = 0, guard = 0;
-  while (placed < 17 && guard++ < 400) {
-    const p = pits[r.nextInt(pits.length)];
-    const x0 = r.nextInt(N), y0 = r.nextInt(N);
-    const cells: [number, number, number][] = [];
-    p.forEach((row, yy) => [...row].forEach((ch, xx) => ch !== '.' && cells.push([x0 + xx, y0 + yy, tone[ch]])));
-    // keep pits apart (periodic), so the grain stays even
-    const near = cells.some(([x, y]) => {
-      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (taken.has(idx(x + dx, y + dy))) return true;
-      return false;
-    });
-    if (near) continue;
-    for (const [x, y, k] of cells) {
-      tones[idx(x, y)] = k === 6 ? (r.chance(0.35) ? 5 : 6) : k;
-      taken.add(idx(x, y));
-    }
-    placed++;
-  }
-  return paint(tones, END_PAL);
 }
 
 // ---------------------------------------------------------------------------

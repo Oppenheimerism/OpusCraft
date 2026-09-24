@@ -68,6 +68,7 @@ const inv = (...items: string[]): Criterion => ({ t: 'inventory', items });
 const never: Criterion = { t: 'impossible' };
 const one = (c: Criterion): Record<string, Criterion> => ({ c });
 const toNether: Criterion = { t: 'changed_dimension', to: 'the_nether' };
+const toEnd: Criterion = { t: 'changed_dimension', to: 'the_end' };
 
 const HOSTILE = [
   'blaze', 'bogged', 'breeze', 'cave_spider', 'creeper', 'drowned', 'elder_guardian', 'ender_dragon', 'enderman', 'endermite', 'evoker',
@@ -105,6 +106,7 @@ function each(names: string[], mk: (n: string) => Criterion): Record<string, Cri
 export const TABS: { root: string; background: string }[] = [
   { root: 'story/root', background: 'advancements_bg_stone' },
   { root: 'nether/root', background: 'advancements_bg_nether' },
+  { root: 'end/root', background: 'advancements_bg_end' },
   { root: 'adventure/root', background: 'advancements_bg_adventure' },
   { root: 'husbandry/root', background: 'advancements_bg_husbandry' },
 ];
@@ -134,7 +136,7 @@ const A: AdvancementDef[] = [
   { id: 'story/enchant_item', parent: 'story/mine_diamond', title: 'Enchanter', description: 'Enchant an item at an Enchanting Table', icon: 'enchanted_book', frame: 'task', criteria: { enchanted_item: { t: 'enchanted_item' } } },
   { id: 'story/cure_zombie_villager', parent: 'story/enter_the_nether', title: 'Zombie Doctor', description: 'Weaken and then cure a Zombie Villager', icon: 'golden_apple', frame: 'goal', criteria: one(never) },
   { id: 'story/follow_ender_eye', parent: 'story/enter_the_nether', title: 'Eye Spy', description: 'Follow an Eye of Ender', icon: 'ender_eye', frame: 'task', criteria: one(never) },
-  { id: 'story/enter_the_end', parent: 'story/follow_ender_eye', title: 'The End?', description: 'Enter the End Portal', icon: 'end_stone', frame: 'task', criteria: one(never) },
+  { id: 'story/enter_the_end', parent: 'story/follow_ender_eye', title: 'The End?', description: 'Enter the End Portal', icon: 'end_stone', frame: 'task', criteria: { entered_end: toEnd } },
 
   // --- Nether
   { id: 'nether/root', parent: null, title: 'Nether', description: 'Bring summer clothes', icon: 'red_nether_bricks', frame: 'task', toast: false, announce: false, criteria: { entered_nether: toNether } },
@@ -164,6 +166,9 @@ const A: AdvancementDef[] = [
   { id: 'nether/all_potions', parent: 'nether/brew_potion', title: 'A Furious Cocktail', description: 'Have every potion effect applied at the same time', icon: 'milk_bucket', frame: 'challenge', criteria: one(never) },
   { id: 'nether/create_full_beacon', parent: 'nether/create_beacon', title: 'Beaconator', description: 'Bring a Beacon to full power', icon: 'beacon', frame: 'goal', criteria: one(never) },
   { id: 'nether/all_effects', parent: 'nether/all_potions', title: 'How Did We Get Here?', description: 'Have every effect applied at the same time', icon: 'bucket', frame: 'challenge', hidden: true, criteria: one(never) },
+
+  // --- The End (the rest of the tab comes with the dragon fight and the outer islands)
+  { id: 'end/root', parent: null, title: 'The End', description: 'Or the beginning?', icon: 'end_stone', frame: 'task', toast: false, announce: false, criteria: { entered_end: toEnd } },
 
   // --- Adventure
   {

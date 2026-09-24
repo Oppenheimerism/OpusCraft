@@ -18,7 +18,7 @@ export function installScreens(game: Game): void {
   game.pauseScreenFactory = () => new PauseScreen(game);
   game.deathScreenFactory = () => new DeathScreen(game, game.deathMessage(game.player.lastDamageSource), !!game.meta?.hardcore);
   game.loadingScreenFactory = () => new LevelLoadingScreen(game);
-  game.receivingScreenFactory = (portal) => new ReceivingLevelScreen(game, portal);
+  game.receivingScreenFactory = (reason) => new ReceivingLevelScreen(game, reason);
   game.chatScreenFactory = (initial) => new ChatScreen(game, initial);
   game.inBedScreenFactory = () => new InBedChatScreen(game);
   game.advancementsScreenFactory = () => new AdvancementsScreen(game);

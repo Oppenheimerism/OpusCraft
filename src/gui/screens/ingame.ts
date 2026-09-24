@@ -1,6 +1,6 @@
 // In-game screens: pause menu, death screen, level loading, chat.
 
-import type { Game } from '../../game/game';
+import type { Game, ReceivingReason } from '../../game/game';
 import { Screen, Button, EditBox } from '../screen';
 import type { GuiGraphics } from '../guiGraphics';
 import { OptionsScreen } from './options';
@@ -115,7 +115,7 @@ export class DeathScreen extends Screen {
 export class ReceivingLevelScreen extends Screen {
   /** (the mouse stays grabbed: the game carries straight on afterwards) */
   readonly keepsMouse = true;
-  constructor(game: Game, readonly portal: boolean) {
+  constructor(game: Game, readonly reason: ReceivingReason) {
     super(game, '');
   }
   init(): void {}
@@ -126,7 +126,8 @@ export class ReceivingLevelScreen extends Screen {
     return false;
   }
   override render(g: GuiGraphics, mx: number, my: number, partial: number): void {
-    if (!this.portal) this.renderBackground(g);
+    // (the portals' backgrounds are drawn by the game under the screen)
+    if (this.reason === 'other') this.renderBackground(g);
     g.centered('Loading terrain...', Math.floor(this.width / 2), Math.floor(this.height / 2) - 50, 0xffffff, true);
     void mx;
     void my;

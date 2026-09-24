@@ -119,6 +119,11 @@ export abstract class LivingEntity extends Entity {
     return 1;
   }
 
+  /** vanilla LivingEntity.onBelowWorld: the void hurts, 4 at a time whatever the armour (tried every tick, landing each half second) */
+  protected override onBelowWorld(): void {
+    if (this.health > 0) this.hurt(4, 'void');
+  }
+
   override baseTick(): void {
     super.baseTick();
     this.bodyYawO = this.bodyYaw;
@@ -740,7 +745,8 @@ export abstract class LivingEntity extends Entity {
     // falling anvils, blocks and stalactites wear the helmet, which takes a quarter off the hit
     if (DAMAGES_HELMET.has(source) && this.hurtHelmet(amount)) amount *= 0.75;
     let fresh = true;
-    if (this.invulnerableTime > 10 && source !== 'genericKill' && source !== 'void') {
+    // (vanilla BYPASSES_COOLDOWN: the void waits its turn like anything else — 4 every half second)
+    if (this.invulnerableTime > 10 && source !== 'genericKill') {
       if (amount <= this.lastHurt) return false;
       this.actuallyHurt(source, amount - this.lastHurt);
       this.lastHurt = amount;

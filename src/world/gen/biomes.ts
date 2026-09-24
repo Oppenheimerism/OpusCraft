@@ -83,6 +83,9 @@ function def(
   return id;
 }
 
+/** vanilla EndBiomes.baseEndBiome's special effects */
+const END_EFFECTS = { precipitation: false, water: 0x3f76e4, waterFog: 0x050533, fog: 0xa080a0, sky: 0x000000 } as const;
+
 export const B = {
   the_void: def('the_void', 0.5, 0.5, { precipitation: false }),
   plains: def('plains', 0.8, 0.4, { grass: 0x91bd59, foliage: 0x77ab2f }),
@@ -152,6 +155,12 @@ export const B = {
   basalt_deltas: def('basalt_deltas', 2.0, 0.0, {
     precipitation: false, fog: 0x685f70, sky: 0x6eb1ff, particle: { type: 'white_ash', chance: 0.118093334 }, ambient: netherAmbient('basalt_deltas', 'basalt_deltas'),
   }),
+  // the End (vanilla EndBiomes.baseEndBiome: no rain, a purple-grey fog, a black sky, the cave mood sound)
+  the_end: def('the_end', 0.5, 0.5, END_EFFECTS),
+  end_highlands: def('end_highlands', 0.5, 0.5, END_EFFECTS),
+  end_midlands: def('end_midlands', 0.5, 0.5, END_EFFECTS),
+  small_end_islands: def('small_end_islands', 0.5, 0.5, END_EFFECTS),
+  end_barrens: def('end_barrens', 0.5, 0.5, END_EFFECTS),
 };
 
 function netherAmbient(sounds: string, music: string): NonNullable<Biome['ambient']> {
@@ -159,6 +168,7 @@ function netherAmbient(sounds: string, music: string): NonNullable<Biome['ambien
 }
 
 export const NETHER_BIOMES = [B.nether_wastes, B.soul_sand_valley, B.crimson_forest, B.warped_forest, B.basalt_deltas];
+export const END_BIOMES = [B.the_end, B.end_highlands, B.end_midlands, B.small_end_islands, B.end_barrens];
 
 // Pretty names for F3 ("minecraft:plains" style is used there).
 for (const b of BIOMES) b.displayName = 'minecraft:' + b.name;

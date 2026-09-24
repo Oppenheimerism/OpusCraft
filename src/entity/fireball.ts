@@ -62,7 +62,7 @@ export abstract class Fireball extends Entity {
       z1 = bh.pz;
     }
     let hit: Entity | null = null, best = Infinity;
-    for (const e of lvl.getEntities(this.bb.expandTowards(this.dx, this.dy, this.dz).inflate(1), (e) => e instanceof LivingEntity && e.isPickable(), this)) {
+    for (const e of lvl.getEntities(this.bb.expandTowards(this.dx, this.dy, this.dz).inflate(1), (e) => (e instanceof LivingEntity || e.type === 'end_crystal') && e.isPickable(), this)) {
       if (e === this.owner && !this.leftOwner) continue;
       if (e.type === 'player' && (e as Player).gameMode === 'spectator') continue;
       const h = e.bb.inflate(0.3).clip(x0, y0, z0, x1, y1, z1);

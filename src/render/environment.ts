@@ -158,19 +158,23 @@ export function skyDarkenInt(tod: number, w: Weather): number {
 /**
  * Fog color (vanilla FogRenderer.setupColor, out of any fluid).
  * lookDir: camera look vector; sunAngle: tod*2π. `darkens`: the fog dims with the daylight (vanilla
- * getBrightnessDependentFogColor: the Overworld's does, the Nether's doesn't); below `minY` + 32 it fades
- * to black towards the void.
+ * getBrightnessDependentFogColor: the Overworld's does, the Nether's doesn't, the End's is 0.15 of the
+ * biome's); below `minY` + 32 it fades to black towards the void.
  */
 export function fogColor(
   biomeFog: RGB, biomeSky: RGB, tod: number, w: Weather, renderDistanceChunks: number,
-  lookX: number, lookY: number, lookZ: number, camY: number, darkens = true, minY = -64,
+  lookX: number, lookY: number, lookZ: number, camY: number, darkens: boolean | 'daylight' | 'constant' | number = true, minY = -64,
 ): [number, number, number] {
   const brightness = clamp(Math.cos(tod * Math.PI * 2) * 2 + 0.5, 0, 1);
   let fr = biomeFog[0], fg = biomeFog[1], fb = biomeFog[2];
-  if (darkens) {
+  if (darkens === true || darkens === 'daylight') {
     fr *= brightness * 0.94 + 0.06;
     fg *= brightness * 0.94 + 0.06;
     fb *= brightness * 0.91 + 0.09;
+  } else if (typeof darkens === 'number') {
+    fr *= darkens;
+    fg *= darkens;
+    fb *= darkens;
   }
   const sky = skyColor(biomeSky, tod, w);
   let f = 0.25 + (0.75 * renderDistanceChunks) / 32;

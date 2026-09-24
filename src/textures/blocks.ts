@@ -23,6 +23,7 @@ import * as LU from './blocklib/lush';
 import * as NE from './blocklib/nether';
 import * as NF from './blocklib/netherFlora';
 import * as IB from './blocklib/iconblocks';
+import * as EN from './blocklib/end';
 import { FIRE_TEXTURES } from './mobs';
 import { registerEnchantingTextures } from './blocklib/enchanting';
 import { registerVillageTextures } from './blocklib/village';
@@ -459,7 +460,6 @@ T['terracotta'] = () => BL.tintBase(BL.terracottaBase, 0x985e43, 222, 0.8);
 // ---------------------------------------------------------------------------
 // Blocks shown as advancement cube icons (gui/iconCubes.ts)
 
-T['end_stone'] = () => IB.endStone();
 T['note_block'] = () => IB.noteBlock();
 T['jukebox_top'] = () => IB.jukeboxTop();
 T['jukebox_side'] = () => IB.jukeboxSide();
@@ -527,6 +527,14 @@ T['twisting_vines'] = () => NF.twistingVines();
 T['twisting_vines_plant'] = () => NF.twistingVinesPlant();
 T['shroomlight'] = () => NF.shroomlight();
 for (const i of [0, 1, 2] as const) T[`nether_wart_stage${i}`] = () => NF.netherWartStage(i);
+
+// The End
+const endStoneBase = memo(() => EN.endStone());
+T['end_stone'] = () => endStoneBase();
+T['end_stone_bricks'] = () => EN.endStoneBricks();
+T['end_portal_frame_top'] = () => EN.endPortalFrameTop();
+T['end_portal_frame_side'] = () => EN.endPortalFrameSide(endStoneBase());
+T['end_portal_frame_eye'] = () => EN.endPortalFrameEye();
 
 // Missing texture (vanilla's magenta/black checkerboard)
 T['missing'] = () => {

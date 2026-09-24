@@ -11,7 +11,6 @@ export interface IconCube {
 }
 
 export const ICON_CUBES: Record<string, IconCube> = {
-  end_stone: { up: 'end_stone', side: 'end_stone' },
   note_block: { up: 'note_block', side: 'note_block' },
   jukebox: { up: 'jukebox_top', side: 'jukebox_side' },
   target: { up: 'target_top', side: 'target_side' },
