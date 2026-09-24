@@ -156,6 +156,8 @@ class BruteStrollGoal extends Goal {
   private wx = 0;
   private wy = 0;
   private wz = 0;
+  /** walking up to what it's looking at: it stops three blocks short */
+  private toLook = false;
   constructor(readonly mob: Brute) {
     super();
     this.flags = Flag.MOVE;
@@ -163,6 +165,7 @@ class BruteStrollGoal extends Goal {
   canUse(): boolean {
     const m = this.mob;
     if (m.target) return false;
+    this.toLook = false;
     if (this.idle > 0) {
       this.idle -= 2;
       return false;
@@ -178,13 +181,16 @@ class BruteStrollGoal extends Goal {
       const l = m.lookTarget;
       if (!l || !l.isAlive || m.distanceToSqr(l.x, l.y, l.z) <= 9) return false;
       [this.wx, this.wy, this.wz] = [l.x, l.y, l.z];
+      this.toLook = true;
       return true;
     }
     this.idle = 30 + m.random.nextInt(31);
     return false;
   }
   override canContinueToUse(): boolean {
-    return !this.mob.navigation.isDone() && !this.mob.target;
+    const m = this.mob;
+    if (this.toLook && m.distanceToSqr(this.wx, this.wy, this.wz) <= 9) return false;
+    return !m.navigation.isDone() && !m.target;
   }
   override start(): void {
     this.mob.navigation.moveTo(this.wx, this.wy, this.wz, 0.4);
