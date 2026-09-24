@@ -17,9 +17,10 @@ import type { Player } from './player';
 import { MobEffectInstance, MOB_EFFECTS } from './effects';
 import { defaultRandomPosTowards, landRandomPos, landRandomPosAway } from './ai/goals';
 import type { Node, Path } from './ai/pathfinder';
-import { Behavior, Brain, doNothing, oneShot, runOne, triggerOneShuffled, type BehaviorControl } from './ai/brain';
+import { Behavior, Brain, GateBehavior, doNothing, oneShot, runOne, triggerOneShuffled, type BehaviorControl } from './ai/brain';
 import { MerchantOffer, VILLAGER_TRADES, addOffersFromListings, type SavedOffer } from './trading';
-import type { ItemStack } from '../item/item';
+import { ItemStack, saveStack, loadStack, type SavedStack } from '../item/item';
+import { ItemEntity } from './itemEntity';
 import { BLOCKS, STATE_BLOCK, FLAGS, F_FULL_COLLISION } from '../world/block';
 import { BIOMES } from '../world/gen/biomes';
 import type { PoiKind } from '../game/poi';
@@ -76,6 +77,16 @@ const heldJobSite = (p: Profession) => (k: PoiKind): boolean => k === p;
 /** vanilla VillagerProfession.acquirableJobSite: any workstation while jobless, none for a nitwit */
 const acquirableJobSite = (p: Profession) => (k: PoiKind): boolean => (p === 'none' ? JOB_KINDS.has(k) : p !== 'nitwit' && k === p);
 
+/** vanilla Villager.FOOD_POINTS: what it eats, and how filling each is */
+const FOOD_POINTS: Record<string, number> = { bread: 4, potato: 1, carrot: 1, beetroot: 1 };
+const FOOD_ITEMS: ReadonlySet<string> = new Set(Object.keys(FOOD_POINTS));
+/** vanilla Villager.WANTED_ITEMS: what any villager picks up */
+const WANTED_ITEMS: ReadonlySet<string> = new Set(['bread', 'potato', 'carrot', 'wheat', 'wheat_seeds', 'beetroot', 'beetroot_seeds', 'torchflower_seeds', 'pitcher_pod']);
+/** vanilla VillagerProfession.requestedItems: what a farmer wants on top */
+const REQUESTED_ITEMS: Partial<Record<Profession, ReadonlySet<string>>> = { farmer: new Set(['wheat', 'wheat_seeds', 'beetroot_seeds', 'bone_meal']) };
+const NOTHING: ReadonlySet<string> = new Set();
+const WHEAT: ReadonlySet<string> = new Set(['wheat']);
+
 // ---------------------------------------------------------------------------
 // Brain types
 
@@ -121,6 +132,12 @@ export interface VillagerMemories {
   visibleLiving: LivingEntity[];
   /** VISIBLE_VILLAGER_BABIES (never empty: an empty list is no memory) */
   visibleBabies: Villager[] | null;
+  /** NEAREST_VISIBLE_WANTED_ITEM: food or seeds lying where it can see them */
+  wantedItem: ItemEntity | null;
+  /** BREED_TARGET: the villager it's courting */
+  breedTarget: Villager | null;
+  /** NEAREST_BED: a baby's nearest bed it can walk to (to bounce on) */
+  nearestBed: Pos | null;
 }
 
 /** vanilla Schedule.VILLAGER_DEFAULT and VILLAGER_BABY: [time of day, activity from then] */
@@ -1021,6 +1038,287 @@ function playTagWithOtherKids(): BehaviorControl<Villager> {
 }
 
 // ---------------------------------------------------------------------------
+// food, family and gossip
+
+/** vanilla GoToWantedItem.create(speed, false, 4): off to the food or seeds it saw lying close by */
+function goToWantedItem(speed: number, maxDist: number): BehaviorControl<Villager> {
+  return oneShot<Villager>((v) => {
+    const it = v.mem.wantedItem;
+    if (v.mem.walkTarget || !it || it.removed || it.distanceToSqr(v.x, v.y, v.z) >= maxDist * maxDist) return false;
+    v.mem.lookTarget = { e: it, eyes: true };
+    v.mem.walkTarget = walkAfter(it, speed, 0);
+    return true;
+  });
+}
+
+/** vanilla InteractWith.of(VILLAGER, 8, AgeableMob::canBreed, AgeableMob::canBreed, BREED_TARGET, speed, 2): a mate within 8 */
+function interactWithMate(speed: number): BehaviorControl<Villager> {
+  return oneShot<Villager>((v) => {
+    if (v.mem.walkTarget) return false;
+    const mate = (e: LivingEntity): e is Villager => e instanceof Villager && e.canBreed();
+    if (!v.canBreed() || !v.mem.visibleLiving.some(mate)) return false;
+    const t = v.mem.visibleLiving.find((e) => mate(e) && e.distanceToSqr(v.x, v.y, v.z) <= 64) as Villager | undefined;
+    if (t) {
+      v.mem.breedTarget = t;
+      v.mem.lookTarget = { e: t, eyes: true };
+      v.mem.walkTarget = walkAfter(t, speed, 2);
+    }
+    return true;
+  });
+}
+
+/** vanilla BehaviorUtils.lockGazeAndWalkToEachOther */
+function lockGazeAndWalkToEachOther(a: Villager, b: Villager, speed: number, closeEnough: number): void {
+  a.mem.lookTarget = { e: b, eyes: true };
+  b.mem.lookTarget = { e: a, eyes: true };
+  a.mem.walkTarget = walkAfter(b, speed, closeEnough);
+  b.mem.walkTarget = walkAfter(a, speed, closeEnough);
+}
+
+/** vanilla BehaviorUtils.targetIsValid: the remembered villager is alive and in sight */
+function validVillager(v: Villager, t: LivingEntity | null): t is Villager {
+  return t instanceof Villager && t.isAlive && !t.removed && v.mem.visibleLiving.includes(t);
+}
+
+/**
+ * vanilla VillagerMakeLove: two well-fed villagers court for a quarter of a minute or so, hearts now and then; then,
+ * if there's a free bed they can walk to, a baby that takes it (angry faces when there isn't)
+ */
+function villagerMakeLove(): BehaviorControl<Villager> {
+  let birth = 0;
+  const possible = (v: Villager): boolean => validVillager(v, v.mem.breedTarget) && v.canBreed() && v.mem.breedTarget!.canBreed();
+  return new Behavior<Villager>({
+    min: 350,
+    max: 350,
+    canStart: possible,
+    canStillUse: (v, now) => now <= birth && possible(v),
+    start: (v, now) => {
+      lockGazeAndWalkToEachOther(v, v.mem.breedTarget!, 0.5, 2);
+      birth = now + 275 + v.random.nextInt(50);
+    },
+    tick: (v, now) => {
+      const t = v.mem.breedTarget!;
+      if (v.distanceToSqr(t.x, t.y, t.z) > 5) return;
+      lockGazeAndWalkToEachOther(v, t, 0.5, 2);
+      if (now >= birth) {
+        v.eatAndDigestFood();
+        t.eatAndDigestFood();
+        tryToGiveBirth(v, t);
+      } else if (v.random.nextInt(35) === 0) {
+        // (vanilla entity event 12)
+        t.addParticlesAroundSelf('heart');
+        v.addParticlesAroundSelf('heart');
+      }
+    },
+    stop: (v) => {
+      v.mem.breedTarget = null;
+    },
+  });
+}
+
+/** vanilla VillagerMakeLove.tryToGiveBirth and giveBedToChild */
+function tryToGiveBirth(v: Villager, partner: Villager): void {
+  const bed = vacantBed(v);
+  if (!bed) {
+    // (vanilla entity event 13)
+    partner.addParticlesAroundSelf('angry_villager');
+    v.addParticlesAroundSelf('angry_villager');
+    return;
+  }
+  const baby = v.breedOffspring(partner);
+  v.setAge(6000);
+  partner.setAge(6000);
+  baby.setAge(-24000);
+  baby.moveTo(v.x, v.y, v.z, 0, 0);
+  v.level.addEntity(baby);
+  baby.addParticlesAroundSelf('heart');
+  // (the bed's ticket is the baby's from the start)
+  if (v.level.poi.take(bed[0], bed[1], bed[2], baby)) baby.mem.home = bed;
+}
+
+/** vanilla takeVacantBed: a bed within 48 with room, that it can walk to */
+function vacantBed(v: Villager): Pos | null {
+  const [bx, by, bz] = blockPos(v);
+  for (const [x, y, z] of v.level.poi.findAll(bx, by, bz, 48, (k) => k === 'home', true)) {
+    if (v.navigation.createPathToBlock(x, y, z, 1)?.canReach()) return [x, y, z];
+  }
+  return null;
+}
+
+/** vanilla TradeWithVillager.figureOutWhatIAmWillingToTrade: what the other's job wants that its own doesn't */
+function willingToTrade(v: Villager, other: Villager): ReadonlySet<string> {
+  const theirs = REQUESTED_ITEMS[other.profession] ?? NOTHING, mine = REQUESTED_ITEMS[v.profession] ?? NOTHING;
+  return new Set([...theirs].filter((id) => !mine.has(id)));
+}
+
+/**
+ * vanilla TradeWithVillager: two villagers that meet swap gossip and hand over what the other needs: spare food,
+ * wheat to a farmer, and whatever a farmer asks for
+ */
+function tradeWithVillager(): BehaviorControl<Villager> {
+  let trades: ReadonlySet<string> = NOTHING;
+  return new Behavior<Villager>({
+    canStart: (v) => validVillager(v, v.mem.interactionTarget),
+    canStillUse: (v) => validVillager(v, v.mem.interactionTarget),
+    start: (v) => {
+      const t = v.mem.interactionTarget as Villager;
+      lockGazeAndWalkToEachOther(v, t, 0.5, 2);
+      trades = willingToTrade(v, t);
+    },
+    tick: (v, now) => {
+      const t = v.mem.interactionTarget as Villager;
+      if (v.distanceToSqr(t.x, t.y, t.z) > 5) return;
+      lockGazeAndWalkToEachOther(v, t, 0.5, 2);
+      v.gossip(t, now);
+      if (v.hasExcessFood() && (v.profession === 'farmer' || t.wantsMoreFood())) throwHalfStack(v, FOOD_ITEMS, t);
+      if (t.profession === 'farmer' && v.countItem('wheat') > 32) throwHalfStack(v, WHEAT, t);
+      if (trades.size && v.inventory.some((s) => !!s && trades.has(s.item.id))) throwHalfStack(v, trades, t);
+    },
+    stop: (v) => {
+      v.mem.interactionTarget = null;
+    },
+  });
+}
+
+/** vanilla TradeWithVillager.throwHalfStack: half of a big stack (or all but 24 of it), tossed to the other */
+function throwHalfStack(v: Villager, ids: ReadonlySet<string>, to: Entity): void {
+  for (let i = 0; i < v.inventory.length; i++) {
+    const s = v.inventory[i];
+    if (!s || !ids.has(s.item.id)) continue;
+    let n: number;
+    if (s.count > s.item.maxStack / 2) n = Math.floor(s.count / 2);
+    else if (s.count > 24) n = s.count - 24;
+    else continue;
+    s.count -= n;
+    if (s.count <= 0) v.inventory[i] = null;
+    throwItem(v, s.copyWithCount(n), to.x, to.y, to.z);
+    return;
+  }
+}
+
+/** vanilla BehaviorUtils.throwItem: from just under its eyes, 0.3 a tick along the line from its feet to the spot */
+function throwItem(v: Villager, s: ItemStack, tx: number, ty: number, tz: number): void {
+  const e = new ItemEntity(v.level, s);
+  e.moveTo(v.x, v.y + v.eyeHeight - 0.3, v.z, v.random.nextFloat() * 360, 0);
+  const dx = tx - v.x, dy = ty - v.y, dz = tz - v.z;
+  const l = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1;
+  e.dx = (dx / l) * 0.3;
+  e.dy = (dy / l) * 0.3;
+  e.dz = (dz / l) * 0.3;
+  e.pickupDelay = 10;
+  e.thrower = v;
+  v.level.addEntity(e);
+}
+
+const isBedAt = (v: Villager, x: number, y: number, z: number): boolean => blk(v.level.world.getState(x, y, z)).name.endsWith('_bed');
+
+/** vanilla JumpOnBed: a child runs to the nearest bed and bounces on it three to six times */
+function jumpOnBed(speed: number): BehaviorControl<Villager> {
+  let bed: Pos | null = null, toReach = 0, jumps = 0, cooldown = 0;
+  const onOrOver = (v: Villager) => {
+    const [x, y, z] = blockPos(v);
+    return isBedAt(v, x, y, z) || isBedAt(v, x, y - 1, z);
+  };
+  const onSurface = (v: Villager) => {
+    const [x, y, z] = blockPos(v);
+    return isBedAt(v, x, y, z);
+  };
+  return new Behavior<Villager>({
+    timesOut: false,
+    canStart: (v) => !!v.mem.nearestBed && !v.mem.walkTarget && v.isBaby(),
+    canStillUse: (v) => v.isBaby() && !!bed && isBedAt(v, bed[0], bed[1], bed[2]) && !(!onOrOver(v) && toReach <= 0) && !(onOrOver(v) && jumps <= 0),
+    start: (v) => {
+      bed = v.mem.nearestBed!;
+      toReach = 100;
+      jumps = 3 + v.random.nextInt(4);
+      cooldown = 0;
+      v.mem.walkTarget = walkTo(bed, speed, 0);
+    },
+    tick: (v) => {
+      if (!onOrOver(v)) toReach--;
+      else if (cooldown > 0) cooldown--;
+      else if (onSurface(v)) {
+        v.jumpControl.jump();
+        jumps--;
+        cooldown = 5;
+      }
+    },
+    stop: () => {
+      bed = null;
+      toReach = jumps = cooldown = 0;
+    },
+  });
+}
+
+/** whatever a living thing holds in its main hand */
+function mainHandOf(e: LivingEntity): ItemStack | null {
+  if (e.type === 'player') return (e as Player).inventory.selectedItem;
+  return (e as { mainHand?: ItemStack | null }).mainHand ?? null;
+}
+
+/**
+ * vanilla ShowTradesToPlayer: a grown villager a player stands close to looks at them, and while they hold something
+ * it would take in trade, it holds up what they could have for it, one after another every two seconds
+ */
+function showTradesToPlayer(min: number, max: number): BehaviorControl<Villager> {
+  let playerItem: string | null = null;
+  let display: ItemStack[] = [];
+  let cycle = 0, index = 0, lookTime = 0;
+  const ok = (v: Villager): boolean => {
+    const t = v.mem.interactionTarget;
+    return !!t && t.type === 'player' && v.isAlive && t.isAlive && !v.isBaby() && v.distanceToSqr(t.x, t.y, t.z) <= 17;
+  };
+  const hold = (v: Villager, s: ItemStack | null) => {
+    v.setItemSlot('mainhand', s);
+    v.setDropChance('mainhand', s ? 0 : 0.085);
+  };
+  return new Behavior<Villager>({
+    min,
+    max,
+    canStart: ok,
+    canStillUse: (v) => ok(v) && lookTime > 0,
+    start: (v) => {
+      v.mem.lookTarget = { e: v.mem.interactionTarget!, eyes: true };
+      cycle = index = 0;
+      lookTime = 40;
+    },
+    tick: (v) => {
+      const p = v.mem.interactionTarget!;
+      v.mem.lookTarget = { e: p, eyes: true };
+      const id = mainHandOf(p)?.item.id ?? '';
+      if (playerItem === null || playerItem !== id) {
+        playerItem = id;
+        display = [];
+        if (id) {
+          for (const o of v.getOffers()) if (!o.isOutOfStock() && (o.costA().item.id === id || o.costB?.id === id)) display.push(o.result.copy());
+          if (display.length) {
+            lookTime = 900;
+            index = 0;
+            hold(v, display[0]);
+          }
+        }
+      }
+      if (display.length) {
+        if (display.length >= 2 && ++cycle >= 40) {
+          index = index + 1 > display.length - 1 ? 0 : index + 1;
+          cycle = 0;
+          hold(v, display[index]);
+        }
+      } else {
+        hold(v, null);
+        lookTime = Math.min(lookTime, 40);
+      }
+      lookTime--;
+    },
+    stop: (v) => {
+      v.mem.interactionTarget = null;
+      hold(v, null);
+      playerItem = null;
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
 
 /** vanilla Villager */
 export class Villager extends AgeableMob {
@@ -1053,11 +1351,17 @@ export class Villager extends AgeableMob {
   private readonly sensePhase = Math.floor(Math.random() * 20);
   /** vanilla lastDamageStamp: the game time it was last hurt */
   private lastDamageStamp = -1000;
+  /** vanilla Villager.inventory: 8 slots of food and seeds */
+  readonly inventory: (ItemStack | null)[] = new Array(8).fill(null);
+  /** vanilla foodLevel: food eaten and not yet used up (a baby takes 12) */
+  foodLevel = 0;
+  /** vanilla lastGossipTime */
+  lastGossipTime = 0;
 
   readonly mem: VillagerMemories = {
     home: null, jobSite: null, potentialJobSite: null, meetingPoint: null, walkTarget: null, lookTarget: null, interactionTarget: null, path: null,
     cantReachWalkTargetSince: null, lastSlept: null, lastWoken: null, lastWorkedAtPoi: null, hurtBy: false, hurtByEntity: null, nearestHostile: null,
-    doorsToClose: null, nearestLiving: [], visibleLiving: [], visibleBabies: null,
+    doorsToClose: null, nearestLiving: [], visibleLiving: [], visibleBabies: null, wantedItem: null, breedTarget: null, nearestBed: null,
   };
   brain: Brain<Villager, VillagerActivity>;
 
@@ -1070,6 +1374,7 @@ export class Villager extends AgeableMob {
     // (vanilla: GroundPathNavigation.setCanOpenDoors, setCanFloat)
     this.ownNavigation.evaluator.canOpenDoors = true;
     this.ownNavigation.canFloat = true;
+    this.canPickUpLoot = true;
     this.brain = this.makeBrain();
   }
 
@@ -1141,6 +1446,26 @@ export class Villager extends AgeableMob {
     // (an entity memory lapses when the entity leaves the world)
     const it = m.interactionTarget;
     if (it && (it.removed || !it.isAlive)) m.interactionTarget = null;
+    if (m.breedTarget && (m.breedTarget.removed || !m.breedTarget.isAlive)) m.breedTarget = null;
+    // vanilla NearestItemSensor: the nearest item it wants and can see, within 32
+    const items = this.level.getEntities(this.bb.inflate(32, 16, 32), (e) => e instanceof ItemEntity) as ItemEntity[];
+    items.sort((a, b) => a.distanceToSqr(this.x, this.y, this.z) - b.distanceToSqr(this.x, this.y, this.z));
+    m.wantedItem = items.find((e) => this.wantsToPickUp(e.stack) && e.distanceToSqr(this.x, this.y, this.z) < 32 * 32 && this.sensing.hasLineOfSight(e)) ?? null;
+    // vanilla NearestBedSensor: a child's nearest bed within 48 that it can walk to
+    if (this.isBaby()) this.senseNearestBed();
+  }
+
+  /** vanilla NearestBedSensor (the few nearest beds tried by path) */
+  private senseNearestBed(): void {
+    const m = this.mem;
+    if (m.nearestBed && isBedAt(this, m.nearestBed[0], m.nearestBed[1], m.nearestBed[2]) && closerToCenter(m.nearestBed, this, 48)) return;
+    const [bx, by, bz] = blockPos(this);
+    for (const [x, y, z] of this.level.poi.findAll(bx, by, bz, 48, (k) => k === 'home', false).slice(0, 5)) {
+      if (this.navigation.createPathToBlock(x, y, z, 1)?.canReach()) {
+        m.nearestBed = [x, y, z];
+        return;
+      }
+    }
   }
 
   // --- ticking ---------------------------------------------------------------
@@ -1280,6 +1605,102 @@ export class Villager extends AgeableMob {
       this.moveTo(at[0], at[1], at[2], yaw, 0);
     }
     this.mem.lastWoken = this.level.gameTime;
+  }
+
+  // --- pockets and food (vanilla Villager inventory, InventoryCarrier) ---------------------------------------
+
+  /** vanilla Villager.wantsToPickUp: food and seeds (a farmer bone meal too), while there's room */
+  override wantsToPickUp(s: ItemStack): boolean {
+    const id = s.item.id;
+    return (WANTED_ITEMS.has(id) || !!REQUESTED_ITEMS[this.profession]?.has(id)) && this.canAddToInventory(s);
+  }
+
+  /** vanilla InventoryCarrier.pickUpItem: as much as fits into its pockets */
+  protected override pickUpItem(it: ItemEntity): void {
+    const s = it.stack;
+    if (!this.wantsToPickUp(s)) return;
+    this.onItemPickup(it);
+    const n = s.count;
+    const left = this.addToInventory(s);
+    this.take(it, n - (left?.count ?? 0));
+    if (!left) it.remove();
+    else s.count = left.count;
+  }
+
+  /** vanilla SimpleContainer.canAddItem */
+  private canAddToInventory(s: ItemStack): boolean {
+    return this.inventory.some((x) => !x || (x.sameItem(s) && x.count < x.item.maxStack));
+  }
+
+  /** vanilla SimpleContainer.addItem: onto stacks of the same, then into an empty slot; what didn't fit comes back */
+  addToInventory(s: ItemStack): ItemStack | null {
+    let left = s.count;
+    for (const x of this.inventory) {
+      if (!x || !x.sameItem(s)) continue;
+      const k = Math.min(left, x.item.maxStack - x.count);
+      x.count += k;
+      left -= k;
+      if (left <= 0) return null;
+    }
+    for (let i = 0; i < this.inventory.length; i++)
+      if (!this.inventory[i]) {
+        this.inventory[i] = s.copyWithCount(left);
+        return null;
+      }
+    return s.copyWithCount(left);
+  }
+
+  /** vanilla SimpleContainer.countItem */
+  countItem(id: string): number {
+    let n = 0;
+    for (const s of this.inventory) if (s?.item.id === id) n += s.count;
+    return n;
+  }
+
+  /** vanilla countFoodPointsInInventory */
+  foodPoints(): number {
+    let n = 0;
+    for (const s of this.inventory) if (s) n += (FOOD_POINTS[s.item.id] ?? 0) * s.count;
+    return n;
+  }
+
+  /** vanilla hasExcessFood / wantsMoreFood */
+  hasExcessFood(): boolean {
+    return this.foodPoints() >= 24;
+  }
+
+  wantsMoreFood(): boolean {
+    return this.foodPoints() < 12;
+  }
+
+  /** vanilla canBreed: fed enough (12 points, eaten or in its pockets), awake, grown and not a new parent */
+  canBreed(): boolean {
+    return this.foodLevel + this.foodPoints() >= 12 && !this.isSleeping() && this.age === 0;
+  }
+
+  /** vanilla eatAndDigestFood: eats until it's had 12 points, then those go into the baby */
+  eatAndDigestFood(): void {
+    if (this.foodLevel < 12 && this.foodPoints() !== 0)
+      eat: for (let i = 0; i < this.inventory.length; i++) {
+        const s = this.inventory[i];
+        const pts = s ? FOOD_POINTS[s.item.id] : undefined;
+        if (!s || pts === undefined) continue;
+        while (s.count > 0) {
+          this.foodLevel += pts;
+          if (--s.count <= 0) this.inventory[i] = null;
+          if (this.foodLevel >= 12) break eat;
+        }
+      }
+    this.foodLevel -= 12;
+  }
+
+  /** vanilla Villager.gossip: when neither has for a minute, two villagers that meet swap what they've heard */
+  gossip(other: Villager, now: number): void {
+    const ready = (t: number) => now < t || now >= t + 1200;
+    if (!ready(this.lastGossipTime) || !ready(other.lastGossipTime)) return;
+    // (what they've heard of players waits for reputation)
+    this.lastGossipTime = now;
+    other.lastGossipTime = now;
   }
 
   // --- trading (vanilla AbstractVillager / Villager as a Merchant) ---------------------------------------------
@@ -1494,6 +1915,8 @@ export class Villager extends AgeableMob {
       sleeping: pos(this.sleepingPos),
     };
     if (this.offers) d.offers = JSON.stringify(this.offers.map((o) => o.save()));
+    if (this.inventory.some((x) => x)) d.inventory = JSON.stringify(this.inventory.map((x) => (x ? saveStack(x) : null)));
+    if (this.foodLevel) d.food = this.foodLevel;
     if (m.lastSlept !== null) d.lastSlept = m.lastSlept;
     if (m.lastWoken !== null) d.lastWoken = m.lastWoken;
     if (m.lastWorkedAtPoi !== null) d.lastWorked = m.lastWorkedAtPoi;
@@ -1511,6 +1934,8 @@ export class Villager extends AgeableMob {
     this.numberOfRestocksToday = Number(d.restocksToday ?? 0);
     this.lastRestockCheckDayTime = Number(d.lastRestockCheckDay ?? 0);
     this.assignProfessionWhenSpawned = d.assignProfession === true;
+    if (typeof d.inventory === 'string') (JSON.parse(d.inventory) as (SavedStack | null)[]).forEach((x, i) => i < 8 && (this.inventory[i] = loadStack(x)));
+    this.foodLevel = Number(d.food ?? 0);
     if (typeof d.offers === 'string') this.offers = (JSON.parse(d.offers) as SavedOffer[]).map((o) => MerchantOffer.load(o)).filter((o): o is MerchantOffer => !!o);
     const pos = (s: unknown): Pos | null => {
       if (typeof s !== 'string' || !s) return null;
@@ -1552,7 +1977,7 @@ function corePackage(): Pkg {
     [1, moveToTargetSink()],
     [2, poiCompetitorScan()],
     [3, lookAndFollowTradingPlayer()],
-    // (GoToWantedItem waits for the villagers' pockets)
+    [5, goToWantedItem(SPEED, 4)],
     [6, acquirePoi('potentialJobSite', ['jobSite'], (v) => acquirableJobSite(v.profession), true, false)],
     [7, goToPotentialJobSite()],
     // (YieldJobSite waits too)
@@ -1575,6 +2000,7 @@ function workPackage(): Pkg {
         // (StrollToPoiList, HarvestFarmland and UseBonemeal wait for the farmers' fields)
       ]),
     ],
+    [10, showTradesToPlayer(400, 1600)],
     [10, setLookAndInteractWithPlayer()],
     [2, setWalkTargetFromBlockMemory('jobSite', SPEED, 9, 100, 1200)],
     [99, updateActivityFromSchedule()],
@@ -1628,9 +2054,11 @@ function restPackage(): Pkg {
 function meetPackage(): Pkg {
   return [
     [2, triggerOneShuffled<Villager>([[strollAroundPoi('meetingPoint', STROLL, 40), 2], [socializeAtBell, 2]])],
+    [10, showTradesToPlayer(400, 1600)],
     [10, setLookAndInteractWithPlayer()],
     [2, setWalkTargetFromBlockMemory('meetingPoint', SPEED, 6, 100, 200)],
     [3, validateNearbyPoi('meetingPoint', () => (k) => k === 'meeting')],
+    [3, tradeGate()],
     [5, fullLook()],
     [99, updateActivityFromSchedule()],
   ];
@@ -1642,16 +2070,27 @@ function idlePackage(): Pkg {
       2,
       runOne<Villager>([
         [interactWith('villager', SPEED), 2],
+        [interactWithMate(SPEED), 1],
         [interactWith('cat', SPEED), 1],
         [villageBoundRandomStroll(SPEED), 1],
         [walkToLookTarget(SPEED, 2), 1],
+        [jumpOnBed(SPEED), 1],
         [doNothing(30, 60), 1],
       ]),
     ],
     [3, setLookAndInteractWithPlayer()],
+    [3, showTradesToPlayer(400, 1600)],
+    [3, tradeGate()],
+    // (a gate that forgets the mate whenever the courting isn't going on)
+    [3, new GateBehavior<Villager>([[villagerMakeLove(), 1]], { shuffle: false, exit: (v) => (v.mem.breedTarget = null) })],
     [5, fullLook()],
     [99, updateActivityFromSchedule()],
   ];
+}
+
+/** vanilla GateBehavior(exit INTERACTION_TARGET, [TradeWithVillager]): whoever it was dealing with is forgotten once that's over */
+function tradeGate(): BehaviorControl<Villager> {
+  return new GateBehavior<Villager>([[tradeWithVillager(), 1]], { shuffle: false, exit: (v) => (v.mem.interactionTarget = null) });
 }
 
 function panicPackage(): Pkg {

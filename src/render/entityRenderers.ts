@@ -638,6 +638,16 @@ export class EntityRenderDispatcher {
       b.setOverlay(0, 0, 0, 0);
       this.drawHeldItem(b, def.root, e.mainHand, baby, e.usingItem ? e.useItemTicks + p : -1);
     }
+    // vanilla CrossedArmsItemLayer: what a villager holds up shows in its folded arms
+    if (e instanceof Villager && e.mainHand) {
+      b.setOverlay(0, 0, 0, 0);
+      const pose = this.pose;
+      pose.push();
+      pose.translate(0, 0.4, -0.4);
+      pose.rotX(180);
+      this.items.render(b, pose, e.mainHand, 'ground');
+      pose.pop();
+    }
     // (the offhand in the left: a piglin's, the gold it's admiring)
     if (e.offHand && (e instanceof Zombie || e instanceof Skeleton || e instanceof Piglin)) {
       b.setOverlay(0, 0, 0, 0);
