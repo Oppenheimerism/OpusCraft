@@ -351,6 +351,8 @@ export class Level {
   onPlayerCrossbowKill: ((killed: Entity[]) => void) | null = null;
   /** an entity's time in a portal came up (the portal block it was in, and which kind) */
   onPortal: ((e: Entity, x: number, y: number, z: number, kind: 'nether' | 'end') => void) | null = null;
+  /** a player cured a zombie villager (vanilla cured_zombie_villager) */
+  onCuredZombieVillager: ((p: Player, v: Villager) => void) | null = null;
   /** a golem someone built came to life (vanilla CarvedPumpkinBlock.spawnGolemInWorld: summoned_entity) */
   onSummonedEntity: ((e: Entity) => void) | null = null;
 

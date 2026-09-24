@@ -43,6 +43,8 @@ export type Criterion =
   | { t: 'distract_piglin'; how: 'thrown' | 'directly' }
   /** vanilla TradeTrigger: traded with a villager (standing at least that high) */
   | { t: 'villager_trade'; minY?: number }
+  /** vanilla CuredZombieVillagerTrigger */
+  | { t: 'cured_zombie_villager' }
   /** vanilla SummonedEntityTrigger: built a golem (or the wither) near enough to see it come to life */
   | { t: 'summoned_entity'; entity: string }
   | { t: 'impossible' };
@@ -136,7 +138,7 @@ const A: AdvancementDef[] = [
     requirements: [['diamond_helmet', 'diamond_chestplate', 'diamond_leggings', 'diamond_boots']],
   },
   { id: 'story/enchant_item', parent: 'story/mine_diamond', title: 'Enchanter', description: 'Enchant an item at an Enchanting Table', icon: 'enchanted_book', frame: 'task', criteria: { enchanted_item: { t: 'enchanted_item' } } },
-  { id: 'story/cure_zombie_villager', parent: 'story/enter_the_nether', title: 'Zombie Doctor', description: 'Weaken and then cure a Zombie Villager', icon: 'golden_apple', frame: 'goal', criteria: one(never) },
+  { id: 'story/cure_zombie_villager', parent: 'story/enter_the_nether', title: 'Zombie Doctor', description: 'Weaken and then cure a Zombie Villager', icon: 'golden_apple', frame: 'goal', criteria: one({ t: 'cured_zombie_villager' }) },
   { id: 'story/follow_ender_eye', parent: 'story/enter_the_nether', title: 'Eye Spy', description: 'Follow an Eye of Ender', icon: 'ender_eye', frame: 'task', criteria: one(never) },
   { id: 'story/enter_the_end', parent: 'story/follow_ender_eye', title: 'The End?', description: 'Enter the End Portal', icon: 'end_stone', frame: 'task', criteria: { entered_end: toEnd } },
 
@@ -433,6 +435,8 @@ export interface TriggerPayload {
   tradeY?: number;
   /** what the player built came to life (summoned_entity) */
   summoned?: string;
+  /** a zombie villager the player cured (cured_zombie_villager) */
+  cured?: boolean;
 }
 
 export class PlayerAdvancements {
@@ -561,6 +565,8 @@ function matches(c: Criterion, p: TriggerPayload): boolean {
       return p.tradeY !== undefined && (c.minY === undefined || p.tradeY >= c.minY);
     case 'summoned_entity':
       return p.summoned === c.entity;
+    case 'cured_zombie_villager':
+      return !!p.cured;
     case 'nether_travel':
       return p.netherTravel !== undefined && p.netherTravel >= c.distance;
     case 'killed_by_crossbow': {

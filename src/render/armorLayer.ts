@@ -33,8 +33,24 @@ export function humanoidArmorModel(g: number): MobModelDef {
   return { root, texW: 64, texH: 32, baby: { headParts: ['head'], scaleHead: true, yHead: 16, zHead: 0, headScale: 2, bodyScale: 2, bodyY: 24 } };
 }
 
+/**
+ * vanilla ZombieVillagerModel.createArmorLayer: the humanoid's armour with the helmet two pixels up on the taller
+ * head, the body and legs a tenth bigger and the legs set two pixels apart
+ */
+export function zombieVillagerArmorModel(g: number): MobModelDef {
+  const root = new ModelPart();
+  const head = root.add('head', new ModelPart([{ x: -4, y: -10, z: -4, w: 8, h: 8, d: 8, u: 0, v: 0, inflate: g }]));
+  head.add('hat', new ModelPart([{ x: -4, y: -8, z: -4, w: 8, h: 8, d: 8, u: 32, v: 0, inflate: g + 0.5 }]));
+  root.add('body', new ModelPart([{ x: -4, y: 0, z: -2, w: 8, h: 12, d: 4, u: 16, v: 16, inflate: g + 0.1 }]));
+  root.add('right_arm', new ModelPart([{ x: -3, y: -2, z: -2, w: 4, h: 12, d: 4, u: 40, v: 16, inflate: g }], [-5, 2, 0]));
+  root.add('left_arm', new ModelPart([{ x: -1, y: -2, z: -2, w: 4, h: 12, d: 4, u: 40, v: 16, inflate: g, mirror: true }], [5, 2, 0]));
+  root.add('right_leg', new ModelPart([{ x: -2, y: 0, z: -2, w: 4, h: 12, d: 4, u: 0, v: 16, inflate: g + 0.1 }], [-2, 12, 0]));
+  root.add('left_leg', new ModelPart([{ x: -2, y: 0, z: -2, w: 4, h: 12, d: 4, u: 0, v: 16, inflate: g + 0.1, mirror: true }], [2, 12, 0]));
+  return { root, texW: 64, texH: 32, baby: { headParts: ['head'], scaleHead: true, yHead: 16, zHead: 0, headScale: 2, bodyScale: 2, bodyY: 24 } };
+}
+
 /** vanilla ModelLayers *_INNER_ARMOR / *_OUTER_ARMOR: 0.5 and 1.0 for most wearers, 0.5 and 1.02 for piglins */
-export type ArmorModelSet = 'humanoid' | 'piglin';
+export type ArmorModelSet = 'humanoid' | 'piglin' | 'zombie_villager';
 
 /** vanilla HumanoidArmorLayer.render's order */
 const ORDER: readonly ArmorSlot[] = ['chest', 'legs', 'feet', 'head'];
@@ -49,6 +65,7 @@ export class ArmorLayer {
   private readonly models: Record<ArmorModelSet, { inner: MobModelDef; outer: MobModelDef }> = {
     humanoid: { inner: humanoidArmorModel(0.5), outer: humanoidArmorModel(1) },
     piglin: { inner: humanoidArmorModel(0.5), outer: humanoidArmorModel(1.02) },
+    zombie_villager: { inner: zombieVillagerArmorModel(0.5), outer: zombieVillagerArmorModel(1) },
   };
   private readonly textures = new Map<string, WebGLTexture | null>();
   private glintTex: WebGLTexture | null = null;

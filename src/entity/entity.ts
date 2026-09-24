@@ -44,6 +44,11 @@ export abstract class Entity {
   get hasUuid(): boolean {
     return this.uuidValue !== null;
   }
+
+  /** vanilla Entity.killedEntity: this killed `victim`; false when it took the body (no death drops then) */
+  killedEntity(_victim: Entity): boolean {
+    return true;
+  }
   x = 0;
   y = 0;
   z = 0;

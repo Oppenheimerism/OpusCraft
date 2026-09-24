@@ -28,6 +28,12 @@ import { reducedTickDelay } from './ai/goal';
 
 const DIFFICULTY_ID: Record<string, number> = { peaceful: 0, easy: 1, normal: 2, hard: 3 };
 
+/**
+ * how a zombie's villager rises as a zombie villager (set by zombieVillager.ts, which needs the villager, which
+ * needs this module): true once it has
+ */
+export const infection: { convert: ((zombie: Zombie, victim: LivingEntity) => boolean) | null } = { convert: null };
+
 export abstract class Monster extends Mob {
   protected override swimSplashSound(): string {
     return 'entity.hostile.splash';
@@ -186,6 +192,16 @@ export class Zombie extends Monster {
   override wantsToPickUp(s: ItemStack): boolean {
     return s.item.id === 'glow_ink_sac' ? false : super.wantsToPickUp(s);
   }
+  /** vanilla Zombie.killedEntity: on normal half the time, and on hard always, a villager it kills rises as one of it */
+  override killedEntity(victim: Entity): boolean {
+    const ok = super.killedEntity(victim);
+    const d = this.level.difficulty;
+    if ((d === 'normal' || d === 'hard') && victim.type === 'villager' && victim instanceof LivingEntity && infection.convert) {
+      if (d !== 'hard' && this.random.nextBool()) return ok;
+      if (infection.convert(this, victim)) return false;
+    }
+    return ok;
+  }
   override doHurtTarget(target: Entity): boolean {
     const ok = super.doHurtTarget(target);
     if (ok) {
@@ -199,10 +215,11 @@ export class Zombie extends Monster {
    * then the armour and weapon, their enchantments and the Halloween pumpkin (no leader zombies, knockback or
    * follow range bonuses, door breaking or chicken jockeys here)
    */
-  override finalizeSpawn(_reason?: SpawnReason): void {
+  override finalizeSpawn(reason?: SpawnReason): void {
     const d = this.spawnDifficulty();
     this.canPickUpLoot = this.random.nextFloat() < Math.fround(0.55 * d.specialMultiplier());
-    if (this.random.nextFloat() < 0.05) this.setBaby(true);
+    // (a conversion comes with vanilla's ZombieGroupData(false, true): as young as the villager was, no roll)
+    if (reason !== 'conversion' && this.random.nextFloat() < 0.05) this.setBaby(true);
     this.populateDefaultEquipmentSlots(d);
     this.populateDefaultEquipmentEnchantments(d);
     this.maybeHalloweenPumpkin();

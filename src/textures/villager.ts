@@ -541,19 +541,103 @@ function over(dst: TexImage, src: TexImage, skip: Face[] = []): void {
 }
 
 /**
- * the villager's skin (vanilla VillagerRenderer and VillagerProfessionLayer): the base, its type's outfit (without
- * its head when the profession's hat covers it), then, for a grown villager with a profession, that outfit and
- * (but for the nitwit) the badge of its level
+ * vanilla VillagerProfessionLayer: over the skin, the type's outfit (without its head when the profession's hat
+ * covers it), then, for a grown one with a profession, that outfit and (but for the nitwit) the badge of its level;
+ * `skip`: regions of the outfits the model uses otherwise
  */
-export function villagerTexture(type: VillagerType, prof: Profession, level: number, baby: boolean): TexImage {
-  const t = cloneImg(base());
+function dress(t: TexImage, type: VillagerType, prof: Profession, level: number, baby: boolean, skip: Face[] = []): TexImage {
   const profHat: Hat = baby || prof === 'none' ? 'none' : PROFESSIONS[prof].hat;
   const typeHat = TYPES[type].hat;
   const showTypeHead = profHat === 'none' || (profHat === 'partial' && typeHat !== 'full');
-  over(t, layer('type/' + type, (l, r) => TYPES[type].paint(l, r)), showTypeHead ? [] : HEAD_REGIONS);
+  over(t, layer('type/' + type, (l, r) => TYPES[type].paint(l, r)), showTypeHead ? skip : [...HEAD_REGIONS, ...skip]);
   if (!baby && prof !== 'none') {
-    over(t, layer('profession/' + prof, (l, r) => PROFESSIONS[prof].paint(l, r)));
+    over(t, layer('profession/' + prof, (l, r) => PROFESSIONS[prof].paint(l, r)), skip);
     if (prof !== 'nitwit') badge(t, level);
   }
   return t;
+}
+
+/** the villager's skin (vanilla VillagerRenderer): the base villager, dressed */
+export function villagerTexture(type: VillagerType, prof: Profession, level: number, baby: boolean): TexImage {
+  return dress(cloneImg(base()), type, prof, level, baby);
+}
+
+// ---------------------------------------------------------------------------
+// the zombie villager (vanilla zombie_villager/zombie_villager.png and its layers): the villager gone green and
+// rotten, hollow dark eyes under the brow, the robe torn at the hem, and ZombieVillagerModel's arms (the sleeve over
+// the upper two thirds, the hand below) in place of the folded ones
+
+const ZSKIN: Pal = [0x3d6e30, 0x467b37, 0x4f873e, 0x589146, 0x629b4f];
+const ZSKIN_W: Pal = [1, 3, 6, 4, 1];
+const ZBROW = 0x1f3a16;
+const ZROBE: Pal = [0x33231c, 0x3c2a21, 0x463128, 0x4f382e, 0x583f34];
+/** ZombieVillagerModel's arms: 4x12x4 at the villager's folded arms' place */
+const ZARM = boxFaces(44, 22, 4, 12, 4);
+
+let ZBASE: TexImage | null = null;
+
+function zombieBase(): TexImage {
+  if (ZBASE) return ZBASE;
+  const t = img(64, 64);
+  const r = new Rand(0x2b1e7a6);
+  noiseBox(t, HEAD, r, ZSKIN, { w: ZSKIN_W, cell: 2, white: 0.4 });
+  paintFace(t, HEAD.top, (x, y, c) => mulC(c, 0.9));
+  paintFace(t, HEAD.bottom, (x, y, c) => mulC(c, 0.8));
+  paintFace(t, HEAD.back, (x, y, c, w, h) => mulC(c, y > h - 3 ? 0.88 : 0.96));
+  drawFace(t, HEAD.front, [
+    '........',
+    '........',
+    '........',
+    '........',
+    '.bBBBBb.',
+    '.KE..EK.',
+    '.s....s.',
+    '........',
+    '..mMMm..',
+    '.c....c.',
+  ], {
+    b: mixC(ZBROW, ZSKIN[1], 0.4), B: ZBROW, K: 0x000000, E: 0x141a10, s: mulC(ZSKIN[2], 0.82), m: mulC(ZSKIN[1], 0.8), M: 0x1b2e14, c: mulC(ZSKIN[3], 0.9),
+  }, r);
+  for (const k of ['right', 'left'] as FaceName[]) drawFace(t, HEAD[k], ['........', '........', '........', '........', '........', '....ee..', '....e...'], { e: mulC(ZSKIN[1], 0.85) }, r);
+  noiseBox(t, NOSE, r, ZSKIN, { w: [1, 2, 4, 6, 3], cell: 1 });
+  paintFace(t, NOSE.front, (x, y, c) => (y === 0 ? mulC(c, 1.05) : y === 3 ? mixC(c, 0x2f4a24, 0.35) : undefined));
+  paintFace(t, NOSE.bottom, (x, y, c) => mulC(c, 0.75));
+  for (const k of ['right', 'left', 'back'] as FaceName[]) paintFace(t, NOSE[k], (x, y, c) => mulC(c, 0.9));
+
+  // the robe, stained and ragged, a green neck at the collar
+  noiseBox(t, BODY, r, ZROBE, { w: ROBE_W, cell: 1 });
+  paintFace(t, BODY.front, (x, y, c) => (y < 2 && x >= 2 && x <= 5 ? pick(r, ZSKIN, ZSKIN_W) : undefined));
+  noiseBox(t, JACKET, r, ZROBE, { w: ROBE_W, cell: 1, white: 0.6 });
+  collar(t, JACKET.front);
+  for (const k of ['front', 'back'] as FaceName[]) paintFace(t, JACKET[k], (x, y, c) => (x === 0 || x === 7 ? mulC(c, 0.9) : undefined));
+  shadeBottom(t, JACKET, 3, 0.85);
+  // (dark stains, and the hem torn into tatters)
+  for (const k of SIDES) paintFace(t, JACKET[k], (x, y, c) => (r.chance(0.06) ? mulC(c, 0.72) : undefined));
+  for (const k of SIDES) {
+    const [x0, y0, w, h] = JACKET[k];
+    for (let x = 0; x < w; x++) {
+      const cut = r.chance(0.45) ? 1 + (r.chance(0.35) ? 1 : 0) : 0;
+      for (let y = h - cut; y < h; y++) clear(t, x0 + x, y0 + y);
+    }
+  }
+  paintFace(t, JACKET.bottom, (x, y, c) => mulC(c, 0.7));
+  // the arms: sleeves, then the hands
+  noiseBox(t, ZARM, r, ZROBE, { w: ROBE_W, cell: 1 });
+  for (const k of SIDES) noiseFace(t, faceRows(ZARM[k], 8, 12), r, ZSKIN, { w: ZSKIN_W, cell: 1 });
+  for (const k of SIDES) paintFace(t, faceRows(ZARM[k], 7, 8), (x, y, c) => mulC(c, 0.8));
+  noiseFace(t, ZARM.bottom, r, ZSKIN, { w: ZSKIN_W, cell: 1 });
+  paintFace(t, ZARM.bottom, (x, y, c) => mulC(c, 0.85));
+  // legs: the robe's skirt over them, worn shoes
+  noiseBox(t, LEG, r, ZROBE, { w: ROBE_W, cell: 1 });
+  for (const k of SIDES) noiseFace(t, faceRows(LEG[k], 8, 12), r, SHOE);
+  noiseFace(t, LEG.bottom, r, SHOE);
+  return (ZBASE = t);
+}
+
+/**
+ * the zombie villager's skin (vanilla ZombieVillagerRenderer): the zombie villager, dressed as the villager it was
+ * (the outfits' cuffs, under the folded arms, are its hands' undersides here)
+ */
+export function zombieVillagerTexture(type: VillagerType, prof: Profession, level: number, baby: boolean): TexImage {
+  return dress(cloneImg(zombieBase()), type, prof, level, baby, [ARM.bottom]);
 }

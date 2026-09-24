@@ -416,6 +416,7 @@ export class Game {
       if (kind === 'end') endPortalTravel(this, e);
       else if (e === this.player) this.portalTravel(x, y, z);
     };
+    this.level.onCuredZombieVillager = () => this.advancements.trigger('cured_zombie_villager', { cured: true });
     this.level.onSummonedEntity = (e) => {
       if (e.bb.inflate(5).intersects(this.player.bb)) this.advancements.trigger('summoned_entity', { summoned: e.type });
     };

@@ -94,7 +94,7 @@ export interface LootEntry {
   lootingChance?: [number, number];
 }
 
-export type SpawnReason = 'natural' | 'chunk' | 'egg' | 'command' | 'breeding' | 'spawner' | 'jockey' | 'structure' | 'summoned';
+export type SpawnReason = 'natural' | 'chunk' | 'egg' | 'command' | 'breeding' | 'spawner' | 'jockey' | 'structure' | 'summoned' | 'conversion';
 
 /** vanilla Mob.DEFAULT_EQUIPMENT_DROP_CHANCE; 2 (a sure drop, kept as it was) once it's something the mob picked up */
 export const DEFAULT_DROP_CHANCE = 0.085;
@@ -826,6 +826,8 @@ export abstract class Mob extends LivingEntity {
     if (this.dead) return;
     super.die(source, attacker);
     this.navigation.stop();
+    // vanilla Entity.killedEntity: the killer may take the body (a zombie's villager rises): then nothing drops
+    if (attacker && !attacker.killedEntity(this)) return;
     const byPlayer = this.lastHurtByPlayerTime > 0;
     // the killer's looting (vanilla ATTACKING_ENTITY: the shooter for arrows)
     const looting = attacker instanceof LivingEntity ? entityLevel(attacker, 'looting') : 0;

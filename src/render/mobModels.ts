@@ -148,6 +148,29 @@ export function villagerModel(): MobModelDef {
   return { root, texW: 64, texH: 64 };
 }
 
+/**
+ * vanilla ZombieVillagerModel.createBodyModel: the villager's head with its nose, hat and brim, and its robe, on a
+ * humanoid's arms and legs (the arms held out as a zombie's)
+ */
+export function zombieVillagerModel(): MobModelDef {
+  const root = new ModelPart();
+  const head = root.add('head', part([
+    { x: -4, y: -10, z: -4, w: 8, h: 10, d: 8, u: 0, v: 0 },
+    { x: -1, y: -3, z: -6, w: 2, h: 4, d: 2, u: 24, v: 0 },
+  ]));
+  const hat = head.add('hat', part([{ x: -4, y: -10, z: -4, w: 8, h: 10, d: 8, u: 32, v: 0, inflate: 0.5 }]));
+  hat.add('hat_rim', part([{ x: -8, y: -8, z: -6, w: 16, h: 16, d: 1, u: 30, v: 47 }], [0, 0, 0], [-PI / 2, 0, 0]));
+  root.add('body', part([
+    { x: -4, y: 0, z: -3, w: 8, h: 12, d: 6, u: 16, v: 20 },
+    { x: -4, y: 0, z: -3, w: 8, h: 20, d: 6, u: 0, v: 38, inflate: 0.05 },
+  ]));
+  root.add('right_arm', part([{ x: -3, y: -2, z: -2, w: 4, h: 12, d: 4, u: 44, v: 22 }], [-5, 2, 0]));
+  root.add('left_arm', part([{ x: -1, y: -2, z: -2, w: 4, h: 12, d: 4, u: 44, v: 22, mirror: true }], [5, 2, 0]));
+  root.add('right_leg', part([{ x: -2, y: 0, z: -2, w: 4, h: 12, d: 4, u: 0, v: 22 }], [-2, 12, 0]));
+  root.add('left_leg', part([{ x: -2, y: 0, z: -2, w: 4, h: 12, d: 4, u: 0, v: 22, mirror: true }], [2, 12, 0]));
+  return { root, texW: 64, texH: 64, baby: { headParts: ['head'], scaleHead: true, yHead: 16, zHead: 0, headScale: 2, bodyScale: 2, bodyY: 24 } };
+}
+
 /** vanilla VillagerModel.setupAnim: the head follows its gaze (shaking no when unhappy), the legs walk */
 export function animateVillager(root: ModelPart, limbSwing: number, limbAmount: number, age: number, headYaw: number, headPitch: number, unhappy: boolean): void {
   const head = root.child('head');

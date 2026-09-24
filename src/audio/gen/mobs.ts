@@ -336,7 +336,7 @@ function zombieVoice(c: Ctx, d: number, base: number, fall: number, o: { breath?
   return out;
 }
 
-function zombieStep(c: Ctx): Float32Array {
+export function zombieStep(c: Ctx): Float32Array {
   const { sr, rng } = c;
   const out = alloc(0.35, sr);
   layer(out, 1, (b) => thump(b, sr, { f0: 110, f1: 70, tau: 0.035 }));

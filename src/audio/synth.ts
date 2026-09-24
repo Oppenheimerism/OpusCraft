@@ -20,6 +20,7 @@ import { crossbowSounds } from './gen/crossbow';
 import { armorSounds } from './gen/armor';
 import { villagerSounds } from './gen/villager';
 import { ironGolemSounds } from './gen/ironGolem';
+import { zombieVillagerSounds } from './gen/zombieVillager';
 import { villageSounds } from './gen/village';
 import { endSounds } from './gen/end';
 
@@ -48,6 +49,7 @@ export const SOUNDS: Record<string, SoundGen> = {
   ...armorSounds(),
   ...villagerSounds(),
   ...ironGolemSounds(),
+  ...zombieVillagerSounds(),
   ...villageSounds(),
   ...endSounds(),
 };

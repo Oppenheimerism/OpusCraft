@@ -23,6 +23,7 @@ import { Creeper, bowPower } from '../entity/monsters';
 import { Piglin, GUARDED_BY_PIGLINS } from '../entity/piglin';
 import { Villager } from '../entity/villager';
 import { IronGolem } from '../entity/ironGolem';
+import { ZombieVillager } from '../entity/zombieVillager';
 import { Arrow } from '../entity/arrow';
 import { PrimedTnt } from '../entity/tnt';
 import { ThrownItem, ThrownKind } from '../entity/throwable';
@@ -338,6 +339,15 @@ export class Interaction {
       if (e instanceof IronGolem && e.interact(p, stack)) {
         p.swing();
         return 'success';
+      }
+      // vanilla ZombieVillager.mobInteract: a golden apple to cure it (not eaten when it isn't weakened)
+      if (e instanceof ZombieVillager) {
+        const r = e.interact(p, stack);
+        if (r === 'success') {
+          p.swing();
+          return 'success';
+        }
+        if (r === 'consume') return 'fail';
       }
       // vanilla Minecart.interact (climb in) / MinecartChest.interact (ContainerEntity.interactWithContainerVehicle)
       if (e instanceof Minecart && e.interact(p)) {

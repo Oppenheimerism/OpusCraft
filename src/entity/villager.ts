@@ -1781,6 +1781,11 @@ export class Villager extends AgeableMob {
     return this.tradingPlayer !== null;
   }
 
+  /** vanilla AbstractVillager.setOffers (a cured zombie villager's, as it had them) */
+  setOffers(offers: MerchantOffer[]): void {
+    this.offers = offers;
+  }
+
   /** vanilla AbstractVillager.getOffers: made the first time they're asked for */
   getOffers(): MerchantOffer[] {
     if (!this.offers) {

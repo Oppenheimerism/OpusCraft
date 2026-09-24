@@ -33,7 +33,8 @@ import { Piglin } from '../entity/piglin';
 import { Villager } from '../entity/villager';
 import { IronGolem } from '../entity/ironGolem';
 import '../textures/ironGolem';
-import { villagerTexture } from '../textures/villager';
+import { villagerTexture, zombieVillagerTexture } from '../textures/villager';
+import { ZombieVillager } from '../entity/zombieVillager';
 import { Fireball, LargeFireball } from '../entity/fireball';
 import { LightningBolt } from '../entity/lightning';
 import { Rand } from '../core/rng';
@@ -57,7 +58,7 @@ import { ArmorLayer, renderHeadItem, PIGLIN_HEAD_ITEM_SCALE } from './armorLayer
 import type { ArmorModelSet } from './armorLayer';
 
 /** the mobs with vanilla's HumanoidArmorLayer and CustomHeadLayer, and their armour models */
-const ARMOR_WEARERS: Record<string, ArmorModelSet> = { zombie: 'humanoid', skeleton: 'humanoid', wither_skeleton: 'humanoid', piglin: 'piglin', zombified_piglin: 'piglin' };
+const ARMOR_WEARERS: Record<string, ArmorModelSet> = { zombie: 'humanoid', zombie_villager: 'zombie_villager', skeleton: 'humanoid', wither_skeleton: 'humanoid', piglin: 'piglin', zombified_piglin: 'piglin' };
 
 export interface EntityRenderOptions {
   shadows: boolean;
@@ -159,6 +160,7 @@ export class EntityRenderDispatcher {
       zoglin: M.hoglinModel(),
       strider: M.striderModel(),
       villager: M.villagerModel(),
+      zombie_villager: M.zombieVillagerModel(),
       iron_golem: M.ironGolemModel(),
     };
     // vanilla textures/misc/shadow.png: soft black disc
@@ -192,6 +194,19 @@ export class EntityRenderDispatcher {
     let t = this.textures.get(key);
     if (!t) {
       const img = villagerTexture(v.villagerType, v.profession, v.merchantLevel, baby);
+      t = createTexture(this.gl, img.w, img.h, new Uint8Array(img.data.buffer, img.data.byteOffset, img.data.byteLength), { clamp: true });
+      this.textures.set(key, t);
+    }
+    return t;
+  }
+
+  /** a zombie villager's skin, dressed as the villager it was (vanilla ZombieVillagerRenderer's layers, painted as one) */
+  private zombieVillagerTex(v: ZombieVillager): WebGLTexture {
+    const baby = v.isBaby();
+    const key = `zombie_villager/${v.villagerType}/${baby ? 'none' : v.profession}/${v.merchantLevel}/${baby}`;
+    let t = this.textures.get(key);
+    if (!t) {
+      const img = zombieVillagerTexture(v.villagerType, v.profession, v.merchantLevel, baby);
       t = createTexture(this.gl, img.w, img.h, new Uint8Array(img.data.buffer, img.data.byteOffset, img.data.byteLength), { clamp: true });
       this.textures.set(key, t);
     }
@@ -465,7 +480,7 @@ export class EntityRenderDispatcher {
     const def = this.models[type];
     // (vanilla GhastRenderer.getTextureLocation: its face while charging a shot)
     // (vanilla StriderRenderer.getTextureLocation: purple while it's cold)
-    const tex = e instanceof Villager ? this.villagerTex(e) : this.tex(e instanceof Ghast && e.charging ? 'ghast_shooting' : e instanceof Strider && e.suffocating ? 'strider_cold' : type);
+    const tex = e instanceof Villager ? this.villagerTex(e) : e instanceof ZombieVillager ? this.zombieVillagerTex(e) : this.tex(e instanceof Ghast && e.charging ? 'ghast_shooting' : e instanceof Strider && e.suffocating ? 'strider_cold' : type);
     if (!def || !tex) return;
     const baby = e.isBaby();
     let white = 0;
@@ -547,6 +562,7 @@ export class EntityRenderDispatcher {
         break;
       }
       case 'zombie':
+      case 'zombie_villager':
         M.animateHumanoidMob(def.root, a.limbSwing, a.limbAmount, a.age, a.headYaw, a.headPitch, attack, 'empty', !!e.vehicle);
         M.animateZombieArms(def.root, (e as Zombie).aggressive, attack, a.age);
         break;
@@ -1278,7 +1294,9 @@ function attackAnim(e: LivingEntity, p: number): number {
  * it's cold): the body twitches ±1.26°
  */
 function shakeYaw(e: LivingEntity): number {
-  return (e instanceof Hoglin && e.isConverting()) || (e instanceof Piglin && e.isConverting()) || (e instanceof Strider && e.suffocating) ? Math.cos(e.tickCount * 3.25) * Math.PI * 0.4 : 0;
+  return (e instanceof Hoglin && e.isConverting()) || (e instanceof Piglin && e.isConverting()) || (e instanceof Strider && e.suffocating) || (e instanceof ZombieVillager && e.converting)
+    ? Math.cos(e.tickCount * 3.25) * Math.PI * 0.4
+    : 0;
 }
 
 /** vanilla renderer shadow radii (babies half) */
@@ -1336,6 +1354,7 @@ function shadowRadius(e: Entity): number {
       r = 0.25 * (e as Slime).size;
       break;
     case 'zombie':
+    case 'zombie_villager':
     case 'zombified_piglin':
     case 'piglin':
     case 'skeleton':

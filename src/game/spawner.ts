@@ -14,6 +14,7 @@ import { Strider } from '../entity/strider';
 import { Piglin } from '../entity/piglin';
 import { Villager } from '../entity/villager';
 import { IronGolem } from '../entity/ironGolem';
+import { ZombieVillager } from '../entity/zombieVillager';
 import { Zombie, ZombifiedPiglin, Skeleton, WitherSkeleton, Creeper, Spider, CaveSpider, Enderman, Slime, MagmaCube, Monster, validSpawnBlock } from '../entity/monsters';
 import { Squid, WaterAnimal } from '../entity/water';
 import { AbstractMinecart, createMinecart, MINECART_TYPES } from '../entity/minecart';
@@ -35,6 +36,7 @@ export const MOB_TYPES: Record<string, (l: Level) => Mob> = {
   sheep: (l) => new Sheep(l),
   chicken: (l) => new Chicken(l),
   zombie: (l) => new Zombie(l),
+  zombie_villager: (l) => new ZombieVillager(l),
   skeleton: (l) => new Skeleton(l),
   creeper: (l) => new Creeper(l),
   spider: (l) => new Spider(l),
@@ -139,7 +141,7 @@ export function isChunkSaved(e: Entity): boolean {
 }
 
 const ENTITY_NAMES: Record<string, string> = {
-  pig: 'Pig', cow: 'Cow', sheep: 'Sheep', chicken: 'Chicken', zombie: 'Zombie', skeleton: 'Skeleton', creeper: 'Creeper', spider: 'Spider',
+  pig: 'Pig', cow: 'Cow', sheep: 'Sheep', chicken: 'Chicken', zombie: 'Zombie', zombie_villager: 'Zombie Villager', skeleton: 'Skeleton', creeper: 'Creeper', spider: 'Spider',
   villager: 'Villager', iron_golem: 'Iron Golem', cave_spider: 'Cave Spider', enderman: 'Enderman', slime: 'Slime', magma_cube: 'Magma Cube', zombified_piglin: 'Zombified Piglin', ghast: 'Ghast', blaze: 'Blaze', wither_skeleton: 'Wither Skeleton', squid: 'Squid', bat: 'Bat', hoglin: 'Hoglin', zoglin: 'Zoglin', strider: 'Strider', piglin: 'Piglin',
   arrow: 'Arrow', tnt: 'Primed TNT', lightning_bolt: 'Lightning Bolt', item: 'Item', experience_orb: 'Experience Orb', falling_block: 'Falling Block', player: 'Player',
   egg: 'Thrown Egg', snowball: 'Snowball', ender_pearl: 'Thrown Ender Pearl',
@@ -189,10 +191,11 @@ const farmAnimals = (): SpawnerData[] => [
   { type: 'cow', weight: 8, min: 4, max: 4 },
 ];
 
-/** vanilla BiomeDefaultFeatures.monsters (zombie villagers and witches not implemented yet) */
-const monsters = (zombie = 95, skeleton = 100): SpawnerData[] => [
+/** vanilla BiomeDefaultFeatures.monsters (witches not implemented yet) */
+const monsters = (zombie = 95, skeleton = 100, zombieVillager = 5): SpawnerData[] => [
   { type: 'spider', weight: 100, min: 4, max: 4 },
-  { type: 'zombie', weight: zombie + 5, min: 4, max: 4 },
+  { type: 'zombie', weight: zombie, min: 4, max: 4 },
+  { type: 'zombie_villager', weight: zombieVillager, min: 1, max: 1 },
   { type: 'skeleton', weight: skeleton, min: 4, max: 4 },
   { type: 'creeper', weight: 100, min: 4, max: 4 },
   { type: 'slime', weight: 100, min: 4, max: 4 },
@@ -279,7 +282,7 @@ function settingsForLand(name: string): Omit<MobSettings, 'water' | 'ambient'> {
     case 'jagged_peaks':
       return { creature: [], monster: monsters(95, 20), creatureProbability: 0.07 };
     case 'desert':
-      return { creature: [], monster: monsters(19), creatureProbability: 0.1 };
+      return { creature: [], monster: monsters(19, 100, 1), creatureProbability: 0.1 };
     default:
       return none;
   }
