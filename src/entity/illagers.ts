@@ -154,6 +154,16 @@ export class Pillager extends AbstractIllager {
     this.targetSelector.addGoal(3, new NearestAttackableMobGoal(this, (e) => e.type === 'iron_golem', true));
   }
 
+  /** vanilla Pillager.getWalkTargetValue: anywhere will do (so an outpost's pillagers spawn by day too) */
+  override walkTargetValue(): number {
+    return 0;
+  }
+
+  /** vanilla Pillager.getMaxSpawnClusterSize: they spawn one at a time */
+  maxSpawnClusterSize(): number {
+    return 1;
+  }
+
   /** vanilla Pillager.getArmPose */
   override armPose(): IllagerArmPose {
     if (this.chargingCrossbow) return 'crossbow_charge';

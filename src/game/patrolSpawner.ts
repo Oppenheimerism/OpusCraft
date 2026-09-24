@@ -9,9 +9,8 @@
 
 import type { Level } from './level';
 import { Pillager } from '../entity/illagers';
-import { motionBlockingNoLeaves } from '../entity/raider';
+import { motionBlockingNoLeaves, checkPatrollingMonsterSpawnRules } from '../entity/raider';
 import { isValidEmptySpawnBlock } from '../entity/mob';
-import { validSpawnBlock } from '../entity/monsters';
 import { currentDifficultyAt } from './difficulty';
 import { BIOMES } from '../world/gen/biomes';
 
@@ -61,9 +60,7 @@ export class PatrolSpawner {
   private spawnPatrolMember(level: Level, x: number, y: number, z: number, leader: boolean): boolean {
     const w = level.world;
     if (!isValidEmptySpawnBlock(w.getState(x, y, z))) return false;
-    // vanilla checkPatrollingMonsterSpawnRules: dark enough by block light, then checkAnyLightMonsterSpawnRules
-    if ((w.getLight(x, y, z) & 15) > 8) return false;
-    if (level.difficulty === 'peaceful' || !validSpawnBlock(level, x, y - 1, z)) return false;
+    if (!checkPatrollingMonsterSpawnRules(level, x, y, z)) return false;
     const m = new Pillager(level);
     // (as vanilla, the captain picks its target before it's put in place: somewhere within 500 blocks of 0, 0, 0)
     if (leader) {

@@ -21,6 +21,8 @@ import { Pillager, Vindicator } from '../entity/illagers';
 import { Evoker, Vex } from '../entity/evoker';
 import { Ravager } from '../entity/ravager';
 import { PatrolSpawner } from './patrolSpawner';
+import { outpostSpawnsAt } from './outposts';
+import { checkPatrollingMonsterSpawnRules } from '../entity/raider';
 import { Husk, Stray } from '../entity/biomeMonsters';
 import { IronGolem } from '../entity/ironGolem';
 import { ZombieVillager } from '../entity/zombieVillager';
@@ -456,7 +458,8 @@ export class NaturalSpawner {
         lvl.addEntity(mob);
         spawned++;
         inGroup++;
-        if (spawned >= 4) return spawned;
+        // (vanilla getMaxSpawnClusterSize: 4, a pillager 1)
+        if (spawned >= ((mob as { maxSpawnClusterSize?(): number }).maxSpawnClusterSize?.() ?? 4)) return spawned;
         void inGroup;
       }
     }
@@ -473,6 +476,9 @@ export class NaturalSpawner {
       const f = this.level.fortresses().at(x, y, z);
       if (f && (BLOCKS[STATE_BLOCK[w.getState(x, y - 1, z)]].name === 'nether_bricks' || f.pieces.some((p) => p.box.isInside(x, y, z)))) return FORTRESS_ENEMIES;
     }
+    // (Stage 4: outposts) a structure's spawn_overrides, bounding_box full (game/outposts.ts)
+    const so = outpostSpawnsAt(this.level, cat, x, y, z);
+    if (so) return so;
     const bs = biomeSettings(w.getBiome3(x, y, z));
     return cat === 'monster' ? bs.monster : cat === 'water_creature' ? bs.water : cat === 'ambient' ? bs.ambient : bs.creature;
   }
@@ -557,6 +563,9 @@ export class NaturalSpawner {
         return Strider.checkStriderSpawn(lvl, x, y, z);
       case 'piglin':
         return Piglin.checkPiglinSpawn(lvl, x, y, z);
+      // (Stage 4: outposts)
+      case 'pillager':
+        return checkPatrollingMonsterSpawnRules(lvl, x, y, z);
       case 'hoglin':
         // vanilla Hoglin.checkHoglinSpawnRules: any light, just not on a nether wart block
         return BLOCKS[STATE_BLOCK[lvl.world.getState(x, y - 1, z)]].name !== 'nether_wart_block';

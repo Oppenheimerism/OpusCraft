@@ -4,7 +4,7 @@
 // illagers' arm poses, their doors, and who they count as friends. The mobs themselves: entity/illagers.ts
 // (pillager, vindicator), entity/evoker.ts (evoker, vex, fangs), entity/ravager.ts, entity/witch.ts.
 
-import { Monster } from './monsters';
+import { Monster, validSpawnBlock } from './monsters';
 import { Mob, type SpawnReason, type SpawnGroup } from './mob';
 
 import type { Level } from '../game/level';
@@ -94,6 +94,15 @@ export function motionBlockingNoLeaves(level: Level, x: number, z: number): numb
     }
   }
   return MIN_Y;
+}
+
+/**
+ * vanilla PatrollingMonster.checkPatrollingMonsterSpawnRules: no brighter than block light 8, then
+ * checkAnyLightMonsterSpawnRules (not in peaceful, on a floor a monster may stand on; the sky's light doesn't matter)
+ */
+export function checkPatrollingMonsterSpawnRules(level: Level, x: number, y: number, z: number): boolean {
+  if ((level.world.getLight(x, y, z) & 15) > 8) return false;
+  return level.difficulty !== 'peaceful' && validSpawnBlock(level, x, y - 1, z);
 }
 
 /**
