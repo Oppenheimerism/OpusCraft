@@ -34,6 +34,8 @@ import { AABB } from '../core/aabb';
 import type { DimensionType } from '../world/dimension';
 import { NetherGenerator } from '../world/gen/nether';
 import { villageLocator, type Villages } from '../world/gen/villages';
+import type { TamableAnimal } from '../entity/tamable';
+import { strongholdLocator, type Strongholds } from '../world/gen/stronghold';
 import type { NetherFortresses } from '../world/gen/fortress';
 import type { EndDragonFight } from './endDragonFight';
 import { behaviorOf } from './blockBehavior';
@@ -45,6 +47,7 @@ import './villageBlocks';
 import './banners';
 import './maps';
 import './endPortal';
+import './infestedBlocks';
 import './golems';
 import './potionItems';
 import './potionEffects';
@@ -129,6 +132,7 @@ export class Level {
   readonly random = new Rand(1234);
   private netherFortresses: NetherFortresses | null = null;
   private overworldVillages: Villages | null = null;
+  private overworldStrongholds: Strongholds | null = null;
   readonly fluids: FluidTicker;
   readonly randomTicks: RandomTicker;
   /** scheduled block ticks (vanilla LevelTicks) */
@@ -177,6 +181,11 @@ export class Level {
   /** the Overworld's villages, placed just as the chunk workers place them (for /locate) */
   villages(): Villages {
     return (this.overworldVillages ??= villageLocator(this.seed));
+  }
+
+  /** the Overworld's strongholds, placed and laid out just as the chunk workers do (eyes of ender, /locate, Eye Spy) */
+  strongholds(): Strongholds {
+    return (this.overworldStrongholds ??= strongholdLocator(this.seed));
   }
 
   addEntity(e: Entity): void {
@@ -393,6 +402,10 @@ export class Level {
   onEntityDied: ((victim: LivingEntity, source: string, attacker: Entity | null) => void) | null = null;
   /** animals bred (the child, and who fed them) */
   onBred: ((child: Entity, cause: Entity | null) => void) | null = null;
+  /** a player tamed an animal (vanilla CriteriaTriggers.TAME_ANIMAL) */
+  onTamed: ((animal: TamableAnimal, by: Entity) => void) | null = null;
+  /** a tame animal died; its owner is told how (vanilla TamableAnimal.die) */
+  onTamedDeath: ((animal: TamableAnimal, source: string) => void) | null = null;
   /** an arrow the player shot hurt something (vanilla "Take Aim") */
   onPlayerArrowHit: ((target: Entity) => void) | null = null;
   /** a trident the player threw hurt something (vanilla "A Throwaway Joke") */
@@ -730,6 +743,7 @@ export class Level {
     }
     if (drop) {
       for (const s of blockDrops(dropState, tool, this.random, levelOf(stack, 'silk_touch') > 0, levelOf(stack, 'fortune'), be)) ItemEntity.drop(this, x, y, z, s);
+      behaviorOf(st)?.spawnAfterBreak?.(this, x, y, z, st, stack);
     }
     this.updateNeighborsAt(x, y, z, b.id);
     this.updateNeighbors(x, y, z, st);

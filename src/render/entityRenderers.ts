@@ -37,6 +37,12 @@ import '../textures/ironGolem';
 import '../textures/witch';
 import '../textures/biomeMobs';
 import '../textures/drowned';
+import '../textures/silverfish';
+import { silverfishModel, animateSilverfish } from './silverfishModel';
+import '../textures/wolf';
+import { wolfModel, animateWolf } from './wolfModel';
+import { Wolf } from '../entity/wolf';
+import { DYE_DIFFUSE } from '../entity/animals';
 import { Witch } from '../entity/witch';
 import { villagerTexture, zombieVillagerTexture } from '../textures/villager';
 import { ZombieVillager } from '../entity/zombieVillager';
@@ -48,6 +54,7 @@ import { ThrownItem } from '../entity/throwable';
 import { AbstractMinecart } from '../entity/minecart';
 import { Boat } from '../entity/boat';
 import { EndCrystal } from '../entity/endCrystal';
+import { EyeOfEnder } from '../entity/eyeOfEnder';
 import { EndCrystalRenderer } from './endCrystalRenderer';
 import { EnderDragon } from '../entity/enderDragon';
 import { DragonFireball } from '../entity/dragonFireball';
@@ -181,6 +188,8 @@ export class EntityRenderDispatcher {
       stray_outer: M.strayOuterModel(),
       drowned: M.drownedModel(),
       drowned_outer: M.drownedModel(0.25),
+      silverfish: silverfishModel(),
+      wolf: wolfModel(),
     };
     // vanilla textures/misc/shadow.png: soft black disc
     const n = 32, data = new Uint8Array(n * n * 4);
@@ -404,6 +413,7 @@ export class EntityRenderDispatcher {
     else if (e instanceof PrimedTnt) this.renderTnt(b, e, dx, dy, dz, p);
     else if (e instanceof FallingBlockEntity) this.renderFalling(b, e, dx, dy, dz);
     else if (e instanceof ThrownItem) this.renderThrown(b, e, dx, dy, dz, cam);
+    else if (e instanceof EyeOfEnder) this.renderEyeOfEnder(b, e, dx, dy, dz, cam);
     else if (e instanceof DragonFireball) this.dragons.renderFireball(b, this.pose, dx, dy, dz, cam);
     else if (e instanceof Fireball) this.renderFireball(b, e, dx, dy, dz, cam);
     else if (e instanceof AbstractMinecart) this.renderMinecart(b, e, x, y, z, dx, dy, dz, p);
@@ -521,7 +531,7 @@ export class EntityRenderDispatcher {
     const def = this.models[type];
     // (vanilla GhastRenderer.getTextureLocation: its face while charging a shot)
     // (vanilla StriderRenderer.getTextureLocation: purple while it's cold)
-    const tex = e instanceof Villager ? this.villagerTex(e) : e instanceof ZombieVillager ? this.zombieVillagerTex(e) : this.tex(e instanceof Ghast && e.charging ? 'ghast_shooting' : e instanceof Strider && e.suffocating ? 'strider_cold' : type);
+    const tex = e instanceof Villager ? this.villagerTex(e) : e instanceof ZombieVillager ? this.zombieVillagerTex(e) : this.tex(e instanceof Ghast && e.charging ? 'ghast_shooting' : e instanceof Strider && e.suffocating ? 'strider_cold' : e instanceof Wolf ? e.texture() : type);
     if (!def || !tex) return;
     const baby = e.isBaby();
     let white = 0;
@@ -584,7 +594,8 @@ export class EntityRenderDispatcher {
       scale = (pose) => pose.rotZ(6.5 * k);
     }
     const spiderLike = type === 'spider' || type === 'cave_spider';
-    const a = this.setupLiving(e, dx + jx, dy, dz + jz, p, spiderLike ? 180 : 90, scale);
+    // (vanilla SpiderRenderer / SilverfishRenderer.getFlipDegrees: they die rolled right over)
+    const a = this.setupLiving(e, dx + jx, dy, dz + jz, p, spiderLike || type === 'silverfish' ? 180 : 90, scale);
     const attack = attackAnim(e, p);
     let armPose: M.ArmPose = 'empty';
     switch (type) {
@@ -679,6 +690,17 @@ export class EntityRenderDispatcher {
         M.animateIronGolem(def.root, a.limbSwing, a.limbAmount, a.headYaw, a.headPitch, g.attackAnimationTick > 0 ? g.attackAnimationTick - p : 0, g.offerFlowerTick);
         break;
       }
+      case 'silverfish':
+        animateSilverfish(def.root, a.age);
+        break;
+      case 'wolf': {
+        const w = e as Wolf;
+        animateWolf(def.root, {
+          limbSwing: a.limbSwing, limbAmount: a.limbAmount, headYaw: a.headYaw, headPitch: a.headPitch,
+          angry: w.isAngry(), sitting: w.inSittingPose, tailAngle: w.tailAngle(), headRoll: w.headRollAngle(p), bodyRoll: (o) => w.bodyRollAngle(p, o),
+        });
+        break;
+      }
       case 'bat': {
         // vanilla AnimationState: seconds since each loop started (a tick is 50 ms)
         const bat = e as Bat;
@@ -689,7 +711,8 @@ export class EntityRenderDispatcher {
     }
     this.overlay(b, e, white);
     // vanilla BatModel renders entityCutout (culled: its flat wings have a front and a back side)
-    this.drawBody(b, e, def, tex, baby, type === 'bat' ? { cull: true } : undefined);
+    // (vanilla WolfRenderer.render: a wet wolf's coat is darker)
+    this.drawBody(b, e, def, tex, baby, type === 'bat' ? { cull: true } : undefined, e instanceof Wolf && e.wet ? e.wetShade(p) : 1);
     // vanilla SaddleLayer: the saddle texture over the same model (the pig's a half pixel bigger all round)
     if (e instanceof Strider && e.saddled && !e.isInvisible()) {
       const st = this.tex('strider_saddle');
@@ -714,6 +737,15 @@ export class EntityRenderDispatcher {
         const [r, g, bl] = sheepFurColor(e.color);
         b.begin(this.state(ft));
         this.drawModel(b, fur, baby, r, g, bl);
+      }
+    }
+    // vanilla WolfCollarLayer: a tame wolf's collar in its dye colour
+    if (e instanceof Wolf && e.isTame() && !e.isInvisible()) {
+      const ct = this.tex('wolf_collar');
+      if (ct) {
+        const c = DYE_DIFFUSE[e.collarColor];
+        b.begin(this.state(ct));
+        this.drawModel(b, def, baby, ((c >> 16) & 255) / 255, ((c >> 8) & 255) / 255, (c & 255) / 255);
       }
     }
     // vanilla SkeletonClothingLayer: the stray's rags over its bones, posed as they are
@@ -804,13 +836,13 @@ export class EntityRenderDispatcher {
    * vanilla LivingEntityRenderer body pass: invisible entities skip it (their layers still draw), and a
    * spectator sees them at 15% opacity
    */
-  private drawBody(b: EntityBatch, e: LivingEntity, def: MobModelDef, tex: WebGLTexture, baby: boolean, extra?: Partial<DrawState>): void {
+  private drawBody(b: EntityBatch, e: LivingEntity, def: MobModelDef, tex: WebGLTexture, baby: boolean, extra?: Partial<DrawState>, shade = 1): void {
     if (!e.isInvisible()) {
       b.begin(this.state(tex, extra));
-      this.drawModel(b, def, baby);
+      this.drawModel(b, def, baby, shade, shade, shade);
     } else if (e.level.player?.gameMode === 'spectator') {
       b.begin(this.state(tex, { blend: true, cutoff: 0.01, depthWrite: false }));
-      this.drawModel(b, def, baby, 1, 1, 1, 38 / 255);
+      this.drawModel(b, def, baby, shade, shade, shade, 38 / 255);
       b.flush();
     }
   }
@@ -1146,6 +1178,19 @@ export class EntityRenderDispatcher {
     this.items.render(b, pose, e.stack, 'ground');
   }
 
+  /** vanilla ThrownItemRenderer(1, fullBright) for an eye of ender: the eye facing the camera, lit as if by a torch */
+  private renderEyeOfEnder(b: EntityBatch, e: EyeOfEnder, dx: number, dy: number, dz: number, cam: Camera): void {
+    if (e.tickCount < 2 && dx * dx + dy * dy + dz * dz < 12.25) return;
+    b.setOverlay(0, 0, 0, 0);
+    b.lightB = 240;
+    const pose = this.pose;
+    pose.reset();
+    pose.translate(dx, dy, dz);
+    pose.rotY(180 - cam.yaw);
+    pose.rotX(-cam.pitch);
+    this.items.render(b, pose, e.stack, 'ground');
+  }
+
   /**
    * vanilla MinecartRenderer: drawn on the rail's centre line between its front and back wheel points
    * (0.3 either way), turned and tilted along the track, wobbling after a hit, with its block (the
@@ -1407,6 +1452,7 @@ function shadowRadius(e: Entity): number {
       r = 0.7;
       break;
     case 'chicken':
+    case 'silverfish':
       r = 0.3;
       break;
     case 'spider':
@@ -1426,6 +1472,7 @@ function shadowRadius(e: Entity): number {
     case 'zoglin':
       r = 0.7;
       break;
+    case 'wolf':
     case 'strider':
     case 'villager':
     case 'end_crystal':

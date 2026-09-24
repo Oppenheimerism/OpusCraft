@@ -20,6 +20,7 @@ export function buildParticleAtlas(gl: GL): { texture: WebGLTexture; rects: Reco
   if (ITEM_TEXTURES['slime_ball']) src['item_slime_ball'] = ITEM_TEXTURES['slime_ball'];
   if (ITEM_TEXTURES['egg']) src['item_egg'] = ITEM_TEXTURES['egg'];
   if (ITEM_TEXTURES['snowball']) src['item_snowball'] = ITEM_TEXTURES['snowball'];
+  if (ITEM_TEXTURES['ender_eye']) src['item_ender_eye'] = ITEM_TEXTURES['ender_eye'];
   // (a splash potion's model's particle texture is its layer0, the untinted liquid: grey glass shards)
   if (ITEM_TEXTURES['potion_overlay']) src['item_splash_potion'] = ITEM_TEXTURES['potion_overlay'];
   if (BLOCK_TEXTURES['cobweb'])

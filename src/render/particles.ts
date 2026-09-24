@@ -509,6 +509,7 @@ export class ParticleEngine {
       case 'item_cobweb':
       case 'item_splash_potion':
       case 'item_snowball':
+      case 'item_ender_eye':
       case 'item_egg': {
         // vanilla BreakingItemParticle: a random quarter of the item sprite
         const p = this.base(kind, x, y, z);

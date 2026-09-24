@@ -1655,8 +1655,6 @@ export class Villager extends AgeableMob {
   sleepingPos: Pos | null = null;
   /** the day the sensors run (vanilla Sensor timeToTick) */
   private readonly sensePhase = Math.floor(Math.random() * 20);
-  /** vanilla lastDamageStamp: the game time it was last hurt */
-  private lastDamageStamp = -1000;
   /** vanilla Villager.inventory: 8 slots of food and seeds */
   readonly inventory: (ItemStack | null)[] = new Array(8).fill(null);
   /** vanilla foodLevel: food eaten and not yet used up (a baby takes 12) */
@@ -2296,7 +2294,6 @@ export class Villager extends AgeableMob {
   override hurt(amount: number, source: string, attacker?: Entity | null, direct?: Entity | null): boolean {
     const ok = super.hurt(amount, source, attacker, direct);
     if (!ok) return false;
-    this.lastDamageStamp = this.level.gameTime;
     if (this.isSleeping()) this.stopSleeping();
     // vanilla Villager.setLastHurtByMob: it remembers who hurt it, and a player's hit angers it (entity event 13)
     if (attacker instanceof LivingEntity) {

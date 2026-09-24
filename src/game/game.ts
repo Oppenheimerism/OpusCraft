@@ -854,10 +854,9 @@ export class Game {
     ctx.restore();
   }
 
-  /** vanilla combat tracker death messages */
-  deathMessage(source: string): string {
-    const n = this.playerName;
-    const k = this.player.killer;
+  /** vanilla combat tracker death messages (the player's, or a tame animal's for its owner) */
+  deathMessage(source: string, victim: LivingEntity = this.player, n = this.playerName): string {
+    const k = victim.killer;
     const kn = k ? entityDisplayName(k) : '';
     switch (source) {
       case 'mob':
@@ -865,15 +864,15 @@ export class Game {
       case 'player':
         return `${n} was slain by ${kn}`;
       case 'arrow':
-        return k && k !== this.player && k.type !== 'arrow' ? `${n} was shot by ${kn}` : `${n} was shot by Arrow`;
+        return k && k !== victim && k.type !== 'arrow' ? `${n} was shot by ${kn}` : `${n} was shot by Arrow`;
       case 'trident':
-        return k && k !== this.player && k.type !== 'trident' ? `${n} was impaled by ${kn}` : `${n} was impaled by Trident`;
+        return k && k !== victim && k.type !== 'trident' ? `${n} was impaled by ${kn}` : `${n} was impaled by Trident`;
       case 'explosion':
         return `${n} blew up`;
       case 'badRespawnPoint':
         return `${n} was killed by [Intentional Game Design]`;
       case 'playerExplosion':
-        return k === this.player || !k ? `${n} blew up` : `${n} was blown up by ${kn}`;
+        return k === victim || !k ? `${n} blew up` : `${n} was blown up by ${kn}`;
       case 'fall':
         return `${n} fell from a high place`;
       case 'drown':
@@ -1701,6 +1700,10 @@ export class Game {
     lvl.onBred = (child, cause) => {
       if (cause === this.player) this.advancements.trigger('breed', { breed: child.type });
     };
+    lvl.onTamed = (animal, by) => {
+      if (by === this.player) this.advancements.trigger('tame', { tame: { type: animal.type, variant: animal.variantId() } });
+    };
+    lvl.onTamedDeath = (animal, source) => this.chat(this.deathMessage(source, animal, entityDisplayName(animal)));
     lvl.onPlayerArrowHit = () => this.advancements.trigger('shoot_arrow');
     lvl.onPlayerTridentHit = () => this.advancements.trigger('throw_trident');
     lvl.onChanneledLightning = (victims) => this.advancements.trigger('channeled_lightning', { channeled: victims.map((e) => e.type) });
@@ -1735,6 +1738,7 @@ export class Game {
       if (b) this.advancements.trigger('biome', { biome: b.name });
       // vanilla LocationPredicate.inStructure: inside one of the structure's pieces
       if (this.world.dim.id === 'the_nether' && this.level.fortresses().pieceAt(Math.floor(p.x), Math.floor(p.y), Math.floor(p.z))) this.advancements.trigger('structure', { structures: ['fortress'] });
+      if (this.world.dim.id === 'overworld' && this.level.strongholds().pieceAt(Math.floor(p.x), Math.floor(p.y), Math.floor(p.z))) this.advancements.trigger('structure', { structures: ['stronghold'] });
     }
     // vanilla trackEnteredOrExitedLavaOnVehicle: how far a mount has carried the player across lava (ride_entity_in_lava)
     const v = p.vehicle;

@@ -111,6 +111,8 @@ const isDigger = (it: Item) => it.tool?.type === 'pickaxe' || it.tool?.type === 
 export interface SpawnGroup {
   /** vanilla AgeableMob.AgeableMobGroupData: members so far, and the odds each after the first is a baby */
   ageable?: { size: number; babyChance: number };
+  /** vanilla Wolf.WolfPackData: the coat the pack shares */
+  wolfVariant?: string;
 }
 
 export abstract class Mob extends LivingEntity {
@@ -920,6 +922,11 @@ export abstract class Mob extends LivingEntity {
   }
 
   /** vanilla checkSpawnObstruction: no liquid inside and no collision */
+  /** vanilla getMaxSpawnClusterSize: how many one spawning pass may bring at once */
+  maxSpawnClusterSize(): number {
+    return 4;
+  }
+
   checkSpawnObstruction(): boolean {
     return this.isFree(this.bb);
   }

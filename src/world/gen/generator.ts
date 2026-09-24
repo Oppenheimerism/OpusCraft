@@ -12,6 +12,7 @@ import { Mineshafts } from './mineshaft';
 import { Geodes, SUB_AIR, SUB_SOLID, SUB_FLUID } from './geode';
 import { Villages } from './villages';
 import { Temples } from './temples';
+import { Strongholds, biomeAtY0, addBeards } from './stronghold';
 import { worldSeed64 } from './jigsaw';
 import { S, getBlock } from '../block';
 import { MIN_Y, MAX_Y, SEA_LEVEL, COLUMN_VOLUME, colIndex, CAVE_BIOME_LEVELS, NO_CAVE_BIOME } from '../constants';
@@ -55,6 +56,7 @@ export class ChunkGenerator {
   readonly villages: Villages;
   /** desert pyramids, jungle temples, swamp huts and igloos (world/gen/temples) */
   readonly temples: Temples;
+  readonly strongholds: Strongholds;
   /** corner columns for terrain height queries, with the noise at their cell corners as it's needed */
   private readonly heightCols = new Map<number, { c: ColumnSample; exactTop: number; corners: (Float32Array | undefined)[] }>();
 
@@ -78,6 +80,8 @@ export class ChunkGenerator {
       quartBiome: (x, z) => this.quartBiome(x, z),
     });
     this.decorator.temples = this.temples;
+    this.strongholds = new Strongholds(worldSeed64(seed), biomeAtY0(this.router));
+    this.decorator.strongholds = this.strongholds;
   }
 
   /** the biome a structure checks for (vanilla getNoiseBiome at the quart, without the fuzzy zoom) */
@@ -247,7 +251,7 @@ export class ChunkGenerator {
       }
     const oreGap = router.n.ore_gap;
     // structures nearby bend the terrain around themselves (vanilla Beardifier, added to the final density)
-    const beard = this.villages.beardFor(cx, cz);
+    const beard = addBeards(this.villages.beardFor(cx, cz), this.strongholds.buryFor(cx, cz));
     const bY0 = beard ? beard.minY : Infinity, bY1 = beard ? beard.maxY : -Infinity;
     const cv = new Float32Array(8 * CHANNELS);
     for (let ck = 0; ck < 4; ck++)

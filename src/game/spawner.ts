@@ -18,6 +18,8 @@ import { Villager } from '../entity/villager';
 import { Witch } from '../entity/witch';
 import { Husk, Stray } from '../entity/biomeMonsters';
 import { Drowned, isInWaterPositionOk, drownedNaturalSpawnRules } from '../entity/drowned';
+import { Silverfish } from '../entity/silverfish';
+import { Wolf, wolfSpawnRulesOk } from '../entity/wolf';
 import { IronGolem } from '../entity/ironGolem';
 import { ZombieVillager } from '../entity/zombieVillager';
 import { Zombie, ZombifiedPiglin, Skeleton, WitherSkeleton, Creeper, Spider, CaveSpider, Enderman, Slime, MagmaCube, Monster, validSpawnBlock } from '../entity/monsters';
@@ -68,6 +70,8 @@ export const MOB_TYPES: Record<string, (l: Level) => Mob> = {
   husk: (l) => new Husk(l),
   stray: (l) => new Stray(l),
   drowned: (l) => new Drowned(l),
+  silverfish: (l) => new Silverfish(l),
+  wolf: (l) => new Wolf(l),
   ender_dragon: (l) => new EnderDragon(l),
 };
 
@@ -162,7 +166,7 @@ export function isChunkSaved(e: Entity): boolean {
 const ENTITY_NAMES: Record<string, string> = {
   pig: 'Pig', cow: 'Cow', sheep: 'Sheep', chicken: 'Chicken', zombie: 'Zombie', zombie_villager: 'Zombie Villager', skeleton: 'Skeleton', creeper: 'Creeper', spider: 'Spider',
   villager: 'Villager', iron_golem: 'Iron Golem', cave_spider: 'Cave Spider', enderman: 'Enderman', slime: 'Slime', magma_cube: 'Magma Cube', zombified_piglin: 'Zombified Piglin', ghast: 'Ghast', blaze: 'Blaze', wither_skeleton: 'Wither Skeleton', squid: 'Squid', bat: 'Bat', hoglin: 'Hoglin', zoglin: 'Zoglin', strider: 'Strider', piglin: 'Piglin',
-  witch: 'Witch', husk: 'Husk', stray: 'Stray', drowned: 'Drowned', fireball: 'Fireball', small_fireball: 'Small Fireball',
+  witch: 'Witch', husk: 'Husk', stray: 'Stray', drowned: 'Drowned', silverfish: 'Silverfish', wolf: 'Wolf', fireball: 'Fireball', small_fireball: 'Small Fireball',
   arrow: 'Arrow', tnt: 'Primed TNT', lightning_bolt: 'Lightning Bolt', item: 'Item', experience_orb: 'Experience Orb', falling_block: 'Falling Block', player: 'Player',
   egg: 'Thrown Egg', snowball: 'Snowball', ender_pearl: 'Thrown Ender Pearl', potion: 'Potion', trident: 'Trident',
   minecart: 'Minecart', chest_minecart: 'Minecart with Chest', boat: 'Boat', chest_boat: 'Boat with Chest', end_crystal: 'End Crystal',
@@ -248,6 +252,22 @@ const NETHER_SPAWNS: Record<string, { monster: SpawnerData[]; creature: SpawnerD
 /** vanilla NetherFortressStructure.FORTRESS_ENEMIES: the monsters of a fortress */
 const FORTRESS_ENEMIES = [S_('blaze', 10, 2, 3), S_('zombified_piglin', 5, 4, 4), S_('wither_skeleton', 8, 5, 5), S_('skeleton', 2, 5, 5), S_('magma_cube', 3, 4, 4)];
 
+/**
+ * vanilla OverworldBiomes' wolves (1.20.5+): forests, taigas and groves, and the packs of the savanna plateau, the
+ * sparse jungle and the wooded badlands (each spawning its own coat, see WolfVariants)
+ */
+const WOLF_SPAWNS: Record<string, SpawnerData> = {
+  forest: S_('wolf', 5, 4, 4),
+  taiga: S_('wolf', 8, 4, 4),
+  snowy_taiga: S_('wolf', 8, 4, 4),
+  old_growth_pine_taiga: S_('wolf', 8, 4, 4),
+  old_growth_spruce_taiga: S_('wolf', 8, 4, 4),
+  grove: S_('wolf', 1, 1, 1),
+  savanna_plateau: S_('wolf', 8, 4, 8),
+  sparse_jungle: S_('wolf', 8, 2, 4),
+  wooded_badlands: S_('wolf', 2, 4, 8),
+};
+
 /** vanilla BiomeDefaultFeatures.endSpawns: the End's biomes have endermen, in fours, and nothing else */
 const END_SPAWN_BIOMES = new Set(['the_end', 'end_highlands', 'end_midlands', 'small_end_islands', 'end_barrens']);
 
@@ -266,7 +286,9 @@ function settingsFor(name: string): MobSettings {
   // (a hundred in a river, one in a frozen river, five in every ocean)
   const drowned = name === 'river' ? 100 : name === 'frozen_river' ? 1 : name.endsWith('ocean') ? 5 : 0;
   const monster = drowned ? [...base.monster, S_('drowned', drowned, 1, 1)] : base.monster;
-  return { ...base, monster, water, ambient };
+  const wolves = WOLF_SPAWNS[name];
+  const creature = wolves ? [...base.creature, wolves] : base.creature;
+  return { ...base, creature, monster, water, ambient };
 }
 
 function settingsForLand(name: string): Omit<MobSettings, 'water' | 'ambient'> {
@@ -445,7 +467,7 @@ export class NaturalSpawner {
         lvl.addEntity(mob);
         spawned++;
         inGroup++;
-        if (spawned >= 4) return spawned;
+        if (spawned >= mob.maxSpawnClusterSize()) return spawned;
         void inGroup;
       }
     }
@@ -546,6 +568,8 @@ export class NaturalSpawner {
         const biome = BIOMES[lvl.world.getBiome3(x, y, z)]?.name ?? '';
         return drownedNaturalSpawnRules(lvl, x, y, z, biome === 'river' || biome === 'frozen_river', this.rand);
       }
+      case 'wolf':
+        return wolfSpawnRulesOk(lvl, x, y, z);
       case 'ghast':
         return Ghast.checkGhastSpawn(lvl, x, y, z, () => this.rand.nextFloat());
       case 'blaze':

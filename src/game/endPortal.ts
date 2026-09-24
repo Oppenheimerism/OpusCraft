@@ -4,10 +4,8 @@
 // EndPortalBlock). What happens to whatever falls in — the trip to the End or
 // back — is game/endTravel.ts; the portal's starfield is render/endRenderer.ts.
 //
-// Throwing an eye to find a stronghold waits for the strongholds: EYE_OF_ENDER
-// below is where they plug in. Until then an eye used in the air does what
-// vanilla's does where there's no stronghold to find: nothing but the use
-// itself (you walk slowly while you hold the button down).
+// Used in the air, an eye is thrown toward the nearest stronghold (entity/eyeOfEnder.ts); where there's none to
+// find (the Nether, the End) it does nothing but the use itself (you walk slowly while you hold the button down).
 
 import { BLOCK_BY_NAME, STATE_BLOCK, S } from '../world/block';
 import type { World } from '../world/world';
@@ -15,6 +13,7 @@ import { AABB } from '../core/aabb';
 import type { Level } from './level';
 import type { Player } from '../entity/player';
 import type { ItemStack } from '../item/item';
+import { EyeOfEnder } from '../entity/eyeOfEnder';
 import { registerBehavior } from './blockBehavior';
 import { registerItemBehavior } from './itemBehavior';
 import { raycast } from './raycast';
@@ -27,14 +26,29 @@ const UPDATE_CLIENTS = 2;
 const FRAME = BLOCK_BY_NAME.get('end_portal_frame')!;
 
 /**
- * Where the strongholds and the flying eye plug in (vanilla EnderEyeItem.use's server side): `locate` is
- * ServerLevel.findNearestMapStructure(EYE_OF_ENDER_LOCATED, pos, 100, false), `launch` throws the EyeOfEnder
- * toward what it found (and plays entity.ender_eye.launch, uses up the eye, swings the hand).
+ * vanilla EnderEyeItem.use's server side: `locate` is ServerLevel.findNearestMapStructure(EYE_OF_ENDER_LOCATED,
+ * pos, 100, false), the nearest stronghold's start chunk corner (only the Overworld has them); `launch` throws the
+ * EyeOfEnder toward it from the middle of the player, plays entity.ender_eye.launch, uses up the eye and swings
+ * the hand.
  */
 export const EYE_OF_ENDER: {
   locate: ((level: Level, x: number, y: number, z: number) => [number, number, number] | null) | null;
   launch: ((level: Level, p: Player, stack: ItemStack, target: [number, number, number]) => void) | null;
-} = { locate: null, launch: null };
+} = {
+  locate(level, x, y, z) {
+    if (level.world.dim.id !== 'overworld') return null;
+    const [sx, sz] = level.strongholds().nearest(x, y, z);
+    return [sx, 0, sz];
+  },
+  launch(level, p, stack, target) {
+    const eye = new EyeOfEnder(level, p.x, p.y + p.height * 0.5, p.z, stack);
+    eye.signalTo(target[0], target[1], target[2]);
+    level.addEntity(eye);
+    level.sound.play('entity.ender_eye.launch', p.x, p.y, p.z, 1, 0.33 + level.random.nextFloat() * 0.17);
+    if (p.gameMode !== 'creative') p.inventory.consumeSelected(1);
+    p.swing();
+  },
+};
 
 /** an end portal frame with its eye in, facing `facing` */
 function eyedFrame(w: World, x: number, y: number, z: number, facing: string): boolean {

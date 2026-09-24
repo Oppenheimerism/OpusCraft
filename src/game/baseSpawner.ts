@@ -8,6 +8,7 @@ import type { SpawnerBlockEntity } from '../world/blockEntity';
 import { createMob } from './spawner';
 import type { Mob } from '../entity/mob';
 import { Monster } from '../entity/monsters';
+import { Silverfish } from '../entity/silverfish';
 import { Animal } from '../entity/animals';
 import { WaterAnimal } from '../entity/water';
 import { BLOCKS, STATE_BLOCK, FLAGS, F_WATER } from '../world/block';
@@ -37,6 +38,8 @@ function delay(level: Level, be: SpawnerBlockEntity): void {
  * test and the floor check (the walk-target check in Mob.checkSpawnRules still keeps them to light <= 11)
  */
 function spawnRulesOk(level: Level, mob: Mob, x: number, y: number, z: number): boolean {
+  // (vanilla Silverfish.checkSilverfishSpawnRules: none right next to a survival player)
+  if (mob instanceof Silverfish) return Silverfish.checkSpawnRules(level, x, y, z, true);
   if (mob instanceof Monster) return level.difficulty !== 'peaceful';
   if (mob instanceof WaterAnimal) return (FLAGS[level.world.getState(x, y, z)] & F_WATER) !== 0;
   if (mob instanceof Animal) return BLOCKS[STATE_BLOCK[level.world.getState(x, y - 1, z)]].name === 'grass_block' && level.rawBrightness(x, y, z, 0) > 8;

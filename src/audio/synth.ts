@@ -31,6 +31,8 @@ import { tridentSounds } from './gen/trident';
 import { drownedSounds } from './gen/drowned';
 import { jobSiteSounds } from './gen/jobSites';
 import { redstoneSounds } from './gen/redstone';
+import { silverfishSounds } from './gen/silverfish';
+import { wolfSounds } from './gen/wolf';
 
 export const SAMPLE_RATE = 44100;
 
@@ -67,6 +69,8 @@ export const SOUNDS: Record<string, SoundGen> = {
   ...tridentSounds(),
   ...drownedSounds(),
   ...jobSiteSounds(),
+  ...silverfishSounds(),
+  ...wolfSounds(),
 };
 // (the redstone components' events, most of them on the samples above)
 Object.assign(SOUNDS, redstoneSounds(SOUNDS));
