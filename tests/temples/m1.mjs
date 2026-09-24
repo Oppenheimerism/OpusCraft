@@ -130,22 +130,26 @@ const stepOf = { north: [0, -1], east: [1, 0], south: [0, 1], west: [-1, 0] };
       if (Math.sign(mx - wx) !== sx || Math.sign(mz - wz) !== sz) facingOk = false;
     }
     check(`pyramid (${d}): four chests facing into the room, with chests/desert_pyramid`, chests.length === 4 && chests.every((c) => c.data.lootTable === 'chests/desert_pyramid') && facingOk);
-    // the cellar: its sand (and the collapsed roof's patch of sand and sandstone)
+    // the cellar: its sand (and the collapsed roof's patch of sand and sandstone); the roof's place and 5-7 of the
+    // cellar's are suspicious sand (M4: tests/temples/m4a-archaeology.mjs)
     const sand = p.suspiciousSand();
-    let sandOk = sand.length === 84;
+    let sandOk = sand.length === 84, sus = 0;
     for (const [x, y, z] of sand) {
       const ctx = ctxs.find((c) => c.inChunk(x, z));
-      if (blockName(m, ctx.getOrAir(x, y, z)) !== 'sand') sandOk = false;
+      const n = blockName(m, ctx.getOrAir(x, y, z));
+      if (n === 'suspicious_sand') sus++;
+      else if (n !== 'sand') sandOk = false;
     }
-    check(`pyramid (${d}): the cellar's 83 places and the roof's one are sand (suspicious sand hook)`, sandOk);
+    check(`pyramid (${d}): the cellar's 83 places and the roof's one are sand, 6-8 of them suspicious`, sandOk && sus >= 6 && sus <= 8, `${sus}`);
     let roof = 0;
-    for (let x = 14; x <= 18; x++) for (let z = 11; z <= 15; z++) if (['sand', 'sandstone'].includes(name(x, 0, z))) roof++;
+    for (let x = 14; x <= 18; x++) for (let z = 11; z <= 15; z++) if (['sand', 'sandstone', 'suspicious_sand'].includes(name(x, 0, z))) roof++;
     check(`pyramid (${d}): the collapsed roof over the cellar`, roof === 25);
     check(`pyramid (${d}): the cellar's stairs under the sand`, name(13, -1, 17) === 'sandstone_stairs' && name(14, -2, 17) === 'sandstone_stairs' && name(15, -3, 17) === 'sandstone_stairs');
     // the same blocks in every orientation (bar the random ones)
     const random = (x, y, z) => (y === 0 && x >= 14 && x <= 18 && z >= 11 && z <= 15) || (z === 17 && y >= -3 && y <= -1);
     const lay = [];
-    for (let y = -14; y <= 14; y++) for (let x = 0; x < 21; x++) for (let z = 0; z < 21; z++) lay.push(random(x, y, z) ? '' : name(x, y, z));
+    // (which of the cellar's sand is suspicious depends on where each block is in the world)
+    for (let y = -14; y <= 14; y++) for (let x = 0; x < 21; x++) for (let z = 0; z < 21; z++) lay.push(random(x, y, z) ? '' : name(x, y, z).replace('suspicious_sand', 'sand'));
     layouts.push(lay);
   }
   check('pyramid: the same blocks in all four orientations', layouts.every((l) => l.every((n, i) => n === layouts[0][i])));

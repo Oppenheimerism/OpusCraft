@@ -80,7 +80,10 @@ function dispense(src, s) {
   be.container.set(0, stack('stone', 5));
   be.container.set(8, stack('egg', 3));
   level.destroyBlock(0, G, 0, true, m.ITEMS.get('stone_pickaxe'));
-  const spilt = items(level).map((e) => `${e.stack.item.id}x${e.stack.count}`).sort().join();
+  // (vanilla Containers.dropItemStack drops a stack in parts of 10-30: the 12 arrows may come out as two)
+  const spiltCounts = {};
+  for (const e of items(level)) spiltCounts[e.stack.item.id] = (spiltCounts[e.stack.item.id] ?? 0) + e.stack.count;
+  const spilt = Object.entries(spiltCounts).map(([id, n]) => `${id}x${n}`).sort().join();
   check('broken: its contents spill out with it', spilt === 'arrowx12,dispenserx1,eggx3,stonex5', spilt);
 }
 

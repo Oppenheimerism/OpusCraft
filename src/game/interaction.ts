@@ -904,6 +904,12 @@ export class Interaction {
       return;
     }
     p.usingItemTicks = p.ticksUsingItem() + 1;
+    // vanilla ItemStack.onUseTick (the brush's strokes), which may stop the use
+    const useTick = itemBehaviorOf(u.item.id)?.useTick;
+    if (useTick) {
+      p.inventory.withHand(p.useHand, () => useTick(this.level, p, u, p.useItemRemaining));
+      if (!p.isUsingItem()) return;
+    }
     // vanilla shouldTriggerItemUseEffects: past the first 21.875 % of the use, every fourth tick
     if (useAnimation(u)) {
       const used = p.useDuration - p.useItemRemaining;
@@ -1077,18 +1083,21 @@ export class Interaction {
     if (!h && !picked) return;
     const b = h ? BLOCKS[STATE_BLOCK[h.state]] : null;
     const own = h ? behaviorOf(h.state)?.cloneItem?.(h.state) : undefined;
-    const it = picked ? getItem(picked) : own ? getItem(own) : itemForBlock(b!.name) ?? (b!.name === 'water' ? getItem('water_bucket') : undefined);
+    // (a stack that depends on the block entity, a decorated pot's: matched with its components, as vanilla's findSlotMatchingItem)
+    const cloned = h && !picked ? behaviorOf(h.state)?.cloneStack?.(this.level, h.x, h.y, h.z, h.state) ?? null : null;
+    const it = cloned ? cloned.item : picked ? getItem(picked) : own ? getItem(own) : itemForBlock(b!.name) ?? (b!.name === 'water' ? getItem('water_bucket') : undefined);
     if (!it) return;
+    const matches = (s: ItemStack | null) => (cloned ? !!s?.sameItem(cloned) : s?.item === it);
     const inv = p.inventory;
     for (let i = 0; i < 9; i++) {
-      if (inv.main[i]?.item === it) {
+      if (matches(inv.main[i])) {
         inv.selected = i;
         inv.version++;
         return;
       }
     }
     if (p.gameMode !== 'creative') {
-      const slot = inv.findSlot((s) => s.item === it);
+      const slot = inv.findSlot((s) => matches(s));
       if (slot >= 9) {
         const tmp = inv.main[inv.selected];
         inv.main[inv.selected] = inv.main[slot];
@@ -1107,7 +1116,7 @@ export class Interaction {
         }
     }
     inv.selected = target;
-    inv.setSlot(target, new ItemStack(it, 1));
+    inv.setSlot(target, cloned ?? new ItemStack(it, 1));
   }
 
   /** vanilla SWAP_ITEM_WITH_OFFHAND (F): the two hands trade what they hold, and any use stops */

@@ -29,6 +29,7 @@ export const DEFAULT_GAME_RULES: GameRules = {
   playersNetherPortalCreativeDelay: 1,
   playersNetherPortalDefaultDelay: 80,
   playersSleepingPercentage: 100,
+  projectilesCanBreakBlocks: true,
   randomTickSpeed: 3,
   sendCommandFeedback: true,
   showDeathMessages: true,

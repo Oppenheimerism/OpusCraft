@@ -25,24 +25,31 @@ interface Blocks {
   PLATE: number;
   TNT: number;
   SAND: number;
+  SUSPICIOUS: number;
   stairs: (facing: string) => number;
 }
 let BLK: Blocks | null = null;
 function k(): Blocks {
   return (BLK ??= {
     SANDSTONE: S('sandstone'), CUT: S('cut_sandstone'), CHISELED: S('chiseled_sandstone'), SLAB: S('sandstone_slab', { type: 'bottom' }),
-    ORANGE: S('orange_terracotta'), BLUE: S('blue_terracotta'), PLATE: S('stone_pressure_plate'), TNT: S('tnt'), SAND: S('sand'),
+    ORANGE: S('orange_terracotta'), BLUE: S('blue_terracotta'), PLATE: S('stone_pressure_plate'), TNT: S('tnt'), SAND: S('sand'), SUSPICIOUS: S('suspicious_sand'),
     stairs: (facing: string) => S('sandstone_stairs', { facing, half: 'bottom', shape: 'straight' }),
   });
 }
 
+/** vanilla BlockPos.asLong: x in the top 26 bits, then z in 26, y in the low 12 */
+export function blockPosAsLong(x: number, y: number, z: number): bigint {
+  return BigInt.asIntN(64, (BigInt(x & 0x3ffffff) << 38n) | (BigInt(z & 0x3ffffff) << 12n) | BigInt(y & 0xfff));
+}
+
 /**
- * HOOK(archaeology): vanilla DesertPyramidStructure.placeSuspiciousSand: suspicious sand with the archaeology loot
- * table (seeded by the position) where it's in this chunk. Plain sand until suspicious sand exists.
+ * vanilla DesertPyramidStructure.placeSuspiciousSand: suspicious sand where it's in this chunk, its block entity
+ * given the archaeology loot table seeded by the position (game/archaeology.ts rolls it when it's first brushed)
  */
 function placeSuspiciousSand(ctx: GenContext, chunk: BoundingBox, x: number, y: number, z: number): void {
   if (!chunk.isInside(x, y, z)) return;
-  ctx.set(x, y, z, k().SAND);
+  ctx.set(x, y, z, k().SUSPICIOUS);
+  ctx.blockEntities.push({ id: 'brushable_block', x, y, z, items: [], data: { lootTable: ARCHAEOLOGY_LOOT, lootSeed: blockPosAsLong(x, y, z).toString() } });
 }
 
 /** vanilla DesertPyramidPiece */
@@ -376,7 +383,7 @@ export class DesertPyramidPiece extends ScatteredPiece {
     }
   }
 
-  /** where the suspicious sand goes (the collapsed roof's first), for tests and the archaeology hook */
+  /** where the suspicious sand may go (the collapsed roof's first, then all the cellar's), for tests */
   suspiciousSand(): [number, number, number][] {
     return [this.roofPos, ...this.sandPositions];
   }

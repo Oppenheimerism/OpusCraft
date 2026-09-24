@@ -89,7 +89,7 @@ const TRIDENT_THROWING_DISPLAY: Record<DisplayContext, Transform> = {
 };
 // flat-in-world block items (plants, torch...) use item/generated with the block texture
 function isHandheld(it: Item): boolean {
-  return !!it.tool || it.id === 'stick' || it.id === 'bone' || it.id === 'blaze_rod' || it.id === 'fishing_rod';
+  return !!it.tool || it.id === 'stick' || it.id === 'bone' || it.id === 'blaze_rod' || it.id === 'fishing_rod' || it.id === 'brush';
 }
 
 /** vanilla default item tint colors for block items */
@@ -123,6 +123,21 @@ let special: SpecialItemRenderer | null = null;
 
 export function setSpecialItemRenderer(r: SpecialItemRenderer | null): void {
   special = r;
+}
+
+/** the other block entities' items, besides the banners (decorated pots: render/archaeologyRenderers.ts) */
+const moreSpecial: SpecialItemRenderer[] = [];
+
+export function addSpecialItemRenderer(r: SpecialItemRenderer): void {
+  moreSpecial.push(r);
+}
+
+function specialScaleY(stack: ItemStack, ctx: DisplayContext): number | undefined {
+  for (const r of moreSpecial) {
+    const s = r.displayScaleY(stack, ctx);
+    if (s !== undefined) return s;
+  }
+  return undefined;
 }
 
 export class ItemRenderer {
@@ -226,7 +241,7 @@ export class ItemRenderer {
   }
 
   displayScaleY(stack: ItemStack, ctx: DisplayContext): number {
-    const sp = special?.displayScaleY(stack, ctx);
+    const sp = special?.displayScaleY(stack, ctx) ?? specialScaleY(stack, ctx);
     if (sp !== undefined) return sp;
     const it = stack.item;
     if (this.isBlockModel(it)) return BLOCK_DISPLAY[ctx].scale[1];
@@ -249,7 +264,7 @@ export class ItemRenderer {
 
   /** Render an item at the pose origin (model-space centered at 0). `texture` overrides the sprite (bow pulling). */
   render(batch: EntityBatch, pose: PoseStack, stack: ItemStack, ctx: DisplayContext, left = false, texture?: string): void {
-    if (special?.render(batch, pose, stack, ctx, left)) return;
+    if (special?.render(batch, pose, stack, ctx, left) || moreSpecial.some((r) => r.render(batch, pose, stack, ctx, left))) return;
     const it = stack.item;
     pose.push();
     if (this.isBlockModel(it)) {

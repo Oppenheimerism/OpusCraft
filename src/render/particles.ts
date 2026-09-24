@@ -79,6 +79,8 @@ interface SpriteParticle {
   stopped?: boolean;
   /** its friction slows it across but not up and down (vanilla DragonBreathParticle, till it lands) */
   keepYSpeed?: boolean;
+  /** what its gravity and its friction are multiplied by each tick before it moves (vanilla DustPlumeParticle) */
+  decay?: [number, number];
 }
 
 export interface SpriteRectUV {
@@ -350,6 +352,26 @@ export class ParticleEngine {
         p.size *= 0.75;
         p.lifetime = Math.max(1, Math.floor(20 / (Math.random() * 0.8 + 0.2)));
         p.physics = false;
+        this.addSprite(p);
+        break;
+      }
+      case 'dust_plume': {
+        // vanilla DustPlumeParticle (a BaseAshSmokeParticle): the puff out of a decorated pot something is put in,
+        // thrown up and falling back, grey-violet, its fall and its drag dying away as it goes
+        const p = this.base(kind, x, y, z);
+        this.withSpeed(p, 0, 0, 0);
+        p.friction = 0.96;
+        p.gravity = 0.5;
+        p.speedUpWhenBlocked = true;
+        p.dx = p.dx * 0.7 + xd;
+        p.dy = p.dy * 0.6 + yd + 0.15;
+        p.dz = p.dz * 0.7 + zd;
+        const k = Math.random() * 0.2;
+        [p.r, p.g, p.b] = [0xba / 255 - k, 0xb1 / 255 - k, 0xc2 / 255 - k];
+        p.size *= 0.75;
+        p.lifetime = Math.max(1, Math.floor(7 / (Math.random() * 0.8 + 0.2)));
+        p.physics = false;
+        p.decay = [0.88, 0.92];
         this.addSprite(p);
         break;
       }
@@ -939,6 +961,10 @@ export class ParticleEngine {
         continue;
       }
       if (p.sinkInAir) p.dy -= 0.0074;
+      if (p.decay) {
+        p.gravity *= p.decay[0];
+        p.friction *= p.decay[1];
+      }
       p.dy -= 0.04 * p.gravity;
       if (p.bbw !== undefined) this.moveBB(p);
       else if (p.physics) this.move(p as unknown as Particle);

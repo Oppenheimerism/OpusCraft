@@ -91,6 +91,10 @@ export interface BlockBehavior {
   triggerEvent?(level: Level, x: number, y: number, z: number, state: number, id: number, param: number): boolean;
   /** vanilla getCloneItemStack: the item a pick-block gives, when it depends on the state (a piston head's piston) */
   cloneItem?(state: number): string;
+  /** vanilla getCloneItemStack, when it depends on the block entity (a decorated pot's sides); null: the usual */
+  cloneStack?(level: Level, x: number, y: number, z: number, state: number): ItemStack | null;
+  /** vanilla getSoundType(state).getBreakSound(), where it isn't the block's own (a cracked pot's shatter) */
+  breakSound?(state: number): string;
 }
 
 const BEHAVIORS: (BlockBehavior | undefined)[] = [];

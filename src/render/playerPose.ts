@@ -24,6 +24,7 @@ export function playerArms(e: Player, mainArm: Arm): HumanoidArms {
       if (s.item.id === 'bow') return 'bow';
       if (s.item.id === 'crossbow') return 'crossbow_charge';
       if (s.item.id === 'trident') return 'throw_spear';
+      if (s.item.id === 'brush') return 'brush';
     } else if (!e.swinging && s.item.id === 'crossbow' && isCharged(s)) return 'crossbow_hold';
     return 'item';
   };

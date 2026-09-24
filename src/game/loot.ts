@@ -108,6 +108,16 @@ export const LOOT_TABLES: Record<string, LootPool[]> = {
     { rolls: 1, entries: [e('', 2), e('wild_armor_trim_smithing_template', 1, [2, 2])] },
   ],
   'chests/jungle_temple_dispenser': [{ rolls: [1, 2], entries: [e('arrow', 30, [2, 7])] }],
+  // archaeology: what a suspicious block gives when brushed (one roll, seeded by its position: game/archaeology.ts)
+  'archaeology/desert_pyramid': [
+    {
+      rolls: 1,
+      entries: [
+        e('archer_pottery_sherd', 1), e('miner_pottery_sherd', 1), e('prize_pottery_sherd', 1), e('skull_pottery_sherd', 1), e('diamond', 1),
+        e('tnt', 1), e('gunpowder', 1), e('emerald', 1),
+      ],
+    },
+  ],
   // strongholds: the chest corridors' altars, the storeroom crossings and the libraries
   'chests/stronghold_corridor': [
     {

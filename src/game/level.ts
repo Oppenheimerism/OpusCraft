@@ -51,6 +51,7 @@ import './infestedBlocks';
 import './golems';
 import './potionItems';
 import './potionEffects';
+import './archaeology';
 
 export interface SoundSink {
   play(name: string, x: number, y: number, z: number, volume?: number, pitch?: number): void;
@@ -704,7 +705,7 @@ export class Level {
     const b = BLOCKS[STATE_BLOCK[st]];
     if (effects) {
       this.particles.blockBreak(x, y, z, st);
-      this.sound.play(`block.${b.sound}.break`, x + 0.5, y + 0.5, z + 0.5, 1, 0.8);
+      this.sound.play(behaviorOf(st)?.breakSound?.(st) ?? `block.${b.sound}.break`, x + 0.5, y + 0.5, z + 0.5, 1, 0.8);
     }
     const replacement = FLAGS[st] & F_WATERLOGGED ? S('water') : 0;
     // containers spill their contents (vanilla Containers.dropContents)

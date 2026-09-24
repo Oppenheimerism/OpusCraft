@@ -9,8 +9,8 @@ Branch: `claude/stoic-johnson-waevai` (from main at 5dfd44d).
 | M1 desert pyramid and swamp hut | done | 9aa2261 Desert pyramids and swamp huts: sandstone pyramids in the desert with four chests over a TNT trap … |
 | M2 redstone components | done: dust, torches, repeaters (M2a), tripwire (M2b), dispensers and droppers (M2c), pistons (M2d) | 74b9613 Redstone dust, redstone torches and repeaters: …; ef67ff5 Tripwire hooks and string: …; 18b3665 Dispensers and droppers: …; 73f0c79 Pistons and sticky pistons: … |
 | (merge) | main merged in (strongholds, silverfish, wolves); conflicts resolved keeping both sides | 9593ea6 Merge strongholds, silverfish in infested stone, and wolves from main into the temples branch |
-| M3 igloo and jungle temple | done | "Jungle temples and igloos: …" (see `git log`; the commit after 9593ea6) |
-| M4 archaeology | not started | |
+| M3 igloo and jungle temple | done | 1643560 Jungle temples and igloos: … |
+| M4 archaeology | done: the brush, suspicious sand and gravel, archaeology/desert_pyramid and the four sherds, decorated pots, the pyramid's suspicious sand (the game has no desert wells), and the two archaeology advancements | "Archaeology: …" (see `git log`; the commit after 1643560) |
 
 ## 2. Shared files changed (all additive hooks)
 
@@ -85,6 +85,48 @@ M3 (all additive):
   `src/world/gen/generator.ts` were side by side additions (my temples and redstone next to main's strongholds,
   silverfish and wolves); both sides kept.
 
+M4 (all additive):
+- `src/world/blocks.ts`: `registerArchaeologyBlocks()` right after `registerRedstoneComponents()` (new
+  `src/world/blocksArchaeology.ts`: suspicious sand and gravel, the decorated pot).
+- `src/item/item.ts`: the brush (after flint and steel), the four sherds (after the misc items), the pot's sprite and
+  the three blocks' creative tab; `ItemTag.potDecorations` (vanilla minecraft:pot_decorations), copied in `cloneTag` and
+  compared in `sameTag`.
+- `src/game/level.ts`: `import './archaeology'` after `import './potionEffects'`; in `destroyBlock` the break sound asks
+  the block's `breakSound` first (a cracked pot shatters).
+- `src/game/blockBehavior.ts`: two optional hooks, `cloneStack(level, x, y, z, state)` (vanilla getCloneItemStack from
+  the block entity: a pot with its sides) and `breakSound(state)`.
+- `src/game/interaction.ts`: `tickUsingItem` calls the item's `useTick` each tick (vanilla onUseTick; the brush's
+  strokes); `pickBlock` asks `cloneStack` and then matches stacks with their components (vanilla findSlotMatchingItem).
+- `src/game/itemBehavior.ts`: optional `useTick`.
+- `src/game/loot.ts`: `archaeology/desert_pyramid` after the temples' chest tables.
+- `src/game/gameRules.ts`: `projectilesCanBreakBlocks` (vanilla 1.21; only the pot reads it).
+- `src/game/game.ts`: two listeners right after `setVillageMenuHook(...)` that feed the archaeology advancements.
+- `src/game/advancements.ts` (not on the list): criterion types `container_loot` (vanilla player_generates_container_loot)
+  and `recipe_crafted` with their payload fields; `adventure/salvage_sherd` and
+  `adventure/craft_decorated_pot_using_only_sherds` have vanilla's criteria instead of `never`.
+- `src/entity/fallingBlock.ts`: `onBrokenAfterFall` (vanilla Fallable.onBrokenAfterFall) and `disableDrop()`; `fall()`
+  now updates the neighbours of the spot it leaves (vanilla's UPDATE_ALL), so what rests on falling sand notices.
+- `src/inventory/recipes.ts`: the brush and the four-brick pot after the pistons (the sherd pot is a special recipe in
+  `src/game/decoratedPot.ts`).
+- `src/world/gen/desertPyramid.ts` (mine): `placeSuspiciousSand` now places suspicious sand with its block entity;
+  `blockPosAsLong` exported.
+- Rendering: `src/render/entityRenderers.ts`: `this.archaeology.render(...)` right after the pistons (new
+  `src/render/archaeologyRenderers.ts`); `src/render/itemRenderer.ts`: `addSpecialItemRenderer` (a list next to the
+  banners' single `setSpecialItemRenderer`, which is untouched) and the brush in `isHandheld`; `src/gui/guiGraphics.ts`:
+  `addStackIconHook` (the same, next to `setStackIconHook`); `src/render/handRenderer.ts`: the brush's first-person use
+  transform, a branch beside the bow's and the trident's; `src/render/model.ts`: arm pose `'brush'`;
+  `src/render/playerPose.ts`: brushing takes it; `src/render/particles.ts`: `dust_plume`, and a `decay` field (gravity and
+  friction multiplied each tick).
+- Textures and sounds: `src/textures/blocks.ts`: `registerArchaeologyTextures(T)` after the redstone ones (new
+  `src/textures/blocklib/archaeology.ts`); `src/textures/items.ts`: `ARCHAEOLOGY_ITEMS` (new
+  `src/textures/itemlib/archaeology.ts`); new `src/textures/decoratedPot.ts` (the pot's sheets and the four motifs);
+  `src/audio/synth.ts`: `Object.assign(SOUNDS, archaeologySounds())` after the redstone line (new
+  `src/audio/gen/archaeology.ts`).
+- New game files: `src/game/archaeology.ts` (the suspicious blocks' block entity and behaviour, the brush, the seeded
+  loot) and `src/game/decoratedPot.ts` (the pot's block entity, behaviour, special recipe and tooltip).
+- Tests: `m1.mjs` counts suspicious sand as the cellar's sand; `m2c-dispenser.mjs`'s spill check adds the arrows up (a
+  stack spills in random parts of 10-30, so 12 arrows sometimes came out as two, about one run in ten).
+
 ## 3. Open points
 
 - **Heights.** Vanilla moves a pyramid to the lowest OCEAN_FLOOR_WG under it (minus 0-2) and a hut to the mean
@@ -99,8 +141,9 @@ M3 (all additive):
   vanilla, the two blocks of the cellar stairway can differ across a chunk border.
 - **Swamp huts have no lowest-Y rule**: vanilla's SwampHutStructure isn't a SinglePieceStructure (huts stand in water).
   The brief listed the rule for both; I followed vanilla.
-- **Suspicious sand (hook):** `placeSuspiciousSand` in `desertPyramid.ts` (marked `HOOK(archaeology)`) places plain sand
-  until M4. The 5-7 chosen spots and the roof spot are already worked out as vanilla does.
+- **Suspicious sand:** done in M4: the collapsed roof's spot and 5-7 of the cellar's (vanilla's choice from M1) are
+  suspicious sand with archaeology/desert_pyramid, seeded by BlockPos.asLong as vanilla does, so each block holds what
+  vanilla's would at that position (a java.util.Random nextInt(8)).
 - **Cats (hooks):** `SwampHutPiece.spawnCat` and the creature override in `structureSpawns.ts` (`HOOK(cats)`).
 - **Dune armor trim template** is in the loot table (weight 1 vs 6 empty, count 2) but rolls nothing until the item exists
   (the existing convention).
@@ -191,10 +234,32 @@ M3 (all additive):
 - **Igloo villagers:** a plains villager and a plains zombie villager without a profession, persistent, loaded from
   the template's entities through the existing entity loading (villager.ts and zombieVillager.ts untouched).
 
-## Work in progress (next steps, for the next session or after a context compaction)
-
-- **M4**: archaeology for the desert pyramid (the brush, suspicious sand and gravel, archaeology/desert_pyramid, sherds,
-  decorated pots, then the pyramid's suspicious sand in place of the `HOOK(archaeology)` plain sand).
+- **Archaeology.** As vanilla 1.21 (BrushItem, BrushableBlock, BrushableBlockEntity, DecoratedPotBlock,
+  DecoratedPotBlockEntity, DecoratedPotRecipe, DecoratedPotRenderer, BrushableBlockRenderer). What I couldn't verify
+  and chose:
+  - The brush flicks its dust away from the arm holding it; which arm is the main one is a client option here, so
+    the logic takes the main hand to be the right arm (a left-handed player's dust goes the other way in vanilla).
+  - Display transforms: the brush is held as a handheld item (like a tool), and the pot item uses
+    `template_chest`'s transforms over `block.json`'s (the GUI at 30/45, so the front shows as in vanilla's icon).
+    Neither item model's JSON was at hand; both are assumptions.
+  - The pot's inventory icon is rendered offscreen, like the banner's. It uses the lights that give the block icons
+    their shading (top full, left 0.8, right 0.6).
+  - The pot items carry no contents: picking a pot gives it with its sides but empty (vanilla's CONTAINER component
+    would carry what's in it), and what's in a pot that breaks spills out as vanilla's does.
+  - `#impact_projectiles` (what shatters a pot) is from memory: arrows, spectral arrows, tridents, snowballs, eggs,
+    fireworks, fireballs, small fireballs, wither skulls, dragon fireballs, llama spit and wind charges.
+  - The suspicious blocks notice a neighbour through `neighborChanged` (the game's `updateShape` has no Level to
+    schedule a tick from); the effect is the same.
+  - Falling suspicious sand breaks where it lands, dropping nothing (its find is lost, as in vanilla). A falling block
+    that times out is removed without dropping, which was already the game's behaviour.
+  - All the textures (the four stages, the sherds and their motifs, the pot) are my own pixel art, and all the sounds
+    are synthesized. The motifs follow what each sherd shows in vanilla: a bow and arrow, a pickaxe, a gem, a skull.
+  - The game has no desert wells, trail ruins or ocean ruins, so nothing generates suspicious gravel yet. The block
+    and its brushing work (given by command or the creative menu).
+  - The advancements: "Respecting the Remnants" comes with the archaeology loot rolled for the player (the first stroke
+    on a suspicious block, whatever it gives), as vanilla's player_generates_container_loot. "Careful Restoration" comes
+    when a pot of four sherds is taken from the crafting grid (vanilla recipe_crafted; here through the pot's
+    onCraftedBy).
 
 ## 4. Tests
 
@@ -284,6 +349,31 @@ Run with `node tests/temples/<file>.mjs` (Node 22, after `npm ci`).
   traps, the levers before and after, the hole and the hidden chest; the igloo outside, inside, and its basement with
   the two cells.
 
+- `tests/temples/m4a-archaeology.mjs`: **46 passed, 0 failed.** The loot table (one roll of eight, vanilla's order,
+  against java.util.Random nextInt(8) worked independently, 4000 rolls, BlockPos.asLong), the items, the pyramid's
+  suspicious sand in all four orientations (the roof spot and 5-7 in the cellar, each with its table and seed); brushing
+  through Interaction as a player does (a stroke every 10 ticks from tick 5, dusted 1/2/3 at strokes 1/3/6, done at the
+  tenth; the find out on the brushed face at rest and picked up; the completion sound; one point of wear, none in
+  creative; plain sand only the generic sound; letting go or looking away stops it), gravel, the reset (40 ticks after the
+  last stroke, two strokes every 4 ticks), from above, falling (two ticks after the block under it goes; breaking where
+  it lands with no item; sand falling from under it), no drops, shovel speed, saving, the recipe.
+- `tests/temples/m4b-decorated-pot.mjs`: **44 passed, 0 failed.** Both recipes and what isn't one, the item, tooltip and
+  stacking; placing (facing, waterlogged, the item's sides); knocking and putting in (sounds, pitch by fullness, the dust
+  plume, both wobbles, no swing, stacking, full, creative); sneaking; pick block; saving; breaking by hand (whole, contents
+  spilt), with a pickaxe (the shatter into its sides' items), sword, silk touch, shears and shovel; arrows (and the game
+  rule); pistons destroying pots and suspicious blocks.
+- `tests/temples/m4c-assets.mjs`: **37 passed, 0 failed.** The suspicious blocks' four stages (each its own, the hollow
+  darkening, each model's texture there), the sherds' sprites, the pot's sheets (every face the model uses painted, the
+  dark mouth, five different sides), the pot model's particle texture; every sound the three blocks, the brush and the
+  pot play exists and renders cleanly; the dust plume (colour, lift, life, its decay each tick); both advancements and
+  what feeds them (the first stroke, a sherd pot taken from the grid).
+- All ten suites pass together (m1 81, m2 46, m2b 47, m2c 111, m2d 149, m3a 124, m3b 84, m4a 46, m4b 44, m4c 37) and
+  `npm run typecheck` is clean.
+- M4 was also checked in the browser (headless Chromium): pots in every facing with their sherd faces, the neck and mouth
+  from above, a brushed block at each stage with the find poking out of the face being brushed, brushing in first and
+  third person (the sherd picked up, the brush worn), and the icons in the hotbar (the pot at the chest's angle with
+  its front on the right).
+
 ## 5. Browser checklist (seed 12345, `http://localhost:5173/?seed=12345`)
 
 Coordinates from the locator (the start chunk's corner, as `/locate` prints it):
@@ -341,3 +431,17 @@ Coordinates from the locator (the start chunk's corner, as `/locate` prints it):
   pushed; stand on one facing up: you're lifted. Power off: the head slides back, a sticky one pulling its block with
   it (not obsidian, a chest or a flower). A redstone block two above a piston (or diagonally above) doesn't fire it
   until a block beside it is placed or broken (quasi-connectivity). Break the head: the piston drops.
+- **Archaeology** in the desert pyramid at 5856, ~, 5936 (see above). It has six suspicious sand blocks: one in the hall
+  floor's sand patch at 5870 67 5947 (a miner sherd), and five in the sand-filled cellar under the patch, at 5870 66 5948
+  (archer), 5873 66 5949 (miner), 5874 66 5950 (TNT), 5870 65 5948 (archer) and 5871 64 5949 (archer). Suspicious sand
+  looks like sand with small pits in it. Get a brush (a feather over a copper ingot over a stick, or `/give @s brush`)
+  and hold right-click on one: a swish and a spray of sand dust every half second, the hollow in the texture deepening
+  at the first, third and sixth strokes, the find poking further out of the face you brush. At the tenth stroke it
+  pops out on your side and the block is plain sand. Stop halfway and it fills back in two seconds later. Dig the sand
+  out from under one: it falls and breaks, and its find is lost. The first stroke gives "Respecting the Remnants".
+- **Decorated pots:** craft four sherds (or bricks) in a diamond (top the back, left and right the sides, bottom the
+  front); "Careful Restoration" for four sherds. Its icon shows the left side and the front. Placed, its front faces
+  you. Right-click with a stack: one item goes in, with a clunk that rises as it fills, a puff of dust and a small
+  wobble; with an empty hand, or something different, a hollow knock and a twist. Break it with a pickaxe: it
+  shatters into its four sherds and bricks, and what's in it spills. By hand or with silk touch it drops whole, with
+  its sides. An arrow shatters it too. Pick block gives the pot with its sides.
