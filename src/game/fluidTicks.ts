@@ -76,6 +76,9 @@ export class FluidTicker {
     }
     const b = BLOCKS[STATE_BLOCK[st]];
     if (b.name === 'ladder' || b.name.endsWith('_sign') || b.name.endsWith('_door')) return false;
+    // vanilla !blocksMotion(): a flower pot's little shape isn't "solid" (BlockStateBase.calculateSolid wants an
+    // average size of 0.73 or a full height), so flowing water pops it off with its plant
+    if (b.name === 'flower_pot' || b.name.startsWith('potted_')) return true;
     if (f & F_OPAQUE) return false;
     if (FACE_OCC[st]) return false;
     // non-solid replaceable things (plants, torches, snow layer) get washed away
