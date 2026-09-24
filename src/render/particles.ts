@@ -659,8 +659,9 @@ export class ParticleEngine {
         this.addSprite(p);
         break;
       }
-      case 'happy_villager': {
-        // vanilla SuspendedTownParticle (HappyVillagerProvider): hovers in place
+      case 'happy_villager':
+      case 'composter': {
+        // vanilla SuspendedTownParticle (HappyVillagerProvider, ComposterFillProvider): hovers in place
         const p = this.base(kind, x, y, z);
         this.withSpeed(p, xd, yd, zd);
         p.bbw = 0.02;
@@ -668,7 +669,7 @@ export class ParticleEngine {
         p.dx *= 0.02;
         p.dy *= 0.02;
         p.dz *= 0.02;
-        p.lifetime = Math.floor(20 / (Math.random() * 0.8 + 0.2));
+        p.lifetime = kind === 'composter' ? 3 + Math.floor(Math.random() * 5) : Math.floor(20 / (Math.random() * 0.8 + 0.2));
         p.physics = false;
         p.friction = 0.99;
         p.frames = ['glint'];
@@ -923,7 +924,8 @@ export class ParticleEngine {
         p.dz *= 0.85;
         return fluidType(w.getState(Math.floor(p.x), Math.floor(p.y), Math.floor(p.z))) === FLUID_WATER;
       }
-      case 'happy_villager': {
+      case 'happy_villager':
+      case 'composter': {
         // vanilla SuspendedTownParticle.tick (moves without collision)
         if (p.lifetime-- <= 0) return false;
         p.x += p.dx;

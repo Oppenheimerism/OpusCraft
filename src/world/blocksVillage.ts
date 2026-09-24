@@ -4,8 +4,8 @@
 // campfire). Models mirror vanilla's block model JSONs and blockstate files; shapes are vanilla's VoxelShapes.
 // What they do is in game/villageBlocks.
 
-import { registerBlock, P, Box, enumProp } from './block';
-import type { ModelDef, FaceDef, UV4, ElementDef } from './models';
+import { registerBlock, P, Box, enumProp, intProp, StateView } from './block';
+import { cubeBottomTop, type ModelDef, type FaceDef, type UV4, type ElementDef, type Variant } from './models';
 import type { DirName } from './dir';
 
 const px = (v: number) => v / 16;
@@ -88,6 +88,55 @@ function bellModels(): Record<string, ModelDef> {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Barrel (vanilla BarrelBlock; block/barrel and barrel_open, cube_bottom_top turned to face where it opens)
+
+/** blockstate rotations of a model whose top is its front */
+const FACE_ROT: Record<string, [number, number]> = { up: [0, 0], down: [180, 0], north: [90, 0], south: [90, 180], west: [90, 270], east: [90, 90] };
+
+function facingModel(m: ModelDef, s: StateView): Variant {
+  const [x, y] = FACE_ROT[s.get<string>('facing')];
+  return { model: m, x, y };
+}
+
+// ---------------------------------------------------------------------------
+// Composter (vanilla ComposterBlock; block/composter, and composter_contents1-7 / composter_contents_ready over it)
+
+export const COMPOSTER_LEVEL = intProp('level', 0, 8);
+
+/** the top of what's in it, in pixels: level 0 is the floor (vanilla ComposterBlock.SHAPES; level 8 is level 7's) */
+export const composterFloor = (level: number): number => Math.max(2, 1 + 2 * Math.min(level, 7));
+
+function composterModels(): { base: ModelDef; contents: ModelDef[] } {
+  const side = 'composter_side', top = 'composter_top', inside = 'composter_bottom';
+  // (the inside faces vanish under a block on top, as vanilla's cull them with "up")
+  const base: ModelDef = {
+    particle: side,
+    elements: [
+      { from: [0, 0, 0], to: [16, 2, 16], faces: { up: f(inside, undefined, 'up'), down: f('composter_bottom', undefined, 'down') } },
+      { from: [0, 0, 0], to: [2, 16, 16], faces: { up: f(top, undefined, 'up'), north: f(side, undefined, 'north'), south: f(side, undefined, 'south'), west: f(side, undefined, 'west'), east: f(side, undefined, 'up') } },
+      { from: [14, 0, 0], to: [16, 16, 16], faces: { up: f(top, undefined, 'up'), north: f(side, undefined, 'north'), south: f(side, undefined, 'south'), west: f(side, undefined, 'up'), east: f(side, undefined, 'east') } },
+      { from: [2, 0, 0], to: [14, 16, 2], faces: { up: f(top, undefined, 'up'), north: f(side, undefined, 'north'), south: f(side, undefined, 'up') } },
+      { from: [2, 0, 14], to: [14, 16, 16], faces: { up: f(top, undefined, 'up'), north: f(side, undefined, 'up'), south: f(side, undefined, 'south') } },
+    ],
+  };
+  const contents: ModelDef[] = [];
+  for (let i = 1; i <= 8; i++) {
+    const tex = i === 8 ? 'composter_ready' : 'composter_compost';
+    contents[i] = { particle: side, elements: [{ from: [2, 0, 2], to: [14, composterFloor(i), 14], faces: { up: f(tex, undefined, 'up') } }] };
+  }
+  return { base, contents };
+}
+
+/** vanilla ComposterBlock.SHAPES: the whole block less the space above what's in it */
+function composterShape(level: number): Box[] {
+  const h = composterFloor(level);
+  return [bx(0, 0, 0, 16, h, 16), bx(0, h, 0, 2, 16, 16), bx(14, h, 0, 16, 16, 16), bx(2, h, 0, 14, 16, 2), bx(2, h, 14, 14, 16, 16)];
+}
+
+/** face bits (1 << dir) of the four sides and the bottom: full faces for neighbours to cull against and hang things on */
+const SIDES_AND_BOTTOM = 0b111101;
+
 export function registerVillageBlocks(): void {
   {
     const models = bellModels();
@@ -98,6 +147,30 @@ export function registerVillageBlocks(): void {
       opaque: false, aoCaster: false, opacity: 0,
       collision: (s) => bellShape(s.get('facing') as string, s.get('attachment') as string),
       model: (s) => ({ model: models[s.get('attachment') as string], y: HOR_ROT[s.get('facing') as string] }),
+    });
+  }
+  {
+    const closed = cubeBottomTop('barrel_side', 'barrel_bottom', 'barrel_top');
+    const open = cubeBottomTop('barrel_side', 'barrel_bottom', 'barrel_top_open');
+    // (vanilla Blocks.BARREL: strength 2.5, wood, set alight by lava)
+    registerBlock('barrel', {
+      props: [P.facing, P.open], defaults: { facing: 'north' },
+      hardness: 2.5, sound: 'wood', tool: 'axe', flammable: true, mapColor: 0x8f7748,
+      model: (s) => facingModel(s.get('open') ? open : closed, s),
+    });
+  }
+  {
+    const { base, contents } = composterModels();
+    // (vanilla Blocks.COMPOSTER: strength 0.6, wood, set alight by lava)
+    registerBlock('composter', {
+      props: [COMPOSTER_LEVEL],
+      hardness: 0.6, sound: 'wood', tool: 'axe', flammable: true, mapColor: 0x8f7748,
+      opaque: false, aoCaster: false, opacity: 0, faceOcclusion: SIDES_AND_BOTTOM,
+      collision: (s) => composterShape(s.get<number>('level')),
+      model: (s) => {
+        const level = s.get<number>('level');
+        return level ? { parts: [{ model: base }, { model: contents[level] }] } : { model: base };
+      },
     });
   }
 }

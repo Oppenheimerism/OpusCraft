@@ -8,7 +8,8 @@ import type { World } from '../world/world';
 import type { Level } from './level';
 import type { Entity } from '../entity/entity';
 import type { Player } from '../entity/player';
-import type { ItemStack } from '../item/item';
+import type { Item, ItemStack } from '../item/item';
+import type { Rand } from '../core/rng';
 import type { Hand } from '../item/inventory';
 import type { PlaceContext } from './blockRules';
 
@@ -68,6 +69,8 @@ export interface BlockBehavior {
   updateShape?(world: World, x: number, y: number, z: number, state: number): number;
   /** vanilla LiquidBlockContainer.placeLiquid: a water bucket emptied into the block; true if it took it */
   placeLiquid?(level: Level, x: number, y: number, z: number, state: number): boolean;
+  /** the block's loot table (vanilla block loot): what breaking it with `tool` drops, when it has one of its own */
+  drops?(state: number, tool: Item | null, r: Rand, silk: boolean, fortune: number): ItemStack[];
   /** vanilla entityInside: `e`'s box overlaps the block */
   entityInside?(level: Level, x: number, y: number, z: number, state: number, e: Entity): void;
   /** vanilla animateTick (client ambient effects) */

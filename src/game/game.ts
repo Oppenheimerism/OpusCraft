@@ -47,7 +47,7 @@ import type { SkinParts } from '../render/entityRenderers';
 import { InventoryMenu, CraftingMenu, FurnaceMenu, ChestMenu } from '../inventory/menus';
 import { EnchantmentMenu, AnvilMenu, GrindstoneMenu } from '../inventory/enchantMenus';
 import { hasVanishing } from '../item/enchantHelper';
-import { ChestBlockEntity, FurnaceBlockEntity } from '../world/blockEntity';
+import { ChestBlockEntity, FurnaceBlockEntity, BarrelBlockEntity } from '../world/blockEntity';
 import { useBed, findRespawn, BED_YROT, MSG, SleepHost } from './sleep';
 import { AmbientTicker } from './animateTick';
 import { ToastComponent, AdvancementToast, RecipeToast } from '../gui/toasts';
@@ -745,6 +745,13 @@ export class Game {
       be.unpackLoot();
       this.setScreen(this.containerScreenFactory(new ChestMenu(p, be)));
       if (be.openCount++ === 0) this.sound.play('block.chest.open', x + 0.5, y + 0.5, z + 0.5, 0.5, Math.random() * 0.1 + 0.9);
+    } else if (kind === 'barrel') {
+      // vanilla BarrelBlock.useWithoutItem: a chest's menu, titled Barrel; the lid opens
+      const be = this.world.getBlockEntity(x, y, z);
+      if (!(be instanceof BarrelBlockEntity)) return;
+      be.unpackLoot();
+      this.setScreen(this.containerScreenFactory(new ChestMenu(p, be, 'Barrel')));
+      be.startOpen(this.level);
     } else if (kind === 'enchanting_table') {
       const m = new EnchantmentMenu(p, [x, y, z]);
       m.onEnchanted = () => this.advancements.trigger('enchanted_item');
@@ -762,6 +769,7 @@ export class Game {
 
   /** chest closed (called by the chest screen) */
   chestClosed(be: ChestBlockEntity): void {
+    if (be instanceof BarrelBlockEntity) return be.stopOpen(this.level);
     be.openCount = Math.max(0, be.openCount - 1);
     if (be.openCount === 0) this.sound.play('block.chest.close', be.x + 0.5, be.y + 0.5, be.z + 0.5, 0.5, Math.random() * 0.1 + 0.9);
   }

@@ -98,6 +98,9 @@ shaped('bookshelf', 1, ['###', 'XXX', '###'], { '#': '#planks', X: 'book' });
 shaped('enchanting_table', 1, [' B ', 'D#D', '###'], { B: 'book', D: 'diamond', '#': 'obsidian' });
 shaped('anvil', 1, ['III', ' i ', 'iii'], { I: 'iron_block', i: 'iron_ingot' });
 shaped('grindstone', 1, ['I-I', '# #'], { I: 'stick', '-': 'stone_slab', '#': '#planks' });
+// the village job sites
+shaped('barrel', 1, ['PSP', 'P P', 'PSP'], { P: '#planks', S: '#wooden_slabs' });
+shaped('composter', 1, ['# #', '# #', '###'], { '#': '#wooden_slabs' });
 shaped('oak_sign', 3, ['###', '###', ' X '], { '#': 'oak_planks', X: 'stick' });
 // vanilla boat recipes: planks in a U, and a chest added to a boat
 for (const w of WOODS) {
@@ -456,6 +459,8 @@ const FUEL: Record<string, number> = {
   oak_boat: 1200, bow: 300, fishing_rod: 300, ladder: 300, crafting_table: 300, chest: 300, bookshelf: 300,
   oak_sign: 200, oak_door: 200, wooden_pickaxe: 200, wooden_axe: 200, wooden_shovel: 200, wooden_hoe: 200, wooden_sword: 200,
   stick: 100, bowl: 100, dead_bush: 100,
+  // (the wooden job sites)
+  lectern: 300, loom: 300, barrel: 300, cartography_table: 300, fletching_table: 300, smithing_table: 300, composter: 300,
 };
 export function fuelTime(s: ItemStack | null): number {
   if (!s) return 0;

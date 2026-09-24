@@ -517,6 +517,8 @@ export function blockDrops(state: number, tool: Item | null, r: Rand, silk = fal
   const b = blk(state);
   const n = b.name;
   if (b.requiresTool && !isCorrectTool(tool, b)) return [];
+  const own = behaviorOf(state)?.drops;
+  if (own) return own(state, tool, r, silk, fortune);
   const shears = tool?.tool?.type === 'shears';
   if (silk && !SILK_IGNORED.has(n) && (SILK_TABLES.has(n) || n.endsWith('_ore') || b.s.isLeaves || b.s.noDrop)) {
     // (vanilla loot tables that drop nothing even with silk touch)

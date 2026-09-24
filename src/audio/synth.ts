@@ -204,6 +204,8 @@ const VOLUMES: Record<string, number> = {
   'entity.blaze.shoot': 2,
   // village blocks: the bell carries twice as far (BellBlock.attemptToRing plays at 2)
   'block.bell.use': 2,
+  'block.barrel.open': 0.5,
+  'block.barrel.close': 0.5,
 };
 
 /**

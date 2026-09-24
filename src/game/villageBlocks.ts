@@ -11,6 +11,11 @@ import { registerBehavior } from './blockBehavior';
 import type { PlaceContext } from './blockRules';
 import { hasNeighborSignal } from './redstone/signal';
 import { BellBlockEntity } from '../world/blockEntity';
+import { composterFloor } from '../world/blocksVillage';
+import { ItemStack } from '../item/item';
+import { ItemEntity } from '../entity/itemEntity';
+import type { Player } from '../entity/player';
+import { lookingDirections } from './blockRules';
 import type { Level } from './level';
 
 const blk = (st: number): Block => BLOCKS[STATE_BLOCK[st]];
@@ -27,6 +32,38 @@ function supportsCenter(st: number, face: number): boolean {
 
 const dirOf = (name: string): Dir => DIR_NAMES.indexOf(name as (typeof DIR_NAMES)[number]) as Dir;
 const facingOf = (st: number): Dir => dirOf(blk(st).get<string>(st, 'facing'));
+
+/** vanilla RandomSource.nextGaussian */
+function gaussian(): number {
+  return Math.sqrt(-2 * Math.log(1 - Math.random())) * Math.cos(2 * Math.PI * Math.random());
+}
+
+/** vanilla ItemStack.consume(1, player): one from the hand in use, unless the player has infinite materials */
+function consumeHeld(p: Player): void {
+  if (p.gameMode !== 'creative') p.inventory.consumeSelected(1);
+}
+
+/**
+ * vanilla ItemUtils.createFilledResult: the hand's item (an empty bucket, a bottle) swapped for `filled`, one at a
+ * time, the rest of the stack kept and the filled one put away (or dropped); a creative player keeps the empty one
+ * and gets a filled one only if they have none
+ */
+export function fillHeld(p: Player, filled: ItemStack): void {
+  const inv = p.inventory;
+  if (p.gameMode === 'creative') {
+    const has = [...inv.main, inv.offhand, ...inv.armor].some((s) => s && s.sameItem(filled));
+    if (!has) inv.add(filled);
+    return;
+  }
+  const held = inv.selectedItem;
+  if (!held || held.count <= 1) {
+    inv.setSelectedItem(filled);
+    return;
+  }
+  inv.consumeSelected(1);
+  const left = inv.add(filled);
+  if (left > 0) p.dropItem(filled.copyWithCount(left), false);
+}
 
 // ---------------------------------------------------------------------------
 // Bell (vanilla BellBlock)
@@ -130,5 +167,100 @@ const facingOf = (st: number): Dir => dirOf(blk(st).get<string>(st, 'facing'));
       if (on) ring(level, x, y, z, null);
       level.setBlock(x, y, z, bell.with(st, 'powered', on));
     },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Barrel (vanilla BarrelBlock: faces away from the player, toward where they look from; its menu is the game's)
+{
+  const barrel = getBlock('barrel');
+  registerBehavior('barrel', {
+    placement: (ctx) => barrel.state({ facing: DIR_NAMES[OPPOSITE[lookingDirections(ctx.yaw, ctx.pitch)[0]]] }),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Composter (vanilla ComposterBlock): plant matter in, a chance a level for each; full at 7, ready a second later;
+// the ready one gives bone meal
+{
+  const composter = getBlock('composter');
+  const levelOf = (st: number) => composter.get<number>(st, 'level');
+
+  /** vanilla ComposterBlock.COMPOSTABLES: the chance each item raises the level */
+  const COMPOSTABLES: Record<string, number> = {};
+  const add = (chance: number, ...ids: string[]) => {
+    for (const id of ids) COMPOSTABLES[id] = chance;
+  };
+  add(0.3, 'jungle_leaves', 'oak_leaves', 'spruce_leaves', 'dark_oak_leaves', 'acacia_leaves', 'cherry_leaves', 'birch_leaves', 'azalea_leaves', 'mangrove_leaves',
+    'oak_sapling', 'spruce_sapling', 'birch_sapling', 'jungle_sapling', 'acacia_sapling', 'cherry_sapling', 'dark_oak_sapling', 'mangrove_propagule',
+    'beetroot_seeds', 'dried_kelp', 'short_grass', 'kelp', 'melon_seeds', 'pumpkin_seeds', 'seagrass', 'sweet_berries', 'glow_berries', 'wheat_seeds',
+    'moss_carpet', 'pink_petals', 'small_dripleaf', 'hanging_roots', 'mangrove_roots', 'torchflower_seeds', 'pitcher_pod');
+  add(0.5, 'dried_kelp_block', 'tall_grass', 'flowering_azalea_leaves', 'cactus', 'sugar_cane', 'vine', 'nether_sprouts', 'weeping_vines', 'twisting_vines',
+    'melon_slice', 'glow_lichen');
+  add(0.65, 'sea_pickle', 'lily_pad', 'pumpkin', 'carved_pumpkin', 'melon', 'apple', 'beetroot', 'carrot', 'cocoa_beans', 'potato', 'wheat',
+    'brown_mushroom', 'red_mushroom', 'mushroom_stem', 'crimson_fungus', 'warped_fungus', 'nether_wart', 'crimson_roots', 'warped_roots', 'shroomlight',
+    'dandelion', 'poppy', 'blue_orchid', 'allium', 'azure_bluet', 'red_tulip', 'orange_tulip', 'white_tulip', 'pink_tulip', 'oxeye_daisy', 'cornflower',
+    'lily_of_the_valley', 'wither_rose', 'fern', 'sunflower', 'lilac', 'rose_bush', 'peony', 'large_fern', 'spore_blossom', 'azalea', 'moss_block',
+    'big_dripleaf');
+  add(0.85, 'hay_block', 'brown_mushroom_block', 'red_mushroom_block', 'nether_wart_block', 'warped_wart_block', 'flowering_azalea', 'bread',
+    'baked_potato', 'cookie', 'torchflower', 'pitcher_plant');
+  add(1, 'cake', 'pumpkin_pie');
+
+  /** vanilla ComposterBlock.handleFill (level event 1500): the rustle, and green sparkles over what's in it */
+  const fillEffects = (level: Level, x: number, y: number, z: number, st: number, success: boolean) => {
+    level.sound.play(success ? 'block.composter.fill_success' : 'block.composter.fill', x + 0.5, y + 0.5, z + 0.5, 1, 1);
+    const top = composterFloor(levelOf(st)) / 16 + 0.03125;
+    for (let i = 0; i < 10; i++) {
+      level.particles.spawn?.('composter', x + 0.13125 + 0.7375 * Math.random(), y + top + Math.random() * (1 - top), z + 0.13125 + 0.7375 * Math.random(),
+        gaussian() * 0.02, gaussian() * 0.02, gaussian() * 0.02);
+    }
+  };
+
+  /** vanilla ComposterBlock.addItem: an empty composter always takes the first; after that it's the item's chance */
+  const addItem = (level: Level, x: number, y: number, z: number, st: number, chance: number): number => {
+    const lvl = levelOf(st);
+    if (!(lvl === 0 && chance > 0) && !(level.random.nextDouble() < chance)) return st;
+    const now = composter.with(st, 'level', lvl + 1);
+    level.setBlock(x, y, z, now);
+    return now;
+  };
+
+  registerBehavior('composter', {
+    // vanilla ComposterBlock.useItemOn: compostable things go in (the click is spent once it's full, until it's ready)
+    useItemOn(level, x, y, z, st, stack, ctx) {
+      const lvl = levelOf(st);
+      const chance = COMPOSTABLES[stack.item.id];
+      if (lvl >= 8 || chance === undefined) return 'pass';
+      if (lvl < 7) {
+        const now = addItem(level, x, y, z, st, chance);
+        fillEffects(level, x, y, z, now, now !== st);
+        consumeHeld(ctx.player);
+      }
+      return 'success';
+    },
+    // vanilla ComposterBlock.useWithoutItem / extractProduce: a ready composter pops out bone meal and empties
+    use(level, x, y, z, st) {
+      if (levelOf(st) !== 8) return false;
+      const e = new ItemEntity(level, ItemStack.of('bone_meal'));
+      e.moveTo(x + 0.5 + (Math.random() - 0.5) * 0.7, y + 1.01 + (Math.random() - 0.5) * 0.7, z + 0.5 + (Math.random() - 0.5) * 0.7, Math.random() * 360, 0);
+      e.dx = Math.random() * 0.2 - 0.1;
+      e.dy = 0.2;
+      e.dz = Math.random() * 0.2 - 0.1;
+      level.addEntity(e);
+      level.setBlock(x, y, z, composter.with(st, 'level', 0));
+      level.sound.play('block.composter.empty', x + 0.5, y + 0.5, z + 0.5, 1, 1);
+      return true;
+    },
+    // vanilla ComposterBlock.onPlace / addItem: full, it's ready a second later
+    onPlace(level, x, y, z, st) {
+      if (levelOf(st) === 7) level.scheduleBlockTick(x, y, z, composter.id, 20);
+    },
+    tick(level, x, y, z, st) {
+      if (levelOf(st) !== 7) return;
+      level.setBlock(x, y, z, composter.with(st, 'level', 8));
+      level.sound.play('block.composter.ready', x + 0.5, y + 0.5, z + 0.5, 1, 1);
+    },
+    // vanilla loot table: itself, and bone meal from a ready one
+    drops: (st) => (levelOf(st) === 8 ? [ItemStack.of('composter'), ItemStack.of('bone_meal')] : [ItemStack.of('composter')]),
   });
 }

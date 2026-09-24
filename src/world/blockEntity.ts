@@ -56,7 +56,7 @@ export function blockEntityKey(x: number, y: number, z: number): string {
 }
 
 export class ChestBlockEntity extends BlockEntity {
-  readonly id = 'chest';
+  readonly id: string = 'chest';
   openCount = 0;
   /** vanilla LootTable / LootTableSeed: rolled when first opened or broken */
   lootTable: string | null = null;
@@ -78,6 +78,35 @@ export class ChestBlockEntity extends BlockEntity {
       this.lootTable = d.lootTable;
       this.lootSeed = Number(d.lootSeed ?? 0);
     }
+  }
+}
+
+/** vanilla Direction.getNormal of the six facings */
+const FACING_NORMAL: Record<string, [number, number, number]> = { down: [0, -1, 0], up: [0, 1, 0], north: [0, 0, -1], south: [0, 0, 1], west: [-1, 0, 0], east: [1, 0, 0] };
+
+/**
+ * vanilla BarrelBlockEntity: a chest's 27 slots behind a lid, open (the block's `open`) while anyone is looking
+ * inside (ContainerOpenersCounter: the first to look opens it, the last to leave shuts it)
+ */
+export class BarrelBlockEntity extends ChestBlockEntity {
+  override readonly id = 'barrel';
+  /** vanilla startOpen */
+  startOpen(level: Level): void {
+    if (!this.removed && this.openCount++ === 0) this.setOpen(level, true);
+  }
+  /** vanilla stopOpen */
+  stopOpen(level: Level): void {
+    if (this.removed || this.openCount === 0) return;
+    if (--this.openCount === 0) this.setOpen(level, false);
+  }
+  /** vanilla BarrelBlockEntity.onOpen / onClose: the lid's sound at its face, and the block's `open` */
+  private setOpen(level: Level, open: boolean): void {
+    const st = level.getState(this.x, this.y, this.z);
+    const b = BLOCKS[STATE_BLOCK[st]];
+    if (b.name !== 'barrel') return;
+    const [nx, ny, nz] = FACING_NORMAL[b.get<string>(st, 'facing')];
+    level.sound.play(open ? 'block.barrel.open' : 'block.barrel.close', this.x + 0.5 + nx / 2, this.y + 0.5 + ny / 2, this.z + 0.5 + nz / 2, 0.5, Math.random() * 0.1 + 0.9);
+    level.setBlock(this.x, this.y, this.z, b.with(st, 'open', open));
   }
 }
 
@@ -292,6 +321,7 @@ export function createBlockEntity(name: string, x: number, y: number, z: number)
   if (name === 'furnace') return new FurnaceBlockEntity(x, y, z);
   if (name === 'spawner') return new SpawnerBlockEntity(x, y, z);
   if (name === 'bell') return new BellBlockEntity(x, y, z);
+  if (name === 'barrel') return new BarrelBlockEntity(x, y, z);
   return null;
 }
 

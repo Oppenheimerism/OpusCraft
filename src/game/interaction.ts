@@ -373,10 +373,10 @@ export class Interaction {
     // blocks with a menu (vanilla Block.useWithoutItem: only on the main hand's turn)
     if (main && h && !secondary && p.gameMode !== 'spectator') {
       const name = BLOCKS[STATE_BLOCK[this.level.getState(h.x, h.y, h.z)]].name;
-      if ((name === 'crafting_table' || name === 'furnace' || name === 'chest' || name === 'enchanting_table' || name === 'grindstone' || name.endsWith('anvil')) && this.onOpenContainer) {
+      if ((name === 'crafting_table' || name === 'furnace' || name === 'chest' || name === 'enchanting_table' || name === 'grindstone' || name.endsWith('anvil') || name === 'barrel') && this.onOpenContainer) {
         this.onOpenContainer(name, h.x, h.y, h.z);
-        // vanilla ChestBlock.useWithoutItem: piglins who see a chest opened take it badly
-        if (name === 'chest') Piglin.angerNearbyPiglins(p, true);
+        // vanilla ChestBlock / BarrelBlock.useWithoutItem: piglins who see a chest or barrel opened take it badly
+        if (name === 'chest' || name === 'barrel') Piglin.angerNearbyPiglins(p, true);
         p.swing();
         return 'success';
       }
