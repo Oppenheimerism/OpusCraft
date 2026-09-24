@@ -1,10 +1,11 @@
 // Path following (vanilla PathNavigation / GroundPathNavigation): waypoint
-// advancing, corner cutting, stuck detection, sun avoidance.
+// advancing, corner cutting, stuck detection, sun avoidance. And WaterBoundPathNavigation, for swimming.
 
-import { findPath, Path, PathType, WalkNodeEvaluator } from './pathfinder';
+import { raycast } from '../../game/raycast';
+import { findPath, Path, PathType, WalkNodeEvaluator, SwimNodeEvaluator, type NodeEvaluator } from './pathfinder';
 import type { Mob } from '../mob';
 import type { Entity } from '../entity';
-import { FLAGS, F_AIR, F_COLLIDE, F_OPAQUE } from '../../world/block';
+import { FLAGS, F_AIR, F_COLLIDE, F_OPAQUE, F_FULL_COLLISION } from '../../world/block';
 import { MIN_Y, MAX_Y } from '../../world/constants';
 
 export class PathNavigation {
@@ -43,7 +44,12 @@ export class PathNavigation {
     return this.evaluator.canOpenDoors;
   }
 
-  private canUpdatePath(): boolean {
+  /** the evaluator paths are found with (the walker's, here) */
+  protected pathEvaluator(): NodeEvaluator {
+    return this.evaluator;
+  }
+
+  protected canUpdatePath(): boolean {
     return this.mob.onGround || this.mob.inWater || this.mob.inLava;
   }
 
@@ -76,11 +82,11 @@ export class PathNavigation {
     return this.createPathRaw(x, y, z, accuracy);
   }
 
-  private createPathRaw(x: number, y: number, z: number, accuracy: number): Path | null {
+  protected createPathRaw(x: number, y: number, z: number, accuracy: number): Path | null {
     if (this.mob.y < MIN_Y || !this.canUpdatePath()) return null;
     if (this.path && !this.path.isDone() && this.targetPos && this.targetPos[0] === x && this.targetPos[1] === y && this.targetPos[2] === z) return this.path;
     const range = this.mob.followRange;
-    const path = findPath(this.evaluator, this.mob.level.world, this.mob, { x, y, z }, range, accuracy, Math.floor(range * 16 * this.maxVisitedMultiplier));
+    const path = findPath(this.pathEvaluator(), this.mob.level.world, this.mob, { x, y, z }, range, accuracy, Math.floor(range * 16 * this.maxVisitedMultiplier));
     if (path) {
       this.targetPos = [x, y, z];
       this.reachRange = accuracy;
@@ -142,7 +148,7 @@ export class PathNavigation {
     this.path = null;
   }
 
-  private tempMobPos(): [number, number, number] {
+  protected tempMobPos(): [number, number, number] {
     return [this.mob.x, this.mob.y, this.mob.z];
   }
 
@@ -150,6 +156,12 @@ export class PathNavigation {
     this.tickCount++;
     if (this.isDone()) return;
     if (this.canUpdatePath()) this.followThePath();
+    else if (this.path && !this.path.isDone()) {
+      // (off the ground, it counts a node it's risen above as reached)
+      const [x, y, z] = this.tempMobPos();
+      const [nx, ny, nz] = this.path.entityPosAt(this.mob.width, this.path.nextNodeIndex);
+      if (y > ny && !this.mob.onGround && Math.floor(x) === Math.floor(nx) && Math.floor(z) === Math.floor(nz)) this.path.advance();
+    }
     if (!this.isDone()) {
       const p = this.path!;
       const [x, y, z] = p.entityPosAt(this.mob.width, p.nextNodeIndex);
@@ -157,7 +169,7 @@ export class PathNavigation {
     }
   }
 
-  private groundY(x: number, y: number, z: number): number {
+  protected groundY(x: number, y: number, z: number): number {
     const w = this.mob.level.world;
     const bx = Math.floor(x), by = Math.floor(y), bz = Math.floor(z);
     if (FLAGS[w.getState(bx, by - 1, bz)] & F_AIR) return y;
@@ -186,12 +198,18 @@ export class PathNavigation {
     const n = p.nextNode;
     const ax = n.x + 0.5 - pos[0], ay = n.y - pos[1], az = n.z + 0.5 - pos[2];
     if (ax * ax + ay * ay + az * az >= 4) return false;
+    if (this.canMoveDirectly(pos, p.entityPosAt(this.mob.width, p.nextNodeIndex))) return true;
     const n2 = p.nodes[p.nextNodeIndex + 1];
     const bx = n2.x + 0.5 - pos[0], by = n2.y - pos[1], bz = n2.z + 0.5 - pos[2];
     const da = ax * ax + ay * ay + az * az, db = bx * bx + by * by + bz * bz;
     if (!(db < da) && !(da < 0.5)) return false;
     const la = Math.sqrt(da) || 1, lb = Math.sqrt(db) || 1;
     return (ax / la) * (bx / lb) + (ay / la) * (by / lb) + (az / la) * (bz / lb) < 0;
+  }
+
+  /** vanilla canMoveDirectly: whether it may make straight for a point off the path (walking, never) */
+  protected canMoveDirectly(_from: [number, number, number], _to: [number, number, number]): boolean {
+    return false;
   }
 
   private doStuckDetection(pos: [number, number, number]): void {
@@ -248,5 +266,51 @@ export class PathNavigation {
 
   get reach(): number {
     return this.reachRange;
+  }
+}
+
+/**
+ * vanilla WaterBoundPathNavigation: paths through the water itself (SwimNodeEvaluator), followed only while in a
+ * liquid, from the middle of the mob's height, to the nodes as they are (not the ground under them); anywhere not a
+ * solid block will do to head for
+ */
+export class WaterBoundPathNavigation extends PathNavigation {
+  private readonly swim = new SwimNodeEvaluator();
+
+  protected override pathEvaluator(): NodeEvaluator {
+    return this.swim;
+  }
+  protected override canUpdatePath(): boolean {
+    return this.mob.inWater || this.mob.inLava;
+  }
+  protected override tempMobPos(): [number, number, number] {
+    return [this.mob.x, this.mob.y + this.mob.height * 0.5, this.mob.z];
+  }
+  protected override groundY(_x: number, y: number, _z: number): number {
+    return y;
+  }
+  /** vanilla PathNavigation.createPath: to the block itself (no looking for ground) */
+  override createPath(x: number, y: number, z: number, accuracy: number): Path | null {
+    return this.createPathRaw(Math.floor(x), Math.floor(y), Math.floor(z), accuracy);
+  }
+  override isStableDestination(x: number, y: number, z: number): boolean {
+    const f = FLAGS[this.mob.level.world.getState(x, y, z)];
+    return !(f & F_OPAQUE && f & F_FULL_COLLISION);
+  }
+  /**
+   * vanilla canMoveDirectly (isClearForMovementBetween): nothing solid on the line from its middle to the point
+   * (raised half its height), so it can cut straight on through the water to the node after
+   */
+  protected override canMoveDirectly(from: [number, number, number], to: [number, number, number]): boolean {
+    const dx = to[0] - from[0], dy = to[1] + this.mob.height * 0.5 - from[1], dz = to[2] - from[2];
+    const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    if (d < 1e-7) return true;
+    const h = raycast(this.mob.level.world, from[0], from[1], from[2], dx / d, dy / d, dz / d, d);
+    return !h || h.dist > d;
+  }
+  /** vanilla setCanFloat: nothing (it swims) */
+  override set canFloat(_v: boolean) {}
+  override get canFloat(): boolean {
+    return false;
   }
 }

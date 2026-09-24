@@ -28,7 +28,7 @@ import { PathType } from './ai/pathfinder';
 import { MoveControl, MoveOp, rotlerp } from './ai/controls';
 import { reducedTickDelay } from './ai/goal';
 
-const DIFFICULTY_ID: Record<string, number> = { peaceful: 0, easy: 1, normal: 2, hard: 3 };
+export const DIFFICULTY_ID: Record<string, number> = { peaceful: 0, easy: 1, normal: 2, hard: 3 };
 
 /**
  * how a zombie's villager rises as a zombie villager (set by zombieVillager.ts, which needs the villager, which
@@ -109,7 +109,8 @@ export function validSpawnBlock(level: Level, x: number, y: number, z: number, f
 
 // ---------------------------------------------------------------------------
 
-class ZombieAttackGoal extends MeleeAttackGoal {
+/** vanilla ZombieAttackGoal: a melee attack, arms raised as the next blow comes due */
+export class ZombieAttackGoal extends MeleeAttackGoal {
   private raiseArmTicks = 0;
   constructor(readonly zombie: Zombie, speed: number, followEvenIfNotSeen: boolean) {
     super(zombie, speed, followEvenIfNotSeen);
@@ -169,6 +170,10 @@ export class Zombie extends Monster {
   protected registerGoals(): void {
     this.goalSelector.addGoal(8, new LookAtPlayerGoal(this, 8));
     this.goalSelector.addGoal(8, new RandomLookAroundGoal(this));
+    this.addBehaviourGoals();
+  }
+  /** vanilla addBehaviourGoals: how it fights, roams and picks its targets (the drowned has its own) */
+  protected addBehaviourGoals(): void {
     this.goalSelector.addGoal(2, new ZombieAttackGoal(this, 1.0, false));
     this.goalSelector.addGoal(6, new MoveThroughVillageGoal(this, 1.0, true, 4, () => this.canBreakDoors()));
     this.goalSelector.addGoal(7, new WaterAvoidingRandomStrollGoal(this, 1.0));
@@ -242,6 +247,10 @@ export class Zombie extends Monster {
     if (t && lvl.difficulty === 'hard' && this.random.nextFloat() < this.reinforcementChance() && lvl.gameRules.doMobSpawning) this.callReinforcement(t);
     return true;
   }
+  /** vanilla SpawnPlacements.isSpawnPositionOk for a reinforcement: on the ground (a drowned's, in water) */
+  protected reinforcementPlacementOk(x: number, y: number, z: number): boolean {
+    return groundSpawnOk(this.level, x, y, z, this.fireImmune());
+  }
   /** vanilla SpawnPlacements.checkSpawnRules for a reinforcement: a zombie's, somewhere dark enough */
   protected reinforcementSpawnRules(x: number, y: number, z: number): boolean {
     return Monster.checkMonsterSpawn(this.level, x, y, z, () => this.level.random.nextFloat());
@@ -254,7 +263,7 @@ export class Zombie extends Monster {
     const off = () => (r.nextInt(34) + 7) * (r.nextInt(3) - 1);
     for (let l = 0; l < 50; l++) {
       const x1 = i + off(), y1 = j + off(), z1 = k + off();
-      if (!groundSpawnOk(lvl, x1, y1, z1, z.fireImmune()) || !z.reinforcementSpawnRules(x1, y1, z1)) continue;
+      if (!z.reinforcementPlacementOk(x1, y1, z1) || !z.reinforcementSpawnRules(x1, y1, z1)) continue;
       z.moveTo(x1, y1, z1, 0, 0);
       const p = lvl.player;
       if (p && p.isAlive && p.gameMode !== 'spectator' && p.distanceToSqr(x1, y1, z1) < 49) continue;

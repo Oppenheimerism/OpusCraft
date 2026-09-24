@@ -625,12 +625,12 @@ export class NearestAttackableMobGoal extends TargetGoal {
   }
 }
 
-/** vanilla HurtByTargetGoal */
+/** vanilla HurtByTargetGoal (`ignoreDamage`: vanilla toIgnoreDamage, those it won't turn on for hurting it) */
 export class HurtByTargetGoal extends TargetGoal {
   private timestamp = 0;
   private alertSameType = false;
   private toIgnoreAlert: readonly string[] = [];
-  constructor(mob: Mob) {
+  constructor(mob: Mob, readonly ignoreDamage: (by: LivingEntity) => boolean = () => false) {
     super(mob, true);
   }
   /**
@@ -645,7 +645,7 @@ export class HurtByTargetGoal extends TargetGoal {
   canUse(): boolean {
     const m = this.mob;
     const t = m.lastHurtByMob;
-    return m.lastHurtByMobTimestamp !== this.timestamp && t !== null && m.canAttack(t);
+    return m.lastHurtByMobTimestamp !== this.timestamp && t !== null && !this.ignoreDamage(t) && m.canAttack(t);
   }
   override start(): void {
     const m = this.mob;

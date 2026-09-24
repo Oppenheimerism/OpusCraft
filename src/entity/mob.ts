@@ -121,8 +121,11 @@ export abstract class Mob extends LivingEntity {
   private ownMoveControl: MoveControl;
   private readonly ownJumpControl: JumpControl;
   readonly bodyControl: BodyRotationControl;
-  /** this mob's own navigation (goals use `navigation`, which is the mount's while this steers one) */
-  readonly ownNavigation: PathNavigation;
+  /**
+   * this mob's own navigation (goals use `navigation`, which is the mount's while this steers one); a drowned swaps
+   * between walking and swimming ones
+   */
+  ownNavigation: PathNavigation;
   readonly sensing: Sensing;
   readonly random = new Rand((Math.random() * 0x7fffffff) | 0);
   target: LivingEntity | null = null;

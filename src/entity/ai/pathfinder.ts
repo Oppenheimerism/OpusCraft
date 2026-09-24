@@ -1,11 +1,11 @@
 // A* pathfinding over the block grid: vanilla PathFinder + WalkNodeEvaluator
-// (path types, maluses, step-up/jump/fall rules, diagonal checks).
+// (path types, maluses, step-up/jump/fall rules, diagonal checks), and SwimNodeEvaluator for what swims.
 
 import { BLOCKS, STATE_BLOCK, FLAGS, F_AIR, F_WATER, F_LAVA, F_LEAVES, COLLISION } from '../../world/block';
 import { MIN_Y } from '../../world/constants';
 import { AABB } from '../../core/aabb';
 import type { World } from '../../world/world';
-import { fluidType } from '../../world/fluids';
+import { fluidType, FLUID_NONE, FLUID_WATER } from '../../world/fluids';
 
 /** vanilla PathType, in declaration order (EnumSet iteration order matters) */
 export const enum PathType {
@@ -210,8 +210,17 @@ function collisionTop(st: number): number {
   return m;
 }
 
+/** what the path finder asks of a node evaluator (vanilla NodeEvaluator) */
+export interface NodeEvaluator {
+  prepare(world: World, mob: PathMob): void;
+  done(): void;
+  getStart(): Node | null;
+  /** fills `out` with the nodes to try from `node`, returning how many */
+  neighbors(out: Node[], node: Node): number;
+}
+
 /** ground-walking node evaluator (vanilla WalkNodeEvaluator) */
-export class WalkNodeEvaluator {
+export class WalkNodeEvaluator implements NodeEvaluator {
   private mob!: PathMob;
   private world!: World;
   private nodes = new Map<number, Node>();
@@ -524,6 +533,111 @@ export class WalkNodeEvaluator {
   }
 }
 
+// the six directions in vanilla Direction order (down, up, north, south, west, east), and each horizontal one (north,
+// east, south, west) with the next one clockwise
+const DIRS6 = [[0, -1, 0], [0, 1, 0], [0, 0, -1], [0, 0, 1], [-1, 0, 0], [1, 0, 0]];
+const CLOCKWISE_PAIRS = [[2, 5], [5, 3], [3, 4], [4, 2]];
+
+/**
+ * vanilla SwimNodeEvaluator (not breaching: a drowned's): a way through water, up and down as well as across and
+ * over the diagonals, only through cells where all of the mob would be in water
+ */
+export class SwimNodeEvaluator implements NodeEvaluator {
+  private mob!: PathMob;
+  private world!: World;
+  private nodes = new Map<number, Node>();
+  private types = new Map<number, PathType>();
+  private readonly got: (Node | null)[] = [null, null, null, null, null, null];
+  private ew = 1;
+  private eh = 1;
+
+  prepare(world: World, mob: PathMob): void {
+    this.world = world;
+    this.mob = mob;
+    this.nodes.clear();
+    this.types.clear();
+    this.ew = Math.floor(mob.width + 1);
+    this.eh = Math.floor(mob.height + 1);
+  }
+
+  done(): void {
+    this.nodes.clear();
+    this.types.clear();
+  }
+
+  private getNode(x: number, y: number, z: number): Node {
+    const k = key(x, y, z);
+    let n = this.nodes.get(k);
+    if (!n) {
+      n = new Node(x, y, z);
+      this.nodes.set(k, n);
+    }
+    return n;
+  }
+
+  /** vanilla getStart: the cell at the corner of its feet (half a block up) */
+  getStart(): Node {
+    const bb = this.mob.bb;
+    return this.getNode(Math.floor(bb.minX), Math.floor(bb.minY + 0.5), Math.floor(bb.minZ));
+  }
+
+  /** vanilla getNeighbors: the six ways, then each diagonal between two open horizontal ones */
+  neighbors(out: Node[], node: Node): number {
+    let i = 0;
+    for (let d = 0; d < 6; d++) {
+      const n = this.acceptedNode(node.x + DIRS6[d][0], node.y + DIRS6[d][1], node.z + DIRS6[d][2]);
+      this.got[d] = n;
+      if (n && !n.closed) out[i++] = n;
+    }
+    for (const [a, b] of CLOCKWISE_PAIRS) {
+      const na = this.got[a], nb = this.got[b];
+      if (!na || na.costMalus < 0 || !nb || nb.costMalus < 0) continue;
+      const n = this.acceptedNode(node.x + DIRS6[a][0] + DIRS6[b][0], node.y, node.z + DIRS6[a][2] + DIRS6[b][2]);
+      if (n && !n.closed) out[i++] = n;
+    }
+    return i;
+  }
+
+  /** vanilla findAcceptedNode: a water cell the mob doesn't mind (8 more for one with no water in it) */
+  private acceptedNode(x: number, y: number, z: number): Node | null {
+    const t = this.cachedType(x, y, z);
+    if (t !== PathType.WATER) return null;
+    const f = this.mob.malus(t);
+    if (f < 0) return null;
+    const n = this.getNode(x, y, z);
+    n.type = t;
+    n.costMalus = Math.max(n.costMalus, f);
+    if (fluidType(this.world.getState(x, y, z)) === FLUID_NONE) n.costMalus += 8;
+    return n;
+  }
+
+  private cachedType(x: number, y: number, z: number): PathType {
+    const k = key(x, y, z);
+    let t = this.types.get(k);
+    if (t === undefined) {
+      t = this.mobType(x, y, z);
+      this.types.set(k, t);
+    }
+    return t;
+  }
+
+  /**
+   * vanilla getPathTypeOfMob: water right through the mob's footprint, and the last cell looked at one that can be
+   * swum through (not a waterlogged block in the way)
+   */
+  mobType(x: number, y: number, z: number): PathType {
+    let st = 0;
+    for (let i = x; i < x + this.ew; i++)
+      for (let j = y; j < y + this.eh; j++)
+        for (let k = z; k < z + this.ew; k++) {
+          st = this.world.getState(i, j, k);
+          if (fluidType(st) !== FLUID_WATER) return PathType.BLOCKED;
+        }
+    const boxes = COLLISION[st];
+    return boxes && boxes.length ? PathType.BLOCKED : PathType.WATER;
+  }
+}
+
 /**
  * vanilla WalkNodeEvaluator.isBurningBlock: fire, lava, magma blocks, lit
  * campfires of either kind and lava cauldrons
@@ -568,7 +682,7 @@ export interface PathTarget {
 }
 
 /** vanilla PathFinder.findPath (A* with h weighted 1.5, best-partial fallback) */
-export function findPath(evaluator: WalkNodeEvaluator, world: World, mob: PathMob, target: PathTarget, maxRange: number, accuracy: number, maxVisited: number): Path | null {
+export function findPath(evaluator: NodeEvaluator, world: World, mob: PathMob, target: PathTarget, maxRange: number, accuracy: number, maxVisited: number): Path | null {
   evaluator.prepare(world, mob);
   const start = evaluator.getStart();
   if (!start) {

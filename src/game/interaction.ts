@@ -742,6 +742,23 @@ export class Interaction {
     // (an item's own use failing or passing gives the other hand its turn, as in vanilla startUseItem)
     const itemUse = itemBehaviorOf(it.id)?.use;
     if (itemUse) return itemUse(this.level, p, stack) === 'success';
+    // vanilla SpawnEggItem.use: aimed at a still pool of water or lava (ClipContext.Fluid.SOURCE_ONLY; a liquid block,
+    // not a waterlogged one), the mob comes out in it
+    if (it.id.endsWith('_spawn_egg') && p.gameMode !== 'spectator') {
+      const pr = (p.pitch * Math.PI) / 180, yr = (p.yaw * Math.PI) / 180;
+      const h = raycast(this.level.world, p.x, p.y + p.eyeHeight, p.z, -Math.sin(yr) * Math.cos(pr), -Math.sin(pr), Math.cos(yr) * Math.cos(pr), this.reach(), true);
+      const b = h && BLOCKS[STATE_BLOCK[h.state]];
+      if (!h || !b || (b.name !== 'water' && b.name !== 'lava') || b.get<number>(h.state, 'level') !== 0) return false;
+      const mob = createMob(it.id.slice(0, -10), this.level);
+      if (!mob) return false;
+      mob.moveTo(h.x + 0.5, h.y, h.z + 0.5, Math.random() * 360, 0);
+      mob.bodyYaw = mob.headYaw = mob.yaw;
+      mob.finalizeSpawn('egg');
+      this.level.addEntity(mob);
+      if (p.gameMode !== 'creative') p.inventory.consumeSelected(1);
+      p.swing();
+      return true;
+    }
     // food / drinks (vanilla Item.use → startUsingItem when edible)
     if (it.food) {
       if (!(p.gameMode === 'creative' || it.food.alwaysEat || p.food.needsFood())) return false;

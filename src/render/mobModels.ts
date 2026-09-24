@@ -127,6 +127,55 @@ export function zombieModel(): MobModelDef {
 }
 
 /**
+ * vanilla DrownedModel.createBodyLayer: a zombie on the player's 64x64 layout, its left arm and leg with skins of
+ * their own (the leg's box a tenth of a pixel in); `g` blows it up for the outer layer (0.25, the hat 0.75)
+ */
+export function drownedModel(g = 0): MobModelDef {
+  const root = new ModelPart();
+  const head = root.add('head', part([{ x: -4, y: -8, z: -4, w: 8, h: 8, d: 8, u: 0, v: 0, inflate: g }]));
+  head.add('hat', part([{ x: -4, y: -8, z: -4, w: 8, h: 8, d: 8, u: 32, v: 0, inflate: g + 0.5 }]));
+  root.add('body', part([{ x: -4, y: 0, z: -2, w: 8, h: 12, d: 4, u: 16, v: 16, inflate: g }]));
+  root.add('right_arm', part([{ x: -3, y: -2, z: -2, w: 4, h: 12, d: 4, u: 40, v: 16, inflate: g }], [-5, 2, 0]));
+  root.add('left_arm', part([{ x: -1, y: -2, z: -2, w: 4, h: 12, d: 4, u: 32, v: 48, inflate: g }], [5, 2, 0]));
+  root.add('right_leg', part([{ x: -2, y: 0, z: -2, w: 4, h: 12, d: 4, u: 0, v: 16, inflate: g }], [-1.9, 12, 0]));
+  root.add('left_leg', part([{ x: -1.9, y: 0, z: -2, w: 4, h: 12, d: 4, u: 16, v: 48, inflate: g }], [1.9, 12, 0]));
+  return { root, texW: 64, texH: 64, baby: { headParts: ['head'], scaleHead: true, yHead: 16, zHead: 0, headScale: 2, bodyScale: 2, bodyY: 24 } };
+}
+
+/** vanilla ModelPart.rotlerpRad: from `a` towards `b` by `t`, the short way round */
+function rotlerpRad(t: number, a: number, b: number): number {
+  let f = (b - a) % (PI * 2);
+  if (f < -PI) f += PI * 2;
+  if (f >= PI) f -= PI * 2;
+  return a + t * f;
+}
+
+/**
+ * vanilla DrownedModel.setupAnim, after the zombie's (animateHumanoidMob then animateZombieArms): with a trident
+ * and aggressive, its arm is raised to throw (THROW_SPEAR); swimming (`swim` 0..1), the legs kick slowly as a
+ * swimmer's (HumanoidModel's lerp to 0.3·cos(limbSwing/3)) and flutter, the arms reach up ahead and paddle, the
+ * head looks straight on
+ */
+export function animateDrowned(root: ModelPart, limbSwing: number, age: number, throwSpear: boolean, swim: number): void {
+  const ra = root.child('right_arm'), la = root.child('left_arm'), rl = root.child('right_leg'), ll = root.child('left_leg');
+  if (throwSpear) {
+    ra.xRot = ra.xRot * 0.5 - PI;
+    ra.yRot = 0;
+  }
+  if (swim <= 0) return;
+  ll.xRot += (0.3 * Math.cos(limbSwing * 0.33333334 + PI) - ll.xRot) * swim;
+  rl.xRot += (0.3 * Math.cos(limbSwing * 0.33333334) - rl.xRot) * swim;
+  const s = swim * 0.35 * Math.sin(0.1 * age);
+  ra.xRot = rotlerpRad(swim, ra.xRot, -2.5132742) + s;
+  la.xRot = rotlerpRad(swim, la.xRot, -2.5132742) - s;
+  ra.zRot = rotlerpRad(swim, ra.zRot, -0.15);
+  la.zRot = rotlerpRad(swim, la.zRot, 0.15);
+  ll.xRot -= swim * 0.55 * Math.sin(0.1 * age);
+  rl.xRot += swim * 0.55 * Math.sin(0.1 * age);
+  root.child('head').xRot = 0;
+}
+
+/**
  * vanilla VillagerModel.createBodyModel: the tall head with its long nose, a hat layer and brim (drawn where an
  * outfit has one), the robe and its long jacket, the folded arms, the legs
  */

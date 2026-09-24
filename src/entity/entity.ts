@@ -153,6 +153,7 @@ export abstract class Entity {
     this.tickCount++;
     this.handlePortal();
     this.updateFluids();
+    this.updateSwimming();
     // vanilla Entity.baseTick: burning and lava
     if (this.remainingFireTicks > 0) {
       if (this.fireImmune()) {
@@ -843,6 +844,12 @@ export abstract class Entity {
   isPushedByFluid(): boolean {
     return true;
   }
+
+  /** vanilla FLAG_SWIMMING: swimming (a drowned going after something in the water) */
+  swimming = false;
+
+  /** vanilla updateSwimming (each tick, once the fluids are known) */
+  protected updateSwimming(): void {}
 
   get isInWaterOrRain(): boolean {
     return this.inWater;

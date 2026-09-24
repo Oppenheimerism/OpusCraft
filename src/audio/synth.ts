@@ -28,6 +28,7 @@ import { brewingSounds } from './gen/brewing';
 import { witchSounds } from './gen/witch';
 import { biomeMobSounds } from './gen/biomeMobs';
 import { tridentSounds } from './gen/trident';
+import { drownedSounds } from './gen/drowned';
 import { jobSiteSounds } from './gen/jobSites';
 
 export const SAMPLE_RATE = 44100;
@@ -63,6 +64,7 @@ export const SOUNDS: Record<string, SoundGen> = {
   ...witchSounds(),
   ...biomeMobSounds(),
   ...tridentSounds(),
+  ...drownedSounds(),
   ...jobSiteSounds(),
 };
 

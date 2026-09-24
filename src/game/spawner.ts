@@ -17,6 +17,7 @@ import { Piglin } from '../entity/piglin';
 import { Villager } from '../entity/villager';
 import { Witch } from '../entity/witch';
 import { Husk, Stray } from '../entity/biomeMonsters';
+import { Drowned, isInWaterPositionOk, drownedNaturalSpawnRules } from '../entity/drowned';
 import { IronGolem } from '../entity/ironGolem';
 import { ZombieVillager } from '../entity/zombieVillager';
 import { Zombie, ZombifiedPiglin, Skeleton, WitherSkeleton, Creeper, Spider, CaveSpider, Enderman, Slime, MagmaCube, Monster, validSpawnBlock } from '../entity/monsters';
@@ -65,6 +66,7 @@ export const MOB_TYPES: Record<string, (l: Level) => Mob> = {
   witch: (l) => new Witch(l),
   husk: (l) => new Husk(l),
   stray: (l) => new Stray(l),
+  drowned: (l) => new Drowned(l),
   ender_dragon: (l) => new EnderDragon(l),
 };
 
@@ -159,7 +161,7 @@ export function isChunkSaved(e: Entity): boolean {
 const ENTITY_NAMES: Record<string, string> = {
   pig: 'Pig', cow: 'Cow', sheep: 'Sheep', chicken: 'Chicken', zombie: 'Zombie', zombie_villager: 'Zombie Villager', skeleton: 'Skeleton', creeper: 'Creeper', spider: 'Spider',
   villager: 'Villager', iron_golem: 'Iron Golem', cave_spider: 'Cave Spider', enderman: 'Enderman', slime: 'Slime', magma_cube: 'Magma Cube', zombified_piglin: 'Zombified Piglin', ghast: 'Ghast', blaze: 'Blaze', wither_skeleton: 'Wither Skeleton', squid: 'Squid', bat: 'Bat', hoglin: 'Hoglin', zoglin: 'Zoglin', strider: 'Strider', piglin: 'Piglin',
-  witch: 'Witch', husk: 'Husk', stray: 'Stray', fireball: 'Fireball', small_fireball: 'Small Fireball',
+  witch: 'Witch', husk: 'Husk', stray: 'Stray', drowned: 'Drowned', fireball: 'Fireball', small_fireball: 'Small Fireball',
   arrow: 'Arrow', tnt: 'Primed TNT', lightning_bolt: 'Lightning Bolt', item: 'Item', experience_orb: 'Experience Orb', falling_block: 'Falling Block', player: 'Player',
   egg: 'Thrown Egg', snowball: 'Snowball', ender_pearl: 'Thrown Ender Pearl', potion: 'Potion', trident: 'Trident',
   minecart: 'Minecart', chest_minecart: 'Minecart with Chest', boat: 'Boat', chest_boat: 'Boat with Chest', end_crystal: 'End Crystal',
@@ -259,7 +261,11 @@ function settingsFor(name: string): MobSettings {
   // vanilla BiomeDefaultFeatures.caveSpawns (through commonSpawns, the mooshroom and cave biomes): bats
   // everywhere in the overworld but the deep dark
   const ambient = name === 'deep_dark' || name === 'the_void' ? [] : [{ type: 'bat', weight: 10, min: 8, max: 8 }];
-  return { ...base, water, ambient };
+  // vanilla OverworldBiomes.river, baseOceanSpawns and BiomeDefaultFeatures.warmOceanSpawns: drowned, one at a time
+  // (a hundred in a river, one in a frozen river, five in every ocean)
+  const drowned = name === 'river' ? 100 : name === 'frozen_river' ? 1 : name.endsWith('ocean') ? 5 : 0;
+  const monster = drowned ? [...base.monster, S_('drowned', drowned, 1, 1)] : base.monster;
+  return { ...base, monster, water, ambient };
 }
 
 function settingsForLand(name: string): Omit<MobSettings, 'water' | 'ambient'> {
@@ -306,6 +312,9 @@ function settingsForLand(name: string): Omit<MobSettings, 'water' | 'ambient'> {
     // vanilla BiomeDefaultFeatures.desertSpawns: few zombies, and husks (no rabbits yet)
     case 'desert':
       return { creature: [], monster: [...monsters(19, 100, 1), S_('husk', 80, 4, 4)], creatureProbability: 0.1 };
+    // vanilla BiomeDefaultFeatures.dripstoneCavesSpawns: the usual, and drowned in fours in the caves' pools
+    case 'dripstone_caves':
+      return { creature: [], monster: [...monsters(), S_('drowned', 95, 4, 4)], creatureProbability: 0.1 };
     default:
       return none;
   }
@@ -465,6 +474,7 @@ export class NaturalSpawner {
   /** vanilla SpawnPlacements: where each kind may appear (in water, in lava, else on the ground) */
   private placementOk(type: string, x: number, y: number, z: number): boolean {
     if (type === 'squid') return this.isInWaterPositionOk(x, y, z);
+    if (type === 'drowned') return isInWaterPositionOk(this.level, x, y, z);
     if (type === 'strider') return fluidType(this.level.world.getState(x, y, z)) === FLUID_LAVA;
     return this.isSpawnPositionOk(x, y, z, FIRE_IMMUNE.has(type));
   }
@@ -526,6 +536,11 @@ export class NaturalSpawner {
         let top = y + 1;
         while (BLOCKS[STATE_BLOCK[lvl.world.getState(x, top, z)]].name === 'powder_snow') top++;
         return Monster.checkMonsterSpawn(lvl, x, y, z, () => this.rand.nextFloat()) && lvl.canSeeSky(x, top - 1, z);
+      }
+      case 'drowned': {
+        // (vanilla #more_frequent_drowned_spawns: the rivers)
+        const biome = BIOMES[lvl.world.getBiome3(x, y, z)]?.name ?? '';
+        return drownedNaturalSpawnRules(lvl, x, y, z, biome === 'river' || biome === 'frozen_river', this.rand);
       }
       case 'ghast':
         return Ghast.checkGhastSpawn(lvl, x, y, z, () => this.rand.nextFloat());

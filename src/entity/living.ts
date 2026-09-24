@@ -431,8 +431,29 @@ export abstract class LivingEntity extends Entity {
     this.fallDistance = 0;
   }
 
+  /** vanilla swimAmount: how far into its swimming pose it is (0 to 1, 0.09 a tick) */
+  swimAmount = 0;
+  swimAmountO = 0;
+
+  /** vanilla isVisuallySwimming: posed as swimming */
+  isVisuallySwimming(): boolean {
+    return false;
+  }
+
+  /** vanilla updateSwimAmount */
+  private updateSwimAmount(): void {
+    this.swimAmountO = this.swimAmount;
+    this.swimAmount = this.isVisuallySwimming() ? Math.min(1, this.swimAmount + 0.09) : Math.max(0, this.swimAmount - 0.09);
+  }
+
+  /** vanilla getSwimAmount */
+  swimAmountAt(p: number): number {
+    return this.swimAmountO + (this.swimAmount - this.swimAmountO) * p;
+  }
+
   override tick(): void {
     super.tick();
+    this.updateSwimAmount();
     this.aiStep();
     this.updateBodyRotation();
     this.updateWalkAnimation();

@@ -36,6 +36,7 @@ import { IronGolem } from '../entity/ironGolem';
 import '../textures/ironGolem';
 import '../textures/witch';
 import '../textures/biomeMobs';
+import '../textures/drowned';
 import { Witch } from '../entity/witch';
 import { villagerTexture, zombieVillagerTexture } from '../textures/villager';
 import { ZombieVillager } from '../entity/zombieVillager';
@@ -65,7 +66,7 @@ import { ArmorLayer, renderHeadItem, PIGLIN_HEAD_ITEM_SCALE } from './armorLayer
 import type { ArmorModelSet } from './armorLayer';
 
 /** the mobs with vanilla's HumanoidArmorLayer and CustomHeadLayer, and their armour models */
-const ARMOR_WEARERS: Record<string, ArmorModelSet> = { zombie: 'humanoid', husk: 'humanoid', zombie_villager: 'zombie_villager', skeleton: 'humanoid', stray: 'humanoid', wither_skeleton: 'humanoid', piglin: 'piglin', zombified_piglin: 'piglin' };
+const ARMOR_WEARERS: Record<string, ArmorModelSet> = { zombie: 'humanoid', husk: 'humanoid', drowned: 'humanoid', zombie_villager: 'zombie_villager', skeleton: 'humanoid', stray: 'humanoid', wither_skeleton: 'humanoid', piglin: 'piglin', zombified_piglin: 'piglin' };
 
 export interface EntityRenderOptions {
   shadows: boolean;
@@ -175,6 +176,8 @@ export class EntityRenderDispatcher {
       husk: M.zombieModel(),
       stray: M.skeletonModel(),
       stray_outer: M.strayOuterModel(),
+      drowned: M.drownedModel(),
+      drowned_outer: M.drownedModel(0.25),
     };
     // vanilla textures/misc/shadow.png: soft black disc
     const n = 32, data = new Uint8Array(n * n * 4);
@@ -453,6 +456,16 @@ export class EntityRenderDispatcher {
       pose.rotX(-90 - e.pitch);
       pose.rotY((e.tickCount + p) * -75);
     }
+    // vanilla DrownedRenderer.setupRotations: swimming, it leans into its look, about the middle of its body
+    if (e.type === 'drowned') {
+      const swim = e.swimAmountAt(p);
+      if (swim > 0) {
+        const h = e.height / 2;
+        pose.translate(0, h, 0);
+        pose.rotX(swim * (-10 - e.pitch));
+        pose.translate(0, -h, 0);
+      }
+    }
     pose.scale(-1, -1, 1);
     scale?.(pose);
     pose.translate(0, -1.501, 0);
@@ -600,6 +613,12 @@ export class EntityRenderDispatcher {
         M.animatePiglinEars(def.root, a.limbSwing, a.limbAmount, a.age);
         M.animateZombieArms(def.root, (e as Zombie).aggressive, attack, a.age);
         break;
+      case 'drowned':
+        M.animateHumanoidMob(def.root, a.limbSwing, a.limbAmount, a.age, a.headYaw, a.headPitch, attack, 'empty', !!e.vehicle);
+        M.animateZombieArms(def.root, e.aggressive, attack, a.age);
+        // (vanilla DrownedModel.prepareMobModel: THROW_SPEAR with a trident while aggressive)
+        M.animateDrowned(def.root, a.limbSwing, a.age, e.aggressive && e.mainHand?.item.id === 'trident', e.swimAmountAt(p));
+        break;
       case 'piglin':
         M.animateHumanoidMob(def.root, a.limbSwing, a.limbAmount, a.age, a.headYaw, a.headPitch, attack, 'empty', !!e.vehicle);
         M.animatePiglinEars(def.root, a.limbSwing, a.limbAmount, a.age);
@@ -700,6 +719,15 @@ export class EntityRenderDispatcher {
         copyPose(def.root, cl.root);
         b.begin(this.state(ct));
         this.drawModel(b, cl, false);
+      }
+    }
+    // vanilla DrownedOuterLayer: the seaweed it wears, posed as it is
+    if (type === 'drowned' && !e.isInvisible()) {
+      const ol = this.models.drowned_outer, ot = this.tex('drowned_outer_layer');
+      if (ol && ot) {
+        copyPose(def.root, ol.root);
+        b.begin(this.state(ot));
+        this.drawModel(b, ol, baby);
       }
     }
     if (e instanceof Creeper && e.powered) this.drawPowerSwirl(b, e, def, p);
@@ -1422,6 +1450,7 @@ function shadowRadius(e: Entity): number {
       break;
     case 'zombie':
     case 'husk':
+    case 'drowned':
     case 'zombie_villager':
     case 'zombified_piglin':
     case 'piglin':
