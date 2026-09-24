@@ -61,6 +61,8 @@ const ALIASES: [RegExp, string][] = [
   // the nether wart crop (vanilla SoundType.NETHER_WART): stone steps, its planting sound on place
   [/^block\.nether_wart\.(?=step|hit)/, 'block.stone.'],
   [/^block\.nether_wart\.place$/, 'item.nether_wart.plant'],
+  // vanilla SoundType.CROP places with item.crop.plant: the same planting sound, however it's planted
+  [/^item\.crop\.plant$/, 'block.crop.place'],
   // vanilla sounds.json: a lightning strike's crack is the explosion samples (random/explode1-4), played low
   [/^entity\.lightning_bolt\.impact$/, 'entity.generic.explode'],
   // vanilla sounds.json: some villagers at work make their workstation's own sound

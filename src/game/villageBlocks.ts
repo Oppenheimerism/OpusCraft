@@ -183,13 +183,13 @@ export function fillHeld(p: Player, filled: ItemStack): void {
 
 // ---------------------------------------------------------------------------
 // Composter (vanilla ComposterBlock): plant matter in, a chance a level for each; full at 7, ready a second later;
-// the ready one gives bone meal
-{
-  const composter = getBlock('composter');
-  const levelOf = (st: number) => composter.get<number>(st, 'level');
+// the ready one gives bone meal. Farmer villagers fill theirs with their spare seeds.
+const composter = getBlock('composter');
+const composterLevel = (st: number) => composter.get<number>(st, 'level');
 
-  /** vanilla ComposterBlock.COMPOSTABLES: the chance each item raises the level */
-  const COMPOSTABLES: Record<string, number> = {};
+/** vanilla ComposterBlock.COMPOSTABLES: the chance each item raises the level */
+const COMPOSTABLES: Record<string, number> = {};
+{
   const add = (chance: number, ...ids: string[]) => {
     for (const id of ids) COMPOSTABLES[id] = chance;
   };
@@ -207,65 +207,81 @@ export function fillHeld(p: Player, filled: ItemStack): void {
   add(0.85, 'hay_block', 'brown_mushroom_block', 'red_mushroom_block', 'nether_wart_block', 'warped_wart_block', 'flowering_azalea', 'bread',
     'baked_potato', 'cookie', 'torchflower', 'pitcher_plant');
   add(1, 'cake', 'pumpkin_pie');
-
-  /** vanilla ComposterBlock.handleFill (level event 1500): the rustle, and green sparkles over what's in it */
-  const fillEffects = (level: Level, x: number, y: number, z: number, st: number, success: boolean) => {
-    level.sound.play(success ? 'block.composter.fill_success' : 'block.composter.fill', x + 0.5, y + 0.5, z + 0.5, 1, 1);
-    const top = composterFloor(levelOf(st)) / 16 + 0.03125;
-    for (let i = 0; i < 10; i++) {
-      level.particles.spawn?.('composter', x + 0.13125 + 0.7375 * Math.random(), y + top + Math.random() * (1 - top), z + 0.13125 + 0.7375 * Math.random(),
-        gaussian() * 0.02, gaussian() * 0.02, gaussian() * 0.02);
-    }
-  };
-
-  /** vanilla ComposterBlock.addItem: an empty composter always takes the first; after that it's the item's chance */
-  const addItem = (level: Level, x: number, y: number, z: number, st: number, chance: number): number => {
-    const lvl = levelOf(st);
-    if (!(lvl === 0 && chance > 0) && !(level.random.nextDouble() < chance)) return st;
-    const now = composter.with(st, 'level', lvl + 1);
-    level.setBlock(x, y, z, now);
-    return now;
-  };
-
-  registerBehavior('composter', {
-    // vanilla ComposterBlock.useItemOn: compostable things go in (the click is spent once it's full, until it's ready)
-    useItemOn(level, x, y, z, st, stack, ctx) {
-      const lvl = levelOf(st);
-      const chance = COMPOSTABLES[stack.item.id];
-      if (lvl >= 8 || chance === undefined) return 'pass';
-      if (lvl < 7) {
-        const now = addItem(level, x, y, z, st, chance);
-        fillEffects(level, x, y, z, now, now !== st);
-        consumeHeld(ctx.player);
-      }
-      return 'success';
-    },
-    // vanilla ComposterBlock.useWithoutItem / extractProduce: a ready composter pops out bone meal and empties
-    use(level, x, y, z, st) {
-      if (levelOf(st) !== 8) return false;
-      const e = new ItemEntity(level, ItemStack.of('bone_meal'));
-      e.moveTo(x + 0.5 + (Math.random() - 0.5) * 0.7, y + 1.01 + (Math.random() - 0.5) * 0.7, z + 0.5 + (Math.random() - 0.5) * 0.7, Math.random() * 360, 0);
-      e.dx = Math.random() * 0.2 - 0.1;
-      e.dy = 0.2;
-      e.dz = Math.random() * 0.2 - 0.1;
-      level.addEntity(e);
-      level.setBlock(x, y, z, composter.with(st, 'level', 0));
-      level.sound.play('block.composter.empty', x + 0.5, y + 0.5, z + 0.5, 1, 1);
-      return true;
-    },
-    // vanilla ComposterBlock.onPlace / addItem: full, it's ready a second later
-    onPlace(level, x, y, z, st) {
-      if (levelOf(st) === 7) level.scheduleBlockTick(x, y, z, composter.id, 20);
-    },
-    tick(level, x, y, z, st) {
-      if (levelOf(st) !== 7) return;
-      level.setBlock(x, y, z, composter.with(st, 'level', 8));
-      level.sound.play('block.composter.ready', x + 0.5, y + 0.5, z + 0.5, 1, 1);
-    },
-    // vanilla loot table: itself, and bone meal from a ready one
-    drops: (st) => (levelOf(st) === 8 ? [ItemStack.of('composter'), ItemStack.of('bone_meal')] : [ItemStack.of('composter')]),
-  });
 }
+
+/** vanilla ComposterBlock.handleFill (level event 1500): the rustle, and green sparkles over what's in it */
+export function composterFillEffects(level: Level, x: number, y: number, z: number, st: number, success: boolean): void {
+  level.sound.play(success ? 'block.composter.fill_success' : 'block.composter.fill', x + 0.5, y + 0.5, z + 0.5, 1, 1);
+  const top = composterFloor(composterLevel(st)) / 16 + 0.03125;
+  for (let i = 0; i < 10; i++) {
+    level.particles.spawn?.('composter', x + 0.13125 + 0.7375 * Math.random(), y + top + Math.random() * (1 - top), z + 0.13125 + 0.7375 * Math.random(),
+      gaussian() * 0.02, gaussian() * 0.02, gaussian() * 0.02);
+  }
+}
+
+/** vanilla ComposterBlock.addItem: an empty composter always takes the first; after that it's the item's chance */
+function composterAddItem(level: Level, x: number, y: number, z: number, st: number, chance: number): number {
+  const lvl = composterLevel(st);
+  if (!(lvl === 0 && chance > 0) && !(level.random.nextDouble() < chance)) return st;
+  const now = composter.with(st, 'level', lvl + 1);
+  level.setBlock(x, y, z, now);
+  return now;
+}
+
+/** vanilla ComposterBlock.insertItem: one of `stack` in, if it composts and there's room (the state it leaves) */
+export function composterInsert(level: Level, x: number, y: number, z: number, st: number, stack: ItemStack): number {
+  const chance = COMPOSTABLES[stack.item.id];
+  if (composterLevel(st) >= 7 || chance === undefined) return st;
+  const now = composterAddItem(level, x, y, z, st, chance);
+  stack.count--;
+  return now;
+}
+
+/** vanilla ComposterBlock.extractProduce: a ready composter pops out bone meal and empties (the state it leaves) */
+export function composterExtract(level: Level, x: number, y: number, z: number, st: number): number {
+  const e = new ItemEntity(level, ItemStack.of('bone_meal'));
+  e.moveTo(x + 0.5 + (Math.random() - 0.5) * 0.7, y + 1.01 + (Math.random() - 0.5) * 0.7, z + 0.5 + (Math.random() - 0.5) * 0.7, Math.random() * 360, 0);
+  e.dx = Math.random() * 0.2 - 0.1;
+  e.dy = 0.2;
+  e.dz = Math.random() * 0.2 - 0.1;
+  level.addEntity(e);
+  const now = composter.with(st, 'level', 0);
+  level.setBlock(x, y, z, now);
+  level.sound.play('block.composter.empty', x + 0.5, y + 0.5, z + 0.5, 1, 1);
+  return now;
+}
+
+registerBehavior('composter', {
+  // vanilla ComposterBlock.useItemOn: compostable things go in (the click is spent once it's full, until it's ready)
+  useItemOn(level, x, y, z, st, stack, ctx) {
+    const lvl = composterLevel(st);
+    const chance = COMPOSTABLES[stack.item.id];
+    if (lvl >= 8 || chance === undefined) return 'pass';
+    if (lvl < 7) {
+      const now = composterAddItem(level, x, y, z, st, chance);
+      composterFillEffects(level, x, y, z, now, now !== st);
+      consumeHeld(ctx.player);
+    }
+    return 'success';
+  },
+  // vanilla ComposterBlock.useWithoutItem / extractProduce
+  use(level, x, y, z, st) {
+    if (composterLevel(st) !== 8) return false;
+    composterExtract(level, x, y, z, st);
+    return true;
+  },
+  // vanilla ComposterBlock.onPlace / addItem: full, it's ready a second later
+  onPlace(level, x, y, z, st) {
+    if (composterLevel(st) === 7) level.scheduleBlockTick(x, y, z, composter.id, 20);
+  },
+  tick(level, x, y, z, st) {
+    if (composterLevel(st) !== 7) return;
+    level.setBlock(x, y, z, composter.with(st, 'level', 8));
+    level.sound.play('block.composter.ready', x + 0.5, y + 0.5, z + 0.5, 1, 1);
+  },
+  // vanilla loot table: itself, and bone meal from a ready one
+  drops: (st) => (composterLevel(st) === 8 ? [ItemStack.of('composter'), ItemStack.of('bone_meal')] : [ItemStack.of('composter')]),
+});
 
 // ---------------------------------------------------------------------------
 // Smoker and blast furnace (vanilla SmokerBlock / BlastFurnaceBlock.animateTick; the cooking is FurnaceBlockEntity's)

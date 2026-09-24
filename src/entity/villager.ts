@@ -21,7 +21,9 @@ import { Behavior, Brain, GateBehavior, doNothing, oneShot, runOne, triggerOneSh
 import { MerchantOffer, VILLAGER_TRADES, addOffersFromListings, type SavedOffer } from './trading';
 import { ItemStack, saveStack, loadStack, type SavedStack } from '../item/item';
 import { ItemEntity } from './itemEntity';
-import { BLOCKS, STATE_BLOCK, FLAGS, F_FULL_COLLISION } from '../world/block';
+import { BLOCKS, STATE_BLOCK, FLAGS, F_FULL_COLLISION, F_AIR, getBlock } from '../world/block';
+import { composterExtract, composterFillEffects, composterInsert } from '../game/villageBlocks';
+import { performBoneMeal, boneMealParticles } from '../game/boneMeal';
 import { BIOMES } from '../world/gen/biomes';
 import type { PoiKind } from '../game/poi';
 import { findStandUpPosition } from '../game/sleep';
@@ -140,6 +142,8 @@ export interface VillagerMemories {
   breedTarget: Villager | null;
   /** NEAREST_BED: a baby's nearest bed it can walk to (to bounce on) */
   nearestBed: Pos | null;
+  /** SECONDARY_JOB_SITE: a farmer's farmland about it */
+  secondaryJobSite: Pos[] | null;
 }
 
 /** vanilla Schedule.VILLAGER_DEFAULT and VILLAGER_BABY: [time of day, activity from then] */
@@ -760,8 +764,11 @@ function strollToPoi(mem: PosMemory, speed: number, closeEnough: number, maxDist
   });
 }
 
-/** vanilla WorkAtPoi: now and then (at most every 15 s), at its workstation: the work sound, and a restock if due */
-function workAtPoi(): BehaviorControl<Villager> {
+/**
+ * vanilla WorkAtPoi: now and then (at most every 15 s), at its workstation: the work sound, what it does there
+ * (`useWorkstation`: a farmer's composting and baking, vanilla WorkAtComposter), and a restock if due
+ */
+function workAtPoi(useWorkstation?: (v: Villager) => void): BehaviorControl<Villager> {
   let lastCheck = 0;
   const near = (v: Villager) => !!v.mem.jobSite && closerToCenter(v.mem.jobSite, v, 1.73);
   return new Behavior<Villager>({
@@ -775,9 +782,227 @@ function workAtPoi(): BehaviorControl<Villager> {
       const j = v.mem.jobSite!;
       v.mem.lookTarget = [j[0], j[1], j[2]];
       v.playWorkSound();
+      useWorkstation?.(v);
       if (v.shouldRestock()) v.restock();
     },
     canStillUse: near,
+  });
+}
+
+// --- the farmer's day (vanilla WorkAtComposter, StrollToPoiList, HarvestFarmland, UseBonemeal) ------------------
+
+/** vanilla ItemTags.VILLAGER_PLANTABLE_SEEDS, and the crop each one plants */
+const PLANTABLE: Record<string, string> = { wheat_seeds: 'wheat', potato: 'potatoes', carrot: 'carrots', beetroot_seeds: 'beetroots' };
+/** vanilla CropBlock subclasses and their getMaxAge */
+const CROP_MAX_AGE: Record<string, number> = { wheat: 7, carrots: 7, potatoes: 7, beetroots: 3 };
+/** vanilla WorkAtComposter.COMPOSTABLE_ITEMS: the seeds a farmer composts what it has over ten of */
+const COMPOSTED_SEEDS = ['wheat_seeds', 'beetroot_seeds'];
+
+const isMatureCrop = (st: number): boolean => {
+  const b = blk(st), max = CROP_MAX_AGE[b.name];
+  return max !== undefined && b.get<number>(st, 'age') >= max;
+};
+const isCrop = (st: number): boolean => CROP_MAX_AGE[blk(st).name] !== undefined;
+
+/**
+ * vanilla WorkAtComposter.useWorkstation: at its composter a farmer bakes (three wheat a loaf, up to three loaves,
+ * while it has no more than 36 bread), empties a ready composter and composts its seeds beyond ten of each kind
+ * (at most 20 at a go)
+ */
+function workAtComposter(v: Villager): void {
+  const j = v.mem.jobSite;
+  if (!j) return;
+  const level = v.level;
+  const st0 = level.world.getState(j[0], j[1], j[2]);
+  if (blk(st0).name !== 'composter') return;
+  // makeBread
+  if (v.countItem('bread') <= 36) {
+    const loaves = Math.min(3, Math.floor(v.countItem('wheat') / 3));
+    if (loaves > 0) {
+      v.removeFromInventory('wheat', loaves * 3);
+      const left = v.addToInventory(ItemStack.of('bread', loaves));
+      if (left) v.spawnAtLocation(left, 0.5);
+    }
+  }
+  // compostItems
+  let st = st0;
+  if (blk(st).get<number>(st, 'level') === 8) st = composterExtract(level, j[0], j[1], j[2], st);
+  const before = st;
+  let room = 20;
+  const seen = new Array(COMPOSTED_SEEDS.length).fill(0);
+  for (let i = v.inventory.length - 1; i >= 0 && room > 0; i--) {
+    const s = v.inventory[i];
+    if (!s) continue;
+    const k = COMPOSTED_SEEDS.indexOf(s.item.id);
+    if (k < 0) continue;
+    const n = s.count;
+    seen[k] += n;
+    const put = Math.min(Math.min(seen[k] - 10, room), n);
+    if (put <= 0) continue;
+    room -= put;
+    for (let m = 0; m < put; m++) {
+      st = composterInsert(level, j[0], j[1], j[2], st, s);
+      if (s.count <= 0) v.inventory[i] = null;
+      if (blk(st).get<number>(st, 'level') === 7) {
+        composterFillEffects(level, j[0], j[1], j[2], st, st !== before);
+        return;
+      }
+    }
+  }
+  composterFillEffects(level, j[0], j[1], j[2], st, st !== before);
+}
+
+/** vanilla StrollToPoiList(SECONDARY_JOB_SITE, speed, 1, 6, JOB_SITE): within 6 of its job, off to one of its fields */
+function strollToPoiList(speed: number): BehaviorControl<Villager> {
+  let nextAt = 0;
+  return oneShot<Villager>((v, now) => {
+    const list = v.mem.secondaryJobSite, j = v.mem.jobSite;
+    if (!list?.length || !j) return false;
+    const p = list[v.level.random.nextInt(list.length)];
+    if (!closerToCenter(j, v, 6)) return false;
+    if (now > nextAt) {
+      v.mem.walkTarget = walkTo(p, speed, 1);
+      nextAt = now + 100;
+    }
+    return true;
+  });
+}
+
+/**
+ * vanilla HarvestFarmland: a farmer by its fields picks a spot about it (within a block) with a ripe crop or bare
+ * farmland; there it harvests, then sows from its seeds, and moves on to the next (for up to 10 s of work, but
+ * like any Behavior of vanilla's that doesn't say otherwise, it gives up after 3 s)
+ */
+function harvestFarmland(): BehaviorControl<Villager> {
+  let target: Pos | null = null;
+  let nextOkStart = 0;
+  let worked = 0;
+  let valid: Pos[] = [];
+  const validPos = (v: Villager, p: Pos): boolean => {
+    const w = v.level.world;
+    const st = w.getState(p[0], p[1], p[2]);
+    return isMatureCrop(st) || ((FLAGS[st] & F_AIR) !== 0 && blk(w.getState(p[0], p[1] - 1, p[2])).name === 'farmland');
+  };
+  const pick = (v: Villager): Pos | null => (valid.length ? valid[v.level.random.nextInt(valid.length)] : null);
+  return new Behavior<Villager>({
+    canStart: (v) => {
+      if (v.mem.lookTarget || v.mem.walkTarget || !v.mem.secondaryJobSite) return false;
+      if (!v.level.gameRules.mobGriefing || v.profession !== 'farmer') return false;
+      valid = [];
+      for (let i = -1; i <= 1; i++)
+        for (let j = -1; j <= 1; j++)
+          for (let k = -1; k <= 1; k++) {
+            const p: Pos = [Math.floor(v.x + i), Math.floor(v.y + j), Math.floor(v.z + k)];
+            if (validPos(v, p)) valid.push(p);
+          }
+      target = pick(v);
+      return target !== null;
+    },
+    start: (v, now) => {
+      if (now > nextOkStart && target) {
+        v.mem.lookTarget = [...target];
+        v.mem.walkTarget = walkTo(target, 0.5, 1);
+      }
+    },
+    canStillUse: () => worked < 200,
+    tick: (v, now) => {
+      if (target && !closerToCenter(target, v, 1)) return;
+      if (target && now > nextOkStart) {
+        const level = v.level, w = level.world;
+        const [x, y, z] = target;
+        const st = w.getState(x, y, z);
+        const below = blk(w.getState(x, y - 1, z)).name;
+        if (isMatureCrop(st)) level.destroyBlock(x, y, z, true);
+        if ((FLAGS[st] & F_AIR) !== 0 && below === 'farmland' && v.hasFarmSeeds()) {
+          for (let i = 0; i < v.inventory.length; i++) {
+            const s = v.inventory[i];
+            const crop = s && PLANTABLE[s.item.id];
+            if (!s || !crop) continue;
+            level.setBlock(x, y, z, getBlock(crop).defaultState);
+            level.sound.play('item.crop.plant', x, y, z, 1, 1);
+            if (--s.count <= 0) v.inventory[i] = null;
+            break;
+          }
+        }
+        if (isCrop(st) && !isMatureCrop(st)) {
+          valid = valid.filter((p) => p !== target);
+          target = pick(v);
+          if (target) {
+            nextOkStart = now + 20;
+            v.mem.walkTarget = walkTo(target, 0.5, 1);
+            v.mem.lookTarget = [...target];
+          }
+        }
+      }
+      worked++;
+    },
+    stop: (v, now) => {
+      v.mem.lookTarget = null;
+      v.mem.walkTarget = null;
+      worked = 0;
+      nextOkStart = now + 40;
+    },
+  });
+}
+
+/**
+ * vanilla UseBonemeal: every half second or so (and 8 s after its last go), a villager with bone meal picks a
+ * growing crop about it, holds the bone meal up and walks over; beside it, it feeds it, then the next (for up to
+ * 4 s of work, but it gives up after 3)
+ */
+function useBonemeal(): BehaviorControl<Villager> {
+  let cropPos: Pos | null = null;
+  let nextCycle = 0, lastSession = 0, worked = 0;
+  const pickNext = (v: Villager): Pos | null => {
+    let found: Pos | null = null, n = 0;
+    const bx = Math.floor(v.x), by = Math.floor(v.y), bz = Math.floor(v.z);
+    for (let i = -1; i <= 1; i++)
+      for (let j = -1; j <= 1; j++)
+        for (let k = -1; k <= 1; k++) {
+          const st = v.level.world.getState(bx + i, by + j, bz + k);
+          if (isCrop(st) && !isMatureCrop(st) && v.level.random.nextInt(++n) === 0) found = [bx + i, by + j, bz + k];
+        }
+    return found;
+  };
+  const aim = (v: Villager) => {
+    if (!cropPos) return;
+    v.mem.lookTarget = [...cropPos];
+    v.mem.walkTarget = walkTo(cropPos, 0.5, 1);
+  };
+  return new Behavior<Villager>({
+    canStart: (v) => {
+      if (v.mem.lookTarget || v.mem.walkTarget) return false;
+      if (v.tickCount % 10 !== 0 || (lastSession !== 0 && lastSession + 160 > v.tickCount)) return false;
+      if (v.countItem('bone_meal') <= 0) return false;
+      cropPos = pickNext(v);
+      return cropPos !== null;
+    },
+    start: (v, now) => {
+      aim(v);
+      v.setItemSlot('mainhand', ItemStack.of('bone_meal'));
+      nextCycle = now;
+      worked = 0;
+    },
+    canStillUse: () => worked < 80 && cropPos !== null,
+    tick: (v, now) => {
+      const p = cropPos!;
+      if (now < nextCycle || !closerToCenter(p, v, 1)) return;
+      const i = v.inventory.findIndex((s) => s?.item.id === 'bone_meal');
+      const st = v.level.world.getState(p[0], p[1], p[2]);
+      if (i >= 0 && performBoneMeal(v.level, p[0], p[1], p[2], st)) {
+        const s = v.inventory[i]!;
+        if (--s.count <= 0) v.inventory[i] = null;
+        boneMealParticles(v.level, p[0], p[1], p[2]);
+        cropPos = pickNext(v);
+        aim(v);
+        nextCycle = now + 40;
+      }
+      worked++;
+    },
+    stop: (v) => {
+      v.setItemSlot('mainhand', null);
+      lastSession = v.tickCount;
+    },
   });
 }
 
@@ -1377,6 +1602,7 @@ export class Villager extends AgeableMob {
     home: null, jobSite: null, potentialJobSite: null, meetingPoint: null, walkTarget: null, lookTarget: null, interactionTarget: null, path: null,
     cantReachWalkTargetSince: null, lastSlept: null, lastWoken: null, lastWorkedAtPoi: null, hurtBy: false, hurtByEntity: null, nearestHostile: null,
     doorsToClose: null, nearestLiving: [], visibleLiving: [], visibleBabies: null, wantedItem: null, breedTarget: null, nearestBed: null,
+    secondaryJobSite: null,
   };
   brain: Brain<Villager, VillagerActivity>;
 
@@ -1402,7 +1628,7 @@ export class Villager extends AgeableMob {
   private makeBrain(): Brain<Villager, VillagerActivity> {
     const b = new Brain<Villager, VillagerActivity>('idle', ['core']);
     if (this.isBaby()) b.add('play', playPackage());
-    else b.add('work', workPackage(), (v) => !!v.mem.jobSite);
+    else b.add('work', workPackage(this.profession), (v) => !!v.mem.jobSite);
     b.add('core', corePackage());
     b.add('meet', meetPackage(), (v) => !!v.mem.meetingPoint);
     b.add('rest', restPackage());
@@ -1437,6 +1663,20 @@ export class Villager extends AgeableMob {
     if (e.type === 'player' && (e as Player).gameMode === 'spectator') return false;
     const r = Math.max(SENSE_RANGE * e.visibilityPercent(this), 2);
     return e.distanceToSqr(this.x, this.y, this.z) <= r * r && this.sensing.hasLineOfSight(e);
+  }
+
+  /** vanilla SecondaryPoiSensor: a farmer's farmland within 4 across and 2 up or down (no one else has any) */
+  private senseSecondaryPoi(): void {
+    if (this.profession !== 'farmer') {
+      this.mem.secondaryJobSite = null;
+      return;
+    }
+    const list: Pos[] = [];
+    const bx = Math.floor(this.x), by = Math.floor(this.y), bz = Math.floor(this.z);
+    for (let i = -4; i <= 4; i++)
+      for (let j = -2; j <= 2; j++)
+        for (let k = -4; k <= 4; k++) if (blk(this.level.world.getState(bx + i, by + j, bz + k)).name === 'farmland') list.push([bx + i, by + j, bz + k]);
+    this.mem.secondaryJobSite = list.length ? list : null;
   }
 
   private sense(): void {
@@ -1496,6 +1736,7 @@ export class Villager extends AgeableMob {
   protected override customServerAiStep(): void {
     const now = this.level.gameTime;
     if ((this.tickCount + this.sensePhase) % 20 === 0 || this.tickCount === 1) this.sense();
+    if ((this.tickCount + this.sensePhase) % 40 === 0) this.senseSecondaryPoi();
     // vanilla GolemSensor: every 200 ticks, an iron golem among those nearby
     if ((this.tickCount + this.sensePhase) % 200 === 0 && this.mem.nearestLiving.some((e) => e.type === 'iron_golem')) this.golemDetected(now);
     this.brain.tick(this, now);
@@ -1667,6 +1908,23 @@ export class Villager extends AgeableMob {
         return null;
       }
     return s.copyWithCount(left);
+  }
+
+  /** vanilla SimpleContainer.removeItemType: up to `n` of an item out of its pockets */
+  removeFromInventory(id: string, n: number): void {
+    for (let i = 0; i < this.inventory.length && n > 0; i++) {
+      const s = this.inventory[i];
+      if (s?.item.id !== id) continue;
+      const k = Math.min(n, s.count);
+      s.count -= k;
+      n -= k;
+      if (s.count <= 0) this.inventory[i] = null;
+    }
+  }
+
+  /** vanilla hasFarmSeeds: anything in its pockets it could sow */
+  hasFarmSeeds(): boolean {
+    return this.inventory.some((s) => !!s && s.item.id in PLANTABLE);
   }
 
   /** vanilla SimpleContainer.countItem */
@@ -2082,16 +2340,20 @@ function corePackage(): Pkg {
   ];
 }
 
-function workPackage(): Pkg {
+/** vanilla VillagerGoalPackages.getWorkPackage (a farmer composts at work, and tends its fields more) */
+function workPackage(prof: Profession): Pkg {
+  const farmer = prof === 'farmer';
   return [
     [5, minimalLook()],
     [
       5,
       runOne<Villager>([
-        [workAtPoi(), 7],
+        [workAtPoi(farmer ? workAtComposter : undefined), 7],
         [oneShot(strollAroundPoi('jobSite', STROLL, 4)), 2],
         [strollToPoi('jobSite', STROLL, 1, 10), 5],
-        // (StrollToPoiList, HarvestFarmland and UseBonemeal wait for the farmers' fields)
+        [strollToPoiList(SPEED), 5],
+        [harvestFarmland(), farmer ? 2 : 5],
+        [useBonemeal(), farmer ? 4 : 7],
       ]),
     ],
     [10, showTradesToPlayer(400, 1600)],
