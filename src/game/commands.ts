@@ -31,6 +31,8 @@ import type { VillageKind } from '../world/gen/villages';
 import { locateOutpost } from './outposts';
 // (Stage 5: ocean)
 import { locateMonument } from './monuments';
+// (temples)
+import { templeKind, locateTemple } from './temples';
 
 class CommandError extends Error {
   constructor(msg: string, readonly pos = -1) {
@@ -692,6 +694,14 @@ export const COMMANDS: Record<string, CommandDef> = {
       const dim = c.dim ?? c.game.world.dim;
       const p = c.game.player;
       const x = Math.floor(p.x), z = Math.floor(p.z);
+      // the temples: desert pyramids, jungle temples, swamp huts and igloos (game/temples)
+      const temple = templeKind(name);
+      if (temple) {
+        const t = dim.id === 'overworld' ? locateTemple(c.game.level.seed, temple, x, z) : null;
+        if (!t) throw new CommandError(`Could not find a structure of type "${name}" nearby`);
+        c.ok(`The nearest ${name} is at §a[${t[0]}, ~, ${t[1]}]§r (${Math.floor(Math.hypot(t[0] - x, t[1] - z))} blocks away)`);
+        return;
+      }
       const village = /^minecraft:village_(plains|desert|savanna|snowy|taiga)$/.exec(name)?.[1] as VillageKind | undefined;
       const found =
         name === 'minecraft:fortress' && dim.id === 'the_nether'

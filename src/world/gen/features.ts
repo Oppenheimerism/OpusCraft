@@ -252,6 +252,8 @@ export class Decorator {
   geodes: { place(ctx: GenContext): void } | null = null;
   /** villages, placed in the SURFACE_STRUCTURES step */
   villages: { place(ctx: GenContext): void } | null = null;
+  /** desert pyramids, jungle temples, swamp huts and igloos, placed in the SURFACE_STRUCTURES step before villages */
+  temples: { place(ctx: GenContext): void } | null = null;
   /** strongholds, placed in the STRONGHOLDS step */
   strongholds: { place(ctx: GenContext): void } | null = null;
 
@@ -270,7 +272,8 @@ export class Decorator {
     // --- mineshafts, then monster rooms (vanilla UNDERGROUND_STRUCTURES step)
     this.mineshafts?.place(ctx, new Rand(hash2(ctx.cx, ctx.cz, this.seed ^ 0x51ae), 5));
     this.monsterRooms(ctx, new Rand(hash2(ctx.cx, ctx.cz, this.seed ^ 0xd06e), 4));
-    // --- villages (vanilla SURFACE_STRUCTURES step)
+    // --- temples, then villages (vanilla SURFACE_STRUCTURES step)
+    this.temples?.place(ctx);
     this.villages?.place(ctx);
     // --- strongholds (vanilla STRONGHOLDS step)
     this.strongholds?.place(ctx);

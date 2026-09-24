@@ -79,6 +79,8 @@ import { crossbowTexture, crossbowChargeProgress, isCharged } from '../item/cros
 import { SpawnerBlockEntity, EnchantingTableBlockEntity } from '../world/blockEntity';
 import { bookModel, bookTexture, renderTableBook } from './bookRenderer';
 import { VillageBlockRenderers } from './villageRenderers';
+import { PistonRenderer } from './pistonRenderer';
+import { ArchaeologyRenderers } from './archaeologyRenderers';
 import { createMob } from '../game/spawner';
 import { ArmorLayer, renderHeadItem, PIGLIN_HEAD_ITEM_SCALE } from './armorLayer';
 import type { ArmorModelSet } from './armorLayer';
@@ -151,6 +153,10 @@ export class EntityRenderDispatcher {
   private readonly armor: ArmorLayer;
   /** the bell (and the other village blocks' block entity renderers) */
   private readonly village: VillageBlockRenderers;
+  /** the pistons' moving blocks */
+  private readonly pistons = new PistonRenderer();
+  /** the decorated pots, and the finds coming out of suspicious sand and gravel */
+  private readonly archaeology: ArchaeologyRenderers;
   private readonly endCrystals: EndCrystalRenderer;
   private readonly dragons: EnderDragonRenderer;
   /** (Stage 4: illagers) the pillager, vindicator, evoker, vex, ravager and the evoker's fangs */
@@ -161,6 +167,7 @@ export class EntityRenderDispatcher {
   constructor(private readonly gl: GL, private readonly items: ItemRenderer, private readonly skin: WebGLTexture) {
     this.armor = new ArmorLayer(gl);
     this.village = new VillageBlockRenderers(gl);
+    this.archaeology = new ArchaeologyRenderers(gl);
     this.endCrystals = new EndCrystalRenderer(gl);
     this.dragons = new EnderDragonRenderer(gl, this.endCrystals.beam);
     // (Stage 4: illagers) lent this dispatcher's living-renderer steps
@@ -343,6 +350,8 @@ export class EntityRenderDispatcher {
     this.renderSpawners(b, level, cam, partial, frustum);
     this.renderEnchantingBooks(b, level, cam, partial, frustum);
     this.village.render(b, level, cam, partial, frustum);
+    this.pistons.render(b, this.items, level, cam, partial, frustum);
+    this.archaeology.render(b, this.items, level, cam, partial, frustum);
     b.setOverlay(0, 0, 0, 0);
     b.flush();
     if (this.shadows.length) this.renderShadows(b, level, cam);

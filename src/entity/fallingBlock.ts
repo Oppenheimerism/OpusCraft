@@ -19,6 +19,8 @@ export class FallingBlockEntity extends Entity {
   private damageSource = 'fallingBlock';
   /** vanilla cancelDrop: a damaged anvil that broke in the fall leaves nothing */
   private cancelDrop = false;
+  /** vanilla Fallable.onBrokenAfterFall for the blocks that do something then (suspicious sand: game/archaeology.ts) */
+  onBrokenAfterFall: ((level: Level, e: FallingBlockEntity) => void) | null = null;
 
   constructor(level: Level, public state: number) {
     super(level);
@@ -29,10 +31,17 @@ export class FallingBlockEntity extends Entity {
     const e = new FallingBlockEntity(level, state);
     e.moveTo(x + 0.5, y, z + 0.5);
     level.world.setState(x, y, z, 0);
+    // (vanilla: the block goes with UPDATE_ALL; the shapes around are the caller's)
+    level.updateNeighborsAt(x, y, z, STATE_BLOCK[state]);
     level.addEntity(e);
     // vanilla AnvilBlock.falling: 2 damage per block fallen, at most 40
     if (e.isAnvil()) e.hurtEntities(2, 40, 'anvil');
     return e;
+  }
+
+  /** vanilla disableDrop: it won't be placed again or drop as an item, only break where it lands (suspicious sand) */
+  disableDrop(): void {
+    this.cancelDrop = true;
   }
 
   private isAnvil(): boolean {
@@ -81,6 +90,7 @@ export class FallingBlockEntity extends Entity {
       const broken = () => {
         if (anvil) this.level.sound.play('block.anvil.destroy', bx + 0.5, by + 0.5, bz + 0.5, 1, Math.random() * 0.1 + 0.9);
         if (block.name === 'pointed_dripstone') this.level.sound.play('block.pointed_dripstone.land', bx + 0.5, by + 0.5, bz + 0.5, 2, Math.random() * 0.1 + 0.9);
+        this.onBrokenAfterFall?.(this.level, this);
       };
       if (this.cancelDrop) broken();
       else if (FLAGS[cur] & (F_AIR | F_REPLACEABLE) && !(FLAGS[cur] & F_LAVA) && canSurvive(this.level.world, bx, by, bz, this.state)) {

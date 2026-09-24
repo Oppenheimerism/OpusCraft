@@ -170,6 +170,23 @@ export class HandRenderer {
         // vanilla BLOCK use animation: just applyItemArmTransform (no swing), the shield_blocking model held across
         pose.translate(i * 0.56, -0.52 + equip * -0.6, -0.72);
         tex = 'shield_blocking';
+      } else if (it.id === 'brush') {
+        // vanilla applyBrushTransform: held out at the block and swept to and fro across it, once every ten ticks
+        pose.translate(i * 0.56, -0.52 + equip * -0.6, -0.72);
+        const f = (p.useItemRemaining % 10) - partial + 1;
+        const sweep = -15 + 75 * Math.cos((1 - f / 10) * 2 * Math.PI);
+        if (i > 0) {
+          pose.translate(-0.25, 0.22, 0.35);
+          pose.rotX(-80);
+          pose.rotY(90);
+          pose.rotX(sweep);
+        } else {
+          pose.translate(0.1, 0.83, 0.35);
+          pose.rotX(-80);
+          pose.rotY(-90);
+          pose.rotX(sweep);
+          pose.translate(-0.3, 0.22, 0.35);
+        }
       } else {
         // vanilla applyEatTransform + applyItemArmTransform (eating and drinking)
         const f = p.useItemRemaining - partial + 1;

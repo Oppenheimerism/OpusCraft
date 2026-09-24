@@ -70,7 +70,10 @@ function searchText(s: ItemStack): string {
 }
 
 /** vanilla CreativeModeTabs.REDSTONE_BLOCKS, in its order (as far as the game has them) */
-const REDSTONE_ORDER = ['redstone', 'redstone_block', 'lever', 'oak_button', 'stone_button', 'oak_pressure_plate', 'stone_pressure_plate', 'light_weighted_pressure_plate', 'heavy_weighted_pressure_plate', 'tnt', 'redstone_lamp'];
+const REDSTONE_ORDER = [
+  'redstone', 'redstone_torch', 'redstone_block', 'repeater', 'lever', 'oak_button', 'stone_button', 'oak_pressure_plate', 'stone_pressure_plate', 'light_weighted_pressure_plate',
+  'heavy_weighted_pressure_plate', 'tripwire_hook', 'piston', 'sticky_piston', 'dispenser', 'dropper', 'tnt', 'redstone_lamp',
+];
 const REDSTONE = new Set(REDSTONE_ORDER);
 const FUNCTIONAL = new Set(['oak_sign', 'painting', 'item_frame', 'red_bed', 'jack_o_lantern', 'carved_pumpkin']);
 const DYE_ORDER = ['white', 'light_gray', 'gray', 'black', 'brown', 'red', 'orange', 'yellow', 'lime', 'green', 'cyan', 'light_blue', 'blue', 'purple', 'magenta', 'pink'];
