@@ -4,7 +4,8 @@
 import { SimpleContainer, isEmpty } from '../inventory/container';
 import { ItemStack, ITEMS, ItemTag, cloneTag } from '../item/item';
 import { cookingResult, cookingTime, burnDuration, type CookingKind } from '../inventory/recipes';
-import { BLOCKS, STATE_BLOCK } from './block';
+import { BLOCKS, STATE_BLOCK, FACE_OCC } from './block';
+import type { World } from './world';
 import type { Level } from '../game/level';
 import type { Entity } from '../entity/entity';
 import { fillContainer } from '../game/loot';
@@ -458,15 +459,37 @@ export class EndGatewayBlockEntity extends BlockEntity {
   cooldownPercent(partial: number): number {
     return 1 - Math.max(0, Math.min(1, (this.teleportCooldown - partial) / 40));
   }
-  /** vanilla TheEndGatewayBlockEntity.portalTick: older by a tick; the cooldown runs down, or every 2 minutes starts */
-  override tick(): void {
+  /**
+   * vanilla TheEndGatewayBlockEntity.portalTick: older by a tick; the cooldown runs down, or every 2 minutes starts
+   * (its beam flashes); the chunk is saved with it when either changes
+   */
+  override tick(level: Level): void {
+    const spawning = this.isSpawning(), cooling = this.isCoolingDown();
     this.age++;
-    if (this.teleportCooldown > 0) this.teleportCooldown--;
+    if (cooling) this.teleportCooldown--;
     else if (this.age % 2400 === 0) this.teleportCooldown = 40;
+    if (spawning !== this.isSpawning() || cooling !== this.isCoolingDown()) {
+      const c = level.world.getChunk(this.x >> 4, this.z >> 4);
+      if (c) c.modified = true;
+    }
   }
   /** vanilla triggerCooldown (and the block event that tells the client) */
   triggerCooldown(): void {
     this.teleportCooldown = 40;
+  }
+  /**
+   * vanilla shouldRenderFace (Block.shouldRenderFace): the face toward `dir` (0 down, 1 up, 2 north, 3 south, 4 west,
+   * 5 east) shows unless the neighbour's face against it is whole
+   */
+  shouldRenderFace(w: World, dir: number): boolean {
+    const n = w.getState(this.x + (dir === 4 ? -1 : dir === 5 ? 1 : 0), this.y + (dir === 0 ? -1 : dir === 1 ? 1 : 0), this.z + (dir === 2 ? -1 : dir === 3 ? 1 : 0));
+    return ((FACE_OCC[n] >> (dir ^ 1)) & 1) === 0;
+  }
+  /** vanilla getParticleAmount: one for each face that shows */
+  particleAmount(w: World): number {
+    let n = 0;
+    for (let d = 0; d < 6; d++) if (this.shouldRenderFace(w, d)) n++;
+    return n;
   }
   protected override saveData(): Record<string, number | string> {
     const d: Record<string, number | string> = { Age: this.age };

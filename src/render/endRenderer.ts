@@ -14,11 +14,21 @@
 // speed with the game time. The loading screen after going through an end
 // portal fills the screen with the same (vanilla ReceivingLevelScreen,
 // Reason.END_PORTAL).
+//
+// The end gateway (vanilla TheEndGatewayRenderer, RenderType.endGateway): the
+// same starfield with a sixteenth layer, on every face of the whole block that
+// isn't against something solid, seen from up to 256 blocks away. While it
+// opens (its first 10 seconds) a magenta beam shoots up and down from it as
+// high as the world and falls back; each time it's used, and every 2 minutes,
+// a purple one 50 blocks each way (vanilla BeaconRenderer.renderBeaconBeam:
+// an opaque turning core and a faint glow round it).
 
 import { GL, Shader, createTexture } from './gl';
 import type { Frustum, Mat4 } from '../core/math';
 import type { World } from '../world/world';
-import { endSkyTexture, endPortalTexture } from '../textures/endEnv';
+import { EndGatewayBlockEntity } from '../world/blockEntity';
+import { endSkyTexture, endPortalTexture, endGatewayBeamTexture } from '../textures/endEnv';
+import { PoseStack, type EntityBatch, type DrawState } from './entityRenderer';
 
 const SKY_VS = `#version 300 es
 layout(location=0) in vec3 a_pos;
@@ -48,8 +58,8 @@ const COLORS: [number, number, number][] = [
   [0.106152, 0.131144, 0.195191], [0.097721, 0.110188, 0.187229], [0.133516, 0.138278, 0.148582], [0.070006, 0.243332, 0.235792],
   [0.196766, 0.142899, 0.214696], [0.047281, 0.315338, 0.32197], [0.204675, 0.39001, 0.302066], [0.080955, 0.314821, 0.661491],
 ];
-/** vanilla RenderType END_PORTAL: EndPortalLayers = 15 */
-const LAYERS = 15;
+/** vanilla rendertype_end_portal's PORTAL_LAYERS: 15 for the portal, 16 for the gateway */
+const PORTAL_LAYERS = 15, GATEWAY_LAYERS = 16;
 
 const PORTAL_VS = `#version 300 es
 layout(location=0) in vec3 a_pos;
@@ -77,9 +87,9 @@ const vec3 = (c: [number, number, number]): string => `vec3(${c.map(f).join(', '
  * s = (4.5 − layer / 4) · 2 and θ = radians((layer² · 4321 + layer · 9) · 2). The angles are worked out here in
  * double precision (a GPU's sin and cos of the 34000-odd radians of the last layers aren't to be trusted).
  */
-export function portalFragmentShader(): string {
+export function portalFragmentShader(layers = PORTAL_LAYERS): string {
   const lines: string[] = [];
-  for (let i = 0; i < LAYERS; i++) {
+  for (let i = 0; i < layers; i++) {
     const L = i + 1;
     const s = (4.5 - L / 4) * 2;
     const a = ((L * L * 4321 + L * 9) * 2 * Math.PI) / 180;
@@ -106,13 +116,37 @@ ${lines.join('\n')}
 
 /** vanilla TheEndPortalRenderer.getOffsetDown / getOffsetUp */
 const OFFSET_DOWN = 0.375, OFFSET_UP = 0.75;
-/** vanilla BlockEntityRenderer.getViewDistance */
-const VIEW_DISTANCE = 64;
+/** vanilla BlockEntityRenderer.getViewDistance, and TheEndGatewayRenderer's */
+const VIEW_DISTANCE = 64, GATEWAY_VIEW_DISTANCE = 256;
+/** vanilla DyeColor.MAGENTA and PURPLE getTextureDiffuseColor: the gateway's beams */
+const MAGENTA = 0xc74ebd, PURPLE = 0x8932b8;
+
+/**
+ * vanilla TheEndPortalRenderer.renderCube's faces, in its order (south, north, east, west, down, up), each four
+ * corners of the unit block, `d` and `u` the heights of the bottom and top
+ */
+function cubeFaces(d: number, u: number): number[][] {
+  return [
+    [0, 0, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1],
+    [0, 1, 0, 1, 1, 0, 1, 0, 0, 0, 0, 0],
+    [1, 1, 0, 1, 1, 1, 1, 0, 1, 1, 0, 0],
+    [0, 0, 0, 0, 0, 1, 0, 1, 1, 0, 1, 0],
+    [0, d, 0, 1, d, 0, 1, d, 1, 0, d, 1],
+    [0, u, 1, 1, u, 1, 1, u, 0, 0, u, 0],
+  ];
+}
+/** which way each of those faces looks (0 down, 1 up, 2 north, 3 south, 4 west, 5 east) */
+const FACE_DIRS = [3, 2, 5, 4, 0, 1];
+const PORTAL_FACES = cubeFaces(OFFSET_DOWN, OFFSET_UP), GATEWAY_FACES = cubeFaces(0, 1);
 const IDENTITY = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
 
 export class EndRenderer {
   private readonly skyShader: Shader;
   private readonly portalShader: Shader;
+  private readonly gatewayShader: Shader;
+  private beamTex: WebGLTexture | null = null;
+  private readonly pose = new PoseStack();
+  private readonly v = [0, 0, 0];
   private readonly skyTex: WebGLTexture;
   private readonly portalTex: WebGLTexture;
   private readonly skyVao: WebGLVertexArrayObject;
@@ -125,6 +159,7 @@ export class EndRenderer {
   constructor(private readonly gl: GL) {
     this.skyShader = new Shader(gl, SKY_VS, SKY_FS, 'endsky');
     this.portalShader = new Shader(gl, PORTAL_VS, portalFragmentShader(), 'endportal');
+    this.gatewayShader = new Shader(gl, PORTAL_VS, portalFragmentShader(GATEWAY_LAYERS), 'endgateway');
     const sky = endSkyTexture(), portal = endPortalTexture();
     // (vanilla: both sampled nearest and repeating)
     this.skyTex = createTexture(gl, sky.w, sky.h, new Uint8Array(sky.data.buffer), { nearest: true, clamp: false });
@@ -205,50 +240,148 @@ export class EndRenderer {
     return ((gameTime % 24000) + partial) / 24000;
   }
 
-  /** every end portal within 64 blocks and in view: its top and bottom, opaque, depth-tested (camera-relative space) */
+  /**
+   * every end portal within 64 blocks and in view (its top and bottom) and every end gateway within 256 (the faces
+   * of it that show): opaque, depth-tested, in camera-relative space
+   */
   renderPortals(world: World, camX: number, camY: number, camZ: number, proj: Mat4, view: Mat4, frustum: Frustum, time: number): void {
-    let n = 0;
-    for (const be of world.blockEntities.values()) {
-      if (be.id !== 'end_portal') continue;
-      const x = be.x - camX, y = be.y - camY, z = be.z - camZ;
-      const cx = x + 0.5, cy = y + 0.5, cz = z + 0.5;
-      if (cx * cx + cy * cy + cz * cz >= VIEW_DISTANCE * VIEW_DISTANCE) continue;
-      if (!frustum.testBox(x, y, z, x + 1, y + 1, z + 1)) continue;
-      if ((n + 1) * 36 > this.verts.length) {
-        const nv = new Float32Array(Math.max(this.verts.length * 2, 36 * 64));
-        nv.set(this.verts);
-        this.verts = nv;
-      }
-      const v = this.verts;
-      let o = n * 36;
-      // (vanilla renderFace: DOWN (0,f,0) (1,f,0) (1,f,1) (0,f,1), facing down; UP (0,g,1) (1,g,1) (1,g,0) (0,g,0), facing up)
-      const d = y + OFFSET_DOWN, u = y + OFFSET_UP;
-      const quads = [
-        [x, d, z, x + 1, d, z, x + 1, d, z + 1, x, d, z + 1],
-        [x, u, z + 1, x + 1, u, z + 1, x + 1, u, z, x, u, z],
-      ];
-      for (const q of quads)
-        for (const k of [0, 1, 2, 0, 2, 3]) {
-          v[o++] = q[k * 3];
-          v[o++] = q[k * 3 + 1];
-          v[o++] = q[k * 3 + 2];
-        }
-      n++;
-    }
+    const portals = this.collect(world, camX, camY, camZ, frustum, false, 0);
+    const gateways = this.collect(world, camX, camY, camZ, frustum, true, portals);
+    const n = portals + gateways;
     if (!n) return;
     const gl = this.gl;
     gl.bindBuffer(gl.ARRAY_BUFFER, this.portalVbo);
-    if (n * 36 > this.portalCap) {
+    if (n * 18 > this.portalCap) {
       this.portalCap = this.verts.length;
       gl.bufferData(gl.ARRAY_BUFFER, this.portalCap * 4, gl.DYNAMIC_DRAW);
     }
-    gl.bufferSubData(gl.ARRAY_BUFFER, 0, this.verts, 0, n * 36);
+    gl.bufferSubData(gl.ARRAY_BUFFER, 0, this.verts, 0, n * 18);
     gl.enable(gl.DEPTH_TEST);
     gl.depthFunc(gl.LEQUAL);
     gl.depthMask(true);
     gl.enable(gl.CULL_FACE);
     gl.disable(gl.BLEND);
-    this.draw(this.portalVao, proj, view, time, n * 12);
+    if (portals) this.draw(this.portalShader, this.portalVao, proj, view, time, 0, portals * 6);
+    if (gateways) this.draw(this.gatewayShader, this.portalVao, proj, view, time, portals * 6, gateways * 6);
+  }
+
+  /** the faces to draw of the end portals (or gateways), as triangles into verts after the first `from` faces; how many */
+  private collect(world: World, camX: number, camY: number, camZ: number, frustum: Frustum, gateway: boolean, from: number): number {
+    let n = from;
+    const dist = gateway ? GATEWAY_VIEW_DISTANCE : VIEW_DISTANCE;
+    const faces = gateway ? GATEWAY_FACES : PORTAL_FACES;
+    for (const be of world.blockEntities.values()) {
+      if (be.id !== (gateway ? 'end_gateway' : 'end_portal')) continue;
+      const x = be.x - camX, y = be.y - camY, z = be.z - camZ;
+      const cx = x + 0.5, cy = y + 0.5, cz = z + 0.5;
+      if (cx * cx + cy * cy + cz * cz >= dist * dist) continue;
+      if (!frustum.testBox(x, y, z, x + 1, y + 1, z + 1)) continue;
+      for (let f = 0; f < 6; f++) {
+        // (vanilla TheEndPortalBlockEntity.shouldRenderFace: just the top and bottom; the gateway's, what shows)
+        if (!gateway && f < 4) continue;
+        if (gateway && !(be as EndGatewayBlockEntity).shouldRenderFace(world, FACE_DIRS[f])) continue;
+        if ((n + 1) * 18 > this.verts.length) {
+          const nv = new Float32Array(Math.max(this.verts.length * 2, 18 * 256));
+          nv.set(this.verts);
+          this.verts = nv;
+        }
+        const q = faces[f], v = this.verts;
+        let o = n * 18;
+        for (const k of [0, 1, 2, 0, 2, 3]) {
+          v[o++] = x + q[k * 3];
+          v[o++] = y + q[k * 3 + 1];
+          v[o++] = z + q[k * 3 + 2];
+        }
+        n++;
+      }
+    }
+    return n - from;
+  }
+
+  /**
+   * vanilla TheEndGatewayRenderer.render's beams, for the gateways opening or cooling down within 256 blocks whose
+   * section is in view: from the block up and down by sin(progress · π) of the world's height (opening, magenta)
+   * or of 50 (cooling down, purple)
+   */
+  renderGatewayBeams(b: EntityBatch, world: World, gameTime: number, camX: number, camY: number, camZ: number, frustum: Frustum, partial: number): void {
+    for (const be of world.blockEntities.values()) {
+      if (!(be instanceof EndGatewayBlockEntity)) continue;
+      const spawning = be.isSpawning();
+      if (!spawning && !be.isCoolingDown()) continue;
+      const x = be.x - camX, y = be.y - camY, z = be.z - camZ;
+      if ((x + 0.5) ** 2 + (y + 0.5) ** 2 + (z + 0.5) ** 2 >= GATEWAY_VIEW_DISTANCE ** 2) continue;
+      // (vanilla draws the block entities of the sections it draws)
+      const sx = Math.floor(be.x / 16) * 16 - camX, sy = Math.floor(be.y / 16) * 16 - camY, sz = Math.floor(be.z / 16) * 16 - camZ;
+      if (!frustum.testBox(sx, sy, sz, sx + 16, sy + 16, sz + 16)) continue;
+      const f = Math.sin((spawning ? be.spawnPercent(partial) : be.cooldownPercent(partial)) * Math.PI);
+      const i = Math.floor(f * (spawning ? world.dim.maxY : 50));
+      this.pose.reset();
+      this.pose.translate(x, y, z);
+      this.beaconBeam(b, partial, f, gameTime, -i, i * 2, spawning ? MAGENTA : PURPLE, 0.15, 0.175);
+    }
+  }
+
+  /**
+   * vanilla BeaconRenderer.renderBeaconBeam: from `yOffset` up `height`, a core `beamRadius` across turning with the
+   * time, then a glow `glowRadius` across (alpha 32) round it, the texture scrolling along both
+   */
+  private beaconBeam(b: EntityBatch, partial: number, textureScale: number, gameTime: number, yOffset: number, height: number, color: number, beamRadius: number, glowRadius: number): void {
+    if (!this.beamTex) {
+      const t = endGatewayBeamTexture();
+      // (vanilla: sampled nearest, repeating)
+      this.beamTex = createTexture(this.gl, t.w, t.h, new Uint8Array(t.data.buffer, t.data.byteOffset, t.data.byteLength), { nearest: true, clamp: false });
+    }
+    const top = yOffset + height;
+    const f = (((gameTime % 40) + 40) % 40) + partial;
+    const f1 = height < 0 ? f : -f;
+    const frac = (v: number) => v - Math.floor(v);
+    const f2 = frac(f1 * 0.2 - Math.floor(f1 * 0.1));
+    const r = ((color >> 16) & 255) / 255, g = ((color >> 8) & 255) / 255, bl = (color & 255) / 255;
+    const pose = this.pose;
+    pose.translate(0.5, 0, 0.5);
+    // the core: a diamond turning 2.25° a tick, opaque (vanilla RenderType.beaconBeam(texture, false))
+    pose.push();
+    pose.rotY(f * 2.25 - 45);
+    const v0 = -1 + f2;
+    b.setOverlay(0, 0, 0, 0);
+    b.begin(this.beamState(false));
+    this.beamPart(b, r, g, bl, 1, yOffset, top, 0, beamRadius, beamRadius, 0, -beamRadius, 0, 0, -beamRadius, 0, 1, height * textureScale * (0.5 / beamRadius) + v0, v0);
+    pose.pop();
+    // the glow: a square round it, faint, not writing depth (vanilla RenderType.beaconBeam(texture, true))
+    b.begin(this.beamState(true));
+    const G = glowRadius;
+    this.beamPart(b, r, g, bl, 32 / 255, yOffset, top, -G, -G, G, -G, -G, G, G, G, 0, 1, height * textureScale + v0, v0);
+  }
+
+  private beamState(glow: boolean): DrawState {
+    return glow
+      ? { texture: this.beamTex!, cutoff: 0, blend: true, cull: true, lit: false, useLightmap: false, depthWrite: false }
+      : { texture: this.beamTex!, cutoff: 0, blend: false, cull: true, lit: false, useLightmap: false };
+  }
+
+  /** vanilla BeaconRenderer.renderPart: the sides (x1, z1) → (x2, z2), (x4, z4) → (x3, z3), (x2, z2) → (x4, z4) and (x3, z3) → (x1, z1) */
+  private beamPart(b: EntityBatch, r: number, g: number, bl: number, a: number, minY: number, maxY: number, x1: number, z1: number, x2: number, z2: number, x3: number, z3: number, x4: number, z4: number, minU: number, maxU: number, minV: number, maxV: number): void {
+    this.beamQuad(b, r, g, bl, a, minY, maxY, x1, z1, x2, z2, minU, maxU, minV, maxV);
+    this.beamQuad(b, r, g, bl, a, minY, maxY, x4, z4, x3, z3, minU, maxU, minV, maxV);
+    this.beamQuad(b, r, g, bl, a, minY, maxY, x2, z2, x4, z4, minU, maxU, minV, maxV);
+    this.beamQuad(b, r, g, bl, a, minY, maxY, x3, z3, x1, z1, minU, maxU, minV, maxV);
+  }
+
+  /** vanilla BeaconRenderer.renderQuad, full bright (as two triangles) */
+  private beamQuad(b: EntityBatch, r: number, g: number, bl: number, a: number, minY: number, maxY: number, minX: number, minZ: number, maxX: number, maxZ: number, minU: number, maxU: number, minV: number, maxV: number): void {
+    const P = this.v, pose = this.pose;
+    const corners = [
+      [minX, maxY, minZ, maxU, minV],
+      [minX, minY, minZ, maxU, maxV],
+      [maxX, minY, maxZ, minU, maxV],
+      [maxX, maxY, maxZ, minU, minV],
+    ];
+    b.lightB = b.lightS = 240;
+    for (const k of [0, 1, 2, 0, 2, 3]) {
+      const c = corners[k];
+      pose.transform(c[0], c[1], c[2], P);
+      b.vertexRaw(P[0], P[1], P[2], c[3], c[4], r, g, bl, a, 0, 1, 0);
+    }
   }
 
   /** the loading screen after an end portal: the starfield over the whole screen */
@@ -257,14 +390,14 @@ export class EndRenderer {
     gl.disable(gl.DEPTH_TEST);
     gl.disable(gl.CULL_FACE);
     gl.disable(gl.BLEND);
-    this.draw(this.screenVao, IDENTITY, IDENTITY, time, 6);
+    this.draw(this.portalShader, this.screenVao, IDENTITY, IDENTITY, time, 0, 6);
     gl.enable(gl.DEPTH_TEST);
     gl.enable(gl.CULL_FACE);
   }
 
-  private draw(vao: WebGLVertexArrayObject, proj: Mat4 | Float32Array, view: Mat4 | Float32Array, time: number, count: number): void {
+  private draw(shader: Shader, vao: WebGLVertexArrayObject, proj: Mat4 | Float32Array, view: Mat4 | Float32Array, time: number, first: number, count: number): void {
     const gl = this.gl;
-    const s = this.portalShader.use();
+    const s = shader.use();
     s.mat4('u_proj', proj as Float32Array);
     s.mat4('u_view', view as Float32Array);
     s.f('u_time', time);
@@ -275,7 +408,7 @@ export class EndRenderer {
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, this.skyTex);
     gl.bindVertexArray(vao);
-    gl.drawArrays(gl.TRIANGLES, 0, count);
+    gl.drawArrays(gl.TRIANGLES, first, count);
     gl.bindVertexArray(null);
   }
 }

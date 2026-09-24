@@ -48,6 +48,8 @@ export class ThrownItem extends Entity {
 
   override tick(): void {
     this.baseTick();
+    // (held at an end gateway while the far side loads: nothing more this tick)
+    if (this.level.inTransit.has(this)) return;
     if (!this.leftOwner) {
       const o = this.owner;
       this.leftOwner = !o || !o.bb.intersects(this.bb.expandTowards(this.dx, this.dy, this.dz).inflate(1));
@@ -83,6 +85,9 @@ export class ThrownItem extends Entity {
       this.onHit(bh.px, bh.py, bh.pz);
       return;
     }
+    // vanilla ThrowableProjectile.tick: what it's in has its say (an end gateway takes it through)
+    this.checkInsideBlocks();
+    if (this.removed) return;
     const h = Math.sqrt(this.dx * this.dx + this.dz * this.dz);
     this.yaw = Math.atan2(this.dx, this.dz) * RAD;
     this.pitch = Math.atan2(this.dy, h) * RAD;

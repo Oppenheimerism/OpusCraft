@@ -69,6 +69,7 @@ import { PortalPoi, portalRectangle, relativePortalPosition, portalExit, createP
 import { setVillageMenuHook } from './villageBlocks';
 import { endPortalTravel, PortalArrivals } from './endTravel';
 import { EndDragonFight, ARENA_TICKET_LEVEL } from './endDragonFight';
+import { gatewayTravel } from './gatewayTravel';
 
 export type { GameOptions } from './options';
 /** vanilla ReceivingLevelScreen.Reason: what the loading screen shows while changing dimension */
@@ -416,7 +417,11 @@ export class Game {
     this.level.onOpenMerchant = (v, p) => this.openMerchant(v, p);
     this.level.onPortal = (e, x, y, z, kind) => {
       if (kind === 'end') endPortalTravel(this, e);
-      else if (e === this.player) this.portalTravel(x, y, z);
+      else if (kind === 'end_gateway') {
+        // (vanilla enter_block: Remote Getaway)
+        if (e === this.player) this.advancements.trigger('enter_block', { enteredBlock: 'end_gateway' });
+        gatewayTravel(this.level, e, x, y, z);
+      } else if (e === this.player) this.portalTravel(x, y, z);
     };
     // vanilla ClientPacketListener.handleTakeItemEntity: the pop, and what was taken flying to whoever took it
     this.level.onTake = (e, taker) => {
@@ -1313,8 +1318,9 @@ export class Game {
     const target = clamp(1 + (p.fovModifier() - 1) * this.opts.fovEffects, 0.1, 1.5);
     this.fovMod += (target - this.fovMod) * 0.5;
     this.level.tick();
-    // (vanilla TicketType.DRAGON: the arena stays loaded while the fight has a player)
+    // (vanilla TicketType.DRAGON: the arena stays loaded while the fight has a player; and the level's own tickets)
     this.chunks.setTicket('dragon', this.level.dragonFight?.ticketHeld ? [0, 0, ARENA_TICKET_LEVEL] : null);
+    this.chunks.setTickets('level', [...this.level.tickets.values()].map((t) => [t.cx, t.cz, t.load]));
     this.spawner?.tick();
     this.tickProgress();
     this.ambient?.tick(p.x, p.y, p.z);

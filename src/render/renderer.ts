@@ -225,6 +225,11 @@ export class Renderer {
     this.world.drawOpaque(tp);
     if (e.level) this.end.renderPortals(e.level.world, cam.x, cam.y, cam.z, this.proj, this.view, this.frustum, EndRenderer.shaderTime(e.level.gameTime, e.partial));
     if (e.level) this.renderEntities(e.level, cam, e.partial, fog, fogStart, fogEnd, e.entityOptions);
+    if (e.level) {
+      // (vanilla TheEndGatewayRenderer's beams, with the block entities)
+      this.end.renderGatewayBeams(this.batch, e.level.world, e.level.gameTime, cam.x, cam.y, cam.z, this.frustum, e.partial);
+      this.batch.flush();
+    }
     this.world.drawTranslucent(tp);
     if (this.particles) {
       this.batch.proj = this.proj;

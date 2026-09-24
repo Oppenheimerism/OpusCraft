@@ -56,7 +56,10 @@ export class AABB {
     return (this.minZ + this.maxZ) / 2;
   }
 
-  /** Ray intersection; returns t in [0,1] along (x0..x1) and hit face, or null. */
+  /**
+   * Ray intersection; returns t in [0,1] along (x0..x1) and hit face, or null. A ray that starts on a face (to
+   * within 1e-7) and goes in hits it at once (vanilla AABB.clipPoint: d > -1.0E-7).
+   */
   clip(x0: number, y0: number, z0: number, x1: number, y1: number, z1: number): { t: number; face: number } | null {
     const dx = x1 - x0, dy = y1 - y0, dz = z1 - z0;
     let tmin = 0, tmax = 1, face = -1;
@@ -76,8 +79,8 @@ export class AABB {
         [t1, t2] = [t2, t1];
         [f1, f2] = [f2, f1];
       }
-      if (t1 > tmin) {
-        tmin = t1;
+      if (t1 > tmin || (face < 0 && t1 > -1e-7)) {
+        tmin = Math.max(tmin, t1);
         face = f1;
       }
       if (t2 < tmax) tmax = t2;

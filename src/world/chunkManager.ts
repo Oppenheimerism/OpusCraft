@@ -30,10 +30,10 @@ export class ChunkManager {
   /** bumped when the world drops its chunks (a change of dimension): work for the old ones is thrown away */
   private epoch = 0;
   /**
-   * squares of chunks kept loaded besides the player's circle, by name: chunk x, z and radius (vanilla chunk
-   * tickets — the dragon fight's arena, an end gateway's way out)
+   * squares of chunks kept loaded besides the player's circle, in named groups: chunk x, z and radius (vanilla chunk
+   * tickets — the dragon fight's arena, an end gateway's way out and its far side)
    */
-  private readonly tickets = new Map<string, [number, number, number]>();
+  private readonly tickets = new Map<string, [number, number, number][]>();
 
   constructor(readonly world: World, readonly pool: WorkerPool, readonly renderer: WorldRenderer) {
     pool.jobSource = () => this.nextJob();
@@ -58,17 +58,21 @@ export class ChunkManager {
 
   /** keep the chunks within `t`'s radius (a square) of its chunk loaded under `name`; null lets them go */
   setTicket(name: string, t: [number, number, number] | null): void {
-    const old = this.tickets.get(name);
-    if (t && old && old[0] === t[0] && old[1] === t[1] && old[2] === t[2]) return;
-    if (!t && !old) return;
-    if (t) this.tickets.set(name, t);
-    else this.tickets.delete(name);
+    this.setTickets(name, t ? [t] : []);
+  }
+
+  /** the squares kept loaded under `group` from now on (those it had and hasn't now are let go) */
+  setTickets(group: string, squares: [number, number, number][]): void {
+    const old = this.tickets.get(group) ?? [];
+    if (old.length === squares.length && old.every((o, i) => o[0] === squares[i][0] && o[1] === squares[i][1] && o[2] === squares[i][2])) return;
+    if (squares.length) this.tickets.set(group, squares.map(([x, z, r]) => [x, z, r]));
+    else this.tickets.delete(group);
     this.genQueueDirty = true;
-    if (old) this.unloadFar();
+    if (old.length) this.unloadFar();
   }
 
   private ticketed(cx: number, cz: number): boolean {
-    for (const [tx, tz, r] of this.tickets.values()) if (Math.abs(cx - tx) <= r && Math.abs(cz - tz) <= r) return true;
+    for (const list of this.tickets.values()) for (const [tx, tz, r] of list) if (Math.abs(cx - tx) <= r && Math.abs(cz - tz) <= r) return true;
     return false;
   }
 
@@ -104,15 +108,16 @@ export class ChunkManager {
         if (this.world.chunks.has(key) || this.requested.has(key)) continue;
         q.push([cx, cz, d2]);
       }
-    for (const [tx, tz, r] of this.tickets.values())
-      for (let cz = tz - r; cz <= tz + r; cz++)
-        for (let cx = tx - r; cx <= tx + r; cx++) {
-          const dx = cx - this.centerX, dz = cz - this.centerZ, d2 = dx * dx + dz * dz;
-          if (d2 <= R * R + R) continue; // (queued above)
-          const key = Chunk.key(cx, cz);
-          if (this.world.chunks.has(key) || this.requested.has(key)) continue;
-          q.push([cx, cz, d2]);
-        }
+    for (const list of this.tickets.values())
+      for (const [tx, tz, r] of list)
+        for (let cz = tz - r; cz <= tz + r; cz++)
+          for (let cx = tx - r; cx <= tx + r; cx++) {
+            const dx = cx - this.centerX, dz = cz - this.centerZ, d2 = dx * dx + dz * dz;
+            if (d2 <= R * R + R) continue; // (queued above)
+            const key = Chunk.key(cx, cz);
+            if (this.world.chunks.has(key) || this.requested.has(key)) continue;
+            q.push([cx, cz, d2]);
+          }
     q.sort((a, b) => b[2] - a[2]); // pop from end = nearest
     this.genQueue = q.map(([x, z]) => [x, z]);
     this.genQueueDirty = false;
