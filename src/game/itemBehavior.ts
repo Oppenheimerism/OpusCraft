@@ -15,6 +15,10 @@ export interface ItemBehavior {
   useOn?(level: Level, p: Player, stack: ItemStack, hit: BlockHit): UseResult;
   /** vanilla Item.use: used in the air (or after useOn passed) */
   use?(level: Level, p: Player, stack: ItemStack): UseResult;
+  /** vanilla Item.inventoryTick: every tick it's in a player's inventory (`selected`: its slot's index is the hotbar's pick) */
+  inventoryTick?(level: Level, p: Player, stack: ItemStack, slot: number, selected: boolean): void;
+  /** vanilla Item.onCraftedBy: taken from a crafting result (a map zoomed out or locked becomes a new map) */
+  onCraftedBy?(level: Level, p: Player, stack: ItemStack): void;
 }
 
 const ITEM_BEHAVIORS = new Map<string, ItemBehavior>();
@@ -26,4 +30,9 @@ export function registerItemBehavior(id: string, b: ItemBehavior): void {
 
 export function itemBehaviorOf(id: string): ItemBehavior | undefined {
   return ITEM_BEHAVIORS.get(id);
+}
+
+/** vanilla ItemStack.onCraftedBy */
+export function craftedBy(p: Player, stack: ItemStack): void {
+  ITEM_BEHAVIORS.get(stack.item.id)?.onCraftedBy?.(p.level, p, stack);
 }

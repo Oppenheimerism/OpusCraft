@@ -42,6 +42,7 @@ import { PoiManager } from './poi';
 import './redstone/components';
 import './villageBlocks';
 import './banners';
+import './maps';
 import './endPortal';
 import './golems';
 

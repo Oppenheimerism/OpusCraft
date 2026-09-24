@@ -66,6 +66,8 @@ export interface WorldMeta {
   bonusChest?: boolean;
   gameRules?: Record<string, boolean | number>;
   worldSpawn?: [number, number, number];
+  /** vanilla data/idcounts.dat: the last map id handed out (the maps are records of their own, see saveWorldData) */
+  lastMapId?: number;
 }
 
 export interface SavedChunk {
@@ -129,7 +131,16 @@ export async function listWorlds(): Promise<WorldMeta[]> {
   return all.sort((a, b) => b.lastPlayed - a.lastPlayed);
 }
 
+/** more of a world to write whenever its meta is (the maps, game/mapData.ts) */
+type MetaSaveHook = (m: WorldMeta) => Promise<void>;
+const metaSaveHooks: MetaSaveHook[] = [];
+
+export function onWorldMetaSave(h: MetaSaveHook): void {
+  metaSaveHooks.push(h);
+}
+
 export async function saveWorldMeta(m: WorldMeta): Promise<void> {
+  for (const h of metaSaveHooks) await h(m);
   await tx('worlds', 'readwrite', (s) => s.put(m));
 }
 
@@ -354,4 +365,24 @@ export async function saveChunks(list: SavedChunk[]): Promise<void> {
 
 export async function loadChunk(key: string): Promise<SavedChunk | undefined> {
   return tx<SavedChunk>('chunks', 'readonly', (s) => s.get(key));
+}
+
+// ---------------------------------------------------------------------------
+// A world's own data records (vanilla's data/ folder: map_<id>.dat and the like), kept in the chunk store under
+// <world>/data/<name> (never a chunk's key: those have a comma), so deleting the world deletes them too
+
+export function worldDataKey(worldId: string, name: string): string {
+  return `${worldId}/data/${name}`;
+}
+
+export async function saveWorldData(list: { key: string; data: unknown }[]): Promise<void> {
+  if (!list.length) return;
+  await tx('chunks', 'readwrite', (s) => {
+    for (const r of list) s.put(r);
+  });
+}
+
+export async function loadWorldData<T>(worldId: string, name: string): Promise<T | undefined> {
+  const r = await tx<{ key: string; data: T }>('chunks', 'readonly', (s) => s.get(worldDataKey(worldId, name)));
+  return r?.data;
 }

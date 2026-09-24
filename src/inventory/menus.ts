@@ -10,6 +10,7 @@ import { hasBinding } from '../item/enchantHelper';
 import { equipSound } from '../item/equipment';
 import { applyDyes, dyeColorName, isDyeable } from '../item/dyedColor';
 import { customRecipeFor, type CustomRecipe } from './customRecipes';
+import { craftedBy } from '../game/itemBehavior';
 
 const ARMOR_ICONS = ['slot_boots', 'slot_leggings', 'slot_chestplate', 'slot_helmet'];
 const ARMOR_SLOT_OF: Record<string, number> = { feet: 0, legs: 1, chest: 2, head: 3 };
@@ -61,7 +62,9 @@ export class ResultSlot extends Slot {
     this.set(null);
     return it;
   }
-  override onTake(p: Player, _s: ItemStack): void {
+  override onTake(p: Player, taken: ItemStack): void {
+    // (vanilla checkTakeAchievements → ItemStack.onCraftedBy: a zoomed-out map becomes its new map)
+    craftedBy(p, taken);
     const c = this.craft;
     // (a special recipe's own remainders: the book or banner copied from stays)
     const rest = this.menu.custom?.remaining?.(c.items, this.menu.gridW) ?? null;
@@ -167,6 +170,7 @@ export class InventoryMenu extends CraftingMenuBase {
     const before = s.copy();
     const armor = s.item.armor ? ARMOR_SLOT_OF[s.item.armor.slot] : -1;
     if (index === 0) {
+      craftedBy(p, s);
       if (!this.moveItemStackTo(s, 9, 45, true)) return null;
       slot.onQuickCraft(s, before);
     } else if (index >= 1 && index < 5) {
@@ -212,6 +216,7 @@ export class CraftingMenu extends CraftingMenuBase {
     if (!s) return null;
     const before = s.copy();
     if (index === 0) {
+      craftedBy(p, s);
       if (!this.moveItemStackTo(s, 10, 46, true)) return null;
       slot.onQuickCraft(s, before);
     } else if (index >= 10 && index < 46) {
