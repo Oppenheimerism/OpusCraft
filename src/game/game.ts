@@ -483,6 +483,7 @@ export class Game {
       this.player.xpProgress = pd.xpProgress;
       this.player.xpTotal = pd.xpTotal;
       this.player.enchantmentSeed = pd.xpSeed ?? 0;
+      if (pd.uuid) this.player.uuid = pd.uuid;
       this.player.setGameMode(pd.gameMode as GameMode);
       this.player.flying = pd.flying && this.player.mayFly;
       this.player.inventory.selected = pd.selected;
@@ -550,7 +551,7 @@ export class Game {
     m.player = {
       x: p.x, y: p.y, z: p.z, yaw: p.yaw, pitch: p.pitch,
       health: p.health, food: p.food.level, saturation: p.food.saturation, exhaustion: p.food.exhaustion,
-      xpLevel: p.xpLevel, xpProgress: p.xpProgress, xpTotal: p.xpTotal, xpSeed: p.enchantmentSeed,
+      xpLevel: p.xpLevel, xpProgress: p.xpProgress, xpTotal: p.xpTotal, xpSeed: p.enchantmentSeed, uuid: p.uuid,
       gameMode: p.gameMode, flying: p.flying, selected: p.inventory.selected,
       inventory: p.inventory.main.map(st), armor: p.inventory.armor.map(st),
       spawn: [p.spawnX, p.spawnY, p.spawnZ],

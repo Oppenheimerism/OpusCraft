@@ -26,6 +26,7 @@ import { BIOMES } from '../world/gen/biomes';
 import type { PoiKind } from '../game/poi';
 import { findStandUpPosition } from '../game/sleep';
 import { summonGolemNear } from './ironGolem';
+import { GossipContainer, type GossipEntry } from './gossip';
 import { wrapDegrees } from '../core/math';
 
 // ---------------------------------------------------------------------------
@@ -1365,6 +1366,10 @@ export class Villager extends AgeableMob {
   foodLevel = 0;
   /** vanilla lastGossipTime */
   lastGossipTime = 0;
+  /** vanilla gossips: what it has heard about players (and mobs) */
+  readonly gossips = new GossipContainer();
+  /** vanilla lastGossipDecayTime */
+  private lastGossipDecayTime = 0;
   /** vanilla GOLEM_DETECTED_RECENTLY: until when (it lasts 600 ticks from the sighting) */
   golemDetectedUntil = -1;
 
@@ -1483,6 +1488,7 @@ export class Villager extends AgeableMob {
   override tick(): void {
     super.tick();
     if (this.unhappyCounter > 0) this.unhappyCounter--;
+    this.maybeDecayGossip();
     // vanilla LivingEntity.tick: asleep in a bed that's gone
     if (this.sleepingPos && !this.bedOrientation()) this.stopSleeping();
   }
@@ -1505,6 +1511,7 @@ export class Villager extends AgeableMob {
       }
     }
     if (this.lastTradedPlayer) {
+      this.onReputationEvent('trade', this.lastTradedPlayer);
       // (vanilla entity event 14)
       this.addParticlesAroundSelf('happy_villager');
       this.lastTradedPlayer = null;
@@ -1710,15 +1717,36 @@ export class Villager extends AgeableMob {
   gossip(other: Villager, now: number): void {
     const ready = (t: number) => now < t || now >= t + 1200;
     if (!ready(this.lastGossipTime) || !ready(other.lastGossipTime)) return;
-    // (what they've heard of players waits for reputation)
+    this.gossips.transferFrom(other.gossips, this.random, 10);
     this.lastGossipTime = now;
     other.lastGossipTime = now;
     this.spawnGolemIfNeeded(now, 5);
   }
 
-  /** what the villagers think of a player (vanilla getPlayerReputation) */
-  playerReputation(_p: Entity): number {
-    return 0;
+  /** what it thinks of a player (vanilla getPlayerReputation) */
+  playerReputation(p: Entity): number {
+    return this.gossips.reputation(p.uuid);
+  }
+
+  /** vanilla Villager.onReputationEventFrom: something someone did, as this villager saw it */
+  onReputationEvent(type: 'zombie_villager_cured' | 'trade' | 'villager_hurt' | 'villager_killed', target: Entity): void {
+    const id = target.uuid;
+    if (type === 'zombie_villager_cured') {
+      this.gossips.add(id, 'major_positive', 20);
+      this.gossips.add(id, 'minor_positive', 25);
+    } else if (type === 'trade') this.gossips.add(id, 'trading', 2);
+    else if (type === 'villager_hurt') this.gossips.add(id, 'minor_negative', 25);
+    else this.gossips.add(id, 'major_negative', 25);
+  }
+
+  /** vanilla maybeDecayGossip: once a day what it has heard fades */
+  private maybeDecayGossip(): void {
+    const now = this.level.gameTime;
+    if (this.lastGossipDecayTime === 0) this.lastGossipDecayTime = now;
+    else if (now >= this.lastGossipDecayTime + 24000) {
+      this.gossips.decay();
+      this.lastGossipDecayTime = now;
+    }
   }
 
   // --- iron golems ---------------------------------------------------------------------------------------------
@@ -1798,8 +1826,15 @@ export class Villager extends AgeableMob {
   }
 
   private startTrading(p: Player): void {
+    this.updateSpecialPrices(p);
     this.tradingPlayer = p;
     this.level.onOpenMerchant?.(this, p);
+  }
+
+  /** vanilla updateSpecialPrices: a player it thinks well of pays less, one it doesn't more */
+  private updateSpecialPrices(p: Player): void {
+    const rep = this.playerReputation(p);
+    if (rep !== 0) for (const o of this.getOffers()) o.addToSpecialPriceDiff(-Math.floor(Math.fround(rep * Math.fround(o.priceMultiplier))));
   }
 
   /** vanilla AbstractVillager.stopTrading (and Villager's: the player's discounts go) */
@@ -1925,13 +1960,18 @@ export class Villager extends AgeableMob {
     if (!ok) return false;
     this.lastDamageStamp = this.level.gameTime;
     if (this.isSleeping()) this.stopSleeping();
-    // vanilla Villager.setLastHurtByMob: a player's hit angers it (entity event 13)
-    if (attacker?.type === 'player' && this.isAlive) this.addParticlesAroundSelf('angry_villager');
+    // vanilla Villager.setLastHurtByMob: it remembers who hurt it, and a player's hit angers it (entity event 13)
+    if (attacker instanceof LivingEntity) {
+      this.onReputationEvent('villager_hurt', attacker);
+      if (attacker.type === 'player' && this.isAlive) this.addParticlesAroundSelf('angry_villager');
+    }
     return true;
   }
 
   override die(source: string, attacker: Entity | null = null): void {
     if (this.dead) return;
+    // vanilla tellWitnessesThatIWasMurdered: every villager that could see it will remember who did it
+    if (attacker) for (const e of this.mem.visibleLiving) if (e instanceof Villager && e !== this) e.onReputationEvent('villager_killed', attacker);
     this.releaseAllPois();
     super.die(source, attacker);
     this.stopTrading();
@@ -1964,6 +2004,9 @@ export class Villager extends AgeableMob {
     if (m.lastSlept !== null) d.lastSlept = m.lastSlept;
     if (m.lastWoken !== null) d.lastWoken = m.lastWoken;
     if (m.lastWorkedAtPoi !== null) d.lastWorked = m.lastWorkedAtPoi;
+    const g = this.gossips.save();
+    if (g.length) d.gossips = JSON.stringify(g);
+    if (this.lastGossipDecayTime) d.lastGossipDecay = this.lastGossipDecayTime;
     return d;
   }
 
@@ -1994,6 +2037,8 @@ export class Villager extends AgeableMob {
     if (typeof d.lastSlept === 'number') m.lastSlept = d.lastSlept;
     if (typeof d.lastWoken === 'number') m.lastWoken = d.lastWoken;
     if (typeof d.lastWorked === 'number') m.lastWorkedAtPoi = d.lastWorked;
+    if (typeof d.gossips === 'string') this.gossips.load(JSON.parse(d.gossips) as GossipEntry[]);
+    this.lastGossipDecayTime = Number(d.lastGossipDecay ?? 0);
     const s = pos(d.sleeping);
     if (s) {
       this.sleepingPos = s;

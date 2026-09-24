@@ -30,6 +30,8 @@ export type MobCategory = 'monster' | 'creature' | 'ambient' | 'water_creature' 
 
 export interface SavedEntity {
   id: string;
+  /** vanilla UUID (only once something has had to remember the entity) */
+  uuid?: string;
   x: number;
   y: number;
   z: number;
@@ -915,6 +917,7 @@ export abstract class Mob extends LivingEntity {
   save(): SavedEntity {
     return {
       id: this.type,
+      uuid: this.hasUuid ? this.uuid : undefined,
       x: this.x,
       y: this.y,
       z: this.z,
@@ -939,6 +942,7 @@ export abstract class Mob extends LivingEntity {
   }
 
   load(d: SavedEntity): void {
+    if (typeof d.uuid === 'string') this.uuid = d.uuid;
     this.moveTo(d.x, d.y, d.z, d.yaw, d.pitch);
     this.bodyYaw = this.bodyYawO = this.headYaw = this.headYawO = d.yaw;
     this.dx = d.dx;

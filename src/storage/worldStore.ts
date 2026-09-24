@@ -35,6 +35,8 @@ export interface WorldMeta {
     xpLevel: number; xpProgress: number; xpTotal: number;
     /** vanilla XpSeed: the enchanting table's offer seed */
     xpSeed?: number;
+    /** vanilla UUID: who the player is to the villagers that gossip about them */
+    uuid?: string;
     gameMode: string; flying: boolean; selected: number;
     inventory: (SavedStack | null)[];
     armor: (SavedStack | null)[];

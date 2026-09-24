@@ -37,7 +37,7 @@ export class MerchantOffer {
   /** vanilla getCostA: the first price, raised by demand (never below one or above a stack) */
   costA(): ItemStack {
     const i = this.baseCostA.count;
-    const j = Math.max(0, Math.floor(i * this.demand * this.priceMultiplier));
+    const j = Math.max(0, Math.floor(Math.fround(i * this.demand * Math.fround(this.priceMultiplier))));
     const s = ItemStack.of(this.baseCostA.id, 1);
     s.count = Math.max(1, Math.min(s.maxStack, i + j + this.specialPriceDiff));
     return s;

@@ -9,6 +9,14 @@ import { behaviorOf, behaviorOfBlock } from '../game/blockBehavior';
 
 let nextEntityId = 1;
 
+/** a fresh random version-4 UUID (vanilla Mth.createInsecureUUID) */
+function newUuid(): string {
+  const c = globalThis.crypto;
+  if (c?.randomUUID) return c.randomUUID();
+  const h = () => Math.floor(Math.random() * 0x10000).toString(16).padStart(4, '0');
+  return `${h()}${h()}-${h()}-4${h().slice(1)}-${((Math.random() * 4) | 8).toString(16)}${h().slice(1)}-${h()}${h()}${h()}`;
+}
+
 /** which portal an entity stands in (vanilla PortalProcessor.portal: NetherPortalBlock or EndPortalBlock) */
 export type PortalKind = 'nether' | 'end';
 
@@ -24,6 +32,18 @@ function isLavaSource(st: number): boolean {
 export abstract class Entity {
   readonly id = nextEntityId++;
   abstract readonly type: string;
+  private uuidValue: string | null = null;
+  /** vanilla Entity.uuid: who it is for good (made the first time anything needs to remember it, then saved with it) */
+  get uuid(): string {
+    return (this.uuidValue ??= newUuid());
+  }
+  set uuid(v: string) {
+    this.uuidValue = v;
+  }
+  /** whether anything has asked for its uuid yet (it's only saved then) */
+  get hasUuid(): boolean {
+    return this.uuidValue !== null;
+  }
   x = 0;
   y = 0;
   z = 0;

@@ -187,8 +187,15 @@ class DefendVillageTargetGoal extends TargetGoal {
     this.potential = null;
     if (!p || !p.isAlive) return false;
     const box = g.bb.inflate(10, 8, 10);
-    if (!box.intersects(p.bb)) return false;
-    for (const e of g.level.getEntities(box, (e) => e instanceof Villager && e.isAlive)) if ((e as Villager).playerReputation(p) <= -100) this.potential = p;
+    // (vanilla TargetingConditions.forCombat().range(64): what it could fight, in sight)
+    const seen = (e: LivingEntity) => {
+      const r = 64 * Math.max(e.visibilityPercent(g), 2 / 64);
+      return e.distanceToSqr(g.x, g.y, g.z) <= r * r && g.sensing.hasLineOfSight(e);
+    };
+    if (!box.intersects(p.bb) || !g.canAttack(p) || !seen(p)) return false;
+    for (const e of g.level.getEntities(box, (e) => e instanceof Villager && e.isAlive)) {
+      if (seen(e as Villager) && (e as Villager).playerReputation(p) <= -100) this.potential = p;
+    }
     if (!this.potential) return false;
     return p.gameMode !== 'spectator' && p.gameMode !== 'creative';
   }
