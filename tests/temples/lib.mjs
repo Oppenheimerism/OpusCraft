@@ -119,3 +119,41 @@ export function prop(m, level, x, y, z, name) {
 export function ticks(level, n) {
   for (let i = 0; i < n; i++) level.tick();
 }
+
+/**
+ * a flat world (`under` below `ground`, air above, all `biome`) with structure pieces placed into it chunk by chunk
+ * as the chunk workers place them (each chunk its own random), loaded into a World with a Level over it
+ */
+export function pieceLevel(m, pieces, { ground = 70, under = 'stone', biome = m.B.plains, margin = 1, seed = 'flat' } = {}) {
+  let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity;
+  for (const p of pieces) {
+    x0 = Math.min(x0, p.box.minX);
+    z0 = Math.min(z0, p.box.minZ);
+    x1 = Math.max(x1, p.box.maxX);
+    z1 = Math.max(z1, p.box.maxZ);
+  }
+  const UNDER = m.S(under);
+  const ctxs = [];
+  for (let cx = (x0 >> 4) - margin; cx <= (x1 >> 4) + margin; cx++)
+    for (let cz = (z0 >> 4) - margin; cz <= (z1 >> 4) + margin; cz++) {
+      const blocks = new Uint16Array(m.COLUMN_VOLUME);
+      for (let y = m.MIN_Y; y < ground; y++) for (let lz = 0; lz < 16; lz++) for (let lx = 0; lx < 16; lx++) blocks[m.colIndex(lx, y, lz)] = UNDER;
+      const ctx = new m.GenContext(cx, cz, blocks, new Uint8Array(256).fill(biome));
+      ctx.computeHeightmaps();
+      const chunk = new m.BoundingBox(ctx.x0, m.MIN_Y + 1, ctx.z0, ctx.x0 + 15, m.MAX_Y - 1, ctx.z0 + 15);
+      const r = new m.Rand(cx * 31 + cz, 7);
+      for (const p of pieces) if (p.box.intersects(chunk)) p.postProcess(ctx, chunk, r);
+      ctxs.push(ctx);
+    }
+  const world = new m.World();
+  for (const ctx of ctxs)
+    world.addChunk({
+      cx: ctx.cx, cz: ctx.cz, blocks: ctx.blocks, light: m.computeChunkLight(ctx.blocks), biomes: ctx.biomes, pending: ctx.pendingWrites(),
+      fluidTicks: ctx.fluidTicks, blockEntities: ctx.blockEntities, entities: ctx.entities, postProcess: ctx.postProcess,
+    });
+  const level = new m.Level(world, seed);
+  const sounds = [];
+  level.sound = { play: (name, x, y, z, volume, pitch) => sounds.push({ name, x, y, z, volume, pitch, t: level.gameTime }), playUI() {} };
+  level.particles = { blockBreak() {}, blockHit() {}, poof() {}, blockParticle() {}, fallingDust() {}, spawn() {}, dust() {} };
+  return { world, level, ctxs, sounds };
+}

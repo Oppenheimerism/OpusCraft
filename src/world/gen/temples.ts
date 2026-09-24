@@ -14,11 +14,13 @@ import { largeFeatureRandom, saltedRandom } from './jigsaw';
 import { BoundingBox, type StructurePiece } from './structure';
 import { DesertPyramidPiece } from './desertPyramid';
 import { SwampHutPiece } from './swampHut';
+import { JungleTemplePiece } from './jungleTemple';
+import { iglooPieces } from './igloo';
 
 export type TempleKind = 'desert_pyramid' | 'igloo' | 'jungle_pyramid' | 'swamp_hut';
 
 /** the kinds placed so far, in vanilla's order in the SURFACE_STRUCTURES step (the structures by name) */
-export const TEMPLE_KINDS: TempleKind[] = ['desert_pyramid', 'swamp_hut'];
+export const TEMPLE_KINDS: TempleKind[] = ['desert_pyramid', 'igloo', 'jungle_pyramid', 'swamp_hut'];
 
 interface TempleSet {
   /** vanilla worldgen/structure_set/<set>.json salt */
@@ -139,6 +141,18 @@ export class Temples {
         for (let z = p.box.minZ; z <= p.box.maxZ; z++) for (let x = p.box.minX; x <= p.box.maxX; x++) low = Math.min(low, t.oceanFloorHeight(x, z));
         p.moveToY(low - r.nextInt(3));
         return { ...s, pieces: [p], bounds: copy(p.box), afterPlace: (ctx, chunk) => p.afterPlace(ctx, chunk) };
+      }
+      case 'igloo': {
+        // (each piece moved to the ground at the dome's doorstep, which vanilla works out as it places each one)
+        const pieces = iglooPieces(r, x0, z0, (x, z) => t.firstFreeHeight(x, z));
+        const bounds = copy(pieces[0].box);
+        for (const p of pieces) bounds.encapsulate(p.box);
+        return { ...s, pieces, bounds };
+      }
+      case 'jungle_pyramid': {
+        const p = new JungleTemplePiece(this.seed, r, x0, z0);
+        p.moveToY(averageGround(t, p.box));
+        return { ...s, pieces: [p], bounds: copy(p.box) };
       }
       case 'swamp_hut': {
         const p = new SwampHutPiece(this.seed, r, x0, z0);

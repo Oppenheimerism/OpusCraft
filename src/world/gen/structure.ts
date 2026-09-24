@@ -87,17 +87,8 @@ function transformState(st: number, flip: boolean, rot: boolean): number {
       st = b.with(st, 'facing', f);
     }
   }
-  // vanilla VineBlock, TripWireBlock, RedStoneWireBlock, CrossCollisionBlock...: a property per side, turned with the block
-  if (b.propIndex('north') >= 0 && b.propIndex('east') >= 0 && b.propIndex('south') >= 0 && b.propIndex('west') >= 0) {
-    let n = b.get(st, 'north'), e = b.get(st, 'east'), s = b.get(st, 'south'), w = b.get(st, 'west');
-    if (flip) [n, s] = [s, n];
-    if (rot) [n, e, s, w] = [w, n, e, s];
-    st = b.with(b.with(b.with(b.with(st, 'north', n), 'east', e), 'south', s), 'west', w);
-  }
   // vanilla RotatedPillarBlock.rotate: a quarter turn swaps x and z
   if (rot && b.propIndex('axis') >= 0 && b.get(st, 'axis') !== 'y') st = b.with(st, 'axis', b.get(st, 'axis') === 'x' ? 'z' : 'x');
-  // vanilla DoorBlock.mirror: the hinge goes to the other side
-  if (flip && b.propIndex('hinge') >= 0) st = b.with(st, 'hinge', b.get(st, 'hinge') === 'left' ? 'right' : 'left');
   if (b.name === 'rail') {
     let s = b.get<string>(st, 'shape');
     if (flip) s = RAIL_FLIP[s] ?? s;
@@ -106,7 +97,8 @@ function transformState(st: number, flip: boolean, rot: boolean): number {
   }
   // vanilla DoorBlock.mirror: a mirrored door hangs from its other side
   if (flip && b.propIndex('hinge') >= 0) st = b.with(st, 'hinge', b.get(st, 'hinge') === 'left' ? 'right' : 'left');
-  // vanilla CrossCollisionBlock (fences, bars, panes) mirror/rotate: the connections turn with the piece
+  // vanilla CrossCollisionBlock (fences, bars, panes), VineBlock, TripWireBlock, RedStoneWireBlock mirror/rotate: the
+  // connections turn with the piece
   if (b.propIndex('north') >= 0 && b.propIndex('east') >= 0 && b.propIndex('south') >= 0 && b.propIndex('west') >= 0) {
     let n = b.get(st, 'north'), e = b.get(st, 'east'), s = b.get(st, 'south'), w = b.get(st, 'west');
     if (flip) [n, s] = [s, n];

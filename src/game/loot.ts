@@ -86,6 +86,28 @@ export const LOOT_TABLES: Record<string, LootPool[]> = {
     { rolls: 4, entries: [e('bone', 10, [1, 8]), e('gunpowder', 10, [1, 8]), e('rotten_flesh', 10, [1, 8]), e('string', 10, [1, 8]), e('sand', 10, [1, 8])] },
     { rolls: 1, entries: [e('', 6), e('dune_armor_trim_smithing_template', 1, [2, 2])] },
   ],
+  'chests/igloo_chest': [
+    {
+      rolls: [2, 8],
+      entries: [
+        e('apple', 15, [1, 3]), e('coal', 15, [1, 4]), e('gold_nugget', 10, [1, 3]), e('stone_axe', 2), e('rotten_flesh', 10), e('emerald', 1),
+        e('wheat', 10, [2, 3]),
+      ],
+    },
+    { rolls: 1, entries: [e('golden_apple', 1)] },
+  ],
+  'chests/jungle_temple': [
+    {
+      rolls: [2, 6],
+      entries: [
+        e('diamond', 3, [1, 3]), e('iron_ingot', 10, [1, 5]), e('gold_ingot', 15, [2, 7]), e('bamboo', 15, [1, 3]), e('emerald', 2, [1, 3]),
+        e('bone', 20, [4, 6]), e('rotten_flesh', 16, [3, 7]), e('saddle', 3), e('iron_horse_armor', 1), e('golden_horse_armor', 1),
+        e('diamond_horse_armor', 1), lv('book', 1, 30),
+      ],
+    },
+    { rolls: 1, entries: [e('', 2), e('wild_armor_trim_smithing_template', 1, [2, 2])] },
+  ],
+  'chests/jungle_temple_dispenser': [{ rolls: [1, 2], entries: [e('arrow', 30, [2, 7])] }],
   // strongholds: the chest corridors' altars, the storeroom crossings and the libraries
   'chests/stronghold_corridor': [
     {

@@ -16,6 +16,8 @@ export function templesFor(seed: string): Temples {
 /** the structure ids /locate knows them by */
 const IDS: Record<string, TempleKind> = {
   'minecraft:desert_pyramid': 'desert_pyramid',
+  'minecraft:igloo': 'igloo',
+  'minecraft:jungle_pyramid': 'jungle_pyramid',
   'minecraft:swamp_hut': 'swamp_hut',
 };
 
