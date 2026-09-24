@@ -519,7 +519,8 @@ export abstract class Mob extends LivingEntity {
       const chance = this.handDropChance + (attacker?.type === 'player' ? 0.01 * looting : 0);
       if (this.mainHand && !hasVanishing(this.mainHand) && this.random.nextFloat() < chance) {
         const s = this.mainHand;
-        if (s.item.maxDamage) s.damage = s.item.maxDamage - 1 - this.random.nextInt(Math.max(1, s.item.maxDamage - 3));
+        // (a guaranteed drop, something it picked up, comes back as it was)
+        if (s.item.maxDamage && chance <= 1) s.damage = s.item.maxDamage - 1 - this.random.nextInt(Math.max(1, s.item.maxDamage - 3));
         this.spawnAtLocation(s);
         this.mainHand = null;
       }

@@ -206,6 +206,35 @@ export function animatePiglinEars(root: ModelPart, limbSwing: number, limbAmount
   head.child('right_ear').zRot = PI / 6 + Math.cos(g) * h;
 }
 
+/** vanilla PiglinArmPose */
+export type PiglinArmPose = 'dancing' | 'admiring_item' | 'attacking_with_melee_weapon' | 'crossbow_charge' | 'crossbow_hold' | 'default';
+
+/**
+ * vanilla PiglinModel.setupAnim, over the humanoid pose: the victory dance (arms flung out, head and body bobbing),
+ * the weapon held high while it means to strike, and gold held up to the eyes while it admires it
+ */
+export function animatePiglinPose(root: ModelPart, pose: PiglinArmPose, age: number, attackTime: number): void {
+  const head = root.child('head'), body = root.child('body'), ra = root.child('right_arm'), la = root.child('left_arm');
+  if (pose === 'dancing') {
+    const f = age / 60;
+    head.child('right_ear').zRot = PI / 6 + (PI / 180) * Math.sin(f * 30) * 10;
+    head.child('left_ear').zRot = -PI / 6 - (PI / 180) * Math.cos(f * 30) * 10;
+    head.x = Math.sin(f * 10);
+    head.y = Math.sin(f * 40) + 0.4;
+    ra.zRot = (PI / 180) * (70 + Math.cos(f * 40) * 10);
+    la.zRot = -ra.zRot;
+    ra.y = la.y = Math.sin(f * 40) * 0.5 + 1.5;
+    body.y = Math.sin(f * 40) * 0.35;
+  } else if (pose === 'attacking_with_melee_weapon' && attackTime === 0) {
+    ra.xRot = -1.8;
+  } else if (pose === 'admiring_item') {
+    head.xRot = 0.5;
+    head.yRot = 0;
+    la.yRot = 0.5;
+    la.xRot = -0.9;
+  }
+}
+
 /**
  * vanilla HoglinModel.createBodyLayer (the zoglin wears it too): a long head hung at 50° with two tusks and two
  * flat ears, a deep body with a flat mane of bristles along the spine, stout legs. Babies: AgeableListModel(true, 8,

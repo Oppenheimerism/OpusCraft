@@ -54,6 +54,7 @@ import { Tutorial, TutorialStep } from './tutorial';
 import { keyDisplayName } from './input';
 import { LivingEntity } from '../entity/living';
 import { Monster } from '../entity/monsters';
+import { Piglin, isLovedItem } from '../entity/piglin';
 import type { MinecartChest } from '../entity/minecart';
 import { ChestBoat } from '../entity/boat';
 import { nightVisionScale, blindnessFog, applyNausea } from '../render/effectVisuals';
@@ -1578,6 +1579,12 @@ export class Game {
       if (cause === this.player) this.advancements.trigger('breed', { breed: child.type });
     };
     lvl.onPlayerArrowHit = () => this.advancements.trigger('shoot_arrow');
+    lvl.onThrownItemPickedUp = (stack, by) => {
+      if (by instanceof Piglin && by.isAdult() && isLovedItem(stack)) this.advancements.trigger('distract_piglin', { distract: 'thrown' });
+    };
+    this.interaction.onInteractedWithEntity = (stack, e) => {
+      if (e instanceof Piglin && e.isAdult() && stack?.item.id === 'gold_ingot') this.advancements.trigger('distract_piglin', { distract: 'directly' });
+    };
     this.interaction.onPlaced = (name) => this.advancements.trigger('place', { place: name });
     this.interaction.onConsumed = (id) => this.advancements.trigger('consume', { consume: id });
     this.interaction.onItemDurability = (item, vehicle) => this.advancements.trigger('item_durability', { durability: { item, vehicle } });

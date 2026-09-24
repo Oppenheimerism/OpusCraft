@@ -81,6 +81,49 @@ export function defaultRandomPosAway(m: Mob, radius: number, yRange: number, ax:
   });
 }
 
+/**
+ * vanilla RandomPos.generateRandomDirectionWithinRadians: an offset within `maxAngle` of the direction (dx, dz), out
+ * to √2 × radius (and dropped when it lands outside the radius square)
+ */
+function randomDirectionWithinRadians(m: Mob, radius: number, yRange: number, dx: number, dz: number, maxAngle: number): Pos | null {
+  const r = m.random;
+  const a = Math.atan2(dz, dx) - Math.PI / 2 + (2 * r.nextFloat() - 1) * maxAngle;
+  const d = Math.sqrt(r.nextDouble()) * Math.SQRT2 * radius;
+  const x = -d * Math.sin(a), z = d * Math.cos(a);
+  if (Math.abs(x) > radius || Math.abs(z) > radius) return null;
+  return [Math.floor(x), r.nextInt(2 * yRange + 1) - yRange, Math.floor(z)];
+}
+
+/** vanilla DefaultRandomPos.getPosTowards: somewhere up to `radius` off in the direction of a point */
+export function defaultRandomPosTowards(m: Mob, radius: number, yRange: number, tx: number, tz: number, maxAngle: number): Pos | null {
+  const vx = tx - m.x, vz = tz - m.z;
+  return bestOf(m, () => {
+    const d = randomDirectionWithinRadians(m, radius, yRange, vx, vz, maxAngle);
+    if (!d) return null;
+    const p = towardDirection(m, d);
+    if (outsideLimits(p) || !m.navigation.isStableDestination(p[0], p[1], p[2]) || hasMalus(m, p[0], p[1], p[2])) return null;
+    return p;
+  });
+}
+
+/** vanilla LandRandomPos.getPosAway: somewhere up to `radius` off, within 90° of straight away from a point */
+export function landRandomPosAway(m: Mob, radius: number, yRange: number, ax: number, az: number): Pos | null {
+  const vx = m.x - ax, vz = m.z - az;
+  return bestOf(m, () => {
+    const d = randomDirectionWithinRadians(m, radius, yRange, vx, vz, Math.PI / 2);
+    if (!d) return null;
+    const p = towardDirection(m, d);
+    if (outsideLimits(p) || !m.navigation.isStableDestination(p[0], p[1], p[2])) return null;
+    let y = p[1];
+    if (isSolid(m, p[0], y, p[2])) {
+      y++;
+      while (y < MAX_Y && isSolid(m, p[0], y, p[2])) y++;
+    }
+    if (isWater(m, p[0], y, p[2]) || hasMalus(m, p[0], y, p[2])) return null;
+    return [p[0], y, p[2]];
+  });
+}
+
 /** vanilla LandRandomPos.getPos */
 export function landRandomPos(m: Mob, radius: number, yRange: number): Pos | null {
   return bestOf(m, () => {

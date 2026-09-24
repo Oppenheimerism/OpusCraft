@@ -29,6 +29,11 @@ export type Criterion =
   | { t: 'item_durability'; item: string; vehicle: string }
   /** vanilla ride_entity_in_lava: carried that far across lava (horizontally) on that mount, in that dimension */
   | { t: 'ride_in_lava'; vehicle: string; distance: number; dimension: string }
+  /**
+   * vanilla thrown_item_picked_up_by_entity (a #piglin_loved item a grown piglin picked up) and
+   * player_interacted_with_entity (a gold ingot handed to one)
+   */
+  | { t: 'distract_piglin'; how: 'thrown' | 'directly' }
   | { t: 'impossible' };
 
 export interface AdvancementDef {
@@ -130,7 +135,7 @@ const A: AdvancementDef[] = [
   { id: 'nether/fast_travel', parent: 'nether/root', title: 'Subspace Bubble', description: 'Use the Nether to travel 7 km in the Overworld', icon: 'map', frame: 'challenge', criteria: { travelled: { t: 'nether_travel', distance: 7000 } } },
   { id: 'nether/find_fortress', parent: 'nether/root', title: 'A Terrible Fortress', description: 'Break your way into a Nether Fortress', icon: 'nether_bricks', frame: 'task', criteria: { fortress: { t: 'structure', structure: 'fortress' } } },
   { id: 'nether/obtain_crying_obsidian', parent: 'nether/root', title: 'Who is Cutting Onions?', description: 'Obtain Crying Obsidian', icon: 'crying_obsidian', frame: 'task', criteria: { crying_obsidian: inv('crying_obsidian') } },
-  { id: 'nether/distract_piglin', parent: 'nether/root', title: 'Oh Shiny', description: 'Distract Piglins with gold', icon: 'gold_ingot', frame: 'task', criteria: one(never) },
+  { id: 'nether/distract_piglin', parent: 'nether/root', title: 'Oh Shiny', description: 'Distract Piglins with gold', icon: 'gold_ingot', frame: 'task', criteria: { distract_piglin: { t: 'distract_piglin', how: 'thrown' }, distract_piglin_directly: { t: 'distract_piglin', how: 'directly' } }, requirements: [['distract_piglin', 'distract_piglin_directly']] },
   { id: 'nether/ride_strider', parent: 'nether/root', title: 'This Boat Has Legs', description: 'Ride a Strider with a Warped Fungus on a Stick', icon: 'warped_fungus_on_a_stick', frame: 'task', criteria: { used_warped_fungus_on_a_stick: { t: 'item_durability', item: 'warped_fungus_on_a_stick', vehicle: 'strider' } } },
   { id: 'nether/uneasy_alliance', parent: 'nether/return_to_sender', title: 'Uneasy Alliance', description: 'Rescue a Ghast from the Nether, bring it safely home to the Overworld... and then kill it', icon: 'ghast_tear', frame: 'challenge', criteria: one(never) },
   { id: 'nether/loot_bastion', parent: 'nether/find_bastion', title: 'War Pigs', description: 'Loot a Chest in a Bastion Remnant', icon: 'chest', frame: 'task', criteria: one(never) },
@@ -404,6 +409,8 @@ export interface TriggerPayload {
   durability?: { item: string; vehicle: string | null };
   /** a ride across lava so far (ride_in_lava) */
   lavaRide?: { vehicle: string; distance: number; dimension: string };
+  /** how a piglin was given gold (distract_piglin) */
+  distract?: 'thrown' | 'directly';
 }
 
 export class PlayerAdvancements {
@@ -522,6 +529,8 @@ function matches(c: Criterion, p: TriggerPayload): boolean {
       return !!p.structures?.includes(c.structure);
     case 'item_durability':
       return p.durability?.item === c.item && p.durability.vehicle === c.vehicle;
+    case 'distract_piglin':
+      return p.distract === c.how;
     case 'ride_in_lava':
       return !!p.lavaRide && p.lavaRide.vehicle === c.vehicle && p.lavaRide.dimension === c.dimension && p.lavaRide.distance >= c.distance;
     case 'changed_dimension':

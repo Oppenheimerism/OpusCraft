@@ -11,6 +11,7 @@ import { Ghast } from '../entity/ghast';
 import { Blaze } from '../entity/blaze';
 import { Hoglin, Zoglin } from '../entity/hoglin';
 import { Strider } from '../entity/strider';
+import { Piglin } from '../entity/piglin';
 import { Zombie, ZombifiedPiglin, Skeleton, WitherSkeleton, Creeper, Spider, CaveSpider, Enderman, Slime, MagmaCube, Monster, validSpawnBlock } from '../entity/monsters';
 import { Squid, WaterAnimal } from '../entity/water';
 import { AbstractMinecart, createMinecart, MINECART_TYPES } from '../entity/minecart';
@@ -47,6 +48,7 @@ export const MOB_TYPES: Record<string, (l: Level) => Mob> = {
   hoglin: (l) => new Hoglin(l),
   zoglin: (l) => new Zoglin(l),
   strider: (l) => new Strider(l),
+  piglin: (l) => new Piglin(l),
 };
 
 export function createMob(type: string, level: Level): Mob | null {
@@ -127,7 +129,7 @@ export function isChunkSaved(e: Entity): boolean {
 
 const ENTITY_NAMES: Record<string, string> = {
   pig: 'Pig', cow: 'Cow', sheep: 'Sheep', chicken: 'Chicken', zombie: 'Zombie', skeleton: 'Skeleton', creeper: 'Creeper', spider: 'Spider',
-  cave_spider: 'Cave Spider', enderman: 'Enderman', slime: 'Slime', magma_cube: 'Magma Cube', zombified_piglin: 'Zombified Piglin', ghast: 'Ghast', blaze: 'Blaze', wither_skeleton: 'Wither Skeleton', squid: 'Squid', bat: 'Bat', hoglin: 'Hoglin', zoglin: 'Zoglin', strider: 'Strider',
+  cave_spider: 'Cave Spider', enderman: 'Enderman', slime: 'Slime', magma_cube: 'Magma Cube', zombified_piglin: 'Zombified Piglin', ghast: 'Ghast', blaze: 'Blaze', wither_skeleton: 'Wither Skeleton', squid: 'Squid', bat: 'Bat', hoglin: 'Hoglin', zoglin: 'Zoglin', strider: 'Strider', piglin: 'Piglin',
   arrow: 'Arrow', tnt: 'Primed TNT', item: 'Item', experience_orb: 'Experience Orb', falling_block: 'Falling Block', player: 'Player',
   egg: 'Thrown Egg', snowball: 'Snowball', ender_pearl: 'Thrown Ender Pearl',
   minecart: 'Minecart', chest_minecart: 'Minecart with Chest', boat: 'Boat', chest_boat: 'Boat with Chest',
@@ -191,9 +193,8 @@ const STRIDERS = [S_('strider', 60, 1, 2)];
 /** vanilla EntityType.fireImmune(): these may be spawned standing on magma blocks */
 const FIRE_IMMUNE = new Set(['magma_cube', 'zombified_piglin', 'ghast', 'strider', 'blaze', 'wither_skeleton']);
 /**
- * vanilla NetherBiomes spawn settings (no bats, no water mobs); what isn't in the game yet (ghasts, piglins, hoglins,
- * magma cubes, striders) is picked as often as vanilla picks it and then simply doesn't appear, so the rest come
- * as rarely as they should
+ * vanilla NetherBiomes spawn settings (no bats, no water mobs); what isn't in the game yet would be picked as often
+ * as vanilla picks it and then simply not appear, so the rest come as rarely as they should
  */
 const NETHER_SPAWNS: Record<string, { monster: SpawnerData[]; creature: SpawnerData[]; costs?: Record<string, [number, number]> }> = {
   nether_wastes: { monster: [S_('ghast', 50, 4, 4), S_('zombified_piglin', 100, 4, 4), S_('magma_cube', 2, 4, 4), S_('enderman', 1, 4, 4), S_('piglin', 15, 4, 4)], creature: STRIDERS },
@@ -479,6 +480,8 @@ export class NaturalSpawner {
         return lvl.difficulty !== 'peaceful';
       case 'strider':
         return Strider.checkStriderSpawn(lvl, x, y, z);
+      case 'piglin':
+        return Piglin.checkPiglinSpawn(lvl, x, y, z);
       case 'hoglin':
         // vanilla Hoglin.checkHoglinSpawnRules: any light, just not on a nether wart block
         return BLOCKS[STATE_BLOCK[lvl.world.getState(x, y - 1, z)]].name !== 'nether_wart_block';

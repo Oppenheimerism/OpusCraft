@@ -28,6 +28,7 @@ import { Ghast } from '../entity/ghast';
 import { Blaze } from '../entity/blaze';
 import { Hoglin, Zoglin } from '../entity/hoglin';
 import { Strider } from '../entity/strider';
+import { Piglin } from '../entity/piglin';
 import { Fireball, LargeFireball } from '../entity/fireball';
 import { Squid } from '../entity/water';
 import { ThrownItem } from '../entity/throwable';
@@ -105,6 +106,7 @@ export class EntityRenderDispatcher {
       slime_outer: M.slimeOuterModel(),
       magma_cube: M.magmaCubeModel(),
       zombified_piglin: M.piglinModel(),
+      piglin: M.piglinModel(),
       ghast: M.ghastModel(),
       blaze: M.blazeModel(),
       wither_skeleton: M.skeletonModel(),
@@ -421,6 +423,11 @@ export class EntityRenderDispatcher {
         M.animatePiglinEars(def.root, a.limbSwing, a.limbAmount, a.age);
         M.animateZombieArms(def.root, (e as Zombie).aggressive, attack, a.age);
         break;
+      case 'piglin':
+        M.animateHumanoidMob(def.root, a.limbSwing, a.limbAmount, a.age, a.headYaw, a.headPitch, attack, 'empty', !!e.vehicle);
+        M.animatePiglinEars(def.root, a.limbSwing, a.limbAmount, a.age);
+        M.animatePiglinPose(def.root, (e as Piglin).armPose(), a.age, attack);
+        break;
       case 'skeleton':
       case 'wither_skeleton': {
         const bow = e.mainHand?.item.id === 'bow';
@@ -510,9 +517,14 @@ export class EntityRenderDispatcher {
         b.flush();
       }
     }
-    if (e.mainHand && (e instanceof Zombie || e instanceof Skeleton)) {
+    if (e.mainHand && (e instanceof Zombie || e instanceof Skeleton || e instanceof Piglin)) {
       b.setOverlay(0, 0, 0, 0);
       this.drawHeldItem(b, def.root, e.mainHand, baby, e.usingItem ? e.useItemTicks + p : -1);
+    }
+    // (the piglin's offhand: the gold it's admiring)
+    if (e instanceof Piglin && e.offHand) {
+      b.setOverlay(0, 0, 0, 0);
+      this.drawHeldItem(b, def.root, e.offHand, baby, -1, true);
     }
   }
 
@@ -584,8 +596,8 @@ export class EntityRenderDispatcher {
     b.lightS = ls;
   }
 
-  /** vanilla ItemInHandLayer (right hand) */
-  private drawHeldItem(b: EntityBatch, root: ModelPart, stack: ItemStack, baby: boolean, useTicks: number): void {
+  /** vanilla ItemInHandLayer (the right hand, or the left) */
+  private drawHeldItem(b: EntityBatch, root: ModelPart, stack: ItemStack, baby: boolean, useTicks: number, left = false): void {
     const pose = this.pose;
     pose.push();
     if (baby) {
@@ -593,16 +605,16 @@ export class EntityRenderDispatcher {
       pose.scale(0.5, 0.5, 0.5);
     }
     root.translateAndRotate(pose);
-    root.child('right_arm').translateAndRotate(pose);
+    root.child(left ? 'left_arm' : 'right_arm').translateAndRotate(pose);
     pose.rotX(-90);
     pose.rotY(180);
-    pose.translate(1 / 16, 0.125, -0.625);
+    pose.translate((left ? -1 : 1) / 16, 0.125, -0.625);
     let tex: string | undefined;
     if (stack.item.id === 'bow' && useTicks >= 0) {
       const pull = useTicks / 20;
       tex = pull >= 0.9 ? 'bow_pulling_2' : pull >= 0.65 ? 'bow_pulling_1' : 'bow_pulling_0';
     }
-    this.items.render(b, pose, stack, 'thirdperson_righthand', false, tex);
+    this.items.render(b, pose, stack, 'thirdperson_righthand', left, tex);
     pose.pop();
   }
 
@@ -1010,7 +1022,7 @@ function attackAnim(e: LivingEntity, p: number): number {
  * it's cold): the body twitches ±1.26°
  */
 function shakeYaw(e: LivingEntity): number {
-  return (e instanceof Hoglin && e.isConverting()) || (e instanceof Strider && e.suffocating) ? Math.cos(e.tickCount * 3.25) * Math.PI * 0.4 : 0;
+  return (e instanceof Hoglin && e.isConverting()) || (e instanceof Piglin && e.isConverting()) || (e instanceof Strider && e.suffocating) ? Math.cos(e.tickCount * 3.25) * Math.PI * 0.4 : 0;
 }
 
 /** vanilla renderer shadow radii (babies half) */
@@ -1064,6 +1076,7 @@ function shadowRadius(e: Entity): number {
       break;
     case 'zombie':
     case 'zombified_piglin':
+    case 'piglin':
     case 'skeleton':
     case 'wither_skeleton':
     case 'blaze':

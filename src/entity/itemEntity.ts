@@ -12,6 +12,8 @@ export class ItemEntity extends Entity {
   health = 5;
   bobOffset = Math.random() * Math.PI * 2;
   onPickup: ((e: ItemEntity, p: Player, count: number) => void) | null = null;
+  /** who threw it (vanilla ItemEntity.thrower: a player's Q or click-out drop) */
+  thrower: Entity | null = null;
 
   constructor(level: Level, public stack: ItemStack) {
     super(level);

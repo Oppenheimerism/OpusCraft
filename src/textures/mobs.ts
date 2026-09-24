@@ -865,6 +865,90 @@ function zombifiedPiglin(): TexImage {
 }
 
 // ---------------------------------------------------------------------------
+// Piglin (64x64, vanilla PiglinModel): what the zombified piglin was. Rosy pink skin with darker bristly patches
+// and a dark crown of coarse hair, small black eyes set close either side of a broad snout, two tusks jutting up
+// from the jaw, floppy ears; a leather belt with a gold buckle and studs, the loincloth's flaps over the thighs;
+// dark hooves. The zombified texture shares the layout.
+
+function piglin(): TexImage {
+  const t = img(64, 64);
+  const r = new Rand(0x9161a);
+  const SK = [0xb66a5e, 0xc87a6c, 0xd88a7a, 0xe49a88, 0xeea996, 0xf5b8a4];
+  const SKW = [1, 2, 4, 5, 3, 1];
+  const BRISTLE = [0x8c4c43, 0x9c5a4e, 0xab665a];
+  const HAIR = [0x3a2217, 0x4a2c1e, 0x5b3826];
+  const HIDE = [0x4a2f1b, 0x5a3a22, 0x6b472b, 0x7a5434];
+  const GOLD = [0xd8a922, 0xf0c935, 0xfbe165];
+  const HOOF = [0x2b1f1b, 0x382922, 0x45322a];
+  const skinBox = (b: Box) => {
+    noiseBox(t, b, r, SK, { w: SKW });
+    for (const k of FACES) fleck(t, b[k], r, 0.05, BRISTLE);
+  };
+  const head = boxFaces(0, 0, 10, 8, 8);
+  const snout = boxFaces(31, 1, 4, 4, 1);
+  const tuskA = boxFaces(2, 4, 1, 2, 1), tuskB = boxFaces(2, 0, 1, 2, 1);
+  const earL = boxFaces(51, 6, 1, 5, 4), earR = boxFaces(39, 6, 1, 5, 4);
+  const body = boxFaces(16, 16, 8, 12, 4);
+  const armR = boxFaces(40, 16, 4, 12, 4), armL = boxFaces(32, 48, 4, 12, 4);
+  const legR = boxFaces(0, 16, 4, 12, 4), legL = boxFaces(16, 48, 4, 12, 4);
+  for (const b of [head, snout, earL, earR, body, armR, armL, legR, legL]) skinBox(b);
+
+  // the crown: coarse dark hair over the top, spilling down the back and the sides of the head
+  noiseFace(t, head.top, r, HAIR, { cell: 1 });
+  paintFace(t, head.back, (x, y) => (y < 3 || (y < 5 && (x * 5 + y * 3) % 4 === 0) ? pick(r, HAIR) : undefined));
+  for (const k of ['right', 'left'] as FaceName[]) paintFace(t, head[k], (x, y) => (y === 0 || (y === 1 && x % 3 !== 1) ? pick(r, HAIR) : undefined));
+  // the face: a dark brow, small eyes (white outside, the black pupil in towards the snout), cheeks a touch darker
+  drawFace(t, head.front, [
+    'HhHHHHHHhH',
+    '.bbb..bbb.',
+    '..........',
+    '.wK....Kw.',
+    '..........',
+    'c........c',
+    'cc......cc',
+    '..........',
+  ], { H: HAIR, h: HAIR[2], b: BRISTLE, w: 0xf2ece4, K: 0x120a08, c: BRISTLE[2] }, r);
+  // the snout: paler, with two dark nostrils
+  noiseBox(t, snout, r, [0xe7a592, 0xefb3a0, 0xf6c2b0], { cell: 1 });
+  drawFace(t, snout.front, ['....', 'K..K', 'K..K', '....'], { K: 0x5a2a24 }, r);
+  // tusks
+  for (const tb of [tuskA, tuskB]) noiseBox(t, tb, r, [0xe4dcc0, 0xf2ecd4]);
+  // ears: a darker inside (the face towards the head)
+  for (const f of [earL.right, earR.left]) paintFace(t, f, (x, y, _c, w, h) => (x > 0 && x < w - 1 && y > 0 && y < h - 1 ? pick(r, BRISTLE) : undefined));
+  // body: the belt, its gold buckle at the front and gold studs round it
+  const hide = () => pick(r, HIDE, [1, 3, 3, 1]);
+  drawFace(t, body.front, [
+    '........',
+    '........',
+    '........',
+    '........',
+    '........',
+    '........',
+    '........',
+    '........',
+    'HHHHHHHH',
+    'HgHGGHgH',
+    'HHHGGHHH',
+    'hHHHHHHh',
+  ], { H: hide, h: HIDE[0], G: GOLD, g: GOLD[1] }, r);
+  for (const k of ['back', 'right', 'left'] as FaceName[]) {
+    const [, , w] = body[k];
+    drawFace(t, body[k], Array.from({ length: 12 }, (_, y) => (y >= 8 ? Array.from({ length: w }, (_, x) => (y === 9 && x % 3 === 1 ? 'g' : 'H')).join('') : '.'.repeat(w))), { H: hide, g: GOLD[1] }, r);
+  }
+  // arms: the hands a shade darker
+  for (const arm of [armR, armL]) {
+    for (const k of SIDES) paintFace(t, arm[k], (_x, y) => (y >= 11 ? pick(r, BRISTLE) : undefined));
+    noiseFace(t, arm.bottom, r, BRISTLE);
+  }
+  // legs: the loincloth's flaps over the thighs, hooves at the bottom
+  for (const leg of [legR, legL]) {
+    for (const k of SIDES) paintFace(t, leg[k], (x, y) => (y < 4 && (k === 'front' || k === 'back' || y < 2) ? (y === 3 && x % 2 === 0 ? HIDE[0] : hide()) : y >= 10 ? pick(r, HOOF) : undefined));
+    noiseFace(t, leg.bottom, r, HOOF);
+  }
+  return t;
+}
+
+// ---------------------------------------------------------------------------
 // Hoglin and zoglin (128x64, vanilla HoglinModel). The body is not turned: its "top" is the spine (front edge at
 // the bottom row), its sides run rump → shoulders on the right face and shoulders → rump on the left. The head
 // hangs at 50°, so its "top" is the face (forehead at row 0, the nose at the bottom) and its "front" the snout's
@@ -1716,6 +1800,7 @@ export const MOB_TEXTURES: Record<string, () => TexImage> = {
   magma_cube: magmaCube,
   blaze,
   zombified_piglin: zombifiedPiglin,
+  piglin,
   hoglin: () => hoglinSkin(HOGLIN_LOOK),
   zoglin: () => hoglinSkin(ZOGLIN_LOOK),
   strider: () => striderSkin(STRIDER_LOOK),
@@ -1850,6 +1935,7 @@ const EGGS: [string, number, number][] = [
   ['hoglin', 0xc66e55, 0x5f6464],
   ['strider', 0x9c3436, 0x4d494d],
   ['zoglin', 0xc66e55, 0xe6e6e6],
+  ['piglin', 0x995f40, 0xf9f3a4],
 ];
 
 export const SPAWN_EGG_TEXTURES: Record<string, () => TexImage> = {};

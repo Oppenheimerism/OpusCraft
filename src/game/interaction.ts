@@ -17,6 +17,7 @@ import type { Entity } from '../entity/entity';
 import { LivingEntity } from '../entity/living';
 import { Animal } from '../entity/animals';
 import { Creeper, bowPower } from '../entity/monsters';
+import { Piglin, GUARDED_BY_PIGLINS } from '../entity/piglin';
 import { Arrow } from '../entity/arrow';
 import { PrimedTnt } from '../entity/tnt';
 import { ThrownItem, ThrownKind } from '../entity/throwable';
@@ -220,6 +221,8 @@ export class Interaction {
     // swords can't break blocks in creative
     if (p.gameMode === 'creative' && held?.item.tool?.type === 'sword') return;
     const survival = p.gameMode === 'survival' || p.gameMode === 'adventure';
+    // vanilla Block.playerWillDestroy: breaking what piglins guard angers every one about, seen or not
+    if (GUARDED_BY_PIGLINS.has(b.name)) Piglin.angerNearbyPiglins(p, false);
     // vanilla BaseFireBlock.playerWillDestroy: punching out fire fizzes
     if (b.name === 'fire') this.level.sound.play('block.fire.extinguish', x + 0.5, y + 0.5, z + 0.5, 0.5, 2.6 + (Math.random() - Math.random()) * 0.8);
     const silk = levelOf(held, 'silk_touch') > 0;
@@ -258,6 +261,8 @@ export class Interaction {
 
   /** Use button pressed or held (vanilla repeats every 4 ticks). */
   onOpenContainer: ((kind: string, x: number, y: number, z: number) => void) | null = null;
+  /** the player used an item on an entity, and something came of it (vanilla player_interacted_with_entity) */
+  onInteractedWithEntity: ((stack: ItemStack | null, e: Entity) => void) | null = null;
 
   use(pressed: boolean, held: boolean): void {
     if (this.rightClickDelay > 0) this.rightClickDelay--;
@@ -284,6 +289,15 @@ export class Interaction {
         p.swing();
         return;
       }
+      // vanilla PiglinAi.mobInteract: a gold ingot for a grown piglin to admire
+      if (e instanceof Piglin) {
+        const before = stack?.copy() ?? null;
+        if (e.interact(p, stack)) {
+          this.onInteractedWithEntity?.(before, e);
+          p.swing();
+          return;
+        }
+      }
       // vanilla Minecart.interact (climb in) / MinecartChest.interact (ContainerEntity.interactWithContainerVehicle)
       if (e instanceof Minecart && e.interact(p)) {
         this.onMounted?.();
@@ -292,6 +306,8 @@ export class Interaction {
       }
       if (e instanceof MinecartChest) {
         this.onOpenEntityContainer?.(e);
+        // vanilla ContainerEntity.interactWithContainerVehicle
+        Piglin.angerNearbyPiglins(p, true);
         p.swing();
         return;
       }
@@ -299,7 +315,10 @@ export class Interaction {
       if (e instanceof Boat) {
         const r = e.interact(p);
         if (r === 'mounted') this.onMounted?.();
-        else if (r === 'container' && e instanceof ChestBoat) this.onOpenEntityContainer?.(e);
+        else if (r === 'container' && e instanceof ChestBoat) {
+          this.onOpenEntityContainer?.(e);
+          Piglin.angerNearbyPiglins(p, true);
+        }
         if (r) {
           p.swing();
           return;
@@ -322,6 +341,8 @@ export class Interaction {
       const name = BLOCKS[STATE_BLOCK[this.level.getState(h.x, h.y, h.z)]].name;
       if ((name === 'crafting_table' || name === 'furnace' || name === 'chest' || name === 'enchanting_table' || name === 'grindstone' || name.endsWith('anvil')) && this.onOpenContainer) {
         this.onOpenContainer(name, h.x, h.y, h.z);
+        // vanilla ChestBlock.useWithoutItem: piglins who see a chest opened take it badly
+        if (name === 'chest') Piglin.angerNearbyPiglins(p, true);
         p.swing();
         return;
       }
@@ -1020,6 +1041,7 @@ export class Interaction {
     const eye = p.y + p.eyeHeight - 0.3;
     e.moveTo(p.x, eye, p.z);
     e.pickupDelay = 40;
+    e.thrower = p;
     const f8 = Math.sin((p.pitch * Math.PI) / 180), f2 = Math.cos((p.pitch * Math.PI) / 180);
     const f3 = Math.sin((p.yaw * Math.PI) / 180), f4 = Math.cos((p.yaw * Math.PI) / 180);
     const f5 = Math.random() * Math.PI * 2, f6 = 0.02 * Math.random();

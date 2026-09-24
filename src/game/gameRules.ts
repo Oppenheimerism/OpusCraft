@@ -20,6 +20,7 @@ export const DEFAULT_GAME_RULES: GameRules = {
   drowningDamage: true,
   fallDamage: true,
   fireDamage: true,
+  forgiveDeadPlayers: true,
   freezeDamage: true,
   keepInventory: false,
   maxEntityCramming: 24,
@@ -32,4 +33,5 @@ export const DEFAULT_GAME_RULES: GameRules = {
   sendCommandFeedback: true,
   showDeathMessages: true,
   spawnRadius: 10,
+  universalAnger: false,
 };
