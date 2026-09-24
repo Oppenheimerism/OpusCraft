@@ -188,8 +188,8 @@ export class Piglin extends AbstractPiglin {
   private baby = false;
   /** vanilla offhand slot: the gold being admired */
   offHand: ItemStack | null = null;
-  /** vanilla Piglin.inventory (8 slots) */
-  readonly inventory: (ItemStack | null)[] = new Array(8).fill(null);
+  /** vanilla Piglin.inventory: its pack, 8 slots */
+  readonly pack: (ItemStack | null)[] = new Array(8).fill(null);
   cannotHunt = false;
   activity: PiglinActivity = 'idle';
   /** vanilla DATA_IS_DANCING */
@@ -1154,22 +1154,22 @@ export class Piglin extends AbstractPiglin {
   }
 
   private canAddToInventory(s: ItemStack): boolean {
-    return this.inventory.some((x) => !x || (x.sameItem(s) && x.count < x.item.maxStack));
+    return this.pack.some((x) => !x || (x.sameItem(s) && x.count < x.item.maxStack));
   }
 
   /** vanilla SimpleContainer.addItem: onto stacks of the same, then into empty slots; what didn't fit comes back */
   private addToInventory(s: ItemStack): ItemStack | null {
     let left = s.count;
-    for (const x of this.inventory) {
+    for (const x of this.pack) {
       if (!x || !x.sameItem(s)) continue;
       const k = Math.min(left, x.item.maxStack - x.count);
       x.count += k;
       left -= k;
       if (left <= 0) return null;
     }
-    for (let i = 0; i < this.inventory.length; i++)
-      if (!this.inventory[i]) {
-        this.inventory[i] = s.copyWithCount(left);
+    for (let i = 0; i < this.pack.length; i++)
+      if (!this.pack[i]) {
+        this.pack[i] = s.copyWithCount(left);
         return null;
       }
     return s.copyWithCount(left);
@@ -1344,10 +1344,10 @@ export class Piglin extends AbstractPiglin {
   }
 
   private dropInventory(): void {
-    for (let i = 0; i < this.inventory.length; i++) {
-      const s = this.inventory[i];
+    for (let i = 0; i < this.pack.length; i++) {
+      const s = this.pack[i];
       if (s) this.spawnAtLocation(s);
-      this.inventory[i] = null;
+      this.pack[i] = null;
     }
   }
 
@@ -1406,7 +1406,7 @@ export class Piglin extends AbstractPiglin {
       immune: this.immuneToZombification,
       handDrop: this.handDropChance,
       huntedRecently: Math.max(0, this.huntedRecentlyUntil - now),
-      inventory: JSON.stringify(this.inventory.map((s) => (s ? saveStack(s) : null))),
+      inventory: JSON.stringify(this.pack.map((s) => (s ? saveStack(s) : null))),
       ...(this.offHand ? { offHand: JSON.stringify(saveStack(this.offHand)), admiring: Math.max(0, this.admiringUntil - now) } : {}),
     };
   }
@@ -1420,7 +1420,7 @@ export class Piglin extends AbstractPiglin {
     this.immuneToZombification = d.immune === true;
     if (typeof d.handDrop === 'number') this.handDropChance = d.handDrop;
     this.huntedRecentlyUntil = now + Number(d.huntedRecently ?? 0);
-    if (typeof d.inventory === 'string') (JSON.parse(d.inventory) as (SavedStack | null)[]).forEach((x, i) => (this.inventory[i] = loadStack(x)));
+    if (typeof d.inventory === 'string') (JSON.parse(d.inventory) as (SavedStack | null)[]).forEach((x, i) => (this.pack[i] = loadStack(x)));
     if (typeof d.offHand === 'string') {
       this.offHand = loadStack(JSON.parse(d.offHand) as SavedStack);
       this.admiringUntil = now + Number(d.admiring ?? 0);

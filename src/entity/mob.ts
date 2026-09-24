@@ -159,8 +159,15 @@ export abstract class Mob extends LivingEntity {
     return p instanceof Mob && p.type !== 'slime' && p.type !== 'magma_cube' ? p : null;
   }
 
+  /**
+   * a mob vanilla runs on a Brain, ported here as goals: its goals are its brain, which a rider's control flags
+   * don't touch (vanilla's Brain mobs have an empty goal selector)
+   */
+  protected readonly brainAsGoals: boolean = false;
+
   /** vanilla Mob.updateControlFlags: a mob steering this one takes its moving, jumping and looking goals */
   private updateControlFlags(): void {
+    if (this.brainAsGoals) return;
     const steered = this.controllingPassenger() instanceof Mob;
     const f = steered ? Flag.MOVE | Flag.JUMP | Flag.LOOK : this.vehicle?.type === 'boat' || this.vehicle?.type === 'chest_boat' ? Flag.JUMP : 0;
     this.goalSelector.disabledFlags = f;

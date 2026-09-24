@@ -39,6 +39,14 @@ export type EquipSlot = 'mainhand' | 'offhand' | 'feet' | 'legs' | 'chest' | 'he
 interface EquipmentHolder {
   inventory?: { selectedItem: ItemStack | null; offhand: ItemStack | null; armor: (ItemStack | null)[] };
   mainHand?: ItemStack | null;
+  /** (a piglin's: the gold it admires) */
+  offHand?: ItemStack | null;
+}
+
+/** a player's inventory, told apart from anything else by that name */
+function playerInventory(h: EquipmentHolder): EquipmentHolder['inventory'] | null {
+  const inv = h.inventory;
+  return inv && Array.isArray(inv.armor) ? inv : null;
 }
 
 /** an entity's equipment in vanilla EquipmentSlot order (players: hands + armour; mobs: their weapon) */
@@ -48,15 +56,18 @@ export function equipment(e: unknown): [EquipSlot, ItemStack][] {
   const push = (slot: EquipSlot, s: ItemStack | null | undefined) => {
     if (s && s.count > 0) out.push([slot, s]);
   };
-  if (h.inventory) {
-    const inv = h.inventory;
+  const inv = playerInventory(h);
+  if (inv) {
     push('mainhand', inv.selectedItem);
     push('offhand', inv.offhand);
     push('feet', inv.armor[0]);
     push('legs', inv.armor[1]);
     push('chest', inv.armor[2]);
     push('head', inv.armor[3]);
-  } else push('mainhand', h.mainHand);
+  } else {
+    push('mainhand', h.mainHand);
+    push('offhand', h.offHand);
+  }
   return out;
 }
 
@@ -88,7 +99,8 @@ export function sumLevels(e: unknown, id: string): number {
 /** the item held in the main hand (vanilla getWeaponItem) */
 export function weaponOf(e: unknown): ItemStack | null {
   const h = e as EquipmentHolder;
-  return (h.inventory ? h.inventory.selectedItem : h.mainHand) ?? null;
+  const inv = playerInventory(h);
+  return (inv ? inv.selectedItem : h.mainHand) ?? null;
 }
 
 // ---------------------------------------------------------------------------

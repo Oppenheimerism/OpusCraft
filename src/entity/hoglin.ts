@@ -329,6 +329,7 @@ export class Hoglin extends Animal {
   override readonly category: MobCategory = 'monster';
   protected adultWidth = 1.3964844;
   protected adultHeight = 1.4;
+  protected override readonly brainAsGoals = true;
   /** vanilla attackAnimationRemainingTicks: the head swings up through a strike (HoglinModel.setupAnim) */
   attackAnimationRemainingTicks = 0;
   private timeInOverworld = 0;
@@ -375,6 +376,11 @@ export class Hoglin extends Animal {
     this.goalSelector.addGoal(4, new BabyFollowAdultGoal(this));
     this.goalSelector.addGoal(5, new BruteStrollGoal(this));
     this.goalSelector.addGoal(6, new BruteLookGoal(this));
+  }
+
+  /** vanilla EntityType.HOGLIN passengerAttachments(1.49375) (a baby piglin rides a piglet: half that) */
+  override passengerAttachmentY(_p: Entity): number {
+    return this.isBaby() ? 0.746875 : 1.49375;
   }
 
   /** vanilla AgeableMob.setAge, then Hoglin.ageBoundaryReached: a piglet bites for 0.5 and is worth 3 xp */
@@ -645,6 +651,7 @@ export class Hoglin extends Animal {
 
 export class Zoglin extends Monster {
   readonly type = 'zoglin';
+  protected override readonly brainAsGoals = true;
   baby = false;
   attackAnimationRemainingTicks = 0;
   private targetUntil = 0;
