@@ -51,6 +51,8 @@ export class EndCrystal extends Entity {
     this.tickCount++;
     this.time++;
     this.checkInsideBlocks();
+    this.handlePortal();
+    if (this.removed) return;
     if (this.level.world.dim.id === 'the_end') {
       const bx = Math.floor(this.x), by = Math.floor(this.y), bz = Math.floor(this.z);
       if (FLAGS[this.level.getState(bx, by, bz)] & F_AIR) placeFire(this.level, bx, by, bz, fireStateAt(this.level.world, bx, by, bz));

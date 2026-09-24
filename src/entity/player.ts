@@ -331,7 +331,8 @@ export class Player extends LivingEntity {
     // whoosh), nausea over 7.5 s and out in its last 3 s
     this.oSpinningEffectIntensity = this.spinningEffectIntensity;
     const nausea = this.getEffect('nausea');
-    if (this.portal?.inside) {
+    // (vanilla Portal.Transition.CONFUSION: the nether portal's; an end portal has none)
+    if (this.portal?.inside && this.portal.kind === 'nether') {
       if (this.spinningEffectIntensity === 0) this.level.sound.playUI('block.portal.trigger', 0.25, Math.random() * 0.4 + 0.8);
       this.spinningEffectIntensity = Math.min(1, this.spinningEffectIntensity + 0.0125);
     } else if (nausea && !nausea.endsWithin(60)) this.spinningEffectIntensity = Math.min(1, this.spinningEffectIntensity + 0.006666667);

@@ -37,6 +37,7 @@ import { behaviorOf } from './blockBehavior';
 import { NeighborUpdater } from './neighborUpdater';
 import { LevelTicks } from './ticks';
 import './redstone/components';
+import './endPortal';
 
 export interface SoundSink {
   play(name: string, x: number, y: number, z: number, volume?: number, pitch?: number): void;
@@ -338,8 +339,8 @@ export class Level {
   onThrownItemPickedUp: ((stack: ItemStack, by: Entity) => void) | null = null;
   /** a crossbow arrow the player shot killed something: all it has killed so far (vanilla killed_by_crossbow) */
   onPlayerCrossbowKill: ((killed: Entity[]) => void) | null = null;
-  /** an entity's time in a nether portal came up (the portal block it was in) */
-  onPortal: ((e: Entity, x: number, y: number, z: number) => void) | null = null;
+  /** an entity's time in a portal came up (the portal block it was in, and which kind) */
+  onPortal: ((e: Entity, x: number, y: number, z: number, kind: 'nether' | 'end') => void) | null = null;
 
   /** vanilla: entities tick only inside the simulation distance (and in loaded chunks) */
   isEntityTicking(x: number, z: number): boolean {

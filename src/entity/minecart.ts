@@ -117,6 +117,8 @@ export abstract class AbstractMinecart extends Entity {
       this.remove();
       return;
     }
+    this.handlePortal();
+    if (this.removed) return;
     // vanilla applyGravity
     this.dy -= this.inWater ? 0.005 : 0.04;
     const w = this.level.world;

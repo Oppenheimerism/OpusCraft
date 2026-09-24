@@ -32,6 +32,8 @@ type Category = 'master' | 'music' | 'blocks' | 'weather' | 'hostile' | 'friendl
 function categoryOf(name: string): Category {
   // vanilla plays these with SimpleSoundInstance.forLocalAmbience (SoundSource.AMBIENT)
   if (name === 'block.portal.trigger' || name === 'block.portal.travel') return 'ambient';
+  // vanilla global level event 1038 plays the end portal's opening as SoundSource.HOSTILE
+  if (name === 'block.end_portal.spawn') return 'hostile';
   // vanilla CrossbowItem: the loading sounds are SoundSource.PLAYERS (the rest the shooter's source)
   if (name.startsWith('item.crossbow.')) return 'players';
   if (name.startsWith('block.') || name.startsWith('item.')) return 'blocks';

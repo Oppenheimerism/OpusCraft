@@ -54,6 +54,8 @@ export interface WorldMeta {
   } | null;
   /** nether portal blocks per dimension (vanilla POI records), as x, y, z triples */
   portals?: Record<string, number[]>;
+  /** entities gone through an end portal to a dimension that wasn't loaded, by the chunk they arrive in (game/endTravel.ts) */
+  arrivals?: Record<string, { entity: SavedEntity; surface?: boolean }[]>;
   version: number;
   /** quick-test worlds are never written to storage */
   transient?: boolean;

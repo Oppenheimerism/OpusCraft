@@ -64,6 +64,7 @@ import { ChestBoat } from '../entity/boat';
 import { nightVisionScale, blindnessFog, applyNausea } from '../render/effectVisuals';
 import { OVERWORLD, THE_NETHER, dimensionById, teleportationScale, type DimensionType } from '../world/dimension';
 import { PortalPoi, portalRectangle, relativePortalPosition, portalExit, createPortal, isPortal, portalAxis, type PortalRect } from './portal';
+import { endPortalTravel, PortalArrivals } from './endTravel';
 
 export type { GameOptions } from './options';
 /** vanilla ReceivingLevelScreen.Reason: what the loading screen shows while changing dimension */
@@ -137,6 +138,8 @@ export class Game {
   receivingScreenFactory: ((reason: ReceivingReason) => Screen) | null = null;
   /** nether portal blocks in every dimension (vanilla POI records) */
   readonly portalPoi = new PortalPoi();
+  /** what went through an end portal to the dimension that isn't loaded (game/endTravel.ts) */
+  readonly arrivals = new PortalArrivals();
   /** after a change of dimension: puts the player in place once the chunks are in (false: wait some more) */
   private arrival: ((g: Game) => boolean) | null = null;
   /** the loading screen shows the nether portal's swirl or the end portal's starfield */
@@ -356,6 +359,7 @@ export class Game {
     this.world = new World();
     this.world.dim = dimensionById(meta.player && !meta.player.dead ? meta.player.dimension : 'overworld');
     this.portalPoi.load(meta.portals);
+    this.arrivals.load(meta.arrivals);
     this.world.onPortalChanged = (x, y, z, present) => this.portalPoi.changed(this.world.dim.id, x, y, z, present);
     this.arrival = null;
     this.receivingPortal = null;
@@ -403,8 +407,9 @@ export class Game {
     this.interaction.onOpenEntityContainer = (e) => this.openEntityContainer(e);
     this.interaction.onMounted = () => this.hud.setOverlayMessage(`Press ${keyDisplayName(KEYS.sneak)} to Dismount`);
     this.interaction.onUseBed = (x, y, z) => useBed(this.sleepHost(), x, y, z);
-    this.level.onPortal = (e, x, y, z) => {
-      if (e === this.player) this.portalTravel(x, y, z);
+    this.level.onPortal = (e, x, y, z, kind) => {
+      if (kind === 'end') endPortalTravel(this, e);
+      else if (e === this.player) this.portalTravel(x, y, z);
     };
     // vanilla ClientPacketListener.handleTakeItemEntity: the pop, and what was taken flying to whoever took it
     this.level.onTake = (e, taker) => {
@@ -550,6 +555,7 @@ export class Game {
       dimension: this.world.dim.id,
     };
     m.portals = this.portalPoi.save();
+    m.arrivals = this.arrivals.save();
     const list = [];
     for (const c of this.world.chunks.values()) {
       if (!c.modified) continue;
@@ -629,6 +635,12 @@ export class Game {
       if (this.spawner?.spawnForNewChunk(c.cx, c.cz).length) this.entityDirty.add(key);
     }
     c.genEntities = null;
+    // what came through an end portal while this dimension wasn't loaded
+    for (const d of this.arrivals.take(this.world, c.cx, c.cz)) {
+      const e = loadEntity(d, lvl);
+      if (e) lvl.addEntity(e);
+      this.entityDirty.add(key);
+    }
   }
 
   private entitiesIn(cx: number, cz: number): Entity[] {
@@ -1050,7 +1062,7 @@ export class Game {
   }
 
   /** the player arrived in another dimension (vanilla ServerPlayer.triggerDimensionChangeTriggers) */
-  private onChangedDimension(from: DimensionType, to: DimensionType): void {
+  onChangedDimension(from: DimensionType, to: DimensionType): void {
     const p = this.player;
     this.advancements.trigger('changed_dimension', { dimension: { from: from.id, to: to.id } });
     if (from.id === 'the_nether' && to.id === 'overworld' && this.enteredNetherAt)
@@ -1210,7 +1222,7 @@ export class Game {
     if (!this.screen && p.isSleeping() && p.health > 0 && this.inBedScreenFactory) this.setScreen(this.inBedScreenFactory());
     else if (this.screen && (this.screen as { inBed?: boolean }).inBed && !p.isSleeping()) (this.screen as unknown as { onPlayerWokeUp(): void }).onPlayerWokeUp();
     // vanilla LocalPlayer.handleConfusionTransitionEffect: standing in a portal closes whatever's open (not the pause or death screens)
-    if (p.portal?.inside && this.screen && !this.screen.isPauseScreen() && p.health > 0) {
+    if (p.portal?.inside && p.portal.kind === 'nether' && this.screen && !this.screen.isPauseScreen() && p.health > 0) {
       (this.screen as { onClose?(): void }).onClose?.();
       if (this.screen) this.setScreen(null);
     }
