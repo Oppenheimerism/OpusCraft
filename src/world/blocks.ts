@@ -10,6 +10,7 @@ import {
 import { registerExtraBlocks } from './blocksExtra';
 import { registerEnchantingBlocks } from './blocksEnchanting';
 import { registerRedstoneBlocks } from './blocksRedstone';
+import { registerEndBlocks } from './blocksEnd';
 
 const px = (v: number) => v / 16;
 const bx = (x0: number, y0: number, z0: number, x1: number, y1: number, z1: number): Box => [px(x0), px(y0), px(z0), px(x1), px(y1), px(z1)];
@@ -485,8 +486,8 @@ for (const c of DYE_COLORS) {
 }
 
 // Slabs & stairs for common materials
-const SLAB_MATERIALS: [string, string, string, string, string, number][] = [
-  // name, bottom, top, side, sound, hardness
+const SLAB_MATERIALS: [string, string, string, string, string, number, number?][] = [
+  // name, bottom, top, side, sound, hardness(, blast resistance when not 6)
   ['oak', 'oak_planks', 'oak_planks', 'oak_planks', 'wood', 2],
   ['spruce', 'spruce_planks', 'spruce_planks', 'spruce_planks', 'wood', 2],
   ['birch', 'birch_planks', 'birch_planks', 'birch_planks', 'wood', 2],
@@ -524,14 +525,15 @@ const SLAB_MATERIALS: [string, string, string, string, string, number][] = [
   ['smooth_red_sandstone', 'red_sandstone_top', 'red_sandstone_top', 'red_sandstone_top', 'stone', 2],
   ['smooth_stone', 'smooth_stone', 'smooth_stone', 'smooth_stone', 'stone', 2],
   ['cut_sandstone', 'sandstone_top', 'sandstone_top', 'cut_sandstone', 'stone', 0.8],
+  ['end_stone_brick', 'end_stone_bricks', 'end_stone_bricks', 'end_stone_bricks', 'stone', 3, 9],
 ];
 /** materials with a slab but no stairs in vanilla */
 const SLAB_ONLY = new Set(['smooth_stone', 'cut_sandstone']);
-for (const [name, bottom, top, side, sound, hardness] of SLAB_MATERIALS) {
+for (const [name, bottom, top, side, sound, hardness, resistance = 6] of SLAB_MATERIALS) {
   const tool = sound === 'wood' || sound === 'nether_wood' ? 'axe' : 'pickaxe';
   const bm = slabBottom(bottom, top, side), tm = slabTop(bottom, top, side), dm = cubeBottomTop(side, bottom, top);
   registerBlock(`${name}_slab`, {
-    props: [P.slabType, P.waterlogged], defaults: { type: 'bottom' }, hardness, resistance: 6, sound, tool, requiresTool: tool === 'pickaxe', flammable: sound === 'wood',
+    props: [P.slabType, P.waterlogged], defaults: { type: 'bottom' }, hardness, resistance, sound, tool, requiresTool: tool === 'pickaxe', flammable: sound === 'wood',
     collision: (s) => (s.get('type') === 'double' ? 'full' : s.get('type') === 'top' ? [bx(0, 8, 0, 16, 16, 16)] : [bx(0, 0, 0, 16, 8, 16)]),
     opaque: (s) => s.get('type') === 'double',
     faceOcclusion: (s) => (s.get('type') === 'double' ? 63 : s.get('type') === 'top' ? 2 : 1),
@@ -545,7 +547,7 @@ for (const [name, bottom, top, side, sound, hardness] of SLAB_MATERIALS) {
   const outer = stairsModel(bottom, top, side, 'outer');
   registerBlock(stairName, {
     props: [P.facingH, P.halfTB, P.stairShape, P.waterlogged], defaults: { facing: 'north', half: 'bottom' },
-    hardness, resistance: 6, sound, tool, requiresTool: tool === 'pickaxe', aoCaster: false,
+    hardness, resistance, sound, tool, requiresTool: tool === 'pickaxe', aoCaster: false,
     opaque: false,
     faceOcclusion: (s) => {
       const f = s.get('facing') as string;
@@ -609,6 +611,7 @@ registerBlock('magma_block', { hardness: 0.5, sound: 'stone', tool: 'pickaxe', r
 registerExtraBlocks();
 registerEnchantingBlocks();
 registerRedstoneBlocks();
+registerEndBlocks();
 
 finalizeBlocks();
 

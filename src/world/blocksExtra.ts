@@ -423,7 +423,7 @@ function fireUp(tex: string, alt: boolean): ModelDef {
 
 const wallSideProp = (n: string) => enumProp(n, ['none', 'low', 'tall']);
 
-function registerWall(name: string, tex: string, hardness: number, sound = 'stone'): void {
+export function registerWall(name: string, tex: string, hardness: number, sound = 'stone', resistance = 6): void {
   const t = tex;
   const post: ModelDef = { particle: t, elements: [box([4, 0, 4], [12, 16, 12], t)] };
   const side: ModelDef = { particle: t, elements: [{ from: [5, 0, 0], to: [11, 14, 8], faces: { down: f(t, undefined, 'down'), up: f(t), north: f(t, undefined, 'north'), west: f(t), east: f(t) } }] };
@@ -431,7 +431,7 @@ function registerWall(name: string, tex: string, hardness: number, sound = 'ston
   registerBlock(name, {
     props: [boolProp('up'), wallSideProp('north'), wallSideProp('east'), wallSideProp('south'), wallSideProp('west'), P.waterlogged],
     defaults: { up: true, east: 'low', west: 'low' },
-    hardness, resistance: 6, sound, tool: 'pickaxe', requiresTool: true, opaque: false, aoCaster: false, opacity: 0,
+    hardness, resistance, sound, tool: 'pickaxe', requiresTool: true, opaque: false, aoCaster: false, opacity: 0,
     collision: (s) => wallBoxes(s, 24),
     outline: (s) => wallBoxes(s, 16),
     model: (s) => {
