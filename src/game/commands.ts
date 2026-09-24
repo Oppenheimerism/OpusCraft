@@ -396,6 +396,8 @@ function mobData(m: Mob, nbt: string): void {
   const flag = (k: string) => new RegExp(`\\b${k}\\s*:\\s*(1b|true)`).test(nbt);
   if (/\bCanPickUpLoot\s*:/.test(nbt)) m.canPickUpLoot = flag('CanPickUpLoot');
   if (flag('PersistenceRequired')) m.persistenceRequired = true;
+  // (Stage 4: illagers) vanilla Vindicator's Johnny flag, or the name Johnny (its setCustomName; names aren't kept yet)
+  if (flag('Johnny') || /\bCustomName\s*:[^,}]*\bJohnny\b/.test(nbt)) (m as { setCustomName?: (n: string) => void }).setCustomName?.('Johnny');
 }
 
 const coordSuggest = (i: number) => ['~', '~ ~', '~ ~ ~'].slice(0, 3 - (i % 3));

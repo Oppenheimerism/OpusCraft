@@ -65,7 +65,7 @@ export interface ParticleSink {
   /** generic sprite particle by vanilla particle type name */
   spawn?(kind: string, x: number, y: number, z: number, dx: number, dy: number, dz: number): void;
   /** vanilla TrackingEmitter (crit sparks around an entity) */
-  emitAround?(kind: 'crit' | 'enchanted_hit', e: Entity): void;
+  emitAround?(kind: 'crit' | 'enchanted_hit' | 'totem_of_undying', e: Entity, lifetime?: number): void;
   /** vanilla FallingDustParticle tinted with a block's dust colour */
   fallingDust?(x: number, y: number, z: number, color: number): void;
   /** vanilla BLOCK particle (TerrainParticle with a starting speed) for the block at bx, by, bz */

@@ -460,7 +460,7 @@ export class Game {
       blockHit: (x, y, z, s, f) => particles.blockHit(x, y, z, s, f),
       poof: (e) => particles.poof(e),
       spawn: (k, x, y, z, dx, dy, dz) => particles.spawn(k, x, y, z, dx, dy, dz),
-      emitAround: (k, e) => particles.emitAround(k, e),
+      emitAround: (k, e, life) => particles.emitAround(k, e, life),
       fallingDust: (x, y, z, c) => particles.fallingDust(x, y, z, c),
       blockParticle: (x, y, z, xd, yd, zd, st, bx, by, bz) => particles.blockParticle(x, y, z, xd, yd, zd, st, bx, by, bz),
       entityEffect: (x, y, z, c, a) => particles.entityEffect(x, y, z, c, a),

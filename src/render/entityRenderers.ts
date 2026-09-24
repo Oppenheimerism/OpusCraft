@@ -51,6 +51,9 @@ import { EndCrystalRenderer } from './endCrystalRenderer';
 import { EnderDragon } from '../entity/enderDragon';
 import { DragonFireball } from '../entity/dragonFireball';
 import { EnderDragonRenderer } from './enderDragonRenderer';
+// (Stage 4: illagers)
+import { RaiderRenderers, RAIDER_SHADOW_RADII } from './illagerRenderers';
+import { EvokerFangs } from '../entity/evoker';
 import type { Bat } from '../entity/bat';
 import type { Player } from '../entity/player';
 import { MOB_TEXTURES, FIRE_TEXTURES } from '../textures/mobs';
@@ -134,12 +137,25 @@ export class EntityRenderDispatcher {
   private readonly village: VillageBlockRenderers;
   private readonly endCrystals: EndCrystalRenderer;
   private readonly dragons: EnderDragonRenderer;
+  /** (Stage 4: illagers) the pillager, vindicator, evoker, vex, ravager and the evoker's fangs */
+  private readonly raiders: RaiderRenderers;
 
   constructor(private readonly gl: GL, private readonly items: ItemRenderer, private readonly skin: WebGLTexture) {
     this.armor = new ArmorLayer(gl);
     this.village = new VillageBlockRenderers(gl);
     this.endCrystals = new EndCrystalRenderer(gl);
     this.dragons = new EnderDragonRenderer(gl, this.endCrystals.beam);
+    // (Stage 4: illagers) lent this dispatcher's living-renderer steps
+    this.raiders = new RaiderRenderers({
+      pose: this.pose,
+      items,
+      tex: (n) => this.tex(n),
+      setupLiving: (e, dx, dy, dz, p, flip, scale) => this.setupLiving(e, dx, dy, dz, p, flip, scale),
+      overlay: (b, e, white) => this.overlay(b, e, white),
+      drawBody: (b, e, def, t, baby, extra) => this.drawBody(b, e, def, t, baby, extra),
+      state: (t, extra) => this.state(t, extra),
+      attackAnim,
+    });
     this.models = {
       pig: M.pigModel(),
       pig_saddle: M.pigModel(0.5),
@@ -381,8 +397,8 @@ export class EntityRenderDispatcher {
   private setLight(b: EntityBatch, level: Level, e: Entity, x: number, y: number, z: number): void {
     const l = level.world.getLight(Math.floor(x), Math.floor(y + e.eyeHeight), Math.floor(z));
     b.lightS = (l >> 4) * 16;
-    // (vanilla MagmaCubeRenderer and BlazeRenderer.getBlockLightLevel: they glow by their own light)
-    b.lightB = (e.isOnFire() || e instanceof MagmaCube || e instanceof Blaze ? 15 : l & 15) * 16;
+    // (vanilla MagmaCubeRenderer and BlazeRenderer.getBlockLightLevel: they glow by their own light; Stage 4: VexRenderer too)
+    b.lightB = (e.isOnFire() || e instanceof MagmaCube || e instanceof Blaze || e.type === 'vex' ? 15 : l & 15) * 16;
   }
 
   private renderEntity(b: EntityBatch, level: Level, e: Entity, x: number, y: number, z: number, dx: number, dy: number, dz: number, p: number, cam: Camera): void {
@@ -402,6 +418,7 @@ export class EntityRenderDispatcher {
     else if (e instanceof AbstractMinecart) this.renderMinecart(b, e, x, y, z, dx, dy, dz, p);
     else if (e instanceof Boat) this.renderBoat(b, e, dx, dy, dz, p);
     else if (e instanceof EndCrystal) this.endCrystals.render(b, this.pose, e, dx, dy, dz, p);
+    else if (e instanceof EvokerFangs) this.raiders.renderFangs(b, e, dx, dy, dz, p); // (Stage 4: illagers)
     // (at the renderer's offset: a crouching player's flames sink with it)
     if (e.isOnFire() && !(e instanceof ItemEntity) && !(e instanceof ExperienceOrb)) this.renderFlame(b, e, dx, dy + renderOffsetY(e), dz, cam.yaw, level.gameTime);
   }
@@ -500,6 +517,8 @@ export class EntityRenderDispatcher {
   }
 
   private renderMob(b: EntityBatch, e: Mob, dx: number, dy: number, dz: number, p: number): void {
+    // (Stage 4: illagers) the raiders have their own renderers
+    if (this.raiders.render(b, e, dx, dy, dz, p)) return;
     const type = e.type;
     const def = this.models[type];
     // (vanilla GhastRenderer.getTextureLocation: its face while charging a shot)
@@ -1367,6 +1386,8 @@ function shakeYaw(e: LivingEntity): number {
 
 /** vanilla renderer shadow radii (babies half) */
 function shadowRadius(e: Entity): number {
+  // (Stage 4: illagers)
+  if (RAIDER_SHADOW_RADII[e.type] !== undefined) return RAIDER_SHADOW_RADII[e.type];
   let r = 0;
   switch (e.type) {
     case 'pig':

@@ -49,6 +49,9 @@ function categoryOf(name: string): Category {
   if (name.startsWith('item.crossbow.')) return 'players';
   // (the shield's thud and crack are its holder's: a player's)
   if (name.startsWith('item.shield.')) return 'players';
+  // (Stage 4: illagers) the totem is its user's (a player's, mostly); the raiders and the vex are hostile
+  if (name === 'item.totem.use') return 'players';
+  if (/^entity\.(pillager|vindicator|evoker|evoker_fangs|vex|ravager|illusioner)\./.test(name)) return 'hostile';
   if (name.startsWith('block.') || name.startsWith('item.')) return 'blocks';
   if (name.startsWith('weather.') || name.startsWith('entity.lightning')) return 'weather';
   if (name.startsWith('ambient.')) return 'ambient';

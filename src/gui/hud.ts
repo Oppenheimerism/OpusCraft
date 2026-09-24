@@ -8,6 +8,8 @@ import { FLUID_WATER } from '../world/fluids';
 import { RARITY_COLOR, type ItemStack } from '../item/item';
 import { compareEffects } from '../entity/effects';
 import { BossHealthOverlay } from './bossOverlay';
+// (Stage 4: totems)
+import { renderItemActivation, tickItemActivation } from './itemActivation';
 
 export class Hud {
   private tickCount = 0;
@@ -33,6 +35,7 @@ export class Hud {
 
   tick(game: Game): void {
     this.tickCount++;
+    tickItemActivation();
     const p = game.player;
     const inv = p.inventory;
     const cur = inv.selectedItem;
@@ -64,6 +67,8 @@ export class Hud {
   render(g: GuiGraphics, game: Game, partial: number, chatOpen: boolean): void {
     const p = game.player;
     const W = g.width, H = g.height;
+    // (Stage 4: totems) vanilla GameRenderer.renderItemActivation, drawn just before the HUD
+    renderItemActivation(g, partial);
     if (p.gameMode === 'spectator') {
       this.renderCrosshair(g, game);
       this.renderEffects(g, game);

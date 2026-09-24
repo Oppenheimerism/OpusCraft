@@ -307,6 +307,8 @@ reg({ id: 'dragon_breath', name: "Dragon's Breath", texture: 'dragon_breath', ra
 // the End: vanilla EnderEyeItem, and EndCrystalItem (rare, with the enchantment glint); the portal frame is a functional block
 reg({ id: 'ender_eye', texture: 'ender_eye', creativeTab: 'tools' });
 // (vanilla CreativeModeTabs.COMBAT lists the end crystal after the totem and TNT)
+// (Stage 4: illagers) vanilla TotemItem: one to a stack, uncommon; its death-cheating is entity/totem.ts
+reg({ id: 'totem_of_undying', maxStack: 1, creativeTab: 'combat', texture: 'totem_of_undying', rarity: 'uncommon' });
 reg({ id: 'end_crystal', texture: 'end_crystal', creativeTab: 'combat', rarity: 'rare', glint: true });
 ITEMS.get('end_portal_frame')!.creativeTab = 'functional';
 Object.assign(ITEMS.get('dragon_egg')!, { rarity: 'epic', creativeTab: 'functional' });
@@ -338,6 +340,10 @@ reg({ id: 'lingering_potion', maxStack: 1, creativeTab: 'food', texture: 'linger
 for (const m of ['bat', 'blaze', 'cave_spider', 'chicken', 'cow', 'creeper', 'enderman', 'ghast', 'hoglin', 'husk', 'iron_golem', 'magma_cube', 'pig', 'piglin', 'sheep', 'skeleton', 'slime', 'spider', 'squid', 'stray', 'strider', 'villager', 'witch', 'wither_skeleton', 'zoglin', 'zombie', 'zombie_villager', 'zombified_piglin']) {
   reg({ id: `${m}_spawn_egg`, texture: `${m}_spawn_egg`, creativeTab: 'spawn_eggs' });
 }
+// (Stage 4: illagers) the raiders' eggs and the ominous bottle (vanilla OminousBottleItem: uncommon, drunk for bad
+// omen, game/raids.ts); the creative tab sorts the eggs by name
+for (const m of ['evoker', 'pillager', 'ravager', 'vex', 'vindicator']) reg({ id: `${m}_spawn_egg`, texture: `${m}_spawn_egg`, creativeTab: 'spawn_eggs' });
+reg({ id: 'ominous_bottle', creativeTab: 'food', texture: 'ominous_bottle', rarity: 'uncommon' });
 // sugar cane item places the block
 {
   const sc = ITEMS.get('sugar_cane');
@@ -441,6 +447,8 @@ export interface ItemTag {
   patterns?: BannerLayer[];
   /** minecraft:base_color: a shield's, from the banner that decorated it */
   baseColor?: string;
+  /** minecraft:ominous_bottle_amplifier: the bad omen an ominous bottle gives (0-4) */
+  ominousAmplifier?: number;
   /** minecraft:map_id */
   mapId?: number;
   /** minecraft:map_post_processing: what a cartography table's result will do to its map when taken */
@@ -511,6 +519,7 @@ export function cloneTag(t: ItemTag | null): ItemTag | null {
   if (t.hideAdditional) o.hideAdditional = true;
   if (t.patterns?.length) o.patterns = t.patterns.map((l) => ({ ...l }));
   if (t.baseColor !== undefined) o.baseColor = t.baseColor;
+  if (t.ominousAmplifier !== undefined) o.ominousAmplifier = t.ominousAmplifier;
   if (t.mapId !== undefined) o.mapId = t.mapId;
   if (t.mapPostProcessing) o.mapPostProcessing = t.mapPostProcessing;
   if (t.trim) o.trim = { ...t.trim };
@@ -528,6 +537,7 @@ export function sameTag(a: ItemTag | null | undefined, b: ItemTag | null | undef
     sameEnchants(a?.enchantments, b?.enchantments) && sameEnchants(a?.stored, b?.stored) && a?.customName === b?.customName && (a?.repairCost ?? 0) === (b?.repairCost ?? 0) &&
     sameCharged(a?.charged, b?.charged) && a?.dyedColor === b?.dyedColor && !a?.dyedHidden === !b?.dyedHidden && samePotion(a?.potion, b?.potion) &&
     a?.itemName === b?.itemName && a?.rarity === b?.rarity && !a?.hideAdditional === !b?.hideAdditional && sameData(a?.patterns?.length ? a.patterns : null, b?.patterns?.length ? b.patterns : null) && a?.baseColor === b?.baseColor &&
+    a?.ominousAmplifier === b?.ominousAmplifier &&
     a?.mapId === b?.mapId && a?.mapPostProcessing === b?.mapPostProcessing && sameData(a?.trim, b?.trim) && sameData(a?.pages, b?.pages) && sameData(a?.book, b?.book)
   );
 }

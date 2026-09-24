@@ -16,6 +16,8 @@ import { END_ITEMS } from './itemlib/end';
 import { SMITHING_ITEMS } from './itemlib/smithing';
 import { BANNER_ITEMS } from './itemlib/banners';
 import { SPAWN_EGG_TEXTURES } from './mobs';
+// (Stage 4: illagers)
+import { ILLAGER_ITEMS } from './itemlib/illagers';
 
 export const ITEM_TEXTURES: Record<string, () => TexImage> = {
   ...SPAWN_EGG_TEXTURES,
@@ -31,4 +33,5 @@ export const ITEM_TEXTURES: Record<string, () => TexImage> = {
   ...END_ITEMS,
   ...SMITHING_ITEMS,
   ...BANNER_ITEMS,
+  ...ILLAGER_ITEMS,
 };

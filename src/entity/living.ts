@@ -12,6 +12,7 @@ import { AABB } from '../core/aabb';
 import type { ItemStack } from '../item/item';
 // (Stage 4: shields)
 import { shieldTakesHit, shieldBlocked } from './shield';
+import { checkTotemDeathProtection } from './totem';
 
 /** damage sources that ignore armor (vanilla #bypasses_armor) */
 const BYPASSES_ARMOR = new Set(['onFire', 'inWall', 'drown', 'starve', 'fall', 'stalagmite', 'void', 'genericKill', 'magic', 'indirectMagic', 'wither', 'generic', 'cramming', 'flyIntoWall']);
@@ -863,13 +864,16 @@ export abstract class LivingEntity extends Entity {
       }
       this.onHurt(source);
     }
-    if (this.health <= 0) {
+    // (Stage 4: totems) vanilla checkTotemDeathProtection: a totem in hand takes the death (entity/totem.ts), and
+    // then there's no hurt sound either
+    const dying = this.health <= 0;
+    if (dying && !checkTotemDeathProtection(this, source)) {
       // (vanilla DamageSource: the causing entity, else the direct one: an ownerless cloud or potion)
       this.killer = attacker ?? direct ?? null;
       this.deathSource = source;
       if (fresh) this.playDeathSound();
       this.die(source, attacker ?? null);
-    } else if (fresh) this.playHurtSound(source);
+    } else if (fresh && !dying) this.playHurtSound(source);
     // vanilla MobEffectInstance.onMobHurt for each effect it has (infested's silverfish)
     for (const inst of [...this.activeEffects.values()]) inst.effect.onMobHurt?.(this, inst.amplifier, source, amount);
     return true;

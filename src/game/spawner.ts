@@ -16,6 +16,10 @@ import { Strider } from '../entity/strider';
 import { Piglin } from '../entity/piglin';
 import { Villager } from '../entity/villager';
 import { Witch } from '../entity/witch';
+// (Stage 4: illagers)
+import { Pillager, Vindicator } from '../entity/illagers';
+import { Evoker, Vex } from '../entity/evoker';
+import { Ravager } from '../entity/ravager';
 import { Husk, Stray } from '../entity/biomeMonsters';
 import { IronGolem } from '../entity/ironGolem';
 import { ZombieVillager } from '../entity/zombieVillager';
@@ -67,6 +71,15 @@ export const MOB_TYPES: Record<string, (l: Level) => Mob> = {
   stray: (l) => new Stray(l),
   ender_dragon: (l) => new EnderDragon(l),
 };
+
+// (Stage 4: illagers) the raiders and the vex
+Object.assign(MOB_TYPES, {
+  pillager: (l: Level) => new Pillager(l),
+  vindicator: (l: Level) => new Vindicator(l),
+  evoker: (l: Level) => new Evoker(l),
+  vex: (l: Level) => new Vex(l),
+  ravager: (l: Level) => new Ravager(l),
+});
 
 export function createMob(type: string, level: Level): Mob | null {
   const f = MOB_TYPES[type];
@@ -165,6 +178,9 @@ const ENTITY_NAMES: Record<string, string> = {
   minecart: 'Minecart', chest_minecart: 'Minecart with Chest', boat: 'Boat', chest_boat: 'Boat with Chest', end_crystal: 'End Crystal',
   ender_dragon: 'Ender Dragon', dragon_fireball: 'Dragon Fireball', area_effect_cloud: 'Area Effect Cloud',
 };
+
+// (Stage 4: illagers)
+Object.assign(ENTITY_NAMES, { pillager: 'Pillager', vindicator: 'Vindicator', evoker: 'Evoker', vex: 'Vex', ravager: 'Ravager', evoker_fangs: 'Evoker Fangs' });
 
 /** vanilla entity type display names (death messages, commands) */
 export function entityDisplayName(e: Entity | string): string {

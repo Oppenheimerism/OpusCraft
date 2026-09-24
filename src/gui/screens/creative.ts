@@ -143,6 +143,8 @@ function tabs(): Tab[] {
   byId.get('redstone_blocks')!.items.sort((a, b) => REDSTONE_ORDER.indexOf(a.id) - REDSTONE_ORDER.indexOf(b.id));
   const rank = (it: Item) => (FUNCTIONAL_ORDER.includes(it.id) ? FUNCTIONAL_ORDER.indexOf(it.id) : FUNCTIONAL_ORDER.length);
   byId.get('functional_blocks')!.items.sort((a, b) => rank(a) - rank(b));
+  // (Stage 4) vanilla CreativeModeTabs.SPAWN_EGGS: by name, wherever the eggs were registered
+  byId.get('spawn_eggs')!.items.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   byId.get('ingredients')!.extra = enchantedBooks(false);
   byId.get('search')!.items = listed;
   TABS = t;
