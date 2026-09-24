@@ -60,6 +60,8 @@ export type Criterion =
   /** vanilla entity_hurt_player: a projectile's damage, blocked by a shield */
   | { t: 'deflected_projectile' }
   | { t: 'used_totem' }
+  /** vanilla player_killed_entity with a #raiders wearing the ominous banner (Voluntary Exile) */
+  | { t: 'killed_raid_captain' }
   | { t: 'impossible' };
 
 export interface AdvancementDef {
@@ -208,7 +210,7 @@ const A: AdvancementDef[] = [
     id: 'adventure/root', parent: null, title: 'Adventure', description: 'Adventure, exploration and combat', icon: 'map', frame: 'task', toast: false, announce: false,
     criteria: { killed_something: { t: 'kill', type: '*' }, killed_by_something: { t: 'killed_by' } }, requirements: [['killed_something', 'killed_by_something']],
   },
-  { id: 'adventure/voluntary_exile', parent: 'adventure/root', title: 'Voluntary Exile', description: 'Kill a raid captain.\nMaybe consider staying away from villages for the time being...', icon: 'white_banner', frame: 'task', hidden: true, criteria: one(never) },
+  { id: 'adventure/voluntary_exile', parent: 'adventure/root', title: 'Voluntary Exile', description: 'Kill a raid captain.\nMaybe consider staying away from villages for the time being...', icon: 'white_banner', frame: 'task', hidden: true, criteria: one({ t: 'killed_raid_captain' }) },
   { id: 'adventure/spyglass_at_parrot', parent: 'adventure/root', title: 'Is It a Bird?', description: 'Look at a Parrot through a Spyglass', icon: 'spyglass', frame: 'task', criteria: one(never) },
   { id: 'adventure/kill_a_mob', parent: 'adventure/root', title: 'Monster Hunter', description: 'Kill any hostile monster', icon: 'iron_sword', frame: 'task', criteria: each(HOSTILE, (n) => ({ t: 'kill', type: n })), requirements: [HOSTILE] },
   { id: 'adventure/read_power_of_chiseled_bookshelf', parent: 'adventure/root', title: 'The Power of Books', description: 'Read the power signal of a Chiseled Bookshelf using a Comparator', icon: 'chiseled_bookshelf', frame: 'task', criteria: one(never) },
@@ -231,7 +233,7 @@ const A: AdvancementDef[] = [
   { id: 'adventure/trade_at_world_height', parent: 'adventure/trade', title: 'Star Trader', description: 'Trade with a Villager at the build height limit', icon: 'emerald', frame: 'task', criteria: one({ t: 'villager_trade', minY: 319 }) },
   { id: 'adventure/trim_with_all_exclusive_armor_patterns', parent: 'adventure/trim_with_any_armor_pattern', title: 'Smithing with Style', description: 'Apply these smithing templates at least once: Spire, Snout, Rib, Ward, Silence, Vex, Tide, Wayfinder', icon: 'silence_armor_trim_smithing_template', frame: 'challenge', criteria: one(never) },
   { id: 'adventure/two_birds_one_arrow', parent: 'adventure/ol_betsy', title: 'Two Birds, One Arrow', description: 'Kill two Phantoms with a piercing Arrow', icon: 'crossbow', frame: 'challenge', criteria: one({ t: 'killed_by_crossbow', victims: ['phantom', 'phantom'] }) },
-  { id: 'adventure/whos_the_pillager_now', parent: 'adventure/ol_betsy', title: "Who's the Pillager Now?", description: 'Give a Pillager a taste of their own medicine', icon: 'crossbow', frame: 'task', criteria: one(never) },
+  { id: 'adventure/whos_the_pillager_now', parent: 'adventure/ol_betsy', title: "Who's the Pillager Now?", description: 'Give a Pillager a taste of their own medicine', icon: 'crossbow', frame: 'task', criteria: one({ t: 'killed_by_crossbow', victims: ['pillager'] }) },
   { id: 'adventure/arbalistic', parent: 'adventure/ol_betsy', title: 'Arbalistic', description: 'Kill five unique mobs with one crossbow shot', icon: 'crossbow', frame: 'challenge', hidden: true, criteria: one({ t: 'killed_by_crossbow', uniqueTypes: 5 }) },
   { id: 'adventure/craft_decorated_pot_using_only_sherds', parent: 'adventure/salvage_sherd', title: 'Careful Restoration', description: 'Make a Decorated Pot out of 4 Pottery Sherds', icon: 'decorated_pot', frame: 'task', criteria: one(never) },
   { id: 'adventure/adventuring_time', parent: 'adventure/sleep_in_bed', title: 'Adventuring Time', description: 'Discover every biome', icon: 'diamond_boots', frame: 'challenge', criteria: each(OVERWORLD_BIOMES, (b) => ({ t: 'biome', biome: b })) },
@@ -636,6 +638,7 @@ function matches(c: Criterion, p: TriggerPayload): boolean {
     case 'enchanted_item':
     case 'deflected_projectile':
     case 'used_totem':
+    case 'killed_raid_captain':
       return true;
     default:
       return false;

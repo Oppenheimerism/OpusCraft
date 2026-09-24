@@ -340,8 +340,8 @@ reg({ id: 'lingering_potion', maxStack: 1, creativeTab: 'food', texture: 'linger
 for (const m of ['bat', 'blaze', 'cave_spider', 'chicken', 'cow', 'creeper', 'enderman', 'ghast', 'hoglin', 'husk', 'iron_golem', 'magma_cube', 'pig', 'piglin', 'sheep', 'skeleton', 'slime', 'spider', 'squid', 'stray', 'strider', 'villager', 'witch', 'wither_skeleton', 'zoglin', 'zombie', 'zombie_villager', 'zombified_piglin']) {
   reg({ id: `${m}_spawn_egg`, texture: `${m}_spawn_egg`, creativeTab: 'spawn_eggs' });
 }
-// (Stage 4: illagers) the raiders' eggs and the ominous bottle (vanilla OminousBottleItem: uncommon, drunk for bad
-// omen, game/raids.ts); the creative tab sorts the eggs by name
+// (Stage 4: illagers) the raiders' eggs and the ominous bottle (vanilla OminousBottleItem: uncommon; drinking it for
+// bad omen comes with raids); the creative tab sorts the eggs by name
 for (const m of ['evoker', 'pillager', 'ravager', 'vex', 'vindicator']) reg({ id: `${m}_spawn_egg`, texture: `${m}_spawn_egg`, creativeTab: 'spawn_eggs' });
 reg({ id: 'ominous_bottle', creativeTab: 'food', texture: 'ominous_bottle', rarity: 'uncommon' });
 // sugar cane item places the block

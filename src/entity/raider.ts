@@ -314,6 +314,9 @@ export abstract class Raider extends PatrollingMonster {
         if (attacker?.type === 'player') raid.addHeroOfTheVillage(attacker);
         raid.removeFromRaid(this, false);
       }
+      // (vanilla player_killed_entity, Voluntary Exile: any raider wearing the ominous banner, the player's kill)
+      const p = this.level.player;
+      if (p && (attacker === p || this.lastHurtByPlayer === p) && isOminousBanner(this.armorItems[3])) this.level.onPlayerTrigger?.(p, 'killed_raid_captain');
     }
     super.die(source, attacker);
   }
