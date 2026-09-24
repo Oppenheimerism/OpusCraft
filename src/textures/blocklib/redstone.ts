@@ -4,6 +4,7 @@
 import { TexImage, img, plot, Rand } from '../tex';
 import { hashString } from '../../core/rng';
 import { sprite } from './plants';
+import { furnaceSide, furnaceTop } from './utility';
 
 type Gen = () => TexImage;
 
@@ -123,6 +124,33 @@ function tripwire(): TexImage {
   return t;
 }
 
+/**
+ * vanilla dispenser_front / dropper_front and their _vertical ones: the furnace's side (or top) with the opening the
+ * items come out of, a round mouth for the dispenser and a small square one for the dropper, sunk in with a lit rim
+ * along the bottom and right
+ */
+function dispenserFront(dropper: boolean, vertical: boolean): TexImage {
+  const t = vertical ? furnaceTop() : furnaceSide();
+  const r = dropper ? 2.6 : 3.6;
+  const c = 7.5;
+  for (let y = 0; y < 16; y++)
+    for (let x = 0; x < 16; x++) {
+      // (a square with its corners rounded off, for the dispenser; a plain square for the dropper)
+      const dx = Math.abs(x - c), dy = Math.abs(y - c);
+      const d = dropper ? Math.max(dx, dy) : Math.max(dx, dy) + Math.max(0, Math.min(dx, dy) - 1.5) * 0.6;
+      if (d > r + 1) continue;
+      if (d > r) {
+        // the rim: shadowed at the top and left, catching the light at the bottom and right
+        plot(t, x, y, x - c + (y - c) > 0 ? 0x9e9e9e : 0x3c3c3c);
+        continue;
+      }
+      const deep = 1 - d / (r + 0.5);
+      const v = Math.round(0x2c - deep * 0x18);
+      plot(t, x, y, (v << 16) | (v << 8) | v);
+    }
+  return t;
+}
+
 /** add the redstone components' block textures to a registry (textures/blocks.ts) */
 export function registerRedstoneTextures(T: Record<string, () => TexImage | { w: number; h: number; frames: Uint8ClampedArray[] }>): void {
   const G = T as Record<string, Gen>;
@@ -133,6 +161,8 @@ export function registerRedstoneTextures(T: Record<string, () => TexImage | { w:
   G['redstone_torch_off'] = () => redstoneTorch(false);
   G['repeater'] = () => repeaterTop(G['smooth_stone'](), false);
   G['repeater_on'] = () => repeaterTop(G['smooth_stone'](), true);
+  for (const dropper of [false, true])
+    for (const vertical of [false, true]) G[`${dropper ? 'dropper' : 'dispenser'}_front${vertical ? '_vertical' : ''}`] = () => dispenserFront(dropper, vertical);
   G['tripwire_hook'] = tripwireHook;
   G['tripwire'] = tripwire;
 }

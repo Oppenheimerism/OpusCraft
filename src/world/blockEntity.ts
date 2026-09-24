@@ -618,7 +618,17 @@ export class EndGatewayBlockEntity extends BlockEntity {
   }
 }
 
+/** block entities kept with their blocks elsewhere (the redstone components': dispensers and droppers, moving pistons) */
+const BLOCK_ENTITY_TYPES = new Map<string, (x: number, y: number, z: number) => BlockEntity>();
+
+/** add a block entity for the block `name` (and its saves under that id) */
+export function registerBlockEntityType(name: string, make: (x: number, y: number, z: number) => BlockEntity): void {
+  BLOCK_ENTITY_TYPES.set(name, make);
+}
+
 export function createBlockEntity(name: string, x: number, y: number, z: number): BlockEntity | null {
+  const make = BLOCK_ENTITY_TYPES.get(name);
+  if (make) return make(x, y, z);
   if (name === 'chest') return new ChestBlockEntity(x, y, z);
   if (name === 'enchanting_table') return new EnchantingTableBlockEntity(x, y, z);
   if (name === 'furnace' || name === 'smoker' || name === 'blast_furnace') return new FurnaceBlockEntity(x, y, z, name);

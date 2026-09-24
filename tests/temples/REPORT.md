@@ -7,7 +7,7 @@ Branch: `claude/stoic-johnson-waevai` (from main at 5dfd44d).
 | Milestone | State | Commits |
 |---|---|---|
 | M1 desert pyramid and swamp hut | done | 9aa2261 Desert pyramids and swamp huts: sandstone pyramids in the desert with four chests over a TNT trap … |
-| M2 redstone components | partly done: dust, torches, repeaters (M2a), tripwire (M2b); dispensers/droppers, pistons to come | 74b9613 Redstone dust, redstone torches and repeaters: …; M2b: "Tripwire hooks and string: …" (see `git log`) |
+| M2 redstone components | partly done: dust, torches, repeaters (M2a), tripwire (M2b), dispensers and droppers (M2c); pistons to come | 74b9613 Redstone dust, redstone torches and repeaters: …; ef67ff5 Tripwire hooks and string: …; M2c: "Dispensers and droppers: …" (see `git log`) |
 | M3 igloo and jungle temple | not started | |
 | M4 archaeology | not started | |
 
@@ -45,7 +45,14 @@ M2 so far (all additive):
 - `src/textures/blocks.ts`: `registerRedstoneTextures(T)` after `registerVillageTextures(T)` (`src/textures/blocklib/redstone.ts`).
 - `src/inventory/recipes.ts`: redstone torch, repeater and tripwire hook after the redstone lamp; the crossbow's
   "left out" comment replaced by its recipe. `src/gui/screens/creative.ts`: `REDSTONE_ORDER` extended.
-- `src/game/redstone/components.ts`: imports `./wire`, `./torch`, `./repeater`, `./tripwire` (new files; `support.ts` is vanilla isFaceSturdy).
+- `src/game/redstone/components.ts`: imports `./wire`, `./torch`, `./repeater`, `./tripwire`, `./dispenser` (new files; `support.ts` is vanilla isFaceSturdy).
+- `src/world/blockEntity.ts`: `registerBlockEntityType(name, make)`, looked up first in `createBlockEntity` (the dispenser
+  and dropper register theirs from `src/game/redstone/dispenser.ts`; the pistons' moving block will too).
+- `src/game/villageBlocks.ts`: `isCompostable(id)` exported (the dropper asks before it puts something in a composter).
+- `src/gui/screens/index.ts`: `installDispenserScreen(game)` after `installJobSiteScreens(game)` (new
+  `src/gui/screens/dispenser.ts`, `src/inventory/dispenserMenu.ts`, GUI texture in `src/textures/redstoneGui.ts`).
+- `src/inventory/recipes.ts`: dispenser and dropper after the tripwire hook.
+- New `src/entity/thrownExperienceBottle.ts`: bottles o' enchanting are now thrown (by players too) and leave experience.
 
 ## 3. Open points
 
@@ -83,11 +90,27 @@ M2 so far (all additive):
   the string running into its ring; string lies at 1.5 px, taut rows of the texture when attached. Both blocks use the
   default (stone) sounds, as vanilla's Properties.of() does.
 
+- **Dispensers and droppers.** As vanilla 1.21.0: triggered 4 ticks after power arrives (at it or, by
+  quasi-connectivity, at the block above it, noticed on its next update), once per rising edge; a random filled slot
+  (vanilla's reservoir sampling); empty, the higher click. Behaviours for everything the game has that vanilla
+  dispenses: arrows (tipped ones keep their potion), tridents, snowballs, eggs, splash and lingering potions, bottles
+  o' enchanting, fire charges, spawn eggs, boats and chest boats, minecarts and chest minecarts, TNT, water and lava
+  buckets (waterlogging what can hold water), empty buckets (sources and waterlogged blocks), glass bottles, water
+  bottles (dirt, coarse and rooted dirt to mud), flint and steel (fire, portals, campfires, TNT), bone meal, shears
+  (sheep), armour, carved pumpkins (iron golems, else onto a head) and saddles (pigs, striders); anything else is
+  thrown out. Shields go into an off hand once the shield item exists (another branch). Buckets and bottles fill as
+  1.21.0 does (the full one into the first empty slot, else thrown out), and vanilla's second click when a boat,
+  minecart, full bucket or potion falls back to being thrown out is kept. The dropper puts one item at a time into the
+  container in front (chests, barrels, dispensers, droppers, furnaces by face, brewing stands by face, composters from
+  above, chest minecarts and chest boats), as a hopper would, silently, and keeps it if it won't go in; otherwise it
+  throws it out like a dispenser. Deviations: a mob from a spawn egg is finalized as a spawn egg's (the game has no
+  "dispenser" spawn reason); horse armour is just thrown out (vanilla would hand it to an empty-handed player's main
+  hand, or a zombie's body slot; there are no horses); no custom names ("Dispenser"/"Dropper" always). Things the game
+  doesn't have yet (fireworks, wind charges, shulker boxes, heads, armour stands, honeycomb, respawn anchors, beehives,
+  fish and powder snow buckets, horses and llamas) aren't dispensed specially.
+
 ## Work in progress (next steps, for the next session or after a context compaction)
 
-- **M2c dispenser/dropper**: 9-slot block entity with loot table (register a factory in `createBlockEntity`),
-  getRandomSlot, TRIGGERED with a 4-tick delay, DispenseItemBehavior for every item the game has, the dropper into
-  containers; 3x3 menu/screen opened through a hook like `setVillageMenuHook`, GUI texture `dispenser` (176x166).
 - **M2d pistons**: Level block-event queue run after scheduled ticks (dispatches `triggerEvent`), PistonMovingBlockEntity
   ticking in `world.blockEntities`, PistonStructureResolver (12), a PushReaction table, sticky pull, quasi-connectivity,
   entity pushing, a renderer for moving blocks (after `village.render` in `render/entityRenderers.ts`), and a
@@ -119,6 +142,20 @@ Run with `node tests/temples/<file>.mjs` (Node 22, after `npm ci`).
   within 10 ticks, a zombie, loose string), breaking the string (trips, then lets go at the next look, the rest goes
   slack), shears (no trip, detach sounds, the cut piece not put back), a disarmed piece, a broken hook, and the recipes
   (two hooks; the crossbow).
+- `tests/temples/m2c-dispenser.mjs`: **111 passed, 0 failed.** Placement (facing the player, up and down), the block
+  entity (nine slots, saved and loaded with its loot table), hardness, drops and spilling when broken; triggering (4
+  ticks after power, once while held, again after the power goes, quasi-connectivity needing an update, a lever, the
+  empty click), the random slot (3000 draws over three slots); dropping (position, speed, sound, smoke, facing down);
+  arrows (position 0.7 out and 0.1 up, speed, pickup), tipped arrows, tridents, snowballs, eggs, potions, the bottle o'
+  enchanting's experience, fire charges; spawn eggs (on a slab too), TNT, boats (on water, over water, thrown out on
+  land with two clicks), chest boats, minecarts (on and over a rail, thrown out without); buckets (water, lava onto
+  grass, waterlogging stairs, picking water up with one or several buckets, no free slot, flowing water, at stone),
+  glass bottles, water bottles to mud; flint and steel (fire, TNT, a campfire, nothing to light, worn out), bone meal,
+  shears; armour onto a zombie and a player, a carved pumpkin on a head and on an iron T (a golem), saddles; the
+  dropper into a chest (one at a time, merging, silent, keeping it when full), into nothing, another dropper, a
+  furnace from the side and above, a brewing stand, a composter, a chest minecart; the loot table rolled on firing and
+  on opening; the menu (slot layout, shift-click both ways, reach, broken); the recipes. Also checked in the browser
+  (headless Chromium): both blocks in every facing, water poured and arrows fired by power, both screens.
 
 ## 5. Browser checklist (seed 12345, `http://localhost:5173/?seed=12345`)
 
@@ -140,6 +177,12 @@ Coordinates from the locator (the start chunk's corner, as `/locate` prints it):
   (a torch powering its own block through dust) burns out with a fizz and smoke. Light level 7.
 - **Repeater** (3 stone, 2 torches, redstone): right-click to set 1-4; a second powered repeater pointing into its side
   locks it (the bedrock bar shows).
+- **Dispenser / dropper** (7 cobblestone round a bow over redstone / the same without the bow): placed, the mouth faces
+  you (round for the dispenser, square for the dropper). Right-click: the 3x3 screen. Put in arrows, a water bucket,
+  bone meal, a spawn egg, flint and steel, armour… and give it a pulse (a button): it clicks and uses one (arrows fly,
+  water pours, the crop in front grows, the mob appears, a fire lights, a zombie in front puts on the helmet); empty,
+  a higher click. A dropper facing a chest puts one item in per pulse, silently; facing nothing it throws it out.
+  A redstone block diagonally above a dispenser doesn't fire it until a block beside it changes (quasi-connectivity).
 - **Tripwire** (hooks: iron ingot, stick, planks; string): two hooks on blocks facing each other with string between
   (up to 40 pieces): they click and drop level as the last piece goes in. Walk through: they click, dip, and a lamp by
   either hook's block lights; out of it, they let go within half a second. Break a piece by hand: a short pulse, then

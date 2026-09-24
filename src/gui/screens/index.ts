@@ -14,6 +14,7 @@ import { MerchantMenu } from '../../inventory/merchantMenu';
 import { MerchantScreen } from './merchant';
 import { WinScreen } from './winScreen';
 import { installJobSiteScreens } from './jobSites';
+import { installDispenserScreen } from './dispenser';
 
 export function installScreens(game: Game): void {
   game.titleScreenFactory = () => new TitleScreen(game, false);
@@ -43,4 +44,5 @@ export function installScreens(game: Game): void {
     return new InventoryScreen(game, menu as InventoryMenu);
   };
   installJobSiteScreens(game);
+  installDispenserScreen(game);
 }

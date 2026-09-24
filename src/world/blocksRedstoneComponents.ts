@@ -4,7 +4,7 @@
 // game/redstone (wire.ts, torch.ts, repeater.ts, piston.ts, dispenser.ts, tripwire.ts).
 
 import { registerBlock, P, Layer, Box, StateView, enumProp, intProp, boolProp } from './block';
-import { torchModel, wallTorchModel, type ModelDef, type ElementDef, type FaceDef, type UV4, type Variant } from './models';
+import { torchModel, wallTorchModel, orientable, cube, type ModelDef, type ElementDef, type FaceDef, type UV4, type Variant } from './models';
 import type { DirName } from './dir';
 import { POWER } from './blocksRedstone';
 
@@ -196,6 +196,21 @@ function wireHalf(attached: boolean): ModelDef {
   return { ao: false, particle: 'tripwire', elements: [stringPiece(WIRE_Y, 0, WIRE_Y, 8, attached)] };
 }
 
+/**
+ * vanilla block/orientable and block/orientable_vertical with the furnace's sides and top, and blockstates
+ * dispenser.json / dropper.json: the front turned to face the way it faces
+ */
+function dispenserModel(kind: 'dispenser' | 'dropper'): (s: StateView) => Variant {
+  const side = orientable(`${kind}_front`, 'furnace_side', 'furnace_top');
+  const vertical = cube({ down: 'furnace_top', up: `${kind}_front_vertical`, north: 'furnace_top', south: 'furnace_top', west: 'furnace_top', east: 'furnace_top' }, { particle: `${kind}_front_vertical` });
+  return (s) => {
+    const facing = s.get('facing') as string;
+    if (facing === 'up') return { model: vertical };
+    if (facing === 'down') return { model: vertical, x: 180 };
+    return { model: side, y: HOR_Y[facing] };
+  };
+}
+
 /** vanilla TripWireBlock AABB and NOT_ATTACHED_AABB */
 const WIRE_ATTACHED_SHAPE = bx(0, 1, 0, 16, 2.5, 16);
 const WIRE_LOOSE_SHAPE = bx(0, 0, 0, 16, 8, 16);
@@ -248,6 +263,13 @@ export function registerRedstoneComponents(): void {
       },
     });
   }
+
+  // Dispenser and dropper: they face any of the six ways (vanilla strength 3.5, a pickaxe to drop)
+  for (const kind of ['dispenser', 'dropper'] as const)
+    registerBlock(kind, {
+      props: [P.facing, TRIGGERED], defaults: { facing: 'north' }, hardness: 3.5, sound: 'stone', tool: 'pickaxe', requiresTool: true,
+      model: dispenserModel(kind),
+    });
 
   // Tripwire hook: it breaks at once, and a piston breaks it too (vanilla pushReaction DESTROY)
   {
