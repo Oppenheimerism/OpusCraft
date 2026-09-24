@@ -1,7 +1,8 @@
 // Maps (vanilla EmptyMapItem, MapItem, MapCloningRecipe and MapExtendingRecipe): using an empty map makes a filled one
 // of the ground around you with an id of its own; held in either hand it draws what's around its holder, shaded by
-// height (and water by depth), until it's locked; its tooltip gives the id; a crafting table copies it onto empty maps,
-// or zooms it out with paper.
+// height (and water by depth), until it's locked; used on a banner it marks the banner on the map (a banner broken or
+// changed loses its mark as the map passes over it); its tooltip gives the id; a crafting table copies it onto empty
+// maps, or zooms it out with paper.
 
 import { ItemStack } from '../item/item';
 import type { Level } from './level';
@@ -123,6 +124,7 @@ export function updateMap(level: Level, viewer: Player, data: MapItemSavedData):
               }
               color = mapColorOf(st);
             }
+            data.checkBanners(level, j2 + j3, k2 + k3);
             d1 += l3 / (i * i);
             counts.set(color, (counts.get(color) ?? 0) + 1);
           }
@@ -199,6 +201,15 @@ registerItemBehavior('map', {
 });
 
 registerItemBehavior('filled_map', {
+  // vanilla MapItem.useOn: used on a banner, marks it on the map (or takes its mark off); anything else, nothing
+  useOn(level, p, stack, hit) {
+    if (!level.getBlockName(hit.x, hit.y, hit.z).endsWith('_banner')) return 'pass';
+    const d = getSavedData(stack, level);
+    const ok = !d || d.toggleBanner(level, hit.x, hit.y, hit.z);
+    // (the hand swings either way: vanilla's client succeeds before the server answers)
+    p.swing(p.inventory.activeHand);
+    return ok ? 'success' : 'fail';
+  },
   // vanilla MapItem.inventoryTick: its carriers are marked on it, and it draws while in either hand (unless locked)
   inventoryTick(level, p, stack, _slot, selected) {
     const d = getSavedData(stack, level);

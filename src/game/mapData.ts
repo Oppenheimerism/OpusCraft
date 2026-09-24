@@ -7,17 +7,21 @@ import type { Player } from '../entity/player';
 import type { ItemStack } from '../item/item';
 import type { DimensionId } from '../world/dimension';
 import { loadWorldData, saveWorldData, worldDataKey, onWorldMetaSave, type WorldMeta } from '../storage/worldStore';
+import { BannerBlockEntity } from '../world/blockEntity';
+import { BANNER_COLORS, bannerColorOf } from '../world/bannerPatterns';
 
 export const MAP_SIZE = 128;
 
-/** vanilla MapDecorationTypes (those the game has): the sprite, whether item frames and the cartography table show it,
- * and whether it counts toward a map's marker limit */
+/** vanilla MapDecorationTypes (those the game has): a player, off the map or far off it, and a banner of each colour */
+export type DecorationType = 'player' | 'player_off_map' | 'player_off_limits' | `banner_${(typeof BANNER_COLORS)[number]}`;
+
+/** whether item frames (and the cartography table) show a marker, and whether it counts toward a map's limit */
 export const DECORATION_TYPES = {
   player: { showOnItemFrame: false, trackCount: true },
   player_off_map: { showOnItemFrame: false, trackCount: true },
   player_off_limits: { showOnItemFrame: false, trackCount: true },
-} as const;
-export type DecorationType = keyof typeof DECORATION_TYPES;
+  ...Object.fromEntries(BANNER_COLORS.map((c) => [`banner_${c}`, { showOnItemFrame: true, trackCount: true }])),
+} as Record<DecorationType, { showOnItemFrame: boolean; trackCount: boolean }>;
 
 /** vanilla MapDecoration: x and y in half map pixels from the centre (-128..127), rot in sixteenths of a turn */
 export interface MapDecoration {
@@ -27,6 +31,27 @@ export interface MapDecoration {
   rot: number;
   name: string | null;
 }
+
+/** vanilla MapBanner: a banner a map was used on, its base colour and name as they were */
+export interface MapBanner {
+  x: number;
+  y: number;
+  z: number;
+  color: string;
+  name: string | null;
+}
+
+/** vanilla MapBanner.getId */
+const bannerId = (b: MapBanner): string => `banner-${b.x},${b.y},${b.z}`;
+
+/** vanilla MapBanner.fromWorld: the banner at the place, if there is one */
+function bannerAt(level: Level, x: number, y: number, z: number): MapBanner | null {
+  const be = level.world.getBlockEntity(x, y, z);
+  const color = be instanceof BannerBlockEntity ? bannerColorOf(level.getBlockName(x, y, z)) : null;
+  return color ? { x, y, z, color, name: (be as BannerBlockEntity).customName ?? null } : null;
+}
+
+const sameBanner = (a: MapBanner, b: MapBanner | null): boolean => !!b && a.x === b.x && a.y === b.y && a.z === b.z && a.color === b.color && a.name === b.name;
 
 /** what a map is saved as (vanilla MapItemSavedData.save) */
 export interface SavedMapData {
@@ -38,6 +63,7 @@ export interface SavedMapData {
   unlimitedTracking: boolean;
   locked: boolean;
   colors: Uint8Array;
+  banners?: MapBanner[];
 }
 
 /** vanilla MapItemSavedData.HoldingPlayer: someone carrying the map, and where their sweep of it has got to */
@@ -54,6 +80,8 @@ export class MapItemSavedData {
   colors = new Uint8Array(MAP_SIZE * MAP_SIZE);
   /** vanilla decorations, in the order they were added */
   readonly decorations = new Map<string, MapDecoration>();
+  /** vanilla bannerMarkers: the banners marked on it, by id */
+  readonly bannerMarkers = new Map<string, MapBanner>();
   trackedDecorationCount = 0;
   private readonly carriedBy = new Map<Player, HoldingPlayer>();
   /** bumped whenever a colour changes (the renderers re-upload the picture) */
@@ -86,6 +114,7 @@ export class MapItemSavedData {
   /** vanilla locked: a copy that won't change any more, markers and all */
   lockedCopy(): MapItemSavedData {
     const d = new MapItemSavedData(this.centerX, this.centerZ, this.scale, this.trackingPosition, this.unlimitedTracking, true, this.dimension);
+    for (const [k, v] of this.bannerMarkers) d.bannerMarkers.set(k, { ...v });
     for (const [k, v] of this.decorations) d.decorations.set(k, { ...v });
     d.trackedDecorationCount = this.trackedDecorationCount;
     d.colors.set(this.colors);
@@ -168,6 +197,43 @@ export class MapItemSavedData {
     }
   }
 
+  /**
+   * vanilla toggleBanner: a banner on the map is marked with its colour (and name), or unmarked if it was already;
+   * false (and the use fails) off the map, for no banner, or past 256 markers
+   */
+  toggleBanner(level: Level, x: number, y: number, z: number): boolean {
+    const d0 = x + 0.5, d1 = z + 0.5;
+    const i = 1 << this.scale;
+    const d2 = (d0 - this.centerX) / i, d3 = (d1 - this.centerZ) / i;
+    if (d2 < -63 || d3 < -63 || d2 > 63 || d3 > 63) return false;
+    const b = bannerAt(level, x, y, z);
+    if (!b) return false;
+    const id = bannerId(b);
+    const had = this.bannerMarkers.get(id);
+    if (had && sameBanner(had, b)) {
+      this.bannerMarkers.delete(id);
+      this.removeDecoration(id);
+      this.dirty = true;
+      return true;
+    }
+    if (this.trackedDecorationCount >= 256) return false;
+    this.bannerMarkers.set(id, b);
+    this.addDecoration(`banner_${b.color}` as DecorationType, level, id, d0, d1, 180, b.name);
+    this.dirty = true;
+    return true;
+  }
+
+  /** vanilla checkBanners: marked banners in this column that have gone (or changed) come off the map */
+  checkBanners(level: Level, x: number, z: number): void {
+    if (!this.bannerMarkers.size) return;
+    for (const [id, b] of this.bannerMarkers) {
+      if (b.x !== x || b.z !== z || sameBanner(b, bannerAt(level, b.x, b.y, b.z))) continue;
+      this.bannerMarkers.delete(id);
+      this.removeDecoration(id);
+      this.dirty = true;
+    }
+  }
+
   /** vanilla removeDecoration */
   removeDecoration(id: string): void {
     const d = this.decorations.get(id);
@@ -191,7 +257,7 @@ export class MapItemSavedData {
     return {
       dimension: this.dimension, xCenter: this.centerX, zCenter: this.centerZ, scale: this.scale,
       trackingPosition: this.trackingPosition, unlimitedTracking: this.unlimitedTracking, locked: this.locked,
-      colors: new Uint8Array(this.colors),
+      colors: new Uint8Array(this.colors), banners: [...this.bannerMarkers.values()].map((b) => ({ ...b })),
     };
   }
 
@@ -200,6 +266,13 @@ export class MapItemSavedData {
     const dim: DimensionId = d.dimension === 'the_nether' || d.dimension === 'the_end' ? d.dimension : 'overworld';
     const m = new MapItemSavedData(d.xCenter | 0, d.zCenter | 0, Math.max(0, Math.min(4, d.scale | 0)), d.trackingPosition !== false, !!d.unlimitedTracking, !!d.locked, dim);
     if (d.colors instanceof Uint8Array && d.colors.length === MAP_SIZE * MAP_SIZE) m.colors.set(d.colors);
+    // (vanilla marks them again at the block's corner, not its middle)
+    for (const b of d.banners ?? []) {
+      if (!(BANNER_COLORS as readonly string[]).includes(b.color)) continue;
+      const banner = { x: b.x | 0, y: b.y | 0, z: b.z | 0, color: b.color, name: typeof b.name === 'string' ? b.name : null };
+      m.bannerMarkers.set(bannerId(banner), banner);
+      m.addDecoration(`banner_${banner.color}` as DecorationType, null, bannerId(banner), banner.x, banner.z, 180, banner.name);
+    }
     return m;
   }
 }

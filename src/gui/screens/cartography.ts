@@ -6,13 +6,30 @@ import type { Game } from '../../game/game';
 import type { GuiGraphics } from '../guiGraphics';
 import { AbstractContainerScreen } from './container';
 import type { CartographyTableMenu } from '../../inventory/cartographyMenu';
-import type { MapItemSavedData } from '../../game/mapData';
+import { DECORATION_TYPES, type MapItemSavedData, type DecorationType } from '../../game/mapData';
 import { viewedMapData } from '../../game/maps';
 import { mapRGBA } from '../../world/mapColors';
+import { decorationAtlas } from '../../textures/mapTextures';
+import { nameLayout } from '../../render/mapRenderer';
 import '../../textures/jobSiteGui';
 
 /** each map's picture on a canvas, redrawn when its colours change */
 const pictures = new WeakMap<MapItemSavedData, { canvas: HTMLCanvasElement; version: number }>();
+
+/** the markers' sprites on a canvas, and where each one is */
+let markers: { canvas: HTMLCanvasElement; uv: Record<DecorationType, [number, number, number, number]> } | null = null;
+
+function markerSheet(): NonNullable<typeof markers> {
+  if (!markers) {
+    const a = decorationAtlas();
+    const canvas = document.createElement('canvas');
+    canvas.width = a.tex.w;
+    canvas.height = a.tex.h;
+    canvas.getContext('2d')!.putImageData(new ImageData(new Uint8ClampedArray(a.tex.data), a.tex.w, a.tex.h), 0, 0);
+    markers = { canvas, uv: a.uv };
+  }
+  return markers;
+}
 
 function picture(d: MapItemSavedData): HTMLCanvasElement {
   let p = pictures.get(d);
@@ -72,11 +89,44 @@ export class CartographyTableScreen extends AbstractContainerScreen<CartographyT
     }
   }
 
-  /** vanilla renderMap: the picture 128 × `scale` across (with the markers an item frame would show: none of the game's) */
+  /**
+   * vanilla renderMap: the picture 128 × `scale` across, with the markers an item frame would show (banners, not
+   * players) and their names, as vanilla MapRenderer draws them
+   */
   private renderMap(g: GuiGraphics, d: MapItemSavedData | null, x: number, y: number, scale: number): void {
     if (!d) return;
     const s = g.scale;
-    g.ctx.imageSmoothingEnabled = false;
-    g.ctx.drawImage(picture(d), 0, 0, 128, 128, Math.round(x * s), Math.round(y * s), Math.round(128 * scale * s), Math.round(128 * scale * s));
+    const ctx = g.ctx;
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(picture(d), 0, 0, 128, 128, Math.round(x * s), Math.round(y * s), Math.round(128 * scale * s), Math.round(128 * scale * s));
+    const shown = [...d.decorations.values()].filter((dec) => DECORATION_TYPES[dec.type].showOnItemFrame);
+    if (!shown.length) return;
+    const sheet = markerSheet();
+    ctx.save();
+    ctx.translate(Math.round(x * s), Math.round(y * s));
+    ctx.scale(scale * s, scale * s);
+    for (const dec of shown) {
+      const [u0, , u1] = sheet.uv[dec.type];
+      ctx.save();
+      ctx.translate(dec.x / 2 + 64, dec.y / 2 + 64);
+      ctx.rotate((((dec.rot * 360) / 16) * Math.PI) / 180);
+      ctx.scale(4, 4);
+      ctx.translate(-0.125, 0.125);
+      // (vanilla's quad has the sprite's top at +y: upside down)
+      ctx.scale(1, -1);
+      ctx.drawImage(sheet.canvas, u0 * sheet.canvas.width, 0, (u1 - u0) * sheet.canvas.width, sheet.canvas.height, -1, -1, 2, 2);
+      ctx.restore();
+      if (dec.name === null) continue;
+      const width = g.font.width(dec.name);
+      const at = nameLayout(dec, width);
+      ctx.save();
+      ctx.translate(at.x, at.y);
+      ctx.scale(at.scale, at.scale);
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+      ctx.fillRect(-1, -1, width + 2, 10);
+      g.font.draw(ctx, dec.name, 0, 0, 0xffffff, 1);
+      ctx.restore();
+    }
+    ctx.restore();
   }
 }
