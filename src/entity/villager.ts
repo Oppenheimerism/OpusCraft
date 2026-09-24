@@ -96,7 +96,7 @@ const WHEAT: ReadonlySet<string> = new Set(['wheat']);
 
 type Pos = [number, number, number];
 
-export type VillagerActivity = 'core' | 'idle' | 'work' | 'meet' | 'rest' | 'play' | 'panic';
+export type VillagerActivity = 'core' | 'idle' | 'work' | 'meet' | 'rest' | 'play' | 'panic' | 'hide';
 
 /** vanilla WalkTarget: a spot, or an entity (EntityTracker), to come within `closeEnough` of (Manhattan blocks) */
 interface WalkTarget {
@@ -144,6 +144,8 @@ export interface VillagerMemories {
   nearestBed: Pos | null;
   /** SECONDARY_JOB_SITE: a farmer's farmland about it */
   secondaryJobSite: Pos[] | null;
+  /** HIDING_PLACE: the bed it runs to when the bell rings */
+  hidingPlace: Pos | null;
 }
 
 /** vanilla Schedule.VILLAGER_DEFAULT and VILLAGER_BABY: [time of day, activity from then] */
@@ -1006,6 +1008,70 @@ function useBonemeal(): BehaviorControl<Villager> {
   });
 }
 
+// --- the bell (vanilla ReactToBell, LocateHidingPlace, SetHiddenState) --------------------------------------------
+
+/** vanilla ReactToBell: a villager that has heard the bell goes to hide (without a raid to tell it otherwise) */
+function reactToBell(): BehaviorControl<Villager> {
+  return oneShot<Villager>((v) => {
+    if (v.heardBellTime === null) return false;
+    v.brain.setActiveActivityIfPossible('hide', v);
+    return true;
+  });
+}
+
+/**
+ * vanilla LocateHidingPlace: the bed right beside it, else any bed within `radius`, else its own is where it hides;
+ * it drops whatever it was about and hurries there
+ */
+function locateHidingPlace(radius: number, speed: number, closeEnough: number): BehaviorControl<Villager> {
+  return oneShot<Villager>((v) => {
+    if (v.mem.walkTarget) return false;
+    const [bx, by, bz] = blockPos(v);
+    const beds = (r: number) => v.level.poi.findAll(bx, by, bz, r, (k) => k === 'home', false);
+    let p: Pos | null = null;
+    const near = beds(closeEnough + 1)[0];
+    if (near && closerToCenter([near[0], near[1], near[2]], v, closeEnough)) p = [near[0], near[1], near[2]];
+    if (!p) {
+      const all = beds(radius);
+      if (all.length) {
+        const q = all[v.random.nextInt(all.length)];
+        p = [q[0], q[1], q[2]];
+      }
+    }
+    p ??= v.mem.home;
+    if (!p) return true;
+    v.mem.path = null;
+    v.mem.lookTarget = null;
+    v.mem.breedTarget = null;
+    v.mem.interactionTarget = null;
+    v.mem.hidingPlace = p;
+    if (!closerToCenter(p, v, closeEnough)) v.mem.walkTarget = walkTo(p, speed, closeEnough);
+    return true;
+  });
+}
+
+/**
+ * vanilla SetHiddenState(15, 3): it stays hidden until it has spent 15 s by its hiding place, or 15 s have passed
+ * since the bell, then forgets the bell and goes back to its day
+ */
+function setHiddenState(seconds: number, closeEnough: number): BehaviorControl<Villager> {
+  let hidden = 0;
+  return oneShot<Villager>((v, now) => {
+    const place = v.mem.hidingPlace, heard = v.heardBellTime;
+    if (!place || heard === null) return false;
+    if (hidden <= seconds * 20 && heard + 300 > now) {
+      const b = blockPos(v);
+      if ((place[0] - b[0]) ** 2 + (place[1] - b[1]) ** 2 + (place[2] - b[2]) ** 2 < closeEnough * closeEnough) hidden++;
+      return true;
+    }
+    v.heardBellTime = null;
+    v.mem.hidingPlace = null;
+    v.updateActivityFromSchedule(now, true);
+    hidden = 0;
+    return true;
+  });
+}
+
 /** vanilla SetLookAndInteract(PLAYER, 4): a player within 4 becomes whom it's dealing with */
 function setLookAndInteractWithPlayer(): BehaviorControl<Villager> {
   return oneShot<Villager>((v) => {
@@ -1597,12 +1663,14 @@ export class Villager extends AgeableMob {
   private lastGossipDecayTime = 0;
   /** vanilla GOLEM_DETECTED_RECENTLY: until when (it lasts 600 ticks from the sighting) */
   golemDetectedUntil = -1;
+  /** vanilla HEARD_BELL_TIME: when it last heard a bell ring (set by the bell itself) */
+  heardBellTime: number | null = null;
 
   readonly mem: VillagerMemories = {
     home: null, jobSite: null, potentialJobSite: null, meetingPoint: null, walkTarget: null, lookTarget: null, interactionTarget: null, path: null,
     cantReachWalkTargetSince: null, lastSlept: null, lastWoken: null, lastWorkedAtPoi: null, hurtBy: false, hurtByEntity: null, nearestHostile: null,
     doorsToClose: null, nearestLiving: [], visibleLiving: [], visibleBabies: null, wantedItem: null, breedTarget: null, nearestBed: null,
-    secondaryJobSite: null,
+    secondaryJobSite: null, hidingPlace: null,
   };
   brain: Brain<Villager, VillagerActivity>;
 
@@ -1634,6 +1702,7 @@ export class Villager extends AgeableMob {
     b.add('rest', restPackage());
     b.add('idle', idlePackage());
     b.add('panic', panicPackage());
+    b.add('hide', hidePackage(), (v) => v.heardBellTime !== null);
     b.setActiveActivityIfPossible('idle', this);
     return b;
   }
@@ -2323,7 +2392,8 @@ function corePackage(): Pkg {
     [0, lookAtTargetSink()],
     [0, panicTrigger()],
     [0, wakeUp()],
-    // (ReactToBell and SetRaidStatus wait for raids)
+    [0, reactToBell()],
+    // (SetRaidStatus waits for raids)
     [0, validateNearbyPoi('jobSite', (v) => heldJobSite(v.profession))],
     [0, validateNearbyPoi('potentialJobSite', (v) => acquirableJobSite(v.profession))],
     [1, moveToTargetSink()],
@@ -2382,6 +2452,15 @@ function playPackage(): Pkg {
       ),
     ],
     [99, updateActivityFromSchedule()],
+  ];
+}
+
+/** vanilla VillagerGoalPackages.getHidePackage: to a bed, and stay there a while */
+function hidePackage(): Pkg {
+  return [
+    [0, setHiddenState(15, 3)],
+    [1, locateHidingPlace(32, SPEED * 1.25, 2)],
+    [5, minimalLook()],
   ];
 }
 
