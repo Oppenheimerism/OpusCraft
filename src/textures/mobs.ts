@@ -886,7 +886,7 @@ const ZOGLIN_LOOK: HoglinLook = {
   tuskBase: 0xc8bfa9,
   hoof: [0x463f3d, 0x544b48, 0x625855],
   ear: [0xb09a95, 0xbea8a3, 0xcab5af],
-  rot: { flesh: [0x6d2429, 0x843139, 0x9b4149, 0xae5a5e], bone: [0xd2cab8, 0xe1dacb, 0xece7dc] },
+  rot: { flesh: [0x7c2c34, 0x923b45, 0xa64d55, 0xb8636a], bone: [0xcfc6b2, 0xded6c4, 0xebe5d8] },
 };
 
 function hoglinSkin(k: HoglinLook): TexImage {
@@ -964,20 +964,25 @@ function hoglinSkin(k: HoglinLook): TexImage {
     const rot = k.rot;
     const sore = (f: Face, cx: number, cy: number, rad: number) =>
       paintFace(t, f, (x, y) => {
-        const d = Math.hypot(x - cx, (y - cy) * 1.3) + r.next() * 0.9;
-        return d < rad * 0.45 ? pick(r, rot.bone) : d < rad ? pick(r, rot.flesh) : undefined;
+        const d = Math.hypot(x - cx, (y - cy) * 1.2) + r.next() * 1.4;
+        if (d >= rad) return undefined;
+        if (d < rad * 0.45 && r.chance(0.55)) return pick(r, rot.bone);
+        return pick(r, rot.flesh, d < rad * 0.6 ? [3, 3, 1, 0] : [0, 1, 3, 3]);
       });
-    sore(body.right, 7, 9, 3.2);
-    sore(body.right, 19, 5, 2.2);
-    sore(body.left, 15, 8, 3.6);
-    sore(body.left, 5, 4, 2);
-    sore(body.top, 4, 7, 2.4);
-    sore(body.back, 11, 6, 2.5);
-    sore(head.top, 10, 8, 2.6);
-    sore(head.right, 6, 3, 1.8);
-    sore(legs[0].front, 2, 6, 1.8);
-    sore(legs[3].left, 2, 4, 1.6);
-    for (const k2 of FACES) fleck(t, body[k2], r, 0.03, rot.flesh);
+    sore(body.right, 7, 8, 4.6);
+    sore(body.right, 20, 4, 3);
+    sore(body.left, 16, 8, 5);
+    sore(body.left, 4, 3, 2.8);
+    sore(body.top, 4, 8, 3.4);
+    sore(body.top, 11, 18, 2.6);
+    sore(body.back, 10, 6, 3.4);
+    sore(body.bottom, 8, 14, 3.6);
+    // half the face has rotted down to the skull
+    sore(head.top, 10, 9, 4);
+    sore(head.right, 11, 3, 3);
+    sore(legs[0].front, 2, 6, 2.6);
+    sore(legs[3].left, 2, 4, 2.4);
+    for (const k2 of FACES) fleck(t, body[k2], r, 0.04, rot.flesh);
   }
   return t;
 }
