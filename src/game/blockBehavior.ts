@@ -59,8 +59,8 @@ export interface BlockBehavior {
   getSignal?(world: World, x: number, y: number, z: number, state: number, dir: Dir): number;
   /** vanilla getDirectSignal: the strong power, which a conductor passes on to all its neighbours */
   getDirectSignal?(world: World, x: number, y: number, z: number, state: number, dir: Dir): number;
-  /** vanilla useWithoutItem: true if it did something */
-  use?(level: Level, x: number, y: number, z: number, state: number, ctx: UseContext): boolean;
+  /** vanilla useWithoutItem: true if it did something, 'consume' if the click is spent without the arm swinging */
+  use?(level: Level, x: number, y: number, z: number, state: number, ctx: UseContext): boolean | 'consume';
   /** vanilla useItemOn: `stack` (in ctx.hand) used on the block, before the block's own use and the item's */
   useItemOn?(level: Level, x: number, y: number, z: number, state: number, stack: ItemStack, ctx: UseContext): ItemUseResult;
   /** vanilla onProjectileHit: `projectile` struck the block */

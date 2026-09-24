@@ -4,7 +4,7 @@
 // campfire). Models mirror vanilla's block model JSONs and blockstate files; shapes are vanilla's VoxelShapes.
 // What they do is in game/villageBlocks.
 
-import { registerBlock, P, Box, enumProp, intProp, boolProp, StateView, Layer } from './block';
+import { registerBlock, P, Box, enumProp, intProp, boolProp, StateView, Layer, BLOCK_BY_NAME } from './block';
 import { cube, cubeBottomTop, orientable, type ModelDef, type FaceDef, type UV4, type ElementDef, type Variant } from './models';
 import type { DirName } from './dir';
 
@@ -283,6 +283,76 @@ function brewingStandModels(): { stand: ModelDef; arms: [ModelDef, ModelDef][] }
   };
 }
 
+// ---------------------------------------------------------------------------
+// Flower pot (vanilla FlowerPotBlock; block/flower_pot, and with a plant in it flower_pot_cross,
+// tinted_flower_pot_cross, potted_cactus or template_potted_azalea_bush)
+
+/** vanilla FlowerPotBlock.SHAPE, the same with a plant in it */
+export const FLOWER_POT_SHAPE: Box[] = [bx(5, 0, 5, 11, 6, 11)];
+
+/**
+ * the plants a pot takes (vanilla FlowerPotBlock.POTTED_BY_CONTENT, in vanilla's order). Those this world doesn't have
+ * yet (torchflower, mangrove propagule, wither rose) get their pot when they arrive; bamboo would need its own model.
+ */
+export const POTTABLE = [
+  'torchflower', 'oak_sapling', 'spruce_sapling', 'birch_sapling', 'jungle_sapling', 'acacia_sapling', 'cherry_sapling', 'dark_oak_sapling',
+  'mangrove_propagule', 'fern', 'dandelion', 'poppy', 'blue_orchid', 'allium', 'azure_bluet', 'red_tulip', 'orange_tulip', 'white_tulip',
+  'pink_tulip', 'oxeye_daisy', 'cornflower', 'lily_of_the_valley', 'wither_rose', 'red_mushroom', 'brown_mushroom', 'dead_bush', 'cactus',
+  'crimson_fungus', 'warped_fungus', 'crimson_roots', 'warped_roots', 'azalea', 'flowering_azalea',
+];
+
+/** the potted block's name (vanilla Blocks.POTTED_AZALEA is potted_azalea_bush) */
+export const pottedName = (plant: string): string => (plant.endsWith('azalea') ? `potted_${plant}_bush` : `potted_${plant}`);
+
+/** vanilla block/flower_pot: four walls a pixel thick round a bed of dirt */
+function flowerPotElements(): ElementDef[] {
+  const t = 'flower_pot';
+  return [
+    { from: [5, 0, 5], to: [6, 6, 11], faces: { down: f(t, [5, 5, 6, 11], 'down'), up: f(t, [5, 5, 6, 11]), north: f(t, [10, 10, 11, 16]), south: f(t, [5, 10, 6, 16]), west: f(t, [5, 10, 11, 16]), east: f(t, [5, 10, 11, 16]) } },
+    { from: [10, 0, 5], to: [11, 6, 11], faces: { down: f(t, [10, 5, 11, 11], 'down'), up: f(t, [10, 5, 11, 11]), north: f(t, [5, 10, 6, 16]), south: f(t, [10, 10, 11, 16]), west: f(t, [5, 10, 11, 16]), east: f(t, [5, 10, 11, 16]) } },
+    { from: [6, 0, 5], to: [10, 6, 6], faces: { down: f(t, [6, 10, 10, 11], 'down'), up: f(t, [6, 5, 10, 6]), north: f(t, [6, 10, 10, 16]), south: f(t, [6, 10, 10, 16]) } },
+    { from: [6, 0, 10], to: [10, 6, 11], faces: { down: f(t, [6, 5, 10, 6], 'down'), up: f(t, [6, 10, 10, 11]), north: f(t, [6, 10, 10, 16]), south: f(t, [6, 10, 10, 16]) } },
+    { from: [6, 0, 6], to: [10, 4, 10], faces: { down: f(t, [6, 12, 10, 16], 'down'), up: f('dirt', [6, 6, 10, 10]) } },
+  ];
+}
+
+/** vanilla flower_pot_cross (tinted_flower_pot_cross with `tint`): the plant's two crossed planes, shrunk to stand in the dirt */
+function pottedCross(plant: string, tint?: number): ElementDef[] {
+  const face: FaceDef = { tex: plant, uv: [0, 0, 16, 16], tint };
+  const rot = { origin: [8, 8, 8] as [number, number, number], axis: 'y' as const, angle: 45, rescale: true };
+  return [
+    { from: [2.6, 4, 8], to: [13.4, 16, 8], rot, shade: false, faces: { north: face, south: face } },
+    { from: [8, 4, 2.6], to: [8, 16, 13.4], rot, shade: false, faces: { west: face, east: face } },
+  ];
+}
+
+/** the pot with `plant` in it */
+function pottedModel(plant: string): ModelDef {
+  const pot = flowerPotElements();
+  const model = (elements: ElementDef[]): ModelDef => ({ ao: false, particle: 'flower_pot', elements: [...pot, ...elements] });
+  if (plant === 'fern') return model(pottedCross('fern', 0));
+  if (plant === 'crimson_roots' || plant === 'warped_roots') return model(pottedCross(`${plant}_pot`));
+  // vanilla potted_cactus: a stub of cactus four pixels across standing up out of the dirt
+  if (plant === 'cactus') {
+    const side = f('cactus_side', [6, 0, 10, 12]);
+    return model([{ from: [6, 4, 6], to: [10, 16, 10], faces: { up: f('cactus_top', [6, 6, 10, 10]), north: side, south: side, west: side, east: side } }]);
+  }
+  // vanilla template_potted_azalea_bush: a small bush, open underneath, on a woody stem
+  if (plant.endsWith('azalea')) {
+    const name = pottedName(plant);
+    const top = `${name}_top`, side = f(`${name}_side`, [4, 0, 12, 8]);
+    return model([
+      { from: [4, 15.9, 4], to: [12, 15.9, 12], faces: { up: f(top, [4, 4, 12, 12]), down: f(top, [4, 12, 12, 4]) } },
+      { from: [4, 8, 4], to: [12, 15.9, 4], faces: { north: side, south: side } },
+      { from: [4, 8, 12], to: [12, 15.9, 12], faces: { north: side, south: side } },
+      { from: [4, 8, 4], to: [4, 15.9, 12], faces: { west: side, east: side } },
+      { from: [12, 8, 4], to: [12, 15.9, 12], faces: { west: side, east: side } },
+      ...pottedCross(`${name}_plant`),
+    ]);
+  }
+  return model(pottedCross(plant));
+}
+
 /** face bits (1 << dir) of the four sides and the bottom: full faces for neighbours to cull against and hang things on */
 const SIDES_AND_BOTTOM = 0b111101;
 
@@ -386,6 +456,18 @@ export function registerVillageBlocks(): void {
       collision: [bx(1, 0, 1, 15, 2, 15), bx(7, 0, 7, 9, 14, 9)],
       model: (s) => ({ parts: [{ model: stand }, ...arms.map(([full, empty], i) => ({ model: s.get(`has_bottle_${i}`) ? full : empty }))] }),
     });
+  }
+  {
+    // (vanilla Blocks.FLOWER_POT and every POTTED_ one: broken in a blink, stone's sounds, see-through; the potted ones
+    // have no item of their own)
+    const pot = { hardness: 0, sound: 'stone', layer: Layer.CUTOUT, opaque: false, aoCaster: false, opacity: 0, collision: FLOWER_POT_SHAPE };
+    const empty: ModelDef = { ao: false, particle: 'flower_pot', elements: flowerPotElements() };
+    registerBlock('flower_pot', { ...pot, model: () => ({ model: empty }) });
+    for (const plant of POTTABLE) {
+      if (!BLOCK_BY_NAME.has(plant)) continue;
+      const model = pottedModel(plant);
+      registerBlock(pottedName(plant), { ...pot, item: false, ...(plant === 'fern' ? { tint: 'grass' as const } : {}), model: () => ({ model }) });
+    }
   }
   // Smoker and blast furnace (vanilla SmokerBlock, BlastFurnaceBlock: furnaces with their own recipes; block/smoker is
   // orientable_with_bottom, block/blast_furnace orientable, each with an _on front)

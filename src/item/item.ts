@@ -301,7 +301,7 @@ for (const b of BLOCKS) {
   const it = ITEMS.get(b.name);
   if (!it || !it.block) continue;
   const n = b.name;
-  if (n.endsWith('_door') || n.endsWith('_bed') || n === 'lantern' || n === 'soul_lantern' || n === 'chain' || n === 'bell' || n === 'cauldron' || n === 'brewing_stand') {
+  if (n.endsWith('_door') || n.endsWith('_bed') || n === 'lantern' || n === 'soul_lantern' || n === 'chain' || n === 'bell' || n === 'cauldron' || n === 'brewing_stand' || n === 'flower_pot') {
     it.texture = n;
     if (n.endsWith('_bed')) it.maxStack = 1;
   }
@@ -338,6 +338,8 @@ export function itemForBlock(name: string): Item | undefined {
   if (name === 'cave_vines' || name === 'cave_vines_plant') return ITEMS.get('glow_berries');
   if (name === 'big_dripleaf_stem') return ITEMS.get('big_dripleaf');
   if (name === 'water_cauldron' || name === 'lava_cauldron') return ITEMS.get('cauldron');
+  // (vanilla FlowerPotBlock.getCloneItemStack: a potted plant picks as its plant)
+  if (name.startsWith('potted_')) return ITEMS.get(name.slice(7).replace(/^(flowering_)?azalea_bush$/, '$1azalea'));
   return ITEMS.get(name);
 }
 

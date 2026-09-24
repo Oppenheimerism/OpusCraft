@@ -80,6 +80,46 @@ export function azaleaPlant(): TexImage {
   return t;
 }
 
+// the potted bush (vanilla potted_azalea_bush_top / _side / _plant and the flowering ones): the same leaves on a
+// smaller bush, eight pixels across, drawn in the middle of the top and the top middle of the side
+
+export function pottedAzaleaTop(flowering: boolean): TexImage {
+  const src = leafCanopy('potted_azalea_bush_top', { blobs: 18, minDist: 2.9, radius: [2, 2.8], noise: 0.7, light: 0.9, holes: 0.04, shadow: 0.1, pal: LEAF });
+  const t = img();
+  for (let y = 4; y < 12; y++)
+    for (let x = 4; x < 12; x++) {
+      // (the corners nibbled off)
+      if (Math.min(x - 4, 11 - x) + Math.min(y - 4, 11 - y) < 1) continue;
+      if (getA(src, x, y)) setPx(t, x, y, getPx(src, x, y));
+    }
+  if (flowering) flowers(t, new Rand(0xf10d, 3), 3);
+  return t;
+}
+
+export function pottedAzaleaSide(flowering: boolean): TexImage {
+  const src = leafCanopy('potted_azalea_bush_side', { blobs: 18, minDist: 2.9, radius: [2, 2.8], noise: 0.7, light: 0.9, holes: 0.06, shadow: 0.12, pal: LEAF });
+  const t = img();
+  const r = new Rand(0xa2a1, 3);
+  let bottom = 6;
+  for (let x = 4; x < 12; x++) {
+    bottom = Math.max(5, Math.min(8, bottom + r.nextInt(3) - 1));
+    for (let y = 0; y < bottom; y++) if (getA(src, x, y)) setPx(t, x, y, y === bottom - 1 ? LEAF[1] : getPx(src, x, y));
+  }
+  if (flowering) flowers(t, new Rand(0xf10e, 3), 2, 6);
+  return t;
+}
+
+/** the stem: a short trunk up out of the dirt, forking into two twigs under the leaves */
+export function pottedAzaleaPlant(): TexImage {
+  const t = img();
+  for (let y = 7; y < N; y++) {
+    setPx(t, 7, y, WOOD[3]);
+    setPx(t, 8, y, y > 12 ? WOOD[0] : WOOD[1]);
+  }
+  for (const [x, y] of [[6, 6], [5, 5], [5, 4], [9, 6], [10, 5], [10, 4], [8, 5], [8, 4]] as const) setPx(t, x, y, WOOD[2]);
+  return t;
+}
+
 export function hangingRoots(): TexImage {
   const t = img();
   const r = new Rand(0x4007, 3);

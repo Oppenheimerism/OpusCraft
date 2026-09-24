@@ -541,8 +541,9 @@ export class Interaction {
     }
     // levers and buttons
     const own = behaviorOf(st)?.use;
-    if (!sneakingWithItem && !skipOwn && own && own(lvl, h.x, h.y, h.z, st, ctx)) {
-      p.swing();
+    const used = !sneakingWithItem && !skipOwn && own ? own(lvl, h.x, h.y, h.z, st, ctx) : false;
+    if (used) {
+      if (used !== 'consume') p.swing();
       return true;
     }
     // doors, trapdoors, fence gates toggle by hand (iron ones need redstone)

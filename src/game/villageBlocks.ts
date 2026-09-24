@@ -2,7 +2,7 @@
 // BlastFurnaceBlock, the cauldrons, LecternBlock, FlowerPotBlock, CampfireBlock). The blocks themselves are in
 // world/blocksVillage; their block entities in world/blockEntity.
 
-import { BLOCKS, STATE_BLOCK, FLAGS, FACE_OCC, F_FULL_COLLISION, F_LEAVES, Block, getBlock } from '../world/block';
+import { BLOCKS, STATE_BLOCK, FLAGS, FACE_OCC, F_FULL_COLLISION, F_LEAVES, BLOCK_BY_NAME, Block, getBlock } from '../world/block';
 import { DOWN, UP, NORTH, SOUTH, WEST, EAST, DX, DZ, OPPOSITE, DIR_NAMES, AXIS_OF, dirFromYaw, type Dir } from '../world/dir';
 import type { World } from '../world/world';
 import { AABB } from '../core/aabb';
@@ -11,10 +11,10 @@ import { registerBehavior, type ItemUseResult, type UseContext } from './blockBe
 import type { PlaceContext } from './blockRules';
 import { hasNeighborSignal } from './redstone/signal';
 import { BellBlockEntity, LecternBlockEntity } from '../world/blockEntity';
-import { composterFloor, cauldronContentTop } from '../world/blocksVillage';
+import { composterFloor, cauldronContentTop, POTTABLE, pottedName } from '../world/blocksVillage';
 import { isDyeable } from '../item/dyedColor';
 import type { Entity } from '../entity/entity';
-import { ItemStack } from '../item/item';
+import { ItemStack, blockForItem } from '../item/item';
 import { ItemEntity } from '../entity/itemEntity';
 import type { Player } from '../entity/player';
 import { lookingDirections } from './blockRules';
@@ -444,7 +444,8 @@ export function lecternPageTurned(level: Level, x: number, y: number, z: number)
     },
     // vanilla LecternBlock.useWithoutItem: its book opens to be read; without one the click is simply spent
     use(_level, x, y, z, st) {
-      if (lectern.get(st, 'has_book')) openMenu?.('lectern', x, y, z);
+      if (!lectern.get(st, 'has_book')) return 'consume';
+      openMenu?.('lectern', x, y, z);
       return true;
     },
     tick(level, x, y, z, st) {
@@ -458,4 +459,50 @@ export function lecternPageTurned(level: Level, x: number, y: number, z: number)
       if (STATE_BLOCK[now] !== lectern.id && lectern.get(st, 'powered')) level.updateNeighborsAt(x, y - 1, z, lectern.id);
     },
   });
+}
+
+// ---------------------------------------------------------------------------
+// Flower pot (vanilla FlowerPotBlock): a plant goes into an empty pot, and comes back out into the hand
+
+{
+  /** vanilla POTTED_BY_CONTENT: the plant's block name → its potted block */
+  const pottedBy = new Map<string, Block>();
+  for (const plant of POTTABLE) {
+    const potted = BLOCK_BY_NAME.get(pottedName(plant));
+    if (potted) pottedBy.set(plant, potted);
+  }
+  const pottedFor = (stack: ItemStack): Block | undefined => {
+    const b = blockForItem(stack.item);
+    return b && pottedBy.get(b.name);
+  };
+  registerBehavior('flower_pot', {
+    // vanilla useItemOn: a plant (its block item) goes in, one from the hand
+    useItemOn(level, x, y, z, _st, stack, ctx) {
+      const potted = pottedFor(stack);
+      if (!potted) return 'pass';
+      level.setBlock(x, y, z, potted.defaultState);
+      consumeHeld(ctx.player);
+      return 'success';
+    },
+    // vanilla useWithoutItem: nothing to take out of an empty pot, but the click is spent
+    use: () => 'consume',
+  });
+  const pot = getBlock('flower_pot');
+  for (const [plant, potted] of pottedBy) {
+    registerBehavior(potted.name, {
+      // a full pot takes no second plant; anything else lets the plant be taken out
+      useItemOn: (_level, _x, _y, _z, _st, stack) => (pottedFor(stack) ? 'consume' : 'pass'),
+      // vanilla useWithoutItem: the plant comes out into the inventory (or drops at the player's feet if it's full)
+      use(level, x, y, z, _st, ctx) {
+        const p = ctx.player;
+        const stack = ItemStack.of(plant);
+        const left = p.inventory.add(stack, p.gameMode === 'creative');
+        if (left > 0) p.dropItem(stack.copyWithCount(left), false);
+        level.setBlock(x, y, z, pot.defaultState);
+        return true;
+      },
+      // vanilla createPotFlowerItemTable: the pot and its plant
+      drops: () => [ItemStack.of('flower_pot'), ItemStack.of(plant)],
+    });
+  }
 }

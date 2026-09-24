@@ -9,6 +9,8 @@ import { speckled, stone } from './terrain';
 import { smoothStone } from './building';
 import { sprite } from './plants';
 import { BELL_GOLD } from '../bellBody';
+import { pottedAzaleaTop, pottedAzaleaSide, pottedAzaleaPlant } from './lush';
+import { roots } from './netherFlora';
 
 type Reg = Record<string, () => TexDef>;
 
@@ -722,6 +724,35 @@ export function brewingStandBase(): TexImage {
   return speckled('brewing_stand_base', FURN_STONE, { oct: [[4, 4, 0.4], [2, 2, 0.4]], white: 0.4, weights: [0, 0.6, 2.5, 5, 2.5, 0.6, 0], mode: 1, dark: 5, darkSize: [1, 2], light: 4, lightSize: [1, 2] });
 }
 
+// ---------------------------------------------------------------------------
+// Flower pot (vanilla block/flower_pot: only the middle is drawn — the rim seen from above, a ring round the square
+// from 5 to 10, and under it, rows 10 to 15, the pot's side; the rest is clear)
+
+const POT = [0x4a2416, 0x62301e, 0x743a25, 0x86442c, 0x985034, 0xaa5c3d, 0xbc6c4b];
+
+export function flowerPot(): TexImage {
+  const r = rng('flower_pot');
+  const t = img();
+  // the rim from above, lit along its far and left edges; inside it, the dark of the pot
+  for (let y = 5; y <= 10; y++)
+    for (let x = 5; x <= 10; x++) {
+      if (x > 5 && x < 10 && y > 5 && y < 10) {
+        setPx(t, x, y, POT[0]);
+        continue;
+      }
+      setPx(t, x, y, POT[(x === 5 || y === 5 ? 6 : 5) - (r.chance(0.2) ? 1 : 0)]);
+    }
+  // the side: the bright lip of the rim, a shadow under it, the body lit on the left and darkening to its foot
+  for (let y = 10; y <= 15; y++)
+    for (let x = 5; x <= 10; x++) {
+      let k = y === 10 ? 6 : y === 11 || y === 15 ? 2 : 4;
+      if (y > 11 && y < 15) k += x === 6 ? 1 : x === 10 ? -1 : 0;
+      if (y > 11 && r.chance(0.15)) k += r.chance(0.5) ? 1 : -1;
+      setPx(t, x, y, POT[Math.max(0, Math.min(6, k))]);
+    }
+  return t;
+}
+
 export function registerVillageTextures(T: Reg): void {
   T['bell_bottom'] = bellBottom;
   T['barrel_side'] = barrelSide;
@@ -771,4 +802,13 @@ export function registerVillageTextures(T: Reg): void {
   T['stonecutter_saw'] = stonecutterSaw;
   T['brewing_stand'] = brewingStand;
   T['brewing_stand_base'] = brewingStandBase;
+  T['flower_pot'] = flowerPot;
+  for (const fl of ['', 'flowering_']) {
+    T[`potted_${fl}azalea_bush_top`] = () => pottedAzaleaTop(fl !== '');
+    T[`potted_${fl}azalea_bush_side`] = () => pottedAzaleaSide(fl !== '');
+    T[`potted_${fl}azalea_bush_plant`] = pottedAzaleaPlant;
+  }
+  // (vanilla draws the potted roots separately, crimson_roots_pot and warped_roots_pot; here they are the roots)
+  T['crimson_roots_pot'] = () => roots('crimson');
+  T['warped_roots_pot'] = () => roots('warped');
 }
