@@ -103,7 +103,7 @@ export class FloatGoal extends Goal {
   constructor(readonly mob: Mob) {
     super();
     this.flags = Flag.JUMP;
-    mob.navigation.canFloat = true;
+    mob.ownNavigation.canFloat = true;
   }
   canUse(): boolean {
     const m = this.mob;
@@ -187,6 +187,8 @@ export class RandomStrollGoal extends Goal {
     this.flags = Flag.MOVE;
   }
   canUse(): boolean {
+    // (vanilla: not while someone steers it)
+    if (this.mob.controllingPassenger()) return false;
     if (!this.forceTrigger) {
       if (this.checkNoActionTime && this.mob.noActionTime >= 100) return false;
       if (this.mob.random.nextInt(reducedTickDelay(this.interval)) !== 0) return false;
@@ -201,7 +203,7 @@ export class RandomStrollGoal extends Goal {
     return defaultRandomPos(this.mob, 10, 7);
   }
   override canContinueToUse(): boolean {
-    return !this.mob.navigation.isDone();
+    return !this.mob.navigation.isDone() && !this.mob.controllingPassenger();
   }
   override start(): void {
     this.mob.navigation.moveTo(this.wx, this.wy, this.wz, this.speed);
@@ -222,11 +224,87 @@ export class WaterAvoidingRandomStrollGoal extends RandomStrollGoal {
   }
 }
 
+/**
+ * vanilla MoveToBlockGoal: every 10-20 s look for a wanted block within `range` (nearest rings first, `vRange` up
+ * and down), walk there and stay a while (a minute or so), giving up after a minute without arriving
+ */
+export abstract class MoveToBlockGoal extends Goal {
+  protected nextStartTick = 0;
+  protected tryTicks = 0;
+  private maxStayTicks = 0;
+  protected bx = 0;
+  protected by = 0;
+  protected bz = 0;
+  protected reachedTarget = false;
+  protected verticalSearchStart = 0;
+  constructor(readonly mob: Mob, readonly speed: number, readonly range: number, readonly vRange = 1) {
+    super();
+    this.flags = Flag.MOVE | Flag.JUMP;
+  }
+  protected abstract isValidTarget(x: number, y: number, z: number): boolean;
+  canUse(): boolean {
+    if (this.nextStartTick > 0) {
+      this.nextStartTick--;
+      return false;
+    }
+    this.nextStartTick = reducedTickDelay(200 + this.mob.random.nextInt(200));
+    return this.findNearestBlock();
+  }
+  override canContinueToUse(): boolean {
+    return this.tryTicks >= -this.maxStayTicks && this.tryTicks <= 1200 && this.isValidTarget(this.bx, this.by, this.bz);
+  }
+  override start(): void {
+    this.mob.navigation.moveTo(this.bx + 0.5, this.by + 1, this.bz + 0.5, this.speed);
+    this.tryTicks = 0;
+    const r = this.mob.random;
+    this.maxStayTicks = r.nextInt(r.nextInt(1200) + 1200) + 1200;
+  }
+  acceptedDistance(): number {
+    return 1;
+  }
+  /** where to stand: on top of the block */
+  protected moveToTarget(): Pos {
+    return [this.bx, this.by + 1, this.bz];
+  }
+  override requiresUpdateEveryTick(): boolean {
+    return true;
+  }
+  override tick(): void {
+    const [x, y, z] = this.moveToTarget(), m = this.mob;
+    const d = this.acceptedDistance();
+    if ((x + 0.5 - m.x) ** 2 + (y + 0.5 - m.y) ** 2 + (z + 0.5 - m.z) ** 2 >= d * d) {
+      this.reachedTarget = false;
+      this.tryTicks++;
+      if (this.shouldRecalculatePath()) m.navigation.moveTo(x + 0.5, y, z + 0.5, this.speed);
+    } else {
+      this.reachedTarget = true;
+      this.tryTicks--;
+    }
+  }
+  shouldRecalculatePath(): boolean {
+    return this.tryTicks % 40 === 0;
+  }
+  protected findNearestBlock(): boolean {
+    const m = this.mob, ox = Math.floor(m.x), oy = Math.floor(m.y), oz = Math.floor(m.z);
+    for (let k = this.verticalSearchStart; k <= this.vRange; k = k > 0 ? -k : 1 - k)
+      for (let l = 0; l < this.range; l++)
+        for (let i = 0; i <= l; i = i > 0 ? -i : 1 - i)
+          for (let j = i < l && i > -l ? l : 0; j <= l; j = j > 0 ? -j : 1 - j) {
+            if (!this.isValidTarget(ox + i, oy + k - 1, oz + j)) continue;
+            this.bx = ox + i;
+            this.by = oy + k - 1;
+            this.bz = oz + j;
+            return true;
+          }
+    return false;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // looking
 
 export class LookAtPlayerGoal extends Goal {
-  private lookAt: LivingEntity | null = null;
+  protected lookAt: LivingEntity | null = null;
   private lookTime = 0;
   constructor(readonly mob: Mob, readonly lookDistance: number, readonly probability = 0.02, readonly onlyHorizontal = false) {
     super();
@@ -236,10 +314,13 @@ export class LookAtPlayerGoal extends Goal {
     const m = this.mob;
     if (m.random.nextFloat() >= this.probability) return false;
     if (m.target) this.lookAt = m.target;
-    const p = m.level.player;
-    this.lookAt = null;
-    if (p && p.isAlive && p.gameMode !== 'spectator' && m.distanceToSqr(p.x, p.y, p.z) <= this.lookDistance * this.lookDistance && m.sensing.hasLineOfSight(p)) this.lookAt = p;
+    this.lookAt = this.findLookAt();
     return this.lookAt !== null;
+  }
+  /** the one to look at: the player, in range and in sight (vanilla lookAtType Player) */
+  protected findLookAt(): LivingEntity | null {
+    const m = this.mob, p = m.level.player;
+    return p && p.isAlive && p.gameMode !== 'spectator' && m.distanceToSqr(p.x, p.y, p.z) <= this.lookDistance * this.lookDistance && m.sensing.hasLineOfSight(p) ? p : null;
   }
   override canContinueToUse(): boolean {
     const l = this.lookAt;

@@ -27,6 +27,7 @@ import { Zombie, Skeleton, Creeper, Enderman, Slime, MagmaCube } from '../entity
 import { Ghast } from '../entity/ghast';
 import { Blaze } from '../entity/blaze';
 import { Hoglin, Zoglin } from '../entity/hoglin';
+import { Strider } from '../entity/strider';
 import { Fireball, LargeFireball } from '../entity/fireball';
 import { Squid } from '../entity/water';
 import { ThrownItem } from '../entity/throwable';
@@ -110,6 +111,7 @@ export class EntityRenderDispatcher {
       bat: M.batModel(),
       hoglin: M.hoglinModel(),
       zoglin: M.hoglinModel(),
+      strider: M.striderModel(),
     };
     // vanilla textures/misc/shadow.png: soft black disc
     const n = 32, data = new Uint8Array(n * n * 4);
@@ -338,7 +340,8 @@ export class EntityRenderDispatcher {
     const type = e.type;
     const def = this.models[type];
     // (vanilla GhastRenderer.getTextureLocation: its face while charging a shot)
-    const tex = this.tex(e instanceof Ghast && e.charging ? 'ghast_shooting' : type);
+    // (vanilla StriderRenderer.getTextureLocation: purple while it's cold)
+    const tex = this.tex(e instanceof Ghast && e.charging ? 'ghast_shooting' : e instanceof Strider && e.suffocating ? 'strider_cold' : type);
     if (!def || !tex) return;
     const baby = e.isBaby();
     let white = 0;
@@ -383,6 +386,8 @@ export class EntityRenderDispatcher {
     if (type === 'ghast') scale = (pose) => pose.scale(4.5, 4.5, 4.5);
     // vanilla WitherSkeletonRenderer.scale
     if (type === 'wither_skeleton') scale = (pose) => pose.scale(1.2, 1.2, 1.2);
+    // vanilla StriderRenderer.scale: a baby is the whole model at half size
+    if (type === 'strider' && baby) scale = (pose) => pose.scale(0.5, 0.5, 0.5);
     const spiderLike = type === 'spider' || type === 'cave_spider';
     const a = this.setupLiving(e, dx + jx, dy, dz + jz, p, spiderLike ? 180 : 90, scale);
     const attack = attackAnim(e, p);
@@ -446,6 +451,9 @@ export class EntityRenderDispatcher {
         M.animateMagmaCube(def.root, mc.oSquish + (mc.squish - mc.oSquish) * p);
         break;
       }
+      case 'strider':
+        M.animateStrider(def.root, a.limbSwing, a.limbAmount, a.age, a.headYaw, a.headPitch, e.isVehicle());
+        break;
       case 'hoglin':
       case 'zoglin':
         M.animateHoglin(def.root, a.limbSwing, a.limbAmount, a.headYaw, (e as Hoglin | Zoglin).attackAnimationRemainingTicks, baby);
@@ -461,6 +469,14 @@ export class EntityRenderDispatcher {
     this.overlay(b, e, white);
     // vanilla BatModel renders entityCutout (culled: its flat wings have a front and a back side)
     this.drawBody(b, e, def, tex, baby, type === 'bat' ? { cull: true } : undefined);
+    // vanilla SaddleLayer: the saddle texture over the same model
+    if (e instanceof Strider && e.saddled && !e.isInvisible()) {
+      const st = this.tex('strider_saddle');
+      if (st) {
+        b.begin(this.state(st));
+        this.drawModel(b, def, false);
+      }
+    }
     // layers (vanilla draws them even for invisible mobs: an invisible spider still shows its eyes)
     if (e instanceof Sheep && !e.sheared && !e.isInvisible()) {
       const fur = this.models.sheep_fur, ft = this.tex('sheep_fur');
@@ -980,9 +996,12 @@ function attackAnim(e: LivingEntity, p: number): number {
   return e.attackAnimO + f * p;
 }
 
-/** vanilla LivingEntityRenderer.isShaking (HoglinRenderer: while it's turning into a zoglin): the body twitches ±1.26° */
+/**
+ * vanilla LivingEntityRenderer.isShaking (HoglinRenderer: while it's turning into a zoglin; StriderRenderer: while
+ * it's cold): the body twitches ±1.26°
+ */
 function shakeYaw(e: LivingEntity): number {
-  return e instanceof Hoglin && e.isConverting() ? Math.cos(e.tickCount * 3.25) * Math.PI * 0.4 : 0;
+  return (e instanceof Hoglin && e.isConverting()) || (e instanceof Strider && e.suffocating) ? Math.cos(e.tickCount * 3.25) * Math.PI * 0.4 : 0;
 }
 
 /** vanilla renderer shadow radii (babies half) */
@@ -1013,6 +1032,9 @@ function shadowRadius(e: Entity): number {
     case 'hoglin':
     case 'zoglin':
       r = 0.7;
+      break;
+    case 'strider':
+      r = 0.5;
       break;
     case 'bat':
       r = 0.25;

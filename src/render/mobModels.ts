@@ -622,6 +622,56 @@ export function applyAnimation(root: ModelPart, def: AnimationDef, seconds: numb
 // bat (the 1.20.3+ model: small body, big ears, two-part wings, feet)
 
 /** vanilla BatModel.createBodyLayer (32x32) */
+/**
+ * vanilla StriderModel (64x128): a tall body on two long legs, with three flat bristles fanned out on each side
+ * (the right ones mirrored)
+ */
+export function striderModel(): MobModelDef {
+  const root = new ModelPart();
+  root.add('right_leg', part([{ x: -2, y: 0, z: -2, w: 4, h: 16, d: 4, u: 0, v: 32 }], [-4, 8, 0]));
+  root.add('left_leg', part([{ x: -2, y: 0, z: -2, w: 4, h: 16, d: 4, u: 0, v: 55 }], [4, 8, 0]));
+  const body = root.add('body', part([{ x: -8, y: -6, z: -8, w: 16, h: 14, d: 16, u: 0, v: 0 }], [0, 1, 0]));
+  const bristle = (x: number, v: number, mirror: boolean) => [{ x, y: 0, z: 0, w: 12, h: 0, d: 16, u: 16, v, mirror }];
+  body.add('right_bottom_bristle', part(bristle(-12, 65, true), [-8, 4, -8], [0, 0, -1.2217305]));
+  body.add('right_middle_bristle', part(bristle(-12, 49, true), [-8, -1, -8], [0, 0, -1.134464]));
+  body.add('right_top_bristle', part(bristle(-12, 33, true), [-8, -5, -8], [0, 0, -0.87266463]));
+  body.add('left_top_bristle', part(bristle(0, 33, false), [8, -6, -8], [0, 0, 0.87266463]));
+  body.add('left_middle_bristle', part(bristle(0, 49, false), [8, -2, -8], [0, 0, 1.134464]));
+  body.add('left_bottom_bristle', part(bristle(0, 65, false), [8, 3, -8], [0, 0, 1.2217305]));
+  return { root, texW: 64, texH: 128 };
+}
+
+/**
+ * vanilla StriderModel.setupAnim: the body is its head (it turns and tilts to look, unless ridden) and sways and
+ * bobs with the stride; the legs swing at half the stride's rate; the bristles flap with it and stir on their own
+ */
+export function animateStrider(root: ModelPart, limbSwing: number, limbAmount: number, age: number, headYaw: number, headPitch: number, ridden: boolean): void {
+  root.resetPose();
+  const amt = Math.min(0.25, limbAmount);
+  const body = root.child('body');
+  if (!ridden) {
+    body.xRot = (headPitch * PI) / 180;
+    body.yRot = (headYaw * PI) / 180;
+  }
+  body.zRot = 0.1 * Math.sin(limbSwing * 1.5) * 4 * amt;
+  body.y = 2 - 2 * Math.cos(limbSwing * 1.5) * 2 * amt;
+  const ll = root.child('left_leg'), rl = root.child('right_leg');
+  ll.xRot = Math.sin(limbSwing * 1.5 * 0.5) * 2 * amt;
+  rl.xRot = Math.sin(limbSwing * 1.5 * 0.5 + PI) * 2 * amt;
+  ll.zRot = (PI / 18) * Math.cos(limbSwing * 1.5 * 0.5) * amt;
+  rl.zRot = (PI / 18) * Math.cos(limbSwing * 1.5 * 0.5 + PI) * amt;
+  ll.y = 8 + 2 * Math.sin(limbSwing * 1.5 * 0.5 + PI) * 2 * amt;
+  rl.y = 8 + 2 * Math.sin(limbSwing * 1.5 * 0.5) * 2 * amt;
+  const f1 = Math.cos(limbSwing * 1.5 + PI) * amt;
+  const set = (n: string, base: number, swing: number, stir: number) => (body.child(n).zRot = base + f1 * swing + stir);
+  set('right_bottom_bristle', -1.2217305, 1.3, 0.05 * Math.sin(age * -0.4));
+  set('right_middle_bristle', -1.134464, 1.2, 0.1 * Math.sin(age * 0.2));
+  set('right_top_bristle', -0.87266463, 0.6, 0.1 * Math.sin(age * 0.4));
+  set('left_top_bristle', 0.87266463, 0.6, 0.1 * Math.sin(age * 0.4));
+  set('left_middle_bristle', 1.134464, 1.2, 0.1 * Math.sin(age * 0.2));
+  set('left_bottom_bristle', 1.2217305, 1.3, 0.05 * Math.sin(age * -0.4));
+}
+
 export function batModel(): MobModelDef {
   const root = new ModelPart();
   const body = root.add('body', part([{ x: -1.5, y: 0, z: -1, w: 3, h: 5, d: 2, u: 0, v: 0 }], [0, 17, 0]));

@@ -9,7 +9,7 @@ import { growHugeFungus, nyliumBoneMeal } from '../world/gen/netherFeatures';
 import type { BlockAccess } from '../world/gen/patches';
 import { updateShape, hasShapeUpdates } from './shapeUpdates';
 import { DX, DY, DZ, DIR_NAMES, dirFromYaw } from '../world/dir';
-import { blockForItem, itemForBlock, ItemStack, getItem } from '../item/item';
+import { blockForItem, itemForBlock, ItemStack, getItem, cloneTag } from '../item/item';
 import { AABB } from '../core/aabb';
 import { ItemEntity } from '../entity/itemEntity';
 import { FLUID_WATER } from '../world/fluids';
@@ -276,6 +276,7 @@ export class Interaction {
     const e = this.entityHit;
     if (e && p.gameMode !== 'spectator') {
       if (e instanceof Animal && e.interact(p, stack)) {
+        if (p.vehicle === e) this.onMounted?.();
         p.swing();
         return;
       }
@@ -572,6 +573,8 @@ export class Interaction {
   onOpenEntityContainer: ((e: MinecartChest | ChestBoat) => void) | null = null;
   /** a block was placed by the player (advancements: planted seeds) */
   onPlaced: ((name: string) => void) | null = null;
+  /** an item the player holds wore down (vanilla item_durability_changed), with what they ride */
+  onItemDurability: ((item: string, vehicle: string | null) => void) | null = null;
   /** food or a drink was finished */
   onConsumed: ((id: string) => void) | null = null;
   /** mining progress on the targeted block (tutorial) */
@@ -803,6 +806,26 @@ export class Interaction {
       if (it.id === 'ender_pearl') p.cooldowns.set('ender_pearl', 20);
       if (p.gameMode !== 'creative') p.inventory.consumeSelected(1);
       p.swing();
+      return;
+    }
+    // vanilla FoodOnAStickItem.use: riding the mount it steers (the warped fungus a strider, the carrot a pig), a
+    // poke sends it off faster at a point of wear (seven for the carrot); worn out, it's a fishing rod again
+    if (it.id === 'warped_fungus_on_a_stick' || it.id === 'carrot_on_a_stick') {
+      const fungus = it.id === 'warped_fungus_on_a_stick';
+      const v = p.vehicle as (Entity & { boost?(): boolean }) | null;
+      if (v && v.controllingPassenger() === p && v.type === (fungus ? 'strider' : 'pig') && v.boost?.()) {
+        const before = stack.damage;
+        const broke = hurtAndBreak(stack, fungus ? 1 : 7, p.gameMode === 'creative');
+        if (broke || stack.damage !== before) this.onItemDurability?.(it.id, v.type);
+        if (broke) {
+          this.level.sound.play('entity.item.break', p.x, p.y, p.z, 0.8, 0.8 + Math.random() * 0.4);
+          const rod = ItemStack.of('fishing_rod');
+          rod.tag = cloneTag(stack.tag);
+          p.inventory.setSelectedItem(rod);
+        }
+        p.inventory.version++;
+        p.swing();
+      }
       return;
     }
     // vanilla BowItem.use: needs arrows unless creative

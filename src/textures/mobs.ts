@@ -1076,6 +1076,135 @@ function blaze(): TexImage {
 }
 
 // ---------------------------------------------------------------------------
+// Strider (64x128, vanilla StriderModel): body (0,0) 16x14x16 with the face on its front, legs (0,32) and
+// (0,55) 4x16x4, and three flat 12x16 bristle planes (16,33) / (16,49) / (16,65) whose top and bottom rects
+// run from the root at the body (column 0) out to the tips. strider_cold is the same creature gone purple.
+
+interface StriderLook {
+  seed: number;
+  body: Pal;
+  fold: number;
+  belly: Pal;
+  leg: Pal;
+  foot: number;
+  hair: Pal;
+  eye: number;
+  eyeLit: number;
+  mouth: number;
+  lip: number;
+}
+
+const STRIDER_LOOK: StriderLook = {
+  seed: 0x57d1,
+  body: [0x731c1c, 0x872424, 0x9b2d2c, 0xa93634, 0xb6403d, 0xc34d49],
+  fold: 0x581414,
+  belly: [0x611a1a, 0x701f1f, 0x7e2525],
+  leg: [0x3b3137, 0x463a42, 0x52454d, 0x5d4f58, 0x695a63],
+  foot: 0x261e23,
+  hair: [0x4e161b, 0x611c22, 0x74242a, 0x86303a],
+  eye: 0x140a0c,
+  eyeLit: 0x3a2a2e,
+  mouth: 0x33090d,
+  lip: 0xc05a5c,
+};
+
+const STRIDER_COLD_LOOK: StriderLook = {
+  seed: 0x57d2,
+  body: [0x4d2e57, 0x5b3667, 0x6a3f77, 0x784986, 0x855393, 0x925fa0],
+  fold: 0x3a2142,
+  belly: [0x40264a, 0x4a2c55, 0x553261],
+  leg: [0x352d3b, 0x3f3646, 0x4a4051, 0x554a5c, 0x605567],
+  foot: 0x221c28,
+  hair: [0x331d3b, 0x40254a, 0x4d2e59, 0x5a3868],
+  eye: 0x120a16,
+  eyeLit: 0x3a2a44,
+  mouth: 0x221028,
+  lip: 0xa47cb0,
+};
+
+function striderSkin(k: StriderLook): TexImage {
+  const t = img(64, 128);
+  const r = new Rand(k.seed);
+  const body = boxFaces(0, 0, 16, 14, 16);
+  noiseBox(t, body, r, k.body, { w: [1, 2, 4, 6, 4, 1], cell: 2, white: 0.4 });
+  noiseFace(t, body.bottom, r, k.belly, { w: [1, 2, 2] });
+  // skin folds: broken darker rings round the barrel, every four rows
+  const jag = valueNoise(r, 64, 14, 3);
+  let off = 0;
+  for (const f of SIDES) {
+    const o = off;
+    paintFace(t, body[f], (x, y, c) => {
+      const band = (y + Math.round((jag[y * 64 + o + x] - 0.5) * 2)) % 4 === 3;
+      return band && y > 0 && y < 13 && r.chance(0.8) ? mixC(c, k.fold, 0.5) : undefined;
+    });
+    off += body[f][2];
+  }
+  fleck(t, body.top, r, 0.08, [k.fold, k.body[1]]);
+  // the face: two small dark eyes set wide, and a long mouth with a paler lip under it
+  drawFace(t, body.front, [
+    '................',
+    '................',
+    '................',
+    '..EE........EE..',
+    '..Ee........eE..',
+    '................',
+    '................',
+    '.MMMMMMMMMMMMMM.',
+    '..mmmmmmmmmmmm..',
+    '...LLLLLLLLLL...',
+  ], { E: k.eye, e: k.eyeLit, M: k.mouth, m: mixC(k.mouth, k.body[1], 0.4), L: k.lip }, r);
+  // legs: ringed like the body, going dark at the feet
+  for (const v of [32, 55]) {
+    const leg = boxFaces(0, v, 4, 16, 4);
+    noiseBox(t, leg, r, k.leg, { w: [1, 2, 4, 4, 1], cell: 1 });
+    for (const f of SIDES)
+      paintFace(t, leg[f], (_x, y, c, _w, h) => (y >= h - 2 ? mixC(c, k.foot, y === h - 1 ? 0.7 : 0.4) : y % 4 === 2 ? mixC(c, k.foot, 0.25) : undefined));
+    noiseFace(t, leg.bottom, r, [k.foot, mixC(k.foot, k.leg[1], 0.5)]);
+  }
+  // bristles: sparse hairs from the root outwards, darker towards the tips, both faces alike
+  for (const v of [33, 49, 65]) {
+    const rows: number[][] = [];
+    for (let y = 0; y < 16; y++) rows.push(y % 3 === 1 || (y % 3 === 2 && r.chance(0.25)) ? [8 + r.nextInt(5)] : []);
+    for (const x0 of [32, 44])
+      paintFace(t, [x0, v, 12, 16], (x, y) => {
+        const len = rows[y][0];
+        if (!len || x >= len) return null;
+        const c = pick(r, k.hair, [1, 2, 3, 2]);
+        return x >= len - 3 ? mixC(c, k.fold, 0.35) : c;
+      });
+  }
+  return t;
+}
+
+/** vanilla strider_saddle: a leather seat on the body's top with a strap and buckle down each side */
+function striderSaddle(): TexImage {
+  const t = img(64, 128);
+  const r = new Rand(0x5add1e);
+  const LEATHER = [0x4f311c, 0x5c3a21, 0x6b4427, 0x7a4e2d, 0x885833];
+  const body = boxFaces(0, 0, 16, 14, 16);
+  // the seat: rows run back (0) to front (15); a raised cantle behind, the pommel in front
+  paintFace(t, body.top, (x, y) => {
+    if (x < 3 || x > 12 || y < 2 || y > 13) return undefined;
+    const rim = x === 3 || x === 12 || y === 2 || y === 13;
+    if (rim) return pick(r, [0x3e2616, 0x472c19]);
+    if (y === 3 || y === 12) return pick(r, [0x92603a, 0x9e6a40]);
+    return pick(r, LEATHER, [1, 2, 4, 3, 1]);
+  });
+  // flaps over the upper sides, then a strap down to a buckle
+  for (const f of ['right', 'left'] as FaceName[])
+    paintFace(t, body[f], (x, y) => {
+      if (y <= 2 && x >= 3 && x <= 12) return y === 2 ? pick(r, [0x3e2616, 0x472c19]) : pick(r, LEATHER, [1, 2, 4, 3, 1]);
+      if (x >= 7 && x <= 8 && y <= 8) {
+        if (y >= 6 && y <= 7) return pick(r, [0x8e8e8e, 0xa8a8a8, 0x6e6e6e]);
+        return pick(r, [0x2e1d11, 0x3a2516]);
+      }
+      return undefined;
+    });
+  for (const f of ['front', 'back'] as FaceName[]) paintFace(t, body[f], (x, y) => (y === 0 && x >= 3 && x <= 12 ? pick(r, [0x3e2616, 0x472c19]) : undefined));
+  return t;
+}
+
+// ---------------------------------------------------------------------------
 // Bat (32x32, the 1.20.3+ BatModel layout): body (0,0) 3x5x2, head (0,7) 4x3x2, and the flat
 // parts with their front rect (the side the face looks to) left of the back rect: ears (1,15) /
 // (8,15), inner wings (12,0) / (12,7), wing tips (16,0) / (16,8), feet (16,16).
@@ -1556,6 +1685,9 @@ export const MOB_TEXTURES: Record<string, () => TexImage> = {
   zombified_piglin: zombifiedPiglin,
   hoglin: () => hoglinSkin(HOGLIN_LOOK),
   zoglin: () => hoglinSkin(ZOGLIN_LOOK),
+  strider: () => striderSkin(STRIDER_LOOK),
+  strider_cold: () => striderSkin(STRIDER_COLD_LOOK),
+  strider_saddle: striderSaddle,
   ghast: () => ghast(false),
   ghast_shooting: () => ghast(true),
   bat,
@@ -1683,6 +1815,7 @@ const EGGS: [string, number, number][] = [
   ['blaze', 0xf6b201, 0xfff87e],
   ['wither_skeleton', 0x141414, 0x474d4d],
   ['hoglin', 0xc66e55, 0x5f6464],
+  ['strider', 0x9c3436, 0x4d494d],
   ['zoglin', 0xc66e55, 0xe6e6e6],
 ];
 

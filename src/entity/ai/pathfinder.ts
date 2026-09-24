@@ -5,6 +5,7 @@ import { BLOCKS, STATE_BLOCK, FLAGS, F_AIR, F_WATER, F_LAVA, F_LEAVES, COLLISION
 import { MIN_Y } from '../../world/constants';
 import { AABB } from '../../core/aabb';
 import type { World } from '../../world/world';
+import { fluidType } from '../../world/fluids';
 
 /** vanilla PathType, in declaration order (EnumSet iteration order matters) */
 export const enum PathType {
@@ -56,6 +57,8 @@ export interface PathMob {
   stepHeight: number;
   malus(t: PathType): number;
   maxFallDistance(): number;
+  /** walks on this fluid (FLUID_*) as on a floor (the strider on lava) */
+  canStandOnFluid(fluid: number): boolean;
 }
 
 export class Node {
@@ -337,7 +340,11 @@ export class WalkNodeEvaluator {
     const m = this.mob;
     let y = Math.floor(m.y);
     const bx = Math.floor(m.x), bz = Math.floor(m.z);
-    if (this.canFloat && m.inWater) {
+    if (m.canStandOnFluid(fluidType(this.world.getState(bx, y, bz)))) {
+      // standing on a fluid: start at the top of it
+      while (m.canStandOnFluid(fluidType(this.world.getState(bx, ++y, bz))));
+      y--;
+    } else if (this.canFloat && m.inWater) {
       for (;;) {
         if (!(FLAGS[this.world.getState(bx, y, bz)] & F_WATER)) {
           y--;

@@ -236,21 +236,39 @@ export class Hud {
       if (blink && i2 < this.displayHealth) g.sprite(heart(type, i2 + 1 === this.displayHealth, true), hx, hy, 9, 9);
       if (i2 < health) g.sprite(heart(type, i2 + 1 === health, false), hx, hy, 9, 9);
     }
-    // food (vanilla Gui.renderFood: green shanks while hungry)
-    const food = p.food.level;
-    const hunger = p.hasEffect('hunger') ? '_hunger' : '';
-    for (let i = 0; i < 10; i++) {
-      let fy = y;
-      if (p.food.saturation <= 0 && tick % (food * 3 + 1) === 0) fy = y + Math.floor(this.rand.next() * 3) - 1;
-      const fx = rx - i * 8 - 9;
-      g.sprite('food_empty' + hunger, fx, fy, 9, 9);
-      if (i * 2 + 1 < food) g.sprite('food_full' + hunger, fx, fy, 9, 9);
-      if (i * 2 + 1 === food) g.sprite('food_half' + hunger, fx, fy, 9, 9);
+    // vanilla Gui.getVehicleMaxHearts: riding something alive, its hearts take the food bar's place (up to 30)
+    const mount = p.vehicle instanceof LivingEntity ? p.vehicle : null;
+    const mountHearts = mount ? Math.min(30, Math.floor((mount.maxHealth + 0.5) / 2)) : 0;
+    if (mount && mountHearts > 0) {
+      // vanilla Gui.renderVehicleHealth: rows of ten from the right, stacking upwards
+      const mh = Math.ceil(mount.health);
+      for (let left = mountHearts, j1 = 0, vy = y; left > 0; j1 += 20, vy -= 10) {
+        const k = Math.min(left, 10);
+        left -= k;
+        for (let l1 = 0; l1 < k; l1++) {
+          const hx = rx - l1 * 8 - 9;
+          g.sprite('heart_vehicle_container', hx, vy, 9, 9);
+          if (l1 * 2 + 1 + j1 < mh) g.sprite('heart_vehicle_full', hx, vy, 9, 9);
+          if (l1 * 2 + 1 + j1 === mh) g.sprite('heart_vehicle_half', hx, vy, 9, 9);
+        }
+      }
+    } else {
+      // food (vanilla Gui.renderFood: green shanks while hungry)
+      const food = p.food.level;
+      const hunger = p.hasEffect('hunger') ? '_hunger' : '';
+      for (let i = 0; i < 10; i++) {
+        let fy = y;
+        if (p.food.saturation <= 0 && tick % (food * 3 + 1) === 0) fy = y + Math.floor(this.rand.next() * 3) - 1;
+        const fx = rx - i * 8 - 9;
+        g.sprite('food_empty' + hunger, fx, fy, 9, 9);
+        if (i * 2 + 1 < food) g.sprite('food_full' + hunger, fx, fy, 9, 9);
+        if (i * 2 + 1 === food) g.sprite('food_half' + hunger, fx, fy, 9, 9);
+      }
     }
-    // air
+    // air (above the mount's hearts if they stack higher)
     const maxAir = 300;
     if (p.eyeFluid === FLUID_WATER || p.air < maxAir) {
-      const ay = y - 10;
+      const ay = y - 10 - Math.max(0, Math.ceil(mountHearts / 10) - 1) * 10;
       const full = Math.ceil(((p.air - 2) * 10) / maxAir);
       const partial = Math.ceil((p.air * 10) / maxAir) - full;
       for (let i = 0; i < full + partial; i++) {

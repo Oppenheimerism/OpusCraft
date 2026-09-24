@@ -1182,7 +1182,7 @@ class SlimeFloatGoal extends Goal {
   constructor(readonly s: Slime) {
     super();
     this.flags = Flag.JUMP | Flag.MOVE;
-    s.navigation.canFloat = true;
+    s.ownNavigation.canFloat = true;
   }
   canUse(): boolean {
     return this.s.inWater || this.s.inLava;

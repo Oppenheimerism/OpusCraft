@@ -143,6 +143,8 @@ shapeless('flint_and_steel', 1, 'iron_ingot', 'flint');
 shaped('compass', 1, [' # ', '#X#', ' # '], { '#': 'iron_ingot', X: 'redstone' });
 shaped('clock', 1, [' # ', '#X#', ' # '], { '#': 'gold_ingot', X: 'redstone' });
 shaped('fishing_rod', 1, ['  #', ' #X', '# X'], { '#': 'stick', X: 'string' });
+shaped('carrot_on_a_stick', 1, ['# ', ' X'], { '#': 'fishing_rod', X: 'carrot' });
+shaped('warped_fungus_on_a_stick', 1, ['# ', ' X'], { '#': 'fishing_rod', X: 'warped_fungus' });
 shaped('map', 1, ['###', '#X#', '###'], { '#': 'paper', X: 'compass' });
 shaped('minecart', 1, ['# #', '###'], { '#': 'iron_ingot' });
 shapeless('chest_minecart', 1, 'chest', 'minecart');

@@ -195,6 +195,8 @@ reg({ id: 'flint_and_steel', maxStack: 1, creativeTab: 'tools', texture: 'flint_
 reg({ id: 'bow', maxStack: 1, creativeTab: 'combat', texture: 'bow', maxDamage: 384 });
 reg({ id: 'arrow', creativeTab: 'combat', texture: 'arrow' });
 reg({ id: 'fishing_rod', maxStack: 1, creativeTab: 'tools', texture: 'fishing_rod', maxDamage: 64 });
+reg({ id: 'carrot_on_a_stick', maxStack: 1, creativeTab: 'tools', texture: 'carrot_on_a_stick', maxDamage: 25 });
+reg({ id: 'warped_fungus_on_a_stick', maxStack: 1, creativeTab: 'tools', texture: 'warped_fungus_on_a_stick', maxDamage: 100 });
 reg({ id: 'compass', creativeTab: 'tools', texture: 'compass' });
 reg({ id: 'clock', creativeTab: 'tools', texture: 'clock' });
 reg({ id: 'map', creativeTab: 'tools', texture: 'map' });
@@ -277,7 +279,7 @@ for (const c of ['white', 'orange', 'magenta', 'light_blue', 'yellow', 'lime', '
   reg({ id: `${c}_dye`, texture: `${c}_dye` });
 }
 // spawn eggs (creative tab order is alphabetical, like vanilla)
-for (const m of ['bat', 'blaze', 'cave_spider', 'chicken', 'cow', 'creeper', 'enderman', 'ghast', 'magma_cube', 'pig', 'sheep', 'skeleton', 'slime', 'spider', 'squid', 'wither_skeleton', 'zombie', 'zombified_piglin', 'hoglin', 'zoglin']) {
+for (const m of ['bat', 'blaze', 'cave_spider', 'chicken', 'cow', 'creeper', 'enderman', 'ghast', 'magma_cube', 'pig', 'sheep', 'skeleton', 'slime', 'spider', 'squid', 'wither_skeleton', 'zombie', 'zombified_piglin', 'hoglin', 'zoglin', 'strider']) {
   reg({ id: `${m}_spawn_egg`, texture: `${m}_spawn_egg`, creativeTab: 'spawn_eggs' });
 }
 // sugar cane item places the block

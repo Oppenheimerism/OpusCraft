@@ -4,7 +4,7 @@
 import { LivingEntity } from './living';
 import type { Entity } from './entity';
 import type { Level } from '../game/level';
-import { GoalSelector } from './ai/goal';
+import { GoalSelector, Flag } from './ai/goal';
 import { LookControl, MoveControl, JumpControl, BodyRotationControl, eyeY } from './ai/controls';
 import { PathNavigation } from './ai/navigation';
 import { PathType, DEFAULT_MALUS } from './ai/pathfinder';
@@ -75,15 +75,24 @@ export interface LootEntry {
   lootingChance?: [number, number];
 }
 
+export type SpawnReason = 'natural' | 'chunk' | 'egg' | 'command' | 'breeding' | 'spawner' | 'jockey';
+
+/** vanilla SpawnGroupData: what one spawn pack's members pass along to each other */
+export interface SpawnGroup {
+  /** vanilla AgeableMob.AgeableMobGroupData: members so far, and the odds each after the first is a baby */
+  ageable?: { size: number; babyChance: number };
+}
+
 export abstract class Mob extends LivingEntity {
   abstract readonly category: MobCategory;
   readonly goalSelector = new GoalSelector();
   readonly targetSelector = new GoalSelector();
   readonly lookControl: LookControl;
-  moveControl: MoveControl;
-  readonly jumpControl: JumpControl;
+  private ownMoveControl: MoveControl;
+  private readonly ownJumpControl: JumpControl;
   readonly bodyControl: BodyRotationControl;
-  readonly navigation: PathNavigation;
+  /** this mob's own navigation (goals use `navigation`, which is the mount's while this steers one) */
+  readonly ownNavigation: PathNavigation;
   readonly sensing: Sensing;
   readonly random = new Rand((Math.random() * 0x7fffffff) | 0);
   target: LivingEntity | null = null;
@@ -108,11 +117,59 @@ export abstract class Mob extends LivingEntity {
   constructor(level: Level) {
     super(level);
     this.lookControl = new LookControl(this);
-    this.moveControl = new MoveControl(this);
-    this.jumpControl = new JumpControl(this);
+    this.ownMoveControl = new MoveControl(this);
+    this.ownJumpControl = new JumpControl(this);
     this.bodyControl = new BodyRotationControl(this);
-    this.navigation = new PathNavigation(this);
+    this.ownNavigation = this.createNavigation();
     this.sensing = new Sensing(this);
+  }
+
+  /** vanilla createNavigation */
+  protected createNavigation(): PathNavigation {
+    return new PathNavigation(this);
+  }
+
+  // --- steering a mount (vanilla getControlledVehicle, getNavigation / getMoveControl / getJumpControl) ---
+
+  /** the mob this one rides and steers, if any */
+  controlledVehicle(): Mob | null {
+    const v = this.vehicle;
+    return v instanceof Mob && v.controllingPassenger() === this ? v : null;
+  }
+
+  get navigation(): PathNavigation {
+    return this.controlledVehicle()?.navigation ?? this.ownNavigation;
+  }
+
+  get moveControl(): MoveControl {
+    return this.controlledVehicle()?.moveControl ?? this.ownMoveControl;
+  }
+  set moveControl(c: MoveControl) {
+    this.ownMoveControl = c;
+  }
+
+  get jumpControl(): JumpControl {
+    return this.controlledVehicle()?.jumpControl ?? this.ownJumpControl;
+  }
+
+  /** vanilla Mob.getControllingPassenger: a mob up front steers (not a slime) */
+  override controllingPassenger(): Entity | null {
+    const p = this.passengers[0];
+    return p instanceof Mob && p.type !== 'slime' && p.type !== 'magma_cube' ? p : null;
+  }
+
+  /** vanilla Mob.updateControlFlags: a mob steering this one takes its moving, jumping and looking goals */
+  private updateControlFlags(): void {
+    const steered = this.controllingPassenger() instanceof Mob;
+    const f = steered ? Flag.MOVE | Flag.JUMP | Flag.LOOK : this.vehicle?.type === 'boat' || this.vehicle?.type === 'chest_boat' ? Flag.JUMP : 0;
+    this.goalSelector.disabledFlags = f;
+  }
+
+  /** vanilla Mob.rideTick: faces the way the mount it steers does */
+  override rideTick(): void {
+    super.rideTick();
+    const v = this.controlledVehicle();
+    if (v) this.bodyYaw = v.bodyYaw;
   }
 
   /** subclasses add their goals here (called lazily once all fields exist) */
@@ -207,6 +264,7 @@ export abstract class Mob extends LivingEntity {
     this.checkDespawn();
     if (this.removed) return;
     super.tick();
+    if (this.tickCount % 5 === 0) this.updateControlFlags();
   }
 
   override baseTick(): void {
@@ -240,11 +298,11 @@ export abstract class Mob extends LivingEntity {
       this.targetSelector.tick();
       this.goalSelector.tick();
     }
-    this.navigation.tick();
+    this.ownNavigation.tick();
     this.customServerAiStep();
-    this.moveControl.tick();
+    this.ownMoveControl.tick();
     this.lookControl.tick();
-    this.jumpControl.tick();
+    this.ownJumpControl.tick();
   }
 
   protected customServerAiStep(): void {}
@@ -506,8 +564,8 @@ export abstract class Mob extends LivingEntity {
 
   // --- spawning -------------------------------------------------------------
 
-  /** random per-spawn setup (sheep color, baby zombies...) */
-  finalizeSpawn(_reason: 'natural' | 'chunk' | 'egg' | 'command' | 'breeding' | 'spawner'): void {}
+  /** random per-spawn setup (sheep color, baby zombies...); `group` is shared by one spawn pack */
+  finalizeSpawn(_reason: SpawnReason, _group?: SpawnGroup): void {}
 
   /** vanilla Mob.checkSpawnRules: walk target value must be non-negative */
   checkSpawnRules(): boolean {

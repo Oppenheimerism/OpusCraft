@@ -25,6 +25,10 @@ export type Criterion =
   | { t: 'enchanted_item' }
   | { t: 'changed_dimension'; from?: string; to?: string }
   | { t: 'nether_travel'; distance: number }
+  /** vanilla item_durability_changed: that item wore, the player riding that mount */
+  | { t: 'item_durability'; item: string; vehicle: string }
+  /** vanilla ride_entity_in_lava: carried that far across lava (horizontally) on that mount, in that dimension */
+  | { t: 'ride_in_lava'; vehicle: string; distance: number; dimension: string }
   | { t: 'impossible' };
 
 export interface AdvancementDef {
@@ -127,7 +131,7 @@ const A: AdvancementDef[] = [
   { id: 'nether/find_fortress', parent: 'nether/root', title: 'A Terrible Fortress', description: 'Break your way into a Nether Fortress', icon: 'nether_bricks', frame: 'task', criteria: { fortress: { t: 'structure', structure: 'fortress' } } },
   { id: 'nether/obtain_crying_obsidian', parent: 'nether/root', title: 'Who is Cutting Onions?', description: 'Obtain Crying Obsidian', icon: 'crying_obsidian', frame: 'task', criteria: { crying_obsidian: inv('crying_obsidian') } },
   { id: 'nether/distract_piglin', parent: 'nether/root', title: 'Oh Shiny', description: 'Distract Piglins with gold', icon: 'gold_ingot', frame: 'task', criteria: one(never) },
-  { id: 'nether/ride_strider', parent: 'nether/root', title: 'This Boat Has Legs', description: 'Ride a Strider with a Warped Fungus on a Stick', icon: 'warped_fungus_on_a_stick', frame: 'task', criteria: one(never) },
+  { id: 'nether/ride_strider', parent: 'nether/root', title: 'This Boat Has Legs', description: 'Ride a Strider with a Warped Fungus on a Stick', icon: 'warped_fungus_on_a_stick', frame: 'task', criteria: { used_warped_fungus_on_a_stick: { t: 'item_durability', item: 'warped_fungus_on_a_stick', vehicle: 'strider' } } },
   { id: 'nether/uneasy_alliance', parent: 'nether/return_to_sender', title: 'Uneasy Alliance', description: 'Rescue a Ghast from the Nether, bring it safely home to the Overworld... and then kill it', icon: 'ghast_tear', frame: 'challenge', criteria: one(never) },
   { id: 'nether/loot_bastion', parent: 'nether/find_bastion', title: 'War Pigs', description: 'Loot a Chest in a Bastion Remnant', icon: 'chest', frame: 'task', criteria: one(never) },
   { id: 'nether/use_lodestone', parent: 'nether/obtain_ancient_debris', title: 'Country Lode, Take Me Home', description: 'Use a Compass on a Lodestone', icon: 'lodestone', frame: 'task', criteria: one(never) },
@@ -138,7 +142,7 @@ const A: AdvancementDef[] = [
   { id: 'nether/get_wither_skull', parent: 'nether/find_fortress', title: 'Spooky Scary Skeleton', description: "Obtain a Wither Skeleton's skull", icon: 'wither_skeleton_skull', frame: 'task', criteria: { skull: inv('wither_skeleton_skull') } },
   { id: 'nether/obtain_blaze_rod', parent: 'nether/find_fortress', title: 'Into Fire', description: 'Relieve a Blaze of its rod', icon: 'blaze_rod', frame: 'task', criteria: { blaze_rod: inv('blaze_rod') } },
   { id: 'nether/charge_respawn_anchor', parent: 'nether/obtain_crying_obsidian', title: 'Not Quite "Nine" Lives', description: 'Charge a Respawn Anchor to the maximum', icon: 'respawn_anchor', frame: 'task', criteria: one(never) },
-  { id: 'nether/ride_strider_in_overworld_lava', parent: 'nether/ride_strider', title: 'Feels Like Home', description: 'Take a Strider for a loooong ride on a lava lake in the Overworld', icon: 'warped_fungus_on_a_stick', frame: 'task', criteria: one(never) },
+  { id: 'nether/ride_strider_in_overworld_lava', parent: 'nether/ride_strider', title: 'Feels Like Home', description: 'Take a Strider for a loooong ride on a lava lake in the Overworld', icon: 'warped_fungus_on_a_stick', frame: 'task', criteria: { ride_entity_distance: { t: 'ride_in_lava', vehicle: 'strider', distance: 50, dimension: 'overworld' } } },
   { id: 'nether/explore_nether', parent: 'nether/ride_strider', title: 'Hot Tourist Destinations', description: 'Explore all Nether biomes', icon: 'netherite_boots', frame: 'challenge', criteria: each(NETHER_BIOMES, (b) => ({ t: 'biome', biome: b })) },
   { id: 'nether/summon_wither', parent: 'nether/get_wither_skull', title: 'Withering Heights', description: 'Summon the Wither', icon: 'nether_star', frame: 'task', criteria: one(never) },
   { id: 'nether/brew_potion', parent: 'nether/obtain_blaze_rod', title: 'Local Brewery', description: 'Brew a Potion', icon: 'potion', frame: 'task', criteria: one(never) },
@@ -396,6 +400,10 @@ export interface TriggerPayload {
   dimension?: { from: string; to: string };
   /** horizontal distance travelled through the Nether (vanilla NetherTravelTrigger) */
   netherTravel?: number;
+  /** the worn item and what the player rides (item_durability) */
+  durability?: { item: string; vehicle: string | null };
+  /** a ride across lava so far (ride_in_lava) */
+  lavaRide?: { vehicle: string; distance: number; dimension: string };
 }
 
 export class PlayerAdvancements {
@@ -512,6 +520,10 @@ function matches(c: Criterion, p: TriggerPayload): boolean {
       return p.biome === c.biome;
     case 'structure':
       return !!p.structures?.includes(c.structure);
+    case 'item_durability':
+      return p.durability?.item === c.item && p.durability.vehicle === c.vehicle;
+    case 'ride_in_lava':
+      return !!p.lavaRide && p.lavaRide.vehicle === c.vehicle && p.lavaRide.dimension === c.dimension && p.lavaRide.distance >= c.distance;
     case 'changed_dimension':
       return !!p.dimension && (!c.from || c.from === p.dimension.from) && (!c.to || c.to === p.dimension.to);
     case 'nether_travel':

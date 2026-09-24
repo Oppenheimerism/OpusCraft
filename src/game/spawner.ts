@@ -3,13 +3,14 @@
 
 import type { Level } from './level';
 import type { Entity } from '../entity/entity';
-import { Mob, MobCategory, SavedEntity } from '../entity/mob';
+import { Mob, MobCategory, SavedEntity, SpawnGroup } from '../entity/mob';
 import { ItemEntity } from '../entity/itemEntity';
 import { ItemStack, ITEMS, cloneTag } from '../item/item';
 import { Pig, Cow, Sheep, Chicken, Animal } from '../entity/animals';
 import { Ghast } from '../entity/ghast';
 import { Blaze } from '../entity/blaze';
 import { Hoglin, Zoglin } from '../entity/hoglin';
+import { Strider } from '../entity/strider';
 import { Zombie, ZombifiedPiglin, Skeleton, WitherSkeleton, Creeper, Spider, CaveSpider, Enderman, Slime, MagmaCube, Monster, validSpawnBlock } from '../entity/monsters';
 import { Squid, WaterAnimal } from '../entity/water';
 import { AbstractMinecart, createMinecart, MINECART_TYPES } from '../entity/minecart';
@@ -17,7 +18,8 @@ import { Bat } from '../entity/bat';
 import { Boat, createBoat, BOAT_TYPES } from '../entity/boat';
 import { moonPhase } from '../render/environment';
 import { BIOMES } from '../world/gen/biomes';
-import { BLOCKS, STATE_BLOCK, FLAGS, F_OPAQUE, F_FULL_COLLISION, F_WATER, F_LAVA, COLLISION } from '../world/block';
+import { BLOCKS, STATE_BLOCK, FLAGS, F_AIR, F_OPAQUE, F_FULL_COLLISION, F_WATER, F_LAVA, COLLISION } from '../world/block';
+import { fluidType, FLUID_LAVA } from '../world/fluids';
 import { MIN_Y } from '../world/constants';
 import { AABB } from '../core/aabb';
 import { Rand, hash2 } from '../core/rng';
@@ -44,6 +46,7 @@ export const MOB_TYPES: Record<string, (l: Level) => Mob> = {
   bat: (l) => new Bat(l),
   hoglin: (l) => new Hoglin(l),
   zoglin: (l) => new Zoglin(l),
+  strider: (l) => new Strider(l),
 };
 
 export function createMob(type: string, level: Level): Mob | null {
@@ -124,7 +127,7 @@ export function isChunkSaved(e: Entity): boolean {
 
 const ENTITY_NAMES: Record<string, string> = {
   pig: 'Pig', cow: 'Cow', sheep: 'Sheep', chicken: 'Chicken', zombie: 'Zombie', skeleton: 'Skeleton', creeper: 'Creeper', spider: 'Spider',
-  cave_spider: 'Cave Spider', enderman: 'Enderman', slime: 'Slime', magma_cube: 'Magma Cube', zombified_piglin: 'Zombified Piglin', ghast: 'Ghast', blaze: 'Blaze', wither_skeleton: 'Wither Skeleton', squid: 'Squid', bat: 'Bat', hoglin: 'Hoglin', zoglin: 'Zoglin',
+  cave_spider: 'Cave Spider', enderman: 'Enderman', slime: 'Slime', magma_cube: 'Magma Cube', zombified_piglin: 'Zombified Piglin', ghast: 'Ghast', blaze: 'Blaze', wither_skeleton: 'Wither Skeleton', squid: 'Squid', bat: 'Bat', hoglin: 'Hoglin', zoglin: 'Zoglin', strider: 'Strider',
   arrow: 'Arrow', tnt: 'Primed TNT', item: 'Item', experience_orb: 'Experience Orb', falling_block: 'Falling Block', player: 'Player',
   egg: 'Thrown Egg', snowball: 'Snowball', ender_pearl: 'Thrown Ender Pearl',
   minecart: 'Minecart', chest_minecart: 'Minecart with Chest', boat: 'Boat', chest_boat: 'Boat with Chest',
@@ -357,6 +360,7 @@ export class NaturalSpawner {
       let data: SpawnerData | null = null;
       let tries = Math.ceil(r.nextFloat() * 4);
       let inGroup = 0;
+      const group: SpawnGroup = {};
       for (let i = 0; i < tries; i++) {
         x += r.nextInt(6) - r.nextInt(6);
         z += r.nextInt(6) - r.nextInt(6);
@@ -372,7 +376,7 @@ export class NaturalSpawner {
         if (d2 > 128 * 128) continue;
         // vanilla canSpawnMobAt: the pack's kind must be on the list where each one lands
         if (!this.mobsAt(cat, x, y, z).includes(data)) continue;
-        const placeOk = data.type === 'squid' ? this.isInWaterPositionOk(x, y, z) : this.isSpawnPositionOk(x, y, z, FIRE_IMMUNE.has(data.type));
+        const placeOk = this.placementOk(data.type, x, y, z);
         if (!placeOk || !this.checkSpawnRules(data.type, x, y, z)) continue;
         if (!this.withinSpawnBudget(data.type, x, y, z)) continue;
         const mob = createMob(data.type, lvl);
@@ -381,7 +385,7 @@ export class NaturalSpawner {
         mob.bodyYaw = mob.headYaw = mob.yaw;
         if (!this.noCollision(mob.bb)) continue;
         if (data.type !== 'squid' && (!mob.checkSpawnRules() || !mob.checkSpawnObstruction())) continue;
-        mob.finalizeSpawn('natural');
+        mob.finalizeSpawn('natural', group);
         lvl.addEntity(mob);
         spawned++;
         inGroup++;
@@ -410,6 +414,13 @@ export class NaturalSpawner {
   private isSpawnPositionOk(x: number, y: number, z: number, fireImmune = false): boolean {
     const w = this.level.world;
     return validSpawnBlock(this.level, x, y - 1, z, fireImmune) && emptySpawnBlock(w.getState(x, y, z)) && emptySpawnBlock(w.getState(x, y + 1, z));
+  }
+
+  /** vanilla SpawnPlacements: where each kind may appear (in water, in lava, else on the ground) */
+  private placementOk(type: string, x: number, y: number, z: number): boolean {
+    if (type === 'squid') return this.isInWaterPositionOk(x, y, z);
+    if (type === 'strider') return fluidType(this.level.world.getState(x, y, z)) === FLUID_LAVA;
+    return this.isSpawnPositionOk(x, y, z, FIRE_IMMUNE.has(type));
   }
 
   /** vanilla SpawnPlacementTypes.IN_WATER */
@@ -466,6 +477,8 @@ export class NaturalSpawner {
       case 'blaze':
         // vanilla Monster.checkAnyLightMonsterSpawnRules
         return lvl.difficulty !== 'peaceful';
+      case 'strider':
+        return Strider.checkStriderSpawn(lvl, x, y, z);
       case 'hoglin':
         // vanilla Hoglin.checkHoglinSpawnRules: any light, just not on a nether wart block
         return BLOCKS[STATE_BLOCK[lvl.world.getState(x, y - 1, z)]].name !== 'nether_wart_block';
@@ -506,6 +519,7 @@ export class NaturalSpawner {
       const data = pickWeighted(set.creature, r);
       if (!data) continue;
       const n = data.min + r.nextInt(1 + data.max - data.min);
+      const group: SpawnGroup = {};
       let l = x0 + r.nextInt(16), i1 = z0 + r.nextInt(16);
       const j1 = l, k1 = i1;
       for (let l1 = 0; l1 < n; l1++) {
@@ -513,14 +527,14 @@ export class NaturalSpawner {
         for (let i2 = 0; !ok && i2 < 4; i2++) {
           const y = this.topNonColliding(l, i1);
           const mob = createMob(data.type, lvl);
-          if (mob && y > MIN_Y && this.isSpawnPositionOk(l, y, i1)) {
+          if (mob && y > MIN_Y && this.placementOk(data.type, l, y, i1)) {
             const f = mob.width;
             const d0 = Math.max(x0 + f, Math.min(x0 + 16 - f, l));
             const d1 = Math.max(z0 + f, Math.min(z0 + 16 - f, i1));
             mob.moveTo(d0, y, d1, r.nextFloat() * 360, 0);
             mob.bodyYaw = mob.headYaw = mob.yaw;
             if (this.noCollision(mob.bb) && this.checkSpawnRules(data.type, Math.floor(d0), y, Math.floor(d1)) && mob.checkSpawnRules() && mob.checkSpawnObstruction()) {
-              mob.finalizeSpawn('chunk');
+              mob.finalizeSpawn('chunk', group);
               lvl.addEntity(mob);
               out.push(mob);
               ok = true;
@@ -534,10 +548,20 @@ export class NaturalSpawner {
     return out;
   }
 
-  /** vanilla getTopNonCollidingPos (motion-blocking heightmap for ON_GROUND mobs) */
+  /**
+   * vanilla getTopNonCollidingPos (motion-blocking heightmap for ON_GROUND mobs); under a ceiling (the Nether) the
+   * first thing solid or liquid below the first gap under the roof
+   */
   private topNonColliding(x: number, z: number): number {
     const w = this.level.world;
     let y = w.heightAt(x, z);
+    if (w.dim.hasCeiling) {
+      do y--;
+      while (y > MIN_Y && !(FLAGS[w.getState(x, y, z)] & F_AIR));
+      do y--;
+      while (y > MIN_Y && FLAGS[w.getState(x, y, z)] & F_AIR);
+      return y;
+    }
     // heightmap counts light-blocking blocks; step down through non-colliding plants
     while (y > MIN_Y + 1) {
       const st = w.getState(x, y - 1, z);

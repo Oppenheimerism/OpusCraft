@@ -137,6 +137,8 @@ export class Game {
   /** where the player left the Overworld for the Nether (vanilla enteredNetherPosition, not saved) */
   private enteredNetherAt: [number, number] | null = null;
   private leftOverworldAt: [number, number] | null = null;
+  /** where the player's mount went into lava (vanilla ServerPlayer.enteredLavaOnVehiclePosition) */
+  private lavaRideFrom: [number, number] | null = null;
   /** the tutorial hints start on first joining the world, not on every change of dimension */
   private joined = false;
   chatScreenFactory: ((initial: string) => Screen) | null = null;
@@ -1578,6 +1580,7 @@ export class Game {
     lvl.onPlayerArrowHit = () => this.advancements.trigger('shoot_arrow');
     this.interaction.onPlaced = (name) => this.advancements.trigger('place', { place: name });
     this.interaction.onConsumed = (id) => this.advancements.trigger('consume', { consume: id });
+    this.interaction.onItemDurability = (item, vehicle) => this.advancements.trigger('item_durability', { durability: { item, vehicle } });
     this.interaction.onDestroyProgress = (name, progress) => this.tutorial.onDestroyBlock(name, progress);
   }
 
@@ -1598,6 +1601,13 @@ export class Game {
       // vanilla LocationPredicate.inStructure: inside one of the structure's pieces
       if (this.world.dim.id === 'the_nether' && this.level.fortresses().pieceAt(Math.floor(p.x), Math.floor(p.y), Math.floor(p.z))) this.advancements.trigger('structure', { structures: ['fortress'] });
     }
+    // vanilla trackEnteredOrExitedLavaOnVehicle: how far a mount has carried the player across lava (ride_entity_in_lava)
+    const v = p.vehicle;
+    if (v?.inLava) {
+      if (!this.lavaRideFrom) this.lavaRideFrom = [p.x, p.z];
+      else this.advancements.trigger('ride_in_lava', { lavaRide: { vehicle: v.type, distance: Math.hypot(p.x - this.lavaRideFrom[0], p.z - this.lavaRideFrom[1]), dimension: this.world.dim.id } });
+    }
+    if (this.lavaRideFrom && !v?.inLava) this.lavaRideFrom = null;
     // vanilla fall_from_world_height: from the build limit to the bottom, alive
     if (!p.onGround && !p.flying && p.y >= MAX_Y - 1) this.fallStartY = p.y;
     if (p.onGround || p.flying || p.inWater) {

@@ -1,7 +1,7 @@
 // LivingEntity: vanilla travel() physics, jumping, health, hurt/death, status effects.
 
 import { Entity } from './entity';
-import { FLUID_WATER } from '../world/fluids';
+import { FLUID_WATER, fluidType } from '../world/fluids';
 import { wrapDegrees } from '../core/math';
 import { FLAGS, F_AIR, F_OPAQUE, F_FULL_COLLISION, BLOCKS, STATE_BLOCK } from '../world/block';
 import { clipBlocks } from '../game/raycast';
@@ -467,12 +467,42 @@ export abstract class LivingEntity extends Entity {
     this.zza *= 0.98;
     // vanilla: slow falling and levitation keep resetting the fall
     if (this.hasEffect('slow_falling') || this.hasEffect('levitation')) this.fallDistance = 0;
-    this.travel(this.xxa, this.yya, this.zza);
+    // vanilla: a player steering this mount drives it (travelRidden); anything else travels on its own
+    const rider = this.controllingPassenger();
+    if (rider instanceof LivingEntity && rider.type === 'player' && this.isAlive) this.travelRidden(rider, this.xxa, this.yya, this.zza);
+    else this.travel(this.xxa, this.yya, this.zza);
     this.pushEntities();
   }
 
   isImmobile(): boolean {
     return this.health <= 0;
+  }
+
+  /**
+   * vanilla LivingEntity.travelRidden: the mount turns and moves as its rider wants (tickRidden, getRiddenInput) at
+   * its ridden speed, stepping up a full block while a player has the reins (vanilla maxUpStep)
+   */
+  protected travelRidden(p: LivingEntity, sx: number, sy: number, sz: number): void {
+    const [ix, iy, iz] = this.riddenInput(p, sx, sy, sz);
+    this.tickRidden(p, ix, iy, iz);
+    this.speed = this.riddenSpeed(p);
+    const step = this.stepHeight;
+    this.stepHeight = Math.max(step, 1);
+    this.travel(ix, iy, iz);
+    this.stepHeight = step;
+  }
+
+  /** vanilla tickRidden: the mount's own bookkeeping while ridden (facing the rider's way) */
+  protected tickRidden(_p: LivingEntity, _sx: number, _sy: number, _sz: number): void {}
+
+  /** vanilla getRiddenInput: the movement the rider asks for */
+  protected riddenInput(_p: LivingEntity, sx: number, sy: number, sz: number): [number, number, number] {
+    return [sx, sy, sz];
+  }
+
+  /** vanilla getRiddenSpeed */
+  protected riddenSpeed(_p: LivingEntity): number {
+    return this.movementSpeed();
   }
 
   /** AI / input hook (mob goals, player input) */
@@ -515,7 +545,10 @@ export abstract class LivingEntity extends Entity {
     const falling = this.dy <= 0;
     // vanilla: slow falling caps gravity on the way down
     if (falling && this.hasEffect('slow_falling')) g = Math.min(g, 0.01);
-    if (this.inWater && this.isAffectedByFluids()) {
+    // vanilla: a fluid it can stand on (a strider's lava) doesn't swim it, it walks
+    const fluidHere = fluidType(this.level.world.getState(Math.floor(this.x), Math.floor(this.y), Math.floor(this.z)));
+    const standsOnFluid = this.canStandOnFluid(fluidHere);
+    if (this.inWater && this.isAffectedByFluids() && !standsOnFluid) {
       const y0 = this.y;
       let slow = this.sprinting ? 0.9 : this.waterSlowDown();
       let f5 = 0.02;
@@ -534,7 +567,7 @@ export abstract class LivingEntity extends Entity {
       this.dz *= slow;
       this.dy = this.fluidFallingAdjusted(g, falling, this.dy);
       if (this.horizontalCollision && this.isFree(this.bb.move(this.dx, this.dy + 0.6 - this.y + y0, this.dz))) this.dy = 0.3;
-    } else if (this.inLava && this.isAffectedByFluids()) {
+    } else if (this.inLava && this.isAffectedByFluids() && !standsOnFluid) {
       const y0 = this.y;
       this.moveRelative(0.02, sx, sy, sz);
       this.move(this.dx, this.dy, this.dz);

@@ -48,7 +48,7 @@ function shapeTop(st: number): number | null {
 }
 
 /** vanilla BlockGetter.getBlockFloorHeight: standing height in a block space, -Infinity if none */
-function floorHeight(level: Level, x: number, y: number, z: number): number {
+export function floorHeight(level: Level, x: number, y: number, z: number): number {
   const here = shapeTop(level.getState(x, y, z));
   if (here !== null) return here;
   const below = shapeTop(level.getState(x, y - 1, z));
@@ -56,7 +56,7 @@ function floorHeight(level: Level, x: number, y: number, z: number): number {
 }
 
 /** vanilla DismountHelper.canDismountTo: no block collision for the rider's box there */
-function blockFree(level: Level, box: AABB): boolean {
+export function blockFree(level: Level, box: AABB): boolean {
   const x0 = Math.floor(box.minX), x1 = Math.floor(box.maxX - 1e-7), y0 = Math.floor(box.minY) - 1, y1 = Math.floor(box.maxY - 1e-7);
   const z0 = Math.floor(box.minZ), z1 = Math.floor(box.maxZ - 1e-7);
   for (let x = x0; x <= x1; x++)

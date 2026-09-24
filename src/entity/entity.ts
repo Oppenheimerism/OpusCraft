@@ -8,6 +8,15 @@ import { setDripleafTilt } from '../game/blockRules';
 
 let nextEntityId = 1;
 
+/** vanilla LiquidBlock.STABLE_SHAPE's top: the half-block floor a lava-walker finds on still lava */
+const LAVA_FLOOR = 0.5;
+
+/** a lava source (vanilla LiquidBlock LEVEL 0), the one kind of lava that bears a strider */
+function isLavaSource(st: number): boolean {
+  const b = BLOCKS[STATE_BLOCK[st]];
+  return b.s.fluid === 'lava' && b.get<number>(st, 'level') === 0;
+}
+
 export abstract class Entity {
   readonly id = nextEntityId++;
   abstract readonly type: string;
@@ -281,6 +290,11 @@ export abstract class Entity {
     return this.passengers.length === 0;
   }
 
+  /** vanilla getControllingPassenger: the rider steering this (mobs: see Mob), or null */
+  controllingPassenger(): Entity | null {
+    return null;
+  }
+
   startRiding(vehicle: Entity, force = false): boolean {
     if (vehicle === this.vehicle) return false;
     for (let e: Entity | null = vehicle; e; e = e.vehicle) if (e === this) return false;
@@ -374,6 +388,7 @@ export abstract class Entity {
   collisionBoxes(box: AABB): AABB[] {
     const out: AABB[] = [];
     const world = this.level.world;
+    const lavaWalker = this.canStandOnFluid(FLUID_LAVA);
     const x0 = Math.floor(box.minX - 1e-7) - 1, x1 = Math.floor(box.maxX + 1e-7) + 1;
     const y0 = Math.floor(box.minY - 1e-7) - 1, y1 = Math.floor(box.maxY + 1e-7) + 1;
     const z0 = Math.floor(box.minZ - 1e-7) - 1, z1 = Math.floor(box.maxZ + 1e-7) + 1;
@@ -388,6 +403,13 @@ export abstract class Entity {
         for (let y = y0; y <= y1; y++) {
           const st = world.getState(x, y, z);
           if (st === 0) continue;
+          // vanilla LiquidBlock.getCollisionShape: still lava with no lava over it is a floor half a block up for
+          // whoever can stand on it (a strider) and is above that floor already
+          if (FLAGS[st] & F_LAVA && lavaWalker && this.y > y + LAVA_FLOOR - 1e-5 && isLavaSource(st) && fluidType(world.getState(x, y + 1, z)) !== FLUID_LAVA) {
+            const b = new AABB(x, y, z, x + 1, y + LAVA_FLOOR, z + 1);
+            if (b.intersects(box)) out.push(b);
+            continue;
+          }
           const boxes = COLLISION[st];
           if (!boxes) continue;
           for (const c of boxes) {
@@ -398,6 +420,11 @@ export abstract class Entity {
       }
     this.entityCollisions(box, out);
     return out;
+  }
+
+  /** vanilla LivingEntity.canStandOnFluid: walks on this fluid (FLUID_*) as on a floor (the strider on lava) */
+  canStandOnFluid(_fluid: number): boolean {
+    return false;
   }
 
   /** vanilla canBeCollidedWith: solid to other entities (boats) */
@@ -490,7 +517,7 @@ export abstract class Entity {
       this.walkDist += Math.sqrt(rx * rx + rz * rz) * 0.6;
       this.moveDist += Math.sqrt(rx * rx + vy * vy + rz * rz) * 0.6;
       if (this.moveDist > this.nextStep && (onState !== 0 || this.inWater || climbing) && this.makesStepSounds()) {
-        this.nextStep = Math.floor(this.moveDist) + 1;
+        this.nextStep = this.nextStepDistance();
         if (this.inWater) this.playSwimSound();
         else if (this.onGround || climbing) {
           this.playStepSound();
@@ -585,6 +612,11 @@ export abstract class Entity {
 
   protected makesStepSounds(): boolean {
     return false;
+  }
+
+  /** vanilla Entity.nextStep: where along the walk the next step sounds */
+  protected nextStepDistance(): number {
+    return Math.floor(this.moveDist) + 1;
   }
 
   protected playStepSound(): void {}
