@@ -2,7 +2,7 @@
 // barrel, composter, smoker, blast furnace, cauldron, lectern, the cartography / fletching / smithing tables,
 // loom, stonecutter, brewing stand, flower pot and campfire.
 
-import { TexImage, TexDef, AnimTex, img, setPx, getPx, mixC, mulC, anim, clear, Rand } from '../tex';
+import { TexImage, TexDef, AnimTex, img, setPx, getPx, mixC, mulC, anim, clear, mapPixels, Rand } from '../tex';
 import { N, rng, fbm, quantize, paint, white } from './core';
 import { planks, WOOD, WoodDef } from './wood';
 import { speckled, stone } from './terrain';
@@ -11,6 +11,7 @@ import { sprite } from './plants';
 import { BELL_GOLD } from '../bellBody';
 import { pottedAzaleaTop, pottedAzaleaSide, pottedAzaleaPlant } from './lush';
 import { roots } from './netherFlora';
+import { campfireLog, campfireFire } from './decor';
 
 type Reg = Record<string, () => TexDef>;
 
@@ -753,6 +754,27 @@ export function flowerPot(): TexImage {
   return t;
 }
 
+// ---------------------------------------------------------------------------
+// Soul campfire: the campfire's glowing logs and its flames in soul fire's blue (vanilla soul_campfire_log_lit,
+// soul_campfire_fire; the unlit logs are the campfire's)
+
+const EMBER_TO_SOUL = new Map([[0xa3290c, 0x0b6f7a], [0xe0561a, 0x17a3ae], [0xff9a2e, 0x3fd3d9], [0xffd463, 0x9af0f2]]);
+const FLAME_TO_SOUL = new Map([[0x9e2e0a, 0x0a5a66], [0xd24f16, 0x0b8792], [0xf08422, 0x17b1ba], [0xffb83f, 0x3fd3d9], [0xffe27a, 0x86eaee], [0xfff8d6, 0xd9fdfe]]);
+
+function recolor(t: TexImage, map: Map<number, number>): TexImage {
+  mapPixels(t, (_x, _y, c, a) => (a ? map.get(c) ?? null : null));
+  return t;
+}
+
+export function soulCampfireLogLit(): TexImage {
+  return recolor(campfireLog(true), EMBER_TO_SOUL);
+}
+
+export function soulCampfireFire(): AnimTex {
+  const a = campfireFire();
+  return { ...a, frames: a.frames.map((data) => recolor({ w: a.w, h: a.h, data }, FLAME_TO_SOUL).data) };
+}
+
 export function registerVillageTextures(T: Reg): void {
   T['bell_bottom'] = bellBottom;
   T['barrel_side'] = barrelSide;
@@ -809,6 +831,8 @@ export function registerVillageTextures(T: Reg): void {
     T[`potted_${fl}azalea_bush_plant`] = pottedAzaleaPlant;
   }
   // (vanilla draws the potted roots separately, crimson_roots_pot and warped_roots_pot; here they are the roots)
+  T['soul_campfire_log_lit'] = soulCampfireLogLit;
+  T['soul_campfire_fire'] = soulCampfireFire;
   T['crimson_roots_pot'] = () => roots('crimson');
   T['warped_roots_pot'] = () => roots('warped');
 }

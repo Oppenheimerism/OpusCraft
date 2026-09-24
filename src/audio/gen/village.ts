@@ -1,6 +1,6 @@
 // Village block sounds: vanilla block/bell/bell_use01-02 (the bell struck), block/barrel/open1-2 and close
 // (the lid), block/composter/fill1-4, fill_success1-4, empty1-3 and ready1-4, block/smoker/smoke1-6 and
-// block/blast_furnace/fire_crackle1-5, item/book/close_put1 and open_flip1-3 (a book laid down, a page turned).
+// block/blast_furnace/fire_crackle1-5, item/book/close_put1 and open_flip1-3 (a book laid down, a page turned), block/campfire/crackle1-6.
 
 import type { SoundGen } from '../synth';
 import { alloc, layer, envBump } from './dsp';
@@ -196,6 +196,18 @@ function blastFurnaceCrackle(c: Ctx): Float32Array {
   return out;
 }
 
+// ------------------------------------------------------------------ campfire
+
+/** a campfire's logs crackling: snaps and pops scattered over the soft flutter of the flames */
+function campfireCrackle(c: Ctx): Float32Array {
+  const { sr, rng } = c;
+  const d = rng.range(1.6, 2.6);
+  const out = alloc(d, sr);
+  layer(out, 1, (b) => fireCrackles(b, sr, rng, 0.01, d - 0.1, rng.range(9, 16), 0.3));
+  layer(out, 0.3, (b) => burst(b, sr, rng, { dur: d, attack: 0.25, tau: d, lp: 380, color: 'brown', env: (t) => envBump(t, 0.3, d - 0.3) }));
+  return out;
+}
+
 // ------------------------------------------------------------------ books
 
 /** a book laid down on the lectern: the soft slap of its cover, and its pages settling */
@@ -239,6 +251,7 @@ export function villageSounds(): Record<string, SoundGen> {
     'block.composter.ready': sound('block.composter.ready', 4, composterReady),
     'block.smoker.smoke': sound('block.smoker.smoke', 6, smokerSmoke),
     'block.blast_furnace.fire_crackle': sound('block.blast_furnace.fire_crackle', 5, blastFurnaceCrackle),
+    'block.campfire.crackle': sound('block.campfire.crackle', 6, campfireCrackle),
     'item.book.put': sound('item.book.put', 1, bookPut),
     'item.book.page_turn': sound('item.book.page_turn', 3, bookPageTurn),
   };

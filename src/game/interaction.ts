@@ -5,6 +5,7 @@ import type { Player } from '../entity/player';
 import { raycast, BlockHit } from './raycast';
 import { destroyProgress, placementState, canReplace, canSurvive, isCorrectTool, blockExperience, hasVacantFace } from './blockRules';
 import { behaviorOf } from './blockBehavior';
+import { lightCampfire, dowseCampfire } from './villageBlocks';
 import { openSound } from './redstone/components';
 import { BLOCKS, BLOCK_BY_NAME, STATE_BLOCK, FLAGS, F_AIR, F_WATER, F_LAVA, F_OPAQUE, F_REPLACEABLE, COLLISION, FACE_OCC, OUTLINE, getBlock, S } from '../world/block';
 import { growHugeFungus, nyliumBoneMeal } from '../world/gen/netherFeatures';
@@ -440,6 +441,12 @@ export class Interaction {
     // replace the clicked block if replaceable (tall grass, snow layer 1...), else place against the face
     let x = h.x, y = h.y, z = h.z;
     const clicked = world.getState(x, y, z);
+    // vanilla BucketItem.emptyContents: a block that holds water (a campfire) takes it in where it stands
+    if (stack.item.id === 'water_bucket' && !world.dim.ultraWarm && behaviorOf(clicked)?.placeLiquid?.(this.level, x, y, z, clicked)) {
+      this.level.sound.play('item.bucket.empty', x + 0.5, y + 0.5, z + 0.5, 1, 1);
+      if (p.gameMode !== 'creative') p.inventory.setSelectedItem(ItemStack.of('bucket'));
+      return true;
+    }
     const clickedBlock = BLOCKS[STATE_BLOCK[clicked]];
     const replaceClicked =
       (FLAGS[clicked] & F_REPLACEABLE && clickedBlock !== block && !(clickedBlock.name === 'water' && block.name !== 'water')) ||
@@ -622,11 +629,18 @@ export class Interaction {
       p.swing();
       return true;
     }
-    // vanilla FlintAndSteelItem.useOn: light a fire on the clicked face
+    // vanilla ShovelItem.useOn: a shovel puts out a lit campfire (not from underneath)
+    if (stack.item.tool?.type === 'shovel' && h.face !== 0 && dowseCampfire(lvl, h.x, h.y, h.z)) {
+      if (p.gameMode !== 'creative') this.damageHeld(1);
+      p.swing();
+      return true;
+    }
+    // vanilla FlintAndSteelItem.useOn: light a campfire that is out, else a fire on the clicked face
     if (id === 'flint_and_steel' || id === 'fire_charge') {
-      const fx = h.x + DX[h.face], fy = h.y + DY[h.face], fz = h.z + DZ[h.face];
-      if (canPlaceFire(lvl.world, fx, fy, fz, DIR_NAMES[dirFromYaw(p.yaw)])) {
-        placeFire(lvl, fx, fy, fz, fireStateAt(lvl.world, fx, fy, fz));
+      const lit = lightCampfire(lvl, h.x, h.y, h.z);
+      const fx = lit ? h.x : h.x + DX[h.face], fy = lit ? h.y : h.y + DY[h.face], fz = lit ? h.z : h.z + DZ[h.face];
+      if (lit || canPlaceFire(lvl.world, fx, fy, fz, DIR_NAMES[dirFromYaw(p.yaw)])) {
+        if (!lit) placeFire(lvl, fx, fy, fz, fireStateAt(lvl.world, fx, fy, fz));
         if (id === 'flint_and_steel') {
           lvl.sound.play('item.flintandsteel.use', fx + 0.5, fy + 0.5, fz + 0.5, 1, Math.random() * 0.4 + 0.8);
           if (p.gameMode !== 'creative') this.damageHeld(1);

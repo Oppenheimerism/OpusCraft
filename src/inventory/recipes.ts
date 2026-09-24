@@ -105,6 +105,8 @@ shaped('smoker', 1, [' # ', '#X#', ' # '], { '#': ['#logs', '#crimson_stems', '#
 shaped('blast_furnace', 1, ['III', 'IXI', '###'], { I: 'iron_ingot', X: 'furnace', '#': 'smooth_stone' });
 shaped('cauldron', 1, ['# #', '# #', '###'], { '#': 'iron_ingot' });
 shaped('flower_pot', 1, ['# #', ' # '], { '#': 'brick' });
+shaped('campfire', 1, [' S ', 'SCS', 'LLL'], { S: 'stick', C: '#coals', L: ['#logs', '#crimson_stems', '#warped_stems'] });
+shaped('soul_campfire', 1, [' S ', 'S#S', 'LLL'], { S: 'stick', '#': '#soul_fire_base_blocks', L: ['#logs', '#crimson_stems', '#warped_stems'] });
 shaped('lectern', 1, ['SSS', ' B ', ' S '], { S: '#wooden_slabs', B: 'bookshelf' });
 shaped('cartography_table', 1, ['@@', '##', '##'], { '@': 'paper', '#': '#planks' });
 shaped('fletching_table', 1, ['@@', '##', '##'], { '@': 'flint', '#': '#planks' });

@@ -387,6 +387,37 @@ export class BrewingStandBlockEntity extends BlockEntity {
   }
 }
 
+/**
+ * vanilla CampfireBlock.makeParticles: a puff of campfire smoke (a signal fire's rises far higher), and a wisp of
+ * ordinary smoke as well when it is being put out
+ */
+export function campfireSmoke(level: Level, x: number, y: number, z: number, signal: boolean, extra: boolean): void {
+  const side = () => (Math.random() < 0.5 ? 1 : -1);
+  const kind = signal ? 'campfire_signal_smoke' : 'campfire_cosy_smoke';
+  level.particles.spawn?.(kind, x + 0.5 + (Math.random() / 3) * side(), y + Math.random() + Math.random(), z + 0.5 + (Math.random() / 3) * side(), 0, 0.07, 0);
+  if (extra) level.particles.spawn?.('smoke', x + 0.5 + (Math.random() / 4) * side(), y + 0.4, z + 0.5 + (Math.random() / 4) * side(), 0, 0.005, 0);
+}
+
+/**
+ * vanilla CampfireBlockEntity (both campfires have one): four places round the fire for food to cook on (the cooking
+ * is still to come) and, while it burns, the smoke it gives off (particleTick)
+ */
+export class CampfireBlockEntity extends BlockEntity {
+  readonly id = 'campfire';
+  constructor(x: number, y: number, z: number) {
+    super(x, y, z, 4);
+  }
+  override tick(level: Level): void {
+    const st = level.getState(this.x, this.y, this.z);
+    const b = BLOCKS[STATE_BLOCK[st]];
+    if (b.propIndex('signal_fire') < 0 || !b.get(st, 'lit')) return;
+    if (Math.random() < 0.11) {
+      const signal = !!b.get(st, 'signal_fire');
+      for (let i = Math.floor(Math.random() * 2) + 2; i > 0; i--) campfireSmoke(level, this.x, this.y, this.z, signal, false);
+    }
+  }
+}
+
 export function createBlockEntity(name: string, x: number, y: number, z: number): BlockEntity | null {
   if (name === 'chest') return new ChestBlockEntity(x, y, z);
   if (name === 'enchanting_table') return new EnchantingTableBlockEntity(x, y, z);
@@ -396,6 +427,7 @@ export function createBlockEntity(name: string, x: number, y: number, z: number)
   if (name === 'barrel') return new BarrelBlockEntity(x, y, z);
   if (name === 'lectern') return new LecternBlockEntity(x, y, z);
   if (name === 'brewing_stand') return new BrewingStandBlockEntity(x, y, z);
+  if (name === 'campfire' || name === 'soul_campfire') return new CampfireBlockEntity(x, y, z);
   return null;
 }
 

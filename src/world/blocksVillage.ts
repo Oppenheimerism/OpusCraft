@@ -353,6 +353,39 @@ function pottedModel(plant: string): ModelDef {
   return model(pottedCross(plant));
 }
 
+// ---------------------------------------------------------------------------
+// Campfire (vanilla CampfireBlock; block/campfire and soul_campfire from template_campfire, and campfire_off: two
+// logs on the ground, two across them, the ash between and the flames crossed over it; the blockstate turns the
+// model, which is drawn facing south)
+
+/** vanilla CampfireBlock.SHAPE */
+export const CAMPFIRE_SHAPE: Box[] = [bx(0, 0, 0, 16, 7, 16)];
+export const SIGNAL_FIRE = boolProp('signal_fire');
+
+/** `fire` and `lit` (the glowing log faces) for a lit campfire; null for one put out */
+function campfireModel(fire: string | null, litLog: string): ModelDef {
+  const log = 'campfire_log';
+  const lit = fire ? litLog : log;
+  // (the bark runs along rows 0-3 of campfire_log, the 4x4 end of a log sits under it, the ash bed below that)
+  const bark: UV4 = [0, 0, 16, 4], back: UV4 = [16, 0, 0, 4], end: UV4 = [0, 4, 4, 8];
+  const elements: ElementDef[] = [
+    { from: [1, 0, 0], to: [5, 4, 16], faces: { north: f(log, end, 'north'), east: f(lit, bark), south: f(log, end, 'south'), west: f(log, back), up: f(log, bark, undefined, 90), down: f(log, bark, 'down', 90) } },
+    { from: [0, 3, 11], to: [16, 7, 15], faces: { north: f(log, back), east: f(log, end, 'east'), south: f(log, bark), west: f(log, end, 'west'), up: f(lit, bark, undefined, 180), down: f(log, bark) } },
+    { from: [11, 0, 0], to: [15, 4, 16], faces: { north: f(log, end, 'north'), east: f(log, bark), south: f(log, end, 'south'), west: f(lit, back), up: f(log, bark, undefined, 90), down: f(log, bark, 'down', 90) } },
+    { from: [0, 3, 1], to: [16, 7, 5], faces: { north: f(log, bark), east: f(log, end, 'east'), south: f(log, back), west: f(log, end, 'west'), up: f(lit, bark, undefined, 180), down: f(log, bark) } },
+    { from: [5, 0, 0], to: [11, 1, 16], faces: { north: f(log, [0, 12, 6, 13], 'north'), south: f(log, [10, 12, 16, 13], 'south'), up: f(lit, [0, 8, 16, 14], undefined, 90), down: f(log, [0, 8, 16, 14], 'down', 90) } },
+  ];
+  if (fire) {
+    const rot = { origin: [8, 8, 8] as [number, number, number], axis: 'y' as const, angle: 45, rescale: true };
+    const flame = f(fire, [0, 0, 16, 16]);
+    elements.push(
+      { from: [0.8, 1, 8], to: [15.2, 17, 8], rot, faces: { north: flame, south: flame } },
+      { from: [8, 1, 0.8], to: [8, 17, 15.2], rot, faces: { west: flame, east: flame } },
+    );
+  }
+  return { particle: log, elements };
+}
+
 /** face bits (1 << dir) of the four sides and the bottom: full faces for neighbours to cull against and hang things on */
 const SIDES_AND_BOTTOM = 0b111101;
 
@@ -468,6 +501,18 @@ export function registerVillageBlocks(): void {
       const model = pottedModel(plant);
       registerBlock(pottedName(plant), { ...pot, item: false, ...(plant === 'fern' ? { tint: 'grass' as const } : {}), model: () => ({ model }) });
     }
+  }
+  // (vanilla Blocks.CAMPFIRE / SOUL_CAMPFIRE: strength 2, wood, set alight by lava, see-through; light 15 or 10 while lit)
+  const off = campfireModel(null, 'campfire_log');
+  for (const [name, light] of [['campfire', 15], ['soul_campfire', 10]] as const) {
+    const on = campfireModel(`${name}_fire`, `${name}_log_lit`);
+    registerBlock(name, {
+      props: [P.lit, SIGNAL_FIRE, P.waterlogged, P.facingH], defaults: { lit: true, facing: 'north' },
+      hardness: 2, sound: 'wood', tool: 'axe', flammable: true, mapColor: 0x815631,
+      light: (s) => (s.get('lit') ? light : 0), layer: Layer.CUTOUT, opaque: false, aoCaster: false, opacity: 0,
+      collision: CAMPFIRE_SHAPE,
+      model: (s) => ({ model: s.get('lit') ? on : off, y: (HOR_ROT[s.get<string>('facing')] + 180) % 360 }),
+    });
   }
   // Smoker and blast furnace (vanilla SmokerBlock, BlastFurnaceBlock: furnaces with their own recipes; block/smoker is
   // orientable_with_bottom, block/blast_furnace orientable, each with an _on front)

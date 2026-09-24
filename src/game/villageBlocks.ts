@@ -10,7 +10,7 @@ import { LivingEntity } from '../entity/living';
 import { registerBehavior, type ItemUseResult, type UseContext } from './blockBehavior';
 import type { PlaceContext } from './blockRules';
 import { hasNeighborSignal } from './redstone/signal';
-import { BellBlockEntity, LecternBlockEntity } from '../world/blockEntity';
+import { BellBlockEntity, LecternBlockEntity, campfireSmoke } from '../world/blockEntity';
 import { composterFloor, cauldronContentTop, POTTABLE, pottedName } from '../world/blocksVillage';
 import { isDyeable } from '../item/dyedColor';
 import type { Entity } from '../entity/entity';
@@ -505,4 +505,97 @@ export function lecternPageTurned(level: Level, x: number, y: number, z: number)
       drops: () => [ItemStack.of('flower_pot'), ItemStack.of(plant)],
     });
   }
+}
+
+// ---------------------------------------------------------------------------
+// Campfire (vanilla CampfireBlock): lit as it's placed (unless in water), a signal fire over a hay bale, hurts what
+// stands in it; put out by water or a shovel, lit again by flint and steel, a fire charge or a burning arrow
+
+const CAMPFIRES = new Set(['campfire', 'soul_campfire']);
+
+/** vanilla CampfireBlock.canLight: a campfire that is out, and not under water */
+function canLight(st: number): boolean {
+  const b = blk(st);
+  return CAMPFIRES.has(b.name) && !b.get(st, 'waterlogged') && !b.get(st, 'lit');
+}
+
+/** vanilla CampfireBlock.dowse: the smoke of it going out (and what was cooking would fall off) */
+function dowse(level: Level, x: number, y: number, z: number, st: number): void {
+  const signal = !!blk(st).get(st, 'signal_fire');
+  for (let i = 0; i < 20; i++) campfireSmoke(level, x, y, z, signal, true);
+}
+
+/** vanilla FlintAndSteelItem / FireChargeItem.useOn: a campfire that is out is lit where it stands; false if it can't be */
+export function lightCampfire(level: Level, x: number, y: number, z: number): boolean {
+  const st = level.getState(x, y, z);
+  if (!canLight(st)) return false;
+  level.setBlock(x, y, z, blk(st).with(st, 'lit', true));
+  return true;
+}
+
+/** vanilla ShovelItem.useOn: a lit campfire is put out with a hiss; false if there's none to put out */
+export function dowseCampfire(level: Level, x: number, y: number, z: number): boolean {
+  const st = level.getState(x, y, z);
+  const b = blk(st);
+  if (!CAMPFIRES.has(b.name) || !b.get(st, 'lit')) return false;
+  // (vanilla levelEvent 1009)
+  level.sound.play('block.fire.extinguish', x + 0.5, y + 0.5, z + 0.5, 0.5, 2.6 + (Math.random() - Math.random()) * 0.8);
+  dowse(level, x, y, z, st);
+  level.setBlock(x, y, z, b.with(st, 'lit', false));
+  return true;
+}
+
+for (const name of CAMPFIRES) {
+  const b = getBlock(name);
+  const soul = name === 'soul_campfire';
+  /** vanilla CampfireBlock.isSmokeSource: a hay bale underneath makes it a signal fire */
+  const smokeSource = (st: number) => blk(st).name === 'hay_block';
+  /** vanilla Projectile.mayInteract: a mob's projectile changes blocks only while mobs may grief */
+  const mayInteract = (level: Level, projectile: Entity) => {
+    const owner = (projectile as Entity & { owner?: Entity | null }).owner;
+    return !owner || owner.type === 'player' || !!level.gameRules.mobGriefing;
+  };
+  registerBehavior(name, {
+    // vanilla getStateForPlacement: facing the way the player looks, out if it goes into water
+    placement(ctx: PlaceContext) {
+      const here = ctx.world.getState(ctx.x, ctx.y, ctx.z);
+      const water = blk(here).name === 'water' && blk(here).get(here, 'level') === 0;
+      const signal = smokeSource(ctx.world.getState(ctx.x, ctx.y - 1, ctx.z));
+      return b.state({ waterlogged: water, signal_fire: signal, lit: !water, facing: DIR_NAMES[dirFromYaw(ctx.yaw)] });
+    },
+    // vanilla updateShape: the hay underneath comes and goes
+    updateShape(world, x, y, z, st) {
+      return b.with(st, 'signal_fire', smokeSource(world.getState(x, y - 1, z)));
+    },
+    // vanilla entityInside: a lit one burns (twice as hard for soul fire) whatever living thing stands in it
+    entityInside(_level, _x, _y, _z, st, e) {
+      if (b.get(st, 'lit') && e instanceof LivingEntity) e.hurt(soul ? 2 : 1, 'campfire');
+    },
+    // vanilla animateTick: now and then a crackle; the ordinary campfire spits embers
+    animateTick(level, x, y, z, st) {
+      if (!b.get(st, 'lit')) return;
+      if (Math.random() < 0.1) level.sound.play('block.campfire.crackle', x + 0.5, y + 0.5, z + 0.5, 0.5 + Math.random(), Math.random() * 0.7 + 0.6);
+      if (!soul && Math.random() < 0.2) level.particles.spawn?.('lava', x + 0.5, y + 0.5, z + 0.5, Math.random() / 2, 5e-5, Math.random() / 2);
+    },
+    // vanilla onProjectileHit: a burning arrow or a fireball lights it
+    projectileHit(level, x, y, z, st, _hit, projectile) {
+      const burning = projectile.isOnFire() || projectile.type === 'fireball' || projectile.type === 'small_fireball';
+      if (burning && mayInteract(level, projectile) && canLight(st)) level.setBlock(x, y, z, b.with(st, 'lit', true));
+    },
+    // vanilla placeLiquid: water poured on puts it out, and stays in it
+    placeLiquid(level, x, y, z, st) {
+      if (b.get(st, 'waterlogged')) return false;
+      if (b.get(st, 'lit')) {
+        level.sound.play('entity.generic.extinguish_fire', x + 0.5, y + 0.5, z + 0.5, 1, 1);
+        dowse(level, x, y, z, st);
+      }
+      level.setBlock(x, y, z, b.with(b.with(st, 'waterlogged', true), 'lit', false));
+      return true;
+    },
+    // vanilla block loot: itself with silk touch, else two charcoal (or the soul campfire's soul soil)
+    drops(_st, _tool, _r, silk) {
+      if (silk) return [ItemStack.of(name)];
+      return soul ? [ItemStack.of('soul_soil')] : [ItemStack.of('charcoal', 2)];
+    },
+  });
 }

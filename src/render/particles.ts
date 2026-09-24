@@ -75,6 +75,8 @@ interface SpriteParticle {
   rotSpeed?: number;
   /** translucent particles (vanilla PARTICLE_SHEET_TRANSLUCENT with alpha < 1) are drawn blended */
   alpha?: number;
+  /** vanilla Particle.stoppedByCollision: something stopped it rising or falling, and it moves no more */
+  stopped?: boolean;
 }
 
 export interface SpriteRectUV {
@@ -89,6 +91,8 @@ const EXPLOSION = Array.from({ length: 16 }, (_, i) => `explosion_${i}`);
 const SWEEP = Array.from({ length: 8 }, (_, i) => `sweep_${i}`);
 /** vanilla particles/entity_effect.json: effect_7 down to effect_0 */
 const EFFECT = Array.from({ length: 8 }, (_, i) => `effect_${7 - i}`);
+/** vanilla particles/campfire_cosy_smoke.json and campfire_signal_smoke.json */
+const BIG_SMOKE = Array.from({ length: 12 }, (_, i) => `big_smoke_${i}`);
 
 export class ParticleEngine {
   private readonly list: Particle[] = [];
@@ -280,6 +284,24 @@ export class ParticleEngine {
         p.size *= 0.75 * mul;
         p.lifetime = Math.max(1, Math.floor((8 / (Math.random() * 0.8 + 0.2)) * mul));
         p.grow = true;
+        this.addSprite(p);
+        break;
+      }
+      case 'campfire_cosy_smoke':
+      case 'campfire_signal_smoke': {
+        // vanilla CampfireSmokeParticle: a big slow billow (a signal fire's lasts over three times as long)
+        const signal = kind === 'campfire_signal_smoke';
+        const p = this.base(kind, x, y, z);
+        p.size *= 3;
+        p.bbw = 0.25;
+        p.lifetime = Math.floor(Math.random() * 50) + (signal ? 280 : 80);
+        p.gravity = 3e-6;
+        p.dx = xd;
+        p.dy = yd + Math.random() / 500;
+        p.dz = zd;
+        p.alpha = signal ? 0.95 : 0.9;
+        p.frames = BIG_SMOKE;
+        p.frame = Math.floor(Math.random() * BIG_SMOKE.length);
         this.addSprite(p);
         break;
       }
@@ -934,6 +956,21 @@ export class ParticleEngine {
         p.dx *= 0.99;
         p.dy *= 0.99;
         p.dz *= 0.99;
+        return true;
+      }
+      case 'campfire_cosy_smoke':
+      case 'campfire_signal_smoke': {
+        // vanilla CampfireSmokeParticle.tick: drifts up, wandering a little, and fades over its last 60 ticks
+        if (p.age++ >= p.lifetime || (p.alpha ?? 0) <= 0) return false;
+        p.dx += (Math.random() / 5000) * (Math.random() < 0.5 ? 1 : -1);
+        p.dz += (Math.random() / 5000) * (Math.random() < 0.5 ? 1 : -1);
+        p.dy -= p.gravity;
+        if (!p.stopped) {
+          const dy = p.dy;
+          this.moveBB(p);
+          if (Math.abs(dy) >= 1e-5 && Math.abs(p.y - p.yo) < 1e-5) p.stopped = true;
+        }
+        if (p.age >= p.lifetime - 60 && (p.alpha ?? 0) > 0.01) p.alpha = (p.alpha ?? 0) - 0.015;
         return true;
       }
       case 'falling_dust': {

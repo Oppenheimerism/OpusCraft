@@ -301,7 +301,7 @@ for (const b of BLOCKS) {
   const it = ITEMS.get(b.name);
   if (!it || !it.block) continue;
   const n = b.name;
-  if (n.endsWith('_door') || n.endsWith('_bed') || n === 'lantern' || n === 'soul_lantern' || n === 'chain' || n === 'bell' || n === 'cauldron' || n === 'brewing_stand' || n === 'flower_pot') {
+  if (n.endsWith('_door') || n.endsWith('_bed') || n === 'lantern' || n === 'soul_lantern' || n === 'chain' || n === 'bell' || n === 'cauldron' || n === 'brewing_stand' || n === 'flower_pot' || n === 'campfire' || n === 'soul_campfire') {
     it.texture = n;
     if (n.endsWith('_bed')) it.maxStack = 1;
   }
