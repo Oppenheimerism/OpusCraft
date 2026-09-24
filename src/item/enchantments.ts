@@ -55,11 +55,11 @@ export const ENCHANTABLE = {
   mining_loot: TOOL('pickaxe', 'axe', 'shovel', 'hoe'),
   bow: (it: Item) => it.id === 'bow',
   crossbow: (it: Item) => it.id === 'crossbow',
-  trident: (_it: Item) => false,
+  trident: (it: Item) => it.id === 'trident',
   mace: (_it: Item) => false,
   fishing: (it: Item) => it.id === 'fishing_rod',
   /** everything that takes damage */
-  durability: (it: Item) => !!it.armor || !!it.tool || it.id === 'bow' || it.id === 'crossbow' || it.id === 'flint_and_steel' || it.id === 'fishing_rod',
+  durability: (it: Item) => !!it.armor || !!it.tool || it.id === 'bow' || it.id === 'crossbow' || it.id === 'trident' || it.id === 'flint_and_steel' || it.id === 'fishing_rod',
   vanishing: (it: Item) => ENCHANTABLE.durability(it) || it.id === 'compass' || it.id === 'recovery_compass' || it.id === 'carved_pumpkin',
 };
 const E = ENCHANTABLE;

@@ -14,6 +14,7 @@ import { LivingEntity } from '../entity/living';
 import { PrimedTnt } from '../entity/tnt';
 import { ExperienceOrb } from '../entity/xpOrb';
 import { Arrow } from '../entity/arrow';
+import { ThrownTrident } from '../entity/thrownTrident';
 import { createMob, entityDisplayName, summonableTypes } from './spawner';
 import type { Mob } from '../entity/mob';
 import { LightningBolt } from '../entity/lightning';
@@ -633,8 +634,8 @@ export const COMMANDS: Record<string, CommandDef> = {
         bolt.moveTo(x, y, z);
         e = bolt;
       }
-      else if (type === 'arrow') {
-        const a = new Arrow(lvl, null);
+      else if (type === 'arrow' || type === 'trident') {
+        const a = type === 'trident' ? new ThrownTrident(lvl, null) : new Arrow(lvl, null);
         a.moveTo(x, y, z);
         e = a;
       } else if (MINECART_TYPES.includes(type)) {

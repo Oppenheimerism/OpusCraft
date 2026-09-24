@@ -3,10 +3,12 @@
 // arthropods).
 
 import type { Entity } from '../entity/entity';
+import type { Level } from './level';
 import { LivingEntity } from '../entity/living';
+import { LightningBolt } from '../entity/lightning';
 import { MobEffectInstance, MOB_EFFECTS } from '../entity/effects';
 import type { ItemStack } from '../item/item';
-import { baneSlowness, fireAspectSeconds, thornsPieces } from '../item/enchantHelper';
+import { baneSlowness, fireAspectSeconds, thornsPieces, levelOf } from '../item/enchantHelper';
 
 const ARMOR_INDEX: Record<string, number> = { feet: 0, legs: 1, chest: 2, head: 3 };
 
@@ -35,4 +37,18 @@ export function doPostAttackEffects(victim: Entity, attacker: Entity | null, wea
     const ticks = baneSlowness(weapon, victim);
     if (ticks !== null) victim.addEffect(new MobEffectInstance(MOB_EFFECTS['slowness'], ticks, 3), attacker);
   }
+}
+
+/**
+ * vanilla channeling's post_attack effect: a trident with it that strikes something under the open sky during a
+ * thunderstorm calls lightning down on it (its thrower, if a player, is the bolt's cause) with a clap of thunder
+ */
+export function channel(level: Level, victim: Entity, owner: Entity | null, weapon: ItemStack): void {
+  if (levelOf(weapon, 'channeling') <= 0 || !level.isThundering()) return;
+  if (!level.canSeeSky(Math.floor(victim.x), Math.floor(victim.y), Math.floor(victim.z))) return;
+  const bolt = new LightningBolt(level);
+  bolt.moveTo(victim.x, victim.y, victim.z, 0, 0);
+  if (owner && owner === level.player) bolt.cause = owner;
+  level.addEntity(bolt);
+  level.sound.play('item.trident.thunder', victim.x, victim.y, victim.z, 5, 1);
 }

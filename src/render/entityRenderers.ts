@@ -20,6 +20,7 @@ import { LivingEntity } from '../entity/living';
 import { Mob } from '../entity/mob';
 import { ItemEntity } from '../entity/itemEntity';
 import { Arrow } from '../entity/arrow';
+import { ThrownTrident } from '../entity/thrownTrident';
 import { ExperienceOrb } from '../entity/xpOrb';
 import { PrimedTnt } from '../entity/tnt';
 import { FallingBlockEntity } from '../entity/fallingBlock';
@@ -390,6 +391,7 @@ export class EntityRenderDispatcher {
     else if (e instanceof EnderDragon) this.dragons.render(b, this.pose, e, dx, dy, dz, p);
     else if (e instanceof Mob) this.renderMob(b, e, dx, dy, dz, p);
     else if (e instanceof LivingEntity && e.type === 'player') this.renderPlayer(b, e as Player, dx, dy, dz, p);
+    else if (e instanceof ThrownTrident) this.items.trident.renderThrown(b, this.pose, e, dx, dy, dz, p, rotLerp(p, e.yawO, e.yaw));
     else if (e instanceof Arrow) this.renderArrow(b, e, dx, dy, dz, p);
     else if (e instanceof ExperienceOrb) this.renderOrb(b, level, e, x, y, z, dx, dy, dz, p, cam);
     else if (e instanceof PrimedTnt) this.renderTnt(b, e, dx, dy, dz, p);
@@ -446,6 +448,10 @@ export class EntityRenderDispatcher {
       f = Math.sqrt(Math.max(0, f));
       if (f > 1) f = 1;
       pose.rotZ(f * flip);
+    } else if (e.isAutoSpinAttack()) {
+      // (vanilla: whirling in a riptide, laid along the look and spun about it)
+      pose.rotX(-90 - e.pitch);
+      pose.rotY((e.tickCount + p) * -75);
     }
     pose.scale(-1, -1, 1);
     scale?.(pose);
@@ -969,6 +975,8 @@ export class EntityRenderDispatcher {
     if (!spectator) {
       this.armor.render(b, this.pose, m, e.inventory.armor, false);
       drawPlayerHeldItems(b, this.items, this.pose, m, e, this.mainArm);
+      // vanilla SpinAttackEffectLayer
+      if (e.isAutoSpinAttack()) this.items.trident.renderSpin(b, this.pose, a.age);
     }
   }
 

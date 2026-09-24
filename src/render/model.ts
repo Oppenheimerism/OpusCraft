@@ -205,7 +205,7 @@ export function animateCrossbowCharge(ra: ModelPart, la: ModelPart, charge: numb
 }
 
 /** vanilla HumanoidModel.ArmPose, as a player's arms take them (PlayerRenderer.getArmPose) */
-export type HumanoidArmPose = 'empty' | 'item' | 'bow' | 'crossbow_charge' | 'crossbow_hold';
+export type HumanoidArmPose = 'empty' | 'item' | 'bow' | 'crossbow_charge' | 'crossbow_hold' | 'throw_spear';
 
 /** vanilla ArmPose.isTwoHanded */
 export function twoHanded(pose: HumanoidArmPose): boolean {
@@ -262,6 +262,11 @@ export function animateHumanoid(root: ModelPart, limbSwing: number, limbAmount: 
         break;
       case 'crossbow_hold':
         animateCrossbowHold(ra, la, head, right);
+        break;
+      case 'throw_spear':
+        // (raised up over the shoulder, swinging half as much)
+        arm.xRot = arm.xRot * 0.5 - Math.PI;
+        arm.yRot = 0;
         break;
       default:
         arm.yRot = 0;

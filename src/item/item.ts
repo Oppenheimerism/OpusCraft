@@ -202,6 +202,9 @@ for (const [mat, t] of Object.entries(TIERS)) {
 }
 reg({ id: 'shears', maxStack: 1, creativeTab: 'tools', texture: 'shears', tool: { type: 'shears', tier: 0, speed: 1.5, durability: 238 } });
 reg({ id: 'flint_and_steel', maxStack: 1, creativeTab: 'tools', texture: 'flint_and_steel', maxDamage: 64 });
+// vanilla TridentItem: 9 attack damage, and thrown it hits for 8 (entity/thrownTrident.ts); with riptide it carries
+// its wielder through water and rain instead
+reg({ id: 'trident', maxStack: 1, creativeTab: 'combat', texture: 'trident', maxDamage: 250, attackDamage: 9, attackSpeed: 1.1, rarity: 'epic' });
 reg({ id: 'bow', maxStack: 1, creativeTab: 'combat', texture: 'bow', maxDamage: 384 });
 // vanilla CrossbowItem (models/item/crossbow.json: layer0 crossbow_standby); its recipe needs a tripwire hook,
 // which the game doesn't have yet, so it isn't craftable (creative, /give)
@@ -278,7 +281,7 @@ const MISC: [string, number?, number?][] = [
   ['clay_ball'], ['brick'], ['nether_brick'], ['paper'], ['book'], ['sugar'], ['egg', 16], ['snowball', 16], ['slime_ball'], ['magma_cream'], ['ghast_tear'], ['fire_charge'], ['ender_pearl', 16],
   ['blaze_rod', 64, 2400], ['glowstone_dust'], ['blaze_powder'], ['bowl', 64, 100], ['glass_bottle'], ['experience_bottle'], ['saddle', 1],
   ['name_tag'], ['lead'], ['painting'], ['item_frame'], ['minecart', 1], ['chest_minecart', 1], ['oak_boat', 1], ['oak_sign', 16], ['oak_door'], ['iron_door'],
-  ['red_bed', 1], ['filled_map'], ['ink_sac'], ['cocoa_beans'], ['amethyst_shard'],
+  ['red_bed', 1], ['filled_map'], ['ink_sac'], ['cocoa_beans'], ['amethyst_shard'], ['nautilus_shell'],
 ];
 for (const [id, stack, fuel] of MISC) {
   if (ITEMS.has(id)) continue;
@@ -291,6 +294,8 @@ for (const [id, stack, fuel] of MISC) {
     }
 }
 Object.assign(ITEMS.get('experience_bottle')!, { rarity: 'uncommon', glint: true });
+// vanilla Items.NAUTILUS_SHELL: uncommon
+ITEMS.get('nautilus_shell')!.rarity = 'uncommon';
 // brewing ingredients (vanilla Items: the glistering melon, the fermented eye, the rabbit's foot and the rest)
 for (const id of ['fermented_spider_eye', 'glistering_melon_slice', 'rabbit_foot', 'phantom_membrane', 'turtle_scute', 'breeze_rod']) reg({ id, texture: id });
 // vanilla Items.DRAGON_BREATH: uncommon, 64 to a stack, and its bottle is left over when it's brewed

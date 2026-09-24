@@ -864,6 +864,8 @@ export class Game {
         return `${n} was slain by ${kn}`;
       case 'arrow':
         return k && k !== this.player && k.type !== 'arrow' ? `${n} was shot by ${kn}` : `${n} was shot by Arrow`;
+      case 'trident':
+        return k && k !== this.player && k.type !== 'trident' ? `${n} was impaled by ${kn}` : `${n} was impaled by Trident`;
       case 'explosion':
         return `${n} blew up`;
       case 'badRespawnPoint':
@@ -1698,6 +1700,8 @@ export class Game {
       if (cause === this.player) this.advancements.trigger('breed', { breed: child.type });
     };
     lvl.onPlayerArrowHit = () => this.advancements.trigger('shoot_arrow');
+    lvl.onPlayerTridentHit = () => this.advancements.trigger('throw_trident');
+    lvl.onChanneledLightning = (victims) => this.advancements.trigger('channeled_lightning', { channeled: victims.map((e) => e.type) });
     lvl.onThrownItemPickedUp = (stack, by) => {
       if (by instanceof Piglin && by.isAdult() && isLovedItem(stack)) this.advancements.trigger('distract_piglin', { distract: 'thrown' });
     };

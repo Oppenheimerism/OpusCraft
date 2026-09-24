@@ -1,6 +1,6 @@
 // Arrows (vanilla AbstractArrow / Arrow): flight, sticking into blocks,
 // entity hits with velocity-scaled damage, critical arrows, the bow's enchantments, pickup,
-// a crossbow's piercing.
+// a crossbow's piercing. The thrown trident (thrownTrident.ts) is one too.
 
 import { Entity } from './entity';
 import type { Level } from '../game/level';
@@ -13,6 +13,8 @@ import { ItemStack } from '../item/item';
 import { allEffects, contentsOf, potionColor, potionEffects } from '../item/potions';
 import { MobEffectInstance } from './effects';
 import type { Player } from './player';
+import type { SavedEntity } from './mob';
+import { ITEMS, cloneTag } from '../item/item';
 import { ItemEntity } from './itemEntity';
 import { damageBonus, levelOf } from '../item/enchantHelper';
 import { doPostAttackEffects } from '../game/enchantEffects';
@@ -22,8 +24,10 @@ const RAD = 180 / Math.PI;
 export type Pickup = 'disallowed' | 'allowed' | 'creative_only';
 
 export class Arrow extends Entity {
-  readonly type = 'arrow';
+  readonly type: string = 'arrow';
   owner: Entity | null = null;
+  /** a saved arrow the player shot: its owner is the player once they're back in the world */
+  private ownerIsPlayer = false;
   private leftOwner = false;
   inGround = false;
   inGroundTime = 0;
@@ -43,10 +47,10 @@ export class Arrow extends Entity {
   /** vanilla soundEvent: what it hits with (a crossbow's arrows item.crossbow.hit until they land) */
   hitSound = 'entity.arrow.hit';
   /** vanilla pickupItemStack: what picking it up gives back (a tipped arrow keeps its potion) */
-  private pickupStack: ItemStack = ItemStack.of('arrow');
+  protected pickupStack: ItemStack = ItemStack.of('arrow');
   /** vanilla Arrow.ID_EFFECT_COLOR: its potion's colour, -1 without one */
   color = -1;
-  private readonly rnd = Math.random;
+  protected readonly rnd = Math.random;
 
   constructor(level: Level, owner?: LivingEntity | null) {
     super(level);
@@ -127,10 +131,12 @@ export class Arrow extends Entity {
     } else this.makeParticle(2);
   }
 
-  /** vanilla AbstractArrow.tick */
+  /** vanilla AbstractArrow.tick; with no physics (a loyal trident coming back) it flies through everything, hitting nothing */
   private tickArrow(): void {
     this.baseTick();
+    if (this.ownerIsPlayer && !this.owner && this.level.player) this.owner = this.level.player;
     const w = this.level.world;
+    const noPhysics = this.noPhysics;
     if (this.pitchO === 0 && this.yawO === 0) {
       const h = Math.sqrt(this.dx * this.dx + this.dz * this.dz);
       this.yaw = this.yawO = Math.atan2(this.dx, this.dz) * RAD;
@@ -139,7 +145,7 @@ export class Arrow extends Entity {
     const bx = Math.floor(this.x), by = Math.floor(this.y), bz = Math.floor(this.z);
     const st = w.getState(bx, by, bz);
     const boxes = COLLISION[st];
-    if (boxes && boxes.length) {
+    if (boxes && boxes.length && !noPhysics) {
       for (const b of boxes) {
         if (new AABB(bx + b[0], by + b[1], bz + b[2], bx + b[3], by + b[4], bz + b[5]).contains(this.x, this.y, this.z)) {
           this.inGround = true;
@@ -149,14 +155,14 @@ export class Arrow extends Entity {
     }
     if (this.shakeTime > 0) this.shakeTime--;
     if (this.inWater) this.clearFire();
-    if (this.inGround) {
+    if (this.inGround && !noPhysics) {
       if (this.lastState !== st && this.shouldFall()) {
         this.inGround = false;
         this.dx *= this.rnd() * 0.2;
         this.dy *= this.rnd() * 0.2;
         this.dz *= this.rnd() * 0.2;
         this.life = 0;
-      } else if (++this.life >= 1200) this.remove();
+      } else this.tickDespawn();
       this.inGroundTime++;
       return;
     }
@@ -170,8 +176,8 @@ export class Arrow extends Entity {
       y1 = blockHit.py;
       z1 = blockHit.pz;
     }
-    let ent = this.findHitEntity(x0, y0, z0, x1, y1, z1);
-    if (!ent && blockHit) {
+    let ent = noPhysics ? null : this.findHitEntity(x0, y0, z0, x1, y1, z1);
+    if (!ent && blockHit && !noPhysics) {
       onProjectileHit(this.level, blockHit.x, blockHit.y, blockHit.z, blockHit, this);
       this.onHitBlock(blockHit.px, blockHit.py, blockHit.pz, w.getState(blockHit.x, blockHit.y, blockHit.z));
     }
@@ -189,21 +195,32 @@ export class Arrow extends Entity {
     }
     const nx = this.x + vx, ny = this.y + vy, nz = this.z + vz;
     const h = Math.sqrt(vx * vx + vz * vz);
-    this.yaw = lerpRotation(this.yawO, Math.atan2(vx, vz) * RAD);
+    // (with no physics it's turned round: a loyal trident comes back handle first)
+    this.yaw = lerpRotation(this.yawO, (noPhysics ? Math.atan2(-vx, -vz) : Math.atan2(vx, vz)) * RAD);
     this.pitch = lerpRotation(this.pitchO, Math.atan2(vy, h) * RAD);
     let f = 0.99;
     if (this.inWater) {
       for (let j = 0; j < 4; j++) this.level.particles.spawn?.('bubble', nx - vx * 0.25, ny - vy * 0.25, nz - vz * 0.25, vx, vy, vz);
-      f = 0.6;
+      f = this.waterInertia();
     }
     this.dx *= f;
     this.dy *= f;
     this.dz *= f;
-    this.dy -= 0.05;
+    if (!noPhysics) this.dy -= 0.05;
     this.setPos(nx, ny, nz);
     // vanilla: an arrow flying through fire catches alight; water and rain put it out
     this.checkInsideBlocks();
     if (this.isInWaterOrRainNow()) this.clearFire();
+  }
+
+  /** vanilla AbstractArrow.getWaterInertia */
+  protected waterInertia(): number {
+    return 0.6;
+  }
+
+  /** vanilla AbstractArrow.tickDespawn: a minute stuck and it's gone */
+  protected tickDespawn(): void {
+    if (++this.life >= 1200) this.remove();
   }
 
   private shouldFall(): boolean {
@@ -226,7 +243,7 @@ export class Arrow extends Entity {
     return !this.pierced?.has(e);
   }
 
-  private findHitEntity(x0: number, y0: number, z0: number, x1: number, y1: number, z1: number): Entity | null {
+  protected findHitEntity(x0: number, y0: number, z0: number, x1: number, y1: number, z1: number): Entity | null {
     const box = this.bb.expandTowards(this.dx, this.dy, this.dz).inflate(1);
     let best: Entity | null = null, bd = Infinity;
     for (const e of this.level.getEntities(box, (e) => this.canHit(e), this)) {
@@ -240,7 +257,7 @@ export class Arrow extends Entity {
     return best;
   }
 
-  private onHitEntity(e: Entity): void {
+  protected onHitEntity(e: Entity): void {
     const speed = Math.sqrt(this.dx * this.dx + this.dy * this.dy + this.dz * this.dz);
     // vanilla EnchantmentHelper.modifyDamage with the bow: power (+0.5·L + 0.5 for arrows) and any damage enchantment
     let base = this.baseDamage;
@@ -318,7 +335,7 @@ export class Arrow extends Entity {
     if (h > 0 && d1 > 0) e.push((this.dx / h) * f * 0.6 * d1, 0.1, (this.dz / h) * f * 0.6 * d1);
   }
 
-  private dropAsItem(): void {
+  protected dropAsItem(): void {
     const e = new ItemEntity(this.level, this.pickupStack.copy());
     e.moveTo(this.x, this.y + 0.1, this.z, Math.random() * 360, 0);
     e.dx = Math.random() * 0.2 - 0.1;
@@ -346,18 +363,67 @@ export class Arrow extends Entity {
     this.piercedAndKilled = null;
   }
 
-  /** vanilla AbstractArrow.playerTouch */
+  /** vanilla AbstractArrow.playerTouch: stuck in something (or flying back with no physics) and done shaking */
   playerTouch(p: Player): boolean {
-    if (!this.inGround || this.shakeTime > 0) return false;
-    let ok = false;
-    if (this.pickup === 'allowed') ok = p.inventory.add(this.pickupStack.copy(), p.gameMode === 'creative') === 0;
-    else if (this.pickup === 'creative_only') ok = p.gameMode === 'creative';
+    if (!(this.inGround || this.noPhysics) || this.shakeTime > 0) return false;
+    const ok = this.tryPickup(p);
     if (ok) {
       p.take(this, 1);
       this.remove();
     }
     return ok;
   }
+
+  /** vanilla AbstractArrow.tryPickup */
+  protected tryPickup(p: Player): boolean {
+    if (this.pickup === 'allowed') return p.inventory.add(this.pickupStack.copy(), p.gameMode === 'creative') === 0;
+    if (this.pickup === 'creative_only') return p.gameMode === 'creative';
+    return false;
+  }
+
+  /** vanilla AbstractArrow.addAdditionalSaveData: an arrow or trident is kept with its chunk */
+  save(): SavedEntity {
+    const s = this.pickupStack;
+    return {
+      id: this.type, x: this.x, y: this.y, z: this.z, yaw: this.yaw, pitch: this.pitch, dx: this.dx, dy: this.dy, dz: this.dz, health: 0, fire: this.remainingFireTicks,
+      data: {
+        item: s.item.id, ...(s.damage ? { damage: s.damage } : {}), ...(s.tag ? { tag: JSON.stringify(s.tag) } : {}),
+        inGround: this.inGround, life: this.life, shake: this.shakeTime, pickup: this.pickup, crit: this.crit, damageBase: this.baseDamage, pierce: this.pierceLevel,
+        ...(this.lastState >= 0 ? { inBlockState: this.lastState } : {}),
+        ...(this.owner?.type === 'player' || this.ownerIsPlayer ? { ownerIsPlayer: true } : {}),
+        ...this.saveData(),
+      },
+    };
+  }
+
+  load(d: SavedEntity): void {
+    this.moveTo(d.x, d.y, d.z, d.yaw, d.pitch);
+    this.yawO = d.yaw;
+    this.pitchO = d.pitch;
+    this.dx = d.dx;
+    this.dy = d.dy;
+    this.dz = d.dz;
+    this.remainingFireTicks = d.fire;
+    const v = d.data ?? {};
+    const it = ITEMS.get(String(v.item));
+    if (it) this.setPickupStack(new ItemStack(it, 1, Number(v.damage ?? 0), typeof v.tag === 'string' ? cloneTag(JSON.parse(v.tag)) : null));
+    this.inGround = v.inGround === true;
+    this.life = Number(v.life ?? 0);
+    this.shakeTime = Number(v.shake ?? 0);
+    this.pickup = (v.pickup as Pickup) ?? 'disallowed';
+    this.crit = v.crit === true;
+    this.baseDamage = Number(v.damageBase ?? 2);
+    this.pierceLevel = Number(v.pierce ?? 0);
+    this.lastState = Number(v.inBlockState ?? -1);
+    this.ownerIsPlayer = v.ownerIsPlayer === true;
+    this.leftOwner = true;
+    this.loadData(v);
+  }
+
+  protected saveData(): Record<string, number | string | boolean> {
+    return {};
+  }
+  protected loadData(_d: Record<string, number | string | boolean>): void {}
 }
 
 /** vanilla Projectile.lerpRotation */

@@ -12,6 +12,7 @@ import type { TexImage } from '../textures/tex';
 import { glintTexture, glintOffset, glintUV } from '../textures/glint';
 import { crossbowTexture } from '../item/crossbow';
 import { itemLayers, layerTint } from '../item/itemColors';
+import { TridentRenderer } from './tridentRenderer';
 
 export type DisplayContext = 'gui' | 'ground' | 'fixed' | 'firstperson_righthand' | 'firstperson_lefthand' | 'thirdperson_righthand' | 'thirdperson_lefthand' | 'head';
 
@@ -66,6 +67,26 @@ const CROSSBOW_DISPLAY: Record<DisplayContext, Transform> = {
   firstperson_righthand: { rot: [-90, 0, -55], trans: [1.13, 3.2, 1.13], scale: [0.68, 0.68, 0.68] },
   firstperson_lefthand: { rot: [-90, 0, 35], trans: [1.13, 3.2, 1.13], scale: [0.68, 0.68, 0.68] },
 };
+const TRIDENT_GUI: Pick<Record<DisplayContext, Transform>, 'gui' | 'ground' | 'fixed' | 'head'> = {
+  gui: { rot: [15, -25, -5], trans: [2, 3, 0], scale: [0.65, 0.65, 0.65] },
+  ground: { rot: [0, 0, 0], trans: [4, 4, 2], scale: [0.25, 0.25, 0.25] },
+  fixed: { rot: [0, 180, 0], trans: [-2, 4, -5], scale: [0.5, 0.5, 0.5] },
+  head: { rot: [0, 0, 0], trans: [0, 0, 0], scale: [1, 1, 1] },
+};
+/** models/item/trident_in_hand.json display (a builtin/entity model: the trident's own model) */
+const TRIDENT_IN_HAND_DISPLAY: Record<DisplayContext, Transform> = {
+  ...TRIDENT_GUI,
+  thirdperson_righthand: { rot: [0, 60, 0], trans: [11, 17, -2], scale: [1, 1, 1] },
+  thirdperson_lefthand: { rot: [0, 60, 0], trans: [3, 17, 12], scale: [1, 1, 1] },
+  firstperson_righthand: { rot: [0, -90, 25], trans: [-3, 17, 1], scale: [1, 1, 1] },
+  firstperson_lefthand: { rot: [0, 90, -25], trans: [13, 17, 1], scale: [1, 1, 1] },
+};
+/** models/item/trident_throwing.json display: raised over the shoulder, prongs first, while it's drawn back to throw */
+const TRIDENT_THROWING_DISPLAY: Record<DisplayContext, Transform> = {
+  ...TRIDENT_IN_HAND_DISPLAY,
+  thirdperson_righthand: { rot: [0, 90, 180], trans: [8, -17, 9], scale: [1, 1, 1] },
+  thirdperson_lefthand: { rot: [0, 90, 180], trans: [8, -17, -7], scale: [1, 1, 1] },
+};
 // flat-in-world block items (plants, torch...) use item/generated with the block texture
 function isHandheld(it: Item): boolean {
   return !!it.tool || it.id === 'stick' || it.id === 'bone' || it.id === 'blaze_rod' || it.id === 'fishing_rod';
@@ -96,8 +117,11 @@ export class ItemRenderer {
   readonly itemSprites = new Map<string, { u0: number; v0: number; u1: number; v1: number; img: TexImage }>();
   private readonly flatCache = new Map<string, FlatModel>();
   itemAtlasSize = 0;
+  /** the trident's model: in flight, in the hand, and riptide's swirl */
+  readonly trident: TridentRenderer;
 
   constructor(private readonly gl: GL, readonly atlas: Atlas, itemTextures: Record<string, () => TexImage> | null, private readonly blockTexImages: Map<string, TexImage>) {
+    this.trident = new TridentRenderer(gl);
     // item atlas: grid of 16x16
     if (itemTextures) {
       const names = Object.keys(itemTextures);
@@ -231,6 +255,13 @@ export class ItemRenderer {
             batch.quad(pose, Array.from(q.pos), Array.from(q.uv), nrm[0], nrm[1], nrm[2], tinted ? tr : 1, tinted ? tg : 1, tinted ? tb : 1, 1);
           }
       }
+    } else if (it.id === 'trident' && ctx !== 'gui' && ctx !== 'ground' && ctx !== 'fixed') {
+      // vanilla ItemRenderer.render: the trident is its flat sprite in the GUI, on the ground and in a frame, and its
+      // model anywhere else (trident_in_hand, or trident_throwing while it's drawn back: `texture` 'trident_throwing')
+      this.applyTransform(pose, (texture === 'trident_throwing' ? TRIDENT_THROWING_DISPLAY : TRIDENT_IN_HAND_DISPLAY)[ctx], left);
+      pose.translate(-0.5, -0.5, -0.5);
+      pose.scale(1, -1, -1);
+      this.trident.renderModel(batch, pose, stack.hasGlint());
     } else {
       // a loaded crossbow's model follows its stack wherever it's drawn (on the ground, in a frame)
       if (texture === undefined && it.id === 'crossbow') texture = crossbowTexture(stack, -1);

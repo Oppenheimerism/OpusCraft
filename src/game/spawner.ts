@@ -5,6 +5,8 @@ import type { Level } from './level';
 import type { Entity } from '../entity/entity';
 import { Mob, MobCategory, SavedEntity, SpawnGroup, isValidEmptySpawnBlock } from '../entity/mob';
 import { ItemEntity } from '../entity/itemEntity';
+import { Arrow } from '../entity/arrow';
+import { ThrownTrident } from '../entity/thrownTrident';
 import { ItemStack, ITEMS, cloneTag } from '../item/item';
 import { Pig, Cow, Sheep, Chicken, Animal } from '../entity/animals';
 import { Ghast } from '../entity/ghast';
@@ -88,6 +90,8 @@ function saveWithPassengers(e: Entity): SavedEntity | null {
 function saveOne(e: Entity): SavedEntity | null {
   if (e instanceof Mob) return e.health > 0 && !e.removed ? e.save() : null;
   if (e instanceof AbstractMinecart || e instanceof Boat || e instanceof EndCrystal) return e.removed ? null : e.save();
+  // (vanilla: arrows and tridents are kept with their chunk, stuck where they landed)
+  if (e instanceof Arrow) return e.removed ? null : e.save();
   if (e instanceof ItemEntity && !e.removed) {
     const s = e.stack;
     return {
@@ -121,6 +125,11 @@ function loadOne(d: SavedEntity, level: Level): Entity | null {
     e.pickupDelay = Number(d.data?.pickupDelay ?? 0);
     return e;
   }
+  if (d.id === 'arrow' || d.id === 'trident') {
+    const a = d.id === 'trident' ? new ThrownTrident(level) : new Arrow(level);
+    a.load(d);
+    return a;
+  }
   if (d.id === 'end_crystal') {
     const c = new EndCrystal(level);
     c.load(d);
@@ -144,7 +153,7 @@ function loadOne(d: SavedEntity, level: Level): Entity | null {
 /** entities that belong to chunk storage (a cart or boat carrying the player is saved with the player) */
 export function isChunkSaved(e: Entity): boolean {
   if (e instanceof AbstractMinecart || e instanceof Boat) return !e.passengers.some((p) => p.type === 'player');
-  return e instanceof Mob || e instanceof ItemEntity || e instanceof EndCrystal;
+  return e instanceof Mob || e instanceof ItemEntity || e instanceof EndCrystal || e instanceof Arrow;
 }
 
 const ENTITY_NAMES: Record<string, string> = {
@@ -152,7 +161,7 @@ const ENTITY_NAMES: Record<string, string> = {
   villager: 'Villager', iron_golem: 'Iron Golem', cave_spider: 'Cave Spider', enderman: 'Enderman', slime: 'Slime', magma_cube: 'Magma Cube', zombified_piglin: 'Zombified Piglin', ghast: 'Ghast', blaze: 'Blaze', wither_skeleton: 'Wither Skeleton', squid: 'Squid', bat: 'Bat', hoglin: 'Hoglin', zoglin: 'Zoglin', strider: 'Strider', piglin: 'Piglin',
   witch: 'Witch', husk: 'Husk', stray: 'Stray', fireball: 'Fireball', small_fireball: 'Small Fireball',
   arrow: 'Arrow', tnt: 'Primed TNT', lightning_bolt: 'Lightning Bolt', item: 'Item', experience_orb: 'Experience Orb', falling_block: 'Falling Block', player: 'Player',
-  egg: 'Thrown Egg', snowball: 'Snowball', ender_pearl: 'Thrown Ender Pearl', potion: 'Potion',
+  egg: 'Thrown Egg', snowball: 'Snowball', ender_pearl: 'Thrown Ender Pearl', potion: 'Potion', trident: 'Trident',
   minecart: 'Minecart', chest_minecart: 'Minecart with Chest', boat: 'Boat', chest_boat: 'Boat with Chest', end_crystal: 'End Crystal',
   ender_dragon: 'Ender Dragon', dragon_fireball: 'Dragon Fireball', area_effect_cloud: 'Area Effect Cloud',
 };
@@ -168,7 +177,7 @@ export function entityDisplayName(e: Entity | string): string {
 
 /** entity type ids accepted by /summon */
 export function summonableTypes(): string[] {
-  return [...Object.keys(MOB_TYPES), 'tnt', 'experience_orb', 'arrow', 'lightning_bolt', ...MINECART_TYPES, ...BOAT_TYPES, 'end_crystal'];
+  return [...Object.keys(MOB_TYPES), 'tnt', 'experience_orb', 'arrow', 'trident', 'lightning_bolt', ...MINECART_TYPES, ...BOAT_TYPES, 'end_crystal'];
 }
 
 /** vanilla MobCategory caps (per 289 spawnable chunks) */

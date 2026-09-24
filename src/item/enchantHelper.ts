@@ -124,9 +124,9 @@ export function weaponOf(e: unknown): ItemStack | null {
 const TIER_VALUE: Record<string, number> = { wooden: 15, stone: 5, iron: 14, golden: 22, diamond: 10, netherite: 15 };
 const ARMOR_VALUE: Record<string, number> = { leather: 15, chainmail: 12, iron: 9, golden: 25, diamond: 10, netherite: 15, turtle: 9 };
 
-/** vanilla Item.getEnchantmentValue: tool tier / armour material enchantability, 1 for books, bows, crossbows and rods */
+/** vanilla Item.getEnchantmentValue: tool tier / armour material enchantability, 1 for books, bows, crossbows, tridents and rods */
 export function enchantmentValue(it: Item): number {
-  if (it.id === 'book' || it.id === 'bow' || it.id === 'crossbow' || it.id === 'fishing_rod') return 1;
+  if (it.id === 'book' || it.id === 'bow' || it.id === 'crossbow' || it.id === 'trident' || it.id === 'fishing_rod') return 1;
   const mat = it.id.split('_')[0];
   if (it.tool && it.tool.type !== 'shears') return TIER_VALUE[mat] ?? 0;
   if (it.armor) return ARMOR_VALUE[mat] ?? 0;
@@ -276,8 +276,13 @@ export function damageBonus(weapon: ItemStack | null, target: { type: string; is
   if (sm > 0 && target.isUndead?.()) f += 2.5 * sm;
   const ba = levelOf(weapon, 'bane_of_arthropods');
   if (ba > 0 && ARTHROPODS.has(target.type)) f += 2.5 * ba;
+  const im = levelOf(weapon, 'impaling');
+  if (im > 0 && SENSITIVE_TO_IMPALING.has(target.type)) f += 2.5 * im;
   return f;
 }
+
+/** vanilla #sensitive_to_impaling: what lives in the water */
+const SENSITIVE_TO_IMPALING = new Set(['axolotl', 'cod', 'dolphin', 'elder_guardian', 'glow_squid', 'guardian', 'pufferfish', 'salmon', 'squid', 'tadpole', 'tropical_fish', 'turtle']);
 
 /** bane of arthropods' post-attack slowness IV for 1.5 to 1.5 + 0.5·(L-1) seconds (null when it doesn't apply) */
 export function baneSlowness(weapon: ItemStack | null, target: { type: string }): number | null {

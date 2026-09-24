@@ -387,6 +387,10 @@ export class Level {
   onBred: ((child: Entity, cause: Entity | null) => void) | null = null;
   /** an arrow the player shot hurt something (vanilla "Take Aim") */
   onPlayerArrowHit: ((target: Entity) => void) | null = null;
+  /** a trident the player threw hurt something (vanilla "A Throwaway Joke") */
+  onPlayerTridentHit: ((target: Entity) => void) | null = null;
+  /** lightning the player's channeling trident called down struck these (vanilla channeled_lightning) */
+  onChanneledLightning: ((victims: Entity[]) => void) | null = null;
   /** vanilla LivingEntity.take: something alive picked up an item, arrow or orb (the pop, and it flying to them) */
   onTake: ((e: Entity, taker: LivingEntity, amount: number) => void) | null = null;
   /** a mob picked up an item a player had thrown (vanilla thrown_item_picked_up_by_entity) */

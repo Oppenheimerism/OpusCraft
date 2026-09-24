@@ -4,17 +4,22 @@
 import type { Level } from './level';
 import type { Player } from '../entity/player';
 import type { Entity } from '../entity/entity';
+import type { ItemStack } from '../item/item';
 import { LivingEntity } from '../entity/living';
 import { damageBonus, levelOf, sweepingRatio } from '../item/enchantHelper';
 import { doPostAttackEffects } from './enchantEffects';
 
 const RAD = Math.PI / 180;
 
-export function playerAttack(level: Level, p: Player, target: Entity, damageHeld: (n: number) => void): void {
+/**
+ * `spin`: a riptide spin running into something (vanilla Player.attack while isAutoSpinAttack): the spin's own damage,
+ * with the trident as the weapon
+ */
+export function playerAttack(level: Level, p: Player, target: Entity, damageHeld: (n: number) => void, spin?: { damage: number; weapon: ItemStack | null }): void {
   if (p.gameMode === 'spectator') return;
-  const held = p.inventory.selectedItem;
+  const held = spin ? spin.weapon : p.inventory.selectedItem;
   // ATTACK_DAMAGE attribute: the weapon's damage with strength / weakness
-  let f = p.effectAttackDamage(held ? held.item.attackDamage : 1);
+  let f = spin ? spin.damage : p.effectAttackDamage(held ? held.item.attackDamage : 1);
   // vanilla getEnchantedDamage - f: sharpness, smite, bane of arthropods
   let f1 = damageBonus(held, target);
   const f2 = p.attackStrengthScale(0.5);
@@ -89,7 +94,8 @@ export function playerAttack(level: Level, p: Player, target: Entity, damageHeld
       }
     }
   }
-  // tool durability (vanilla Item.hurtEnemy, living targets only: swords 1, other tools 2)
-  if (held?.item.tool && p.gameMode !== 'creative' && target instanceof LivingEntity) damageHeld(held.item.tool.type === 'sword' ? 1 : 2);
+  // weapon durability (vanilla Item.postHurtEnemy, living targets only: swords and tridents 1, other tools 2)
+  const wear = held?.item.tool ? (held.item.tool.type === 'sword' ? 1 : 2) : held?.item.id === 'trident' ? 1 : 0;
+  if (wear && p.gameMode !== 'creative' && target instanceof LivingEntity) damageHeld(wear);
   p.food.addExhaustion(0.1);
 }

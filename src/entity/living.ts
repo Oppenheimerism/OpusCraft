@@ -8,6 +8,8 @@ import { FLAGS, F_AIR, F_OPAQUE, F_FULL_COLLISION, BLOCKS, STATE_BLOCK } from '.
 import { clipBlocks } from '../game/raycast';
 import { MobEffectInstance, SavedEffect, saveEffect, loadEffect } from './effects';
 import { burningTimeFactor, damageAfterProtection, damageProtection, waterMovementEfficiency } from '../item/enchantHelper';
+import { AABB } from '../core/aabb';
+import type { ItemStack } from '../item/item';
 
 /** damage sources that ignore armor (vanilla #bypasses_armor) */
 const BYPASSES_ARMOR = new Set(['onFire', 'inWall', 'drown', 'starve', 'fall', 'stalagmite', 'void', 'genericKill', 'magic', 'indirectMagic', 'wither', 'generic', 'cramming', 'flyIntoWall']);
@@ -68,6 +70,12 @@ export abstract class LivingEntity extends Entity {
   lastHurtMob: LivingEntity | null = null;
   /** who dealt the killing blow and how (death messages, loot) */
   killer: Entity | null = null;
+  /** vanilla autoSpinAttackTicks: ticks left of a riptide spin */
+  autoSpinAttackTicks = 0;
+  /** vanilla autoSpinAttackDmg: what the spin hits for */
+  autoSpinAttackDmg = 0;
+  /** vanilla autoSpinAttackItemStack: the trident it spins with */
+  autoSpinAttackItem: ItemStack | null = null;
   deathSource = '';
   dead = false;
   /** vanilla activeEffects */
@@ -498,10 +506,54 @@ export abstract class LivingEntity extends Entity {
     if (this.hasEffect('slow_falling') || this.hasEffect('levitation')) this.fallDistance = 0;
     // vanilla: a player steering this mount drives it (travelRidden); anything else travels on its own
     const rider = this.controllingPassenger();
+    const before = this.autoSpinAttackTicks > 0 ? this.bb.clone() : null;
     if (rider instanceof LivingEntity && rider.type === 'player' && this.isAlive) this.travelRidden(rider, this.xxa, this.yya, this.zza);
     else this.travel(this.xxa, this.yya, this.zza);
+    if (before && this.autoSpinAttackTicks > 0) {
+      this.autoSpinAttackTicks--;
+      this.checkAutoSpinAttack(before, this.bb);
+    }
     this.pushEntities();
   }
+
+  /** vanilla startAutoSpinAttack: a riptide trident sends it spinning for `ticks`, hitting for `damage` */
+  startAutoSpinAttack(ticks: number, damage: number, item: ItemStack): void {
+    this.autoSpinAttackTicks = ticks;
+    this.autoSpinAttackDmg = damage;
+    this.autoSpinAttackItem = item;
+  }
+
+  /** vanilla isAutoSpinAttack */
+  isAutoSpinAttack(): boolean {
+    return this.autoSpinAttackTicks > 0;
+  }
+
+  /**
+   * vanilla checkAutoSpinAttack: the first living thing in the space swept this tick takes the spin's hit, which
+   * ends it and bounces the spinner back a little; with nothing about, running into a wall ends it
+   */
+  protected checkAutoSpinAttack(before: AABB, after: AABB): void {
+    const box = new AABB(Math.min(before.minX, after.minX), Math.min(before.minY, after.minY), Math.min(before.minZ, after.minZ), Math.max(before.maxX, after.maxX), Math.max(before.maxY, after.maxY), Math.max(before.maxZ, after.maxZ));
+    const list = this.level.getEntities(box, (e) => !(e.type === 'player' && (e as { gameMode?: string }).gameMode === 'spectator'), this);
+    if (list.length) {
+      for (const e of list) {
+        if (!(e instanceof LivingEntity)) continue;
+        this.doAutoAttackOnTouch(e);
+        this.autoSpinAttackTicks = 0;
+        this.dx *= -0.2;
+        this.dy *= -0.2;
+        this.dz *= -0.2;
+        break;
+      }
+    } else if (this.horizontalCollision) this.autoSpinAttackTicks = 0;
+    if (this.autoSpinAttackTicks <= 0) {
+      this.autoSpinAttackDmg = 0;
+      this.autoSpinAttackItem = null;
+    }
+  }
+
+  /** vanilla doAutoAttackOnTouch: what a spin does to what it runs into (a player attacks it) */
+  protected doAutoAttackOnTouch(_target: LivingEntity): void {}
 
   isImmobile(): boolean {
     return this.health <= 0;

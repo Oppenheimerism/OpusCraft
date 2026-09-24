@@ -22,6 +22,8 @@ export class LightningBolt extends Entity {
   visualOnly = false;
   private readonly hitEntities = new Set<Entity>();
   blocksSetOnFire = 0;
+  /** vanilla cause: the player whose channeling trident called it down */
+  cause: Entity | null = null;
 
   constructor(level: Level) {
     super(level);
@@ -67,6 +69,8 @@ export class LightningBolt extends Entity {
           e.thunderHit(this);
           this.hitEntities.add(e);
         }
+        // vanilla CriteriaTriggers.CHANNELED_LIGHTNING: everything it has struck so far
+        if (this.cause && this.cause === lvl.player) lvl.onChanneledLightning?.([...this.hitEntities]);
       }
     }
   }

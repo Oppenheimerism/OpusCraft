@@ -141,6 +141,22 @@ export class HandRenderer {
         pose.rotY(i * -45);
         const pull = f8 / 20;
         tex = pull >= 0.9 ? 'bow_pulling_2' : pull >= 0.65 ? 'bow_pulling_1' : 'bow_pulling_0';
+      } else if (it.id === 'trident') {
+        // vanilla ItemInHandRenderer SPEAR use animation: raised over the shoulder and drawn back over half a
+        // second, shaking once it's past 10 %
+        pose.translate(i * 0.56, -0.52 + equip * -0.6, -0.72);
+        pose.translate(i * -0.5, 0.7, 0.1);
+        pose.rotX(-55);
+        pose.rotY(i * 35.3);
+        pose.rotZ(i * -9.785);
+        const f7 = p.useDuration - (p.useItemRemaining - partial + 1);
+        let f11 = f7 / 10;
+        if (f11 > 1) f11 = 1;
+        if (f11 > 0.1) pose.translate(0, Math.sin((f7 - 0.1) * 1.3) * (f11 - 0.1) * 0.004, 0);
+        pose.translate(0, 0, f11 * 0.2);
+        pose.scale(1, 1, 1 + f11 * 0.2);
+        pose.rotY(i * -45);
+        tex = 'trident_throwing';
       } else {
         // vanilla applyEatTransform + applyItemArmTransform (eating and drinking)
         const f = p.useItemRemaining - partial + 1;
@@ -154,6 +170,15 @@ export class HandRenderer {
         pose.translate(i * 0.56, -0.52 + equip * -0.6, -0.72);
       }
       this.items.render(batch, pose, item, ctx, i < 0, tex);
+      return;
+    }
+    if (p.isAutoSpinAttack()) {
+      // vanilla: whirling in a riptide, what's in the hand is thrust out ahead
+      pose.translate(i * 0.56, -0.52 + equip * -0.6, -0.72);
+      pose.translate(i * -0.4, 0.8, 0.3);
+      pose.rotY(i * 65);
+      pose.rotZ(i * -85);
+      this.items.render(batch, pose, item, ctx, i < 0);
       return;
     }
     const sq = Math.sqrt(swing);

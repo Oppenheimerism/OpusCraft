@@ -15,6 +15,7 @@ import { BLOCKS, STATE_BLOCK } from '../world/block';
 import { wrapDegrees } from '../core/math';
 import { findStandUpPosition } from '../game/sleep';
 import { hurtAndBreak, oxygenBonus } from '../item/enchantHelper';
+import { playerAttack } from '../game/combat';
 
 export type GameMode = 'survival' | 'creative' | 'adventure' | 'spectator';
 
@@ -147,7 +148,32 @@ export class Player extends LivingEntity {
 
   override get eyeHeight(): number {
     if (this.sleepingPos) return 0.2;
+    if (this.spinPose) return 0.4;
     return this.crouching ? 1.27 : 1.62;
+  }
+
+  /** vanilla Pose.SPIN_ATTACK: curled up 0.6 tall (eyes at 0.4) while a riptide spin lasts */
+  spinPose = false;
+
+  /** vanilla Player.doAutoAttackOnTouch: the spin strikes what it runs into, with the trident, for the spin's damage */
+  protected override doAutoAttackOnTouch(target: LivingEntity): void {
+    playerAttack(this.level, this, target, (n) => this.wearSpinItem(n), { damage: this.autoSpinAttackDmg, weapon: this.autoSpinAttackItem });
+  }
+
+  /** the spin's hit wears the trident it's done with, in whichever hand (vanilla hurtAndBreak on getWeaponItem) */
+  private wearSpinItem(n: number): void {
+    const s = this.autoSpinAttackItem;
+    if (!s || this.gameMode === 'creative') return;
+    if (hurtAndBreak(s, n)) {
+      const inv = this.inventory;
+      if (inv.offhand === s) inv.offhand = null;
+      else {
+        const i = inv.main.indexOf(s);
+        if (i >= 0) inv.main[i] = null;
+      }
+      this.level.sound.play('entity.item.break', this.x, this.y, this.z, 0.8, 0.8 + Math.random() * 0.4);
+    }
+    this.inventory.version++;
   }
 
   isSleeping(): boolean {
@@ -430,9 +456,26 @@ export class Player extends LivingEntity {
       this.jumping = false;
       return;
     }
+    // vanilla updatePlayerPose: a riptide spin curls up (0.6 tall); after it, standing if there's room, else crouching
+    if (this.isAutoSpinAttack() !== this.spinPose) {
+      if (!this.spinPose) {
+        this.spinPose = true;
+        this.crouching = false;
+        this.setSize(0.6, 0.6);
+      } else {
+        this.spinPose = false;
+        const fits = (h: number) => {
+          const b = this.bb.clone();
+          b.maxY = b.minY + h;
+          return this.collisionBoxes(b.inflate(-1e-4, 0, -1e-4)).length === 0;
+        };
+        this.crouching = !fits(1.8);
+        this.setSize(0.6, this.crouching ? 1.5 : 1.8);
+      }
+    }
     // crouching pose (vanilla: shift while on ground / not flying)
-    const wantCrouch = inp.sneak && !this.flying && !this.inWater;
-    if (wantCrouch !== this.crouching) {
+    const wantCrouch = inp.sneak && !this.flying && !this.inWater && !this.spinPose;
+    if (!this.spinPose && wantCrouch !== this.crouching) {
       if (wantCrouch) {
         this.crouching = true;
         this.setSize(0.6, 1.5);

@@ -25,6 +25,7 @@ import { Villager } from '../entity/villager';
 import { IronGolem } from '../entity/ironGolem';
 import { ZombieVillager } from '../entity/zombieVillager';
 import { Arrow } from '../entity/arrow';
+import { ThrownTrident } from '../entity/thrownTrident';
 import { PrimedTnt } from '../entity/tnt';
 import { ThrownItem, ThrownKind } from '../entity/throwable';
 import { createMob } from './spawner';
@@ -229,8 +230,8 @@ export class Interaction {
     const b = BLOCKS[STATE_BLOCK[st]];
     if (b.hardness < 0 && p.gameMode !== 'creative') return;
     const held = p.inventory.selectedItem;
-    // swords can't break blocks in creative
-    if (p.gameMode === 'creative' && held?.item.tool?.type === 'sword') return;
+    // swords and tridents can't break blocks in creative (vanilla canAttackBlock)
+    if (p.gameMode === 'creative' && (held?.item.tool?.type === 'sword' || held?.item.id === 'trident')) return;
     const survival = p.gameMode === 'survival' || p.gameMode === 'adventure';
     // vanilla Block.playerWillDestroy: breaking what piglins guard angers every one about, seen or not
     if (GUARDED_BY_PIGLINS.has(b.name)) Piglin.angerNearbyPiglins(p, false);
@@ -250,7 +251,8 @@ export class Interaction {
     }
     if (survival) {
       p.food.addExhaustion(0.005);
-      if (held && held.item.tool && b.hardness > 0) this.damageHeld(1);
+      // (vanilla Tool.damagePerBlock: 2 for a sword or trident, 1 for the rest)
+      if (held && (held.item.tool || held.item.id === 'trident') && b.hardness > 0) this.damageHeld(held.item.tool?.type === 'sword' || held.item.id === 'trident' ? 2 : 1);
       else if (held && held.item.tool && held.item.tool.type !== 'sword' && b.hardness === 0) {
         /* no durability loss on instant blocks */
       }
@@ -793,6 +795,13 @@ export class Interaction {
     }
     // vanilla ArmorItem.use → Equipable.swapWithEquipmentSlot
     if (it.armor) return this.swapWithEquipmentSlot(stack);
+    // vanilla TridentItem.use: not when one more use would break it; with riptide only in water or rain
+    if (it.id === 'trident') {
+      if (stack.damage >= it.maxDamage - 1) return false;
+      if (levelOf(stack, 'riptide') > 0 && !p.isInWaterOrRainNow()) return false;
+      p.startUsingItem(stack, 72000);
+      return true;
+    }
     // vanilla BowItem.use: needs arrows unless creative
     if (it.id === 'bow') {
       if (!(p.gameMode === 'creative' || this.arrowSource())) return false;
@@ -953,6 +962,10 @@ export class Interaction {
       }
       return;
     }
+    if (s?.item.id === 'trident') {
+      this.releaseTrident(s, used);
+      return;
+    }
     if (!s || s.item.id !== 'bow') return;
     const creative = p.gameMode === 'creative';
     const ammo = this.arrowSource();
@@ -981,6 +994,46 @@ export class Interaction {
     this.level.addEntity(arrow);
     if (!creative) this.damageHeld(1);
     this.level.sound.play('entity.arrow.shoot', p.x, p.y, p.z, 1, 1 / (Math.random() * 0.4 + 1.2) + f * 0.5);
+  }
+
+  /**
+   * vanilla TridentItem.releaseUsing: held back half a second or more, it's thrown at 2.5 blocks a tick (and gone from
+   * the inventory, unless in creative, where it can't be picked up again). With riptide, in water or rain, it flings
+   * its wielder along their look instead, 1.5 blocks a tick and 0.75 more a level, spinning through whatever they
+   * hit for a second; standing, they're lifted clear of the ground first
+   */
+  private releaseTrident(s: ItemStack, used: number): void {
+    const p = this.player;
+    if (used < 10 || s.damage >= s.item.maxDamage - 1) return;
+    const riptide = levelOf(s, 'riptide');
+    const f = riptide > 0 ? 1.5 + 0.75 * (riptide - 1) : 0;
+    if (f > 0 && !p.isInWaterOrRainNow()) return;
+    const creative = p.gameMode === 'creative';
+    // (vanilla trident_sound: riptide's own whoosh, a level apiece)
+    const sound = riptide >= 3 ? 'item.trident.riptide_3' : riptide === 2 ? 'item.trident.riptide_2' : riptide === 1 ? 'item.trident.riptide_1' : 'item.trident.throw';
+    if (!creative) this.damageHeld(1);
+    if (f === 0) {
+      const t = new ThrownTrident(this.level, p, s);
+      t.shootFromRotation(p, p.pitch, p.yaw, 0, 2.5, 1);
+      if (creative) t.pickup = 'creative_only';
+      this.level.addEntity(t);
+      this.level.sound.play(sound, t.x, t.y, t.z, 1, 1);
+      if (!creative) {
+        p.inventory.setSelectedItem(null);
+        p.inventory.version++;
+      }
+      return;
+    }
+    const yr = (p.yaw * Math.PI) / 180, pr = (p.pitch * Math.PI) / 180;
+    let x = -Math.sin(yr) * Math.cos(pr), y = -Math.sin(pr), z = Math.cos(yr) * Math.cos(pr);
+    const l = Math.sqrt(x * x + y * y + z * z);
+    x *= f / l;
+    y *= f / l;
+    z *= f / l;
+    p.push(x, y, z);
+    p.startAutoSpinAttack(20, 8, s);
+    if (p.onGround) p.move(0, 1.1999999, 0);
+    this.level.sound.play(sound, p.x, p.y, p.z, 1, 1);
   }
 
   /** vanilla Player.getProjectile for a bow: #arrows in the offhand, then the main hand, then the inventory in order */

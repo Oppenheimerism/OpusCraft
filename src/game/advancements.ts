@@ -15,6 +15,10 @@ export type Criterion =
   | { t: 'consume'; item: string | '*' }
   | { t: 'breed'; type: string | '*' }
   | { t: 'shoot_arrow' }
+  /** vanilla player_hurt_entity, the damage's direct entity a trident */
+  | { t: 'throw_trident' }
+  /** vanilla channeled_lightning: lightning from the player's channeling trident struck one of each of these */
+  | { t: 'channeled_lightning'; victims: string[] }
   /** vanilla shot_crossbow: fired a crossbow */
   | { t: 'shot_crossbow' }
   /**
@@ -216,7 +220,7 @@ const A: AdvancementDef[] = [
   { id: 'adventure/sleep_in_bed', parent: 'adventure/root', title: 'Sweet Dreams', description: 'Sleep in a Bed to change your respawn point', icon: 'red_bed', frame: 'task', criteria: one({ t: 'slept' }) },
   { id: 'adventure/minecraft_trials_edition', parent: 'adventure/root', title: 'Minecraft: Trial(s) Edition', description: 'Step foot in a Trial Chamber', icon: 'chiseled_tuff', frame: 'task', criteria: one(never) },
   { id: 'adventure/hero_of_the_village', parent: 'adventure/voluntary_exile', title: 'Hero of the Village', description: 'Successfully defend a village from a raid', icon: 'white_banner', frame: 'challenge', criteria: one(never) },
-  { id: 'adventure/throw_trident', parent: 'adventure/kill_a_mob', title: 'A Throwaway Joke', description: 'Throw a Trident at something.\nNote: Throwing away your only weapon is not a good idea.', icon: 'trident', frame: 'task', criteria: one(never) },
+  { id: 'adventure/throw_trident', parent: 'adventure/kill_a_mob', title: 'A Throwaway Joke', description: 'Throw a Trident at something.\nNote: Throwing away your only weapon is not a good idea.', icon: 'trident', frame: 'task', criteria: one({ t: 'throw_trident' }) },
   { id: 'adventure/shoot_arrow', parent: 'adventure/kill_a_mob', title: 'Take Aim', description: 'Shoot something with an Arrow', icon: 'bow', frame: 'task', criteria: one({ t: 'shoot_arrow' }) },
   { id: 'adventure/kill_all_mobs', parent: 'adventure/kill_a_mob', title: 'Monsters Hunted', description: 'Kill one of every hostile monster', icon: 'diamond_sword', frame: 'challenge', criteria: each(HOSTILE, (n) => ({ t: 'kill', type: n })) },
   { id: 'adventure/totem_of_undying', parent: 'adventure/kill_a_mob', title: 'Postmortal', description: 'Use a Totem of Undying to cheat death', icon: 'totem_of_undying', frame: 'goal', criteria: one(never) },
@@ -238,7 +242,7 @@ const A: AdvancementDef[] = [
   { id: 'adventure/overoverkill', parent: 'adventure/minecraft_trials_edition', title: 'Over-Overkill', description: 'Deal 50 hearts of damage in a single hit using the Mace', icon: 'mace', frame: 'challenge', criteria: one(never) },
   { id: 'adventure/revaulting', parent: 'adventure/under_lock_and_key', title: 'Revaulting', description: 'Unlock an Ominous Vault with an Ominous Trial Key', icon: 'ominous_trial_key', frame: 'goal', criteria: one(never) },
   { id: 'adventure/spyglass_at_ghast', parent: 'adventure/spyglass_at_parrot', title: 'Is It a Balloon?', description: 'Look at a Ghast through a Spyglass', icon: 'spyglass', frame: 'task', criteria: one(never) },
-  { id: 'adventure/very_very_frightening', parent: 'adventure/throw_trident', title: 'Very Very Frightening', description: 'Strike a Villager with lightning', icon: 'trident', frame: 'task', criteria: one(never) },
+  { id: 'adventure/very_very_frightening', parent: 'adventure/throw_trident', title: 'Very Very Frightening', description: 'Strike a Villager with lightning', icon: 'trident', frame: 'task', criteria: one({ t: 'channeled_lightning', victims: ['villager'] }) },
   { id: 'adventure/sniper_duel', parent: 'adventure/shoot_arrow', title: 'Sniper Duel', description: 'Kill a Skeleton from at least 50 meters away', icon: 'arrow', frame: 'challenge', criteria: one({ t: 'sniper' }) },
   { id: 'adventure/bullseye', parent: 'adventure/shoot_arrow', title: 'Bullseye', description: 'Hit the bullseye of a Target block from at least 30 meters away', icon: 'target', frame: 'challenge', criteria: one(never) },
   { id: 'adventure/spyglass_at_dragon', parent: 'adventure/spyglass_at_ghast', title: 'Is It a Plane?', description: 'Look at the Ender Dragon through a Spyglass', icon: 'spyglass', frame: 'task', criteria: one(never) },
@@ -453,6 +457,8 @@ export interface TriggerPayload {
   distract?: 'thrown' | 'directly';
   /** the types of everything one crossbow arrow has killed (killed_by_crossbow) */
   crossbowKills?: string[];
+  /** what the player's channeled lightning struck (channeled_lightning) */
+  channeled?: string[];
   /** where the player stood for a trade (villager_trade) */
   tradeY?: number;
   /** what the player built came to life (summoned_entity) */
@@ -616,8 +622,11 @@ function matches(c: Criterion, p: TriggerPayload): boolean {
       }
       return true;
     }
+    case 'channeled_lightning':
+      return !!p.channeled && c.victims.every((v) => p.channeled!.includes(v));
     case 'killed_by':
     case 'slept':
+    case 'throw_trident':
     case 'shoot_arrow':
     case 'shot_crossbow':
     case 'fall_from_height':
