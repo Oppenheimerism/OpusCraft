@@ -166,6 +166,10 @@ export class HandRenderer {
         pose.scale(1, 1, 1 + f11 * 0.2);
         pose.rotY(i * -45);
         tex = 'trident_throwing';
+      } else if (it.id === 'shield') {
+        // vanilla BLOCK use animation: just applyItemArmTransform (no swing), the shield_blocking model held across
+        pose.translate(i * 0.56, -0.52 + equip * -0.6, -0.72);
+        tex = 'shield_blocking';
       } else {
         // vanilla applyEatTransform + applyItemArmTransform (eating and drinking)
         const f = p.useItemRemaining - partial + 1;

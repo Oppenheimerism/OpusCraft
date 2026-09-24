@@ -3,8 +3,22 @@
 // (music.dragon over the End's) and for the world's fog to close in.
 
 import '../textures/bossBar';
+// (Stage 4: raids) a raid's red, notched bar
+import '../textures/raidBar';
 import type { GuiGraphics } from './guiGraphics';
-import type { BossEvent } from '../game/endDragonFight';
+
+/**
+ * (Stage 4: raids) a bar the overlay shows (vanilla BossEvent): the dragon's (game/endDragonFight.ts BossEvent) or a
+ * raid's (game/raids.ts RaidBar); `overlay` is vanilla's BossBarOverlay, 'progress' (plain) or 'notched_N'
+ */
+export interface BossBar {
+  readonly name: string;
+  readonly color: string;
+  readonly overlay: string;
+  readonly progress: number;
+  readonly playBossMusic: boolean;
+  readonly createWorldFog: boolean;
+}
 
 /** vanilla LerpingBossEvent */
 class LerpingBossEvent {
@@ -12,7 +26,7 @@ class LerpingBossEvent {
   private target: number;
   private setTime = 0;
 
-  constructor(readonly event: BossEvent) {
+  constructor(readonly event: BossBar) {
     this.from = this.target = event.progress;
   }
 
@@ -31,12 +45,12 @@ class LerpingBossEvent {
 }
 
 export class BossHealthOverlay {
-  private readonly events = new Map<BossEvent, LerpingBossEvent>();
+  private readonly events = new Map<BossBar, LerpingBossEvent>();
 
   /** once a tick: the bars shown to the player now (vanilla ClientboundBossEventPacket add, update and remove) */
-  update(shown: (BossEvent | null)[]): void {
+  update(shown: (BossBar | null)[]): void {
     const now = performance.now();
-    const live = new Set(shown.filter((e): e is BossEvent => !!e));
+    const live = new Set(shown.filter((e): e is BossBar => !!e));
     for (const e of [...this.events.keys()]) if (!live.has(e)) this.events.delete(e);
     for (const e of live) {
       const l = this.events.get(e);
@@ -58,11 +72,17 @@ export class BossHealthOverlay {
     for (const l of this.events.values()) {
       const x = Math.floor(w / 2) - 91;
       const color = l.event.color;
+      // (Stage 4: raids) vanilla drawBar: the bar, then its notches (a raid's bar has ten)
+      const notched = l.event.overlay !== 'progress' ? `boss_bar_${l.event.overlay}` : null;
       g.sprite(`boss_bar_${color}_background`, x, y, 182, 5);
+      if (notched) g.sprite(`${notched}_background`, x, y, 182, 5);
       // (vanilla Mth.lerpDiscrete(progress, 0, 182))
       const p = l.progress(now);
       const i = Math.floor(p * 181) + (p > 0 ? 1 : 0);
-      if (i > 0) g.sprite(`boss_bar_${color}_progress`, x, y, i, 5, 0, 0, i, 5);
+      if (i > 0) {
+        g.sprite(`boss_bar_${color}_progress`, x, y, i, 5, 0, 0, i, 5);
+        if (notched) g.sprite(`${notched}_progress`, x, y, i, 5, 0, 0, i, 5);
+      }
       const name = l.event.name;
       g.text(name, Math.floor(w / 2) - Math.floor(g.textWidth(name) / 2), y - 9, 0xffffff, true);
       y += 10 + 9;

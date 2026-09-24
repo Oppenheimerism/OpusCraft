@@ -221,9 +221,10 @@ export class ItemIcons implements IconSource {
 
   /**
    * vanilla glint render type over a GUI item: the scrolling glint texture,
-   * masked to the icon and added on top (the texture is pre-squared for GL_SRC_COLOR, GL_ONE).
+   * masked to the icon (an item's, or an image drawn for it: a shield's) and added on top (the texture is
+   * pre-squared for GL_SRC_COLOR, GL_ONE).
    */
-  drawGlint(ctx: CanvasRenderingContext2D, id: string, px: number, py: number, size: number): void {
+  drawGlint(ctx: CanvasRenderingContext2D, id: string | CanvasImageSource, px: number, py: number, size: number): void {
     let sc = this.glintScratch;
     if (!sc) {
       sc = this.glintScratch = document.createElement('canvas');
@@ -241,7 +242,11 @@ export class ItemIcons implements IconSource {
     const sctx = sc.getContext('2d')!;
     sctx.globalCompositeOperation = 'source-over';
     sctx.clearRect(0, 0, size, size);
-    if (!this.drawIcon(sctx, id, 0, 0, size) || !this.glintPattern) return;
+    if (typeof id !== 'string') {
+      sctx.imageSmoothingEnabled = false;
+      sctx.drawImage(id, 0, 0, size, size);
+    } else if (!this.drawIcon(sctx, id, 0, 0, size)) return;
+    if (!this.glintPattern) return;
     // icon pixel l → glint texel g = R(10°)·(8/size · l) + (-f, f1)·64, so the pattern maps g → size/8 · R(-10°)·(g - t)
     const [f, f1] = glintOffset(performance.now());
     this.glintPattern.setTransform(new DOMMatrix().scale(size / 8).rotate(-10).translate(f * GLINT_SIZE, -f1 * GLINT_SIZE));

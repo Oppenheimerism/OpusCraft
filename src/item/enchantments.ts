@@ -59,7 +59,7 @@ export const ENCHANTABLE = {
   mace: (_it: Item) => false,
   fishing: (it: Item) => it.id === 'fishing_rod',
   /** everything that takes damage */
-  durability: (it: Item) => !!it.armor || !!it.tool || it.id === 'bow' || it.id === 'crossbow' || it.id === 'trident' || it.id === 'flint_and_steel' || it.id === 'fishing_rod',
+  durability: (it: Item) => !!it.armor || !!it.tool || it.id === 'bow' || it.id === 'crossbow' || it.id === 'trident' || it.id === 'flint_and_steel' || it.id === 'fishing_rod' || it.id === 'shield',
   vanishing: (it: Item) => ENCHANTABLE.durability(it) || it.id === 'compass' || it.id === 'recovery_compass' || it.id === 'carved_pumpkin',
 };
 const E = ENCHANTABLE;

@@ -16,6 +16,13 @@ import { Strider } from '../entity/strider';
 import { Piglin } from '../entity/piglin';
 import { Villager } from '../entity/villager';
 import { Witch } from '../entity/witch';
+// (Stage 4: illagers)
+import { Pillager, Vindicator } from '../entity/illagers';
+import { Evoker, Vex } from '../entity/evoker';
+import { Ravager } from '../entity/ravager';
+import { PatrolSpawner } from './patrolSpawner';
+import { outpostSpawnsAt } from './outposts';
+import { checkPatrollingMonsterSpawnRules } from '../entity/raider';
 import { Husk, Stray } from '../entity/biomeMonsters';
 import { Drowned, isInWaterPositionOk, drownedNaturalSpawnRules } from '../entity/drowned';
 import { Silverfish } from '../entity/silverfish';
@@ -73,6 +80,15 @@ export const MOB_TYPES: Record<string, (l: Level) => Mob> = {
   wolf: (l) => new Wolf(l),
   ender_dragon: (l) => new EnderDragon(l),
 };
+
+// (Stage 4: illagers) the raiders and the vex
+Object.assign(MOB_TYPES, {
+  pillager: (l: Level) => new Pillager(l),
+  vindicator: (l: Level) => new Vindicator(l),
+  evoker: (l: Level) => new Evoker(l),
+  vex: (l: Level) => new Vex(l),
+  ravager: (l: Level) => new Ravager(l),
+});
 
 export function createMob(type: string, level: Level): Mob | null {
   const f = MOB_TYPES[type];
@@ -171,6 +187,9 @@ const ENTITY_NAMES: Record<string, string> = {
   minecart: 'Minecart', chest_minecart: 'Minecart with Chest', boat: 'Boat', chest_boat: 'Boat with Chest', end_crystal: 'End Crystal',
   ender_dragon: 'Ender Dragon', dragon_fireball: 'Dragon Fireball', area_effect_cloud: 'Area Effect Cloud',
 };
+
+// (Stage 4: illagers)
+Object.assign(ENTITY_NAMES, { pillager: 'Pillager', vindicator: 'Vindicator', evoker: 'Evoker', vex: 'Vex', ravager: 'Ravager', evoker_fangs: 'Evoker Fangs' });
 
 /** vanilla entity type display names (death messages, commands) */
 export function entityDisplayName(e: Entity | string): string {
@@ -368,6 +387,8 @@ export class NaturalSpawner {
   private readonly rand = new Rand(0x5eed);
   /** world spawn (no natural spawns within 24 blocks) */
   spawnPos: [number, number, number] | null = null;
+  /** (Stage 4: patrols) */
+  readonly patrols = new PatrolSpawner();
 
   constructor(readonly level: Level, readonly worldSeed: number) {}
 
@@ -392,6 +413,8 @@ export class NaturalSpawner {
     // and water creatures every tick
     const spawnFriendlies = lvl.gameTime % 400 === 0;
     const spawnEnemies = lvl.difficulty !== 'peaceful';
+    // (Stage 4: patrols) vanilla ServerLevel.tickCustomSpawners
+    this.patrols.tick(lvl, spawnEnemies);
     const pcx = Math.floor(p.x) >> 4, pcz = Math.floor(p.z) >> 4;
     const r = Math.min(8, lvl.simulationDistance);
     const chunks: [number, number][] = [];
@@ -483,6 +506,9 @@ export class NaturalSpawner {
       const f = this.level.fortresses().at(x, y, z);
       if (f && (BLOCKS[STATE_BLOCK[w.getState(x, y - 1, z)]].name === 'nether_bricks' || f.pieces.some((p) => p.box.isInside(x, y, z)))) return FORTRESS_ENEMIES;
     }
+    // (Stage 4: outposts) a structure's spawn_overrides, bounding_box full (game/outposts.ts)
+    const so = outpostSpawnsAt(this.level, cat, x, y, z);
+    if (so) return so;
     const bs = biomeSettings(w.getBiome3(x, y, z));
     return cat === 'monster' ? bs.monster : cat === 'water_creature' ? bs.water : cat === 'ambient' ? bs.ambient : bs.creature;
   }
@@ -575,6 +601,9 @@ export class NaturalSpawner {
         return Strider.checkStriderSpawn(lvl, x, y, z);
       case 'piglin':
         return Piglin.checkPiglinSpawn(lvl, x, y, z);
+      // (Stage 4: outposts)
+      case 'pillager':
+        return checkPatrollingMonsterSpawnRules(lvl, x, y, z);
       case 'hoglin':
         // vanilla Hoglin.checkHoglinSpawnRules: any light, just not on a nether wart block
         return BLOCKS[STATE_BLOCK[lvl.world.getState(x, y - 1, z)]].name !== 'nether_wart_block';

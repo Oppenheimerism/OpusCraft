@@ -1711,7 +1711,7 @@ const EGG_SPOTS = [
   '................',
 ];
 
-function spawnEgg(base: number, spot: number): TexImage {
+export function spawnEgg(base: number, spot: number): TexImage {
   const t = img(16, 16);
   for (let y = 0; y < 16; y++)
     for (let x = 0; x < 16; x++) {

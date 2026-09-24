@@ -46,11 +46,16 @@ import './redstone/components';
 import './villageBlocks';
 import './banners';
 import './maps';
+// (Stage 4: the shield, raising it and decorating it; advancements met out in the world)
+import './shields';
+import type { Criterion, TriggerPayload } from './advancements';
 import './endPortal';
 import './infestedBlocks';
 import './golems';
 import './potionItems';
 import './potionEffects';
+// (Stage 4: raids)
+import { Raids } from './raids';
 
 export interface SoundSink {
   play(name: string, x: number, y: number, z: number, volume?: number, pitch?: number): void;
@@ -65,7 +70,7 @@ export interface ParticleSink {
   /** generic sprite particle by vanilla particle type name */
   spawn?(kind: string, x: number, y: number, z: number, dx: number, dy: number, dz: number): void;
   /** vanilla TrackingEmitter (crit sparks around an entity) */
-  emitAround?(kind: 'crit' | 'enchanted_hit', e: Entity): void;
+  emitAround?(kind: 'crit' | 'enchanted_hit' | 'totem_of_undying', e: Entity, lifetime?: number): void;
   /** vanilla FallingDustParticle tinted with a block's dust colour */
   fallingDust?(x: number, y: number, z: number, color: number): void;
   /** vanilla BLOCK particle (TerrainParticle with a starting speed) for the block at bx, by, bz */
@@ -148,6 +153,8 @@ export class Level {
   readonly poi: PoiManager;
   /** vanilla ServerLevel.dragonFight: the End's (game/endDragonFight.ts), null elsewhere */
   dragonFight: EndDragonFight | null = null;
+  /** (Stage 4: raids) vanilla ServerLevel.raids (game/raids.ts) */
+  readonly raids: Raids = new Raids(this);
   /** chunk tickets by name (the game keeps what they name loaded) */
   readonly tickets = new Map<string, ChunkTicket>();
   /**
@@ -420,6 +427,8 @@ export class Level {
   onCuredZombieVillager: ((p: Player, v: Villager) => void) | null = null;
   /** a golem someone built came to life (vanilla CarvedPumpkinBlock.spawnGolemInWorld: summoned_entity) */
   onSummonedEntity: ((e: Entity) => void) | null = null;
+  /** (Stage 4) a player's advancement criterion met out in the world: a shield's block, a totem, a raid (vanilla CriteriaTriggers.*.trigger) */
+  onPlayerTrigger: ((p: Player, type: Criterion['t'], payload?: TriggerPayload) => void) | null = null;
 
   /**
    * vanilla LevelRenderer.destructionProgress: the cracks shown on blocks something other than the player is breaking
@@ -454,6 +463,8 @@ export class Level {
     else this.tickWeatherLevels();
     tickSleeping(this);
     this.updateSkyBrightness();
+    // (Stage 4: raids) vanilla ServerLevel.tick: the raids, before the entities
+    this.raids.tick();
     // (vanilla ServerLevel.tick: the dragon fight just before the entities)
     this.dragonFight?.tick();
     for (const [k, t] of this.tickets) if (t.until <= this.gameTime) this.tickets.delete(k);

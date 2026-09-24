@@ -51,7 +51,7 @@ interface SpriteParticle {
   /** per-tick color decay (crit) */
   gDecay: number; bDecay: number;
   /** emitter particles spawn children and are never drawn */
-  emitter?: 'explosion' | 'crit' | 'enchanted_hit';
+  emitter?: 'explosion' | 'crit' | 'enchanted_hit' | 'totem_of_undying';
   target?: { x: number; y: number; z: number; width: number; height: number };
   /** portal particles move along a curve from their start point */
   portal?: { x: number; y: number; z: number };
@@ -101,6 +101,8 @@ const GUST = Array.from({ length: 12 }, (_, i) => `gust_${i}`);
 const DRAGON_BREATH = ['generic_2', 'generic_1', 'generic_0'];
 /** vanilla particles/campfire_cosy_smoke.json and campfire_signal_smoke.json */
 const BIG_SMOKE = Array.from({ length: 12 }, (_, i) => `big_smoke_${i}`);
+/** (Stage 4: totems) vanilla particles/totem_of_undying.json: glitter_0 to glitter_7 */
+const GLITTER = Array.from({ length: 8 }, (_, i) => `glitter_${i}`);
 
 export class ParticleEngine {
   private readonly list: Particle[] = [];
@@ -262,6 +264,25 @@ export class ParticleEngine {
   /** spawn by vanilla particle type name */
   spawn(kind: string, x: number, y: number, z: number, xd: number, yd: number, zd: number): void {
     switch (kind) {
+      case 'totem_of_undying': {
+        // (Stage 4: totems) vanilla TotemParticle (a SimpleAnimatedParticle, gravity 1.25): flung out, falling, a
+        // quarter of them gold and the rest green, glowing, fading over the second half of their 3 s
+        const p = this.base(kind, x, y, z);
+        p.dx = xd;
+        p.dy = yd;
+        p.dz = zd;
+        p.gravity = 1.25;
+        p.friction = 0.6;
+        p.size *= 0.75;
+        p.lifetime = 60 + Math.floor(Math.random() * 12);
+        p.frames = GLITTER;
+        p.fullBright = true;
+        p.alpha = 1;
+        if (Math.random() * 4 < 1) [p.r, p.g, p.b] = [0.6 + Math.random() * 0.2, 0.6 + Math.random() * 0.3, Math.random() * 0.2];
+        else [p.r, p.g, p.b] = [0.1 + Math.random() * 0.2, 0.4 + Math.random() * 0.3, Math.random() * 0.2];
+        this.addSprite(p);
+        break;
+      }
       case 'poof': {
         const p = this.base(kind, x, y, z);
         p.gravity = -0.1;
@@ -856,10 +877,10 @@ export class ParticleEngine {
     this.addSprite(p);
   }
 
-  /** vanilla TrackingEmitter: 3 ticks × 16 particles around an entity (crits) */
-  emitAround(kind: 'crit' | 'enchanted_hit', e: { x: number; y: number; z: number; width: number; height: number }): void {
+  /** vanilla TrackingEmitter: `lifetime` ticks (3 for crits, 30 for a totem) × 16 particles around an entity */
+  emitAround(kind: 'crit' | 'enchanted_hit' | 'totem_of_undying', e: { x: number; y: number; z: number; width: number; height: number }, lifetime = 3): void {
     const p = this.base('emitter', e.x, e.y, e.z);
-    p.lifetime = 3;
+    p.lifetime = lifetime;
     p.emitter = kind;
     p.target = e;
     this.addSprite(p);
@@ -960,6 +981,8 @@ export class ParticleEngine {
       }
       p.g *= p.gDecay;
       p.b *= p.bDecay;
+      // (Stage 4: totems) vanilla SimpleAnimatedParticle.tick: fading out over the second half of its life
+      if (p.kind === 'totem_of_undying' && p.age > p.lifetime / 2) p.alpha = 1 - (p.age - p.lifetime / 2) / p.lifetime;
       // vanilla LavaParticle.tick: embers trail smoke while young
       if (p.kind === 'lava' && Math.random() > p.age / p.lifetime) this.spawn('smoke', p.x, p.y, p.z, p.dx, p.dy, p.dz);
       list[w++] = p;

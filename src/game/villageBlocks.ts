@@ -72,6 +72,10 @@ export function fillHeld(p: Player, filled: ItemStack): void {
 
 // ---------------------------------------------------------------------------
 // Bell (vanilla BellBlock)
+
+/** (Stage 4: raids) vanilla BellBlock.attemptToRing, for a villager sounding the alarm (game/raidVillagers.ts): set below */
+export const bellRinger: { ring: (level: Level, x: number, y: number, z: number, dir: Dir | null) => boolean } = { ring: () => false };
+
 {
   const bell = getBlock('bell');
   const attachment = (st: number) => bell.get<string>(st, 'attachment');
@@ -121,6 +125,7 @@ export function fillHeld(p: Player, filled: ItemStack): void {
     level.sound.play('block.bell.use', cx, cy, cz, 2, 1);
     return true;
   };
+  bellRinger.ring = ring;
 
   registerBehavior('bell', {
     // vanilla BellBlock.getStateForPlacement

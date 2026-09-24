@@ -403,6 +403,8 @@ export class Game {
     this.level.thunder = this.level.thunderO = meta.thundering ? 1 : 0;
     this.level.simulationDistance = this.opts.simulationDistance;
     this.level.gameRules = { ...DEFAULT_GAME_RULES, ...(meta.gameRules ?? {}) };
+    // (Stage 4: raids)
+    this.level.raids.load(meta.raids);
     this.worldSpawn = meta.worldSpawn ?? null;
     this.level.sound = this.sound;
     this.attachDragonFight();
@@ -460,7 +462,7 @@ export class Game {
       blockHit: (x, y, z, s, f) => particles.blockHit(x, y, z, s, f),
       poof: (e) => particles.poof(e),
       spawn: (k, x, y, z, dx, dy, dz) => particles.spawn(k, x, y, z, dx, dy, dz),
-      emitAround: (k, e) => particles.emitAround(k, e),
+      emitAround: (k, e, life) => particles.emitAround(k, e, life),
       fallingDust: (x, y, z, c) => particles.fallingDust(x, y, z, c),
       blockParticle: (x, y, z, xd, yd, zd, st, bx, by, bz) => particles.blockParticle(x, y, z, xd, yd, zd, st, bx, by, bz),
       entityEffect: (x, y, z, c, a) => particles.entityEffect(x, y, z, c, a),
@@ -580,6 +582,8 @@ export class Game {
     m.portals = this.portalPoi.save();
     m.arrivals = this.arrivals.save();
     if (this.level.dragonFight) m.dragonFight = this.level.dragonFight.save();
+    // (Stage 4: raids)
+    m.raids = this.level.raids.save();
     const list = [];
     for (const c of this.world.chunks.values()) {
       if (!c.modified) continue;
@@ -1714,6 +1718,8 @@ export class Game {
       if (e instanceof Piglin && e.isAdult() && stack?.item.id === 'gold_ingot') this.advancements.trigger('distract_piglin', { distract: 'directly' });
     };
     lvl.onPlayerCrossbowKill = (killed) => this.advancements.trigger('killed_by_crossbow', { crossbowKills: killed.map((e) => e.type) });
+    // (Stage 4) criteria met out in the world: shields, totems, raids
+    lvl.onPlayerTrigger = (p, type, payload) => p === this.player && this.advancements.trigger(type, payload);
     this.interaction.onShotCrossbow = () => this.advancements.trigger('shot_crossbow');
     this.interaction.onItemUsed = (hand) => this.renderer.hand.itemUsed(hand);
     this.interaction.onPlaced = (name) => this.advancements.trigger('place', { place: name });

@@ -8,6 +8,8 @@ import { FLUID_WATER } from '../world/fluids';
 import { RARITY_COLOR, type ItemStack } from '../item/item';
 import { compareEffects } from '../entity/effects';
 import { BossHealthOverlay } from './bossOverlay';
+// (Stage 4: totems)
+import { renderItemActivation, tickItemActivation } from './itemActivation';
 
 export class Hud {
   private tickCount = 0;
@@ -23,7 +25,7 @@ export class Hud {
   chat: { text: string; time: number }[] = [];
   title: { text: string; sub: string; time: number } | null = null;
   actionBar: { text: string; time: number } | null = null;
-  /** vanilla Gui.bossOverlay: the ender dragon's bar */
+  /** vanilla Gui.bossOverlay: the ender dragon's bar, a raid's */
   readonly bossOverlay = new BossHealthOverlay();
 
   /** vanilla Gui.setOverlayMessage (the action bar above the hotbar) */
@@ -33,6 +35,7 @@ export class Hud {
 
   tick(game: Game): void {
     this.tickCount++;
+    tickItemActivation();
     const p = game.player;
     const inv = p.inventory;
     const cur = inv.selectedItem;
@@ -53,7 +56,8 @@ export class Hud {
     this.vignetteBrightness += (f - this.vignetteBrightness) * 0.01;
     if (this.actionBar && --this.actionBar.time <= 0) this.actionBar = null;
     if (this.title && --this.title.time <= 0) this.title = null;
-    this.bossOverlay.update([game.level.dragonFight?.shownBar() ?? null]);
+    // (Stage 4: raids) and the raids' bars
+    this.bossOverlay.update([game.level.dragonFight?.shownBar() ?? null, ...game.level.raids.shownBars()]);
   }
 
   addChat(text: string, tick: number): void {
@@ -64,6 +68,8 @@ export class Hud {
   render(g: GuiGraphics, game: Game, partial: number, chatOpen: boolean): void {
     const p = game.player;
     const W = g.width, H = g.height;
+    // (Stage 4: totems) vanilla GameRenderer.renderItemActivation, drawn just before the HUD
+    renderItemActivation(g, partial);
     if (p.gameMode === 'spectator') {
       this.renderCrosshair(g, game);
       this.renderEffects(g, game);
@@ -90,10 +96,10 @@ export class Hud {
       g.stack(s, x, y, p.useItem === s ? p.ticksUsingItem() : -1);
       if (pop > 0) g.popTransform();
       g.itemDecorations(s.count, s.damage, s.item.maxDamage, x, y);
-      // vanilla item cooldown overlay (ender pearls)
+      // vanilla item cooldown overlay (ender pearls, a knocked-down shield): the part of the cooldown left
       const cd = p.cooldowns.get(s.item.id);
       if (cd) {
-        const f = Math.max(0, Math.min(1, (cd - partial) / 20));
+        const f = Math.max(0, Math.min(1, (cd - partial) / (p.cooldownTotals.get(s.item.id) ?? 20)));
         const i1 = y + Math.floor(16 * (1 - f));
         g.fill(x, i1, x + 16, i1 + Math.ceil(16 * f), 0x7fffffff);
       }

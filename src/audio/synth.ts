@@ -32,6 +32,7 @@ import { drownedSounds } from './gen/drowned';
 import { jobSiteSounds } from './gen/jobSites';
 import { silverfishSounds } from './gen/silverfish';
 import { wolfSounds } from './gen/wolf';
+import { illagerSounds } from './gen/illagers';
 
 export const SAMPLE_RATE = 44100;
 
@@ -70,6 +71,7 @@ export const SOUNDS: Record<string, SoundGen> = {
   ...jobSiteSounds(),
   ...silverfishSounds(),
   ...wolfSounds(),
+  ...illagerSounds(),
 };
 
 /** Number of in-game (overworld) music tracks. */

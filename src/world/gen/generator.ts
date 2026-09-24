@@ -12,6 +12,8 @@ import { Mineshafts } from './mineshaft';
 import { Geodes, SUB_AIR, SUB_SOLID, SUB_FLUID } from './geode';
 import { Villages } from './villages';
 import { Strongholds, biomeAtY0, addBeards } from './stronghold';
+// (Stage 4: outposts)
+import { PillagerOutposts } from './outposts';
 import { worldSeed64 } from './jigsaw';
 import { S, getBlock } from '../block';
 import { MIN_Y, MAX_Y, SEA_LEVEL, COLUMN_VOLUME, colIndex, CAVE_BIOME_LEVELS, NO_CAVE_BIOME } from '../constants';
@@ -54,6 +56,8 @@ export class ChunkGenerator {
   private readonly pointAquifer: Aquifer;
   readonly villages: Villages;
   readonly strongholds: Strongholds;
+  /** (Stage 4: outposts) */
+  readonly outposts: PillagerOutposts;
   /** corner columns for terrain height queries, with the noise at their cell corners as it's needed */
   private readonly heightCols = new Map<number, { c: ColumnSample; exactTop: number; corners: (Float32Array | undefined)[] }>();
 
@@ -70,7 +74,9 @@ export class ChunkGenerator {
     this.surfaceSecondary = this.router.n.surface_secondary;
     this.clayBands = makeClayBands(new Rand(this.seedHash ^ 0xba4d, 3));
     this.villages = new Villages(worldSeed64(seed), { firstFreeHeight: (x, z) => this.firstFreeHeight(x, z), quartBiome: (x, z) => this.quartBiome(x, z) });
-    this.decorator.villages = this.villages;
+    // (Stage 4: outposts) placed in the villages' step (vanilla SURFACE_STRUCTURES, the outpost first), bending the terrain with them
+    this.outposts = new PillagerOutposts(worldSeed64(seed), { firstFreeHeight: (x, z) => this.firstFreeHeight(x, z), quartBiome: (x, z) => this.quartBiome(x, z) }, this.villages);
+    this.decorator.villages = { place: (ctx) => (this.outposts.place(ctx), this.villages.place(ctx)) };
     this.strongholds = new Strongholds(worldSeed64(seed), biomeAtY0(this.router));
     this.decorator.strongholds = this.strongholds;
   }
@@ -241,7 +247,7 @@ export class ChunkGenerator {
       }
     const oreGap = router.n.ore_gap;
     // structures nearby bend the terrain around themselves (vanilla Beardifier, added to the final density)
-    const beard = addBeards(this.villages.beardFor(cx, cz), this.strongholds.buryFor(cx, cz));
+    const beard = addBeards(this.outposts.beardFor(cx, cz, this.villages.beardFor(cx, cz)), this.strongholds.buryFor(cx, cz));
     const bY0 = beard ? beard.minY : Infinity, bY1 = beard ? beard.maxY : -Infinity;
     const cv = new Float32Array(8 * CHANNELS);
     for (let ck = 0; ck < 4; ck++)

@@ -3,12 +3,13 @@
 // to get by: water breathing under water, fire resistance when burning, healing when hurt, swiftness to catch up.
 // Magic barely touches it and its own potions not at all. A villager struck by lightning turns into one.
 
-import { Monster } from './monsters';
+import { Raider, RAIDER_TYPES } from './raider';
 import { Mob, LootEntry } from './mob';
 import type { Level } from '../game/level';
 import type { Entity } from './entity';
 import { LivingEntity, FIRE_SOURCES } from './living';
-import { FloatGoal, WaterAvoidingRandomStrollGoal, LookAtPlayerGoal, RandomLookAroundGoal, HurtByTargetGoal, NearestAttackablePlayerGoal, RangedAttackGoal, type RangedAttacker } from './ai/goals';
+import { FloatGoal, WaterAvoidingRandomStrollGoal, LookAtPlayerGoal, RandomLookAroundGoal, HurtByTargetGoal, NearestAttackablePlayerGoal, NearestAttackableMobGoal, RangedAttackGoal, type RangedAttacker } from './ai/goals';
+import { reducedTickDelay } from './ai/goal';
 import { ItemStack, ITEMS } from '../item/item';
 import { allEffects, contentsOf, potionStack } from '../item/potions';
 import { ThrownPotion } from './thrownPotion';
@@ -16,7 +17,7 @@ import { FLUID_WATER } from '../world/fluids';
 import { Villager, lightningConversion } from './villager';
 
 /** vanilla #raiders: the ones a witch won't turn on when they hurt it (and heals, in a raid) */
-const RAIDERS = new Set(['witch', 'pillager', 'vindicator', 'evoker', 'illusioner', 'ravager']);
+const RAIDERS = RAIDER_TYPES;
 /** vanilla #witch_resistant_to: what the witch takes only 15% of */
 const WITCH_RESISTANT_TO = new Set(['magic', 'indirectMagic', 'sonicBoom', 'thorns']);
 
@@ -28,6 +29,34 @@ class WitchHurtByTargetGoal extends HurtByTargetGoal {
   }
 }
 
+/**
+ * vanilla NearestHealableRaiderTargetGoal: in an active raid, now and then (a coin toss, then not again for 10 s) a
+ * fellow raider in sight, not a witch, becomes its "target" — to be splashed with healing
+ */
+class NearestHealableRaiderTargetGoal extends NearestAttackableMobGoal {
+  cooldown = 0;
+  constructor(readonly witch: Witch) {
+    super(witch, (e) => e instanceof Raider && e.type !== 'witch' && witch.hasActiveRaid(), true);
+  }
+  override canUse(): boolean {
+    if (this.cooldown > 0 || !this.mob.random.nextBool()) return false;
+    if (!this.witch.hasActiveRaid()) return false;
+    return super.canUse();
+  }
+  override start(): void {
+    this.cooldown = reducedTickDelay(200);
+    super.start();
+  }
+}
+
+/** vanilla NearestAttackableWitchTargetGoal: players, but not while it's been healing raiders lately */
+class NearestAttackableWitchTargetGoal extends NearestAttackablePlayerGoal {
+  canAttack = true;
+  override canUse(): boolean {
+    return this.canAttack && super.canUse();
+  }
+}
+
 /** vanilla nextGaussian */
 function gauss(r: () => number): number {
   let u = 0, v = 0;
@@ -36,7 +65,7 @@ function gauss(r: () => number): number {
   return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
 }
 
-export class Witch extends Monster implements RangedAttacker {
+export class Witch extends Raider implements RangedAttacker {
   readonly type = 'witch';
   /** vanilla DATA_USING_ITEM: drinking the potion in its hand */
   drinking = false;
@@ -46,6 +75,8 @@ export class Witch extends Monster implements RangedAttacker {
   /** vanilla getLastDamageSource: the last hurt, for 2 seconds */
   private lastHurtSource: string | null = null;
   private lastHurtTick = 0;
+  private healRaidersGoal!: NearestHealableRaiderTargetGoal;
+  private attackPlayersGoal!: NearestAttackableWitchTargetGoal;
 
   constructor(level: Level) {
     super(level);
@@ -67,15 +98,28 @@ export class Witch extends Monster implements RangedAttacker {
     super.moveSpeedAttr = v;
   }
 
-  protected registerGoals(): void {
+  protected override registerGoals(): void {
+    super.registerGoals();
+    this.healRaidersGoal = new NearestHealableRaiderTargetGoal(this);
+    this.attackPlayersGoal = new NearestAttackableWitchTargetGoal(this, true);
     this.goalSelector.addGoal(1, new FloatGoal(this));
     this.goalSelector.addGoal(2, new RangedAttackGoal(this, 1.0, 60, 60, 10));
     this.goalSelector.addGoal(2, new WaterAvoidingRandomStrollGoal(this, 1.0));
     this.goalSelector.addGoal(3, new LookAtPlayerGoal(this, 8));
     this.goalSelector.addGoal(3, new RandomLookAroundGoal(this));
     this.targetSelector.addGoal(1, new WitchHurtByTargetGoal(this));
-    // (vanilla NearestAttackableWitchTargetGoal: players, unless it's busy healing raiders — there are no raids yet)
-    this.targetSelector.addGoal(3, new NearestAttackablePlayerGoal(this, true));
+    this.targetSelector.addGoal(2, this.healRaidersGoal);
+    this.targetSelector.addGoal(3, this.attackPlayersGoal);
+  }
+
+  /** vanilla Witch.applyRaidBuffs: nothing */
+  applyRaidBuffs(_wave: number, _unused: boolean): void {}
+  celebrateSound(): string {
+    return 'entity.witch.celebrate';
+  }
+  /** vanilla Witch.canBeLeader: never a captain */
+  override canBeLeader(): boolean {
+    return false;
   }
 
   /**
@@ -83,6 +127,11 @@ export class Witch extends Monster implements RangedAttacker {
    * one it needs; now and then a wisp of purple sparkles rises over its hat (entity event 15)
    */
   override aiStep(): void {
+    // vanilla Witch.aiStep: in a raid, it goes after players only once its healing has cooled down
+    if (this.hasActiveRaid() && this.healRaidersGoal) {
+      if (this.healRaidersGoal.cooldown > 0) this.healRaidersGoal.cooldown--;
+      this.attackPlayersGoal.canAttack = this.healRaidersGoal.cooldown <= 0;
+    }
     if (this.isAlive) {
       const r = this.random;
       if (this.drinking) {

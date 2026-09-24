@@ -59,6 +59,13 @@ export type Criterion =
   | { t: 'effects_changed'; effects: string[] }
   /** vanilla enter_block: stepped into that block (an end gateway) */
   | { t: 'enter_block'; block: string }
+  /** vanilla entity_hurt_player: a projectile's damage, blocked by a shield */
+  | { t: 'deflected_projectile' }
+  | { t: 'used_totem' }
+  /** vanilla player_killed_entity with a #raiders wearing the ominous banner (Voluntary Exile) */
+  | { t: 'killed_raid_captain' }
+  /** vanilla hero_of_the_village (CriteriaTriggers.RAID_WIN): a raid won with the player among its heroes */
+  | { t: 'raid_won' }
   | { t: 'impossible' };
 
 export interface AdvancementDef {
@@ -143,7 +150,7 @@ const A: AdvancementDef[] = [
   },
   { id: 'story/lava_bucket', parent: 'story/smelt_iron', title: 'Hot Stuff', description: 'Fill a Bucket with lava', icon: 'lava_bucket', frame: 'task', criteria: { lava_bucket: inv('lava_bucket') } },
   { id: 'story/iron_tools', parent: 'story/smelt_iron', title: "Isn't It Iron Pick", description: 'Upgrade your Pickaxe', icon: 'iron_pickaxe', frame: 'task', criteria: { iron_pickaxe: inv('iron_pickaxe') } },
-  { id: 'story/deflect_arrow', parent: 'story/obtain_armor', title: 'Not Today, Thank You', description: 'Deflect a projectile with a Shield', icon: 'shield', frame: 'task', criteria: one(never) },
+  { id: 'story/deflect_arrow', parent: 'story/obtain_armor', title: 'Not Today, Thank You', description: 'Deflect a projectile with a Shield', icon: 'shield', frame: 'task', criteria: one({ t: 'deflected_projectile' }) },
   { id: 'story/form_obsidian', parent: 'story/lava_bucket', title: 'Ice Bucket Challenge', description: 'Obtain a block of Obsidian', icon: 'obsidian', frame: 'task', criteria: { obsidian: inv('obsidian') } },
   { id: 'story/mine_diamond', parent: 'story/iron_tools', title: 'Diamonds!', description: 'Acquire diamonds', icon: 'diamond', frame: 'task', criteria: { diamond: inv('diamond') } },
   { id: 'story/enter_the_nether', parent: 'story/form_obsidian', title: 'We Need to Go Deeper', description: 'Build, light and enter a Nether Portal', icon: 'flint_and_steel', frame: 'task', criteria: { entered_nether: toNether } },
@@ -210,7 +217,7 @@ const A: AdvancementDef[] = [
     id: 'adventure/root', parent: null, title: 'Adventure', description: 'Adventure, exploration and combat', icon: 'map', frame: 'task', toast: false, announce: false,
     criteria: { killed_something: { t: 'kill', type: '*' }, killed_by_something: { t: 'killed_by' } }, requirements: [['killed_something', 'killed_by_something']],
   },
-  { id: 'adventure/voluntary_exile', parent: 'adventure/root', title: 'Voluntary Exile', description: 'Kill a raid captain.\nMaybe consider staying away from villages for the time being...', icon: 'white_banner', frame: 'task', hidden: true, criteria: one(never) },
+  { id: 'adventure/voluntary_exile', parent: 'adventure/root', title: 'Voluntary Exile', description: 'Kill a raid captain.\nMaybe consider staying away from villages for the time being...', icon: 'white_banner', frame: 'task', hidden: true, criteria: one({ t: 'killed_raid_captain' }) },
   { id: 'adventure/spyglass_at_parrot', parent: 'adventure/root', title: 'Is It a Bird?', description: 'Look at a Parrot through a Spyglass', icon: 'spyglass', frame: 'task', criteria: one(never) },
   { id: 'adventure/kill_a_mob', parent: 'adventure/root', title: 'Monster Hunter', description: 'Kill any hostile monster', icon: 'iron_sword', frame: 'task', criteria: each(HOSTILE, (n) => ({ t: 'kill', type: n })), requirements: [HOSTILE] },
   { id: 'adventure/read_power_of_chiseled_bookshelf', parent: 'adventure/root', title: 'The Power of Books', description: 'Read the power signal of a Chiseled Bookshelf using a Comparator', icon: 'chiseled_bookshelf', frame: 'task', criteria: one(never) },
@@ -224,16 +231,16 @@ const A: AdvancementDef[] = [
   { id: 'adventure/avoid_vibration', parent: 'adventure/root', title: 'Sneak 100', description: 'Sneak near a Sculk Sensor or Warden to prevent it from detecting you', icon: 'sculk_sensor', frame: 'task', criteria: one(never) },
   { id: 'adventure/sleep_in_bed', parent: 'adventure/root', title: 'Sweet Dreams', description: 'Sleep in a Bed to change your respawn point', icon: 'red_bed', frame: 'task', criteria: one({ t: 'slept' }) },
   { id: 'adventure/minecraft_trials_edition', parent: 'adventure/root', title: 'Minecraft: Trial(s) Edition', description: 'Step foot in a Trial Chamber', icon: 'chiseled_tuff', frame: 'task', criteria: one(never) },
-  { id: 'adventure/hero_of_the_village', parent: 'adventure/voluntary_exile', title: 'Hero of the Village', description: 'Successfully defend a village from a raid', icon: 'white_banner', frame: 'challenge', criteria: one(never) },
+  { id: 'adventure/hero_of_the_village', parent: 'adventure/voluntary_exile', title: 'Hero of the Village', description: 'Successfully defend a village from a raid', icon: 'white_banner', frame: 'challenge', criteria: one({ t: 'raid_won' }) },
   { id: 'adventure/throw_trident', parent: 'adventure/kill_a_mob', title: 'A Throwaway Joke', description: 'Throw a Trident at something.\nNote: Throwing away your only weapon is not a good idea.', icon: 'trident', frame: 'task', criteria: one({ t: 'throw_trident' }) },
   { id: 'adventure/shoot_arrow', parent: 'adventure/kill_a_mob', title: 'Take Aim', description: 'Shoot something with an Arrow', icon: 'bow', frame: 'task', criteria: one({ t: 'shoot_arrow' }) },
   { id: 'adventure/kill_all_mobs', parent: 'adventure/kill_a_mob', title: 'Monsters Hunted', description: 'Kill one of every hostile monster', icon: 'diamond_sword', frame: 'challenge', criteria: each(HOSTILE, (n) => ({ t: 'kill', type: n })) },
-  { id: 'adventure/totem_of_undying', parent: 'adventure/kill_a_mob', title: 'Postmortal', description: 'Use a Totem of Undying to cheat death', icon: 'totem_of_undying', frame: 'goal', criteria: one(never) },
+  { id: 'adventure/totem_of_undying', parent: 'adventure/kill_a_mob', title: 'Postmortal', description: 'Use a Totem of Undying to cheat death', icon: 'totem_of_undying', frame: 'goal', criteria: one({ t: 'used_totem' }) },
   { id: 'adventure/summon_iron_golem', parent: 'adventure/trade', title: 'Hired Help', description: 'Summon an Iron Golem to help defend a village', icon: 'carved_pumpkin', frame: 'goal', criteria: one({ t: 'summoned_entity', entity: 'iron_golem' }) },
   { id: 'adventure/trade_at_world_height', parent: 'adventure/trade', title: 'Star Trader', description: 'Trade with a Villager at the build height limit', icon: 'emerald', frame: 'task', criteria: one({ t: 'villager_trade', minY: 319 }) },
   { id: 'adventure/trim_with_all_exclusive_armor_patterns', parent: 'adventure/trim_with_any_armor_pattern', title: 'Smithing with Style', description: 'Apply these smithing templates at least once: Spire, Snout, Rib, Ward, Silence, Vex, Tide, Wayfinder', icon: 'silence_armor_trim_smithing_template', frame: 'challenge', criteria: one(never) },
   { id: 'adventure/two_birds_one_arrow', parent: 'adventure/ol_betsy', title: 'Two Birds, One Arrow', description: 'Kill two Phantoms with a piercing Arrow', icon: 'crossbow', frame: 'challenge', criteria: one({ t: 'killed_by_crossbow', victims: ['phantom', 'phantom'] }) },
-  { id: 'adventure/whos_the_pillager_now', parent: 'adventure/ol_betsy', title: "Who's the Pillager Now?", description: 'Give a Pillager a taste of their own medicine', icon: 'crossbow', frame: 'task', criteria: one(never) },
+  { id: 'adventure/whos_the_pillager_now', parent: 'adventure/ol_betsy', title: "Who's the Pillager Now?", description: 'Give a Pillager a taste of their own medicine', icon: 'crossbow', frame: 'task', criteria: one({ t: 'killed_by_crossbow', victims: ['pillager'] }) },
   { id: 'adventure/arbalistic', parent: 'adventure/ol_betsy', title: 'Arbalistic', description: 'Kill five unique mobs with one crossbow shot', icon: 'crossbow', frame: 'challenge', hidden: true, criteria: one({ t: 'killed_by_crossbow', uniqueTypes: 5 }) },
   { id: 'adventure/craft_decorated_pot_using_only_sherds', parent: 'adventure/salvage_sherd', title: 'Careful Restoration', description: 'Make a Decorated Pot out of 4 Pottery Sherds', icon: 'decorated_pot', frame: 'task', criteria: one(never) },
   { id: 'adventure/adventuring_time', parent: 'adventure/sleep_in_bed', title: 'Adventuring Time', description: 'Discover every biome', icon: 'diamond_boots', frame: 'challenge', criteria: each(OVERWORLD_BIOMES, (b) => ({ t: 'biome', biome: b })) },
@@ -639,6 +646,10 @@ function matches(c: Criterion, p: TriggerPayload): boolean {
     case 'shot_crossbow':
     case 'fall_from_height':
     case 'enchanted_item':
+    case 'deflected_projectile':
+    case 'used_totem':
+    case 'killed_raid_captain':
+    case 'raid_won':
       return true;
     default:
       return false;

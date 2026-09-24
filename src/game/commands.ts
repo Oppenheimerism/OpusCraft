@@ -27,6 +27,8 @@ import { ENCHANTMENTS, areCompatible, canEnchant, enchantmentLine } from '../ite
 import { craftingEnchants, setCraftingEnchants, weaponOf } from '../item/enchantHelper';
 import { DIMENSIONS, type DimensionType } from '../world/dimension';
 import type { VillageKind } from '../world/gen/villages';
+// (Stage 4: outposts)
+import { locateOutpost } from './outposts';
 
 class CommandError extends Error {
   constructor(msg: string, readonly pos = -1) {
@@ -396,6 +398,8 @@ function mobData(m: Mob, nbt: string): void {
   const flag = (k: string) => new RegExp(`\\b${k}\\s*:\\s*(1b|true)`).test(nbt);
   if (/\bCanPickUpLoot\s*:/.test(nbt)) m.canPickUpLoot = flag('CanPickUpLoot');
   if (flag('PersistenceRequired')) m.persistenceRequired = true;
+  // (Stage 4: illagers) vanilla Vindicator's Johnny flag, or the name Johnny (its setCustomName; names aren't kept yet)
+  if (flag('Johnny') || /\bCustomName\s*:[^,}]*\bJohnny\b/.test(nbt)) (m as { setCustomName?: (n: string) => void }).setCustomName?.('Johnny');
 }
 
 const coordSuggest = (i: number) => ['~', '~ ~', '~ ~ ~'].slice(0, 3 - (i % 3));
@@ -694,7 +698,9 @@ export const COMMANDS: Record<string, CommandDef> = {
             ? c.game.level.strongholds().nearest(p.x, p.y, p.z)
             : village && dim.id === 'overworld'
               ? c.game.level.villages().nearest(village, x, z)
-              : null;
+              : name === 'minecraft:pillager_outpost' && dim.id === 'overworld'
+                ? locateOutpost(c.game.level, x, z)
+                : null;
       if (!found) throw new CommandError(`Could not find a structure of type "${name}" nearby`);
       c.ok(`The nearest ${name} is at §a[${found[0]}, ~, ${found[1]}]§r (${Math.floor(Math.hypot(found[0] - x, found[1] - z))} blocks away)`);
     },

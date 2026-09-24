@@ -96,7 +96,8 @@ const WHEAT: ReadonlySet<string> = new Set(['wheat']);
 
 type Pos = [number, number, number];
 
-export type VillagerActivity = 'core' | 'idle' | 'work' | 'meet' | 'rest' | 'play' | 'panic' | 'hide';
+// (Stage 4: raids) pre_raid and raid (game/raidVillagers.ts)
+export type VillagerActivity = 'core' | 'idle' | 'work' | 'meet' | 'rest' | 'play' | 'panic' | 'hide' | 'pre_raid' | 'raid';
 
 /** vanilla WalkTarget: a spot, or an entity (EntityTracker), to come within `closeEnough` of (Manhattan blocks) */
 interface WalkTarget {
@@ -1014,7 +1015,8 @@ function useBonemeal(): BehaviorControl<Villager> {
 function reactToBell(): BehaviorControl<Villager> {
   return oneShot<Villager>((v) => {
     if (v.heardBellTime === null) return false;
-    v.brain.setActiveActivityIfPossible('hide', v);
+    // (Stage 4: raids) not while there's a raid on
+    if (!villagerRaidHooks.raidHere(v)) v.brain.setActiveActivityIfPossible('hide', v);
     return true;
   });
 }
@@ -1707,6 +1709,8 @@ export class Villager extends AgeableMob {
     b.add('idle', idlePackage());
     b.add('panic', panicPackage());
     b.add('hide', hidePackage(), (v) => v.heardBellTime !== null);
+    // (Stage 4: raids) vanilla PRE_RAID and RAID
+    for (const [a, pkg] of villagerRaidHooks.activities()) b.add(a, pkg);
     b.setActiveActivityIfPossible('idle', this);
     return b;
   }
@@ -1830,6 +1834,8 @@ export class Villager extends AgeableMob {
       this.addParticlesAroundSelf('happy_villager');
       this.lastTradedPlayer = null;
     }
+    // (Stage 4: raids) vanilla: now and then a villager in a raid breaks into a sweat (entity event 42)
+    villagerRaidHooks.aiStep(this);
     if (this.profession === 'none' && this.isTrading()) this.stopTrading();
     super.customServerAiStep();
   }
@@ -2171,6 +2177,9 @@ export class Villager extends AgeableMob {
   private updateSpecialPrices(p: Player): void {
     const rep = this.playerReputation(p);
     if (rep !== 0) for (const o of this.getOffers()) o.addToSpecialPriceDiff(-Math.floor(Math.fround(rep * Math.fround(o.priceMultiplier))));
+    // (Stage 4: raids) a Hero of the Village pays 30% less of the first price, 6.25% less for each level above I (one at least)
+    const hero = p.getEffect('hero_of_the_village');
+    if (hero) for (const o of this.getOffers()) o.addToSpecialPriceDiff(-Math.max(Math.floor((0.3 + 0.0625 * hero.amplifier) * o.baseCostA.count), 1));
   }
 
   /** vanilla AbstractVillager.stopTrading (and Villager's: the player's discounts go) */
@@ -2394,6 +2403,22 @@ export class Villager extends AgeableMob {
 
 type Pkg = [number, BehaviorControl<Villager>][];
 
+/**
+ * (Stage 4: raids) the raid's part in the brain, filled in by game/raidVillagers.ts: SetRaidStatus in the core,
+ * GiveGiftToHero at work, at the meeting point and idle, the PRE_RAID and RAID activities, whether there's a raid on
+ * here (the bell then doesn't send it into hiding), and a villager's sweat in a raid
+ */
+export const villagerRaidHooks: {
+  core: () => Pkg;
+  gift: () => Pkg;
+  activities: () => [VillagerActivity, Pkg][];
+  raidHere: (v: Villager) => boolean;
+  aiStep: (v: Villager) => void;
+} = { core: () => [], gift: () => [], activities: () => [], raidHere: () => false, aiStep: () => {} };
+
+/** (Stage 4: raids) the behaviours and helpers the raid's packages share with the others */
+export const villagerBehaviors = { minimalLook, villageBoundRandomStroll, setWalkTargetFromBlockMemory, locateHidingPlace, throwItem, walkTo, walkAfter, blockPos };
+
 function corePackage(): Pkg {
   return [
     [0, swim()],
@@ -2402,7 +2427,8 @@ function corePackage(): Pkg {
     [0, panicTrigger()],
     [0, wakeUp()],
     [0, reactToBell()],
-    // (SetRaidStatus waits for raids)
+    // (Stage 4: raids) SetRaidStatus
+    ...villagerRaidHooks.core(),
     [0, validateNearbyPoi('jobSite', (v) => heldJobSite(v.profession))],
     [0, validateNearbyPoi('potentialJobSite', (v) => acquirableJobSite(v.profession))],
     [1, moveToTargetSink()],
@@ -2438,6 +2464,8 @@ function workPackage(prof: Profession): Pkg {
     [10, showTradesToPlayer(400, 1600)],
     [10, setLookAndInteractWithPlayer()],
     [2, setWalkTargetFromBlockMemory('jobSite', SPEED, 9, 100, 1200)],
+    // (Stage 4: raids) GiveGiftToHero
+    ...villagerRaidHooks.gift(),
     [99, updateActivityFromSchedule()],
   ];
 }
@@ -2501,6 +2529,8 @@ function meetPackage(): Pkg {
     [10, showTradesToPlayer(400, 1600)],
     [10, setLookAndInteractWithPlayer()],
     [2, setWalkTargetFromBlockMemory('meetingPoint', SPEED, 6, 100, 200)],
+    // (Stage 4: raids) GiveGiftToHero
+    ...villagerRaidHooks.gift(),
     [3, validateNearbyPoi('meetingPoint', () => (k) => k === 'meeting')],
     [3, tradeGate()],
     [5, fullLook()],
@@ -2522,6 +2552,8 @@ function idlePackage(): Pkg {
         [doNothing(30, 60), 1],
       ]),
     ],
+    // (Stage 4: raids) GiveGiftToHero
+    ...villagerRaidHooks.gift(),
     [3, setLookAndInteractWithPlayer()],
     [3, showTradesToPlayer(400, 1600)],
     [3, tradeGate()],
