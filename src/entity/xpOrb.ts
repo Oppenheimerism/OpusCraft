@@ -112,10 +112,10 @@ export class ExperienceOrb extends Entity {
   playerTouch(p: Player): boolean {
     if (p.takeXpDelay > 0) return false;
     p.takeXpDelay = 2;
+    p.take(this, 1);
     const left = repairWithXp(p, this.value);
     if (left !== this.value) p.inventory.version++;
     if (left > 0) p.giveExperiencePoints(left);
-    this.level.sound.playUI?.('entity.experience_orb.pickup', 0.1, 0.5 * ((Math.random() - Math.random()) * 0.7 + 1.8));
     if (--this.count === 0) this.remove();
     return true;
   }

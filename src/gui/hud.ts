@@ -75,7 +75,14 @@ export class Hud {
       const s = p.inventory.main[i];
       if (!s) continue;
       const x = cx - 90 + i * 20 + 2, y = H - 16 - 3;
+      // vanilla Gui.renderSlot: a stack that just took items in bounces, squeezed narrow and tall
+      const pop = s.popTime - partial;
+      if (pop > 0) {
+        const f1 = 1 + pop / 5;
+        g.pushScaleAbout(x + 8, y + 12, 1 / f1, (f1 + 1) / 2);
+      }
       g.stack(s, x, y, p.useItem === s ? p.ticksUsingItem() : -1);
+      if (pop > 0) g.popTransform();
       g.itemDecorations(s.count, s.damage, s.item.maxDamage, x, y);
       // vanilla item cooldown overlay (ender pearls)
       const cd = p.cooldowns.get(s.item.id);

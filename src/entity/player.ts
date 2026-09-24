@@ -335,6 +335,7 @@ export class Player extends LivingEntity {
     this.bob += (f - this.bob) * 0.4;
     this.food.tick(this);
     this.tickAir();
+    this.inventory.tick();
     if (this.takeXpDelay > 0) this.takeXpDelay--;
     for (const [k, v] of this.cooldowns) {
       if (v <= 1) this.cooldowns.delete(k);
@@ -346,7 +347,7 @@ export class Player extends LivingEntity {
         const touch = (e as { touchPlayer?: (p: Player) => void }).touchPlayer;
         if (touch) touch.call(e, this);
         if (e instanceof ExperienceOrb) e.playerTouch(this);
-        else if (e instanceof Arrow && e.playerTouch(this)) this.level.sound.play('entity.item.pickup', this.x, this.y, this.z, 0.2, ((Math.random() - Math.random()) * 0.7 + 1) * 2);
+        else if (e instanceof Arrow) e.playerTouch(this);
       }
     }
     if (this.flying) this.fallDistance = 0;

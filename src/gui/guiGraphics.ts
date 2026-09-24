@@ -278,6 +278,15 @@ export class GuiGraphics {
     this.ctx.restore();
   }
 
+  /** scale what's drawn about a GUI point, x and y apart, until popTransform */
+  pushScaleAbout(px: number, py: number, sx: number, sy: number): void {
+    const c = this.ctx, s = this.scale;
+    c.save();
+    c.translate(px * s, py * s);
+    c.scale(sx, sy);
+    c.translate(-px * s, -py * s);
+  }
+
   /** multiply alpha of everything drawn until popAlpha */
   pushAlpha(a: number): void {
     this.ctx.save();

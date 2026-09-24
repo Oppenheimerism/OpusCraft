@@ -87,6 +87,8 @@ export class EntityRenderDispatcher {
   private base: Float32Array | null = null;
   private readonly spawnerPose = new PoseStack();
   private whiteTex: WebGLTexture | null = null;
+  /** vanilla ItemPickupParticle: what was just picked up, flying to whoever took it */
+  private readonly pickups: { e: Entity; target: Entity; life: number; tx: number; ty: number; tz: number; txo: number; tyo: number; tzo: number }[] = [];
   private readonly boatModels: Record<string, M.BoatModelDef> = { boat: M.boatModel(), chest_boat: M.chestBoatModel() };
   /** boat water masks, drawn once every entity is down so riders' legs aren't masked out */
   private readonly waterPatches: { m: Float32Array; part: ModelPart; tex: WebGLTexture; texW: number; texH: number }[] = [];
@@ -194,12 +196,47 @@ export class EntityRenderDispatcher {
       }
     }
     this.rendered = drawn;
+    for (const pk of this.pickups) {
+      // (vanilla ItemPickupParticle.renderCustom: easing in over its three ticks, to halfway up the taker)
+      let f = (pk.life + partial) / 3;
+      f *= f;
+      const tx = pk.txo + (pk.tx - pk.txo) * partial, ty = pk.tyo + (pk.ty - pk.tyo) * partial, tz = pk.tzo + (pk.tz - pk.tzo) * partial;
+      const e = pk.e;
+      const x = e.x + (tx - e.x) * f, y = e.y + (ty - e.y) * f, z = e.z + (tz - e.z) * f;
+      this.renderEntity(b, level, e, x, y, z, x - cam.x, y - cam.y, z - cam.z, partial, cam);
+      if (opts.shadows) {
+        const r = shadowRadius(e);
+        if (r > 0) this.shadows.push({ x, y, z, radius: r, strength: e instanceof ItemEntity || e instanceof ExperienceOrb ? 0.75 : 1 });
+      }
+    }
     this.renderWaterPatches(b);
     this.renderSpawners(b, level, cam, partial, frustum);
     this.renderEnchantingBooks(b, level, cam, partial, frustum);
     b.setOverlay(0, 0, 0, 0);
     b.flush();
     if (this.shadows.length) this.renderShadows(b, level, cam);
+  }
+
+  /** vanilla ItemPickupParticle: `e` (a copy, for a dropped item) flies to `target` over the next three ticks */
+  addPickup(e: Entity, target: Entity): void {
+    const tx = target.x, ty = target.y + target.eyeHeight / 2, tz = target.z;
+    this.pickups.push({ e, target, life: 0, tx, ty, tz, txo: tx, tyo: ty, tzo: tz });
+  }
+
+  /** once a game tick (vanilla ItemPickupParticle.tick): following the taker, gone on its third */
+  tickPickups(): void {
+    let w = 0;
+    for (const pk of this.pickups) {
+      if (++pk.life >= 3) continue;
+      pk.txo = pk.tx;
+      pk.tyo = pk.ty;
+      pk.tzo = pk.tz;
+      pk.tx = pk.target.x;
+      pk.ty = pk.target.y + pk.target.eyeHeight / 2;
+      pk.tz = pk.target.z;
+      this.pickups[w++] = pk;
+    }
+    this.pickups.length = w;
   }
 
   /** vanilla SpawnerRenderer (block entity view distance 64): the spawner's mob spinning in the cage */

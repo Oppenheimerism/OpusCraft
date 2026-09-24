@@ -806,6 +806,11 @@ export abstract class LivingEntity extends Entity {
     if (this.remainingFireTicks < t) this.remainingFireTicks = t;
   }
 
+  /** vanilla LivingEntity.take: tell the client this picked something up (it pops, and flies to them) */
+  take(e: Entity, amount: number): void {
+    if (!e.removed) this.level.onTake?.(e, this, amount);
+  }
+
   protected playHurtSound(_source: string): void {}
   protected playDeathSound(): void {}
 

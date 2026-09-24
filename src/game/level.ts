@@ -307,6 +307,8 @@ export class Level {
   onBred: ((child: Entity, cause: Entity | null) => void) | null = null;
   /** an arrow the player shot hurt something (vanilla "Take Aim") */
   onPlayerArrowHit: ((target: Entity) => void) | null = null;
+  /** vanilla LivingEntity.take: something alive picked up an item, arrow or orb (the pop, and it flying to them) */
+  onTake: ((e: Entity, taker: LivingEntity, amount: number) => void) | null = null;
   /** a mob picked up an item a player had thrown (vanilla thrown_item_picked_up_by_entity) */
   onThrownItemPickedUp: ((stack: ItemStack, by: Entity) => void) | null = null;
   /** a crossbow arrow the player shot killed something: all it has killed so far (vanilla killed_by_crossbow) */

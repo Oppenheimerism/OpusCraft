@@ -41,6 +41,7 @@ import { timeOfDay, skyDarkenInt, blendBiomeColors } from '../render/environment
 import { GameOptions, loadOptions, saveOptions } from './options';
 import { DEFAULT_GAME_RULES } from './gameRules';
 import { ItemEntity } from '../entity/itemEntity';
+import { ExperienceOrb } from '../entity/xpOrb';
 import { GuiEntityRenderer } from '../render/guiEntity';
 import { InventoryMenu, CraftingMenu, FurnaceMenu, ChestMenu } from '../inventory/menus';
 import { EnchantmentMenu, AnvilMenu, GrindstoneMenu } from '../inventory/enchantMenus';
@@ -400,6 +401,13 @@ export class Game {
     this.interaction.onUseBed = (x, y, z) => useBed(this.sleepHost(), x, y, z);
     this.level.onPortal = (e, x, y, z) => {
       if (e === this.player) this.portalTravel(x, y, z);
+    };
+    // vanilla ClientPacketListener.handleTakeItemEntity: the pop, and what was taken flying to whoever took it
+    this.level.onTake = (e, taker) => {
+      const r = Math.random;
+      if (e instanceof ExperienceOrb) this.level.sound.play('entity.experience_orb.pickup', e.x, e.y, e.z, 0.1, (r() - r()) * 0.35 + 0.9);
+      else this.level.sound.play('entity.item.pickup', e.x, e.y, e.z, 0.2, (r() - r()) * 1.4 + 2);
+      this.renderer.entities.addPickup(e instanceof ItemEntity ? e.copy() : e, taker);
     };
     this.player.dropHandler = (s) => this.interaction.throwItem(s);
     this.applyGameRules();
@@ -1244,6 +1252,7 @@ export class Game {
     this.renderer.lightmap.tick();
     this.renderer.hand.tick(p);
     this.renderer.particles?.tick();
+    this.renderer.entities.tickPickups();
     this.hud.tick(this);
     this.sound.tick(this);
     if (++this.autosaveTimer >= 6000) {

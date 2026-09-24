@@ -28,29 +28,41 @@ export class Inventory {
     this.version++;
   }
 
-  /** Add as much as possible; returns remaining count. Hotbar first like vanilla. */
-  add(stack: ItemStack): number {
+  /**
+   * vanilla Inventory.add: as much as fits, returning what's left — into stacks with room (the selected one, then the
+   * offhand, then the rest in order), then empty slots; every stack that takes some bounces in the hotbar for 5
+   * ticks. `infinite` (vanilla hasInfiniteMaterials, creative): when nothing fits it all goes anyway
+   */
+  add(stack: ItemStack, infinite = false): number {
     let remaining = stack.count;
-    // merge into existing stacks (selected, offhand, then slots in order)
-    const order = [this.selected, ...Array.from({ length: 36 }, (_, i) => i).filter((i) => i !== this.selected)];
-    for (const i of order) {
-      const s = this.main[i];
-      if (!s || !s.sameItem(stack) || s.count >= s.maxStack) continue;
+    const merge = (s: ItemStack | null): void => {
+      if (remaining <= 0 || !s || !s.sameItem(stack) || s.count >= s.maxStack) return;
       const n = Math.min(remaining, s.maxStack - s.count);
       s.count += n;
+      s.popTime = 5;
       remaining -= n;
-      if (remaining <= 0) break;
+    };
+    merge(this.main[this.selected]);
+    merge(this.offhand);
+    for (let i = 0; i < 36; i++) merge(this.main[i]);
+    for (let i = 0; i < 36 && remaining > 0; i++) {
+      if (this.main[i]) continue;
+      const n = Math.min(remaining, stack.maxStack);
+      const s = stack.copyWithCount(n);
+      s.popTime = 5;
+      this.main[i] = s;
+      remaining -= n;
     }
-    if (remaining > 0) {
-      for (let i = 0; i < 36 && remaining > 0; i++) {
-        if (this.main[i]) continue;
-        const n = Math.min(remaining, stack.maxStack);
-        this.main[i] = stack.copyWithCount(n);
-        remaining -= n;
-      }
-    }
+    if (infinite && remaining === stack.count) remaining = 0;
     this.version++;
     return remaining;
+  }
+
+  /** vanilla Inventory.tick → ItemStack.inventoryTick: the bounces wind down */
+  tick(): void {
+    for (const s of this.main) if (s && s.popTime > 0) s.popTime--;
+    for (const s of this.armor) if (s && s.popTime > 0) s.popTime--;
+    if (this.offhand && this.offhand.popTime > 0) this.offhand.popTime--;
   }
 
   /** Remove `count` from the selected slot. */

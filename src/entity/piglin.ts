@@ -1197,14 +1197,13 @@ export class Piglin extends AbstractPiglin {
     this.stopWalking();
     // vanilla Mob.onItemPickup: thrown_item_picked_up_by_entity ("Oh Shiny")
     if (it.thrower?.type === 'player') this.level.onThrownItemPickedUp?.(it.stack, this);
-    // (vanilla LivingEntity.take: the pop the client plays for any pickup)
-    const r = this.random;
-    this.level.sound.play('entity.item.pickup', it.x, it.y, it.z, 0.2, ((r.nextFloat() - r.nextFloat()) * 0.7 + 1) * 2);
     let s: ItemStack;
     if (it.stack.item.id === 'gold_nugget') {
+      this.take(it, it.stack.count);
       s = it.stack;
       it.remove();
     } else {
+      this.take(it, 1);
       s = it.stack.copyWithCount(1);
       if (--it.stack.count <= 0) it.remove();
     }
