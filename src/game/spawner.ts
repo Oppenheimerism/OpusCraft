@@ -177,10 +177,10 @@ function loadOne(d: SavedEntity, level: Level): Entity | null {
   return m;
 }
 
-/** entities that belong to chunk storage (a cart or boat carrying the player is saved with the player) */
+/** entities that belong to chunk storage (whatever carries the player is saved with the player: vanilla RootVehicle) */
 export function isChunkSaved(e: Entity): boolean {
-  if (e instanceof AbstractMinecart || e instanceof Boat) return !e.passengers.some((p) => p.type === 'player');
-  return e instanceof Mob || e instanceof ItemEntity || e instanceof EndCrystal || e instanceof Arrow;
+  if (e.passengers.some((p) => p.type === 'player')) return false;
+  return e instanceof AbstractMinecart || e instanceof Boat || e instanceof Mob || e instanceof ItemEntity || e instanceof EndCrystal || e instanceof Arrow;
 }
 
 const ENTITY_NAMES: Record<string, string> = {
