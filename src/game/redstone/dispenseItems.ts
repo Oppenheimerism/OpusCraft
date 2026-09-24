@@ -35,6 +35,8 @@ import { canPlaceFire, placeFire, fireStateAt } from '../fire';
 import { lightCampfire } from '../villageBlocks';
 import { isRail, railShape, isAscending } from '../rails';
 import { BlockPattern } from '../blockPattern';
+import { dispenseShulkerBox } from '../shulkerBox';
+import { isShulkerBox } from '../../world/blocksShulker';
 import type { Level } from '../level';
 
 const blk = (st: number): Block => BLOCKS[STATE_BLOCK[st]];
@@ -525,6 +527,16 @@ const saddle = behavior((src, stack) => {
   return left(stack);
 });
 
+/**
+ * vanilla ShulkerBoxDispenseItemBehavior: the box set down in front as a player would place it (game/shulkerBox.ts),
+ * and one fewer; the failed click if it couldn't go there
+ */
+const shulkerBox = optional((src, stack) => {
+  src.success = dispenseShulkerBox(src.level, src.x, src.y, src.z, src.facing, stack);
+  if (src.success) stack.count--;
+  return left(stack);
+});
+
 // ---------------------------------------------------------------------------
 // The registry (vanilla DispenserBlock.DISPENSER_REGISTRY)
 
@@ -544,6 +556,7 @@ export function dispenseBehaviorFor(stack: ItemStack): DispenseBehavior {
   const own = BEHAVIORS[id];
   if (own) return own;
   if (id.endsWith('_spawn_egg')) return spawnEgg;
+  if (isShulkerBox(id)) return shulkerBox;
   const b = boatItemInfo(id);
   if (b) return (BEHAVIORS[id] = boat(b.variant, b.chest));
   if (stack.item.armor || id === 'shield') return armor;

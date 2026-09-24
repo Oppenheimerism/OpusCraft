@@ -16,6 +16,8 @@ import { registerDynamicShape } from '../world/dynamicShapes';
 import { ShulkerBoxMenu } from '../inventory/shulkerBoxMenu';
 import { ItemStack, ITEMS, getItem, cloneTag } from '../item/item';
 import { ItemEntity } from '../entity/itemEntity';
+import { LivingEntity } from '../entity/living';
+import { AABB } from '../core/aabb';
 import { registerHoverText } from '../item/hoverText';
 import { registerCustomRecipe, type Grid } from '../inventory/customRecipes';
 import { GUARDED_BY_PIGLINS, Piglin } from '../entity/piglin';
@@ -201,18 +203,17 @@ function washBox(level: Level, x: number, y: number, z: number, st: number, stac
 }
 
 // ---------------------------------------------------------------------------
-// Hooks for the pistons and dispensers (not in this branch): wire these in where they are
+// Dispensers (redstone/dispenseItems.ts calls this). Pistons break boxes rather than push them (vanilla
+// PushReaction.DESTROY: redstone/piston.ts), dropping them with what they hold as any block broken so.
+
+/** vanilla Entity.blocksBuilding, besides living things: minecarts, boats and rafts, primed TNT, falling blocks, end crystals */
+const BLOCKS_BUILDING = /^(tnt|falling_block|end_crystal|.*minecart|.*_boat|.*_raft)$/;
 
 /**
- * vanilla PushReaction.DESTROY (Blocks.shulkerBox): a piston doesn't push a shulker box but breaks it, dropping it
- * with what it holds, as any other block that breaks when pushed
- */
-export const SHULKER_BOX_PUSH_REACTION = 'destroy' as const;
-
-/**
- * vanilla ShulkerBoxDispenseBehavior: a dispenser facing `facing` (a Dir) at (x, y, z) places the box in front of it —
- * facing the same way, or up when there's nothing under the spot — as a player placing it would (its contents and name
- * with it). True if it went down (the dispenser then spends the item; else it clicks as a failed dispense).
+ * vanilla ShulkerBoxDispenseItemBehavior: a dispenser facing `facing` (a Dir) at (x, y, z) places the box in front of
+ * it — facing the same way, or up when there's nothing under the spot — as a player placing it would (its contents and
+ * name with it), if nothing stands there (vanilla Level.isUnobstructed). True if it went down (the dispenser then
+ * spends the item; else it clicks as a failed dispense).
  */
 export function dispenseShulkerBox(level: Level, x: number, y: number, z: number, facing: number, stack: ItemStack): boolean {
   const name = stack.item.id;
@@ -220,6 +221,8 @@ export function dispenseShulkerBox(level: Level, x: number, y: number, z: number
   const tx = x + DX[facing], ty = y + DY[facing], tz = z + DZ[facing];
   const w = level.world;
   if (!(FLAGS[w.getState(tx, ty, tz)] & F_REPLACEABLE)) return false;
+  const cell = new AABB(tx, ty, tz, tx + 1, ty + 1, tz + 1);
+  if (level.getEntities(cell, (e) => !e.removed && (e instanceof LivingEntity || BLOCKS_BUILDING.test(e.type))).length) return false;
   const face = FLAGS[w.getState(tx, ty - 1, tz)] & F_AIR ? facing : 1;
   const box = getBlock(name).state({ facing: DIR_NAMES[face] });
   level.setBlock(tx, ty, tz, box);
