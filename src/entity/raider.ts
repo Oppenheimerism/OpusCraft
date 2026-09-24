@@ -322,12 +322,12 @@ export abstract class Raider extends PatrollingMonster {
   }
 
   /**
-   * vanilla loot tables entities/pillager (and the other raiders'): a captain killed outside a raid drops an ominous
-   * bottle of level 1 to 5 (minecraft:raider {is_captain: true, has_raid: false}; set_ominous_bottle_amplifier 0-4)
+   * vanilla 1.21: a captain killed by a player (the causing entity: a player's arrow counts, their wolf doesn't)
+   * outside a raid drops an ominous bottle of level 1 to 5 (set_ominous_bottle_amplifier 0-4)
    */
   protected override dropLoot(byPlayer: boolean, looting = 0): void {
     super.dropLoot(byPlayer, looting);
-    if (this.isCaptain() && !this.raid) {
+    if (this.isCaptain() && !this.raid && this.killer?.type === 'player') {
       const s = ItemStack.of('ominous_bottle');
       s.tag = { ...(s.tag ?? {}), ominousAmplifier: this.random.nextInt(5) };
       this.spawnAtLocation(s);
