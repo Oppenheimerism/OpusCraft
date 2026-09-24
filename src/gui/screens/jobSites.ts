@@ -1,5 +1,5 @@
-// The job sites' screens, as the game opens them (game/jobSites.ts): each block's menu with its screen; and the
-// books' screens, as using one opens them (game/books.ts).
+// The job sites' screens, as the game opens them (game/jobSites.ts): each block's menu with its screen; the books'
+// screens, as using one opens them (game/books.ts); and which world's maps are the ones in play (game/mapData.ts).
 
 import type { Game } from '../../game/game';
 import type { Screen } from '../screen';
@@ -14,6 +14,9 @@ import { LecternMenu } from '../../inventory/lecternMenu';
 import { BookEditScreen, BookViewScreen, LecternScreen, bookPages } from './book';
 import { LoomMenu } from '../../inventory/loomMenu';
 import { LoomScreen } from './loom';
+import { CartographyTableMenu } from '../../inventory/cartographyMenu';
+import { CartographyTableScreen } from './cartography';
+import { setMapWorldSource } from '../../game/mapData';
 
 export function installJobSiteScreens(game: Game): void {
   setJobSiteScreens((kind, x, y, z): Screen | null => {
@@ -26,6 +29,8 @@ export function installJobSiteScreens(game: Game): void {
         return new SmithingScreen(game, new SmithingMenu(p, pos));
       case 'loom':
         return new LoomScreen(game, new LoomMenu(p, pos));
+      case 'cartography_table':
+        return new CartographyTableScreen(game, new CartographyTableMenu(p, pos));
       case 'lectern': {
         const be = p.level.world.getBlockEntity(x, y, z);
         return be instanceof LecternBlockEntity ? new LecternScreen(game, new LecternMenu(p, be)) : null;
@@ -33,6 +38,8 @@ export function installJobSiteScreens(game: Game): void {
     }
     return null;
   });
+  // the world being played, for its maps (game/mapData.ts): read from and saved with its save
+  setMapWorldSource(() => (game.meta && game.level ? { level: game.level, meta: game.meta } : null));
   // vanilla LocalPlayer.openItemGui (and ClientboundOpenBookPacket for a signed book)
   setItemGuiHook((p, stack, hand) => {
     if (p !== game.player) return;

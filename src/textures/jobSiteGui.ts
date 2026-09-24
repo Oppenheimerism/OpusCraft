@@ -1,9 +1,11 @@
-// GUI sprites of the job sites' screens (vanilla container/stonecutter.png, smithing.png, loom.png and the sprites in
-// gui/sprites/container/{stonecutter,smithing,loom}): backgrounds at vanilla slot positions, the recipe and pattern
-// buttons and scrollers, and the empty-slot icons (vanilla item/empty_slot_*, container/slot/banner and the rest);
-// and the book the lectern and books open (vanilla gui/book.png and the widget/page_* arrows).
+// GUI sprites of the job sites' screens (vanilla container/stonecutter.png, smithing.png, loom.png, cartography_table.png
+// and the sprites in gui/sprites/container/{stonecutter,smithing,loom,cartography_table}): backgrounds at vanilla slot
+// positions, the recipe and pattern buttons and scrollers, the map sheets, and the empty-slot icons (vanilla
+// item/empty_slot_*, container/slot/banner and the rest); and the book the lectern and books open (vanilla gui/book.png
+// and the widget/page_* arrows).
 
-import { TexImage, img, plot, rect, mixC } from './tex';
+import { TexImage, img, plot, rect, mixC, blit, pattern } from './tex';
+import { parchment } from './mapTextures';
 import { GUI_TEXTURES, panel, inset, slotAt, bigSlotAt, playerInventory, arrowMask, drawMask } from './gui';
 import { hammer } from './enchantingGui';
 
@@ -412,6 +414,76 @@ const LOOM_SLOT_ICONS: Record<string, string[]> = {
   ],
 };
 for (const [name, rows] of Object.entries(LOOM_SLOT_ICONS)) G[`slot_${name}`] = () => debossed(rows);
+
+// ---------------------------------------------------------------------------
+// Cartography table (vanilla container/cartography_table.png and the sprites in container/cartography_table)
+
+G['container_cartography_table'] = () => {
+  const t = panel(176, 166);
+  slotAt(t, 15, 15); // map
+  slotAt(t, 15, 52); // paper, empty map or glass pane
+  // the two joined and led on to the map (under the error cross at 35, 31)
+  const LINE = 0x8b8b8b;
+  rect(t, 34, 22, 6, 2, LINE);
+  rect(t, 34, 59, 6, 2, LINE);
+  rect(t, 38, 22, 2, 39, LINE);
+  drawMask(t, 41, 34, arrowMask(22, 15, 7), LINE);
+  inset(t, 66, 12, 68, 68); // where the map shows (66 × 66 at 67, 13)
+  drawMask(t, 135, 43, arrowMask(8, 9, 3), LINE);
+  slotAt(t, 145, 39); // result
+  playerInventory(t, 84);
+  return t;
+};
+/** a sheet of paper, the map drawn on it at 4, 4 */
+G['cartography_table_map'] = () => parchment(66, 66, false, 7301);
+/** zoomed out: the map small in the middle of a bigger sheet, its old edges marked */
+G['cartography_table_scaled_map'] = () => {
+  const t = parchment(66, 66, false, 7302);
+  for (let i = 16; i <= 49; i++)
+    if (i % 3 !== 2)
+      for (const [x, y] of [[i, 16], [i, 49], [16, i], [49, i]]) plot(t, x, y, 0xa98e5c);
+  return t;
+};
+/** one of two copies: a 50 × 50 sheet (the rest of the sprite is clear), the map on it at 3, 3 */
+G['cartography_table_duplicated_map'] = () => {
+  const t = img(50, 66);
+  blit(t, parchment(50, 50, false, 7303), 0, 0);
+  return t;
+};
+/** a padlock over the map's corner: it's to be locked */
+G['cartography_table_locked'] = () => {
+  const t = img(10, 14);
+  pattern(t, 0, 0, [
+    '..######..',
+    '.##....##.',
+    '.#......#.',
+    '.#......#.',
+    '.#......#.',
+    '##########',
+    '#yyyyyyyy#',
+    '#yYYYYYYy#',
+    '#yYY##YYy#',
+    '#yYY##YYy#',
+    '#yYYY#YYy#',
+    '#yYYYYYYy#',
+    '#yyyyyyyy#',
+    '##########',
+  ], { '#': 0x3a3a3a, y: 0xb8962e, Y: 0xe8c24a });
+  for (const [x, y] of [[2, 1], [7, 1], [1, 2], [8, 2], [1, 3], [8, 3], [1, 4], [8, 4]]) plot(t, x, y, 0x9a9a9a);
+  return t;
+};
+/** over the arrow when the table can't do it: a red cross */
+G['cartography_table_error'] = () => {
+  const t = img(28, 21);
+  for (let i = 0; i < 17; i++) {
+    const x = 5 + Math.round((i * 18) / 16), y = 2 + i;
+    for (const [dx, c] of [[-2, 0x000000], [-1, 0xff5555], [0, 0xd81e1e], [1, 0xa01010], [2, 0x000000]] as [number, number][]) {
+      plot(t, x + dx, y, c);
+      plot(t, 23 - Math.round((i * 18) / 16) + dx, y, c);
+    }
+  }
+  return t;
+};
 
 // ---------------------------------------------------------------------------
 // Books

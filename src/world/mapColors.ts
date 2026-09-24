@@ -51,6 +51,20 @@ export function colorFromPackedId(packed: number): number {
   return (0xff000000 | (r << 16) | (g << 8) | b) >>> 0;
 }
 
+/** each packed colour as the four bytes r, g, b, a (read as a little-endian word) */
+const RGBA_WORDS = new Uint32Array(256);
+for (let i = 0; i < 256; i++) {
+  const c = colorFromPackedId(i);
+  RGBA_WORDS[i] = (((c >>> 24) << 24) | ((c & 255) << 16) | (((c >> 8) & 255) << 8) | ((c >> 16) & 255)) >>> 0;
+}
+
+/** a map's packed colours as RGBA pixels (vanilla MapRenderer.MapInstance.updateTexture) */
+export function mapRGBA(colors: Uint8Array): Uint8Array<ArrayBuffer> {
+  const px = new Uint32Array(colors.length);
+  for (let i = 0; i < px.length; i++) px[i] = RGBA_WORDS[colors[i]];
+  return new Uint8Array(px.buffer);
+}
+
 // ---------------------------------------------------------------------------
 // Which colour each block is
 
