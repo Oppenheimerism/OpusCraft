@@ -91,6 +91,19 @@ interface FlatModel {
   quads: Float32Array[];
 }
 
+/** items drawn by their block entity's renderer instead of a model (vanilla BlockEntityWithoutLevelRenderer: banners) */
+export interface SpecialItemRenderer {
+  /** draws the stack at the pose and says so, or false when it isn't one of its items */
+  render(batch: EntityBatch, pose: PoseStack, stack: ItemStack, ctx: DisplayContext, left: boolean): boolean;
+  /** its display transform's y scale in `ctx` (undefined: not one of its items) */
+  displayScaleY(stack: ItemStack, ctx: DisplayContext): number | undefined;
+}
+let special: SpecialItemRenderer | null = null;
+
+export function setSpecialItemRenderer(r: SpecialItemRenderer | null): void {
+  special = r;
+}
+
 export class ItemRenderer {
   readonly itemTexture: WebGLTexture | null;
   readonly itemSprites = new Map<string, { u0: number; v0: number; u1: number; v1: number; img: TexImage }>();
@@ -189,6 +202,8 @@ export class ItemRenderer {
   }
 
   displayScaleY(stack: ItemStack, ctx: DisplayContext): number {
+    const sp = special?.displayScaleY(stack, ctx);
+    if (sp !== undefined) return sp;
     const it = stack.item;
     if (this.isBlockModel(it)) return BLOCK_DISPLAY[ctx].scale[1];
     return (isHandheld(it) ? HANDHELD_DISPLAY : GENERATED_DISPLAY)[ctx].scale[1];
@@ -210,6 +225,7 @@ export class ItemRenderer {
 
   /** Render an item at the pose origin (model-space centered at 0). `texture` overrides the sprite (bow pulling). */
   render(batch: EntityBatch, pose: PoseStack, stack: ItemStack, ctx: DisplayContext, left = false, texture?: string): void {
+    if (special?.render(batch, pose, stack, ctx, left)) return;
     const it = stack.item;
     pose.push();
     if (this.isBlockModel(it)) {

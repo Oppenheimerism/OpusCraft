@@ -2,7 +2,7 @@
 // AbstractFurnaceBlockEntity), with persistence to saved chunks.
 
 import { SimpleContainer, isEmpty } from '../inventory/container';
-import { ItemStack, ITEMS, ItemTag, cloneTag } from '../item/item';
+import { ItemStack, ITEMS, ItemTag, cloneTag, type BannerLayer, type Rarity } from '../item/item';
 import { cookingResult, cookingTime, burnDuration, type CookingKind } from '../inventory/recipes';
 import { BLOCKS, STATE_BLOCK } from './block';
 import type { Level } from '../game/level';
@@ -31,6 +31,8 @@ export abstract class BlockEntity {
   tick(_level: Level): void {}
   /** vanilla RandomizableContainer.unpackLootTable: roll a pending loot table into the container */
   unpackLoot(): void {}
+  /** vanilla applyComponentsFromItemStack: what the item it was placed from carries (a banner's patterns) */
+  applyComponents(_s: ItemStack): void {}
   save(): SavedBlockEntity {
     const items: SavedBlockEntity['items'] = [];
     this.container.items.forEach((s, i) => {
@@ -419,6 +421,61 @@ export class CampfireBlockEntity extends BlockEntity {
 }
 
 /**
+ * vanilla BannerBlockEntity: the banner's layers over its base colour (the block's) and its custom name; and what
+ * else the item it was placed from carried that the drop gives back (vanilla BlockEntity.components, copied by the
+ * banner's loot table: the ominous banner's item name, hidden tooltip and rarity)
+ */
+export class BannerBlockEntity extends BlockEntity {
+  readonly id = 'banner';
+  patterns: BannerLayer[] = [];
+  customName: string | undefined = undefined;
+  kept: Pick<ItemTag, 'itemName' | 'hideAdditional' | 'rarity'> = {};
+  constructor(x: number, y: number, z: number) {
+    super(x, y, z, 0);
+  }
+  /** vanilla applyImplicitComponents: BANNER_PATTERNS and CUSTOM_NAME; the rest is kept as it came */
+  override applyComponents(s: ItemStack): void {
+    const t = s.tag;
+    this.patterns = t?.patterns?.map((l) => ({ ...l })) ?? [];
+    this.customName = t?.customName;
+    this.kept = {};
+    if (t?.itemName !== undefined) this.kept.itemName = t.itemName;
+    if (t?.hideAdditional) this.kept.hideAdditional = true;
+    if (t?.rarity) this.kept.rarity = t.rarity;
+    this.container.changed();
+  }
+  /** vanilla collectComponents (with the kept ones): the components the banner's item gets back */
+  itemTag(): ItemTag | null {
+    const t: ItemTag = { ...this.kept };
+    if (this.patterns.length) t.patterns = this.patterns.map((l) => ({ ...l }));
+    if (this.customName !== undefined) t.customName = this.customName;
+    return Object.keys(t).length ? t : null;
+  }
+  protected override saveData(): Record<string, number | string> | undefined {
+    const d: Record<string, number | string> = {};
+    if (this.patterns.length) d.patterns = JSON.stringify(this.patterns);
+    if (this.customName !== undefined) d.name = this.customName;
+    if (this.kept.itemName !== undefined) d.itemName = this.kept.itemName;
+    if (this.kept.hideAdditional) d.hide = 1;
+    if (this.kept.rarity) d.rarity = this.kept.rarity;
+    return Object.keys(d).length ? d : undefined;
+  }
+  protected override loadData(d: Record<string, number | string>): void {
+    try {
+      const p = typeof d.patterns === 'string' ? JSON.parse(d.patterns) : [];
+      this.patterns = Array.isArray(p) ? p.filter((l) => l && typeof l.pattern === 'string' && typeof l.color === 'string') : [];
+    } catch {
+      this.patterns = [];
+    }
+    this.customName = typeof d.name === 'string' ? d.name : undefined;
+    this.kept = {};
+    if (typeof d.itemName === 'string') this.kept.itemName = d.itemName;
+    if (d.hide) this.kept.hideAdditional = true;
+    if (typeof d.rarity === 'string') this.kept.rarity = d.rarity as Rarity;
+  }
+}
+
+/**
  * vanilla TheEndPortalBlockEntity: nothing to keep, but it's what gets an end portal drawn (render/endRenderer.ts
  * draws its up and down faces, vanilla shouldRenderFace: the Y axis only)
  */
@@ -440,6 +497,7 @@ export function createBlockEntity(name: string, x: number, y: number, z: number)
   if (name === 'brewing_stand') return new BrewingStandBlockEntity(x, y, z);
   if (name === 'campfire' || name === 'soul_campfire') return new CampfireBlockEntity(x, y, z);
   if (name === 'end_portal') return new EndPortalBlockEntity(x, y, z);
+  if (name === 'banner' || name.endsWith('_banner')) return new BannerBlockEntity(x, y, z);
   return null;
 }
 

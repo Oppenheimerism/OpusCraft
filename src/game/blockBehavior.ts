@@ -12,6 +12,7 @@ import type { Item, ItemStack } from '../item/item';
 import type { Rand } from '../core/rng';
 import type { Hand } from '../item/inventory';
 import type { PlaceContext } from './blockRules';
+import type { BlockEntity } from '../world/blockEntity';
 
 /** a right click on the block (vanilla BlockHitResult) */
 export interface UseContext {
@@ -70,7 +71,7 @@ export interface BlockBehavior {
   /** vanilla LiquidBlockContainer.placeLiquid: a water bucket emptied into the block; true if it took it */
   placeLiquid?(level: Level, x: number, y: number, z: number, state: number): boolean;
   /** the block's loot table (vanilla block loot): what breaking it with `tool` drops, when it has one of its own */
-  drops?(state: number, tool: Item | null, r: Rand, silk: boolean, fortune: number): ItemStack[];
+  drops?(state: number, tool: Item | null, r: Rand, silk: boolean, fortune: number, be?: BlockEntity | null): ItemStack[];
   /** vanilla entityInside: `e`'s box overlaps the block */
   entityInside?(level: Level, x: number, y: number, z: number, state: number, e: Entity): void;
   /** vanilla animateTick (client ambient effects) */

@@ -1,6 +1,6 @@
 // Items: block items + regular items with vanilla stats.
 
-import { BLOCKS, Block, ToolType, getBlock } from '../world/block';
+import { BLOCKS, BLOCK_BY_NAME, Block, ToolType, getBlock } from '../world/block';
 import { WOODS } from '../world/blocksExtra';
 
 export interface ToolInfo {
@@ -287,6 +287,11 @@ reg({
   id: 'netherite_upgrade_smithing_template', name: 'Smithing Template', texture: 'netherite_upgrade_smithing_template', rarity: 'uncommon',
   lore: ['Netherite Upgrade', '', 'Applies to:', ' §9Diamond Equipment', 'Ingredients:', ' §9Netherite Ingot'],
 });
+// vanilla BannerPatternItem: one to a stack, each named "Banner Pattern" (what it weaves is its tooltip, game/banners.ts);
+// in 1.21 they share one sprite
+for (const [id, rarity] of [['flower', 'common'], ['creeper', 'uncommon'], ['skull', 'uncommon'], ['mojang', 'epic'], ['globe', 'common'], ['piglin', 'uncommon'], ['flow', 'rare'], ['guster', 'rare']] as [string, Rarity][]) {
+  reg({ id: `${id}_banner_pattern`, name: 'Banner Pattern', texture: 'banner_pattern', maxStack: 1, rarity });
+}
 for (const m of ['iron', 'golden', 'diamond']) reg({ id: `${m}_horse_armor`, texture: `${m}_horse_armor`, maxStack: 1, creativeTab: 'combat' });
 // vanilla 1.21 jukebox songs: disc name + "C418 - title" description
 for (const [id, desc, rarity] of [['music_disc_13', 'C418 - 13', 'uncommon'], ['music_disc_cat', 'C418 - cat', 'uncommon'], ['music_disc_otherside', 'Lena Raine - otherside', 'rare']] as [string, string, Rarity][]) {
@@ -317,6 +322,8 @@ for (const b of BLOCKS) {
     it.texture = n;
     if (n.endsWith('_bed')) it.maxStack = 1;
   }
+  // (vanilla BannerItem: sixteen to a stack, fuel like planks; drawn by the banner's renderer, the sprite behind it)
+  if (n.endsWith('_banner')) Object.assign(it, { texture: n, maxStack: 16, fuel: 300, creativeTab: 'colored' });
   if (n === 'glass_pane') it.texture = 'block:glass';
   if (n === 'glow_lichen') {
     it.texture = 'block:glow_lichen';
@@ -345,6 +352,9 @@ for (const b of BLOCKS) {
 }
 
 export function itemForBlock(name: string): Item | undefined {
+  // (a block that is another's item's: a wall banner is its banner's)
+  const own = BLOCK_BY_NAME.get(name)?.s.item;
+  if (typeof own === 'string') return ITEMS.get(own);
   if (name === 'wall_torch') return ITEMS.get('torch');
   if (name === 'soul_wall_torch') return ITEMS.get('soul_torch');
   if (name === 'cave_vines' || name === 'cave_vines_plant') return ITEMS.get('glow_berries');

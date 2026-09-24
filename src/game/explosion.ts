@@ -132,7 +132,7 @@ export function explode(level: Level, source: Entity | null, x: number, y: numbe
         continue;
       }
       if (!decay || rand.nextFloat() < 1 / radius) {
-        for (const s of blockDrops(st, null, rand)) {
+        for (const s of blockDrops(st, null, rand, false, 0, w.getBlockEntity(bx, by, bz))) {
           const same = drops.find((d) => d[0].sameItem(s) && d[0].count + s.count <= d[0].maxStack);
           if (same) same[0].count += s.count;
           else drops.push([s, bx, by, bz]);

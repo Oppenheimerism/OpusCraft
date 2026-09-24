@@ -41,6 +41,7 @@ import { LevelTicks } from './ticks';
 import { PoiManager } from './poi';
 import './redstone/components';
 import './villageBlocks';
+import './banners';
 import './endPortal';
 import './golems';
 
@@ -635,7 +636,7 @@ export class Level {
       }
     }
     if (drop) {
-      for (const s of blockDrops(dropState, tool, this.random, levelOf(stack, 'silk_touch') > 0, levelOf(stack, 'fortune'))) ItemEntity.drop(this, x, y, z, s);
+      for (const s of blockDrops(dropState, tool, this.random, levelOf(stack, 'silk_touch') > 0, levelOf(stack, 'fortune'), be)) ItemEntity.drop(this, x, y, z, s);
     }
     this.updateNeighborsAt(x, y, z, b.id);
     this.updateNeighbors(x, y, z, st);
