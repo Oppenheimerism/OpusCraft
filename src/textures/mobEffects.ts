@@ -407,6 +407,111 @@ function heartIcon(p: ReturnType<typeof heart>, extra?: (rows: string[]) => stri
 
 const WOOD = { w: 0x8a5a2a };
 
+// the 1.21 potions' effects and the rest of the registry
+
+/** oozing: a slime cube with its face */
+const SLIME_CUBE = [
+  '..................',
+  '..................',
+  '..................',
+  '...gggggggggggg...',
+  '...gLLLLLLLLLLg...',
+  '...gLllllllllLg...',
+  '...gLlkkllkklLg...',
+  '...gLlkkllkklLg...',
+  '...gLllllllllLg...',
+  '...gLllllllllLg...',
+  '...gLllllkkllLg...',
+  '...gLllllllllLg...',
+  '...gLLllllllLLg...',
+  '...gLLLLLLLLLLg...',
+  '...gggggggggggg...',
+  '..................',
+  '..................',
+  '..................',
+];
+
+/** infested: a silverfish curled up, its segments and feelers */
+const SILVERFISH = [
+  '..................',
+  '..................',
+  '..................',
+  '..f...............',
+  '...f..............',
+  '....hh.hhh........',
+  '...hllhlllhhh.....',
+  '...hlkhlllhllhh...',
+  '...hllhlllhlllhh..',
+  '....mmmmmmmmmmlh..',
+  '.....mmmmmmmmmmh..',
+  '...........mmmhh..',
+  '............mmh...',
+  '.............h....',
+  '..................',
+  '..................',
+  '..................',
+  '..................',
+];
+
+/** weaving: a web strung between the corners */
+function web(): string[] {
+  const g = Array.from({ length: N }, () => Array(N).fill('.'));
+  const c = 8.5;
+  // the spokes
+  for (let a = 0; a < 8; a++) {
+    const t = (a / 8) * Math.PI * 2;
+    for (let r = 0; r < 9; r += 0.25) {
+      const x = Math.floor(c + r * Math.cos(t)), y = Math.floor(c + r * Math.sin(t));
+      if (x >= 1 && y >= 1 && x < N - 1 && y < N - 1) g[y][x] = 's';
+    }
+  }
+  // the rings between them
+  for (const R of [3, 6]) {
+    for (let a = 0; a < 8; a++) {
+      const t0 = (a / 8) * Math.PI * 2, t1 = ((a + 1) / 8) * Math.PI * 2;
+      const x0 = c + R * Math.cos(t0), y0 = c + R * Math.sin(t0), x1 = c + R * Math.cos(t1), y1 = c + R * Math.sin(t1);
+      for (let k = 0; k <= 1; k += 0.05) {
+        const x = Math.floor(x0 + (x1 - x0) * k), y = Math.floor(y0 + (y1 - y0) * k);
+        if (g[y][x] === '.') g[y][x] = 'r';
+      }
+    }
+  }
+  return g.map((r) => r.join(''));
+}
+
+/** wind charged: a gust curling round on itself */
+function gust(): string[] {
+  const g = Array.from({ length: N }, () => Array(N).fill('.'));
+  for (let t = 0; t < Math.PI * 3.1; t += 0.02) {
+    const r = 7.2 - t * 0.62;
+    const x = Math.round(8.5 + r * Math.cos(t + 0.6) - 0.5), y = Math.round(8.5 + r * Math.sin(t + 0.6) * 0.8 - 0.5);
+    if (x >= 0 && y >= 0 && x < N && y < N) g[y][x] = t < 3 ? 'w' : 'm';
+  }
+  return g.map((r) => r.join(''));
+}
+
+/** an eye closed over darkness, or an omen's banner-like flag: simple symbols for the effects nothing here gives */
+const FLAG = [
+  '..................',
+  '...hhhhhhhhhhh....',
+  '...hmmmmmmmmmh....',
+  '...hmmmllmmmmh....',
+  '...hmmlllllmmh....',
+  '...hmmmllmmmmh....',
+  '...hmmlmmlmmmh....',
+  '...hmlmmmmlmmh....',
+  '...hmmmmmmmmmh....',
+  '...hmmmmmmmmmh....',
+  '...hmmmmmmmmmh....',
+  '...hmmmmmmmmmh....',
+  '...hmm.hh.mmmh....',
+  '...hm.......mh....',
+  '...h.........h....',
+  '...h..............',
+  '...h..............',
+  '..................',
+];
+
 export const MOB_EFFECT_TEXTURES: Record<string, () => TexImage> = {
   mob_effect_speed: () =>
     icon(put(put(put(BOOT, [[2, 4], [3, 4], [4, 4], [5, 4], [6, 4]], 'W'), [[1, 7], [2, 7], [3, 7], [4, 7], [5, 7]], 'W'), [[3, 10], [4, 10], [5, 10]], 'W'), { l: 0xa8f4ff, m: 0x33c4e8, d: 0x16708e, W: 0xe8ffff }),
@@ -441,4 +546,16 @@ export const MOB_EFFECT_TEXTURES: Record<string, () => TexImage> = {
   mob_effect_luck: () => icon(clover(false), { l: 0x9ae84a, m: 0x59c106, d: 0x3a8a04, s: 0x3a8a04 }),
   mob_effect_unluck: () => icon(clover(true), { l: 0xd8c070, m: 0xa88a3a, d: 0x6e5a22, s: 0x6e5a22 }),
   mob_effect_slow_falling: () => icon(FEATHER, { w: 0xfff6f0, v: 0xf3cfb9, l: 0xc89878, q: 0xa87858 }),
+  mob_effect_glowing: () => icon(FIGURE, { h: 0xfaffc8, s: 0xd8e690, d: 0x94a061 }),
+  mob_effect_conduit_power: () => icon(EYE, { w: 0xc8f4f8, l: 0xffffff, d: 0x5ab0bc, i: 0x1dc2d1, p: 0x0a2a30, g: 0xffffff }),
+  mob_effect_dolphins_grace: () => icon(put(put(FIGURE, upArrow(1, 8), 'a'), upArrow(14, 8), 'a'), { h: 0xe0ecf8, s: 0x88a3be, d: 0x5a7490, a: 0xc8e0f8 }),
+  mob_effect_bad_omen: () => icon(FLAG, { h: 0x3a3a3a, m: 0x0b6138, l: 0xdadada }),
+  mob_effect_hero_of_the_village: () => icon(FLAG, { h: 0x6a4a2a, m: 0x44ff44, l: 0x1a7a1a }),
+  mob_effect_darkness: () => icon(EYE, { w: 0x3a3836, l: 0x4a4744, d: 0x1e1c1b, i: 0x292721, p: 0x050505, g: 0x050505 }, { outline: 0x0a0a0a }),
+  mob_effect_trial_omen: () => icon(FLAG, { h: 0x3a3a3a, m: 0x16a6a6, l: 0xe8f8f8 }),
+  mob_effect_raid_omen: () => icon(FLAG, { h: 0x3a3a3a, m: 0xde4058, l: 0xf8e0e4 }),
+  mob_effect_wind_charged: () => icon(gust(), { w: 0xe8ecff, m: 0xbdc9ff }),
+  mob_effect_weaving: () => icon(web(), { s: 0xe0dad0, r: 0xb0a898 }),
+  mob_effect_oozing: () => icon(SLIME_CUBE, { g: 0x4a9a3a, L: 0x99ffa3, l: 0x7ad884, k: 0x2a5a24 }),
+  mob_effect_infested: () => icon(SILVERFISH, { h: 0x6a746a, l: 0xb4c0b4, m: 0x8c9b8c, k: 0x1a1a1a, f: 0x8c9b8c }),
 };

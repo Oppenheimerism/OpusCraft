@@ -11,7 +11,7 @@ import { BLOCKS, LAYER, Layer } from '../world/block';
 import type { TexImage } from '../textures/tex';
 import { glintTexture, glintOffset, glintUV } from '../textures/glint';
 import { crossbowTexture } from '../item/crossbow';
-import { dyedColor, isDyeable } from '../item/dyedColor';
+import { itemLayers, layerTint } from '../item/itemColors';
 
 export type DisplayContext = 'gui' | 'ground' | 'fixed' | 'firstperson_righthand' | 'firstperson_lefthand' | 'thirdperson_righthand' | 'thirdperson_lefthand' | 'head';
 
@@ -241,21 +241,19 @@ export class ItemRenderer {
         pose.translate(-0.5, -0.5, -0.5);
         const model = this.flatModel((texture ?? it.texture ?? it.id), src.img, src.u0, src.v0, src.u1, src.v1);
         batch.begin({ texture: src.tex, cutoff: 0.1, blend: false, cull: true, lit: true, useLightmap: ctx !== 'gui' });
-        let tint = 0xffffff;
-        if (it.block && it.block.tint !== 'none') tint = itemTint(it);
-        // leather: the dye tints layer0 (vanilla ItemColors: DyedItemColor.getOrDefault)
-        const dyeable = isDyeable(it);
-        if (dyeable) tint = dyedColor(stack);
-        const tr = ((tint >> 16) & 255) / 255, tg = ((tint >> 8) & 255) / 255, tb = (tint & 255) / 255;
-        for (const qd of model.quads) {
-          batch.quad(pose, Array.from(qd.subarray(0, 12)), Array.from(qd.subarray(12, 20)), qd[20], qd[21], qd[22], tr, tg, tb, 1);
-        }
-        // (and its untinted layer1, the overlay, over it)
-        const over = dyeable ? this.flatSource(it, `${it.texture}_overlay`) : null;
-        if (over) {
-          const om = this.flatModel(`${it.texture}_overlay`, over.img, over.u0, over.v0, over.u1, over.v1);
-          for (const qd of om.quads) batch.quad(pose, Array.from(qd.subarray(0, 12)), Array.from(qd.subarray(12, 20)), qd[20], qd[21], qd[22]);
-        }
+        // vanilla item model layers with ItemColors: leather's dye, a potion's colour on its tinted layer (layer0),
+        // the untinted ones drawn over it; anything else is its one sprite (grayscale blocks with their default tint)
+        const layered = texture === undefined ? itemLayers(it) : null;
+        const layers = layered ? layered.layers : [texture ?? it.texture ?? it.id];
+        const colour = layered ? layerTint(stack) : it.block && it.block.tint !== 'none' ? itemTint(it) : 0xffffff;
+        layers.forEach((name, li) => {
+          const ls = layered ? this.flatSource(it, name) : src;
+          if (!ls) return;
+          const m = layered ? this.flatModel(name, ls.img, ls.u0, ls.v0, ls.u1, ls.v1) : model;
+          const tint = !layered || li === layered.tinted ? colour : 0xffffff;
+          const tr = ((tint >> 16) & 255) / 255, tg = ((tint >> 8) & 255) / 255, tb = (tint & 255) / 255;
+          for (const qd of m.quads) batch.quad(pose, Array.from(qd.subarray(0, 12)), Array.from(qd.subarray(12, 20)), qd[20], qd[21], qd[22], tr, tg, tb, 1);
+        });
         if (stack.hasGlint()) this.renderGlint(batch, pose, model, src);
       }
     }

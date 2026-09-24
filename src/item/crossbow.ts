@@ -26,7 +26,7 @@
 // No firework rockets yet: only arrows are loaded, but a charged 'firework_rocket' is already told apart
 // where vanilla does (1.6 speed, 3 durability, the crossbow_firework texture).
 
-import { ItemStack, type ChargedProjectile } from './item';
+import { ItemStack, ITEMS, cloneTag, type ChargedProjectile } from './item';
 import { levelOf, hurtAndBreak } from './enchantHelper';
 import { Arrow } from '../entity/arrow';
 import type { Level } from '../game/level';
@@ -171,14 +171,21 @@ export function draw(stack: ItemStack, ammo: ItemStack | null, infinite: boolean
   const n = 1 + 2 * levelOf(stack, 'multishot');
   const free = infinite || (levelOf(stack, 'infinity') > 0 && ammo.item.id === 'arrow');
   const out: ChargedProjectile[] = [];
+  // (each carries the ammo's own components: a tipped arrow's potion)
+  const tag = ammo.tag ? { tag: cloneTag(ammo.tag)! } : {};
   for (let j = 0; j < n; j++) {
-    if (j > 0 || free) out.push({ id: ammo.item.id, intangible: true });
+    if (j > 0 || free) out.push({ id: ammo.item.id, intangible: true, ...tag });
     else {
       ammo.count--;
-      out.push({ id: ammo.item.id });
+      out.push({ id: ammo.item.id, ...tag });
     }
   }
   return out;
+}
+
+/** vanilla #arrows: plain and tipped (no spectral arrows yet) */
+function isArrow(s: ItemStack): boolean {
+  return s.item.id === 'arrow' || s.item.id === 'tipped_arrow';
 }
 
 /**
@@ -188,8 +195,8 @@ export function draw(stack: ItemStack, ammo: ItemStack | null, infinite: boolean
 export function playerProjectile(p: Player): ItemStack | null {
   const inv = p.inventory;
   const off = inv.offhand;
-  if (off && (off.item.id === 'arrow' || off.item.id === 'firework_rocket')) return off;
-  const i = inv.findSlot((s) => s.item.id === 'arrow');
+  if (off && (isArrow(off) || off.item.id === 'firework_rocket')) return off;
+  const i = inv.findSlot(isArrow);
   if (i >= 0) return inv.main[i];
   return p.gameMode === 'creative' ? ItemStack.of('arrow') : null;
 }
@@ -257,6 +264,8 @@ export function performShooting(level: Level, shooter: LivingEntity, stack: Item
  */
 function createArrow(level: Level, shooter: LivingEntity, weapon: ItemStack, p: ChargedProjectile, crit: boolean): Arrow {
   const a = new Arrow(level, shooter);
+  const it = ITEMS.get(p.id);
+  if (it && (p.id === 'arrow' || p.id === 'tipped_arrow')) a.setPickupStack(new ItemStack(it, 1, 0, cloneTag(p.tag ?? null)));
   if (p.intangible) a.pickup = 'creative_only';
   a.weapon = weapon.copy();
   a.pierceLevel = levelOf(weapon, 'piercing');

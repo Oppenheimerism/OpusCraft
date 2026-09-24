@@ -39,22 +39,34 @@ function enchantedBooks(allLevels: boolean): ItemStack[] {
   return out;
 }
 
+/** an item's creative stacks: one of it, or its variants (vanilla generatePotionEffectTypes: a potion of each kind) */
+function stacksOf(it: Item): ItemStack[] {
+  return it.creativeStacks?.() ?? [new ItemStack(it, 1)];
+}
+
 /** the search tab's stacks: every item, with the books of every level among the ingredients (before the spawn eggs) */
 let SEARCH: ItemStack[] | null = null;
 function searchStacks(): ItemStack[] {
   if (SEARCH) return SEARCH;
-  const items = tabs().find((t) => t.id === 'search')!.items;
-  const stacks = items.map((it) => new ItemStack(it, 1));
-  const i = items.findIndex((it) => it.creativeTab === 'spawn_eggs');
+  const stacks = tabs().find((t) => t.id === 'search')!.items.flatMap(stacksOf);
+  const i = stacks.findIndex((s) => s.item.creativeTab === 'spawn_eggs');
   stacks.splice(i < 0 ? stacks.length : i, 0, ...enchantedBooks(true));
   return (SEARCH = stacks);
 }
 
-/** the tooltip's enchantment lines, which the search also matches */
-function enchantText(s: ItemStack): string {
-  return tooltipOrder(craftingEnchants(s))
-    .map(([id, l]) => enchantmentLine(id, l).text.toLowerCase())
-    .join('\n');
+/**
+ * what the search matches a stack by (vanilla SessionSearchTrees.CREATIVE_NAMES): its tooltip, every line without its
+ * formatting — the name, a book's enchantments, a potion's effects
+ */
+const SEARCH_TEXT = new WeakMap<ItemStack, string>();
+function searchText(s: ItemStack): string {
+  let t = SEARCH_TEXT.get(s);
+  if (t === undefined) {
+    const ench = tooltipOrder(craftingEnchants(s)).map(([id, l]) => enchantmentLine(id, l).text);
+    t = [...itemTooltip(s), ...ench].map((l) => l.replace(/§./g, '').trim().toLowerCase()).join('\n');
+    SEARCH_TEXT.set(s, t);
+  }
+  return t;
 }
 
 /** vanilla CreativeModeTabs.REDSTONE_BLOCKS, in its order (as far as the game has them) */
@@ -207,7 +219,7 @@ export class CreativeInventoryScreen extends AbstractContainerScreen<ContainerMe
     this.menu = t.type === 'inventory' ? this.invMenu : this.picker;
     this.menu.carried = carried;
     if (t.type !== 'inventory') {
-      this.picker.items = t.type === 'search' ? this.filtered() : [...t.items.map((it) => new ItemStack(it, 1)), ...(t.extra ?? []).map((x) => x.copy())];
+      this.picker.items = t.type === 'search' ? this.filtered() : [...t.items.flatMap(stacksOf), ...(t.extra ?? []).map((x) => x.copy())];
       this.picker.scrollTo(0);
     }
     if (this.search) {
@@ -219,7 +231,7 @@ export class CreativeInventoryScreen extends AbstractContainerScreen<ContainerMe
   private filtered(): ItemStack[] {
     const q = this.searchText.toLowerCase();
     return searchStacks()
-      .filter((x) => !q || x.item.name.toLowerCase().includes(q) || x.item.id.includes(q.replace(/ /g, '_')) || enchantText(x).includes(q))
+      .filter((x) => !q || searchText(x).includes(q) || x.item.id.includes(q.replace(/ /g, '_')))
       .map((x) => x.copy());
   }
 

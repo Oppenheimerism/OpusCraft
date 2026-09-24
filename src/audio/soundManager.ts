@@ -56,13 +56,15 @@ const ALIASES: [RegExp, string][] = [
   [/^block\.(calcite|tuff|dripstone_block|pointed_dripstone|stone|copper|spawner|sponge)\./, 'block.stone.'],
   [/^block\.(rooted_dirt)\./, 'block.gravel.'],
   [/^block\.(powder_snow)\./, 'block.snow.'],
-  [/^block\.(cobweb)\./, 'block.stone.'],
   [/^block\.(hard_crop)\./, 'block.wood.'],
   // the nether wart crop (vanilla SoundType.NETHER_WART): stone steps, its planting sound on place
   [/^block\.nether_wart\.(?=step|hit)/, 'block.stone.'],
   [/^block\.nether_wart\.place$/, 'item.nether_wart.plant'],
   // vanilla SoundType.CROP places with item.crop.plant: the same planting sound, however it's planted
   [/^item\.crop\.plant$/, 'block.crop.place'],
+  // vanilla sounds.json: a potion is thrown with the bow's twang (random/bow) and smashes as glass does (random/glass)
+  [/^entity\.(splash|lingering)_potion\.throw$/, 'entity.arrow.shoot'],
+  [/^entity\.splash_potion\.break$/, 'block.glass.break'],
   // vanilla sounds.json: a lightning strike's crack is the explosion samples (random/explode1-4), played low
   [/^entity\.lightning_bolt\.impact$/, 'entity.generic.explode'],
   // vanilla sounds.json: some villagers at work make their workstation's own sound

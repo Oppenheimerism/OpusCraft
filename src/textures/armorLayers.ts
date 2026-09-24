@@ -62,6 +62,8 @@ const LOOKS: Record<string, Look> = {
   gold: { ramp: ARMOR_MATS.golden.s, base: 3, dip: 2, mottle: 0.3, lit: 4, rim: 2, edge: 0, sparkle: 0.03, seed: 0x901d },
   diamond: { ramp: ARMOR_MATS.diamond.s, base: 3, dip: 2, mottle: 0.3, lit: 4, rim: 2, edge: 0, sparkle: 0.05, seed: 0xd1a3 },
   netherite: { ramp: ARMOR_MATS.netherite.s, base: 2, dip: 1, mottle: 0.35, lit: 4, rim: 1, edge: 0, sparkle: 0.03, seed: 0x7e71 },
+  // (the turtle shell icon's greens: itemlib/extras.ts)
+  turtle: { ramp: [0x1e4a16, 0x2a6a1e, 0x3a8a28, 0x4ea434, 0x68c046, 0x8ed866], base: 3, dip: 2, mottle: 0.3, lit: 4, rim: 1, edge: 0, seed: 0x7a17 },
 };
 
 /**
@@ -200,6 +202,35 @@ function leatherOverlay(layer: 1 | 2): TexImage {
   return t;
 }
 
+/**
+ * the turtle shell (vanilla turtle_layer_1; a helmet is all there is of it): the shell over the crown in its scutes,
+ * a row down the middle between rows either side, each lighter in the middle, its rim over the brow and the ears
+ * cut into the little plates round a shell's edge
+ */
+function turtleLayer1(): TexImage {
+  const look = LOOKS.turtle;
+  const t = img(64, 32);
+  const r = new Rand(look.seed, 1);
+  const cover: Coverage = {
+    top: ALL,
+    front: (x, y, w) => y <= 1 || (y <= 3 && (x === 0 || x === w - 1)),
+    right: (_x, y) => y <= 4,
+    left: (_x, y) => y <= 4,
+    back: (_x, y) => y <= 5,
+  };
+  paintPiece(t, look, HEAD, cover, r);
+  const top = HEAD.top;
+  for (let y = 0; y < 8; y++) shadeAt(t, look, top, 2, y, look.rim), shadeAt(t, look, top, 5, y, look.rim);
+  for (const x of [3, 4]) shadeAt(t, look, top, x, 2, look.rim), shadeAt(t, look, top, x, 5, look.rim);
+  for (const x of [0, 1, 6, 7]) shadeAt(t, look, top, x, 3, look.rim);
+  for (const [x, y] of [[3, 0], [4, 0], [3, 3], [4, 4], [3, 7], [4, 6], [0, 1], [1, 1], [6, 1], [7, 1], [0, 5], [1, 6], [6, 6], [7, 5]])
+    shadeAt(t, look, top, x, y, look.lit + 1);
+  // the marginal plates
+  for (const f of [HEAD.right, HEAD.left, HEAD.back]) for (let x = 1; x < 8; x += 2) for (let y = 2; y < 5; y++) shadeAt(t, look, f, x, y, look.rim);
+  for (const x of [2, 5]) shadeAt(t, look, HEAD.front, x, 1, look.rim);
+  return t;
+}
+
 const MATERIALS = ['leather', 'chainmail', 'iron', 'gold', 'diamond', 'netherite'];
 
 /** vanilla ArmorMaterial layer textures by name: <material>_layer_1 / _layer_2 (leather also _overlay) */
@@ -208,6 +239,7 @@ for (const m of MATERIALS) {
   ARMOR_LAYER_TEXTURES[`${m}_layer_1`] = () => layer1(m);
   ARMOR_LAYER_TEXTURES[`${m}_layer_2`] = () => layer2(m);
 }
+ARMOR_LAYER_TEXTURES.turtle_layer_1 = turtleLayer1;
 ARMOR_LAYER_TEXTURES.leather_layer_1_overlay = () => leatherOverlay(1);
 ARMOR_LAYER_TEXTURES.leather_layer_2_overlay = () => leatherOverlay(2);
 

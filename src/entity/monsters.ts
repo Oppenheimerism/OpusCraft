@@ -1273,6 +1273,9 @@ export class Enderman extends Monster {
     if (this.isAlive && this.isInWaterOrRainNow()) this.hurt(1, 'drown');
     super.aiStep();
   }
+  override isSensitiveToWater(): boolean {
+    return true;
+  }
   protected override customServerAiStep(): void {
     if (this.level.isDay() && this.tickCount >= this.targetChangeTime + 600) {
       const f = this.lightMagic();
@@ -1331,6 +1334,13 @@ export class Enderman extends Monster {
     return true;
   }
   override hurt(amount: number, source: string, attacker?: Entity | null, direct?: Entity | null): boolean {
+    // vanilla EnderMan.hurt: a thrown potion only hurts it if it's water (hurtWithCleanWater), and it gets away
+    if (direct?.type === 'potion') {
+      const water = (direct as Entity & { stack?: ItemStack }).stack?.tag?.potion?.potion === 'water';
+      const ok = water && super.hurt(amount, source, attacker, direct);
+      for (let i = 0; i < 64; i++) if (this.teleport()) return true;
+      return ok;
+    }
     if (source === 'arrow' || (direct && direct !== attacker)) {
       // projectiles never hit endermen: they teleport away
       for (let i = 0; i < 64; i++) if (this.teleport()) return false;

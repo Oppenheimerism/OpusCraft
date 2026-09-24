@@ -15,6 +15,7 @@ import { composterFloor, cauldronContentTop, POTTABLE, pottedName } from '../wor
 import { isDyeable } from '../item/dyedColor';
 import type { Entity } from '../entity/entity';
 import { ItemStack, blockForItem } from '../item/item';
+import { potionStack } from '../item/potions';
 import { ItemEntity } from '../entity/itemEntity';
 import type { Player } from '../entity/player';
 import { lookingDirections } from './blockRules';
@@ -346,8 +347,21 @@ registerBehavior('composter', {
   const inContent = (e: Entity, y: number, top: number) => e.y < y + top && e.bb.maxY > y + 0.25;
   const drops = () => [ItemStack.of('cauldron')];
 
+  /** a water bottle's contents: vanilla PotionContents.is(Potions.WATER) */
+  const isWaterBottle = (s: ItemStack) => s.item.id === 'potion' && s.tag?.potion?.potion === 'water';
   registerBehavior('cauldron', {
-    useItemOn: (level, x, y, z, _st, stack, ctx) => pour(level, x, y, z, stack.item.id, ctx) ?? 'pass',
+    useItemOn(level, x, y, z, _st, stack, ctx) {
+      const r = pour(level, x, y, z, stack.item.id, ctx);
+      if (r) return r;
+      // vanilla CauldronInteraction.EMPTY: a water bottle poured in is a third full
+      if (isWaterBottle(stack)) {
+        fillHeld(ctx.player, ItemStack.of('glass_bottle'));
+        level.setBlock(x, y, z, waterCauldron.state({ level: 1 }));
+        at(level, x, y, z, 'item.bottle.empty');
+        return 'success';
+      }
+      return 'pass';
+    },
     drops,
   });
   registerBehavior('water_cauldron', {
@@ -357,6 +371,19 @@ registerBehavior('composter', {
       if (r) return r;
       // (only a full one fills a bucket)
       if (id === 'bucket') return levelOf(st) === 3 ? fillBucket(level, x, y, z, ctx, 'water_bucket', 'item.bucket.fill') : 'pass';
+      // vanilla CauldronInteraction.WATER: a glass bottle takes a third of it, a water bottle tops it up by one
+      if (id === 'glass_bottle') {
+        fillHeld(ctx.player, potionStack('potion', 'water'));
+        lowerFillLevel(level, x, y, z, st);
+        at(level, x, y, z, 'item.bottle.fill');
+        return 'success';
+      }
+      if (isWaterBottle(stack) && levelOf(st) !== 3) {
+        fillHeld(ctx.player, ItemStack.of('glass_bottle'));
+        level.setBlock(x, y, z, waterCauldron.with(st, 'level', levelOf(st) + 1));
+        at(level, x, y, z, 'item.bottle.empty');
+        return 'success';
+      }
       // vanilla CauldronInteraction.DYED_ITEM: dyed leather comes out undyed, for a level of water
       if (isDyeable(stack.item) && stack.tag?.dyedColor !== undefined) {
         delete stack.tag.dyedColor;

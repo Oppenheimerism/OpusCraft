@@ -156,3 +156,35 @@ export function explode(level: Level, source: Entity | null, x: number, y: numbe
   }
   void fire;
 }
+
+/**
+ * vanilla Level.explode with a wind charge's damage calculator (AbstractWindCharge.EXPLOSION_DAMAGE_CALCULATOR,
+ * ExplosionInteraction.TRIGGER): the blast's push on everything within twice the radius, no harm to them or the
+ * blocks, a gust where it went off and the wind's burst (the wind charged effect, when its bearer dies)
+ */
+export function windBurst(level: Level, source: Entity | null, x: number, y: number, z: number, radius: number): void {
+  const f2 = radius * 2;
+  const box = new AABB(Math.floor(x - f2 - 1), Math.floor(y - f2 - 1), Math.floor(z - f2 - 1), Math.floor(x + f2 + 1), Math.floor(y + f2 + 1), Math.floor(z + f2 + 1));
+  for (const e of level.getEntities(box, undefined, source)) {
+    const dist = Math.sqrt(e.distanceToSqr(x, y, z)) / f2;
+    if (dist > 1) continue;
+    let dx = e.x - x;
+    let dy = (e.type === 'tnt' ? e.y : e.y + e.eyeHeight) - y;
+    let dz = e.z - z;
+    const d12 = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    if (d12 === 0) continue;
+    let k = (1 - dist) * seenPercent(level, x, y, z, e);
+    if (e instanceof LivingEntity) k *= 1 - explosionKnockbackResistance(e);
+    const p = e as { gameMode?: string; flying?: boolean };
+    if (p.gameMode === 'spectator' || (p.gameMode === 'creative' && p.flying)) continue;
+    dx /= d12;
+    dy /= d12;
+    dz /= d12;
+    e.dx += dx * k;
+    e.dy += dy * k;
+    e.dz += dz * k;
+  }
+  // (vanilla GUST_EMITTER_LARGE for a blast of 2 or more that touches blocks)
+  for (let i = 0; i < 7; i++) level.particles.spawn?.('gust', x + (level.random.nextFloat() - level.random.nextFloat()) * radius, y + (level.random.nextFloat() - level.random.nextFloat()) * radius, z + (level.random.nextFloat() - level.random.nextFloat()) * radius, 0, 0, 0);
+  level.sound.play('entity.breeze.wind_burst', x, y, z, 4, (1 + (level.random.nextFloat() - level.random.nextFloat()) * 0.2) * 0.7);
+}

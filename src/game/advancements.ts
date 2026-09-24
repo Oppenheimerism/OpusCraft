@@ -47,6 +47,10 @@ export type Criterion =
   | { t: 'cured_zombie_villager' }
   /** vanilla SummonedEntityTrigger: built a golem (or the wither) near enough to see it come to life */
   | { t: 'summoned_entity'; entity: string }
+  /** vanilla BrewedPotionTrigger: took something with a potion in it out of a brewing stand */
+  | { t: 'brewed_potion' }
+  /** vanilla EffectsChangedTrigger with a MobEffectsPredicate: all of these effects on the player at once */
+  | { t: 'effects_changed'; effects: string[] }
   | { t: 'impossible' };
 
 export interface AdvancementDef {
@@ -165,9 +169,17 @@ const A: AdvancementDef[] = [
   { id: 'nether/ride_strider_in_overworld_lava', parent: 'nether/ride_strider', title: 'Feels Like Home', description: 'Take a Strider for a loooong ride on a lava lake in the Overworld', icon: 'warped_fungus_on_a_stick', frame: 'task', criteria: { ride_entity_distance: { t: 'ride_in_lava', vehicle: 'strider', distance: 50, dimension: 'overworld' } } },
   { id: 'nether/explore_nether', parent: 'nether/ride_strider', title: 'Hot Tourist Destinations', description: 'Explore all Nether biomes', icon: 'netherite_boots', frame: 'challenge', criteria: each(NETHER_BIOMES, (b) => ({ t: 'biome', biome: b })) },
   { id: 'nether/summon_wither', parent: 'nether/get_wither_skull', title: 'Withering Heights', description: 'Summon the Wither', icon: 'nether_star', frame: 'task', criteria: one(never) },
-  { id: 'nether/brew_potion', parent: 'nether/obtain_blaze_rod', title: 'Local Brewery', description: 'Brew a Potion', icon: 'potion', frame: 'task', criteria: one(never) },
+  { id: 'nether/brew_potion', parent: 'nether/obtain_blaze_rod', title: 'Local Brewery', description: 'Brew a Potion', icon: 'potion', frame: 'task', criteria: { potion: { t: 'brewed_potion' } } },
   { id: 'nether/create_beacon', parent: 'nether/summon_wither', title: 'Bring Home the Beacon', description: 'Construct and place a Beacon', icon: 'beacon', frame: 'task', criteria: one(never) },
-  { id: 'nether/all_potions', parent: 'nether/brew_potion', title: 'A Furious Cocktail', description: 'Have every potion effect applied at the same time', icon: 'milk_bucket', frame: 'challenge', criteria: one(never) },
+  {
+    id: 'nether/all_potions', parent: 'nether/brew_potion', title: 'A Furious Cocktail', description: 'Have every potion effect applied at the same time', icon: 'milk_bucket', frame: 'challenge',
+    criteria: {
+      all_effects: {
+        t: 'effects_changed',
+        effects: ['speed', 'slowness', 'strength', 'jump_boost', 'regeneration', 'fire_resistance', 'water_breathing', 'invisibility', 'night_vision', 'weakness', 'poison', 'slow_falling', 'resistance', 'oozing', 'infested', 'wind_charged', 'weaving'],
+      },
+    },
+  },
   { id: 'nether/create_full_beacon', parent: 'nether/create_beacon', title: 'Beaconator', description: 'Bring a Beacon to full power', icon: 'beacon', frame: 'goal', criteria: one(never) },
   { id: 'nether/all_effects', parent: 'nether/all_potions', title: 'How Did We Get Here?', description: 'Have every effect applied at the same time', icon: 'bucket', frame: 'challenge', hidden: true, criteria: one(never) },
 
@@ -437,6 +449,10 @@ export interface TriggerPayload {
   summoned?: string;
   /** a zombie villager the player cured (cured_zombie_villager) */
   cured?: boolean;
+  /** the potion taken out of a brewing stand (brewed_potion) */
+  potion?: string;
+  /** the effects the player has now (effects_changed) */
+  effects?: Set<string>;
 }
 
 export class PlayerAdvancements {
@@ -567,6 +583,10 @@ function matches(c: Criterion, p: TriggerPayload): boolean {
       return p.summoned === c.entity;
     case 'cured_zombie_villager':
       return !!p.cured;
+    case 'brewed_potion':
+      return p.potion !== undefined;
+    case 'effects_changed':
+      return !!p.effects && c.effects.every((e) => p.effects!.has(e));
     case 'nether_travel':
       return p.netherTravel !== undefined && p.netherTravel >= c.distance;
     case 'killed_by_crossbow': {

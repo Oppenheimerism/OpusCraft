@@ -870,8 +870,8 @@ export class Interaction {
       return;
     }
     p.usingItemTicks = p.ticksUsingItem() + 1;
-    const edible = !!u.item.food || u.item.id === 'milk_bucket';
-    if (edible) {
+    // vanilla shouldTriggerItemUseEffects: past the first 21.875 % of the use, every fourth tick
+    if (useAnimation(u)) {
       const used = p.useDuration - p.useItemRemaining;
       if (used > Math.floor(p.useDuration * 0.21875) && p.useItemRemaining % 4 === 0) this.itemUseEffects(u);
     }
@@ -881,10 +881,12 @@ export class Interaction {
     if (--p.useItemRemaining === 0 && u.item.id !== 'crossbow') p.inventory.withHand(p.useHand, () => this.completeUsingItem());
   }
 
+  /** vanilla LivingEntity.triggerItemUseEffects: a drink's gulp, food's munch */
   private itemUseEffects(s: ItemStack): void {
     const p = this.player;
-    if (s.item.id === 'milk_bucket') this.level.sound.play('entity.generic.drink', p.x, p.y, p.z, 0.5, Math.random() * 0.1 + 0.9);
-    else this.level.sound.play('entity.generic.eat', p.x, p.y, p.z, 0.5 + 0.5 * Math.floor(Math.random() * 2), (Math.random() - Math.random()) * 0.2 + 1);
+    const anim = useAnimation(s);
+    if (anim === 'drink') this.level.sound.play('entity.generic.drink', p.x, p.y, p.z, 0.5, Math.random() * 0.1 + 0.9);
+    else if (anim === 'eat') this.level.sound.play('entity.generic.eat', p.x, p.y, p.z, 0.5 + 0.5 * Math.floor(Math.random() * 2), (Math.random() - Math.random()) * 0.2 + 1);
   }
 
   /** vanilla completeUsingItem → Item.finishUsingItem */
@@ -893,9 +895,16 @@ export class Interaction {
     const s = p.useItem!;
     p.stopUsingItem();
     const it = s.item;
-    if (it.food || it.id === 'milk_bucket') this.onConsumed?.(it.id);
+    const finish = itemBehaviorOf(it.id)?.finishUsing;
+    if (it.food || it.id === 'milk_bucket' || finish) this.onConsumed?.(it.id);
+    // (vanilla completeUsingItem: the use's last effects, then what finishing does)
+    this.itemUseEffects(s);
+    if (finish) {
+      finish(this.level, p, s);
+      p.inventory.version++;
+      return;
+    }
     if (it.food) {
-      this.itemUseEffects(s);
       p.food.eat(it.food.nutrition, it.food.saturation);
       this.level.sound.play('entity.player.burp', p.x, p.y, p.z, 0.5, Math.random() * 0.1 + 0.9);
       // vanilla LivingEntity.addEatEffect: each food effect rolls its probability
@@ -948,9 +957,10 @@ export class Interaction {
     if (!ammo && !creative) return;
     const f = bowPower(used);
     if (f < 0.1) return;
-    // vanilla useAmmo: creative and infinity (ammo_use 0 for plain arrows) keep the arrow, and the shot one
-    // can't be picked up (INTANGIBLE_PROJECTILE)
-    const free = creative || levelOf(s, 'infinity') > 0;
+    // vanilla useAmmo: creative and infinity (ammo_use 0 for plain arrows only) keep the arrow, and the shot one
+    // can't be picked up (INTANGIBLE_PROJECTILE); with nothing to shoot, creative shoots a plain arrow
+    const free = creative || (levelOf(s, 'infinity') > 0 && (!ammo || ammo.item.id === 'arrow'));
+    const shot = ammo ? ammo.copyWithCount(1) : ItemStack.of('arrow');
     if (!free && ammo) {
       ammo.count--;
       const inv = p.inventory;
@@ -959,6 +969,7 @@ export class Interaction {
       inv.version++;
     }
     const arrow = new Arrow(this.level, p);
+    arrow.setPickupStack(shot);
     arrow.pickup = free ? 'creative_only' : 'allowed';
     // the bow's power and punch act when the arrow hits; flame (projectile_spawned) sets it alight for 100 s
     arrow.weapon = s.copy();
@@ -970,10 +981,10 @@ export class Interaction {
     this.level.sound.play('entity.arrow.shoot', p.x, p.y, p.z, 1, 1 / (Math.random() * 0.4 + 1.2) + f * 0.5);
   }
 
-  /** vanilla Player.getProjectile for a bow: arrows in the offhand, then the main hand, then the inventory in order */
+  /** vanilla Player.getProjectile for a bow: #arrows in the offhand, then the main hand, then the inventory in order */
   private arrowSource(): ItemStack | null {
     const inv = this.player.inventory;
-    const isArrow = (x: ItemStack | null): x is ItemStack => !!x && x.item.id === 'arrow' && x.count > 0;
+    const isArrow = (x: ItemStack | null): x is ItemStack => !!x && (x.item.id === 'arrow' || x.item.id === 'tipped_arrow') && x.count > 0;
     const off = inv.inHand('off'), main = inv.inHand('main');
     if (isArrow(off)) return off;
     if (isArrow(main)) return main;
@@ -1059,6 +1070,14 @@ export class Interaction {
     e.dz = f4 * f2 * 0.3 + Math.sin(f5) * f6;
     this.level.addEntity(e);
   }
+}
+
+/** vanilla ItemStack.getUseAnimation, for the uses that eat or drink */
+function useAnimation(s: ItemStack): 'drink' | 'eat' | null {
+  const b = itemBehaviorOf(s.item.id)?.useAnim;
+  if (b) return b;
+  if (s.item.id === 'milk_bucket') return 'drink';
+  return s.item.food ? 'eat' : null;
 }
 
 export { S };

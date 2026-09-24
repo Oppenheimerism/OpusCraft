@@ -2,6 +2,7 @@
 
 import { BLOCKS, Block, ToolType, getBlock } from '../world/block';
 import { WOODS } from '../world/blocksExtra';
+import type { SavedEffect } from '../entity/effects';
 
 export interface ToolInfo {
   type: ToolType;
@@ -42,6 +43,14 @@ export interface Item {
   glint?: boolean;
   /** extra gray tooltip lines (music disc descriptions...) */
   lore?: string[];
+  /** vanilla Item.getName(stack): a name that depends on the stack (potions by their contents) */
+  stackName?: (s: ItemStack) => string;
+  /** vanilla Item.appendHoverText: tooltip lines after the name (a potion's effects) */
+  hoverText?: (s: ItemStack, lines: string[]) => void;
+  /** the stacks the creative tabs list for it (vanilla generatePotionEffectTypes: one per potion) */
+  creativeStacks?: () => ItemStack[];
+  /** vanilla Item.craftingRemainingItem: what's left of it in a crafting grid or brewing stand (dragon's breath: the bottle) */
+  remainder?: string;
 }
 
 export type Rarity = 'common' | 'uncommon' | 'rare' | 'epic';
@@ -198,6 +207,8 @@ reg({ id: 'bow', maxStack: 1, creativeTab: 'combat', texture: 'bow', maxDamage: 
 // which the game doesn't have yet, so it isn't craftable (creative, /give)
 reg({ id: 'crossbow', maxStack: 1, creativeTab: 'combat', texture: 'crossbow_standby', maxDamage: 465 });
 reg({ id: 'arrow', creativeTab: 'combat', texture: 'arrow' });
+// vanilla TippedArrowItem (models/item/tipped_arrow.json: layer0 the tinted head, layer1 the shaft; item/potions.ts)
+reg({ id: 'tipped_arrow', creativeTab: 'combat', texture: 'tipped_arrow_base' });
 reg({ id: 'fishing_rod', maxStack: 1, creativeTab: 'tools', texture: 'fishing_rod', maxDamage: 64 });
 reg({ id: 'carrot_on_a_stick', maxStack: 1, creativeTab: 'tools', texture: 'carrot_on_a_stick', maxDamage: 25 });
 reg({ id: 'warped_fungus_on_a_stick', maxStack: 1, creativeTab: 'tools', texture: 'warped_fungus_on_a_stick', maxDamage: 100 });
@@ -227,6 +238,9 @@ for (const [mat, a] of Object.entries(ARMOR)) {
     reg({ id: `${mat}_${piece}`, maxStack: 1, creativeTab: 'combat', texture: `${mat}_${piece}`, armor: { slot, defense: a.def[i], toughness: a.tough, durability: ARMOR_BASE[i] * a.dur } });
   }
 }
+// vanilla ArmorMaterials.TURTLE (defence 2, durability multiplier 25): only a helmet, which lets its wearer breathe
+// a while longer when they duck under
+reg({ id: 'turtle_helmet', name: 'Turtle Shell', maxStack: 1, creativeTab: 'combat', texture: 'turtle_helmet', armor: { slot: 'head', defense: 2, toughness: 0, durability: ARMOR_BASE[0] * 25 } });
 
 // Food
 const FOOD: [string, number, number, Partial<FoodInfo>?][] = [
@@ -236,7 +250,7 @@ const FOOD: [string, number, number, Partial<FoodInfo>?][] = [
   ['cooked_cod', 5, 0.6], ['salmon', 2, 0.1], ['cooked_salmon', 6, 0.8], ['cookie', 2, 0.1], ['melon_slice', 2, 0.3],
   ['sweet_berries', 2, 0.1], ['rotten_flesh', 4, 0.1], ['spider_eye', 2, 0.8], ['mushroom_stew', 6, 0.6, { remainder: 'bowl' }],
   ['beetroot', 1, 0.6], ['beetroot_soup', 6, 0.6, { remainder: 'bowl' }], ['golden_carrot', 6, 1.2], ['poisonous_potato', 2, 0.3],
-  ['pumpkin_pie', 8, 0.3], ['glow_berries', 2, 0.1],
+  ['pumpkin_pie', 8, 0.3], ['glow_berries', 2, 0.1], ['pufferfish', 1, 0.1],
 ];
 for (const [id, n, s, extra] of FOOD) {
   reg({ id, texture: id, creativeTab: 'food', maxStack: extra?.remainder ? 1 : 64, food: { nutrition: n, saturation: s, ...(extra ?? {}) } });
@@ -251,6 +265,8 @@ const EAT_EFFECTS: Record<string, [string, number, number, number][]> = {
   rotten_flesh: [['hunger', 600, 0, 0.8]],
   poisonous_potato: [['poison', 100, 0, 0.6]],
   spider_eye: [['poison', 100, 0, 1]],
+  // vanilla Foods.PUFFERFISH
+  pufferfish: [['poison', 1200, 1, 1], ['hunger', 300, 2, 1], ['nausea', 300, 0, 1]],
 };
 for (const [id, fx] of Object.entries(EAT_EFFECTS)) ITEMS.get(id)!.food!.effects = fx;
 
@@ -275,6 +291,10 @@ for (const [id, stack, fuel] of MISC) {
     }
 }
 Object.assign(ITEMS.get('experience_bottle')!, { rarity: 'uncommon', glint: true });
+// brewing ingredients (vanilla Items: the glistering melon, the fermented eye, the rabbit's foot and the rest)
+for (const id of ['fermented_spider_eye', 'glistering_melon_slice', 'rabbit_foot', 'phantom_membrane', 'turtle_scute', 'breeze_rod']) reg({ id, texture: id });
+// vanilla Items.DRAGON_BREATH: uncommon, 64 to a stack, and its bottle is left over when it's brewed
+reg({ id: 'dragon_breath', name: "Dragon's Breath", texture: 'dragon_breath', rarity: 'uncommon', remainder: 'glass_bottle' });
 // the End: vanilla EnderEyeItem, and EndCrystalItem (rare, with the enchantment glint); the portal frame is a functional block
 reg({ id: 'ender_eye', texture: 'ender_eye', creativeTab: 'tools' });
 // (vanilla CreativeModeTabs.COMBAT lists the end crystal after the totem and TNT)
@@ -289,6 +309,11 @@ for (const [id, desc, rarity] of [['music_disc_13', 'C418 - 13', 'uncommon'], ['
 for (const c of ['white', 'orange', 'magenta', 'light_blue', 'yellow', 'lime', 'pink', 'gray', 'light_gray', 'cyan', 'purple', 'blue', 'brown', 'green', 'red', 'black']) {
   reg({ id: `${c}_dye`, texture: `${c}_dye` });
 }
+// potions (vanilla PotionItem, SplashPotionItem, LingeringPotionItem: one to a stack; models/item/potion.json:
+// layer0 the tinted potion_overlay, layer1 the bottle; their contents, names and brewing in item/potions.ts)
+reg({ id: 'potion', maxStack: 1, creativeTab: 'food', texture: 'potion' });
+reg({ id: 'splash_potion', maxStack: 1, creativeTab: 'food', texture: 'splash_potion' });
+reg({ id: 'lingering_potion', maxStack: 1, creativeTab: 'food', texture: 'lingering_potion' });
 // spawn eggs (creative tab order is alphabetical, like vanilla)
 for (const m of ['bat', 'blaze', 'cave_spider', 'chicken', 'cow', 'creeper', 'enderman', 'ghast', 'hoglin', 'iron_golem', 'magma_cube', 'pig', 'piglin', 'sheep', 'skeleton', 'slime', 'spider', 'squid', 'strider', 'villager', 'wither_skeleton', 'zoglin', 'zombie', 'zombie_villager', 'zombified_piglin']) {
   reg({ id: `${m}_spawn_egg`, texture: `${m}_spawn_egg`, creativeTab: 'spawn_eggs' });
@@ -379,12 +404,36 @@ export interface ItemTag {
   dyedColor?: number;
   /** minecraft:dyed_color show_in_tooltip: false */
   dyedHidden?: boolean;
+  /** minecraft:potion_contents (potions, tipped arrows; see item/potions.ts) */
+  potion?: PotionContents;
+}
+
+/** vanilla PotionContents: the potion (a registry id; none for an uncraftable one), a custom colour, custom effects */
+export interface PotionContents {
+  potion?: string;
+  customColor?: number;
+  customEffects?: SavedEffect[];
 }
 
 /** one of a crossbow's charged projectiles: the item, and vanilla INTANGIBLE_PROJECTILE (multishot's copies, creative's) */
 export interface ChargedProjectile {
   id: string;
   intangible?: boolean;
+  /** the projectile stack's own components (a tipped arrow's potion) */
+  tag?: ItemTag;
+}
+
+export function clonePotion(p: PotionContents): PotionContents {
+  const o: PotionContents = {};
+  if (p.potion !== undefined) o.potion = p.potion;
+  if (p.customColor !== undefined) o.customColor = p.customColor;
+  if (p.customEffects?.length) o.customEffects = JSON.parse(JSON.stringify(p.customEffects));
+  return o;
+}
+
+function samePotion(a: PotionContents | undefined, b: PotionContents | undefined): boolean {
+  if (!a || !b) return !a === !b;
+  return a.potion === b.potion && a.customColor === b.customColor && JSON.stringify(a.customEffects ?? []) === JSON.stringify(b.customEffects ?? []);
 }
 
 export function cloneTag(t: ItemTag | null): ItemTag | null {
@@ -394,16 +443,25 @@ export function cloneTag(t: ItemTag | null): ItemTag | null {
   if (t.stored) o.stored = { ...t.stored };
   if (t.customName !== undefined) o.customName = t.customName;
   if (t.repairCost) o.repairCost = t.repairCost;
-  if (t.charged?.length) o.charged = t.charged.map((p) => ({ ...p }));
+  if (t.charged?.length) o.charged = t.charged.map((p) => ({ ...p, ...(p.tag ? { tag: cloneTag(p.tag)! } : {}) }));
   if (t.dyedColor !== undefined) o.dyedColor = t.dyedColor;
   if (t.dyedHidden) o.dyedHidden = true;
+  if (t.potion) o.potion = clonePotion(t.potion);
   return o;
+}
+
+/** vanilla isSameItemSameComponents on two tags */
+export function sameTag(a: ItemTag | null | undefined, b: ItemTag | null | undefined): boolean {
+  return (
+    sameEnchants(a?.enchantments, b?.enchantments) && sameEnchants(a?.stored, b?.stored) && a?.customName === b?.customName && (a?.repairCost ?? 0) === (b?.repairCost ?? 0) &&
+    sameCharged(a?.charged, b?.charged) && a?.dyedColor === b?.dyedColor && !a?.dyedHidden === !b?.dyedHidden && samePotion(a?.potion, b?.potion)
+  );
 }
 
 function sameCharged(a: ChargedProjectile[] | undefined, b: ChargedProjectile[] | undefined): boolean {
   const la = a?.length ?? 0;
   if (la !== (b?.length ?? 0)) return false;
-  for (let i = 0; i < la; i++) if (a![i].id !== b![i].id || !a![i].intangible !== !b![i].intangible) return false;
+  for (let i = 0; i < la; i++) if (a![i].id !== b![i].id || !a![i].intangible !== !b![i].intangible || !sameTag(a![i].tag, b![i].tag)) return false;
   return true;
 }
 
@@ -443,15 +501,11 @@ export class ItemStack {
   /** vanilla isSameItemSameComponents */
   sameItem(o: ItemStack | null): boolean {
     if (!o || o.item !== this.item || o.damage !== this.damage) return false;
-    const a = this.tag, b = o.tag;
-    return (
-      sameEnchants(a?.enchantments, b?.enchantments) && sameEnchants(a?.stored, b?.stored) && a?.customName === b?.customName && (a?.repairCost ?? 0) === (b?.repairCost ?? 0) &&
-      sameCharged(a?.charged, b?.charged) && a?.dyedColor === b?.dyedColor && !a?.dyedHidden === !b?.dyedHidden
-    );
+    return sameTag(this.tag, o.tag);
   }
-  /** vanilla getHoverName: the custom name, or the item's name */
+  /** vanilla getHoverName: the custom name, or the item's name (for this stack) */
   displayName(): string {
-    return this.tag?.customName ?? this.item.name;
+    return this.tag?.customName ?? this.item.stackName?.(this) ?? this.item.name;
   }
   get maxStack(): number {
     return this.item.maxStack;

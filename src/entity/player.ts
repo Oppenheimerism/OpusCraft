@@ -3,6 +3,7 @@
 
 import { LivingEntity } from './living';
 import type { Entity } from './entity';
+import { MOB_EFFECTS, MobEffectInstance } from './effects';
 import { FLUID_WATER } from '../world/fluids';
 import type { Level } from '../game/level';
 import type { ItemStack } from '../item/item';
@@ -356,6 +357,7 @@ export class Player extends LivingEntity {
     this.tickAir();
     this.inventory.tick();
     if (this.takeXpDelay > 0) this.takeXpDelay--;
+    this.turtleHelmetTick();
     for (const [k, v] of this.cooldowns) {
       if (v <= 1) this.cooldowns.delete(k);
       else this.cooldowns.set(k, v - 1);
@@ -370,6 +372,12 @@ export class Player extends LivingEntity {
       }
     }
     if (this.flying) this.fallDistance = 0;
+  }
+
+  /** vanilla Player.turtleHelmetTick: out of the water, a turtle shell keeps 10 s of breath in hand (no swirls, just the icon) */
+  private turtleHelmetTick(): void {
+    if (this.inventory.armor[3]?.item.id === 'turtle_helmet' && this.eyeFluid !== FLUID_WATER)
+      this.addEffect(new MobEffectInstance(MOB_EFFECTS.water_breathing, 200, 0, false, false, true));
   }
 
   /** vanilla Entity.spawnSprintParticle: running kicks up bits of the ground */
@@ -595,9 +603,30 @@ export class Player extends LivingEntity {
     this.onDeath?.(this, source);
   }
 
+  /** vanilla ServerPlayer.onEffectAdded / onEffectUpdated / onEffectRemoved: CriteriaTriggers.EFFECTS_CHANGED */
+  onEffectsChanged: (() => void) | null = null;
+  protected override onEffectAdded(inst: MobEffectInstance): void {
+    super.onEffectAdded(inst);
+    this.onEffectsChanged?.();
+  }
+  protected override onEffectUpdated(inst: MobEffectInstance, forced: boolean): void {
+    super.onEffectUpdated(inst, forced);
+    this.onEffectsChanged?.();
+  }
+  protected override onEffectRemoved(inst: MobEffectInstance): void {
+    super.onEffectRemoved(inst);
+    this.onEffectsChanged?.();
+  }
+
+  /** vanilla Player.isAffectedByPotions: not a spectator */
+  override isAffectedByPotions(): boolean {
+    return this.gameMode !== 'spectator' && super.isAffectedByPotions();
+  }
+
   protected override tickDeath(): void {
     this.deathTime++;
-    // players are not removed; death screen handles respawn
+    // players are not removed; death screen handles respawn (vanilla removes the body 20 ticks on: its effects' last word)
+    if (this.deathTime === 20) this.triggerOnDeathMobEffects();
   }
 
   /** vanilla Player.drop: `thrown` flings it like the drop key, otherwise it falls at the feet */

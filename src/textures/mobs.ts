@@ -1936,6 +1936,34 @@ const EFFECT_SWIRL = [
   ['...WW...', '.w....w.', '.W.ww.W.', 'W.W..W.W', 'W.W.W..W', '.W..W.w.', '.w..W...', '...W....'],
 ];
 EFFECT_SWIRL.forEach((rows, i) => (MOB_PARTICLE_TEXTURES['effect_' + i] = () => pixelSprite(rows, { W: 0xffffff, w: 0xbdbdbd })));
+// instant effects' and witches' sparkles (vanilla spell_0..7): white, tinted; spell_7, the first, a wide
+// four-pointed glint that draws in to a dot
+const SPELL_SPARK = [
+  ['........', '........', '........', '...W....', '........', '........', '........', '........'],
+  ['........', '........', '...w....', '..wWw...', '...w....', '........', '........', '........'],
+  ['........', '........', '...W....', '..WWW...', '...W....', '........', '........', '........'],
+  ['........', '...w....', '...W....', '.wWWWw..', '...W....', '...w....', '........', '........'],
+  ['........', '...W....', '..wWw...', '.WWWWW..', '..wWw...', '...W....', '........', '........'],
+  ['...w....', '...W....', '.w.W.w..', 'wWWWWWw.', '.w.W.w..', '...W....', '...w....', '........'],
+  ['...W....', '.w.W.w..', '..wWw...', 'WWW.WWW.', '..wWw...', '.w.W.w..', '...W....', '........'],
+  ['W..W..W.', '.w.W.w..', '..w.w...', 'WW...WW.', '..w.w...', '.w.W.w..', 'W..W..W.', '........'],
+];
+SPELL_SPARK.forEach((rows, i) => (MOB_PARTICLE_TEXTURES['spell_' + i] = () => pixelSprite(rows, { W: 0xffffff, w: 0xbdbdbd })));
+// the infested effect's specks (vanilla particle/infested): a grey mite
+MOB_PARTICLE_TEXTURES['infested'] = () =>
+  pixelSprite(['........', '........', '...ww...', '..wWWw..', '..WssW..', '...ww...', '........', '........'], { W: 0xc8d0c8, w: 0x8c9b8c, s: 0x5a645a });
+// a gust of wind (vanilla gust_0..11, drawn from the wind charged effect): a curl of air opening out and thinning away
+for (let i = 0; i < 12; i++)
+  MOB_PARTICLE_TEXTURES['gust_' + i] = () => {
+    const t = img(16, 16);
+    const r0 = 2 + i * 0.45;
+    for (let a = 0; a < Math.PI * 1.6; a += 0.05) {
+      const r = r0 + a * 0.9;
+      const x = Math.round(7.5 + r * Math.cos(a + i * 0.3)), y = Math.round(7.5 + r * Math.sin(a + i * 0.3) * 0.7);
+      if (x >= 0 && y >= 0 && x < 16 && y < 16 && (i < 8 || (x + y + i) % 3)) plot(t, x, y, a < 2 ? 0xffffff : 0xdce4f4);
+    }
+    return t;
+  };
 // happy villager / bone meal sparkle (vanilla glint)
 MOB_PARTICLE_TEXTURES['glint'] = () => pixelSprite([
   '........',

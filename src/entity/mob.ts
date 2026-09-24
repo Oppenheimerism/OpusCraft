@@ -890,6 +890,7 @@ export abstract class Mob extends LivingEntity {
     this.deathTime++;
     if (this.deathTime >= 20 && !this.removed) {
       this.level.particles.poof?.(this);
+      this.triggerOnDeathMobEffects();
       this.remove();
     }
   }

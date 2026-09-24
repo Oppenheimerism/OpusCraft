@@ -12,7 +12,7 @@ import { LAYER, Layer } from '../world/block';
 import type { IconSource } from './guiGraphics';
 import type { TexImage } from '../textures/tex';
 import { glintTexture, glintOffset, GLINT_SIZE } from '../textures/glint';
-import { DEFAULT_LEATHER_COLOR, isDyeable } from '../item/dyedColor';
+import { itemLayers, layerTint } from '../item/itemColors';
 
 const FACE_SHADE = [0.5, 1.0, 0.6, 0.8, 0.8, 0.8]; // down, up, north(right), south, west, east(left)
 
@@ -25,12 +25,12 @@ export class ItemIcons implements IconSource {
 
   constructor(private readonly renderer: Renderer, private readonly blockImages: Map<string, TexImage>) {}
 
-  /** `dye`: a dyed stack's colour (leather: vanilla ItemColors tints layer0 with DyedItemColor, undyed 0xa06540) */
-  private flatCanvas(it: Item, dye?: number): HTMLCanvasElement | null {
+  /** `tint`: the colour of a layered item's tinted layer (vanilla ItemColors: a dye, a potion's colour) */
+  private flatCanvas(it: Item, tint?: number): HTMLCanvasElement | null {
     const tex = it.texture;
     if (!tex) return null;
-    const dyeable = isDyeable(it);
-    const key = dyeable && dye !== undefined ? `${tex}#${dye}` : tex;
+    const layered = itemLayers(it);
+    const key = layered ? `${it.id}#${(tint ?? layered.defaultTint).toString(16)}` : tex;
     let c = this.flat.get(key);
     if (c) return c;
     let img: TexImage | undefined;
@@ -41,22 +41,35 @@ export class ItemIcons implements IconSource {
     c.width = img.w;
     c.height = img.h;
     const ctx = c.getContext('2d')!;
-    const data = new Uint8ClampedArray(img.data);
-    // tint grayscale block sprites (grass, fern, vines...) with default colors, leather with its dye
-    let tint = -1;
-    if (it.block && it.block.tint !== 'none' && tex.startsWith('block:')) tint = it.block.tint === 'foliage' ? 0x48b518 : it.block.tint === 'lily' ? 0x71c35c : 0x7cbd6b;
-    if (dyeable) tint = dye ?? DEFAULT_LEATHER_COLOR;
-    if (tint >= 0)
-      for (let i = 0; i < data.length; i += 4) {
-        data[i] = (data[i] * ((tint >> 16) & 255)) / 255;
-        data[i + 1] = (data[i + 1] * ((tint >> 8) & 255)) / 255;
-        data[i + 2] = (data[i + 2] * (tint & 255)) / 255;
+    let data: Uint8ClampedArray<ArrayBuffer>;
+    if (layered) {
+      // (vanilla item model layers, bottom to top: the tinted one multiplied by its colour, each over the last)
+      data = new Uint8ClampedArray(img.w * img.h * 4);
+      const col = tint ?? layered.defaultTint;
+      layered.layers.forEach((name, li) => {
+        const l = this.renderer.items.itemSprites.get(name)?.img;
+        if (!l) return;
+        const t = li === layered.tinted ? col : 0xffffff;
+        for (let i = 0; i < data.length; i += 4) {
+          if (!l.data[i + 3]) continue;
+          data[i] = (l.data[i] * ((t >> 16) & 255)) / 255;
+          data[i + 1] = (l.data[i + 1] * ((t >> 8) & 255)) / 255;
+          data[i + 2] = (l.data[i + 2] * (t & 255)) / 255;
+          data[i + 3] = l.data[i + 3];
+        }
+      });
+    } else {
+      data = new Uint8ClampedArray(img.data);
+      // tint grayscale block sprites (grass, fern, vines...) with default colors
+      if (it.block && it.block.tint !== 'none' && tex.startsWith('block:')) {
+        const t = it.block.tint === 'foliage' ? 0x48b518 : it.block.tint === 'lily' ? 0x71c35c : 0x7cbd6b;
+        for (let i = 0; i < data.length; i += 4) {
+          data[i] = (data[i] * ((t >> 16) & 255)) / 255;
+          data[i + 1] = (data[i + 1] * ((t >> 8) & 255)) / 255;
+          data[i + 2] = (data[i + 2] * (t & 255)) / 255;
+        }
       }
-    // (vanilla item model layer1: the untinted overlay over it)
-    const over = dyeable ? this.renderer.items.itemSprites.get(`${tex}_overlay`)?.img : undefined;
-    if (over)
-      for (let i = 0; i < data.length; i += 4)
-        if (over.data[i + 3]) for (let k = 0; k < 4; k++) data[i + k] = over.data[i + k];
+    }
     ctx.putImageData(new ImageData(data, img.w, img.h), 0, 0);
     this.flat.set(key, c);
     return c;
@@ -183,7 +196,7 @@ export class ItemIcons implements IconSource {
     this.builtScale = scale;
   }
 
-  /** `id` may carry a dyed colour, as `<id>#<rrggbb>` (GuiGraphics.stack) */
+  /** `id` may carry its tinted layer's colour, as `<id>#<rrggbb>` (GuiGraphics.stack) */
   drawIcon(ctx: CanvasRenderingContext2D, id: string, px: number, py: number, size: number): boolean {
     const hash = id.indexOf('#');
     const dye = hash >= 0 ? parseInt(id.slice(hash + 1), 16) : undefined;
@@ -243,6 +256,6 @@ export class ItemIcons implements IconSource {
   }
 
   drawStack(ctx: CanvasRenderingContext2D, s: ItemStack, px: number, py: number, size: number): boolean {
-    return this.drawIcon(ctx, s.item.id, px, py, size);
+    return this.drawIcon(ctx, itemLayers(s.item) ? `${s.item.id}#${layerTint(s).toString(16)}` : s.item.id, px, py, size);
   }
 }

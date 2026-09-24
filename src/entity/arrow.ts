@@ -9,7 +9,9 @@ import { clipBlocks } from '../game/raycast';
 import { onProjectileHit } from '../game/blockRules';
 import { AABB } from '../core/aabb';
 import { COLLISION } from '../world/block';
-import { ItemStack, ITEMS } from '../item/item';
+import { ItemStack } from '../item/item';
+import { allEffects, contentsOf, potionColor, potionEffects } from '../item/potions';
+import { MobEffectInstance } from './effects';
 import type { Player } from './player';
 import { ItemEntity } from './itemEntity';
 import { damageBonus, levelOf } from '../item/enchantHelper';
@@ -40,6 +42,10 @@ export class Arrow extends Entity {
   private piercedAndKilled: LivingEntity[] | null = null;
   /** vanilla soundEvent: what it hits with (a crossbow's arrows item.crossbow.hit until they land) */
   hitSound = 'entity.arrow.hit';
+  /** vanilla pickupItemStack: what picking it up gives back (a tipped arrow keeps its potion) */
+  private pickupStack: ItemStack = ItemStack.of('arrow');
+  /** vanilla Arrow.ID_EFFECT_COLOR: its potion's colour, -1 without one */
+  color = -1;
   private readonly rnd = Math.random;
 
   constructor(level: Level, owner?: LivingEntity | null) {
@@ -82,12 +88,47 @@ export class Arrow extends Entity {
     if (!shooter.onGround) this.dy += shooter.y - shooter.yo;
   }
 
+  /** vanilla AbstractArrow.setPickupItemStack + Arrow.updateColor: the stack it came from, whose potion it carries */
+  setPickupStack(stack: ItemStack): void {
+    this.pickupStack = stack.copyWithCount(1);
+    const c = contentsOf(this.pickupStack);
+    this.color = c ? potionColor(c) : -1;
+  }
+
+  get pickupItem(): ItemStack {
+    return this.pickupStack;
+  }
+
+  /** vanilla Arrow.makeParticle: swirls in its potion's colour */
+  private makeParticle(n: number): void {
+    if (this.color === -1) return;
+    for (let j = 0; j < n; j++) {
+      const x = this.x + this.width * (2 * this.rnd() - 1) * 0.5, y = this.y + this.height * this.rnd(), z = this.z + this.width * (2 * this.rnd() - 1) * 0.5;
+      this.level.particles.entityEffect?.(x, y, z, this.color, 1);
+    }
+  }
+
   /** vanilla setBaseDamageFromMob */
   setBaseDamageFromMob(velocity: number, difficulty: number): void {
     this.baseDamage = velocity * 2 + difficulty * 0.11 + 0.57425 * (this.rnd() - this.rnd());
   }
 
   override tick(): void {
+    this.tickArrow();
+    // vanilla Arrow.tick: a tipped arrow trails its colour (in the ground, a wisp every quarter second); stuck for half
+    // a minute its potion is spent, with a last puff, and it's a plain arrow again
+    if (this.removed) return;
+    if (this.inGround) {
+      if (this.inGroundTime % 5 === 0) this.makeParticle(1);
+      if (this.inGroundTime !== 0 && this.color !== -1 && this.inGroundTime >= 600) {
+        this.makeParticle(20);
+        this.setPickupStack(ItemStack.of('arrow'));
+      }
+    } else this.makeParticle(2);
+  }
+
+  /** vanilla AbstractArrow.tick */
+  private tickArrow(): void {
     this.baseTick();
     const w = this.level.world;
     if (this.pitchO === 0 && this.yawO === 0) {
@@ -228,6 +269,7 @@ export class Arrow extends Entity {
         this.doKnockback(e);
         // the victim's thorns hurt the shooter
         doPostAttackEffects(e, owner, this.weapon, false);
+        this.doPostHurtEffects(e);
         if (!e.isAlive && this.piercedAndKilled) this.piercedAndKilled.push(e);
         // vanilla KilledByCrossbowTrigger: everything this crossbow arrow has killed so far
         if (owner && owner === this.level.player && this.weapon?.item.id === 'crossbow') {
@@ -252,6 +294,21 @@ export class Arrow extends Entity {
     }
   }
 
+  /**
+   * vanilla Arrow.doPostHurtEffects: its potion's effects on what it hit, for an eighth of their time (at least a
+   * tick), and any custom ones in full
+   */
+  private doPostHurtEffects(e: LivingEntity): void {
+    const c = contentsOf(this.pickupStack);
+    if (!c) return;
+    const source = this.owner ?? this;
+    for (const inst of potionEffects(c.potion)) {
+      const d = inst.isInfinite() || inst.duration === 0 ? inst.duration : Math.max(Math.floor(inst.duration / 8), 1);
+      e.addEffect(new MobEffectInstance(inst.effect, d, inst.amplifier, inst.ambient, inst.visible), source);
+    }
+    for (const inst of allEffects({ customEffects: c.customEffects })) e.addEffect(inst, source);
+  }
+
   /** vanilla AbstractArrow.doKnockback: punch pushes along the flight, 0.6 per level, less knockback resistance */
   private doKnockback(e: LivingEntity): void {
     const f = levelOf(this.weapon, 'punch');
@@ -262,9 +319,7 @@ export class Arrow extends Entity {
   }
 
   private dropAsItem(): void {
-    const it = ITEMS.get('arrow');
-    if (!it) return;
-    const e = new ItemEntity(this.level, new ItemStack(it, 1));
+    const e = new ItemEntity(this.level, this.pickupStack.copy());
     e.moveTo(this.x, this.y + 0.1, this.z, Math.random() * 360, 0);
     e.dx = Math.random() * 0.2 - 0.1;
     e.dy = 0.2;
@@ -295,10 +350,8 @@ export class Arrow extends Entity {
   playerTouch(p: Player): boolean {
     if (!this.inGround || this.shakeTime > 0) return false;
     let ok = false;
-    if (this.pickup === 'allowed') {
-      const it = ITEMS.get('arrow');
-      ok = !!it && p.inventory.add(new ItemStack(it, 1), p.gameMode === 'creative') === 0;
-    } else if (this.pickup === 'creative_only') ok = p.gameMode === 'creative';
+    if (this.pickup === 'allowed') ok = p.inventory.add(this.pickupStack.copy(), p.gameMode === 'creative') === 0;
+    else if (this.pickup === 'creative_only') ok = p.gameMode === 'creative';
     if (ok) {
       p.take(this, 1);
       this.remove();

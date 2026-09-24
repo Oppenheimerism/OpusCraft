@@ -195,6 +195,9 @@ export class Strider extends Animal {
     if (this.isAlive && this.isInWaterOrRainNow()) this.hurt(1, 'drown');
     super.aiStep();
   }
+  override isSensitiveToWater(): boolean {
+    return true;
+  }
 
   /** vanilla checkFallDamage: lava breaks any fall */
   protected override checkFallDamage(dy: number, onGround: boolean): void {

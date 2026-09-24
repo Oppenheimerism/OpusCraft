@@ -474,6 +474,13 @@ const ARROW = [
 ];
 M['arrow'] = () =>
   spr(ARROW, { '#': 0x2a2a2a, 5: 0xe8e8e8, 4: 0xb4b4b4, 3: 0x8a8a8a, 2: 0x5e5e5e, a: 0x9a7a4a, b: 0x6b5030, w: 0xf2f2f2, W: 0xc6c6c6 }, 'arrow');
+/** the arrowhead's pixels: its shades and the outline round its tip and barb */
+const isHead = (x: number, y: number) => /[2-5]/.test(ARROW[y][x]) || (ARROW[y][x] === '#' && (y <= 3 || x === 14));
+// vanilla tipped_arrow_head (layer0, tinted with the potion's colour: a pale head) and tipped_arrow_base (layer1)
+M['tipped_arrow_head'] = () =>
+  spr(ARROW.map((r, y) => [...r].map((c, x) => (isHead(x, y) ? c : '.')).join('')), { '#': 0x5c5c5c, 5: 0xffffff, 4: 0xeaeaea, 3: 0xcecece, 2: 0xaaaaaa }, 'tipped_arrow_head');
+M['tipped_arrow_base'] = () =>
+  spr(ARROW.map((r, y) => [...r].map((c, x) => (isHead(x, y) ? '.' : c)).join('')), { '#': 0x2a2a2a, a: 0x9a7a4a, b: 0x6b5030, w: 0xf2f2f2, W: 0xc6c6c6 }, 'tipped_arrow_base');
 
 // ---------------------------------------------------------------------------
 // Shears (closed, blades toward the upper right)
@@ -746,7 +753,13 @@ export function liquidBottle(ramp: number[], seed: string, sparkle?: number): Te
   plot(t, 4, 9, 0xffffff);
   return t;
 }
-M['potion'] = () => liquidBottle([0x2a47a8, 0x385dc6, 0x5a82e0], 'potion');
+// vanilla potion.png, the untinted layer1 over the tinted potion_overlay: the bottle, its glint on the liquid
+M['potion'] = () => {
+  const t = spr(BOTTLE, GLASS, 'potion');
+  plot(t, 4, 8, 0xffffff);
+  plot(t, 4, 9, 0xffffff);
+  return t;
+};
 M['experience_bottle'] = () => liquidBottle([0x4a9a1e, 0x7ad23a, 0xb4f06a], 'experience_bottle', 0xf4ffc0);
 
 // ---------------------------------------------------------------------------

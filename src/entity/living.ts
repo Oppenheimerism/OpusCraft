@@ -10,7 +10,7 @@ import { MobEffectInstance, SavedEffect, saveEffect, loadEffect } from './effect
 import { burningTimeFactor, damageAfterProtection, damageProtection, waterMovementEfficiency } from '../item/enchantHelper';
 
 /** damage sources that ignore armor (vanilla #bypasses_armor) */
-const BYPASSES_ARMOR = new Set(['onFire', 'inWall', 'drown', 'starve', 'fall', 'stalagmite', 'void', 'genericKill', 'magic', 'wither', 'generic', 'cramming', 'flyIntoWall']);
+const BYPASSES_ARMOR = new Set(['onFire', 'inWall', 'drown', 'starve', 'fall', 'stalagmite', 'void', 'genericKill', 'magic', 'indirectMagic', 'wither', 'generic', 'cramming', 'flyIntoWall']);
 /** damage sources that never knock back (vanilla #no_knockback) */
 const NO_KNOCKBACK = new Set(['explosion', 'playerExplosion', 'badRespawnPoint', 'fall', 'stalagmite', 'drown', 'starve', 'onFire', 'inFire', 'campfire', 'lava', 'lightningBolt', 'inWall', 'void', 'genericKill', 'magic', 'wither', 'cactus', 'sweetBerryBush', 'generic']);
 /** vanilla #bypasses_resistance */
@@ -73,8 +73,8 @@ export abstract class LivingEntity extends Entity {
   /** vanilla activeEffects */
   readonly activeEffects = new Map<string, MobEffectInstance>();
   private effectsDirty = true;
-  /** vanilla DATA_EFFECT_PARTICLES (ARGB per visible effect) and DATA_EFFECT_AMBIENCE_ID */
-  private effectParticles: number[] = [];
+  /** vanilla DATA_EFFECT_PARTICLES (ARGB per visible effect, or an effect's own particle) and DATA_EFFECT_AMBIENCE_ID */
+  private effectParticles: (number | string)[] = [];
   private effectsAmbient = false;
 
   constructor(level: Entity['level']) {
@@ -163,6 +163,16 @@ export abstract class LivingEntity extends Entity {
     return false;
   }
 
+  /** vanilla isSensitiveToWater: water hurts it (endermen, blazes, striders), a splash of it too */
+  isSensitiveToWater(): boolean {
+    return false;
+  }
+
+  /** vanilla isAffectedByPotions: splashes and clouds pass over the dead (and spectators) */
+  isAffectedByPotions(): boolean {
+    return this.health > 0 && !this.dead;
+  }
+
   /** vanilla LivingEntity.addEffect: add, or merge into the active instance (MobEffectInstance.update) */
   addEffect(inst: MobEffectInstance, _source: Entity | null = null): boolean {
     if (!this.canBeAffected(inst)) return false;
@@ -233,7 +243,7 @@ export abstract class LivingEntity extends Entity {
       this.effectsAmbient = true;
       for (const inst of this.activeEffects.values()) {
         if (!inst.visible) continue;
-        this.effectParticles.push(((inst.ambient ? 38 : 255) << 24 | inst.effect.color) >>> 0);
+        this.effectParticles.push(inst.effect.particle ?? ((inst.ambient ? 38 : 255) << 24 | inst.effect.color) >>> 0);
         if (!inst.ambient) this.effectsAmbient = false;
       }
       this.effectsDirty = false;
@@ -244,7 +254,8 @@ export abstract class LivingEntity extends Entity {
       if (Math.floor(Math.random() * i * j) === 0) {
         const c = this.effectParticles[Math.floor(Math.random() * this.effectParticles.length)];
         const x = this.x + this.width * (2 * Math.random() - 1) * 0.5, y = this.y + this.height * Math.random(), z = this.z + this.width * (2 * Math.random() - 1) * 0.5;
-        this.level.particles.entityEffect?.(x, y, z, c & 0xffffff, (c >>> 24) / 255);
+        if (typeof c === 'string') this.level.particles.spawn?.(c, x, y, z, 1, 1, 1);
+        else this.level.particles.entityEffect?.(x, y, z, c & 0xffffff, (c >>> 24) / 255);
       }
     }
   }
@@ -455,7 +466,10 @@ export abstract class LivingEntity extends Entity {
 
   protected tickDeath(): void {
     this.deathTime++;
-    if (this.deathTime >= 20) this.remove();
+    if (this.deathTime >= 20 && !this.removed) {
+      this.triggerOnDeathMobEffects();
+      this.remove();
+    }
   }
 
   aiStep(): void {
@@ -723,6 +737,12 @@ export abstract class LivingEntity extends Entity {
     super.checkFallDamage(dy, onGround);
   }
 
+  /** vanilla CobwebBlock.entityInside: weaving lets its bearer through at twice the pace */
+  protected override insideCobweb(): void {
+    if (this.hasEffect('weaving')) this.makeStuckInBlock(0.5, 0.25, 0.5);
+    else super.insideCobweb();
+  }
+
   /** vanilla SweetBerryBushBlock.entityInside: slows, and pricks anything that moves in a grown bush */
   protected override insideBerryBush(st: number): void {
     if (this.type === 'fox' || this.type === 'bee') return;
@@ -787,7 +807,20 @@ export abstract class LivingEntity extends Entity {
       if (fresh) this.playDeathSound();
       this.die(source, attacker ?? null);
     } else if (fresh) this.playHurtSound(source);
+    // vanilla MobEffectInstance.onMobHurt for each effect it has (infested's silverfish)
+    for (const inst of [...this.activeEffects.values()]) inst.effect.onMobHurt?.(this, inst.amplifier, source, amount);
     return true;
+  }
+
+  /**
+   * vanilla LivingEntity.remove(KILLED) → triggerOnDeathMobEffects: the death animation over, each effect's last
+   * word (oozing's slimes, weaving's webs, a wind burst), then they're gone
+   */
+  protected triggerOnDeathMobEffects(): void {
+    const all = [...this.activeEffects.values()];
+    for (const inst of all) inst.effect.onMobRemoved?.(this, inst.amplifier);
+    this.activeEffects.clear();
+    this.effectsDirty = true;
   }
 
   protected actuallyHurt(source: string, amount: number): void {

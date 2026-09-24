@@ -8,6 +8,7 @@ import { BLOCKS, STATE_BLOCK } from './block';
 import type { Level } from '../game/level';
 import type { Entity } from '../entity/entity';
 import { fillContainer } from '../game/loot';
+import { brewMix, hasMix, isBrewingIngredient } from '../item/potions';
 
 export interface SavedBlockEntity {
   id: string;
@@ -352,23 +353,55 @@ export class LecternBlockEntity extends BlockEntity {
  * vanilla BrewingStandBlockEntity: three bottles (slots 0-2), the ingredient (3) and blaze powder for fuel (4); the
  * block shows a bottle on each arm whose slot is filled. (No potions yet, so nothing brews: its menu is to come.)
  */
+/** vanilla BrewingStandBlockEntity.isBrewable: an ingredient that brews with one of the bottles */
+function isBrewable(c: SimpleContainer): boolean {
+  const ing = c.get(3);
+  if (!ing || !isBrewingIngredient(ing)) return false;
+  for (let i = 0; i < 3; i++) if (hasMix(c.get(i), ing)) return true;
+  return false;
+}
+
+/**
+ * vanilla BrewingStandBlockEntity: three bottles (slots 0-2), the ingredient (3) and blaze powder (4). A powder is
+ * 20 brews; a brew takes 20 seconds, and stops if the ingredient changes or stops brewing with the bottles
+ */
 export class BrewingStandBlockEntity extends BlockEntity {
   readonly id = 'brewing_stand';
+  /** vanilla BREW_TIME_MAX */
+  static readonly BREW_TIME = 400;
+  /** vanilla FUEL_USES */
+  static readonly FUEL_USES = 20;
   brewTime = 0;
   fuel = 0;
+  /** vanilla ingredient: what the brew began with */
+  private ingredient: string | null = null;
   private lastBottles: boolean[] | null = null;
   constructor(x: number, y: number, z: number) {
     super(x, y, z, 5);
   }
-  /** vanilla serverTick: blaze powder tops up the fuel; the arms follow the bottle slots */
+  /** vanilla serverTick: blaze powder tops up the fuel, a brew counts down, the arms follow the bottle slots */
   override tick(level: Level): void {
-    const powder = this.container.get(4);
+    const c = this.container;
+    const powder = c.get(4);
     if (this.fuel <= 0 && powder && powder.item.id === 'blaze_powder') {
-      this.fuel = 20;
-      if (--powder.count <= 0) this.container.items[4] = null;
-      this.container.changed();
+      this.fuel = BrewingStandBlockEntity.FUEL_USES;
+      if (--powder.count <= 0) c.items[4] = null;
+      c.changed();
     }
-    const bits = [0, 1, 2].map((i) => !isEmpty(this.container.get(i)));
+    const brewable = isBrewable(c);
+    const ing = c.get(3);
+    if (this.brewTime > 0) {
+      this.brewTime--;
+      if (this.brewTime === 0 && brewable) this.doBrew(level);
+      else if (!brewable || ing?.item.id !== this.ingredient) this.brewTime = 0;
+      c.changed();
+    } else if (brewable && this.fuel > 0) {
+      this.fuel--;
+      this.brewTime = BrewingStandBlockEntity.BREW_TIME;
+      this.ingredient = ing!.item.id;
+      c.changed();
+    }
+    const bits = [0, 1, 2].map((i) => !isEmpty(c.get(i)));
     if (this.lastBottles && bits.every((b, i) => b === this.lastBottles![i])) return;
     this.lastBottles = bits;
     const st = level.getState(this.x, this.y, this.z);
@@ -378,12 +411,34 @@ export class BrewingStandBlockEntity extends BlockEntity {
     bits.forEach((v, i) => (now = b.with(now, `has_bottle_${i}`, v)));
     if (now !== st) level.setBlock(this.x, this.y, this.z, now, 2);
   }
+  /**
+   * vanilla doBrew: each bottle becomes what it brews into, one of the ingredient is used, and what's left of it (the
+   * dragon's breath's bottle) stays in its slot when it was the last, else drops out; then the bubbling (level event 1035)
+   */
+  private doBrew(level: Level): void {
+    const c = this.container;
+    const ing = c.get(3)!;
+    for (let i = 0; i < 3; i++) c.items[i] = brewMix(ing, c.get(i));
+    ing.count--;
+    let left: ItemStack | null = ing.count > 0 ? ing : null;
+    const rem = ing.item.remainder;
+    if (rem) {
+      const r = ItemStack.of(rem);
+      if (!left) left = r;
+      else level.dropStackAt(this.x, this.y, this.z, r);
+    }
+    c.items[3] = left;
+    c.changed();
+    level.sound.play('block.brewing_stand.brew', this.x + 0.5, this.y + 0.5, this.z + 0.5, 1, 1);
+  }
   protected override saveData(): Record<string, number> {
     return { brewTime: this.brewTime, fuel: this.fuel };
   }
   protected override loadData(d: Record<string, number | string>): void {
     this.brewTime = Number(d.brewTime ?? 0);
     this.fuel = Number(d.fuel ?? 0);
+    // (vanilla loadAdditional: a brew under way goes on with the ingredient that's there)
+    if (this.brewTime > 0) this.ingredient = this.container.get(3)?.item.id ?? null;
   }
 }
 

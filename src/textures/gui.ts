@@ -684,6 +684,125 @@ G['container_furnace'] = () => {
   return t;
 };
 
+// ---------------------------------------------------------------------------
+// Brewing stand (vanilla textures/gui/container/brewing_stand.png and its sprites: fuel_length 18x4 at 60,44,
+// brew_progress 9x28 at 97,16, bubbles 12x29 at 63,14)
+
+/** a silhouette debossed into the panel where a slot waits for something (an empty bottle, blaze powder) */
+function deboss(t: TexImage, x0: number, y0: number, rows: string[]): void {
+  const m = (x: number, y: number) => y >= 0 && y < rows.length && x >= 0 && x < rows[y].length && rows[y][x] === '#';
+  for (let y = 0; y < rows.length; y++)
+    for (let x = 0; x < rows[y].length; x++) {
+      if (!m(x, y)) continue;
+      let c = 0x7b7b7b;
+      if (!m(x - 1, y) || !m(x, y - 1)) c = 0x6a6a6a;
+      else if (!m(x + 1, y) || !m(x, y + 1)) c = 0x9a9a9a;
+      plot(t, x0 + x, y0 + y, c);
+    }
+}
+
+const EMPTY_BOTTLE = [
+  '................',
+  '.....######.....',
+  '.....######.....',
+  '......####......',
+  '......####......',
+  '.....######.....',
+  '....########....',
+  '...##########...',
+  '..############..',
+  '..############..',
+  '..############..',
+  '..############..',
+  '...##########...',
+  '....########....',
+  '.....######.....',
+  '................',
+];
+const EMPTY_POWDER = [
+  '................',
+  '................',
+  '................',
+  '................',
+  '................',
+  '.......##.......',
+  '......####......',
+  '.....######.....',
+  '....#######.....',
+  '...#########....',
+  '...##########...',
+  '..############..',
+  '..############..',
+  '...##########...',
+  '................',
+  '................',
+];
+
+/** the brew's downward arrow (9 wide, 28 tall): a shaft, and a head over its last rows */
+function brewArrow(): boolean[][] {
+  const m: boolean[][] = [];
+  for (let y = 0; y < 28; y++) {
+    const row: boolean[] = [];
+    for (let x = 0; x < 9; x++) row.push(y < 23 ? x >= 3 && x <= 5 : Math.abs(x - 4) <= 27 - y);
+    m.push(row);
+  }
+  return m;
+}
+
+G['container_brewing_stand'] = () => {
+  const t = panel(176, 166);
+  // the blaze powder's slot, and its pipe round to the fuel gauge
+  slotAt(t, 17, 17);
+  deboss(t, 17, 17, EMPTY_POWDER);
+  rect(t, 24, 35, 3, 12, SLOT);
+  rect(t, 24, 44, 36, 3, SLOT);
+  for (let x = 24; x < 60; x++) plot(t, x, 43, x < 27 ? PANEL : SLOT_SHADOW);
+  for (let y = 35; y < 44; y++) plot(t, 23, y, SLOT_SHADOW);
+  inset(t, 59, 43, 20, 6, SLOT_SHADOW);
+  // the ingredient, the rod down to the middle bottle, and the three bottles
+  slotAt(t, 79, 17);
+  rect(t, 86, 34, 4, 23, SLOT);
+  for (let y = 34; y < 57; y++) {
+    plot(t, 85, y, SLOT_SHADOW);
+    plot(t, 90, y, WHITE);
+  }
+  for (const [x, y] of [[56, 51], [79, 58], [102, 51]]) {
+    slotAt(t, x, y);
+    deboss(t, x, y, EMPTY_BOTTLE);
+  }
+  // where the bubbles rise, and the arrow the brew fills
+  inset(t, 62, 13, 14, 31);
+  drawMask(t, 97, 16, brewArrow(), SLOT);
+  playerInventory(t, 84);
+  return t;
+};
+G['brewing_fuel_length'] = () => {
+  const t = img(18, 4);
+  const ramp = [0xffe060, 0xffb020, 0xe8801a, 0xb85a10];
+  for (let y = 0; y < 4; y++) for (let x = 0; x < 18; x++) plot(t, x, y, ramp[y]);
+  return t;
+};
+G['brewing_brew_progress'] = () => {
+  const t = img(9, 28);
+  const m = brewArrow();
+  drawMask(t, 0, 0, m, WHITE);
+  for (let y = 0; y < 28; y++) for (let x = 0; x < 9; x++) if (m[y][x] && (x + 1 >= 9 || !m[y][x + 1])) plot(t, x, y, 0xd4d4d4);
+  return t;
+};
+G['brewing_bubbles'] = () => {
+  const t = img(12, 29);
+  // bubbles of a few sizes up the column, smaller as they rise
+  const bubbles: [number, number, number][] = [[3, 26, 2], [8, 22, 2], [4, 18, 1], [8, 14, 1], [3, 10, 1], [7, 6, 0], [4, 3, 0], [9, 1, 0]];
+  for (const [cx, cy, r] of bubbles)
+    for (let y = -r - 1; y <= r + 1; y++)
+      for (let x = -r - 1; x <= r + 1; x++) {
+        const d = Math.hypot(x, y);
+        if (d > r + 0.6) continue;
+        plot(t, cx + x, cy + y, d > r - 0.4 ? 0xffffff : 0xb4d8f0);
+      }
+  return t;
+};
+
 G['container_generic_54'] = () => {
   const t = panel(176, 222);
   for (let r = 0; r < 6; r++) for (let c = 0; c < 9; c++) slotAt(t, 8 + 18 * c, 18 + 18 * r);

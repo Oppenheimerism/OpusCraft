@@ -17,7 +17,7 @@ export function isArmorSlot(slot: EquipSlot): slot is ArmorSlot {
 }
 
 /** vanilla ArmorMaterials by item prefix (the texture is textures/models/armor/<material>_layer_1/2) */
-const MATERIAL_OF: Record<string, string> = { leather: 'leather', chainmail: 'chainmail', iron: 'iron', golden: 'gold', diamond: 'diamond', netherite: 'netherite' };
+const MATERIAL_OF: Record<string, string> = { leather: 'leather', chainmail: 'chainmail', iron: 'iron', golden: 'gold', diamond: 'diamond', netherite: 'netherite', turtle: 'turtle' };
 
 /** an armour item's material name (vanilla ArmorMaterial.layers' asset id), or null */
 export function armorMaterial(it: Item): string | null {
@@ -33,6 +33,7 @@ const EQUIP_SOUND: Record<string, string> = {
   gold: 'item.armor.equip_gold',
   diamond: 'item.armor.equip_diamond',
   netherite: 'item.armor.equip_netherite',
+  turtle: 'item.armor.equip_turtle',
 };
 
 /**

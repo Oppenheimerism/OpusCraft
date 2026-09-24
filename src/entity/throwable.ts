@@ -4,7 +4,7 @@
 import { Entity } from './entity';
 import type { Level } from '../game/level';
 import { LivingEntity } from './living';
-import { clipBlocks } from '../game/raycast';
+import { clipBlocks, type SegmentHit } from '../game/raycast';
 import { onProjectileHit } from '../game/blockRules';
 import { ItemStack, ITEMS } from '../item/item';
 import { Chicken } from './animals';
@@ -12,7 +12,7 @@ import type { Player } from './player';
 
 const RAD = 180 / Math.PI;
 
-export type ThrownKind = 'egg' | 'snowball' | 'ender_pearl';
+export type ThrownKind = 'egg' | 'snowball' | 'ender_pearl' | 'potion';
 
 export class ThrownItem extends Entity {
   readonly type: string;
@@ -20,13 +20,19 @@ export class ThrownItem extends Entity {
   private leftOwner = false;
   readonly stack: ItemStack;
 
-  constructor(level: Level, readonly kind: ThrownKind, owner: LivingEntity | null) {
+  /** `stack`: what it looks like, and carries (a thrown potion's contents); by default one of the kind's item */
+  constructor(level: Level, readonly kind: ThrownKind, owner: LivingEntity | null, stack?: ItemStack) {
     super(level);
     this.type = kind;
     this.owner = owner;
     this.setSize(0.25, 0.25);
-    this.stack = new ItemStack(ITEMS.get(kind)!, 1);
+    this.stack = stack ?? new ItemStack(ITEMS.get(kind === 'potion' ? 'splash_potion' : kind)!, 1);
     if (owner) this.moveTo(owner.x, owner.y + owner.eyeHeight - 0.1, owner.z, owner.yaw, owner.pitch);
+  }
+
+  /** vanilla getDefaultGravity: 0.03 for thrown items (a potion's 0.05) */
+  protected gravity(): number {
+    return 0.03;
   }
 
   /** vanilla Projectile.shootFromRotation + shoot */
@@ -75,12 +81,13 @@ export class ThrownItem extends Entity {
     }
     if (hit) {
       this.onHitEntity(hit);
-      this.onHit(hit.x, hit.y, hit.z);
+      this.onHit(hit.x, hit.y, hit.z, hit);
       return;
     }
     if (bh) {
       onProjectileHit(this.level, bh.x, bh.y, bh.z, bh, this);
-      this.onHit(bh.px, bh.py, bh.pz);
+      this.onHitBlock(bh);
+      this.onHit(bh.px, bh.py, bh.pz, null);
       return;
     }
     const h = Math.sqrt(this.dx * this.dx + this.dz * this.dz);
@@ -92,17 +99,21 @@ export class ThrownItem extends Entity {
     this.dx *= f;
     this.dy *= f;
     this.dz *= f;
-    this.dy -= 0.03;
+    this.dy -= this.gravity();
     this.setPos(nx, ny, nz);
   }
 
-  private onHitEntity(e: Entity): void {
+  protected onHitEntity(e: Entity): void {
     // snowballs hurt blazes for 3; everything else takes 0 (knockback + hurt flash)
     const dmg = this.kind === 'snowball' && e.type === 'blaze' ? 3 : 0;
     e.hurt(dmg, 'thrown', this.owner ?? this, this);
   }
 
-  private onHit(_x: number, _y: number, _z: number): void {
+  /** vanilla onHitBlock (after the block's own onProjectileHit) */
+  protected onHitBlock(_hit: SegmentHit): void {}
+
+  /** vanilla onHit: whatever it hit, `entity` when that was an entity */
+  protected onHit(_x: number, _y: number, _z: number, _entity: Entity | null): void {
     const lvl = this.level;
     if (this.kind === 'egg') {
       // vanilla ThrownEgg.onHit: 1/8 chance of a chick (1/32 of those: four)

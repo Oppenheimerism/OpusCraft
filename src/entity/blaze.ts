@@ -166,6 +166,9 @@ export class Blaze extends Monster {
     if (this.isAlive && this.isInWaterOrRainNow()) this.hurt(1, 'drown');
     super.aiStep();
   }
+  override isSensitiveToWater(): boolean {
+    return true;
+  }
   protected override customServerAiStep(): void {
     // every five seconds a new height to keep above its target (triangular about 0.5, up to ±6.9)
     if (--this.nextHeightOffsetChangeTick <= 0) {

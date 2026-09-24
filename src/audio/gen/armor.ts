@@ -143,6 +143,23 @@ function netherite(c: Ctx): Float32Array {
   return out;
 }
 
+/** item.armor.equip_turtle: a hollow shell knocked on and settled: two woody tocks, a short scrape of scute */
+function turtle(c: Ctx): Float32Array {
+  const { sr, rng } = c;
+  const out = alloc(0.5, sr);
+  const f = rng.range(420, 560), t2 = rng.range(0.07, 0.12);
+  // (a shell's few broad, quickly damped modes: more a knock than a ring)
+  const R = [1, 1.74, 2.62, 3.9];
+  layer(out, 1, (b) => {
+    thump(b, sr, { t: 0.002, f0: rng.range(190, 230), f1: 130, tau: 0.03, amp: 0.8 });
+    clank(b, sr, rng, 0.002, f, R, 0.05, 1, 0.6);
+    clank(b, sr, rng, t2, f * rng.range(1.15, 1.35), R, 0.04, 0.6, 0.6);
+  });
+  layer(out, 0.4, (b) => burst(b, sr, rng, { t: t2 + 0.02, dur: 0.12, attack: 0.004, tau: 0.03, bp: [rng.range(1600, 2200), 1.4], color: 'brown' }));
+  layer(out, 0.35, (b) => rustle(b, sr, rng, 0.002, 0.25, 0.85));
+  return out;
+}
+
 /** item.armor.equip_generic: something that isn't armour put on: a soft rustle and a small knock */
 function generic(c: Ctx): Float32Array {
   const { sr, rng } = c;
@@ -164,6 +181,7 @@ export function armorSounds(): Record<string, SoundGen> {
     'item.armor.equip_gold': sound('item.armor.equip_gold', 6, gold),
     'item.armor.equip_diamond': sound('item.armor.equip_diamond', 6, diamond),
     'item.armor.equip_netherite': sound('item.armor.equip_netherite', 4, netherite),
+    'item.armor.equip_turtle': sound('item.armor.equip_turtle', 5, turtle),
     'item.armor.equip_generic': sound('item.armor.equip_generic', 6, generic),
   };
 }

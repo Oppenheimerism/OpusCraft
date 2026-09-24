@@ -2,10 +2,11 @@
 // chest and the creative item picker (vanilla slot layouts).
 
 import { ContainerMenu, Slot, SimpleContainer, PlayerContainer, Container, isEmpty } from './container';
-import { ItemStack } from '../item/item';
+import { ItemStack, ITEMS, clonePotion } from '../item/item';
 import type { Player } from '../entity/player';
 import { findRecipe, craftingRemainder, cookingResult, fuelTime, CraftingRecipe } from './recipes';
-import type { ChestBlockEntity, FurnaceBlockEntity } from '../world/blockEntity';
+import type { BrewingStandBlockEntity, ChestBlockEntity, FurnaceBlockEntity } from '../world/blockEntity';
+import { contentsOf, isBrewingIngredient } from '../item/potions';
 import { hasBinding } from '../item/enchantHelper';
 import { equipSound } from '../item/equipment';
 import { applyDyes, dyeColorName, isDyeable } from '../item/dyedColor';
@@ -110,6 +111,20 @@ function armorDye(grid: readonly (ItemStack | null)[]): ItemStack | null {
   return piece && dyes.length ? applyDyes(piece, dyes) : null;
 }
 
+/**
+ * vanilla TippedArrowRecipe (special: no recipe book entry): a lingering potion in the middle of a full 3×3 grid of
+ * arrows makes 8 arrows tipped with it
+ */
+function tippedArrow(grid: readonly (ItemStack | null)[], w: number): ItemStack | null {
+  if (w !== 3) return null;
+  for (let i = 0; i < 9; i++) {
+    const s = grid[i];
+    if (!s || s.item.id !== (i === 4 ? 'lingering_potion' : 'arrow')) return null;
+  }
+  const c = contentsOf(grid[4]!);
+  return c ? new ItemStack(ITEMS.get('tipped_arrow')!, 8, 0, { potion: clonePotion(c) }) : ItemStack.of('tipped_arrow', 8);
+}
+
 export abstract class CraftingMenuBase extends ContainerMenu implements CraftingLike {
   readonly craft: SimpleContainer;
   readonly result = new SimpleContainer(1);
@@ -124,7 +139,7 @@ export abstract class CraftingMenuBase extends ContainerMenu implements Crafting
   }
   slotsChanged(): void {
     this.recipe = findRecipe(this.craft.items, this.gridW, this.gridW);
-    this.result.items[0] = this.recipe ? ItemStack.of(this.recipe.result, this.recipe.count) : armorDye(this.craft.items);
+    this.result.items[0] = this.recipe ? ItemStack.of(this.recipe.result, this.recipe.count) : armorDye(this.craft.items) ?? tippedArrow(this.craft.items, this.gridW);
   }
   override canTakeItemForPickAll(_s: ItemStack | null, slot: Slot): boolean {
     return slot.container !== this.result;
@@ -283,6 +298,106 @@ export class FurnaceMenu extends ContainerMenu {
     else slot.setChanged();
     if (s.count === before.count) return null;
     slot.onTake(p, s);
+    return before;
+  }
+}
+
+/** vanilla BrewingStandMenu.PotionSlot: a potion, splash or lingering potion or a glass bottle, one at a time */
+class PotionSlot extends Slot {
+  /** vanilla BREWED_POTION: something with a potion in it was taken out */
+  onBrewed: ((potion: string) => void) | null = null;
+  static mayPlaceItem(s: ItemStack): boolean {
+    const id = s.item.id;
+    return id === 'potion' || id === 'splash_potion' || id === 'lingering_potion' || id === 'glass_bottle';
+  }
+  override mayPlace(s: ItemStack): boolean {
+    return PotionSlot.mayPlaceItem(s);
+  }
+  override maxStackSize(): number {
+    return 1;
+  }
+  override onTake(p: Player, s: ItemStack): void {
+    const potion = s.tag?.potion?.potion;
+    if (potion !== undefined) this.onBrewed?.(potion);
+    super.onTake(p, s);
+  }
+}
+
+/** vanilla BrewingStandMenu.IngredientsSlot: whatever brews with something */
+class IngredientsSlot extends Slot {
+  override mayPlace(s: ItemStack): boolean {
+    return isBrewingIngredient(s);
+  }
+}
+
+/** vanilla BrewingStandMenu.FuelSlot: #brewing_fuel, blaze powder */
+class BrewingFuelSlot extends Slot {
+  static mayPlaceItem(s: ItemStack): boolean {
+    return s.item.id === 'blaze_powder';
+  }
+  override mayPlace(s: ItemStack): boolean {
+    return BrewingFuelSlot.mayPlaceItem(s);
+  }
+}
+
+/** vanilla BrewingStandMenu: the three bottles, the ingredient on top, the blaze powder, and the player's inventory */
+export class BrewingStandMenu extends ContainerMenu {
+  private readonly ingredientSlot: IngredientsSlot;
+  private readonly potionSlots: PotionSlot[];
+  constructor(player: Player, readonly stand: BrewingStandBlockEntity) {
+    super(player);
+    const c = stand.container;
+    this.potionSlots = [new PotionSlot(c, 0, 56, 51), new PotionSlot(c, 1, 79, 58), new PotionSlot(c, 2, 102, 51)];
+    for (const s of this.potionSlots) this.addSlot(s);
+    this.ingredientSlot = this.addSlot(new IngredientsSlot(c, 3, 79, 17)) as IngredientsSlot;
+    this.addSlot(new BrewingFuelSlot(c, 4, 17, 17));
+    this.addPlayerSlots(new PlayerContainer(player), 8, 84);
+  }
+  /** vanilla CriteriaTriggers.BREWED_POTION, for the advancements */
+  set onBrewed(fn: ((potion: string) => void) | null) {
+    for (const s of this.potionSlots) s.onBrewed = fn;
+  }
+  /** vanilla getFuel / getBrewingTicks (the ContainerData) */
+  get fuel(): number {
+    return this.stand.fuel;
+  }
+  get brewingTicks(): number {
+    return this.stand.brewTime;
+  }
+  override stillValid(p: Player): boolean {
+    const b = this.stand;
+    return !b.removed && p.distanceToSqr(b.x + 0.5, b.y + 0.5, b.z + 0.5) <= 64;
+  }
+  /**
+   * vanilla BrewingStandMenu.quickMoveStack: from the inventory, blaze powder to the fuel first (then the ingredient
+   * slot), an ingredient to its slot, a bottle to the first free bottle slot, anything else between the inventory and
+   * the hotbar; from the stand, back to the inventory (the hotbar end first)
+   */
+  quickMoveStack(p: Player, index: number): ItemStack | null {
+    const slot = this.slots[index];
+    const s = slot.item;
+    if (!s) return null;
+    const before = s.copy();
+    if ((index < 0 || index > 2) && index !== 3 && index !== 4) {
+      if (BrewingFuelSlot.mayPlaceItem(before)) {
+        if (this.moveItemStackTo(s, 4, 5, false) || (this.ingredientSlot.mayPlace(s) && !this.moveItemStackTo(s, 3, 4, false))) return null;
+      } else if (this.ingredientSlot.mayPlace(s)) {
+        if (!this.moveItemStackTo(s, 3, 4, false)) return null;
+      } else if (PotionSlot.mayPlaceItem(before)) {
+        if (!this.moveItemStackTo(s, 0, 3, false)) return null;
+      } else if (index >= 5 && index < 32) {
+        if (!this.moveItemStackTo(s, 32, 41, false)) return null;
+      } else if (index >= 32 && index < 41) {
+        if (!this.moveItemStackTo(s, 5, 32, false)) return null;
+      } else if (!this.moveItemStackTo(s, 5, 41, false)) return null;
+    } else {
+      if (!this.moveItemStackTo(s, 5, 41, true)) return null;
+      slot.onQuickCraft(s, before);
+    }
+    if (s.count <= 0) slot.set(null);
+    else slot.setChanged();
+    if (s.count === before.count) return null;
+    slot.onTake(p, before);
     return before;
   }
 }

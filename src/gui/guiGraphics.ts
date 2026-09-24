@@ -5,6 +5,7 @@ import type { TexImage } from '../textures/tex';
 import type { FontData } from '../textures/font';
 import type { ItemStack } from '../item/item';
 import { crossbowTexture } from '../item/crossbow';
+import { itemLayers, layerTint } from '../item/itemColors';
 
 export const COLOR_CODES: Record<string, number> = {
   '0': 0x000000, '1': 0x0000aa, '2': 0x00aa00, '3': 0x00aaaa, '4': 0xaa0000, '5': 0xaa00aa, '6': 0xffaa00, '7': 0xaaaaaa,
@@ -387,8 +388,8 @@ export class GuiGraphics {
    */
   stack(s: ItemStack, x: number, y: number, ticksUsing = -1): boolean {
     let id = s.item.id === 'crossbow' ? crossbowTexture(s, ticksUsing) ?? s.item.id : s.item.id;
-    // (a dyed stack's colour tints its icon: vanilla ItemColors, DyedItemColor)
-    if (s.tag?.dyedColor !== undefined) id += `#${s.tag.dyedColor.toString(16)}`;
+    // (a dyed stack's or a potion's colour tints its icon: vanilla ItemColors)
+    if (itemLayers(s.item)) id += `#${layerTint(s).toString(16)}`;
     const ok = this.item(id, x, y);
     if (ok && s.hasGlint()) this.icons?.drawGlint?.(this.ctx, id, Math.round(x * this.scale), Math.round(y * this.scale), 16 * this.scale);
     return ok;

@@ -5,7 +5,7 @@ import type { Game } from '../../game/game';
 import { Screen, Button } from '../screen';
 import type { GuiGraphics } from '../guiGraphics';
 import { ContainerMenu, Slot, canItemQuickReplace, quickCraftPlaceCount, quickcraftMask, ClickType } from '../../inventory/container';
-import { InventoryMenu, CraftingMenu, FurnaceMenu, ChestMenu } from '../../inventory/menus';
+import { InventoryMenu, CraftingMenu, FurnaceMenu, ChestMenu, BrewingStandMenu } from '../../inventory/menus';
 import { ItemStack, ITEMS, RARITY_COLOR } from '../../item/item';
 import { enchantmentLine, tooltipOrder } from '../../item/enchantments';
 import { KEYS } from '../../game/input';
@@ -22,7 +22,10 @@ export function itemTooltip(s: ItemStack): string[] {
   const lines = [rarity === 'common' ? `${italic}${s.displayName()}` : `§${RARITY_COLOR[rarity]}${italic}${s.displayName()}`];
   // vanilla CrossbowItem.appendHoverText: the first charged projectile, as its [display name]
   const shot = s.tag?.charged?.[0];
-  if (shot) lines.push(`§fProjectile: [${ITEMS.get(shot.id)?.name ?? shot.id}]`);
+  const shotItem = shot && ITEMS.get(shot.id);
+  if (shot) lines.push(`§fProjectile: [${shotItem ? new ItemStack(shotItem, 1, 0, shot.tag ?? null).displayName() : shot.id}]`);
+  // vanilla Item.appendHoverText (a potion's effects)
+  it.hoverText?.(s, lines);
   if (it.lore) for (const l of it.lore) lines.push(`§7${l}`);
   // stored then held enchantments, each in #tooltip_order (ItemEnchantments.addToTooltip)
   for (const ench of [s.tag?.stored, s.tag?.enchantments])
@@ -492,6 +495,33 @@ export class FurnaceScreen extends AbstractContainerScreen<FurnaceMenu> {
     }
     const l = Math.ceil(f.burnProgress() * 24);
     if (l > 0) g.sprite('furnace_burn_progress', L + 79, T + 34, l, 16, 0, 0, l, 16);
+  }
+}
+
+/** vanilla BrewingStandScreen.BUBBLELENGTHS: the bubbles' height as the brew goes, two ticks a step */
+const BUBBLELENGTHS = [29, 24, 20, 16, 11, 6, 0];
+
+/** vanilla BrewingStandScreen: the fuel gauge, the arrow filling as it brews, the bubbles rising */
+export class BrewingStandScreen extends AbstractContainerScreen<BrewingStandMenu> {
+  constructor(game: Game, menu: BrewingStandMenu) {
+    super(game, menu, 'Brewing Stand');
+  }
+  override renderLabels(g: GuiGraphics): void {
+    g.text(this.title, Math.floor((this.imageWidth - g.textWidth(this.title)) / 2), this.titleLabelY, LABEL, false);
+    g.text('Inventory', this.inventoryLabelX, this.inventoryLabelY, LABEL, false);
+  }
+  renderBg(g: GuiGraphics): void {
+    const L = this.leftPos, T = this.topPos;
+    g.sprite('container_brewing_stand', L, T);
+    const l = Math.max(0, Math.min(18, Math.floor((18 * this.menu.fuel + 19) / 20)));
+    if (l > 0) g.sprite('brewing_fuel_length', L + 60, T + 44, l, 4, 0, 0, l, 4);
+    const m = this.menu.brewingTicks;
+    if (m > 0) {
+      const n = Math.trunc(28 * (1 - m / 400));
+      if (n > 0) g.sprite('brewing_brew_progress', L + 97, T + 16, 9, n, 0, 0, 9, n);
+      const b = BUBBLELENGTHS[Math.floor(m / 2) % 7];
+      if (b > 0) g.sprite('brewing_bubbles', L + 63, T + 14 + 29 - b, 12, b, 0, 29 - b, 12, b);
+    }
   }
 }
 

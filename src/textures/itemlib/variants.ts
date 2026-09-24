@@ -242,8 +242,34 @@ function potionLike(shape: string[], ramp: number[], name: string): TexImage {
   plot(t, 4, 9, 0xffffff);
   return t;
 }
-V['splash_potion'] = () => potionLike(SPLASH, [0x2a47a8, 0x385dc6, 0x5a82e0], 'splash_potion');
-V['lingering_potion'] = () => potionLike(SPLASH, [0x3a4a9a, 0x5068c0, 0x7a92e0], 'lingering_potion');
+// prettier-ignore
+const LINGERING = [
+  '................',
+  '.....######.....',
+  '......#rR#......',
+  '.......##.......',
+  '......#..#......',
+  '.....#h...#.....',
+  '....#h.....#....',
+  '...#h.......#...',
+  '..#h.........d..',
+  '..#h.........d..',
+  '..#..........d..',
+  '..#..........d..',
+  '...#........d...',
+  '....#......d....',
+  '.....dddddd.....',
+  '................',
+];
+/** a potion item's bottle (layer1, untinted, over the tinted potion_overlay), with the glint on its liquid */
+function bottleLayer(shape: string[], name: string): TexImage {
+  const t = spr(shape, GLASS, name);
+  plot(t, 4, 8, 0xffffff);
+  plot(t, 4, 9, 0xffffff);
+  return t;
+}
+V['splash_potion'] = () => bottleLayer(SPLASH, 'splash_potion');
+V['lingering_potion'] = () => bottleLayer(LINGERING, 'lingering_potion');
 V['honey_bottle'] = () => potionLike(BOTTLE, [0xc87a10, 0xeca21e, 0xfcd04a], 'honey_bottle');
 V['dragon_breath'] = () => potionLike(BOTTLE, [0x9a3a8a, 0xc85ab8, 0xf0a0e8], 'dragon_breath');
 

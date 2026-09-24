@@ -15,6 +15,10 @@ export interface ItemBehavior {
   useOn?(level: Level, p: Player, stack: ItemStack, hit: BlockHit): UseResult;
   /** vanilla Item.use: used in the air (or after useOn passed) */
   use?(level: Level, p: Player, stack: ItemStack): UseResult;
+  /** vanilla Item.getUseAnimation for one that's used over time: drinking plays its sound as it goes */
+  useAnim?: 'drink' | 'eat';
+  /** vanilla Item.finishUsingItem: the use has run its course (the drink is drunk) */
+  finishUsing?(level: Level, p: Player, stack: ItemStack): void;
 }
 
 const ITEM_BEHAVIORS = new Map<string, ItemBehavior>();

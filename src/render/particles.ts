@@ -91,6 +91,10 @@ const EXPLOSION = Array.from({ length: 16 }, (_, i) => `explosion_${i}`);
 const SWEEP = Array.from({ length: 8 }, (_, i) => `sweep_${i}`);
 /** vanilla particles/entity_effect.json: effect_7 down to effect_0 */
 const EFFECT = Array.from({ length: 8 }, (_, i) => `effect_${7 - i}`);
+/** vanilla particles/instant_effect.json: spell_7 down to spell_0 */
+const SPELL = Array.from({ length: 8 }, (_, i) => `spell_${7 - i}`);
+/** vanilla particles/small_gust.json: gust_0 to gust_11 */
+const GUST = Array.from({ length: 12 }, (_, i) => `gust_${i}`);
 /** vanilla particles/campfire_cosy_smoke.json and campfire_signal_smoke.json */
 const BIG_SMOKE = Array.from({ length: 12 }, (_, i) => `big_smoke_${i}`);
 
@@ -477,6 +481,8 @@ export class ParticleEngine {
         break;
       }
       case 'item_slime':
+      case 'item_cobweb':
+      case 'item_splash_potion':
       case 'item_snowball':
       case 'item_egg': {
         // vanilla BreakingItemParticle: a random quarter of the item sprite
@@ -485,13 +491,46 @@ export class ParticleEngine {
         p.dx = p.dx * 0.1 + xd;
         p.dy = p.dy * 0.1 + yd;
         p.dz = p.dz * 0.1 + zd;
-        if (kind === 'item_slime') this.withSpeed(p, 0, 0, 0);
+        // (vanilla SlimeProvider / CobwebProvider make theirs without a speed)
+        if (kind === 'item_slime' || kind === 'item_cobweb') this.withSpeed(p, 0, 0, 0);
         p.gravity = 1;
         p.size /= 2;
         p.frames = [kind === 'item_slime' ? 'item_slime_ball' : kind];
         p.frame = 0;
         const uo = Math.random() * 3, vo = Math.random() * 3;
         p.sub = [uo / 4, vo / 4, (uo + 1) / 4, (vo + 1) / 4];
+        this.addSprite(p);
+        break;
+      }
+      case 'infested': {
+        // vanilla SpellParticle.Provider: the infested effect's mites, rising like an effect's swirl
+        const p = this.base(kind, x, y, z);
+        this.withSpeed(p, 0.5 - Math.random(), yd, 0.5 - Math.random());
+        p.friction = 0.96;
+        p.gravity = -0.1;
+        p.speedUpWhenBlocked = true;
+        p.dy *= 0.2;
+        if (xd === 0 && zd === 0) {
+          p.dx *= 0.1;
+          p.dz *= 0.1;
+        }
+        p.size *= 0.75;
+        p.lifetime = Math.floor(8 / (Math.random() * 0.8 + 0.2));
+        p.physics = false;
+        p.frames = ['infested'];
+        p.frame = 0;
+        this.addSprite(p);
+        break;
+      }
+      case 'gust':
+      case 'small_gust': {
+        // vanilla GustParticle (SmallProvider: at 0.15 the size): a curl of air where it is, bright, over 12-15 ticks
+        const p = this.base(kind, x, y, z);
+        p.lifetime = 12 + Math.floor(Math.random() * 4);
+        p.size = kind === 'gust' ? 1 : 0.15;
+        p.physics = false;
+        p.fullBright = true;
+        p.frames = GUST;
         this.addSprite(p);
         break;
       }
@@ -704,6 +743,35 @@ export class ParticleEngine {
       default:
         break;
     }
+  }
+
+  /**
+   * vanilla SpellParticle for EFFECT and INSTANT_EFFECT (a splash potion's burst): a swirl, or an instant effect's
+   * sparkle, rising, in the colour given; `power` flings it out (Particle.setPower). Only the vertical speed is
+   * the caller's: the constructor makes up its own horizontal one, slowed tenfold when none was given
+   */
+  spell(kind: 'effect' | 'instant_effect', x: number, y: number, z: number, xd: number, yd: number, zd: number, r: number, g: number, b: number, power = 1): void {
+    const p = this.base(kind, x, y, z);
+    this.withSpeed(p, 0.5 - Math.random(), yd, 0.5 - Math.random());
+    p.friction = 0.96;
+    p.gravity = -0.1;
+    p.speedUpWhenBlocked = true;
+    p.dy *= 0.2;
+    if (xd === 0 && zd === 0) {
+      p.dx *= 0.1;
+      p.dz *= 0.1;
+    }
+    p.size *= 0.75;
+    p.lifetime = Math.floor(8 / (Math.random() * 0.8 + 0.2));
+    p.physics = false;
+    p.frames = kind === 'instant_effect' ? SPELL : EFFECT;
+    p.r = r;
+    p.g = g;
+    p.b = b;
+    p.dx *= power;
+    p.dy = (p.dy - 0.1) * power + 0.1;
+    p.dz *= power;
+    this.addSprite(p);
   }
 
   /** vanilla SpellParticle.MobEffectProvider (ENTITY_EFFECT): a rising swirl in the effect's colour */

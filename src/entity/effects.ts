@@ -3,6 +3,7 @@
 // with vanilla's merge rules and hidden (shadowed) weaker copies, the HUD /
 // inventory ordering, display strings and save data.
 
+import type { Entity } from './entity';
 import type { LivingEntity } from './living';
 import type { Player } from './player';
 
@@ -23,6 +24,29 @@ export interface MobEffect {
   applyTick(e: LivingEntity, amplifier: number): boolean;
   /** vanilla onEffectStarted: every time the effect is given, even when it doesn't replace the current one */
   onStarted(e: LivingEntity, amplifier: number): void;
+  /**
+   * vanilla MobEffect.applyInstantenousEffect: an instant effect from a drunk or splashed potion, all at once, at
+   * `health` of its strength (a splash's closeness); `source` is the potion, `indirect` who threw it
+   */
+  applyInstant(source: Entity | null, indirect: Entity | null, target: LivingEntity, amplifier: number, health: number): void;
+  /** vanilla MobEffect.onMobRemoved: its bearer was killed (as the death animation ends); see game/potionEffects.ts */
+  onMobRemoved?(e: LivingEntity, amplifier: number): void;
+  /** vanilla MobEffect.onMobHurt: its bearer was hurt */
+  onMobHurt?(e: LivingEntity, amplifier: number, source: string, amount: number): void;
+  /** vanilla MobEffect.createParticleOptions: a particle of its own rather than the swirl in its colour */
+  readonly particle?: string;
+  /**
+   * vanilla MobEffect.attributeModifiers, for the potion tooltips' "When Applied:" lines (LivingEntity reads the
+   * effects themselves where vanilla reads the attributes): the attribute's name, the amount per level, and whether
+   * it's a fraction (ADD_MULTIPLIED_TOTAL) rather than a plain amount (ADD_VALUE)
+   */
+  readonly modifiers?: readonly EffectModifier[];
+}
+
+export interface EffectModifier {
+  attribute: string;
+  amount: number;
+  multiplied: boolean;
 }
 
 /** vanilla `int i = n >> amplifier; return i > 0 ? duration % i == 0 : true` */
@@ -33,14 +57,18 @@ const every = (n: number) => (duration: number, amplifier: number): boolean => {
 
 export const MOB_EFFECTS: Record<string, MobEffect> = {};
 
-function reg(id: string, name: string, category: EffectCategory, color: number, o: Partial<Pick<MobEffect, 'instant' | 'shouldTick' | 'applyTick' | 'onStarted'>> = {}): MobEffect {
+function reg(id: string, name: string, category: EffectCategory, color: number, o: Partial<Pick<MobEffect, 'instant' | 'shouldTick' | 'applyTick' | 'onStarted' | 'applyInstant' | 'particle' | 'modifiers'>> = {}): MobEffect {
   const e: MobEffect = {
     id, name, category, color,
+    particle: o.particle,
+    modifiers: o.modifiers,
     instant: !!o.instant,
     // vanilla InstantenousMobEffect ticks while it lasts (one tick when given by a command)
     shouldTick: o.shouldTick ?? (o.instant ? (d) => d >= 1 : () => false),
     applyTick: o.applyTick ?? (() => true),
     onStarted: o.onStarted ?? (() => {}),
+    // (vanilla MobEffect.applyInstantenousEffect: the tick's effect, once)
+    applyInstant: o.applyInstant ?? ((_s, _i, target, amp) => void e.applyTick(target, amp)),
   };
   MOB_EFFECTS[id] = e;
   return e;
@@ -55,16 +83,26 @@ function healOrHarm(harm: boolean) {
   };
 }
 
+/** vanilla HealOrHarmMobEffect.applyInstantenousEffect: scaled by `health`, rounded; thrown, the thrower is to blame */
+function healOrHarmInstant(harm: boolean) {
+  return (source: Entity | null, indirect: Entity | null, e: LivingEntity, amp: number, health: number): void => {
+    if (harm === e.isUndead()) e.heal(Math.floor(health * (4 << amp) + 0.5));
+    else if (source) e.hurt(Math.floor(health * (6 << amp) + 0.5), 'indirectMagic', indirect, source);
+    else e.hurt(Math.floor(health * (6 << amp) + 0.5), 'magic');
+  };
+}
+
 // vanilla MobEffects registration order; attribute effects (speed, strength, health boost...) are
 // read by LivingEntity where vanilla reads the attribute
-reg('speed', 'Speed', 'beneficial', 0x33ebff);
-reg('slowness', 'Slowness', 'harmful', 0x8bafe0);
-reg('haste', 'Haste', 'beneficial', 0xd9c043);
-reg('mining_fatigue', 'Mining Fatigue', 'harmful', 0x4a4217);
-reg('strength', 'Strength', 'beneficial', 0xffc700);
-reg('instant_health', 'Instant Health', 'beneficial', 0xf82423, { instant: true, applyTick: healOrHarm(false) });
-reg('instant_damage', 'Instant Damage', 'harmful', 0xa9656a, { instant: true, applyTick: healOrHarm(true) });
-reg('jump_boost', 'Jump Boost', 'beneficial', 0xfdff84);
+const mod = (attribute: string, amount: number, multiplied = false): EffectModifier[] => [{ attribute, amount, multiplied }];
+reg('speed', 'Speed', 'beneficial', 0x33ebff, { modifiers: mod('Speed', 0.2, true) });
+reg('slowness', 'Slowness', 'harmful', 0x8bafe0, { modifiers: mod('Speed', -0.15, true) });
+reg('haste', 'Haste', 'beneficial', 0xd9c043, { modifiers: mod('Attack Speed', 0.1, true) });
+reg('mining_fatigue', 'Mining Fatigue', 'harmful', 0x4a4217, { modifiers: mod('Attack Speed', -0.1, true) });
+reg('strength', 'Strength', 'beneficial', 0xffc700, { modifiers: mod('Attack Damage', 3) });
+reg('instant_health', 'Instant Health', 'beneficial', 0xf82423, { instant: true, applyTick: healOrHarm(false), applyInstant: healOrHarmInstant(false) });
+reg('instant_damage', 'Instant Damage', 'harmful', 0xa9656a, { instant: true, applyTick: healOrHarm(true), applyInstant: healOrHarmInstant(true) });
+reg('jump_boost', 'Jump Boost', 'beneficial', 0xfdff84, { modifiers: mod('Safe Fall Distance', 1) });
 reg('nausea', 'Nausea', 'harmful', 0x551d4a);
 // vanilla RegenerationMobEffect: 1 HP every 50 >> amplifier ticks
 reg('regeneration', 'Regeneration', 'beneficial', 0xcd5cab, {
@@ -88,7 +126,7 @@ reg('hunger', 'Hunger', 'harmful', 0x587653, {
     return true;
   },
 });
-reg('weakness', 'Weakness', 'harmful', 0x484d48);
+reg('weakness', 'Weakness', 'harmful', 0x484d48, { modifiers: mod('Attack Damage', -4) });
 // vanilla PoisonMobEffect: 1 magic damage every 25 >> amplifier ticks, never below half a heart
 reg('poison', 'Poison', 'harmful', 0x87a363, {
   shouldTick: every(25),
@@ -105,9 +143,10 @@ reg('wither', 'Wither', 'harmful', 0x736156, {
     return true;
   },
 });
-reg('health_boost', 'Health Boost', 'beneficial', 0xf87d23);
+reg('health_boost', 'Health Boost', 'beneficial', 0xf87d23, { modifiers: mod('Max Health', 4) });
 // vanilla AbsorptionMobEffect: golden hearts on start; the effect ends when they are used up
 reg('absorption', 'Absorption', 'beneficial', 0x2552a5, {
+  modifiers: mod('Max Absorption', 4),
   shouldTick: () => true,
   applyTick: (e) => e.absorption > 0,
   onStarted: (e, amp) => {
@@ -122,10 +161,23 @@ reg('saturation', 'Saturation', 'beneficial', 0xf82423, {
     return true;
   },
 });
+reg('glowing', 'Glowing', 'neutral', 0x94a061);
 reg('levitation', 'Levitation', 'harmful', 0xceffff);
-reg('luck', 'Luck', 'beneficial', 0x59c106);
-reg('unluck', 'Bad Luck', 'harmful', 0xc0a44d);
+reg('luck', 'Luck', 'beneficial', 0x59c106, { modifiers: mod('Luck', 1) });
+reg('unluck', 'Bad Luck', 'harmful', 0xc0a44d, { modifiers: mod('Luck', -1) });
 reg('slow_falling', 'Slow Falling', 'beneficial', 0xf3cfb9);
+reg('conduit_power', 'Conduit Power', 'beneficial', 0x1dc2d1);
+reg('dolphins_grace', "Dolphin's Grace", 'beneficial', 0x88a3be);
+reg('bad_omen', 'Bad Omen', 'neutral', 0x0b6138);
+reg('hero_of_the_village', 'Hero of the Village', 'beneficial', 0x44ff44);
+reg('darkness', 'Darkness', 'harmful', 0x292721);
+reg('trial_omen', 'Trial Omen', 'neutral', 0x16a6a6);
+reg('raid_omen', 'Raid Omen', 'neutral', 0xde4058);
+// the 1.21 potions' effects: what they do when their bearer dies or is hurt is in game/potionEffects.ts
+reg('wind_charged', 'Wind Charged', 'harmful', 0xbdc9ff, { particle: 'small_gust' });
+reg('weaving', 'Weaving', 'harmful', 0x78695a, { particle: 'item_cobweb' });
+reg('oozing', 'Oozing', 'harmful', 0x99ffa3, { particle: 'item_slime' });
+reg('infested', 'Infested', 'harmful', 0x8c9b8c, { particle: 'infested' });
 
 /** registry lookup accepting a namespaced id (minecraft:speed) */
 export function mobEffect(id: string): MobEffect | undefined {

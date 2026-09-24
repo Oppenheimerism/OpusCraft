@@ -9,6 +9,7 @@ import { applyDyes } from '../item/dyedColor';
 import { selectEnchantment, type EnchantRandom } from '../item/enchantHelper';
 import { ENCHANTMENTS, TABLE_ENCHANTMENTS } from '../item/enchantments';
 import { DYES } from '../world/blocksExtra';
+import { POTIONS, isBrewablePotion, potionStack } from '../item/potions';
 import type { Rand } from '../core/rng';
 
 /** one side of a trade's price (vanilla ItemCost): an item and how many */
@@ -166,6 +167,19 @@ function enchantedItemForEmeralds(id: string, baseCost: number, maxUses: number,
   };
 }
 
+/**
+ * vanilla TippedArrowForItemsAndEmeralds: arrows and emeralds for as many arrows tipped with a random potion (one
+ * with effects, that can be brewed)
+ */
+function tippedArrowForItemsAndEmeralds(from: string, fromCount: number, to: string, toCount: number, emeralds: number, maxUses: number, xp: number): ItemListing {
+  return (t) => {
+    if (!has(from) || !has(to)) return null;
+    const list = [...POTIONS.values()].filter((p) => p.effects.length > 0 && isBrewablePotion(p.id));
+    const potion = list[t.random.nextInt(list.length)];
+    return new MerchantOffer({ id: 'emerald', count: emeralds }, { id: from, count: fromCount }, potionStack(to, potion.id, toCount), maxUses, xp, 0.05);
+  };
+}
+
 /** vanilla #tradeable enchantments: every one the table gives, plus the two curses, frost walker and mending */
 const TRADEABLE = [...TABLE_ENCHANTMENTS, ...['binding_curse', 'vanishing_curse', 'frost_walker', 'mending'].map((id) => ENCHANTMENTS.get(id)!)];
 /** vanilla #double_trade_price: the treasure enchantments */
@@ -244,8 +258,7 @@ export const VILLAGER_TRADES: Record<string, ItemListing[][]> = {
     [emeraldForItems('flint', 26, 12, 10), itemsForEmeralds('bow', 2, 1, 12, 5)],
     [emeraldForItems('string', 14, 16, 20), itemsForEmeralds('crossbow', 3, 1, 12, 10)],
     [emeraldForItems('feather', 24, 16, 30), enchantedItemForEmeralds('bow', 2, 3, 15)],
-    // (the tipped arrows wait for potions)
-    [emeraldForItems('tripwire_hook', 8, 12, 30), enchantedItemForEmeralds('crossbow', 3, 3, 15)],
+    [emeraldForItems('tripwire_hook', 8, 12, 30), enchantedItemForEmeralds('crossbow', 3, 3, 15), tippedArrowForItemsAndEmeralds('arrow', 5, 'tipped_arrow', 5, 2, 12, 30)],
   ],
   librarian: [
     [emeraldForItems('paper', 24, 16, 2), enchantBookForEmeralds(1), itemsForEmeralds('bookshelf', 9, 1, 12, 1)],

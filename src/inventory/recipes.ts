@@ -324,6 +324,10 @@ shapeless('pumpkin_seeds', 4, 'pumpkin');
 shaped('beetroot_soup', 1, ['OOO', 'OOO', ' B '], { O: 'beetroot', B: 'bowl' });
 shapeless('pumpkin_pie', 1, 'pumpkin', 'sugar', 'egg');
 shaped('golden_carrot', 1, ['###', '#X#', '###'], { '#': 'gold_nugget', X: 'carrot' });
+// brewing ingredients
+shaped('glistering_melon_slice', 1, ['###', '#X#', '###'], { '#': 'gold_nugget', X: 'melon_slice' });
+shapeless('fermented_spider_eye', 1, 'spider_eye', 'brown_mushroom', 'sugar');
+shaped('turtle_helmet', 1, ['XXX', 'X X'], { X: 'turtle_scute' });
 shapeless('melon_seeds', 1, 'melon_slice');
 shaped('melon', 1, ['###', '###', '###'], { '#': 'melon_slice' });
 for (const c of COLORS) {
@@ -422,7 +426,7 @@ export function findRecipe(grid: (ItemStack | null)[], w: number, h: number): Cr
 /** items left behind in the grid after crafting (buckets) */
 export function craftingRemainder(s: ItemStack): ItemStack | null {
   if (s.item.id === 'milk_bucket' || s.item.id === 'water_bucket' || s.item.id === 'lava_bucket') return ItemStack.of('bucket');
-  return null;
+  return s.item.remainder ? ItemStack.of(s.item.remainder) : null;
 }
 
 // ---------------------------------------------------------------------------

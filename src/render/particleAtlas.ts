@@ -4,6 +4,8 @@ import type { GL } from './gl';
 import { createTexture } from './gl';
 import { MOB_PARTICLE_TEXTURES } from '../textures/mobs';
 import { ITEM_TEXTURES } from '../textures/items';
+import { BLOCK_TEXTURES } from '../textures/blocks';
+import { isAnim } from '../textures/tex';
 import { sgaParticleTextures } from '../textures/sga';
 import { campfireSmokeTextures } from '../textures/campfireSmoke';
 import type { SpriteRectUV } from './particles';
@@ -18,6 +20,13 @@ export function buildParticleAtlas(gl: GL): { texture: WebGLTexture; rects: Reco
   if (ITEM_TEXTURES['slime_ball']) src['item_slime_ball'] = ITEM_TEXTURES['slime_ball'];
   if (ITEM_TEXTURES['egg']) src['item_egg'] = ITEM_TEXTURES['egg'];
   if (ITEM_TEXTURES['snowball']) src['item_snowball'] = ITEM_TEXTURES['snowball'];
+  // (a splash potion's model's particle texture is its layer0, the untinted liquid: grey glass shards)
+  if (ITEM_TEXTURES['potion_overlay']) src['item_splash_potion'] = ITEM_TEXTURES['potion_overlay'];
+  if (BLOCK_TEXTURES['cobweb'])
+    src['item_cobweb'] = () => {
+      const t = BLOCK_TEXTURES['cobweb']();
+      return isAnim(t) ? { w: t.w, h: t.h, data: t.frames[0] } : t;
+    };
   const names = Object.keys(src);
   const cell = 16;
   const cols = 8;

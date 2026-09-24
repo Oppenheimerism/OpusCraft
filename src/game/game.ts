@@ -45,12 +45,12 @@ import { ItemEntity } from '../entity/itemEntity';
 import { ExperienceOrb } from '../entity/xpOrb';
 import { GuiEntityRenderer } from '../render/guiEntity';
 import type { SkinParts } from '../render/entityRenderers';
-import { InventoryMenu, CraftingMenu, FurnaceMenu, ChestMenu } from '../inventory/menus';
+import { InventoryMenu, CraftingMenu, FurnaceMenu, ChestMenu, BrewingStandMenu } from '../inventory/menus';
 import { EnchantmentMenu, AnvilMenu, GrindstoneMenu } from '../inventory/enchantMenus';
 import { MerchantMenu } from '../inventory/merchantMenu';
 import type { Villager } from '../entity/villager';
 import { hasVanishing } from '../item/enchantHelper';
-import { ChestBlockEntity, FurnaceBlockEntity, BarrelBlockEntity } from '../world/blockEntity';
+import { ChestBlockEntity, FurnaceBlockEntity, BarrelBlockEntity, BrewingStandBlockEntity } from '../world/blockEntity';
 import { useBed, findRespawn, BED_YROT, MSG, SleepHost } from './sleep';
 import { AmbientTicker } from './animateTick';
 import { ToastComponent, AdvancementToast, RecipeToast } from '../gui/toasts';
@@ -455,6 +455,7 @@ export class Game {
       blockParticle: (x, y, z, xd, yd, zd, st, bx, by, bz) => particles.blockParticle(x, y, z, xd, yd, zd, st, bx, by, bz),
       entityEffect: (x, y, z, c, a) => particles.entityEffect(x, y, z, c, a),
       dust: (x, y, z, r, g, b, s) => particles.dust(x, y, z, r, g, b, s),
+      spell: (k, x, y, z, xd, yd, zd, r, g, b, pw) => particles.spell(k, x, y, z, xd, yd, zd, r, g, b, pw),
     };
     this.spawner = new NaturalSpawner(this.level, hashString(meta.seed));
     this.ambient = new AmbientTicker(this.level);
@@ -752,7 +753,7 @@ export class Game {
     };
   }
 
-  containerScreenFactory: ((menu: InventoryMenu | CraftingMenu | FurnaceMenu | ChestMenu | EnchantmentMenu | AnvilMenu | GrindstoneMenu | MerchantMenu) => Screen) | null = null;
+  containerScreenFactory: ((menu: InventoryMenu | CraftingMenu | FurnaceMenu | ChestMenu | BrewingStandMenu | EnchantmentMenu | AnvilMenu | GrindstoneMenu | MerchantMenu) => Screen) | null = null;
 
   /** right-clicked a block with a menu */
   openContainer(kind: string, x: number, y: number, z: number): void {
@@ -777,6 +778,12 @@ export class Game {
       be.unpackLoot();
       this.setScreen(this.containerScreenFactory(new ChestMenu(p, be, 'Barrel')));
       be.startOpen(this.level);
+    } else if (kind === 'brewing_stand') {
+      const be = this.world.getBlockEntity(x, y, z);
+      if (!(be instanceof BrewingStandBlockEntity)) return;
+      const m = new BrewingStandMenu(p, be);
+      m.onBrewed = (potion) => this.advancements.trigger('brewed_potion', { potion });
+      this.setScreen(this.containerScreenFactory(m));
     } else if (kind === 'enchanting_table') {
       const m = new EnchantmentMenu(p, [x, y, z]);
       m.onEnchanted = () => this.advancements.trigger('enchanted_item');
@@ -878,6 +885,8 @@ export class Game {
         return `${n} was killed`;
       case 'magic':
         return `${n} was killed by magic`;
+      case 'indirectMagic':
+        return k ? `${n} was killed by ${kn} using magic` : `${n} was killed by magic`;
       case 'wither':
         return `${n} withered away`;
       case 'stalagmite':
@@ -1639,6 +1648,7 @@ export class Game {
   /** wire player progress (advancements, recipes, tutorial) to world events */
   private hookProgress(): void {
     this.advancements.onAward = (a) => this.onAdvancement(a);
+    this.player.onEffectsChanged = () => this.advancements.trigger('effects_changed', { effects: new Set(this.player.activeEffects.keys()) });
     this.recipeBook.onUnlock = (rs) => this.onRecipesUnlocked(rs);
     this.lastInvVersion = -1;
     const lvl = this.level;
