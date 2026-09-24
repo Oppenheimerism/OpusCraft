@@ -524,6 +524,18 @@ export class WalkNodeEvaluator {
   }
 }
 
+/**
+ * vanilla WalkNodeEvaluator.isBurningBlock: fire, lava, magma blocks, lit
+ * campfires of either kind and lava cauldrons
+ */
+export function isBurningBlock(st: number): boolean {
+  if (FLAGS[st] & F_LAVA) return true;
+  const b = BLOCKS[STATE_BLOCK[st]];
+  const name = b.name;
+  if (name === 'fire' || name === 'soul_fire' || name === 'magma_block' || name === 'lava_cauldron') return true;
+  return (name === 'campfire' || name === 'soul_campfire') && !!b.get(st, 'lit');
+}
+
 /** vanilla getPathTypeFromState for a single block */
 export function rawPathType(world: World, x: number, y: number, z: number): PathType {
   const st = world.getState(x, y, z);
@@ -539,7 +551,7 @@ export function rawPathType(world: World, x: number, y: number, z: number): Path
   if (name === 'cactus' || name === 'sweet_berry_bush') return PathType.DAMAGE_OTHER;
   if (name === 'wither_rose' || name === 'pointed_dripstone') return PathType.DAMAGE_CAUTIOUS;
   if (f & F_LAVA) return PathType.LAVA;
-  if (name === 'fire' || name === 'soul_fire' || name === 'magma_block' || name === 'campfire') return PathType.DAMAGE_FIRE;
+  if (isBurningBlock(st)) return PathType.DAMAGE_FIRE;
   if (f & F_LEAVES) return PathType.LEAVES;
   if (name.endsWith('_fence') || name.endsWith('_wall') || name.endsWith('_fence_gate')) return PathType.FENCE;
   const top = collisionTop(st);

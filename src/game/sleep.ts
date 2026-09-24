@@ -8,6 +8,7 @@ import type { Player } from '../entity/player';
 import type { Entity } from '../entity/entity';
 import type { Villager } from '../entity/villager';
 import { explode } from './explosion';
+import { isBurningBlock } from '../entity/ai/pathfinder';
 
 const blk = (st: number): Block => BLOCKS[STATE_BLOCK[st]];
 
@@ -39,7 +40,7 @@ function suffocating(st: number): boolean {
 /** vanilla EntityType.isBlockDangerous for a player */
 function dangerous(st: number): boolean {
   const n = blk(st).name;
-  return n === 'fire' || n === 'lava' || n === 'magma_block' || n === 'wither_rose' || n === 'sweet_berry_bush' || n === 'cactus' || n === 'powder_snow' || (n === 'campfire' && !!blk(st).get(st, 'lit'));
+  return isBurningBlock(st) || n === 'wither_rose' || n === 'sweet_berry_bush' || n === 'cactus' || n === 'powder_snow';
 }
 
 /** top of a block's collision shape (ladders/vines and open trapdoors count as empty), -1 if none */
