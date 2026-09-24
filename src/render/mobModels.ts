@@ -205,6 +205,54 @@ export function animatePiglinEars(root: ModelPart, limbSwing: number, limbAmount
   head.child('right_ear').zRot = PI / 6 + Math.cos(g) * h;
 }
 
+/**
+ * vanilla HoglinModel.createBodyLayer (the zoglin wears it too): a long head hung at 50° with two tusks and two
+ * flat ears, a deep body with a flat mane of bristles along the spine, stout legs. Babies: AgeableListModel(true, 8,
+ * 6, 1.9, 2, 24)
+ */
+export function hoglinModel(): MobModelDef {
+  const root = new ModelPart();
+  const body = root.add('body', part([{ x: -8, y: -7, z: -13, w: 16, h: 14, d: 26, u: 1, v: 1 }], [0, 7, 0]));
+  body.add('mane', part([{ x: 0, y: 0, z: -9, w: 0, h: 10, d: 19, u: 90, v: 33, inflate: 0.001 }], [0, -14, -5]));
+  const head = root.add('head', part([{ x: -7, y: -3, z: -19, w: 14, h: 6, d: 19, u: 61, v: 1 }], [0, 2, -12], [0.87266463, 0, 0]));
+  head.add('right_ear', part([{ x: -6, y: -1, z: -2, w: 6, h: 1, d: 4, u: 1, v: 1 }], [-6, -2, -3], [0, 0, -0.6981317]));
+  head.add('left_ear', part([{ x: 0, y: -1, z: -2, w: 6, h: 1, d: 4, u: 1, v: 6 }], [6, -2, -3], [0, 0, 0.6981317]));
+  head.add('right_horn', part([{ x: -1, y: -11, z: -1, w: 2, h: 11, d: 2, u: 10, v: 13 }], [-7, 2, -12]));
+  head.add('left_horn', part([{ x: -1, y: -11, z: -1, w: 2, h: 11, d: 2, u: 1, v: 13 }], [7, 2, -12]));
+  root.add('right_front_leg', part([{ x: -3, y: 0, z: -3, w: 6, h: 14, d: 6, u: 66, v: 42 }], [-4, 10, -8.5]));
+  root.add('left_front_leg', part([{ x: -3, y: 0, z: -3, w: 6, h: 14, d: 6, u: 41, v: 42 }], [4, 10, -8.5]));
+  root.add('right_hind_leg', part([{ x: -2.5, y: 0, z: -2.5, w: 5, h: 11, d: 5, u: 21, v: 45 }], [-5, 13, 10]));
+  root.add('left_hind_leg', part([{ x: -2.5, y: 0, z: -2.5, w: 5, h: 11, d: 5, u: 0, v: 45 }], [5, 13, 10]));
+  return { root, texW: 128, texH: 64, baby: { headParts: ['head'], scaleHead: true, yHead: 8, zHead: 6, headScale: 1.9, bodyScale: 2, bodyY: 24 } };
+}
+
+/**
+ * vanilla HoglinModel.setupAnim: the ears flap with the stride, and through the 10 ticks of a strike the head
+ * swings from its 50° hang up to -20° and back (a baby's also drops from y 2 to 5)
+ */
+export function animateHoglin(root: ModelPart, limbSwing: number, limbAmount: number, headYaw: number, attackTicks: number, baby: boolean): void {
+  root.resetPose();
+  const head = root.child('head');
+  head.child('right_ear').zRot = -PI * 2 / 9 - limbAmount * Math.sin(limbSwing);
+  head.child('left_ear').zRot = PI * 2 / 9 + limbAmount * Math.sin(limbSwing);
+  head.yRot = (headYaw * PI) / 180;
+  const f = 1 - Math.abs(10 - 2 * attackTicks) / 10;
+  head.xRot = 0.87266463 + (-PI / 9 - 0.87266463) * f;
+  const mane = root.child('body').child('mane');
+  if (baby) {
+    head.y = 2 + 3 * f;
+    mane.z = -3;
+  } else {
+    head.y = 2;
+    mane.z = -7;
+  }
+  const rf = root.child('right_front_leg'), lf = root.child('left_front_leg');
+  rf.xRot = Math.cos(limbSwing) * 1.2 * limbAmount;
+  lf.xRot = Math.cos(limbSwing + PI) * 1.2 * limbAmount;
+  root.child('right_hind_leg').xRot = lf.xRot;
+  root.child('left_hind_leg').xRot = rf.xRot;
+}
+
 export function skeletonModel(): MobModelDef {
   const root = new ModelPart();
   const head = root.add('head', part([{ x: -4, y: -8, z: -4, w: 8, h: 8, d: 8, u: 0, v: 0 }]));
