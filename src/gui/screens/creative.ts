@@ -61,6 +61,18 @@ function enchantText(s: ItemStack): string {
 const REDSTONE_ORDER = ['redstone', 'redstone_block', 'lever', 'oak_button', 'stone_button', 'oak_pressure_plate', 'stone_pressure_plate', 'light_weighted_pressure_plate', 'heavy_weighted_pressure_plate', 'tnt', 'redstone_lamp'];
 const REDSTONE = new Set(REDSTONE_ORDER);
 const FUNCTIONAL = new Set(['oak_sign', 'painting', 'item_frame', 'red_bed', 'jack_o_lantern', 'carved_pumpkin']);
+const DYE_ORDER = ['white', 'light_gray', 'gray', 'black', 'brown', 'red', 'orange', 'yellow', 'lime', 'green', 'cyan', 'light_blue', 'blue', 'purple', 'magenta', 'pink'];
+/** vanilla CreativeModeTabs.FUNCTIONAL_BLOCKS, in its order (as far as the game has them; the rest follow) */
+const FUNCTIONAL_ORDER = [
+  'torch', 'soul_torch', 'redstone_torch', 'lantern', 'soul_lantern', 'chain', 'end_rod', 'sea_lantern', 'redstone_lamp', 'glowstone',
+  'shroomlight', 'ochre_froglight', 'verdant_froglight', 'pearlescent_froglight', 'crying_obsidian', 'glow_lichen', 'magma_block',
+  'crafting_table', 'stonecutter', 'cartography_table', 'fletching_table', 'smithing_table', 'grindstone', 'loom', 'furnace', 'smoker',
+  'blast_furnace', 'campfire', 'soul_campfire', 'anvil', 'chipped_anvil', 'damaged_anvil', 'composter', 'note_block', 'jukebox',
+  'enchanting_table', 'end_crystal', 'brewing_stand', 'cauldron', 'bell', 'beacon', 'conduit', 'lodestone', 'ladder', 'scaffolding',
+  'bee_nest', 'beehive', 'suspicious_sand', 'suspicious_gravel', 'lightning_rod', 'flower_pot', 'decorated_pot', 'armor_stand',
+  'item_frame', 'glow_item_frame', 'painting', 'bookshelf', 'chiseled_bookshelf', 'lectern', 'tinted_glass', 'oak_sign', 'chest', 'barrel',
+  'ender_chest', 'respawn_anchor', ...DYE_ORDER.map((c) => `${c}_bed`),
+];
 const BUILDING = new Set(['oak_door', 'iron_door']);
 const TOOLS = new Set(['minecart', 'chest_minecart', 'oak_boat', 'saddle', 'lead', 'name_tag', 'filled_map', 'map', 'milk_bucket', 'experience_bottle']);
 /** vanilla lists seeds with the natural blocks */
@@ -117,6 +129,8 @@ function tabs(): Tab[] {
   const listed = ITEM_LIST.filter((it) => it.id !== 'enchanted_book');
   for (const it of listed) byId.get(tabOf(it))?.items.push(it);
   byId.get('redstone_blocks')!.items.sort((a, b) => REDSTONE_ORDER.indexOf(a.id) - REDSTONE_ORDER.indexOf(b.id));
+  const rank = (it: Item) => (FUNCTIONAL_ORDER.includes(it.id) ? FUNCTIONAL_ORDER.indexOf(it.id) : FUNCTIONAL_ORDER.length);
+  byId.get('functional_blocks')!.items.sort((a, b) => rank(a) - rank(b));
   byId.get('ingredients')!.extra = enchantedBooks(false);
   byId.get('search')!.items = listed;
   TABS = t;
