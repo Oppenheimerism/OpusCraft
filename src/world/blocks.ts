@@ -104,14 +104,14 @@ registerBlock('mud', { hardness: 0.5, sound: 'mud', tool: 'shovel', collision: [
   const dry = farm(false), wet = farm(true);
   registerBlock('farmland', {
     props: [P.moisture], hardness: 0.6, sound: 'gravel', tool: 'shovel', randomTicks: true,
-    collision: [bx(0, 0, 0, 16, 15, 16)], opaque: false, faceOcclusion: 1, aoCaster: true,
+    collision: [bx(0, 0, 0, 16, 15, 16)], opaque: false, faceOcclusion: 1,
     model: (s) => ({ model: (s.get('moisture') as number) === 7 ? wet : dry }),
   });
   const path: ModelDef = {
     particle: 'dirt',
     elements: [box([0, 0, 0], [16, 15, 16], { down: 'dirt', up: 'dirt_path_top', north: 'dirt_path_side', south: 'dirt_path_side', west: 'dirt_path_side', east: 'dirt_path_side' })],
   };
-  registerBlock('dirt_path', { hardness: 0.65, sound: 'grass', tool: 'shovel', collision: [bx(0, 0, 0, 16, 15, 16)], opaque: false, faceOcclusion: 1, aoCaster: true, model: one(path) });
+  registerBlock('dirt_path', { hardness: 0.65, sound: 'grass', tool: 'shovel', collision: [bx(0, 0, 0, 16, 15, 16)], opaque: false, faceOcclusion: 1, model: one(path) });
 }
 
 registerBlock('sand', { hardness: 0.5, sound: 'sand', tool: 'shovel', model: () => randRot(cubeAll('sand')) });
