@@ -23,6 +23,9 @@ import { Ravager } from '../entity/ravager';
 import { PatrolSpawner } from './patrolSpawner';
 import { outpostSpawnsAt } from './outposts';
 import { checkPatrollingMonsterSpawnRules } from '../entity/raider';
+// (Stage 5: ocean)
+import { Guardian, ElderGuardian, checkGuardianSpawnRules } from '../entity/guardian';
+import { monumentSpawnsAt } from './monuments';
 import { Husk, Stray } from '../entity/biomeMonsters';
 import { Drowned, isInWaterPositionOk, drownedNaturalSpawnRules } from '../entity/drowned';
 import { Silverfish } from '../entity/silverfish';
@@ -93,6 +96,11 @@ Object.assign(MOB_TYPES, {
   evoker: (l: Level) => new Evoker(l),
   vex: (l: Level) => new Vex(l),
   ravager: (l: Level) => new Ravager(l),
+});
+// (Stage 5: ocean) the guardians
+Object.assign(MOB_TYPES, {
+  guardian: (l: Level) => new Guardian(l),
+  elder_guardian: (l: Level) => new ElderGuardian(l),
 });
 
 export function createMob(type: string, level: Level): Mob | null {
@@ -195,6 +203,8 @@ const ENTITY_NAMES: Record<string, string> = {
 
 // (Stage 4: illagers)
 Object.assign(ENTITY_NAMES, { pillager: 'Pillager', vindicator: 'Vindicator', evoker: 'Evoker', vex: 'Vex', ravager: 'Ravager', evoker_fangs: 'Evoker Fangs' });
+// (Stage 5: ocean)
+Object.assign(ENTITY_NAMES, { guardian: 'Guardian', elder_guardian: 'Elder Guardian' });
 
 /** vanilla entity type display names (death messages, commands) */
 export function entityDisplayName(e: Entity | string): string {
@@ -519,6 +529,9 @@ export class NaturalSpawner {
     // (Stage 4: outposts) a structure's spawn_overrides, bounding_box full (game/outposts.ts)
     const so = outpostSpawnsAt(this.level, cat, x, y, z);
     if (so) return so;
+    // (Stage 5: ocean) a monument's guardians (game/monuments.ts)
+    const mo = monumentSpawnsAt(this.level, cat, x, y, z);
+    if (mo) return mo;
     const bs = biomeSettings(w.getBiome3(x, y, z));
     return cat === 'monster' ? bs.monster : cat === 'water_creature' ? bs.water : cat === 'ambient' ? bs.ambient : bs.creature;
   }
@@ -533,6 +546,8 @@ export class NaturalSpawner {
   private placementOk(type: string, x: number, y: number, z: number): boolean {
     if (type === 'squid') return this.isInWaterPositionOk(x, y, z);
     if (type === 'drowned') return isInWaterPositionOk(this.level, x, y, z);
+    // (Stage 5: ocean) vanilla SpawnPlacements: the guardian IN_WATER
+    if (type === 'guardian') return isInWaterPositionOk(this.level, x, y, z);
     if (type === 'strider') return fluidType(this.level.world.getState(x, y, z)) === FLUID_LAVA;
     return this.isSpawnPositionOk(x, y, z, FIRE_IMMUNE.has(type));
   }
@@ -617,6 +632,9 @@ export class NaturalSpawner {
       // (Stage 4: outposts)
       case 'pillager':
         return checkPatrollingMonsterSpawnRules(lvl, x, y, z);
+      // (Stage 5: ocean)
+      case 'guardian':
+        return checkGuardianSpawnRules(lvl, x, y, z, (n) => this.rand.nextInt(n));
       case 'hoglin':
         // vanilla Hoglin.checkHoglinSpawnRules: any light, just not on a nether wart block
         return BLOCKS[STATE_BLOCK[lvl.world.getState(x, y - 1, z)]].name !== 'nether_wart_block';

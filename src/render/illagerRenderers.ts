@@ -337,7 +337,8 @@ export class RaiderRenderers {
   private readonly ravager = ravagerModel();
   private readonly fangs = evokerFangsModel();
 
-  constructor(private readonly kit: LivingKit) {}
+  // ((Stage 5: ocean) lent on to the ocean's renderers)
+  constructor(readonly kit: LivingKit) {}
 
   /** draws `e` if it's one of these renderers' mobs (false: not ours) */
   render(b: EntityBatch, e: Mob, dx: number, dy: number, dz: number, p: number): boolean {

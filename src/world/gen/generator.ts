@@ -14,6 +14,8 @@ import { Villages } from './villages';
 import { Strongholds, biomeAtY0, addBeards } from './stronghold';
 // (Stage 4: outposts)
 import { PillagerOutposts } from './outposts';
+// (Stage 5: ocean)
+import { OceanMonuments } from './monument';
 import { worldSeed64 } from './jigsaw';
 import { S, getBlock } from '../block';
 import { MIN_Y, MAX_Y, SEA_LEVEL, COLUMN_VOLUME, colIndex, CAVE_BIOME_LEVELS, NO_CAVE_BIOME } from '../constants';
@@ -58,6 +60,8 @@ export class ChunkGenerator {
   readonly strongholds: Strongholds;
   /** (Stage 4: outposts) */
   readonly outposts: PillagerOutposts;
+  /** (Stage 5: ocean) */
+  readonly monuments: OceanMonuments;
   /** corner columns for terrain height queries, with the noise at their cell corners as it's needed */
   private readonly heightCols = new Map<number, { c: ColumnSample; exactTop: number; corners: (Float32Array | undefined)[] }>();
 
@@ -76,7 +80,9 @@ export class ChunkGenerator {
     this.villages = new Villages(worldSeed64(seed), { firstFreeHeight: (x, z) => this.firstFreeHeight(x, z), quartBiome: (x, z) => this.quartBiome(x, z) });
     // (Stage 4: outposts) placed in the villages' step (vanilla SURFACE_STRUCTURES, the outpost first), bending the terrain with them
     this.outposts = new PillagerOutposts(worldSeed64(seed), { firstFreeHeight: (x, z) => this.firstFreeHeight(x, z), quartBiome: (x, z) => this.quartBiome(x, z) }, this.villages);
-    this.decorator.villages = { place: (ctx) => (this.outposts.place(ctx), this.villages.place(ctx)) };
+    // (Stage 5: ocean) monuments too (vanilla SURFACE_STRUCTURES, after the outposts)
+    this.monuments = new OceanMonuments(worldSeed64(seed), (x, z) => this.quartBiome(x, z));
+    this.decorator.villages = { place: (ctx) => (this.outposts.place(ctx), this.monuments.place(ctx), this.villages.place(ctx)) };
     this.strongholds = new Strongholds(worldSeed64(seed), biomeAtY0(this.router));
     this.decorator.strongholds = this.strongholds;
   }

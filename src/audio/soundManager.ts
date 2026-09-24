@@ -52,6 +52,8 @@ function categoryOf(name: string): Category {
   // (Stage 4: illagers) the totem is its user's (a player's, mostly); the raiders and the vex are hostile
   if (name === 'item.totem.use') return 'players';
   if (/^entity\.(pillager|vindicator|evoker|evoker_fangs|vex|ravager|illusioner)\./.test(name)) return 'hostile';
+  // (Stage 5: ocean) the guardians are hostile
+  if (/^entity\.(guardian|elder_guardian)\./.test(name)) return 'hostile';
   // (Stage 4: raids) the horn is vanilla's SoundSource.NEUTRAL; the bottle and the omens are the drinker's (a player's)
   if (name === 'event.raid.horn') return 'friendly';
   if (name.startsWith('item.ominous_bottle.') || name.startsWith('event.mob_effect.')) return 'players';
@@ -102,6 +104,8 @@ const ALIASES: [RegExp, string][] = [
   [/^entity\.villager\.work_fisherman$/, 'block.barrel.open'],
   [/^entity\.villager\.work_leatherworker$/, 'item.armor.equip_leather'],
   [/^entity\.villager\.work_librarian$/, 'item.book.page_turn'],
+  // (Stage 5: ocean) the wet sponge's steps and knocks are the dry one's (both stone's here)
+  [/^block\.wet_sponge\.(?!dries)/, 'block.stone.'],
 ];
 
 /** how late (ms) a sound that had to be generated first may still start */

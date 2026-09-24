@@ -346,6 +346,11 @@ for (const m of ['bat', 'blaze', 'cat', 'cave_spider', 'chicken', 'cow', 'creepe
 // bad omen comes with raids); the creative tab sorts the eggs by name
 for (const m of ['evoker', 'pillager', 'ravager', 'vex', 'vindicator']) reg({ id: `${m}_spawn_egg`, texture: `${m}_spawn_egg`, creativeTab: 'spawn_eggs' });
 reg({ id: 'ominous_bottle', creativeTab: 'food', texture: 'ominous_bottle', rarity: 'uncommon' });
+// (Stage 5: ocean) vanilla Items.PRISMARINE_SHARD / PRISMARINE_CRYSTALS (guardians', sea lanterns'); the wet sponge sits by the sponge
+for (const id of ['prismarine_shard', 'prismarine_crystals']) reg({ id, texture: id });
+ITEMS.get('wet_sponge')!.creativeTab = 'functional';
+// (Stage 5: ocean) the guardians' eggs
+for (const m of ['elder_guardian', 'guardian']) reg({ id: `${m}_spawn_egg`, texture: `${m}_spawn_egg`, creativeTab: 'spawn_eggs' });
 // sugar cane item places the block
 {
   const sc = ITEMS.get('sugar_cane');

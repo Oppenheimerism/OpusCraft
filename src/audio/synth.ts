@@ -34,6 +34,8 @@ import { silverfishSounds } from './gen/silverfish';
 import { wolfSounds } from './gen/wolf';
 import { catSounds } from './gen/cat';
 import { illagerSounds } from './gen/illagers';
+// (Stage 5: ocean)
+import { oceanSounds } from './gen/ocean';
 
 export const SAMPLE_RATE = 44100;
 
@@ -74,6 +76,8 @@ export const SOUNDS: Record<string, SoundGen> = {
   ...wolfSounds(),
   ...catSounds(),
   ...illagerSounds(),
+  // (Stage 5: ocean)
+  ...oceanSounds(),
 };
 
 /** Number of in-game (overworld) music tracks. */

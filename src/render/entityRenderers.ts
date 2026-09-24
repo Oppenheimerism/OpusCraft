@@ -66,6 +66,9 @@ import { DragonFireball } from '../entity/dragonFireball';
 import { EnderDragonRenderer } from './enderDragonRenderer';
 // (Stage 4: illagers)
 import { RaiderRenderers, RAIDER_SHADOW_RADII } from './illagerRenderers';
+// (Stage 5: ocean)
+import { OceanRenderers, OCEAN_SHADOW_RADII } from './oceanRenderers';
+import { Guardian } from '../entity/guardian';
 import { EvokerFangs } from '../entity/evoker';
 import type { Bat } from '../entity/bat';
 import type { Player } from '../entity/player';
@@ -152,6 +155,8 @@ export class EntityRenderDispatcher {
   private readonly dragons: EnderDragonRenderer;
   /** (Stage 4: illagers) the pillager, vindicator, evoker, vex, ravager and the evoker's fangs */
   private readonly raiders: RaiderRenderers;
+  /** (Stage 5: ocean) the guardians, their lasers, the elder's ghostly face */
+  private readonly ocean: OceanRenderers;
 
   constructor(private readonly gl: GL, private readonly items: ItemRenderer, private readonly skin: WebGLTexture) {
     this.armor = new ArmorLayer(gl);
@@ -169,6 +174,8 @@ export class EntityRenderDispatcher {
       state: (t, extra) => this.state(t, extra),
       attackAnim,
     });
+    // (Stage 5: ocean) lent the same steps
+    this.ocean = new OceanRenderers(gl, this.raiders.kit);
     this.models = {
       pig: M.pigModel(),
       pig_saddle: M.pigModel(0.5),
@@ -306,9 +313,11 @@ export class EntityRenderDispatcher {
       const maxD = size * 64 * opts.distanceScale;
       // (vanilla EndCrystalRenderer.shouldRender: a crystal with a beam is always drawn; the dragon is never culled)
       const beam = e instanceof EndCrystal && e.beamTarget !== null;
-      if (d2 >= maxD * maxD && !beam) continue;
+      // (Stage 5: ocean) vanilla GuardianRenderer.shouldRender: so is a guardian with its laser on
+      const laser = e instanceof Guardian && e.activeAttackTarget() !== null;
+      if (d2 >= maxD * maxD && !beam && !laser) continue;
       const hw = (bb.maxX - bb.minX) / 2 + 0.5, h = bb.maxY - bb.minY + 0.5;
-      if (!beam && !(e instanceof EnderDragon) && !frustum.testBox(dx - hw, dy - 0.5, dz - hw, dx + hw, dy + h, dz + hw)) continue;
+      if (!beam && !laser && !(e instanceof EnderDragon) && !frustum.testBox(dx - hw, dy - 0.5, dz - hw, dx + hw, dy + h, dz + hw)) continue;
       this.renderEntity(b, level, e, x, y, z, dx, dy, dz, partial, cam);
       drawn++;
       if (opts.shadows && !(e instanceof LivingEntity && e.isInvisible())) {
@@ -337,6 +346,8 @@ export class EntityRenderDispatcher {
     b.setOverlay(0, 0, 0, 0);
     b.flush();
     if (this.shadows.length) this.renderShadows(b, level, cam);
+    // (Stage 5: ocean) the elder guardian's ghostly face, over everything
+    this.ocean.renderAppearance(b, level, cam, partial);
   }
 
   /** vanilla ItemPickupParticle: `e` (a copy, for a dropped item) flies to `target` over the next three ticks */
@@ -561,6 +572,8 @@ export class EntityRenderDispatcher {
   private renderMob(b: EntityBatch, e: Mob, dx: number, dy: number, dz: number, p: number): void {
     // (Stage 4: illagers) the raiders have their own renderers
     if (this.raiders.render(b, e, dx, dy, dz, p)) return;
+    // (Stage 5: ocean)
+    if (this.ocean.render(b, e, dx, dy, dz, p)) return;
     const type = e.type;
     const def = this.models[type];
     // (vanilla GhastRenderer.getTextureLocation: its face while charging a shot)
@@ -1509,6 +1522,8 @@ function shakeYaw(e: LivingEntity): number {
 function shadowRadius(e: Entity): number {
   // (Stage 4: illagers)
   if (RAIDER_SHADOW_RADII[e.type] !== undefined) return RAIDER_SHADOW_RADII[e.type];
+  // (Stage 5: ocean)
+  if (OCEAN_SHADOW_RADII[e.type] !== undefined) return OCEAN_SHADOW_RADII[e.type];
   let r = 0;
   switch (e.type) {
     case 'pig':
