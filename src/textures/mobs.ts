@@ -2005,6 +2005,7 @@ const EGGS: [string, number, number][] = [
   ['witch', 0x340000, 0x51a03e],
   ['husk', 0x797061, 0xe6cc94],
   ['stray', 0x617677, 0xddeaea],
+  ['silverfish', 0x6e6e6e, 0x303030],
 ];
 
 export const SPAWN_EGG_TEXTURES: Record<string, () => TexImage> = {};

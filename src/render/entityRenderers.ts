@@ -35,6 +35,8 @@ import { IronGolem } from '../entity/ironGolem';
 import '../textures/ironGolem';
 import '../textures/witch';
 import '../textures/biomeMobs';
+import '../textures/silverfish';
+import { silverfishModel, animateSilverfish } from './silverfishModel';
 import { Witch } from '../entity/witch';
 import { villagerTexture, zombieVillagerTexture } from '../textures/villager';
 import { ZombieVillager } from '../entity/zombieVillager';
@@ -174,6 +176,7 @@ export class EntityRenderDispatcher {
       husk: M.zombieModel(),
       stray: M.skeletonModel(),
       stray_outer: M.strayOuterModel(),
+      silverfish: silverfishModel(),
     };
     // vanilla textures/misc/shadow.png: soft black disc
     const n = 32, data = new Uint8Array(n * n * 4);
@@ -561,7 +564,8 @@ export class EntityRenderDispatcher {
       scale = (pose) => pose.rotZ(6.5 * k);
     }
     const spiderLike = type === 'spider' || type === 'cave_spider';
-    const a = this.setupLiving(e, dx + jx, dy, dz + jz, p, spiderLike ? 180 : 90, scale);
+    // (vanilla SpiderRenderer / SilverfishRenderer.getFlipDegrees: they die rolled right over)
+    const a = this.setupLiving(e, dx + jx, dy, dz + jz, p, spiderLike || type === 'silverfish' ? 180 : 90, scale);
     const attack = attackAnim(e, p);
     let armPose: M.ArmPose = 'empty';
     switch (type) {
@@ -650,6 +654,9 @@ export class EntityRenderDispatcher {
         M.animateIronGolem(def.root, a.limbSwing, a.limbAmount, a.headYaw, a.headPitch, g.attackAnimationTick > 0 ? g.attackAnimationTick - p : 0, g.offerFlowerTick);
         break;
       }
+      case 'silverfish':
+        animateSilverfish(def.root, a.age);
+        break;
       case 'bat': {
         // vanilla AnimationState: seconds since each loop started (a tick is 50 ms)
         const bat = e as Bat;
@@ -1367,6 +1374,7 @@ function shadowRadius(e: Entity): number {
       r = 0.7;
       break;
     case 'chicken':
+    case 'silverfish':
       r = 0.3;
       break;
     case 'spider':

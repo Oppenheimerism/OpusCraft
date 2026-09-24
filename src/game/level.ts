@@ -43,6 +43,7 @@ import { PoiManager } from './poi';
 import './redstone/components';
 import './villageBlocks';
 import './endPortal';
+import './infestedBlocks';
 import './golems';
 import './potionItems';
 import './potionEffects';
@@ -683,6 +684,7 @@ export class Level {
     }
     if (drop) {
       for (const s of blockDrops(dropState, tool, this.random, levelOf(stack, 'silk_touch') > 0, levelOf(stack, 'fortune'))) ItemEntity.drop(this, x, y, z, s);
+      behaviorOf(st)?.spawnAfterBreak?.(this, x, y, z, st, stack);
     }
     this.updateNeighborsAt(x, y, z, b.id);
     this.updateNeighbors(x, y, z, st);
