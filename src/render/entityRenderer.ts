@@ -192,6 +192,8 @@ export class EntityBatch {
   lightS = 240;
   overlay: [number, number, number, number] = [0, 0, 0, 0];
   color: [number, number, number, number] = [1, 1, 1, 1];
+  /** while set, quad() maps each (u, v) to (a·u + b·v + c, d·u + e·v + f) (vanilla's texture matrix: glint texturing) */
+  uvTransform: [number, number, number, number, number, number] | null = null;
 
   constructor(private readonly gl: GL) {
     this.shader = new Shader(gl, VS, FS, 'entity');
@@ -243,12 +245,14 @@ export class EntityBatch {
 
   /** Emit a quad transformed by the pose (positions in model space). */
   quad(pose: PoseStack, p: number[], uv: number[], nx: number, ny: number, nz: number, r = 1, g = 1, b = 1, a = 1): void {
-    const t = this.tmp, tn = this.tmpN;
+    const t = this.tmp, tn = this.tmpN, m = this.uvTransform;
     pose.transformNormal(nx, ny, nz, tn);
     const verts = [0, 1, 2, 0, 2, 3];
     for (const k of verts) {
       pose.transform(p[k * 3], p[k * 3 + 1], p[k * 3 + 2], t);
-      this.vertexRaw(t[0], t[1], t[2], uv[k * 2], uv[k * 2 + 1], r, g, b, a, tn[0], tn[1], tn[2]);
+      const u = uv[k * 2], v = uv[k * 2 + 1];
+      if (m) this.vertexRaw(t[0], t[1], t[2], m[0] * u + m[1] * v + m[2], m[3] * u + m[4] * v + m[5], r, g, b, a, tn[0], tn[1], tn[2]);
+      else this.vertexRaw(t[0], t[1], t[2], u, v, r, g, b, a, tn[0], tn[1], tn[2]);
     }
   }
 

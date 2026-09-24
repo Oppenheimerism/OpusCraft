@@ -31,6 +31,8 @@ export function itemTooltip(s: ItemStack): string[] {
         const e = enchantmentLine(id, lvl);
         lines.push((e.curse ? '§c' : '§7') + e.text);
       }
+  // vanilla DyedItemColor.addToTooltip ("item.dyed", unless show_in_tooltip is off)
+  if (s.tag?.dyedColor !== undefined && !s.tag.dyedHidden) lines.push('§7§oDyed');
   const fmt = (v: number) => (Math.round(v * 100) / 100).toString();
   if (it.tool || it.attackDamage !== 1 || it.attackSpeed !== 4) {
     if (it.tool || it.attackDamage > 1) {

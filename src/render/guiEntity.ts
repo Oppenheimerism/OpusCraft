@@ -8,6 +8,7 @@ import { playerModel, animateHumanoid, ModelPart } from './model';
 import { mat4, ortho } from '../core/math';
 import type { Player } from '../entity/player';
 import type { GameOptions } from '../game/options';
+import { ArmorLayer } from './armorLayer';
 
 export class GuiEntityRenderer {
   private fb: WebGLFramebuffer | null = null;
@@ -20,8 +21,11 @@ export class GuiEntityRenderer {
   private readonly proj = mat4();
   private readonly out = document.createElement('canvas');
   private pixels = new Uint8Array(0);
+  private readonly armor: ArmorLayer;
 
-  constructor(private readonly gl: GL, private readonly batch: EntityBatch, private readonly skin: WebGLTexture) {}
+  constructor(private readonly gl: GL, private readonly batch: EntityBatch, private readonly skin: WebGLTexture) {
+    this.armor = new ArmorLayer(gl);
+  }
 
   private ensure(w: number, h: number): void {
     if (this.fb && w === this.w && h === this.h) return;
@@ -98,12 +102,13 @@ export class GuiEntityRenderer {
     pose.scale(-1, -1, 1);
     pose.scale(0.9375, 0.9375, 0.9375);
     pose.translate(0, -1.501, 0);
-    // vanilla: an invisible player leaves the preview empty
+    // vanilla: an invisible player's body is left out of the preview (the armour layer still draws)
     if (!p.isInvisible()) {
       b.begin({ texture: this.skin, cutoff: 0.1, blend: false, cull: false, lit: true, useLightmap: false });
       m.render(b, pose, 64, 64);
-      b.flush();
     }
+    this.armor.render(b, pose, m, p.inventory.armor, false, 'humanoid', false);
+    b.flush();
     gl.readPixels(0, 0, W, H, gl.RGBA, gl.UNSIGNED_BYTE, this.pixels);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     const ctx = this.out.getContext('2d')!;

@@ -7,13 +7,23 @@ import type { Player } from '../entity/player';
 import { findRecipe, craftingRemainder, smeltingResult, fuelTime, CraftingRecipe } from './recipes';
 import type { ChestBlockEntity, FurnaceBlockEntity } from '../world/blockEntity';
 import { hasBinding } from '../item/enchantHelper';
+import { equipSound } from '../item/equipment';
+import { applyDyes, dyeColorName, isDyeable } from '../item/dyedColor';
 
 const ARMOR_ICONS = ['slot_boots', 'slot_leggings', 'slot_chestplate', 'slot_helmet'];
 const ARMOR_SLOT_OF: Record<string, number> = { feet: 0, legs: 1, chest: 2, head: 3 };
 
 export class ArmorSlot extends Slot {
-  constructor(inv: PlayerContainer, private readonly armorIndex: number, x: number, y: number) {
+  constructor(private readonly inv: PlayerContainer, private readonly armorIndex: number, x: number, y: number) {
     super(inv, 36 + armorIndex, x, y);
+  }
+  /** vanilla ArmorSlot.setByPlayer → LivingEntity.onEquipItem: a piece put on (not the very same) plays its equip sound */
+  override set(s: ItemStack | null): void {
+    const old = this.item;
+    super.set(s);
+    if (!s || (old && old.sameItem(s)) || !this.mayPlace(s)) return;
+    const p = this.inv.player, snd = equipSound(s.item);
+    if (snd && p.gameMode !== 'spectator') p.level.sound.play(snd, p.x, p.y, p.z, 1, 1);
   }
   override maxStackSize(): number {
     return 1;
@@ -79,6 +89,27 @@ interface CraftingLike {
   slotsChanged(): void;
 }
 
+/**
+ * vanilla ArmorDyeRecipe (a special recipe: no recipe book entry): one piece of leather armour and any dyes, anywhere
+ * in the grid and nothing else, make the piece in the colours mixed (DyedItemColor.applyDyes)
+ */
+function armorDye(grid: readonly (ItemStack | null)[]): ItemStack | null {
+  let piece: ItemStack | null = null;
+  const dyes: string[] = [];
+  for (const s of grid) {
+    if (!s) continue;
+    if (isDyeable(s.item)) {
+      if (piece) return null;
+      piece = s;
+    } else {
+      const d = dyeColorName(s.item);
+      if (!d) return null;
+      dyes.push(d);
+    }
+  }
+  return piece && dyes.length ? applyDyes(piece, dyes) : null;
+}
+
 export abstract class CraftingMenuBase extends ContainerMenu implements CraftingLike {
   readonly craft: SimpleContainer;
   readonly result = new SimpleContainer(1);
@@ -93,7 +124,7 @@ export abstract class CraftingMenuBase extends ContainerMenu implements Crafting
   }
   slotsChanged(): void {
     this.recipe = findRecipe(this.craft.items, this.gridW, this.gridW);
-    this.result.items[0] = this.recipe ? ItemStack.of(this.recipe.result, this.recipe.count) : null;
+    this.result.items[0] = this.recipe ? ItemStack.of(this.recipe.result, this.recipe.count) : armorDye(this.craft.items);
   }
   override canTakeItemForPickAll(_s: ItemStack | null, slot: Slot): boolean {
     return slot.container !== this.result;
