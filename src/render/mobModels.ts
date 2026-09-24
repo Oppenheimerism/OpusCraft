@@ -1,6 +1,8 @@
 // Mob models (vanilla LayerDefinitions) and their setupAnim animations.
 
-import { ModelPart, Cube, sitHumanoid } from './model';
+import { ModelPart, Cube, sitHumanoid, animateCrossbowCharge, animateCrossbowHold } from './model';
+
+export { animateCrossbowCharge, animateCrossbowHold };
 
 const PI = Math.PI;
 
@@ -265,7 +267,12 @@ export function skeletonModel(): MobModelDef {
   return { root, texW: 64, texH: 32 };
 }
 
-export type ArmPose = 'empty' | 'item' | 'bow';
+/**
+ * the right arm's pose. The crossbow ones (vanilla PiglinArmPose / IllagerArmPose CROSSBOW_CHARGE and
+ * CROSSBOW_HOLD) pose both arms; as in PiglinModel / IllagerModel they're applied after the rest of the
+ * humanoid animation (the idle sway included), with animateHumanoidMob's `crossbowCharge` (0..1) for the draw
+ */
+export type ArmPose = 'empty' | 'item' | 'bow' | 'crossbow_charge' | 'crossbow_hold';
 
 /** vanilla AnimationUtils.bobArms */
 function bobArms(ra: ModelPart, la: ModelPart, age: number): void {
@@ -276,7 +283,7 @@ function bobArms(ra: ModelPart, la: ModelPart, age: number): void {
 }
 
 /** vanilla HumanoidModel.setupAnim (mob subset: walking, riding, arm poses, attack swing, idle bob) */
-export function animateHumanoidMob(root: ModelPart, limbSwing: number, limbAmount: number, age: number, headYaw: number, headPitch: number, attackTime: number, rightPose: ArmPose, riding = false): void {
+export function animateHumanoidMob(root: ModelPart, limbSwing: number, limbAmount: number, age: number, headYaw: number, headPitch: number, attackTime: number, rightPose: ArmPose, riding = false, crossbowCharge = 0): void {
   root.resetPose();
   const head = root.child('head'), body = root.child('body');
   const ra = root.child('right_arm'), la = root.child('left_arm'), rl = root.child('right_leg'), ll = root.child('left_leg');
@@ -326,6 +333,8 @@ export function animateHumanoidMob(root: ModelPart, limbSwing: number, limbAmoun
     la.zRot -= Math.cos(age * 0.09) * 0.05 + 0.05;
     la.xRot -= Math.sin(age * 0.067) * 0.05;
   }
+  if (rightPose === 'crossbow_charge') animateCrossbowCharge(ra, la, crossbowCharge);
+  else if (rightPose === 'crossbow_hold') animateCrossbowHold(ra, la, head);
 }
 
 /** vanilla AnimationUtils.animateZombieArms */

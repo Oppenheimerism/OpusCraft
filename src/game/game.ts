@@ -1580,6 +1580,7 @@ export class Game {
     lvl.onPlayerArrowHit = () => this.advancements.trigger('shoot_arrow');
     lvl.onPlayerCrossbowKill = (killed) => this.advancements.trigger('killed_by_crossbow', { crossbowKills: killed.map((e) => e.type) });
     this.interaction.onShotCrossbow = () => this.advancements.trigger('shot_crossbow');
+    this.interaction.onItemUsed = () => this.renderer.hand.itemUsed();
     this.interaction.onPlaced = (name) => this.advancements.trigger('place', { place: name });
     this.interaction.onConsumed = (id) => this.advancements.trigger('consume', { consume: id });
     this.interaction.onItemDurability = (item, vehicle) => this.advancements.trigger('item_durability', { durability: { item, vehicle } });

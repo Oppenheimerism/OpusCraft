@@ -75,7 +75,7 @@ export class Hud {
       const s = p.inventory.main[i];
       if (!s) continue;
       const x = cx - 90 + i * 20 + 2, y = H - 16 - 3;
-      g.stack(s, x, y);
+      g.stack(s, x, y, p.useItem === s ? p.ticksUsingItem() : -1);
       g.itemDecorations(s.count, s.damage, s.item.maxDamage, x, y);
       // vanilla item cooldown overlay (ender pearls)
       const cd = p.cooldowns.get(s.item.id);
