@@ -4,6 +4,7 @@
 import { Rand } from '../core/rng';
 import { ItemStack, ITEMS } from '../item/item';
 import { RANDOM_LOOT_ENCHANTMENTS } from '../item/enchantments';
+import { selectEnchantment } from '../item/enchantHelper';
 import type { SimpleContainer } from '../inventory/container';
 
 interface LootEntry {
@@ -13,6 +14,8 @@ interface LootEntry {
   count?: [number, number];
   /** enchant_randomly from #on_random_loot (books become enchanted books) */
   enchant?: boolean;
+  /** enchant_with_levels from #on_random_loot: enchanted as a table would at this level */
+  levels?: number;
 }
 
 interface LootPool {
@@ -21,6 +24,8 @@ interface LootPool {
 }
 
 const e = (item: string, weight: number, count?: [number, number], enchant?: boolean): LootEntry => ({ item, weight, count, enchant });
+/** an entry with enchant_with_levels */
+const lv = (item: string, weight: number, levels: number): LootEntry => ({ item, weight, levels });
 
 export const LOOT_TABLES: Record<string, LootPool[]> = {
   'chests/simple_dungeon': [
@@ -67,6 +72,33 @@ export const LOOT_TABLES: Record<string, LootPool[]> = {
       ],
     },
     { rolls: 1, entries: [e('', 14), e('rib_armor_trim_smithing_template', 1)] },
+  ],
+  // strongholds: the chest corridors' altars, the storeroom crossings and the libraries
+  'chests/stronghold_corridor': [
+    {
+      rolls: [2, 3],
+      entries: [
+        e('ender_pearl', 10), e('diamond', 3, [1, 3]), e('iron_ingot', 10, [1, 5]), e('gold_ingot', 5, [1, 3]), e('redstone', 5, [4, 9]),
+        e('bread', 15, [1, 3]), e('apple', 15, [1, 3]), e('iron_pickaxe', 5), e('iron_sword', 5), e('iron_chestplate', 5), e('iron_helmet', 5),
+        e('iron_leggings', 5), e('iron_boots', 5), e('golden_apple', 1), e('saddle', 1), e('iron_horse_armor', 1), e('golden_horse_armor', 1),
+        e('diamond_horse_armor', 1), e('music_disc_otherside', 1), lv('book', 1, 30),
+      ],
+    },
+    { rolls: 1, entries: [e('', 9), e('eye_armor_trim_smithing_template', 1)] },
+  ],
+  'chests/stronghold_crossing': [
+    {
+      rolls: [1, 4],
+      entries: [
+        e('iron_ingot', 10, [1, 5]), e('gold_ingot', 5, [1, 3]), e('redstone', 5, [4, 9]), e('coal', 10, [3, 8]), e('bread', 15, [1, 3]),
+        e('apple', 15, [1, 3]), e('iron_pickaxe', 1), lv('book', 1, 30),
+      ],
+    },
+    { rolls: 1, entries: [e('', 9), e('eye_armor_trim_smithing_template', 1)] },
+  ],
+  'chests/stronghold_library': [
+    { rolls: [2, 10], entries: [e('book', 20, [1, 3]), e('paper', 20, [2, 7]), e('map', 1), e('compass', 1), lv('book', 10, 30)] },
+    { rolls: 1, entries: [e('eye_armor_trim_smithing_template', 1)] },
   ],
   // villages (chests/village/*)
   'chests/village/village_weaponsmith': [
@@ -202,6 +234,14 @@ function enchantRandomly(stack: ItemStack, r: Rand): ItemStack {
   return new ItemStack(stack.item, stack.count, stack.damage, { ...stack.tag, enchantments: { ...stack.tag?.enchantments, [ench.id]: level } });
 }
 
+/** vanilla EnchantWithLevelsFunction (EnchantmentHelper.enchantItem): a book becomes an enchanted book */
+function enchantWithLevels(stack: ItemStack, levels: number, r: Rand): ItemStack {
+  const m: Record<string, number> = {};
+  for (const x of selectEnchantment(r, stack, levels, RANDOM_LOOT_ENCHANTMENTS)) m[x.def.id] = x.level;
+  if (stack.item.id === 'book') return new ItemStack(ITEMS.get('enchanted_book')!, stack.count, 0, { stored: m });
+  return new ItemStack(stack.item, stack.count, stack.damage, { ...stack.tag, enchantments: { ...stack.tag?.enchantments, ...m } });
+}
+
 /** vanilla LootTable.getRandomItems (stacks over the max size are split) */
 export function rollLoot(table: string, r: Rand): ItemStack[] {
   const out: ItemStack[] = [];
@@ -215,6 +255,7 @@ export function rollLoot(table: string, r: Rand): ItemStack[] {
       if (!it) continue;
       let stack = new ItemStack(it, entry.count ? between(r, entry.count[0], entry.count[1]) : 1);
       if (entry.enchant) stack = enchantRandomly(stack, r);
+      if (entry.levels) stack = enchantWithLevels(stack, entry.levels, r);
       while (stack.count > stack.maxStack) out.push(stack.split(stack.maxStack));
       out.push(stack);
     }

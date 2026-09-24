@@ -34,6 +34,7 @@ import { AABB } from '../core/aabb';
 import type { DimensionType } from '../world/dimension';
 import { NetherGenerator } from '../world/gen/nether';
 import { villageLocator, type Villages } from '../world/gen/villages';
+import { strongholdLocator, type Strongholds } from '../world/gen/stronghold';
 import type { NetherFortresses } from '../world/gen/fortress';
 import type { EndDragonFight } from './endDragonFight';
 import { behaviorOf } from './blockBehavior';
@@ -126,6 +127,7 @@ export class Level {
   readonly random = new Rand(1234);
   private netherFortresses: NetherFortresses | null = null;
   private overworldVillages: Villages | null = null;
+  private overworldStrongholds: Strongholds | null = null;
   readonly fluids: FluidTicker;
   readonly randomTicks: RandomTicker;
   /** scheduled block ticks (vanilla LevelTicks) */
@@ -170,6 +172,11 @@ export class Level {
   /** the Overworld's villages, placed just as the chunk workers place them (for /locate) */
   villages(): Villages {
     return (this.overworldVillages ??= villageLocator(this.seed));
+  }
+
+  /** the Overworld's strongholds, placed and laid out just as the chunk workers do (eyes of ender, /locate, Eye Spy) */
+  strongholds(): Strongholds {
+    return (this.overworldStrongholds ??= strongholdLocator(this.seed));
   }
 
   addEntity(e: Entity): void {

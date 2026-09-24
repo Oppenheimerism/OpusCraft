@@ -252,6 +252,8 @@ export class Decorator {
   geodes: { place(ctx: GenContext): void } | null = null;
   /** villages, placed in the SURFACE_STRUCTURES step */
   villages: { place(ctx: GenContext): void } | null = null;
+  /** strongholds, placed in the STRONGHOLDS step */
+  strongholds: { place(ctx: GenContext): void } | null = null;
 
   constructor(readonly seed: number, patchNoise: NormalNoise) {
     this.patchNoise = patchNoise;
@@ -270,6 +272,8 @@ export class Decorator {
     this.monsterRooms(ctx, new Rand(hash2(ctx.cx, ctx.cz, this.seed ^ 0xd06e), 4));
     // --- villages (vanilla SURFACE_STRUCTURES step)
     this.villages?.place(ctx);
+    // --- strongholds (vanilla STRONGHOLDS step)
+    this.strongholds?.place(ctx);
     // biome of the chunk center decides most decoration (vanilla decorates per biome present;
     // we use a few sample columns so borders mix naturally)
     // --- ores

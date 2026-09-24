@@ -1729,6 +1729,7 @@ export class Game {
       if (b) this.advancements.trigger('biome', { biome: b.name });
       // vanilla LocationPredicate.inStructure: inside one of the structure's pieces
       if (this.world.dim.id === 'the_nether' && this.level.fortresses().pieceAt(Math.floor(p.x), Math.floor(p.y), Math.floor(p.z))) this.advancements.trigger('structure', { structures: ['fortress'] });
+      if (this.world.dim.id === 'overworld' && this.level.strongholds().pieceAt(Math.floor(p.x), Math.floor(p.y), Math.floor(p.z))) this.advancements.trigger('structure', { structures: ['stronghold'] });
     }
     // vanilla trackEnteredOrExitedLavaOnVehicle: how far a mount has carried the player across lava (ride_entity_in_lava)
     const v = p.vehicle;
