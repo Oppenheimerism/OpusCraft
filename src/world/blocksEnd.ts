@@ -2,7 +2,7 @@
 // stairs and wall are in the shared tables of blocks.ts / blocksExtra.ts), the
 // end portal frame an eye of ender is set into, and the end portal itself.
 // What the frame and the portal do is in game/endPortal.ts; the portal's
-// starfield is drawn by render/endPortalRenderer.ts, not by the mesher.
+// starfield is drawn by render/endRenderer.ts, not by the mesher.
 
 import { registerBlock, P, Box, StateView, boolProp } from './block';
 import type { ModelDef, ModelChoice, FaceDef, UV4 } from './models';

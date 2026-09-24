@@ -275,7 +275,8 @@ for (const [id, stack, fuel] of MISC) {
 Object.assign(ITEMS.get('experience_bottle')!, { rarity: 'uncommon', glint: true });
 // the End: vanilla EnderEyeItem, and EndCrystalItem (rare, with the enchantment glint); the portal frame is a functional block
 reg({ id: 'ender_eye', texture: 'ender_eye', creativeTab: 'tools' });
-reg({ id: 'end_crystal', texture: 'end_crystal', creativeTab: 'functional', rarity: 'rare', glint: true });
+// (vanilla CreativeModeTabs.COMBAT lists the end crystal after the totem and TNT)
+reg({ id: 'end_crystal', texture: 'end_crystal', creativeTab: 'combat', rarity: 'rare', glint: true });
 ITEMS.get('end_portal_frame')!.creativeTab = 'functional';
 reg({ id: 'enchanted_book', texture: 'enchanted_book', maxStack: 1, rarity: 'uncommon', glint: true });
 for (const m of ['iron', 'golden', 'diamond']) reg({ id: `${m}_horse_armor`, texture: `${m}_horse_armor`, maxStack: 1, creativeTab: 'combat' });
