@@ -151,6 +151,19 @@ shaped('minecart', 1, ['# #', '###'], { '#': 'iron_ingot' });
 shapeless('chest_minecart', 1, 'chest', 'minecart');
 shaped('rail', 16, ['X X', 'X#X', 'X X'], { X: 'iron_ingot', '#': 'stick' });
 shaped('iron_door', 3, ['##', '##', '##'], { '#': 'iron_ingot' });
+// redstone switches and the lamp
+shaped('lever', 1, ['X', '#'], { '#': 'cobblestone', X: 'stick' });
+for (const w of [...WOODS, ...NETHER_WOODS]) {
+  shapeless(`${w}_button`, 1, `${w}_planks`);
+  shaped(`${w}_pressure_plate`, 1, ['##'], { '#': `${w}_planks` });
+}
+shapeless('stone_button', 1, 'stone');
+shaped('stone_pressure_plate', 1, ['##'], { '#': 'stone' });
+shapeless('polished_blackstone_button', 1, 'polished_blackstone');
+shaped('polished_blackstone_pressure_plate', 1, ['##'], { '#': 'polished_blackstone' });
+shaped('light_weighted_pressure_plate', 1, ['##'], { '#': 'gold_ingot' });
+shaped('heavy_weighted_pressure_plate', 1, ['##'], { '#': 'iron_ingot' });
+shaped('redstone_lamp', 1, [' R ', 'RGR', ' R '], { R: 'redstone', G: 'glowstone' });
 shaped('glass_bottle', 3, ['# #', ' # '], { '#': 'glass' });
 shaped('lead', 2, ['~~ ', '~O ', '  ~'], { '~': 'string', O: 'slime_ball' });
 shaped('magma_block', 1, ['##', '##'], { '#': 'magma_cream' });

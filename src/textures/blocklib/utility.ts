@@ -343,6 +343,22 @@ export function glowstone(): TexImage {
   return stones('glowstone', pal, { sites: 11, minDist: 3.2, mortar: [0x55361a, 0x6b4520], mortarW: 0.6, shadeTones: [2, 3, 3, 4], rim: 0.5, noiseAmt: 1.2 });
 }
 
+/** vanilla redstone_lamp(_on).png: a glowstone-like pane of cells in a dark frame, dull red-brown off, blazing when lit */
+export function redstoneLamp(on: boolean): TexImage {
+  const pal = on ? [0x6b3a14, 0x93561d, 0xb87428, 0xd69535, 0xebb44c, 0xf8d57a, 0xfff0bd] : [0x2e170b, 0x3f2011, 0x512a17, 0x62351d, 0x734024, 0x864d2c, 0x985c38];
+  const t = stones(on ? 'redstone_lamp_on' : 'redstone_lamp', pal, { sites: 9, minDist: 3.2, mortar: on ? [0x5a3212, 0x70421a] : [0x24110a, 0x2f170d], mortarW: 0.6, shadeTones: [2, 3, 3, 4], rim: 0.5, noiseAmt: 1.2 });
+  const frame = on ? [0x3f2412, 0x5c3a1f, 0x7a5230] : [0x1f120b, 0x2e1c11, 0x3e2819];
+  for (let i = 0; i < N; i++)
+    for (const [x, y] of [[i, 0], [0, i], [i, 15], [15, i]] as [number, number][]) setPx(t, x, y, frame[(i + x + y) % 2]);
+  for (let i = 1; i < 15; i++) {
+    setPx(t, i, 1, mixC(getPx(t, i, 1), frame[2], 0.6));
+    setPx(t, 1, i, mixC(getPx(t, 1, i), frame[2], 0.6));
+    setPx(t, i, 14, mixC(getPx(t, i, 14), frame[0], 0.5));
+    setPx(t, 14, i, mixC(getPx(t, 14, i), frame[0], 0.5));
+  }
+  return t;
+}
+
 export function seaLantern(): TexImage {
   const t = img();
   const pal = [0x759a91, 0x92b5ac, 0xadcdc5, 0xc5dfd9, 0xdcefea, 0xf1faf7];

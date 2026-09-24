@@ -4,6 +4,8 @@ import type { Level } from './level';
 import type { Player } from '../entity/player';
 import { raycast, BlockHit } from './raycast';
 import { destroyProgress, placementState, canReplace, canSurvive, isCorrectTool, blockExperience, hasVacantFace } from './blockRules';
+import { behaviorOf } from './blockBehavior';
+import { openSound } from './redstone/components';
 import { BLOCKS, BLOCK_BY_NAME, STATE_BLOCK, FLAGS, F_AIR, F_WATER, F_LAVA, F_OPAQUE, F_REPLACEABLE, COLLISION, FACE_OCC, OUTLINE, getBlock, S } from '../world/block';
 import { growHugeFungus, nyliumBoneMeal } from '../world/gen/netherFeatures';
 import type { BlockAccess } from '../world/gen/patches';
@@ -524,6 +526,12 @@ export class Interaction {
     const n = b.name;
     // (what the block does by itself, vanilla useWithoutItem: the main hand's turn, not sneaking with an item)
     const sneakingWithItem = secondary || !main;
+    // levers and buttons
+    const own = behaviorOf(st)?.use;
+    if (!sneakingWithItem && own && own(lvl, h.x, h.y, h.z, st, { player: p, face: h.face, hx: h.hx, hy: h.hy, hz: h.hz })) {
+      p.swing();
+      return true;
+    }
     // doors, trapdoors, fence gates toggle by hand (iron ones need redstone)
     if (!sneakingWithItem && (n.endsWith('_door') || n.endsWith('_trapdoor') || n.endsWith('_fence_gate')) && !n.startsWith('iron_')) {
       let ns = b.with(st, 'open', !b.get(st, 'open'));
@@ -534,11 +542,7 @@ export class Interaction {
         if (b.get(st, 'facing') === opp[f]) ns = b.with(ns, 'facing', f);
       }
       lvl.setBlock(h.x, h.y, h.z, ns);
-      const open = b.get(ns, 'open');
-      // (vanilla BlockSetType / WoodType: crimson and warped doors sound of nether wood, cherry ones of cherry wood)
-      const wood = /^(crimson|warped)_/.test(n) ? 'nether_wood_' : n.startsWith('cherry_') ? 'cherry_wood_' : '';
-      const kind = n.endsWith('_door') ? `${wood || 'wooden_'}door` : n.endsWith('_trapdoor') ? `${wood || 'wooden_'}trapdoor` : `${wood}fence_gate`;
-      lvl.sound.play(`block.${kind}.${open ? 'open' : 'close'}`, h.x + 0.5, h.y + 0.5, h.z + 0.5, 1, Math.random() * 0.1 + 0.9);
+      lvl.sound.play(openSound(n, b.get(ns, 'open') as boolean), h.x + 0.5, h.y + 0.5, h.z + 0.5, 1, Math.random() * 0.1 + 0.9);
       p.swing();
       return true;
     }

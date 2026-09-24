@@ -8,6 +8,8 @@ import type { World } from '../world/world';
 import type { Level } from './level';
 import { Rand } from '../core/rng';
 import { oreDrops, uniformBonus, tableBonus } from '../item/enchantHelper';
+import { behaviorOf, behaviorOfBlock } from './blockBehavior';
+import { hasNeighborSignal } from './redstone/signal';
 
 const blk = (st: number): Block => BLOCKS[STATE_BLOCK[st]];
 
@@ -61,6 +63,8 @@ const NETHER_PLANT_SOIL = new Set([...PLANT_SOIL, 'crimson_nylium', 'warped_nyli
 
 /** Can the block `state` stay at (x,y,z)? `placing`: the other half of a tall plant isn't there yet */
 export function canSurvive(world: World, x: number, y: number, z: number, state: number, placing = false): boolean {
+  const own = behaviorOf(state)?.canSurvive;
+  if (own) return own(world, x, y, z, state);
   const b = blk(state);
   const n = b.name;
   const below = world.getState(x, y - 1, z);
@@ -264,6 +268,8 @@ export function hasVacantFace(state: number): boolean {
 const OPP_NAME = ['up', 'down', 'south', 'north', 'east', 'west'];
 
 export function placementState(block: Block, ctx: PlaceContext): number | null {
+  const own = behaviorOfBlock(block.id)?.placement;
+  if (own) return own(ctx);
   const n = block.name;
   let st = block.defaultState;
   const facingH = DIR_NAMES[dirFromYaw(ctx.yaw)]; // player's horizontal facing
@@ -307,6 +313,8 @@ export function placementState(block: Block, ctx: PlaceContext): number | null {
     st = block.with(st, 'facing', facingH);
     st = block.with(st, 'half', 'lower');
     st = block.with(st, 'hinge', doorHinge(ctx, facingH));
+    const on = hasNeighborSignal(ctx.world, ctx.x, ctx.y, ctx.z) || hasNeighborSignal(ctx.world, ctx.x, ctx.y + 1, ctx.z);
+    st = block.with(block.with(st, 'powered', on), 'open', on);
   } else if (n.endsWith('_trapdoor')) {
     // vanilla TrapDoorBlock.getStateForPlacement
     if (ctx.face !== UP && ctx.face !== DOWN) {
@@ -316,9 +324,14 @@ export function placementState(block: Block, ctx: PlaceContext): number | null {
       st = block.with(st, 'facing', oppositeH);
       st = block.with(st, 'half', ctx.face === UP ? 'bottom' : 'top');
     }
+    if (hasNeighborSignal(ctx.world, ctx.x, ctx.y, ctx.z)) st = block.with(block.with(st, 'open', true), 'powered', true);
   } else if (n.endsWith('_fence_gate') || n.endsWith('_bed')) {
     st = block.with(st, 'facing', facingH);
     if (n.endsWith('_bed')) st = block.with(st, 'part', 'foot');
+    else {
+      const on = hasNeighborSignal(ctx.world, ctx.x, ctx.y, ctx.z);
+      st = block.with(block.with(st, 'open', on), 'powered', on);
+    }
   } else if (n === 'lantern' || n === 'soul_lantern') {
     // vanilla: prefer the vertical direction the player looks toward
     const hanging = ctx.face === DOWN;

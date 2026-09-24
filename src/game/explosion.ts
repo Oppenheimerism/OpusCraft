@@ -10,6 +10,7 @@ import { MIN_Y, MAX_Y } from '../world/constants';
 import { AABB } from '../core/aabb';
 import { clipBlocks } from './raycast';
 import { blockDrops } from './blockRules';
+import { behaviorOf } from './blockBehavior';
 import { ItemEntity } from '../entity/itemEntity';
 import { ItemStack } from '../item/item';
 import { PrimedTnt } from '../entity/tnt';
@@ -118,6 +119,7 @@ export function explode(level: Level, source: Entity | null, x: number, y: numbe
     }
     const decay = kind !== 'tnt';
     const drops: [ItemStack, number, number, number][] = [];
+    const removed: [number, number, number, number][] = [];
     for (const [bx, by, bz] of list) {
       const st = w.getState(bx, by, bz);
       if (FLAGS[st] & F_AIR) continue;
@@ -142,8 +144,14 @@ export function explode(level: Level, source: Entity | null, x: number, y: numbe
         for (const s of be.container.removeAll()) level.dropStackAt(bx, by, bz, s);
       }
       level.world.setState(bx, by, bz, 0);
+      // (vanilla: removed with setBlock, so a switch caught in the blast lets go of what it powered)
+      behaviorOf(st)?.onRemove?.(level, bx, by, bz, st, 0, false);
+      removed.push([bx, by, bz, b.id]);
     }
-    for (const [bx, by, bz] of list) level.updateNeighbors(bx, by, bz);
+    for (const [bx, by, bz, id] of removed) {
+      level.updateNeighborsAt(bx, by, bz, id);
+      level.updateNeighbors(bx, by, bz);
+    }
     for (const [s, bx, by, bz] of drops) ItemEntity.drop(level, bx, by, bz, s);
   }
   void fire;

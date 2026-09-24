@@ -57,7 +57,9 @@ function enchantText(s: ItemStack): string {
     .join('\n');
 }
 
-const REDSTONE = new Set(['redstone', 'redstone_block', 'tnt']);
+/** vanilla CreativeModeTabs.REDSTONE_BLOCKS, in its order (as far as the game has them) */
+const REDSTONE_ORDER = ['redstone', 'redstone_block', 'lever', 'oak_button', 'stone_button', 'oak_pressure_plate', 'stone_pressure_plate', 'light_weighted_pressure_plate', 'heavy_weighted_pressure_plate', 'tnt', 'redstone_lamp'];
+const REDSTONE = new Set(REDSTONE_ORDER);
 const FUNCTIONAL = new Set(['oak_sign', 'painting', 'item_frame', 'red_bed', 'jack_o_lantern', 'carved_pumpkin']);
 const BUILDING = new Set(['oak_door', 'iron_door']);
 const TOOLS = new Set(['minecart', 'chest_minecart', 'oak_boat', 'saddle', 'lead', 'name_tag', 'filled_map', 'map', 'milk_bucket', 'experience_bottle']);
@@ -114,6 +116,7 @@ function tabs(): Tab[] {
   // (no bare enchanted book: vanilla lists one per enchantment instead)
   const listed = ITEM_LIST.filter((it) => it.id !== 'enchanted_book');
   for (const it of listed) byId.get(tabOf(it))?.items.push(it);
+  byId.get('redstone_blocks')!.items.sort((a, b) => REDSTONE_ORDER.indexOf(a.id) - REDSTONE_ORDER.indexOf(b.id));
   byId.get('ingredients')!.extra = enchantedBooks(false);
   byId.get('search')!.items = listed;
   TABS = t;

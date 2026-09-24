@@ -437,6 +437,7 @@ export class Game {
       fallingDust: (x, y, z, c) => particles.fallingDust(x, y, z, c),
       blockParticle: (x, y, z, xd, yd, zd, st, bx, by, bz) => particles.blockParticle(x, y, z, xd, yd, zd, st, bx, by, bz),
       entityEffect: (x, y, z, c, a) => particles.entityEffect(x, y, z, c, a),
+      dust: (x, y, z, r, g, b, s) => particles.dust(x, y, z, r, g, b, s),
     };
     this.spawner = new NaturalSpawner(this.level, hashString(meta.seed));
     this.ambient = new AmbientTicker(this.level);

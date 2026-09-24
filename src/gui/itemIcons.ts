@@ -5,7 +5,7 @@ import type { Renderer } from '../render/renderer';
 import { PoseStack } from '../render/entityRenderer';
 import { ITEM_LIST, ITEMS, Item, ItemStack } from '../item/item';
 import { ortho, mat4 } from '../core/math';
-import { getStateModels, bakeChoice } from '../render/mesher';
+import { getItemModels, bakeChoice } from '../render/mesher';
 import { cube } from '../world/models';
 import { ICON_CUBES } from './iconCubes';
 import { LAYER, Layer } from '../world/block';
@@ -123,7 +123,7 @@ export class ItemIcons implements IconSource {
       pose.scale(0.625, 0.625, 0.625);
       pose.translate(-0.5, -0.5, -0.5);
       const b = it.block!;
-      const models = getStateModels(b.defaultState);
+      const models = getItemModels(b);
       if (!models) return;
       const layer = LAYER[b.defaultState];
       batch.begin({ texture: r.atlas.texture!, cutoff: layer === Layer.SOLID ? -1 : 0.1, blend: layer === Layer.TRANSLUCENT, cull: true, lit: false, useLightmap: false });

@@ -701,6 +701,25 @@ export class ParticleEngine {
     this.addSprite(p);
   }
 
+  /** vanilla DustParticle (DustParticleBase): a speck of colour that drifts a little and shrinks away through the generic frames */
+  dust(x: number, y: number, z: number, r: number, g: number, b: number, scale: number): void {
+    const p = this.base('dust', x, y, z);
+    this.withSpeed(p, 0, 0, 0);
+    p.friction = 0.96;
+    p.speedUpWhenBlocked = true;
+    p.dx *= 0.1;
+    p.dy *= 0.1;
+    p.dz *= 0.1;
+    const f = Math.random() * 0.4 + 0.6;
+    p.r = (Math.random() * 0.2 + 0.8) * r * f;
+    p.g = (Math.random() * 0.2 + 0.8) * g * f;
+    p.b = (Math.random() * 0.2 + 0.8) * b * f;
+    p.size *= 0.75 * scale;
+    p.lifetime = Math.max(1, Math.floor(Math.floor(8 / (Math.random() * 0.8 + 0.2)) * scale));
+    p.grow = true;
+    this.addSprite(p);
+  }
+
   /** vanilla FallingDustParticle (dust sifting from under sand and gravel), tinted by the block */
   fallingDust(x: number, y: number, z: number, color: number): void {
     const p = this.base('falling_dust', x, y, z);

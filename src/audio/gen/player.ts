@@ -44,6 +44,21 @@ export function click(c: Ctx): Float32Array {
   return out;
 }
 
+/** vanilla random/wood_click: the duller, hollower knock of wooden buttons and pressure plates. */
+export function woodClick(c: Ctx): Float32Array {
+  const { sr, rng } = c;
+  const out = alloc(0.1, sr);
+  layer(out, 1, (b) => {
+    impact(b, sr, rng, {
+      modes: [640, 1, 0.024, 1420, 0.5, 0.013, 2300, 0.28, 0.008, 3400, 0.12, 0.005, 310, 0.35, 0.03],
+      noise: 0.55,
+      noiseTau: 0.0016,
+      noiseBp: [2300, 0.8],
+    });
+  });
+  return out;
+}
+
 /** Toast sliding in/out: a soft paper-like swish that rises (in) or falls (out). */
 function toastSwish(c: Ctx, rising: boolean): Float32Array {
   const { sr, rng } = c;
@@ -928,6 +943,7 @@ function itemBreak(c: Ctx): Float32Array {
 
 export function playerSounds(): Record<string, SoundGen> {
   const clickS = sound('ui.button.click', 1, click);
+  const woodClickS = sound('random.wood_click', 1, woodClick);
   const bow = sound('entity.arrow.shoot', 1, bowShoot);
   const hurt = sound('entity.player.hurt', 3, (c) => grunt(c, false));
   return {
@@ -935,9 +951,19 @@ export function playerSounds(): Record<string, SoundGen> {
     'ui.toast.in': sound('ui.toast.in', 1, (c) => toastSwish(c, true)),
     'ui.toast.out': sound('ui.toast.out', 1, (c) => toastSwish(c, false)),
     'ui.toast.challenge_complete': sound('ui.toast.challenge_complete', 1, challengeFanfare),
+    // (vanilla sounds.json pitches: the switches' clicks are random/click and random/wood_click played low)
     'block.stone_button.click_on': pitched(clickS, 0.6),
     'block.stone_button.click_off': pitched(clickS, 0.5),
-    'block.lever.click': pitched(clickS, 0.6),
+    'block.wooden_button.click_on': pitched(woodClickS, 0.6),
+    'block.wooden_button.click_off': pitched(woodClickS, 0.5),
+    'block.stone_pressure_plate.click_on': pitched(clickS, 0.6),
+    'block.stone_pressure_plate.click_off': pitched(clickS, 0.5),
+    'block.wooden_pressure_plate.click_on': pitched(woodClickS, 0.8),
+    'block.wooden_pressure_plate.click_off': pitched(woodClickS, 0.7),
+    'block.metal_pressure_plate.click_on': pitched(clickS, 0.9),
+    'block.metal_pressure_plate.click_off': pitched(clickS, 0.75),
+    // (the lever's pitch is the code's: 0.6 on, 0.5 off)
+    'block.lever.click': clickS,
     'entity.item.pickup': sound('entity.item.pickup', 1, pop),
     'entity.player.hurt': hurt,
     'entity.player.death': sound('entity.player.death', 2, (c) => grunt(c, true)),

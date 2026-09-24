@@ -5,6 +5,7 @@ import { COLLISION, FLAGS, F_WATER, F_LAVA, BLOCKS, STATE_BLOCK, F_CLIMBABLE } f
 import { fluidType, fluidHeight, fluidFlow, FLUID_WATER, FLUID_LAVA, FLUID_NONE } from '../world/fluids';
 import type { Level } from '../game/level';
 import { setDripleafTilt } from '../game/blockRules';
+import { behaviorOf, behaviorOfBlock } from '../game/blockBehavior';
 
 let nextEntityId = 1;
 
@@ -584,6 +585,7 @@ export abstract class Entity {
           else if (kind === INSIDE_CACTUS) this.hurt(1, 'cactus');
           else if (kind === INSIDE_DRIPLEAF) this.insideDripleaf(x, y, z, st);
           else if (kind === INSIDE_PORTAL) this.insidePortal(x, y, z);
+          else if (kind === INSIDE_BEHAVIOR) behaviorOf(st)!.entityInside!(this.level, x, y, z, st, this);
           if (this.removed) return fire;
         }
     return fire;
@@ -847,6 +849,8 @@ function solidEntities(level: Level): Entity[] {
 }
 
 const INSIDE_NONE = 0, INSIDE_FIRE = 1, INSIDE_LAVA = 2, INSIDE_COBWEB = 3, INSIDE_BERRY_BUSH = 4, INSIDE_CACTUS = 5, INSIDE_DRIPLEAF = 6, INSIDE_PORTAL = 7, INSIDE_SOUL_FIRE = 8;
+/** the block has its own entityInside (pressure plates, wooden buttons) */
+const INSIDE_BEHAVIOR = 9;
 let INSIDE: Uint8Array | null = null;
 
 /** which vanilla entityInside behaviour a block has (lazy per-block table) */
@@ -854,7 +858,7 @@ function insideKind(st: number): number {
   if (!INSIDE) {
     INSIDE = new Uint8Array(BLOCKS.length);
     const kinds: Record<string, number> = { fire: INSIDE_FIRE, soul_fire: INSIDE_SOUL_FIRE, lava: INSIDE_LAVA, cobweb: INSIDE_COBWEB, sweet_berry_bush: INSIDE_BERRY_BUSH, cactus: INSIDE_CACTUS, big_dripleaf: INSIDE_DRIPLEAF, nether_portal: INSIDE_PORTAL };
-    BLOCKS.forEach((b, i) => (INSIDE![i] = kinds[b.name] ?? INSIDE_NONE));
+    BLOCKS.forEach((b, i) => (INSIDE![i] = kinds[b.name] ?? (behaviorOfBlock(i)?.entityInside ? INSIDE_BEHAVIOR : INSIDE_NONE)));
   }
   return INSIDE[STATE_BLOCK[st]];
 }

@@ -47,6 +47,7 @@ function categoryOf(name: string): Category {
 // alias events not synthesized to ones that are
 const ALIASES: [RegExp, string][] = [
   [/^block\.(cherry_wood|bamboo_wood)\./, 'block.wood.'],
+  [/^block\.(cherry_wood|bamboo_wood|nether_wood)_(button|pressure_plate)\./, 'block.wooden_$2.'],
   [/^block\.(moss_carpet)\./, 'block.moss.'],
   [/^block\.(cherry_leaves|azalea_leaves|azalea|flowering_azalea|cherry_sapling|sweet_berry_bush|vine|cave_vines|spore_blossom|hanging_roots|lily_pad|moss|grass)\./, 'block.grass.'],
   [/^block\.(polished_deepslate|deepslate_bricks|deepslate_tiles)\./, 'block.deepslate.'],

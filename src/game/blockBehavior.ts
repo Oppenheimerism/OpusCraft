@@ -1,0 +1,65 @@
+// Per-block behaviour hooks (vanilla BlockBehaviour's overridable methods) for the blocks that have them: the
+// redstone components and the blocks redstone works. The level, interaction, entities and ambient ticker call them
+// where vanilla's Level, LevelChunk, Entity and ClientLevel do; signals only read blocks, so they take the world.
+
+import { BLOCK_BY_NAME, STATE_BLOCK } from '../world/block';
+import type { Dir } from '../world/dir';
+import type { World } from '../world/world';
+import type { Level } from './level';
+import type { Entity } from '../entity/entity';
+import type { Player } from '../entity/player';
+import type { PlaceContext } from './blockRules';
+
+/** a right click on the block (vanilla BlockHitResult) */
+export interface UseContext {
+  player: Player;
+  face: number;
+  /** where the click landed, in world coordinates */
+  hx: number;
+  hy: number;
+  hz: number;
+}
+
+export interface BlockBehavior {
+  /** vanilla getStateForPlacement (null: can't go there) */
+  placement?(ctx: PlaceContext): number | null;
+  /** vanilla canSurvive */
+  canSurvive?(world: World, x: number, y: number, z: number, state: number): boolean;
+  /** vanilla onPlace: `state` is now in the world, where `old` was */
+  onPlace?(level: Level, x: number, y: number, z: number, state: number, old: number, moving: boolean): void;
+  /** vanilla onRemove: `state` was replaced by `now` (already in the world) */
+  onRemove?(level: Level, x: number, y: number, z: number, state: number, now: number, moving: boolean): void;
+  /** vanilla neighborChanged: `source` (a block id) at (fx, fy, fz) changed */
+  neighborChanged?(level: Level, x: number, y: number, z: number, state: number, source: number, fx: number, fy: number, fz: number, moving: boolean): void;
+  /** vanilla tick: a scheduled block tick */
+  tick?(level: Level, x: number, y: number, z: number, state: number): void;
+  /** vanilla isSignalSource */
+  isSignalSource?(state: number): boolean;
+  /** vanilla getSignal: the (weak) power toward whoever asks; `dir` points from the asker to this block */
+  getSignal?(world: World, x: number, y: number, z: number, state: number, dir: Dir): number;
+  /** vanilla getDirectSignal: the strong power, which a conductor passes on to all its neighbours */
+  getDirectSignal?(world: World, x: number, y: number, z: number, state: number, dir: Dir): number;
+  /** vanilla useWithoutItem: true if it did something */
+  use?(level: Level, x: number, y: number, z: number, state: number, ctx: UseContext): boolean;
+  /** vanilla entityInside: `e`'s box overlaps the block */
+  entityInside?(level: Level, x: number, y: number, z: number, state: number, e: Entity): void;
+  /** vanilla animateTick (client ambient effects) */
+  animateTick?(level: Level, x: number, y: number, z: number, state: number): void;
+}
+
+const BEHAVIORS: (BlockBehavior | undefined)[] = [];
+
+/** add hooks to a block (merged with any it already has) */
+export function registerBehavior(name: string, b: BlockBehavior): void {
+  const block = BLOCK_BY_NAME.get(name);
+  if (!block) throw new Error('no block ' + name);
+  BEHAVIORS[block.id] = { ...BEHAVIORS[block.id], ...b };
+}
+
+export function behaviorOf(state: number): BlockBehavior | undefined {
+  return BEHAVIORS[STATE_BLOCK[state]];
+}
+
+export function behaviorOfBlock(id: number): BlockBehavior | undefined {
+  return BEHAVIORS[id];
+}

@@ -881,6 +881,26 @@ export function torch(soul = false): TexImage {
   );
 }
 
+/** the lever's handle (vanilla lever.png): a short stick, its top the handle's end */
+export function lever(): TexImage {
+  return sprite(
+    [
+      '.......lb.......',
+      '.......Lb.......',
+      '.......Lb.......',
+      '.......lb.......',
+      '.......Lb.......',
+      '.......lB.......',
+      '.......Lb.......',
+      '.......lb.......',
+      '.......Lb.......',
+      '.......lB.......',
+    ],
+    { L: 0x9c7a4b, l: 0x866741, b: 0x6b5132, B: 0x5a4329 },
+    img(), 0, 6,
+  );
+}
+
 export function ladder(): TexImage {
   const t = img();
   const rail = [0x4f3a1f, 0x6b5030, 0x7f6139, 0x957446];

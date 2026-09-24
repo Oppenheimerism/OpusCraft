@@ -1,7 +1,7 @@
 // Block registry: blocks, properties, global block-state ids and per-state
 // lookup tables used by the mesher, light engine and physics.
 
-import type { ModelChoice } from './models';
+import type { ModelChoice, ModelDef } from './models';
 
 export type PropValue = string | number | boolean;
 
@@ -124,6 +124,8 @@ export interface BlockSettings {
   /** vanilla getMaxHorizontalOffset (0.25; pointed dripstone 0.125) */
   maxOffset?: number;
   model?: (s: StateView) => ModelChoice;
+  /** the item's own block model when it isn't the default state's (vanilla models/item/*_button → block/button_inventory) */
+  itemModel?: ModelDef;
   /** same-type face culling (glass/ice/water) */
   cullSame?: boolean;
   /** AO shade brightness 0.2 caster override */

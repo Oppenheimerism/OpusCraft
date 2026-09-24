@@ -6,6 +6,7 @@ import {
   BLOCKS, STATE_BLOCK, OPACITY, EMISSION, FLAGS, FACE_OCC, LAYER, STATE_VIEWS,
   F_AIR, F_OPAQUE, F_FULL_COLLISION, F_VIEW_BLOCKING, F_WATER, F_LAVA, F_CULL_SAME, F_LEAVES, F_HAS_MODEL, F_COLLIDE,
 } from '../world/block';
+import type { Block } from '../world/block';
 import { BakedModel, BakedQuad, bakeVariant, SpriteLookup, SpriteRect, Variant, ModelChoice } from '../world/models';
 import { mcPosSeed, hash3 } from '../core/rng';
 import { MIN_Y } from '../world/constants';
@@ -102,6 +103,17 @@ export function bakeChoice(choice: ModelChoice): StateModels {
 
 export function getStateModels(state: number): StateModels | null {
   return MODELS[state];
+}
+
+const ITEM_MODELS = new Map<number, StateModels>();
+
+/** what a block's item is drawn with: its own item model (vanilla block/button_inventory), else its default state's */
+export function getItemModels(block: Block): StateModels | null {
+  const m = block.s.itemModel;
+  if (!m) return MODELS[block.defaultState];
+  let r = ITEM_MODELS.get(block.id);
+  if (!r) ITEM_MODELS.set(block.id, (r = bakeChoice({ model: m })));
+  return r;
 }
 
 // ---------------------------------------------------------------------------

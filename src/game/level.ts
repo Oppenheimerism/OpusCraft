@@ -33,6 +33,10 @@ import { AABB } from '../core/aabb';
 import type { DimensionType } from '../world/dimension';
 import { NetherGenerator } from '../world/gen/nether';
 import type { NetherFortresses } from '../world/gen/fortress';
+import { behaviorOf } from './blockBehavior';
+import { NeighborUpdater } from './neighborUpdater';
+import { LevelTicks } from './ticks';
+import './redstone/components';
 
 export interface SoundSink {
   play(name: string, x: number, y: number, z: number, volume?: number, pitch?: number): void;
@@ -54,7 +58,21 @@ export interface ParticleSink {
   blockParticle?(x: number, y: number, z: number, xd: number, yd: number, zd: number, state: number, bx: number, by: number, bz: number): void;
   /** vanilla ENTITY_EFFECT (SpellParticle) swirl in an effect colour; alpha 38/255 for ambient effects */
   entityEffect?(x: number, y: number, z: number, color: number, alpha: number): void;
+  /** vanilla DUST (DustParticle): a coloured speck, as powered redstone gives off */
+  dust?(x: number, y: number, z: number, r: number, g: number, b: number, scale: number): void;
 }
+
+/** vanilla Block.UPDATE_NEIGHBORS: setBlock tells the six neighbours (neighborChanged) */
+export const UPDATE_NEIGHBORS = 1;
+/** vanilla Block.UPDATE_CLIENTS */
+export const UPDATE_CLIENTS = 2;
+/** vanilla Block.UPDATE_KNOWN_SHAPE: setBlock leaves the neighbours' shapes (connections, support) alone */
+export const UPDATE_KNOWN_SHAPE = 16;
+/** vanilla Block.UPDATE_ALL */
+export const UPDATE_ALL = UPDATE_NEIGHBORS | UPDATE_CLIENTS;
+
+/** the scheduled ticks that predate the block-behaviour ones (fluids, falling blocks, fire, dripleaves): one per position */
+const LEGACY_TICK = -1;
 
 const NULL_SOUND: SoundSink = { play() {}, playUI() {} };
 const NULL_PARTICLES: ParticleSink = { blockBreak() {}, blockHit() {} };
@@ -84,8 +102,15 @@ export class Level {
   private netherFortresses: NetherFortresses | null = null;
   readonly fluids: FluidTicker;
   readonly randomTicks: RandomTicker;
-  /** scheduled block ticks: key → due game time */
-  private readonly scheduled = new Map<string, number>();
+  /** scheduled block ticks (vanilla LevelTicks) */
+  private readonly blockTicks = new LevelTicks();
+  /** vanilla Level.neighborUpdater */
+  private readonly neighborUpdater = new NeighborUpdater({
+    runNeighborChanged: (x, y, z, source, fx, fy, fz, moving) => {
+      const st = this.world.getState(x, y, z);
+      behaviorOf(st)?.neighborChanged?.(this, x, y, z, st, source, fx, fy, fz, moving);
+    },
+  });
   simulationDistance = 8;
   gameRules: GameRules = { ...DEFAULT_GAME_RULES };
 
@@ -158,7 +183,7 @@ export class Level {
     for (const e of this.entities) if (!keep.includes(e)) e.removed = true;
     this.entities.length = 0;
     this.entities.push(...keep);
-    this.scheduled.clear();
+    this.blockTicks.clear();
     this.skyFlash = 0;
     // (the overworld's weather carried on meanwhile: back under the sky it's as it is, not fading in)
     if (this.world.dim.hasSkyLight) {
@@ -382,28 +407,31 @@ export class Level {
     }
   }
 
+  /** a tick for whatever is at (x, y, z) in `delay` ticks: fluids flowing, blocks falling, fire spreading */
   scheduleTick(x: number, y: number, z: number, delay: number): void {
-    const key = x + ',' + y + ',' + z;
-    if (this.scheduled.has(key)) return;
-    this.scheduled.set(key, this.gameTime + delay);
+    this.blockTicks.schedule(x, y, z, LEGACY_TICK, this.gameTime + delay);
+  }
+
+  /** vanilla Level.scheduleTick(pos, block, delay, priority): the block's own tick, if it's still there by then */
+  scheduleBlockTick(x: number, y: number, z: number, block: number, delay: number, priority = 0): void {
+    this.blockTicks.schedule(x, y, z, block, this.gameTime + delay, priority);
+  }
+
+  hasScheduledTick(x: number, y: number, z: number, block: number): boolean {
+    return this.blockTicks.hasScheduledTick(x, y, z, block);
   }
 
   private runScheduledTicks(): void {
-    if (!this.scheduled.size) return;
-    const due: [number, number, number][] = [];
-    for (const [k, t] of this.scheduled) {
-      if (t > this.gameTime) continue;
-      const [x, y, z] = k.split(',').map(Number);
-      due.push([x, y, z]);
-      this.scheduled.delete(k);
-      if (due.length > 4096) break;
-    }
-    for (const [x, y, z] of due) {
-      if (!this.world.isLoaded(x, z)) continue;
+    if (!this.blockTicks.size) return;
+    this.blockTicks.tick(this.gameTime, 65536, (x, z) => (this.world.isLoaded(x, z) ? 'run' : 'drop'), (x, y, z, type) => {
       const st = this.world.getState(x, y, z);
+      if (type !== LEGACY_TICK) {
+        if (STATE_BLOCK[st] === type) behaviorOf(st)?.tick?.(this, x, y, z, st);
+        return;
+      }
       const f = FLAGS[st];
       if (f & (F_WATER | F_LAVA) && BLOCKS[STATE_BLOCK[st]].s.fluid) {
-        if (f & F_LAVA && !this.fluids.checkLavaInteraction(x, y, z)) continue;
+        if (f & F_LAVA && !this.fluids.checkLavaInteraction(x, y, z)) return;
         this.fluids.tick(x, y, z);
       } else if (isGravityBlock(st)) {
         this.tryFall(x, y, z, st);
@@ -412,7 +440,7 @@ export class Level {
       } else if (STATE_BLOCK[st] === DRIPLEAF()) {
         dripleafTick(this, x, y, z, st);
       }
-    }
+    });
   }
 
   private tryFall(x: number, y: number, z: number, st: number): void {
@@ -498,14 +526,34 @@ export class Level {
     return BLOCKS[STATE_BLOCK[this.world.getState(x, y, z)]].name;
   }
 
-  /** place/remove a block with the usual side effects */
-  setBlock(x: number, y: number, z: number, state: number, notify = true): number {
+  /**
+   * vanilla Level.setBlock: place or remove a block with the usual side effects. `flags` are vanilla's UPDATE_*
+   * bits; true tells the neighbours and updates their shapes (UPDATE_ALL), false does neither.
+   */
+  setBlock(x: number, y: number, z: number, state: number, flags: boolean | number = true): number {
+    const f = flags === true ? UPDATE_ALL : flags === false ? UPDATE_CLIENTS | UPDATE_KNOWN_SHAPE : flags;
     const old = this.world.setState(x, y, z, state);
     if (old === state) return old;
+    // vanilla LevelChunk.setBlockState: the old block's onRemove, then (if it's still there) the new one's onPlace
+    behaviorOf(old)?.onRemove?.(this, x, y, z, old, state, false);
+    if (this.world.getState(x, y, z) !== state) return old;
     // vanilla BaseRailBlock.onPlace: a new rail connects up (reshaping itself notifies the neighbours)
     if (STATE_BLOCK[old] !== STATE_BLOCK[state] && isRail(state)) railOnPlace(this, x, y, z, state);
-    if (notify && this.world.getState(x, y, z) === state) this.updateNeighbors(x, y, z, old);
+    behaviorOf(state)?.onPlace?.(this, x, y, z, state, old, false);
+    if (this.world.getState(x, y, z) !== state) return old;
+    if (f & UPDATE_NEIGHBORS) this.updateNeighborsAt(x, y, z, STATE_BLOCK[old]);
+    if (!(f & UPDATE_KNOWN_SHAPE) && this.world.getState(x, y, z) === state) this.updateNeighbors(x, y, z, old);
     return old;
+  }
+
+  /** vanilla Level.updateNeighborsAt: the six neighbours of (x, y, z) hear that `source` (a block id) there changed */
+  updateNeighborsAt(x: number, y: number, z: number, source: number): void {
+    this.neighborUpdater.updateNeighborsAt(x, y, z, source);
+  }
+
+  /** vanilla Level.neighborChanged: just the block at (x, y, z) hears it */
+  neighborChanged(x: number, y: number, z: number, source: number, fx: number, fy: number, fz: number): void {
+    this.neighborUpdater.neighborChanged(x, y, z, source, fx, fy, fz);
   }
 
   /** Destroy a block: effects, drops, neighbour updates. `stack` = the breaking tool (silk touch, fortune). */
@@ -525,6 +573,7 @@ export class Level {
       for (const s of be.container.removeAll()) this.dropStackAt(x, y, z, s);
     }
     this.world.setState(x, y, z, replacement);
+    behaviorOf(st)?.onRemove?.(this, x, y, z, st, replacement, false);
     // two-block blocks (tall plants, doors, beds): remove the other part; loot comes from the lower half / bed head
     let dropState = st;
     let other: [number, number, number] | null = null;
@@ -554,8 +603,12 @@ export class Level {
     if (drop) {
       for (const s of blockDrops(dropState, tool, this.random, levelOf(stack, 'silk_touch') > 0, levelOf(stack, 'fortune'))) ItemEntity.drop(this, x, y, z, s);
     }
+    this.updateNeighborsAt(x, y, z, b.id);
     this.updateNeighbors(x, y, z, st);
-    if (other) this.updateNeighbors(other[0], other[1], other[2]);
+    if (other) {
+      this.updateNeighborsAt(other[0], other[1], other[2], b.id);
+      this.updateNeighbors(other[0], other[1], other[2]);
+    }
     return true;
   }
 

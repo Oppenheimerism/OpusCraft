@@ -9,6 +9,7 @@ import {
 } from './models';
 import { registerExtraBlocks } from './blocksExtra';
 import { registerEnchantingBlocks } from './blocksEnchanting';
+import { registerRedstoneBlocks } from './blocksRedstone';
 
 const px = (v: number) => v / 16;
 const bx = (x0: number, y0: number, z0: number, x1: number, y1: number, z1: number): Box => [px(x0), px(y0), px(z0), px(x1), px(y1), px(z1)];
@@ -607,6 +608,7 @@ registerBlock('magma_block', { hardness: 0.5, sound: 'stone', tool: 'pickaxe', r
 
 registerExtraBlocks();
 registerEnchantingBlocks();
+registerRedstoneBlocks();
 
 finalizeBlocks();
 

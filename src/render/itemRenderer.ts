@@ -5,7 +5,7 @@ import type { GL } from './gl';
 import { createTexture } from './gl';
 import type { Atlas } from './atlas';
 import { EntityBatch, PoseStack, DrawState } from './entityRenderer';
-import { getStateModels } from './mesher';
+import { getStateModels, getItemModels } from './mesher';
 import type { Item, ItemStack } from '../item/item';
 import { BLOCKS, LAYER, Layer } from '../world/block';
 import type { TexImage } from '../textures/tex';
@@ -216,7 +216,7 @@ export class ItemRenderer {
       this.applyTransform(pose, BLOCK_DISPLAY[ctx], left);
       pose.translate(-0.5, -0.5, -0.5);
       const b = it.block!;
-      const models = getStateModels(b.defaultState);
+      const models = getItemModels(b);
       if (models) {
         const layer = LAYER[b.defaultState];
         const state: DrawState = { texture: this.atlas.texture!, cutoff: layer === Layer.SOLID ? -1 : 0.1, blend: layer === Layer.TRANSLUCENT, cull: true, lit: true, useLightmap: ctx !== 'gui' };

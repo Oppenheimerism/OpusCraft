@@ -13,6 +13,7 @@ import { fluidStateOf } from './fluidTicks';
 import { canBurn } from './fire';
 import type { Level } from './level';
 import { BOOKSHELF_OFFSETS, isValidBookshelf } from '../world/blocksEnchanting';
+import { behaviorOf } from './blockBehavior';
 
 const enum K {
   NONE,
@@ -199,6 +200,8 @@ export class AmbientTicker {
       case K.CRYING_OBSIDIAN:
         this.cryingObsidian(x, y, z);
         break;
+      default:
+        behaviorOf(st)?.animateTick?.(this.level, x, y, z, st);
     }
     const f = FLAGS[st];
     if (f & (F_WATER | F_LAVA)) this.fluid(x, y, z, st);

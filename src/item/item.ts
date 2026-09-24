@@ -290,7 +290,7 @@ for (const m of ['bat', 'blaze', 'cave_spider', 'chicken', 'cow', 'creeper', 'en
   const sc = ITEMS.get('sugar_cane');
   if (sc) sc.texture = 'sugar_cane';
 }
-for (const id of ['torch', 'soul_torch', 'short_grass', 'fern', 'dead_bush', 'vine', 'lily_pad', 'cobweb', 'ladder', 'seagrass', 'kelp', 'sweet_berries']) {
+for (const id of ['torch', 'soul_torch', 'short_grass', 'fern', 'dead_bush', 'vine', 'lily_pad', 'cobweb', 'ladder', 'seagrass', 'kelp', 'sweet_berries', 'lever']) {
   const it = ITEMS.get(id);
   if (it && it.block) it.texture = 'block:' + (id === 'kelp' ? 'kelp' : id);
 }
