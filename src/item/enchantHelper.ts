@@ -4,8 +4,14 @@
 // damage protection, item damage, repair with XP, attributes...).
 
 import type { JavaRandom } from '../core/rng';
-import { ENCHANTMENTS, EnchantmentDef, EnchantSlots, areCompatible, isPrimaryItem, maxCost, minCost } from './enchantments';
+import { ENCHANTMENTS, EnchantmentDef, EnchantSlots, TABLE_ENCHANTMENTS, areCompatible, isPrimaryItem, maxCost, minCost } from './enchantments';
 import type { Item, ItemStack } from './item';
+
+/** what the enchanting rolls draw from: the table's java.util.Random, or a mob's own random (spawn equipment) */
+export interface EnchantRandom {
+  nextInt(n: number): number;
+  nextFloat(): number;
+}
 
 // ---------------------------------------------------------------------------
 // levels
@@ -41,6 +47,8 @@ interface EquipmentHolder {
   mainHand?: ItemStack | null;
   /** (a piglin's: the gold it admires) */
   offHand?: ItemStack | null;
+  /** a mob's armour slots: feet, legs, chest, head (vanilla Mob.armorItems) */
+  armorItems?: (ItemStack | null)[];
 }
 
 /** a player's inventory, told apart from anything else by that name */
@@ -49,7 +57,7 @@ function playerInventory(h: EquipmentHolder): EquipmentHolder['inventory'] | nul
   return inv && Array.isArray(inv.armor) ? inv : null;
 }
 
-/** an entity's equipment in vanilla EquipmentSlot order (players: hands + armour; mobs: their weapon) */
+/** an entity's equipment in vanilla EquipmentSlot order: the hands, then the armour (a player's inventory, a mob's slots) */
 export function equipment(e: unknown): [EquipSlot, ItemStack][] {
   const out: [EquipSlot, ItemStack][] = [];
   const h = e as EquipmentHolder;
@@ -67,6 +75,13 @@ export function equipment(e: unknown): [EquipSlot, ItemStack][] {
   } else {
     push('mainhand', h.mainHand);
     push('offhand', h.offHand);
+    const a = h.armorItems;
+    if (a) {
+      push('feet', a[0]);
+      push('legs', a[1]);
+      push('chest', a[2]);
+      push('head', a[3]);
+    }
   }
   return out;
 }
@@ -155,7 +170,7 @@ export function availableResults(level: number, s: ItemStack, pool: EnchantmentD
 }
 
 /** vanilla WeightedRandom.getRandomItem */
-function weightedPick(r: JavaRandom, list: EnchantmentInstance[]): EnchantmentInstance | null {
+function weightedPick(r: EnchantRandom, list: EnchantmentInstance[]): EnchantmentInstance | null {
   let total = 0;
   for (const x of list) total += x.def.weight;
   if (total <= 0) return null;
@@ -170,7 +185,7 @@ function weightedPick(r: JavaRandom, list: EnchantmentInstance[]): EnchantmentIn
 const f32 = Math.fround;
 
 /** vanilla selectEnchantment: enchantability bonus, ±15% spread, then weighted picks while nextInt(50) <= level (halving) */
-export function selectEnchantment(r: JavaRandom, s: ItemStack, level: number, pool: EnchantmentDef[]): EnchantmentInstance[] {
+export function selectEnchantment(r: EnchantRandom, s: ItemStack, level: number, pool: EnchantmentDef[]): EnchantmentInstance[] {
   const list: EnchantmentInstance[] = [];
   const i = enchantmentValue(s.item);
   if (i <= 0) return list;
@@ -194,6 +209,23 @@ export function selectEnchantment(r: JavaRandom, s: ItemStack, level: number, po
     }
   }
   return list;
+}
+
+/**
+ * vanilla EnchantmentHelper.enchantItemFromProvider(MOB_SPAWN_EQUIPMENT): EnchantmentsByCostWithDifficulty(
+ * #on_mob_spawn_equipment, 5, 17), a cost of 5 to 5 + (int)(special × 17) drawn from the non-treasure enchantments;
+ * each result upgrades what the item already has
+ */
+export function enchantMobSpawnEquipment(s: ItemStack, special: number, r: EnchantRandom): void {
+  const max = 5 + Math.trunc(f32(special * 17));
+  const cost = r.nextInt(max - 5 + 1) + 5;
+  const m: Record<string, number> = { ...(s.tag?.enchantments ?? {}) };
+  let any = false;
+  for (const e of selectEnchantment(r, s, cost, TABLE_ENCHANTMENTS)) {
+    m[e.def.id] = Math.max(m[e.def.id] ?? 0, e.level);
+    any = true;
+  }
+  if (any) s.tag = { ...(s.tag ?? {}), enchantments: m };
 }
 
 // ---------------------------------------------------------------------------

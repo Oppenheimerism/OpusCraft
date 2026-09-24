@@ -32,7 +32,8 @@ import { Minecart, MinecartChest, createMinecart } from '../entity/minecart';
 import { Boat, ChestBoat, boatItemInfo, useBoatItem } from '../entity/boat';
 import { isRail, railShape, isAscending } from './rails';
 import { MobEffectInstance, MOB_EFFECTS } from '../entity/effects';
-import { levelOf, miningEfficiency, submergedMiningSpeed, hurtAndBreak } from '../item/enchantHelper';
+import { levelOf, miningEfficiency, submergedMiningSpeed, hurtAndBreak, hasBinding } from '../item/enchantHelper';
+import { armorIndex, equipSound } from '../item/equipment';
 import type { Hand } from '../item/inventory';
 import { isCharged, performShooting, shootingPower, PLAYER_INACCURACY, playerProjectile, useDuration, crossbowUseTick, releaseUsing as releaseCrossbow } from '../item/crossbow';
 
@@ -901,6 +902,8 @@ export class Interaction {
       else return false;
       return true;
     }
+    // vanilla ArmorItem.use → Equipable.swapWithEquipmentSlot
+    if (it.armor) return this.swapWithEquipmentSlot(stack);
     // vanilla BowItem.use: needs arrows unless creative
     if (it.id === 'bow') {
       if (!(p.gameMode === 'creative' || this.arrowSource())) return false;
@@ -946,6 +949,28 @@ export class Interaction {
       }
     }
     return false;
+  }
+
+  /**
+   * vanilla Equipable.swapWithEquipmentSlot: the held piece goes on and what was worn there comes to hand (a creative
+   * player puts on a copy, and keeps the held one if the slot was empty); nothing over curse of binding (but in
+   * creative) or over the very same stack, and then the other hand gets its turn. Putting it on plays its equip
+   * sound (LivingEntity.onEquipItem)
+   */
+  private swapWithEquipmentSlot(stack: ItemStack): boolean {
+    const p = this.player;
+    const inv = p.inventory;
+    const i = armorIndex(stack.item.armor!.slot);
+    const cur = inv.armor[i];
+    const creative = p.gameMode === 'creative';
+    if (cur && ((hasBinding(cur) && !creative) || (cur.count === stack.count && cur.sameItem(stack)))) return false;
+    inv.armor[i] = creative ? stack.copy() : stack;
+    if (cur) inv.setSelectedItem(cur);
+    else if (!creative) inv.setSelectedItem(null);
+    inv.version++;
+    if (!cur?.sameItem(stack)) this.level.sound.play(equipSound(stack.item) ?? 'item.armor.equip_generic', p.x, p.y, p.z, 1, 1);
+    p.swing();
+    return true;
   }
 
   /** vanilla LivingEntity.updatingUsingItem (called every tick) */

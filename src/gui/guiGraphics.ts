@@ -386,7 +386,9 @@ export class GuiGraphics {
    * follow it (vanilla renders GUI items with the player as the entity: a crossbow drawn in the hotbar)
    */
   stack(s: ItemStack, x: number, y: number, ticksUsing = -1): boolean {
-    const id = s.item.id === 'crossbow' ? crossbowTexture(s, ticksUsing) ?? s.item.id : s.item.id;
+    let id = s.item.id === 'crossbow' ? crossbowTexture(s, ticksUsing) ?? s.item.id : s.item.id;
+    // (a dyed stack's colour tints its icon: vanilla ItemColors, DyedItemColor)
+    if (s.tag?.dyedColor !== undefined) id += `#${s.tag.dyedColor.toString(16)}`;
     const ok = this.item(id, x, y);
     if (ok && s.hasGlint()) this.icons?.drawGlint?.(this.ctx, id, Math.round(x * this.scale), Math.round(y * this.scale), 16 * this.scale);
     return ok;

@@ -1,11 +1,16 @@
 // Armor items: helmet, chestplate, leggings, boots for each material.
 
-import { TexImage, plot, getA, getPx } from '../tex';
+import { TexImage, img, plot, getA, getPx } from '../tex';
 import { Gen, autoShade, paint } from './common';
 
 export const ARMOR_ITEMS: Record<string, Gen> = {};
 
 interface ArmorMat { o: number; s: number[] }
+/**
+ * leather is drawn in greys that the dye multiplies (vanilla DyedItemColor; undyed 0xa06540 brings back the browns
+ * of ARMOR_MATS.leather, the brightest grey being the dye itself)
+ */
+export const LEATHER_ICON: ArmorMat = { o: 0x5c5c5c, s: [0x787878, 0x949494, 0xaeaeae, 0xc8c8c8, 0xe2e2e2, 0xfafafa] };
 export const ARMOR_MATS: Record<string, ArmorMat> = {
   leather: { o: 0x3a2414, s: [0x5a3620, 0x74462a, 0x8c5836, 0xa06540, 0xb67c56, 0xc99470] },
   chainmail: { o: 0x262626, s: [0x3e3e3e, 0x5a5a5a, 0x787878, 0x969696, 0xb4b4b4, 0xd0d0d0] },
@@ -95,7 +100,7 @@ const BOOTS = [
 const SHAPES: Record<string, string[]> = { helmet: HELMET, chestplate: CHESTPLATE, leggings: LEGGINGS, boots: BOOTS };
 
 function armor(piece: string, mat: string): TexImage {
-  const m = ARMOR_MATS[mat];
+  const m = mat === 'leather' ? LEATHER_ICON : ARMOR_MATS[mat];
   const t = autoShade(SHAPES[piece], m.s, m.o, { seed: `${mat}_${piece}`, edge: 1.25, relief: 2, bias: 0.04 });
   const shade = (x: number, y: number, k: number) => {
     if (getA(t, x, y) && getPx(t, x, y) !== m.o) plot(t, x, y, m.s[k]);
@@ -129,5 +134,28 @@ function armor(piece: string, mat: string): TexImage {
   return t;
 }
 
+/**
+ * vanilla leather_<piece>_overlay (the item model's untinted layer1): what keeps its own colour however the leather
+ * is dyed; the tunic's lacing, the leggings' drawstring, the boots' soles (the cap has none)
+ */
+function leatherOverlay(piece: string): TexImage {
+  const t = img(16, 16);
+  const [lace, knot, sole] = [ARMOR_MATS.leather.s[1], ARMOR_MATS.leather.s[3], ARMOR_MATS.leather.o];
+  if (piece === 'chestplate') {
+    plot(t, 7, 4, lace);
+    plot(t, 8, 4, lace);
+    plot(t, 7, 5, knot);
+    plot(t, 8, 6, lace);
+  } else if (piece === 'leggings') {
+    plot(t, 7, 3, knot);
+    plot(t, 8, 3, knot);
+    plot(t, 7, 4, lace);
+  } else if (piece === 'boots') {
+    for (const x of [1, 2, 3, 4, 5, 10, 11, 12, 13, 14]) plot(t, x, 12, sole);
+  }
+  return t;
+}
+
 for (const mat of Object.keys(ARMOR_MATS))
   for (const piece of Object.keys(SHAPES)) ARMOR_ITEMS[`${mat}_${piece}`] = () => armor(piece, mat);
+for (const piece of Object.keys(SHAPES)) ARMOR_ITEMS[`leather_${piece}_overlay`] = () => leatherOverlay(piece);

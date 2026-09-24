@@ -11,6 +11,7 @@ import { BLOCKS, LAYER, Layer } from '../world/block';
 import type { TexImage } from '../textures/tex';
 import { glintTexture, glintOffset, glintUV } from '../textures/glint';
 import { crossbowTexture } from '../item/crossbow';
+import { dyedColor, isDyeable } from '../item/dyedColor';
 
 export type DisplayContext = 'gui' | 'ground' | 'fixed' | 'firstperson_righthand' | 'firstperson_lefthand' | 'thirdperson_righthand' | 'thirdperson_lefthand' | 'head';
 
@@ -242,9 +243,18 @@ export class ItemRenderer {
         batch.begin({ texture: src.tex, cutoff: 0.1, blend: false, cull: true, lit: true, useLightmap: ctx !== 'gui' });
         let tint = 0xffffff;
         if (it.block && it.block.tint !== 'none') tint = itemTint(it);
+        // leather: the dye tints layer0 (vanilla ItemColors: DyedItemColor.getOrDefault)
+        const dyeable = isDyeable(it);
+        if (dyeable) tint = dyedColor(stack);
         const tr = ((tint >> 16) & 255) / 255, tg = ((tint >> 8) & 255) / 255, tb = (tint & 255) / 255;
         for (const qd of model.quads) {
           batch.quad(pose, Array.from(qd.subarray(0, 12)), Array.from(qd.subarray(12, 20)), qd[20], qd[21], qd[22], tr, tg, tb, 1);
+        }
+        // (and its untinted layer1, the overlay, over it)
+        const over = dyeable ? this.flatSource(it, `${it.texture}_overlay`) : null;
+        if (over) {
+          const om = this.flatModel(`${it.texture}_overlay`, over.img, over.u0, over.v0, over.u1, over.v1);
+          for (const qd of om.quads) batch.quad(pose, Array.from(qd.subarray(0, 12)), Array.from(qd.subarray(12, 20)), qd[20], qd[21], qd[22]);
         }
         if (stack.hasGlint()) this.renderGlint(batch, pose, model, src);
       }

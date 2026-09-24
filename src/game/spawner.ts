@@ -18,6 +18,7 @@ import { AbstractMinecart, createMinecart, MINECART_TYPES } from '../entity/mine
 import { Bat } from '../entity/bat';
 import { Boat, createBoat, BOAT_TYPES } from '../entity/boat';
 import { moonPhase } from '../render/environment';
+import { tickInhabitedTime } from './difficulty';
 import { BIOMES } from '../world/gen/biomes';
 import { BLOCKS, STATE_BLOCK, FLAGS, F_AIR, F_OPAQUE, F_FULL_COLLISION, F_WATER, F_LAVA, COLLISION } from '../world/block';
 import { fluidType, FLUID_LAVA } from '../world/fluids';
@@ -311,6 +312,8 @@ export class NaturalSpawner {
   tick(): void {
     const lvl = this.level;
     const p = lvl.player;
+    // (the same pass ages the chunks round the player, spawning or not)
+    tickInhabitedTime(lvl);
     if (!p || !lvl.gameRules.doMobSpawning) return;
     // vanilla: persistent creatures only every 400 ticks; monsters, ambient (bats, even in peaceful)
     // and water creatures every tick

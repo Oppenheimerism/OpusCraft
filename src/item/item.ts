@@ -364,6 +364,10 @@ export interface ItemTag {
   repairCost?: number;
   /** minecraft:charged_projectiles: what a loaded crossbow will fire (see item/crossbow.ts) */
   charged?: ChargedProjectile[];
+  /** minecraft:dyed_color rgb (leather armour, see item/dyedColor.ts) */
+  dyedColor?: number;
+  /** minecraft:dyed_color show_in_tooltip: false */
+  dyedHidden?: boolean;
 }
 
 /** one of a crossbow's charged projectiles: the item, and vanilla INTANGIBLE_PROJECTILE (multishot's copies, creative's) */
@@ -380,6 +384,8 @@ export function cloneTag(t: ItemTag | null): ItemTag | null {
   if (t.customName !== undefined) o.customName = t.customName;
   if (t.repairCost) o.repairCost = t.repairCost;
   if (t.charged?.length) o.charged = t.charged.map((p) => ({ ...p }));
+  if (t.dyedColor !== undefined) o.dyedColor = t.dyedColor;
+  if (t.dyedHidden) o.dyedHidden = true;
   return o;
 }
 
@@ -427,7 +433,10 @@ export class ItemStack {
   sameItem(o: ItemStack | null): boolean {
     if (!o || o.item !== this.item || o.damage !== this.damage) return false;
     const a = this.tag, b = o.tag;
-    return sameEnchants(a?.enchantments, b?.enchantments) && sameEnchants(a?.stored, b?.stored) && a?.customName === b?.customName && (a?.repairCost ?? 0) === (b?.repairCost ?? 0) && sameCharged(a?.charged, b?.charged);
+    return (
+      sameEnchants(a?.enchantments, b?.enchantments) && sameEnchants(a?.stored, b?.stored) && a?.customName === b?.customName && (a?.repairCost ?? 0) === (b?.repairCost ?? 0) &&
+      sameCharged(a?.charged, b?.charged) && a?.dyedColor === b?.dyedColor && !a?.dyedHidden === !b?.dyedHidden
+    );
   }
   /** vanilla getHoverName: the custom name, or the item's name */
   displayName(): string {

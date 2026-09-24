@@ -11,8 +11,9 @@
 // there). The port keeps that shape: memories are fields with expiry times, behaviours are the methods `brainTick`
 // runs for the current activity.
 
-import { Mob, LootEntry, SpawnReason } from './mob';
+import { Mob, LootEntry, SpawnReason, EQUIPMENT_SLOTS } from './mob';
 import type { Level } from '../game/level';
+import type { DifficultyInstance } from '../game/difficulty';
 import type { Entity } from './entity';
 import { LivingEntity } from './living';
 import type { Player } from './player';
@@ -23,6 +24,8 @@ import { defaultRandomPosTowards, landRandomPos, landRandomPosAway } from './ai/
 import { PathType } from './ai/pathfinder';
 import type { Path } from './ai/pathfinder';
 import { ItemStack, ITEMS, saveStack, loadStack, SavedStack } from '../item/item';
+import { hasBinding } from '../item/enchantHelper';
+import { equipmentSlotForItem } from '../item/equipment';
 import { BLOCKS, STATE_BLOCK } from '../world/block';
 import { Rand } from '../core/rng';
 import { isCrossbow, isCharged, chargeDuration, releaseUsing, performShooting, MOB_ARROW_POWER, mobInaccuracy, CROSSBOW_RANGE } from '../item/crossbow';
@@ -41,6 +44,7 @@ const REPELLENT_ITEMS = new Set(['soul_torch', 'soul_lantern', 'soul_campfire'])
 const REPELLENT_BLOCKS = new Set(['soul_fire', 'soul_torch', 'soul_wall_torch', 'soul_lantern', 'soul_campfire']);
 /** vanilla #piglin_safe_armor: gold armour keeps them calm */
 const GOLD_ARMOR = new Set(['golden_helmet', 'golden_chestplate', 'golden_leggings', 'golden_boots']);
+const GOLD_PIECE = { head: 'helmet', chest: 'chestplate', legs: 'leggings', feet: 'boots' } as const;
 /** vanilla #guarded_by_piglins: open or break these near them and they're angry */
 export const GUARDED_BY_PIGLINS = new Set([
   'gold_block', 'barrel', 'chest', 'ender_chest', 'gilded_blackstone', 'trapped_chest', 'raw_gold_block', 'gold_ore', 'nether_gold_ore',
@@ -130,6 +134,7 @@ export abstract class AbstractPiglin extends Monster {
 
   constructor(level: Level) {
     super(level);
+    this.canPickUpLoot = true;
     this.setPathfindingMalus(PathType.DANGER_FIRE, 16);
     this.setPathfindingMalus(PathType.DAMAGE_FIRE, -1);
   }
@@ -153,17 +158,31 @@ export abstract class AbstractPiglin extends Monster {
 
   protected abstract convertedSound(): string;
 
-  /** vanilla AbstractPiglin.finishConversion (convertTo, keeping its equipment): nausea for ten seconds */
+  /**
+   * vanilla AbstractPiglin.finishConversion → Mob.convertTo(transferInventory): the loot pickup, every slot's item
+   * with its drop chance and the mount carry over; nausea for ten seconds
+   */
   protected finishConversion(): void {
     const z = new ZombifiedPiglin(this.level);
     z.moveTo(this.x, this.y, this.z, this.yaw, this.pitch);
     z.bodyYaw = z.bodyYawO = this.bodyYaw;
     z.headYaw = z.headYawO = this.headYaw;
     z.setBaby(this.isBaby());
-    z.mainHand = this.mainHand;
-    z.handDropChance = this.handDropChance;
     z.persistenceRequired = this.persistenceRequired;
+    z.canPickUpLoot = this.canPickUpLoot;
+    for (const slot of EQUIPMENT_SLOTS) {
+      const s = this.getItemBySlot(slot);
+      if (!s) continue;
+      z.setItemSlot(slot, s);
+      z.setDropChance(slot, this.equipmentDropChance(slot));
+      this.setItemSlot(slot, null);
+    }
     this.level.addEntity(z);
+    const v = this.vehicle;
+    if (v) {
+      this.stopRiding();
+      z.startRiding(v, true);
+    }
     z.addEffect(new MobEffectInstance(MOB_EFFECTS.nausea, 200, 0));
     this.remove();
   }
@@ -186,9 +205,7 @@ export abstract class AbstractPiglin extends Monster {
 export class Piglin extends AbstractPiglin {
   readonly type = 'piglin';
   private baby = false;
-  /** vanilla offhand slot: the gold being admired */
-  offHand: ItemStack | null = null;
-  /** vanilla Piglin.inventory: its pack, 8 slots */
+  /** vanilla Piglin.inventory: its pack, 8 slots (the gold being admired is in its off hand) */
   readonly pack: (ItemStack | null)[] = new Array(8).fill(null);
   cannotHunt = false;
   activity: PiglinActivity = 'idle';
@@ -276,15 +293,29 @@ export class Piglin extends AbstractPiglin {
     this.moveSpeedAttr = b ? 0.35 * 1.2 : 0.35;
   }
 
-  /** vanilla Piglin.finalizeSpawn: a fifth are babies; the grown ones take a crossbow or a golden sword */
-  override finalizeSpawn(_reason: SpawnReason): void {
+  /**
+   * vanilla Piglin.finalizeSpawn: a fifth are babies, the grown ones take a crossbow or a golden sword (not those
+   * a structure places); a grown one wears each piece of gold armour one time in ten, and its gear may be enchanted
+   */
+  override finalizeSpawn(reason: SpawnReason): void {
     const r = this.random;
-    if (r.nextFloat() < 0.2) this.setBaby(true);
-    else this.mainHand = ItemStack.of(r.nextFloat() < 0.5 ? 'crossbow' : 'golden_sword');
+    if (reason !== 'structure') {
+      if (r.nextFloat() < 0.2) this.setBaby(true);
+      else this.setItemSlot('mainhand', ItemStack.of(r.nextFloat() < 0.5 ? 'crossbow' : 'golden_sword'));
+    }
     // vanilla PiglinAi.initMemories: the first hunt waits a while
     this.huntedRecentlyUntil = this.level.gameTime + huntPause(r);
-    // (vanilla populateDefaultEquipmentSlots gives a grown one each piece of gold armour one time in ten: mobs
-    // don't wear armour yet)
+    const d = this.spawnDifficulty();
+    this.populateDefaultEquipmentSlots(d);
+    this.populateDefaultEquipmentEnchantments(d);
+  }
+
+  /** vanilla Piglin.populateDefaultEquipmentSlots: a grown one, each piece of gold armour with chance 0.1, the head first */
+  protected override populateDefaultEquipmentSlots(_d: DifficultyInstance): void {
+    if (!this.isAdult()) return;
+    for (const slot of ['head', 'chest', 'legs', 'feet'] as const) {
+      if (this.random.nextFloat() < 0.1) this.setItemSlot(slot, ItemStack.of(`golden_${GOLD_PIECE[slot]}`));
+    }
   }
 
   /** vanilla checkPiglinSpawnRules: anywhere but on nether wart blocks */
@@ -1108,8 +1139,8 @@ export class Piglin extends AbstractPiglin {
   // --- gold -----------------------------------------------------------------
 
   /** vanilla Piglin.wantsToPickUp → PiglinAi.wantsToPickup (only while mobs may grief) */
-  wantsToPickUp(s: ItemStack): boolean {
-    if (!this.level.gameRules.mobGriefing) return false;
+  override wantsToPickUp(s: ItemStack): boolean {
+    if (!this.level.gameRules.mobGriefing || !this.canPickUpLoot) return false;
     const id = s.item.id;
     if (this.isBaby() && id === 'leather') return false;
     if (REPELLENT_ITEMS.has(id)) return false;
@@ -1118,39 +1149,26 @@ export class Piglin extends AbstractPiglin {
     const room = this.canAddToInventory(s);
     if (id === 'gold_nugget') return room;
     if (PIGLIN_FOOD.has(id)) return !this.hasEatenRecently() && room;
-    if (!isLovedItem(s)) return this.canReplaceCurrentItem(s);
+    if (!isLovedItem(s)) return this.canReplaceItemInItsSlot(s);
     return !isLovedItem(this.offHand) && room;
   }
 
+  /** vanilla Piglin.canReplaceCurrentItem(candidate): against what's in the slot the item would go in */
+  private canReplaceItemInItsSlot(s: ItemStack): boolean {
+    return this.canReplaceCurrentItem(s, this.getItemBySlot(equipmentSlotForItem(s.item)));
+  }
+
   /**
-   * vanilla Piglin.canReplaceCurrentItem → Mob.canReplaceCurrentItem, for the hand (mobs don't wear armour yet, so
-   * armour goes to an empty hand): gold and crossbows first, a grown one keeps its crossbow, then an empty hand takes
-   * anything, a better sword a sword, a better tool a tool or a block
+   * vanilla Piglin.canReplaceCurrentItem: never over curse of binding; gold and crossbows first; a grown one keeps
+   * its crossbow; the rest as any mob (Mob.canReplaceCurrentItem)
    */
-  private canReplaceCurrentItem(s: ItemStack): boolean {
-    const cur = this.mainHand;
-    if (s.item.armor) return !cur;
+  override canReplaceCurrentItem(s: ItemStack, cur: ItemStack | null): boolean {
+    if (hasBinding(cur)) return false;
     const a = isLovedItem(s) || s.item.id === 'crossbow', b = isLovedItem(cur) || cur?.item.id === 'crossbow';
     if (a && !b) return true;
     if (!a && b) return false;
     if (this.isAdult() && s.item.id !== 'crossbow' && cur?.item.id === 'crossbow') return false;
-    if (!cur) return true;
-    const sword = (x: ItemStack) => x.item.tool?.type === 'sword';
-    const better = () => (s.item.attackDamage !== cur.item.attackDamage ? s.item.attackDamage > cur.item.attackDamage : this.canReplaceEqualItem(s, cur));
-    if (sword(s)) return !sword(cur) || better();
-    if ((s.item.id === 'bow' && cur.item.id === 'bow') || (s.item.id === 'crossbow' && cur.item.id === 'crossbow')) return this.canReplaceEqualItem(s, cur);
-    if (s.item.tool) {
-      if (cur.item.block) return true;
-      if (cur.item.tool && !sword(cur)) return better();
-    }
-    return false;
-  }
-
-  /** vanilla Mob.canReplaceEqualItem: less worn, or enchanted where the other isn't */
-  private canReplaceEqualItem(s: ItemStack, cur: ItemStack): boolean {
-    if (s.damage < cur.damage) return true;
-    const extra = (x: ItemStack) => !!x.tag && Object.keys(x.tag).length > 0;
-    return extra(s) && !extra(cur);
+    return super.canReplaceCurrentItem(s, cur);
   }
 
   private canAddToInventory(s: ItemStack): boolean {
@@ -1181,22 +1199,14 @@ export class Piglin extends AbstractPiglin {
     if (left) this.throwItemsToward([left], this.randomNearbyPos());
   }
 
-  /** vanilla Mob.aiStep item pickup: what it wants within a block round it (not straight up or down) */
-  override aiStep(): void {
-    super.aiStep();
-    if (!this.isAlive || this.dead || !this.level.gameRules.mobGriefing) return;
-    for (const e of this.level.getEntities(this.bb.inflate(1, 0, 1), (e) => e instanceof ItemEntity)) {
-      const it = e as ItemEntity;
-      if (it.removed || it.stack.count <= 0 || it.pickupDelay > 0 || !this.wantsToPickUp(it.stack)) continue;
-      this.pickUpItem(it);
-    }
-  }
-
-  /** vanilla PiglinAi.pickUpItem: gold to hold and admire, pork to eat, the rest to hold or keep */
-  private pickUpItem(it: ItemEntity): void {
-    this.stopWalking();
+  /**
+   * vanilla Piglin.pickUpItem (Mob.aiStep finds what it wants within a block round it) → PiglinAi.pickUpItem: gold
+   * to hold and admire, pork to eat, the rest to wear, hold or keep
+   */
+  protected override pickUpItem(it: ItemEntity): void {
     // vanilla Mob.onItemPickup: thrown_item_picked_up_by_entity ("Oh Shiny")
-    if (it.thrower?.type === 'player') this.level.onThrownItemPickedUp?.(it.stack, this);
+    this.onItemPickup(it);
+    this.stopWalking();
     let s: ItemStack;
     if (it.stack.item.id === 'gold_nugget') {
       this.take(it, it.stack.count);
@@ -1212,47 +1222,39 @@ export class Piglin extends AbstractPiglin {
       this.holdInOffhand(s);
       this.admiringUntil = this.now + ADMIRE_TICKS;
     } else if (PIGLIN_FOOD.has(s.item.id) && !this.hasEatenRecently()) this.ateRecentlyUntil = this.now + 200;
-    else if (!this.equipIfPossible(s)) this.putInInventory(s);
-  }
-
-  /** vanilla PiglinAi.holdInOffhand: whatever it held there before is dropped */
-  private holdInOffhand(s: ItemStack): void {
-    if (this.offHand) this.spawnAtLocation(this.offHand);
-    this.offHand = s;
+    else if (!this.equipItemIfPossible(s)) this.putInInventory(s);
   }
 
   /**
-   * vanilla Mob.equipItemIfPossible (the hand): the old item only drops as it would on death (always, if it was
-   * picked up), and what it picks up always drops
+   * vanilla PiglinAi.holdInOffhand → Piglin.holdInOffHand: whatever it held there before is dropped; a gold ingot
+   * drops for sure when it dies, other gold it keeps for good (and stays around for)
    */
-  private equipIfPossible(s: ItemStack): boolean {
-    if (!this.canReplaceCurrentItem(s)) return false;
-    const cur = this.mainHand;
-    if (cur && Math.max(this.random.nextFloat() - 0.1, 0) < this.handDropChance) this.spawnAtLocation(cur);
-    this.holdInMainHand(s);
-    return true;
+  private holdInOffhand(s: ItemStack): void {
+    if (this.offHand) this.spawnAtLocation(this.offHand);
+    if (s.item.id === CURRENCY) {
+      this.setItemSlot('offhand', s);
+      this.setGuaranteedDrop('offhand');
+    } else this.setItemSlotAndDropWhenKilled('offhand', s);
   }
 
-  /** vanilla setItemSlotAndDropWhenKilled */
+  /** vanilla Piglin.holdInMainHand */
   private holdInMainHand(s: ItemStack): void {
-    this.mainHand = s;
-    this.handDropChance = 2;
-    this.persistenceRequired = true;
+    this.setItemSlotAndDropWhenKilled('mainhand', s);
   }
 
   /**
    * vanilla PiglinAi.stopHoldingOffHandItem: done admiring, a grown piglin barters a gold ingot away (other gold it
-   * keeps, and a gold ingot taken from it by a blow is lost); a baby holds it in its hand
+   * wears, holds or keeps, and a gold ingot taken from it by a blow is lost); a baby holds it in its hand
    */
   stopHoldingOffHandItem(barter: boolean): void {
     const s = this.offHand;
-    this.offHand = null;
+    this.setItemSlot('offhand', null);
     if (!s) return;
     if (this.isAdult()) {
       const currency = s.item.id === CURRENCY;
       if (barter && currency) this.throwItems(this.barterResponse());
-      else if (!currency && !this.equipIfPossible(s)) this.putInInventory(s);
-    } else if (!this.equipIfPossible(s)) {
+      else if (!currency && !this.equipItemIfPossible(s)) this.putInInventory(s);
+    } else if (!this.equipItemIfPossible(s)) {
       const held = this.mainHand;
       if (held) {
         if (isLovedItem(held)) this.putInInventory(held);
@@ -1332,11 +1334,14 @@ export class Piglin extends AbstractPiglin {
 
   // --- the rest --------------------------------------------------------------
 
-  /** vanilla Piglin.finishConversion: it drops the gold it was admiring and everything it carries first */
+  /**
+   * vanilla Piglin.finishConversion: it drops the gold it was admiring (PiglinAi.cancelAdmiring) and everything in
+   * its pack first; what it wears and holds goes over to the zombified piglin
+   */
   protected override finishConversion(): void {
     if (this.isAdmiring() && this.offHand) {
       this.spawnAtLocation(this.offHand);
-      this.offHand = null;
+      this.setItemSlot('offhand', null);
     }
     this.dropInventory();
     super.finishConversion();
@@ -1350,15 +1355,11 @@ export class Piglin extends AbstractPiglin {
     }
   }
 
-  /** vanilla Piglin.dropCustomDeathLoot: the gold in its hand, and everything in its pack */
+  /** vanilla Piglin.dropCustomDeathLoot: its equipment as any mob's (the gold in its off hand drops for sure), then its pack */
   override die(source: string, attacker: Entity | null = null): void {
     if (this.dead) return;
     super.die(source, attacker);
     if (!this.level.gameRules.doMobLoot) return;
-    if (this.offHand) {
-      this.spawnAtLocation(this.offHand);
-      this.offHand = null;
-    }
     this.dropInventory();
   }
 
@@ -1403,10 +1404,9 @@ export class Piglin extends AbstractPiglin {
       cannotHunt: this.cannotHunt,
       timeInOverworld: this.timeInOverworld,
       immune: this.immuneToZombification,
-      handDrop: this.handDropChance,
       huntedRecently: Math.max(0, this.huntedRecentlyUntil - now),
       inventory: JSON.stringify(this.pack.map((s) => (s ? saveStack(s) : null))),
-      ...(this.offHand ? { offHand: JSON.stringify(saveStack(this.offHand)), admiring: Math.max(0, this.admiringUntil - now) } : {}),
+      ...(this.offHand ? { admiring: Math.max(0, this.admiringUntil - now) } : {}),
     };
   }
 
@@ -1417,12 +1417,14 @@ export class Piglin extends AbstractPiglin {
     this.cannotHunt = d.cannotHunt === true;
     this.timeInOverworld = Number(d.timeInOverworld ?? 0);
     this.immuneToZombification = d.immune === true;
-    if (typeof d.handDrop === 'number') this.handDropChance = d.handDrop;
     this.huntedRecentlyUntil = now + Number(d.huntedRecently ?? 0);
     if (typeof d.inventory === 'string') (JSON.parse(d.inventory) as (SavedStack | null)[]).forEach((x, i) => (this.pack[i] = loadStack(x)));
+    // (saves from before mobs had equipment slots kept the hand's drop chance and the off hand here)
+    if (typeof d.handDrop === 'number') this.handDropChance = d.handDrop;
     if (typeof d.offHand === 'string') {
       this.offHand = loadStack(JSON.parse(d.offHand) as SavedStack);
-      this.admiringUntil = now + Number(d.admiring ?? 0);
+      this.offHandDropChance = 2;
     }
+    if (this.offHand) this.admiringUntil = now + Number(d.admiring ?? 0);
   }
 }

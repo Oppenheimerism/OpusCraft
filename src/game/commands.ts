@@ -15,6 +15,7 @@ import { PrimedTnt } from '../entity/tnt';
 import { ExperienceOrb } from '../entity/xpOrb';
 import { Arrow } from '../entity/arrow';
 import { createMob, entityDisplayName, summonableTypes } from './spawner';
+import type { Mob } from '../entity/mob';
 import { LightningBolt } from '../entity/lightning';
 import { Creeper } from '../entity/monsters';
 import { createMinecart, MINECART_TYPES } from '../entity/minecart';
@@ -330,6 +331,68 @@ function itemComponents(raw: string, stack: ItemStack): void {
     tag[m[1] === 'stored_enchantments' ? 'stored' : 'enchantments'] = levels;
     stack.tag = tag;
   }
+  // dyed_color=<int> or dyed_color={rgb:<int>,show_in_tooltip:<bool>} (vanilla DyedItemColor.CODEC)
+  const dm = /(?:minecraft:)?dyed_color=(?:\{([^}]*)\}|(-?\d+))/.exec(raw);
+  const rgb = dm ? (dm[1] !== undefined ? /rgb\s*:\s*(-?\d+)/.exec(dm[1])?.[1] : dm[2]) : undefined;
+  if (dm && rgb !== undefined) {
+    const tag = stack.tag ?? {};
+    tag.dyedColor = +rgb & 0xffffff;
+    if (dm[1] !== undefined && /show_in_tooltip\s*:\s*(false|0b)/.test(dm[1])) tag.dyedHidden = true;
+    stack.tag = tag;
+  }
+}
+
+/** the top-level {...} entries of an SNBT list `key:[...]` */
+function snbtEntries(nbt: string, key: string): string[] | null {
+  const m = new RegExp(`\\b${key}\\s*:\\s*\\[`).exec(nbt);
+  if (!m) return null;
+  const out: string[] = [];
+  let depth = 0, start = -1;
+  for (let j = m.index + m[0].length; j < nbt.length; j++) {
+    const ch = nbt[j];
+    if (ch === '{' || ch === '[') {
+      if (depth === 0) start = j;
+      depth++;
+    } else if (ch === '}' || ch === ']') {
+      if (depth === 0) break;
+      if (--depth === 0) out.push(nbt.slice(start, j + 1));
+    }
+  }
+  return out;
+}
+
+/** an SNBT item: {id:"minecraft:iron_helmet",count:1,components:{"minecraft:enchantments":{levels:{...}},"minecraft:dyed_color":..}} */
+function snbtStack(e: string): ItemStack | null {
+  const id = /\bid\s*:\s*"?(?:minecraft:)?([a-z_]+)"?/.exec(e)?.[1];
+  const it = id ? ITEMS.get(id) : undefined;
+  if (!it) return null;
+  const s = new ItemStack(it, Math.max(1, Math.min(it.maxStack, +(/\bcount\s*:\s*(\d+)/.exec(e)?.[1] ?? 1))));
+  const dmg = /"?(?:minecraft:)?damage"?\s*:\s*(\d+)/.exec(e)?.[1];
+  if (dmg && it.maxDamage) s.damage = Math.min(it.maxDamage, +dmg);
+  itemComponents(e.replace(/"?(?:minecraft:)?(stored_enchantments|enchantments|dyed_color)"?\s*:/g, '$1='), s);
+  return s;
+}
+
+/**
+ * vanilla Mob.readAdditionalSaveData for /summon's entity data: ArmorItems (feet to head) and HandItems (main, off),
+ * ArmorDropChances / HandDropChances, CanPickUpLoot, PersistenceRequired
+ */
+function mobData(m: Mob, nbt: string): void {
+  const slots = { ArmorItems: ['feet', 'legs', 'chest', 'head'], HandItems: ['mainhand', 'offhand'] } as const;
+  for (const [key, names] of Object.entries(slots)) {
+    const list = snbtEntries(nbt, key);
+    list?.forEach((e, i) => {
+      if (i < names.length) m.setItemSlot(names[i], snbtStack(e));
+    });
+    const chances = new RegExp(`\\b${key === 'ArmorItems' ? 'ArmorDropChances' : 'HandDropChances'}\\s*:\\s*\\[([^\\]]*)\\]`).exec(nbt)?.[1];
+    chances?.split(',').forEach((f, i) => {
+      const v = parseFloat(f);
+      if (i < names.length && !Number.isNaN(v)) m.setDropChance(names[i], v);
+    });
+  }
+  const flag = (k: string) => new RegExp(`\\b${k}\\s*:\\s*(1b|true)`).test(nbt);
+  if (/\bCanPickUpLoot\s*:/.test(nbt)) m.canPickUpLoot = flag('CanPickUpLoot');
+  if (flag('PersistenceRequired')) m.persistenceRequired = true;
 }
 
 const coordSuggest = (i: number) => ['~', '~ ~', '~ ~ ~'].slice(0, 3 - (i % 3));
@@ -551,7 +614,7 @@ export const COMMANDS: Record<string, CommandDef> = {
     },
   },
   summon: {
-    usage: ['/summon <entity> [<pos>]'],
+    usage: ['/summon <entity> [<pos>] [<nbt>]'],
     suggest: (_g, _p, i) => (i === 0 ? summonableTypes().map((t) => 'minecraft:' + t) : i < 4 ? coordSuggest(i - 1) : []),
     run: (c) => {
       const type = needArg(c, 0).replace(/^minecraft:/, '');
@@ -587,9 +650,12 @@ export const COMMANDS: Record<string, CommandDef> = {
         if (!m) throw new CommandError(`Can't find element 'minecraft:${type}' of type 'minecraft:entity_type'`, c.args[0].pos);
         m.moveTo(x, y, z, Math.random() * 360, 0);
         m.bodyYaw = m.headYaw = m.yaw;
-        m.finalizeSpawn('command');
+        // (vanilla SummonCommand: a mob given entity data isn't finalized: none of the random gear)
+        const nbt = c.args[4] ? c.line.slice(c.args[4].pos) : '';
+        if (nbt.trimStart().startsWith('{')) mobData(m, nbt);
+        else m.finalizeSpawn('command');
         // (entity data: a charged creeper is {powered:1b})
-        if (m instanceof Creeper && c.args[4] && /powered:\s*(1b|true)/.test(c.line.slice(c.args[4].pos))) m.powered = true;
+        if (m instanceof Creeper && /powered:\s*(1b|true)/.test(nbt)) m.powered = true;
         e = m;
       }
       lvl.addEntity(e);

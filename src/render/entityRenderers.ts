@@ -46,6 +46,11 @@ import { crossbowTexture, crossbowChargeProgress, isCharged } from '../item/cros
 import { SpawnerBlockEntity, EnchantingTableBlockEntity } from '../world/blockEntity';
 import { bookModel, bookTexture, renderTableBook } from './bookRenderer';
 import { createMob } from '../game/spawner';
+import { ArmorLayer, renderHeadItem, PIGLIN_HEAD_ITEM_SCALE } from './armorLayer';
+import type { ArmorModelSet } from './armorLayer';
+
+/** the mobs with vanilla's HumanoidArmorLayer and CustomHeadLayer, and their armour models */
+const ARMOR_WEARERS: Record<string, ArmorModelSet> = { zombie: 'humanoid', skeleton: 'humanoid', wither_skeleton: 'humanoid', piglin: 'piglin', zombified_piglin: 'piglin' };
 
 export interface EntityRenderOptions {
   shadows: boolean;
@@ -109,8 +114,10 @@ export class EntityRenderDispatcher {
   private readonly boatModels: Record<string, M.BoatModelDef> = { boat: M.boatModel(), chest_boat: M.chestBoatModel() };
   /** boat water masks, drawn once every entity is down so riders' legs aren't masked out */
   private readonly waterPatches: { m: Float32Array; part: ModelPart; tex: WebGLTexture; texW: number; texH: number }[] = [];
+  private readonly armor: ArmorLayer;
 
   constructor(private readonly gl: GL, private readonly items: ItemRenderer, private readonly skin: WebGLTexture) {
+    this.armor = new ArmorLayer(gl);
     this.models = {
       pig: M.pigModel(),
       pig_saddle: M.pigModel(0.5),
@@ -607,10 +614,18 @@ export class EntityRenderDispatcher {
       b.setOverlay(0, 0, 0, 0);
       this.drawHeldItem(b, def.root, e.mainHand, baby, e.usingItem ? e.useItemTicks + p : -1);
     }
-    // (the piglin's offhand: the gold it's admiring)
-    if (e instanceof Piglin && e.offHand) {
+    // (the offhand in the left: a piglin's, the gold it's admiring)
+    if (e.offHand && (e instanceof Zombie || e instanceof Skeleton || e instanceof Piglin)) {
       b.setOverlay(0, 0, 0, 0);
       this.drawHeldItem(b, def.root, e.offHand, baby, -1, true);
+    }
+    // vanilla HumanoidArmorLayer and CustomHeadLayer (worn by the invisible too)
+    const armorSet = ARMOR_WEARERS[type];
+    if (armorSet) {
+      this.armor.render(b, this.pose, def.root, e.armorItems, baby, armorSet);
+      const head = e.armorItems[3];
+      const s = armorSet === 'piglin' ? PIGLIN_HEAD_ITEM_SCALE : 1;
+      if (head && !head.item.armor) renderHeadItem(b, this.pose, this.items, def.root, head, baby, s, 1, s);
     }
   }
 
@@ -779,7 +794,7 @@ export class EntityRenderDispatcher {
     animateHumanoid(m, a.limbSwing, a.limbAmount, a.age, a.headYaw, a.headPitch, attackAnim(e, p), crouch, !!e.vehicle, playerArms(e, this.mainArm));
     this.overlay(b, e);
     // vanilla: an invisible player's body isn't drawn (a spectator's is, faintly, to the spectator: themselves), the
-    // held items still are; a spectator has no layers at all
+    // armour and held items still are; a spectator has no layers at all
     if (!e.isInvisible()) {
       b.begin(this.state(this.skin));
       m.render(b, this.pose, 64, 64);
@@ -789,7 +804,11 @@ export class EntityRenderDispatcher {
       b.flush();
     }
     b.setOverlay(0, 0, 0, 0);
-    if (!spectator) drawPlayerHeldItems(b, this.items, this.pose, m, e, this.mainArm);
+    // (vanilla PlayerRenderer's layers: HumanoidArmorLayer, then PlayerItemInHandLayer)
+    if (!spectator) {
+      this.armor.render(b, this.pose, m, e.inventory.armor, false);
+      drawPlayerHeldItems(b, this.items, this.pose, m, e, this.mainArm);
+    }
   }
 
   // -------------------------------------------------------------------------

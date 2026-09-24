@@ -383,8 +383,16 @@ export function debugLines(game: Game): string[] {
     `Facing: ${facing} (${toward}) (${yawW.toFixed(1)} / ${p.pitch.toFixed(1)})`,
     `Client Light: ${Math.max(l >> 4, l & 15)} (${l >> 4} sky, ${l & 15} block)`,
     `Biome: minecraft:${BIOME_NAME(game)}`,
-    `Day ${Math.floor(game.level.dayTime / 24000)}`,
+    localDifficultyLine(game, bx, by, bz),
   ];
+}
+
+import { currentDifficultyAt } from '../game/difficulty';
+/** vanilla DebugScreenOverlay: "Local Difficulty: %.2f // %.2f (Day %d)", from the chunk the player stands in */
+function localDifficultyLine(game: Game, x: number, y: number, z: number): string {
+  if (!game.world.getChunk(x >> 4, z >> 4)) return 'Local Difficulty: ??';
+  const d = currentDifficultyAt(game.level, x, y, z);
+  return `Local Difficulty: ${d.effective.toFixed(2)} // ${d.specialMultiplier().toFixed(2)} (Day ${Math.floor(game.level.dayTime / 24000)})`;
 }
 
 import { BIOMES } from '../world/gen/biomes';
