@@ -7,7 +7,7 @@ Branch: `claude/stoic-johnson-waevai` (from main at 5dfd44d).
 | Milestone | State | Commits |
 |---|---|---|
 | M1 desert pyramid and swamp hut | done | 9aa2261 Desert pyramids and swamp huts: sandstone pyramids in the desert with four chests over a TNT trap … |
-| M2 redstone components | partly done: dust, torches, repeaters (M2a); tripwire, dispensers/droppers, pistons to come | M2a: "Redstone dust, redstone torches and repeaters: …" (see `git log`) |
+| M2 redstone components | partly done: dust, torches, repeaters (M2a), tripwire (M2b); dispensers/droppers, pistons to come | 74b9613 Redstone dust, redstone torches and repeaters: …; M2b: "Tripwire hooks and string: …" (see `git log`) |
 | M3 igloo and jungle temple | not started | |
 | M4 archaeology | not started | |
 
@@ -38,11 +38,14 @@ M2 so far (all additive):
 - `src/game/interaction.ts`: calls `playerWillDestroy` just before `level.destroyBlock` in `destroyBlock`, and `setPlacedBy` after `setBlock` in `commitPlace`.
 - `src/game/level.ts`: `willTickThisTick(x, y, z, block)`; `updateNeighborsAt(x, y, z, source, skip = -1)` (vanilla updateNeighborsAtExceptFromFacing).
 - `src/render/mesher.ts`: `case 'redstone'` in `tintFor` (dust colour by power, `src/world/redstoneColor.ts`).
-- `src/item/item.ts`: `blockForItem`: redstone places `redstone_wire`; a small loop before `itemForBlock` giving the redstone torch and repeater items their flat sprites.
+- `src/item/item.ts`: `blockForItem`: redstone places `redstone_wire`, string places `tripwire`; a small loop before `itemForBlock` giving the redstone torch, repeater and tripwire hook items their flat sprites.
+  (The comment on the crossbow's `reg` line still says it can't be crafted; I left that line alone, since the illager
+  work may touch it. It can be crafted now.)
 - `src/audio/synth.ts`: `Object.assign(SOUNDS, redstoneSounds(SOUNDS))` after `SOUNDS` (`src/audio/gen/redstone.ts`).
 - `src/textures/blocks.ts`: `registerRedstoneTextures(T)` after `registerVillageTextures(T)` (`src/textures/blocklib/redstone.ts`).
-- `src/inventory/recipes.ts`: redstone torch and repeater after the redstone lamp. `src/gui/screens/creative.ts`: `REDSTONE_ORDER` extended.
-- `src/game/redstone/components.ts`: imports `./wire`, `./torch`, `./repeater` (new files; `support.ts` is vanilla isFaceSturdy).
+- `src/inventory/recipes.ts`: redstone torch, repeater and tripwire hook after the redstone lamp; the crossbow's
+  "left out" comment replaced by its recipe. `src/gui/screens/creative.ts`: `REDSTONE_ORDER` extended.
+- `src/game/redstone/components.ts`: imports `./wire`, `./torch`, `./repeater`, `./tripwire` (new files; `support.ts` is vanilla isFaceSturdy).
 
 ## 3. Open points
 
@@ -71,15 +74,17 @@ M2 so far (all additive):
 - **Dust.** Vanilla's per-direction `updateShape` is done for all sides at once (same results); dust's neighbour
   updates walk the seven positions in java.util.HashSet order, as vanilla does. The overlay texture
   (redstone_dust_overlay, fully transparent in vanilla) is left out of the models.
+- **Tripwire.** As vanilla 1.21, including its quirks: breaking string without shears trips the line for one look (the
+  hooks click on, then off 10 ticks later as they let go; the detach sound only plays when the power didn't change),
+  cutting it with shears disarms it first so the hooks just let go; hooks reach 41 blocks (40 pieces of string); only
+  string still there gets its `attached` changed (1.20.2+, no string duplication). Every entity in the string's shape
+  presses it (vanilla's `isIgnoringBlockTriggers` is false for all of them). The models are my own, after vanilla's:
+  the hook's arm is raised while loose, level with the string when attached and dipped when tripped, with the end of
+  the string running into its ring; string lies at 1.5 px, taut rows of the texture when attached. Both blocks use the
+  default (stone) sounds, as vanilla's Properties.of() does.
 
 ## Work in progress (next steps, for the next session or after a context compaction)
 
-- **M2b tripwire**: register `tripwire_hook` (facing, powered, attached) and `tripwire` (powered, attached, disarmed,
-  n/e/s/w booleans, `item: 'string'`; `blockForItem('string')` → tripwire) in `blocksRedstoneComponents.ts` (props
-  already declared); behaviour `game/redstone/tripwire.ts` as vanilla TripWireHookBlock.calculateState (41 blocks),
-  TripWireBlock.updateSource (south and west), checkPressed + 10-tick recheck, `playerWillDestroy` with shears sets
-  DISARMED; sounds are already registered (`block.tripwire.*`). Recipe: tripwire hook ×2 (iron ingot, stick, planks);
-  the crossbow recipe (stick, iron, string, tripwire hook) becomes possible.
 - **M2c dispenser/dropper**: 9-slot block entity with loot table (register a factory in `createBlockEntity`),
   getRandomSlot, TRIGGERED with a 4-tick delay, DispenseItemBehavior for every item the game has, the dropper into
   containers; 3x3 menu/screen opened through a hook like `setVillageMenuHook`, GUI texture `dispenser` (176x166).
@@ -106,6 +111,14 @@ Run with `node tests/temples/<file>.mjs` (Node 22, after `npm ci`).
   60 ticks with the fizz and smoke, relighting later); repeaters (placement facing, delays 1-4 exactly 2-8 ticks,
   output 15 from an input of 1, no input from the side, right-click cycling, locking by a powered repeater into its
   side and not by dust).
+- `tests/temples/m2b-tripwire.mjs`: **47 passed, 0 failed.** Hook placement (on a wall facing away from it, not on a
+  bare floor, on the wall when clicking the floor beside it, dropping off without its wall), string (placed by the string
+  item, in mid-air, joining up), drops, attaching (not with a gap, both hooks and all the string when the last piece goes
+  in, the attach sound, not side by side or to a hook facing away, 41 apart yes and 42 no), tripping (an item falling on
+  it, both hooks' strong and weak power lighting lamps, the click sounds, staying on while something's there, letting go
+  within 10 ticks, a zombie, loose string), breaking the string (trips, then lets go at the next look, the rest goes
+  slack), shears (no trip, detach sounds, the cut piece not put back), a disarmed piece, a broken hook, and the recipes
+  (two hooks; the crossbow).
 
 ## 5. Browser checklist (seed 12345, `http://localhost:5173/?seed=12345`)
 
@@ -127,3 +140,7 @@ Coordinates from the locator (the start chunk's corner, as `/locate` prints it):
   (a torch powering its own block through dust) burns out with a fizz and smoke. Light level 7.
 - **Repeater** (3 stone, 2 torches, redstone): right-click to set 1-4; a second powered repeater pointing into its side
   locks it (the bedrock bar shows).
+- **Tripwire** (hooks: iron ingot, stick, planks; string): two hooks on blocks facing each other with string between
+  (up to 40 pieces): they click and drop level as the last piece goes in. Walk through: they click, dip, and a lamp by
+  either hook's block lights; out of it, they let go within half a second. Break a piece by hand: a short pulse, then
+  the hooks rise; cut one with shears: no pulse. Throw an item on the string: it stays tripped while the item lies there.

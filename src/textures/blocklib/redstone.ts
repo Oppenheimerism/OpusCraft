@@ -84,6 +84,45 @@ function repeaterTop(base: TexImage, on: boolean): TexImage {
   return t;
 }
 
+/**
+ * vanilla tripwire_hook.png: the iron ring over its wooden stick (the item shows it whole; the block model takes the
+ * ring from it, the plank and arm are oak planks)
+ */
+function tripwireHook(): TexImage {
+  return sprite(
+    [
+      '.....aAAAAb.....',
+      '.....A....c.....',
+      '.....A....c.....',
+      '.....A....c.....',
+      '.....A....c.....',
+      '.....bccccd.....',
+      '.......Lb.......',
+      '.......Lb.......',
+      '.......lb.......',
+      '.......Lb.......',
+      '.......lB.......',
+      '.......Lb.......',
+      '.......lB.......',
+    ],
+    { a: 0xf0f0f0, A: 0xd6d6d6, b: 0xb0b0b0, c: 0x8e8e8e, d: 0x6a6a6a, L: 0x9c7a4b, l: 0x866741, B: 0x5a4329 },
+    img(), 0, 2,
+  );
+}
+
+/** vanilla tripwire.png: the string along the top rows, drawn taut (rows 0-1) and slack (rows 2-3) */
+function tripwire(): TexImage {
+  const t = img();
+  const r = R('tripwire');
+  for (let x = 0; x < 16; x++) {
+    plot(t, x, 0, r.next() < 0.3 ? 0xe2e2e2 : 0xf4f4f4);
+    plot(t, x, 1, r.next() < 0.4 ? 0xbdbdbd : 0xd4d4d4);
+    plot(t, x, 2, r.next() < 0.35 ? 0xcfcfcf : 0xe6e6e6);
+    plot(t, x, 3, r.next() < 0.5 ? 0xa9a9a9 : 0xc2c2c2);
+  }
+  return t;
+}
+
 /** add the redstone components' block textures to a registry (textures/blocks.ts) */
 export function registerRedstoneTextures(T: Record<string, () => TexImage | { w: number; h: number; frames: Uint8ClampedArray[] }>): void {
   const G = T as Record<string, Gen>;
@@ -94,4 +133,6 @@ export function registerRedstoneTextures(T: Record<string, () => TexImage | { w:
   G['redstone_torch_off'] = () => redstoneTorch(false);
   G['repeater'] = () => repeaterTop(G['smooth_stone'](), false);
   G['repeater_on'] = () => repeaterTop(G['smooth_stone'](), true);
+  G['tripwire_hook'] = tripwireHook;
+  G['tripwire'] = tripwire;
 }

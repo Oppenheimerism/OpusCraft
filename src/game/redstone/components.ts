@@ -19,6 +19,7 @@ import type { Level } from '../level';
 import './wire';
 import './torch';
 import './repeater';
+import './tripwire';
 
 const blk = (st: number): Block => BLOCKS[STATE_BLOCK[st]];
 

@@ -141,6 +141,67 @@ function repeaterModel(delay: number, powered: boolean, locked: boolean): ModelD
 /** vanilla blockstates/repeater.json: south unrotated */
 const REPEATER_Y: Record<string, number> = { south: 0, west: 90, north: 180, east: 270 };
 
+// ---------------------------------------------------------------------------
+// Tripwire hook and tripwire (vanilla TripWireHookBlock, TripWireBlock; models tripwire_hook[_attached][_on] and
+// tripwire[_attached]_n/ne/ns/nse/nsew)
+
+/** the string's height, as in vanilla's tripwire models */
+const WIRE_Y = 1.5;
+
+/** a length of string from (8, y0, z0) to (8, y1, z1), lying along z (the texture's rows 0-1 taut, 2-3 slack) */
+function stringPiece(y0: number, z0: number, y1: number, z1: number, taut: boolean): ElementDef {
+  const len = Math.hypot(y1 - y0, z1 - z0);
+  const v = taut ? 0 : 2;
+  const face = (): FaceDef => ({ tex: 'tripwire', uv: [0, v, Math.min(16, len), v + 2], rot: 90 });
+  const angle = (-Math.atan2(y1 - y0, z1 - z0) * 180) / Math.PI;
+  return { from: [7.75, y0, z0], to: [8.25, y0, z0 + len], rot: angle ? { origin: [8, y0, z0], axis: 'x', angle } : undefined, shade: false, faces: { up: face(), down: face() } };
+}
+
+/**
+ * the hook facing north, its plank on the block to the south: the plank, and an arm with an iron ring on its end,
+ * raised while nothing is strung to it, lowered to the string once there is, and dipping further when it's tripped;
+ * an attached hook holds the end of the string in its ring
+ */
+function hookModel(attached: boolean, powered: boolean): ModelDef {
+  const wood = 'oak_planks', hook = 'tripwire_hook';
+  const angle = attached ? (powered ? -35 : -22.5) : powered ? -22.5 : 45;
+  const rot = { origin: [8, 6, 14] as [number, number, number], axis: 'x' as const, angle };
+  const els: ElementDef[] = [
+    {
+      from: [6, 1, 14], to: [10, 9, 16],
+      faces: {
+        down: f(wood, [6, 14, 10, 16]), up: f(wood, [6, 14, 10, 16]), north: f(wood, [6, 7, 10, 15]), south: f(wood, [6, 7, 10, 15], 'south'),
+        west: f(wood, [14, 7, 16, 15]), east: f(wood, [0, 7, 2, 15]),
+      },
+    },
+    { from: [7.2, 5.2, 12], to: [8.8, 6.8, 14], rot, faces: { down: f(wood, [7, 12, 9, 14]), up: f(wood, [7, 12, 9, 14]), north: f(wood, [7, 7, 9, 9]), west: f(wood, [12, 7, 14, 9]), east: f(wood, [2, 7, 4, 9]) } },
+    {
+      from: [6.2, 5.6, 8.4], to: [9.8, 6.4, 12], rot,
+      faces: {
+        down: f(hook, [5, 2, 11, 8]), up: f(hook, [5, 2, 11, 8]), north: f(hook, [5, 2, 11, 3]), south: f(hook, [5, 7, 11, 8]),
+        west: f(hook, [5, 2, 11, 3]), east: f(hook, [5, 2, 11, 3]),
+      },
+    },
+  ];
+  if (attached) {
+    // (from the next block's string up into the far side of the ring)
+    const a = (angle * Math.PI) / 180, l = 5.2;
+    els.push(stringPiece(WIRE_Y, 0, 6 + l * Math.sin(a), 14 - l * Math.cos(a), true));
+  }
+  return { ao: false, particle: wood, elements: els };
+}
+
+/** vanilla tripwire models: half a block of string toward the north (the others turned) */
+function wireHalf(attached: boolean): ModelDef {
+  return { ao: false, particle: 'tripwire', elements: [stringPiece(WIRE_Y, 0, WIRE_Y, 8, attached)] };
+}
+
+/** vanilla TripWireBlock AABB and NOT_ATTACHED_AABB */
+const WIRE_ATTACHED_SHAPE = bx(0, 1, 0, 16, 2.5, 16);
+const WIRE_LOOSE_SHAPE = bx(0, 0, 0, 16, 8, 16);
+/** vanilla TripWireHookBlock NORTH/SOUTH/WEST/EAST_AABB */
+const HOOK_SHAPES: Record<string, Box> = { north: bx(5, 0, 10, 11, 10, 16), south: bx(5, 0, 0, 11, 10, 6), west: bx(10, 0, 5, 16, 10, 11), east: bx(0, 0, 5, 6, 10, 11) };
+
 export function registerRedstoneComponents(): void {
   // Redstone dust: the redstone item places it
   registerBlock('redstone_wire', {
@@ -184,6 +245,35 @@ export function registerRedstoneComponents(): void {
         let m = models.get(key);
         if (!m) models.set(key, (m = repeaterModel(s.get('delay') as number, s.get('powered') as boolean, s.get('locked') as boolean)));
         return { model: m, y: REPEATER_Y[s.get('facing') as string] };
+      },
+    });
+  }
+
+  // Tripwire hook: it breaks at once, and a piston breaks it too (vanilla pushReaction DESTROY)
+  {
+    const models = [false, true].map((a) => [false, true].map((p) => hookModel(a, p)));
+    registerBlock('tripwire_hook', {
+      props: [P.facingH, P.powered, ATTACHED], defaults: { facing: 'north' },
+      hardness: 0, sound: 'stone', collision: 'none', layer: Layer.CUTOUT, opaque: false, aoCaster: false, opacity: 0,
+      outline: (s) => [HOOK_SHAPES[s.get('facing') as string]],
+      model: (s) => ({ model: models[s.get('attached') ? 1 : 0][s.get('powered') ? 1 : 0], y: HOR_Y[s.get('facing') as string] }),
+    });
+  }
+
+  // Tripwire: string placed as a block (vanilla ItemNameBlockItem: the string item places it)
+  {
+    const halves = [wireHalf(false), wireHalf(true)];
+    registerBlock('tripwire', {
+      props: [P.powered, ATTACHED, DISARMED, P.north, P.east, P.south, P.west],
+      hardness: 0, sound: 'stone', collision: 'none', layer: Layer.CUTOUT, opaque: false, aoCaster: false, opacity: 0, item: 'string',
+      outline: (s) => [s.get('attached') ? WIRE_ATTACHED_SHAPE : WIRE_LOOSE_SHAPE],
+      // vanilla blockstates/tripwire.json: each side it's strung to; unstrung it lies north-south
+      model: (s) => {
+        const m = halves[s.get('attached') ? 1 : 0];
+        const parts: Variant[] = [];
+        for (const d of ['north', 'east', 'south', 'west']) if (s.get(d)) parts.push({ model: m, y: HOR_Y[d] });
+        if (!parts.length) parts.push({ model: m }, { model: m, y: 180 });
+        return { parts };
       },
     });
   }

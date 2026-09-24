@@ -153,7 +153,7 @@ for (const [m, x] of ARMOR_MATS) {
   shaped(`${m}_boots`, 1, ['X X', 'X X'], { X: x });
 }
 shaped('bow', 1, [' #X', '# X', ' #X'], { '#': 'stick', X: 'string' });
-// vanilla crossbow ['#&#', '~$~', ' # ']: # stick, & iron ingot, ~ string, $ tripwire hook — left out, no tripwire hook yet
+shaped('crossbow', 1, ['#&#', '~$~', ' # '], { '#': 'stick', '&': 'iron_ingot', '~': 'string', $: 'tripwire_hook' });
 shaped('arrow', 4, ['X', '#', 'Y'], { X: 'flint', '#': 'stick', Y: 'feather' });
 shaped('bucket', 1, ['# #', ' # '], { '#': 'iron_ingot' });
 shaped('shears', 1, [' #', '# '], { '#': 'iron_ingot' });
@@ -183,6 +183,7 @@ shaped('heavy_weighted_pressure_plate', 1, ['##'], { '#': 'iron_ingot' });
 shaped('redstone_lamp', 1, [' R ', 'RGR', ' R '], { R: 'redstone', G: 'glowstone' });
 shaped('redstone_torch', 1, ['X', '#'], { X: 'redstone', '#': 'stick' });
 shaped('repeater', 1, ['#X#', 'III'], { '#': 'redstone_torch', X: 'redstone', I: 'stone' });
+shaped('tripwire_hook', 2, ['I', 'S', '#'], { I: 'iron_ingot', S: 'stick', '#': '#planks' });
 shaped('glass_bottle', 3, ['# #', ' # '], { '#': 'glass' });
 shaped('lead', 2, ['~~ ', '~O ', '  ~'], { '~': 'string', O: 'slime_ball' });
 shaped('magma_block', 1, ['##', '##'], { '#': 'magma_cream' });
