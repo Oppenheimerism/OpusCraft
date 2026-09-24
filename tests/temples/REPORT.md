@@ -7,7 +7,7 @@ Branch: `claude/stoic-johnson-waevai` (from main at 5dfd44d).
 | Milestone | State | Commits |
 |---|---|---|
 | M1 desert pyramid and swamp hut | done | 9aa2261 Desert pyramids and swamp huts: sandstone pyramids in the desert with four chests over a TNT trap … |
-| M2 redstone components | partly done: dust, torches, repeaters (M2a), tripwire (M2b), dispensers and droppers (M2c); pistons to come | 74b9613 Redstone dust, redstone torches and repeaters: …; ef67ff5 Tripwire hooks and string: …; M2c: "Dispensers and droppers: …" (see `git log`) |
+| M2 redstone components | done: dust, torches, repeaters (M2a), tripwire (M2b), dispensers and droppers (M2c), pistons (M2d) | 74b9613 Redstone dust, redstone torches and repeaters: …; ef67ff5 Tripwire hooks and string: …; 18b3665 Dispensers and droppers: …; M2d: "Pistons and sticky pistons: …" (see `git log`) |
 | M3 igloo and jungle temple | not started | |
 | M4 archaeology | not started | |
 
@@ -53,6 +53,24 @@ M2 so far (all additive):
   `src/gui/screens/dispenser.ts`, `src/inventory/dispenserMenu.ts`, GUI texture in `src/textures/redstoneGui.ts`).
 - `src/inventory/recipes.ts`: dispenser and dropper after the tripwire hook.
 - New `src/entity/thrownExperienceBottle.ts`: bottles o' enchanting are now thrown (by players too) and leave experience.
+- Pistons (M2d):
+  - `src/game/level.ts`: vanilla block events — `blockEvent(x, y, z, block, a, b)` queues one (once each), `runBlockEvents()`
+    runs them after the random ticks (new ones too, unloaded ones wait) through the block's `triggerEvent`;
+    `handlingTick` (true during scheduled ticks and block events); `UPDATE_MOVE_BY_PISTON = 64`, and `setBlock` now
+    passes `moving` (that flag) to `onRemove`/`onPlace` instead of always false.
+  - `src/entity/entity.ts`: `DYNAMIC_COLLISION[blockId]` (collision from more than the state: a moving piston's comes from
+    its block entity), consulted in `collisionBoxes` only where `COLLISION[st]` is null; a `pistonMoving` flag that keeps
+    `maybeBackOffFromEdge` out of a piston's push (vanilla only backs off for MoverType.SELF/PLAYER).
+  - `src/game/blockRules.ts`: `blockDrops(..., harvest = true)`: false skips the "needs the right tool" check (vanilla
+    requiresCorrectToolForDrops only applies to a player's harvest; a piston breaking a lantern drops it).
+  - `src/game/fluidTicks.ts`: `holds` refuses `moving_piston` (vanilla forceSolidOn: water doesn't flow into it).
+  - `src/game/blockBehavior.ts`: optional `cloneItem(state)` hook (vanilla getCloneItemStack); `src/game/interaction.ts`
+    `pickBlock` asks it first (a sticky piston's head picks a sticky piston).
+  - `src/render/entityRenderers.ts`: `this.pistons.render(...)` right after `this.village.render(...)` (new
+    `src/render/pistonRenderer.ts`).
+  - `src/game/redstone/components.ts`: `import './piston'` (new `src/game/redstone/piston.ts`); recipes for the piston and
+    sticky piston after the dropper; piston textures in `src/textures/blocklib/redstone.ts`; the two piston sounds are
+    synthesized in `src/audio/gen/redstone.ts`.
 
 ## 3. Open points
 
@@ -109,12 +127,30 @@ M2 so far (all additive):
   doesn't have yet (fireworks, wind charges, shulker boxes, heads, armour stands, honeycomb, respawn anchors, beehives,
   fish and powder snow buckets, horses and llamas) aren't dispensed specially.
 
+- **Pistons.** As vanilla 1.21.0 (PistonBaseBlock, PistonHeadBlock, MovingPistonBlock, PistonMovingBlockEntity,
+  PistonStructureResolver): power at any side but the front, or by quasi-connectivity at the block above (noticed on
+  the piston's next update), queues a block event; the push moves up to 12 blocks and breaks the PushReaction DESTROY
+  ones in the way (dropping their loot, with break particles and no sound); obsidian, crying obsidian, unbreakable
+  blocks, BLOCK ones (anvils, grindstones, heads, moving blocks), extended pistons and blocks with a block entity
+  (chests, furnaces, dispensers, banners…) don't move; a sticky piston pulls one NORMAL block (or a retracted piston)
+  back, and a short pulse (the pushed block still moving: TRIGGER_DROP) leaves it behind. The moving block entity
+  goes half a block a tick and puts its block down on the third tick after the event (reshaped to its new neighbours;
+  one that can't stay there breaks, a waterlogged one comes out dry), pushing entities in its way (each at most 0.51 a
+  tick along an axis, however many pistons; area effect clouds and flying players are left alone; entities on a block
+  pushed sideways aren't carried). Its collision is the block where it has got to, not in the way of what it's pushing;
+  a retracting piston's base stays solid. Breaking a head breaks the piston (dropping it; in creative without), a
+  piston broken takes its head. Block PushReactions are a table after vanilla's Blocks.java (in `piston.ts`).
+  Deviations and hooks: slime and honey blocks don't exist yet — the structure resolver already branches through them
+  (by name) but their effects on entities (slime launching, honey carrying) are left for when they're added; there's no
+  world border to check; game events (BLOCK_ACTIVATE etc.) aren't sent (no sculk); moving blocks are drawn with the
+  light where they came from and the chunk meshes' face shading, without ambient occlusion. This game ticks entities
+  before the scheduled ticks and block events (vanilla after); pistons keep to the game's order. Nothing special is
+  done for zero-tick pulses (block events run in vanilla's order, new ones in the same pass, so what follows from that
+  ordering happens as in vanilla). The item model is vanilla's piston_inventory (the platform on top).
+
 ## Work in progress (next steps, for the next session or after a context compaction)
 
-- **M2d pistons**: Level block-event queue run after scheduled ticks (dispatches `triggerEvent`), PistonMovingBlockEntity
-  ticking in `world.blockEntities`, PistonStructureResolver (12), a PushReaction table, sticky pull, quasi-connectivity,
-  entity pushing, a renderer for moving blocks (after `village.render` in `render/entityRenderers.ts`), and a
-  collision hook for moving_piston in `entity.ts collisionBoxes`; piston sounds need synthesizing.
+- **M3**: the igloo and the jungle temple (not started).
 
 ## 4. Tests
 
@@ -156,6 +192,24 @@ Run with `node tests/temples/<file>.mjs` (Node 22, after `npm ci`).
   furnace from the side and above, a brewing stand, a composter, a chest minecart; the loot table rolled on firing and
   on opening; the menu (slot layout, shift-click both ways, reach, broken); the recipes. Also checked in the browser
   (headless Chromium): both blocks in every facing, water poured and arrows fired by power, both screens.
+  (The projectile speed bounds were widened in M2d to the whole spread, 0.97-1.23: they failed about one run in a
+  hundred.)
+- `tests/temples/m2d-piston.mjs`: **149 passed, 0 failed.** The blocks (hardness, drops, items, not conductors, shapes of
+  the base, head and short head, no shape or mesh for the moving block, light), textures and sounds; placement facing;
+  power from behind, beside, under and on top but not in front; quasi-connectivity (from two above and diagonally,
+  only on an update, both ways); the event and the moving blocks' timing, block entities and states; 12 blocks yes,
+  13 no; what won't move (obsidian, bedrock, chests, furnaces, anvils, banners, extended pistons, heads, the world's
+  top and bottom) and what will (glass, fences, carpets, TNT, a retracted piston…); breaking torches, flowers, water,
+  lanterns, cobwebs, snow, dust, repeaters, buttons, plates, pumpkins, melons, beds (both halves, one bed), fire and
+  leaves, with doTileDrops off too; retracting (head gone at once, base moving, the contract sound); sticky pulls (one
+  block of a line; not obsidian, flowers, chests or anvils; a piston yes; downwards); the short pulse leaving the
+  block, changes of mind before the event, events queued once; a repeater's tick setting a piston off the same tick;
+  power moved with a redstone block, TNT primed, sand falling, a carpet breaking, waterlogged blocks drying, torches
+  popping off; entities pushed along and lifted (not carried sideways, not flying players or clouds; the 0.51 limit);
+  collision of the moving head and a retracting base; the head (breaking either part, creative, needing its piston,
+  pick-block); water kept out of a moving block; saving the moving block entities; the recipes. Also checked in the
+  browser (headless Chromium): pistons in every facing, extended and not, sticky faces, blocks mid-push (a grass block
+  keeps its colour) and mid-pull, the inventory icons.
 
 ## 5. Browser checklist (seed 12345, `http://localhost:5173/?seed=12345`)
 
@@ -187,3 +241,9 @@ Coordinates from the locator (the start chunk's corner, as `/locate` prints it):
   (up to 40 pieces): they click and drop level as the last piece goes in. Walk through: they click, dip, and a lamp by
   either hook's block lights; out of it, they let go within half a second. Break a piece by hand: a short pulse, then
   the hooks rise; cut one with shears: no pulse. Throw an item on the string: it stays tripped while the item lies there.
+- **Pistons** (3 planks, 4 cobblestone, iron ingot, redstone; sticky: slimeball on a piston): placed, the wooden face
+  points at you. Put a lever or button beside it: it shoves out with a hiss-and-knock, pushing up to 12 blocks (13
+  won't go; obsidian or a chest in the line stops it; a torch or flower in the way pops off); stand in front: you're
+  pushed; stand on one facing up: you're lifted. Power off: the head slides back, a sticky one pulling its block with
+  it (not obsidian, a chest or a flower). A redstone block two above a piston (or diagonally above) doesn't fire it
+  until a block beside it is placed or broken (quasi-connectivity). Break the head: the piston drops.

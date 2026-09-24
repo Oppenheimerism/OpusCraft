@@ -186,6 +186,8 @@ shaped('repeater', 1, ['#X#', 'III'], { '#': 'redstone_torch', X: 'redstone', I:
 shaped('tripwire_hook', 2, ['I', 'S', '#'], { I: 'iron_ingot', S: 'stick', '#': '#planks' });
 shaped('dispenser', 1, ['###', '#X#', '#R#'], { '#': 'cobblestone', X: 'bow', R: 'redstone' });
 shaped('dropper', 1, ['###', '# #', '#R#'], { '#': 'cobblestone', R: 'redstone' });
+shaped('piston', 1, ['TTT', '#X#', '#R#'], { T: '#planks', '#': '#stone_crafting_materials', X: 'iron_ingot', R: 'redstone' });
+shaped('sticky_piston', 1, ['S', 'P'], { S: 'slime_ball', P: 'piston' });
 shaped('glass_bottle', 3, ['# #', ' # '], { '#': 'glass' });
 shaped('lead', 2, ['~~ ', '~O ', '  ~'], { '~': 'string', O: 'slime_ball' });
 shaped('magma_block', 1, ['##', '##'], { '#': 'magma_cream' });

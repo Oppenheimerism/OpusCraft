@@ -1075,7 +1075,8 @@ export class Interaction {
     const picked = this.entityHit && p.gameMode === 'creative' ? this.entityHit.pickResult() : null;
     if (!h && !picked) return;
     const b = h ? BLOCKS[STATE_BLOCK[h.state]] : null;
-    const it = picked ? getItem(picked) : itemForBlock(b!.name) ?? (b!.name === 'water' ? getItem('water_bucket') : undefined);
+    const own = h ? behaviorOf(h.state)?.cloneItem?.(h.state) : undefined;
+    const it = picked ? getItem(picked) : own ? getItem(own) : itemForBlock(b!.name) ?? (b!.name === 'water' ? getItem('water_bucket') : undefined);
     if (!it) return;
     const inv = p.inventory;
     for (let i = 0; i < 9; i++) {

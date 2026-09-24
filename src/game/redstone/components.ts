@@ -21,6 +21,7 @@ import './torch';
 import './repeater';
 import './tripwire';
 import './dispenser';
+import './piston';
 
 const blk = (st: number): Block => BLOCKS[STATE_BLOCK[st]];
 

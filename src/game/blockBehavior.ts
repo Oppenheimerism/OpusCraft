@@ -84,6 +84,8 @@ export interface BlockBehavior {
   playerWillDestroy?(level: Level, x: number, y: number, z: number, state: number, player: Player, held: ItemStack | null): void;
   /** vanilla triggerEvent: a block event queued for it (Level.blockEvent) comes up; true if it did something */
   triggerEvent?(level: Level, x: number, y: number, z: number, state: number, id: number, param: number): boolean;
+  /** vanilla getCloneItemStack: the item a pick-block gives, when it depends on the state (a piston head's piston) */
+  cloneItem?(state: number): string;
 }
 
 const BEHAVIORS: (BlockBehavior | undefined)[] = [];

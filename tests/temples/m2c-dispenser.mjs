@@ -179,7 +179,8 @@ function dispense(src, s) {
   dispense(src, s);
   const [a] = live(level, m.Arrow);
   check('arrow: shot out of the front, 0.7 out and 0.1 up', a && near(a.x, 1.2) && near(a.y, G + 0.6) && near(a.z, 0.5), a && `${a.x} ${a.y} ${a.z}`);
-  check('arrow: at about 1.1, eastward', a && speed(a) > 1.0 && speed(a) < 1.2 && a.dx > 1.0, a && `${speed(a)} ${a.dx}`);
+  // (1.1, each axis off by up to 0.0172275 * 6 of it: 0.98-1.22)
+  check('arrow: at about 1.1, eastward', a && speed(a) > 0.97 && speed(a) < 1.23 && a.dx > 0.97, a && `${speed(a)} ${a.dx}`);
   check('arrow: it can be picked up, one used', a?.pickup === 'allowed' && s.count === 4);
   check('arrow: with the launch sound', count(sounds, 'block.dispenser.launch') === 1);
   const tipped = m.potionStack('tipped_arrow', 'poison');
@@ -190,7 +191,7 @@ function dispense(src, s) {
   tri.damage = 17;
   const trLeft = dispense(src, tri);
   const [tr] = live(level, m.ThrownTrident);
-  check('trident: thrown as it is (its wear kept), to be picked up', trLeft === null && tr && tr.pickup === 'allowed' && tr.pickupItem.damage === 17 && speed(tr) > 1.0);
+  check('trident: thrown as it is (its wear kept), to be picked up', trLeft === null && tr && tr.pickup === 'allowed' && tr.pickupItem.damage === 17 && speed(tr) > 0.97);
   dispense(src, stack('snowball', 16));
   dispense(src, stack('egg', 16));
   const thrown = live(level, m.ThrownItem).map((e) => e.kind ?? e.type).sort().join();

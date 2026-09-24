@@ -1,7 +1,7 @@
-// The redstone components' textures (vanilla block/redstone_dust_*, redstone_torch[_off], repeater[_on], and the
-// pistons', dispensers' and tripwire's as they come). The dust is drawn in grays: the game tints it by its power.
+// The redstone components' textures (vanilla block/redstone_dust_*, redstone_torch[_off], repeater[_on], piston_*,
+// dispenser/dropper fronts and the tripwire's). The dust is drawn in grays: the game tints it by its power.
 
-import { TexImage, img, plot, Rand } from '../tex';
+import { TexImage, img, plot, Rand, getPx, mulC, mixC } from '../tex';
 import { hashString } from '../../core/rng';
 import { sprite } from './plants';
 import { furnaceSide, furnaceTop } from './utility';
@@ -151,6 +151,70 @@ function dispenserFront(dropper: boolean, vertical: boolean): TexImage {
   return t;
 }
 
+/** darken the outermost ring of a texture (a framed edge) */
+function frame(t: TexImage, f: number): TexImage {
+  for (let i = 0; i < 16; i++)
+    for (const [x, y] of [[i, 0], [i, 15], [0, i], [15, i]]) plot(t, x, y, mulC(getPx(t, x, y), f));
+  return t;
+}
+
+/** vanilla piston_top.png: the head's platform, oak planks with a darker edge */
+function pistonTop(planks: TexImage): TexImage {
+  return frame(planks, 0.78);
+}
+
+/**
+ * vanilla piston_top_sticky.png: the platform under a round-cornered sheet of slime, the wood showing at the edges;
+ * lit at the top left, deeper green toward the bottom right, a few bubbles
+ */
+function pistonTopSticky(planks: TexImage): TexImage {
+  const t = pistonTop(planks);
+  const r = R('piston_top_sticky');
+  const wob = Array.from({ length: 16 }, () => (r.next() - 0.5) * 0.9);
+  for (let y = 0; y < 16; y++)
+    for (let x = 0; x < 16; x++) {
+      const dx = Math.abs(x - 7.5), dy = Math.abs(y - 7.5);
+      // (a squircle, its edge wobbling a little along each side)
+      const d = Math.pow(Math.pow(dx, 4) + Math.pow(dy, 4), 0.25) + wob[dx > dy ? y : x];
+      if (d > 6.4) continue;
+      const light = (15 - x - y) / 30 + (6.4 - d) / 20;
+      let c = mixC(0x4d8a3c, 0x93d67a, Math.max(0, Math.min(1, 0.35 + light)));
+      if (d > 5.5) c = mulC(c, 0.78); // the sheet's rim
+      if (r.next() < 0.06) c = mixC(c, 0xc8f2b0, 0.6);
+      plot(t, x, y, c);
+    }
+  return t;
+}
+
+/**
+ * vanilla piston_side.png: the head's wooden edge along the top four rows (the platform end), a shadow under it, and
+ * the cobblestone body
+ */
+function pistonSide(planks: TexImage, cobble: TexImage): TexImage {
+  const t = cobble;
+  for (let y = 0; y < 4; y++) for (let x = 0; x < 16; x++) plot(t, x, y, mulC(getPx(planks, x, y + 4), y === 3 ? 0.7 : 1));
+  for (let x = 0; x < 16; x++) plot(t, x, 4, mulC(getPx(t, x, 4), 0.62));
+  return t;
+}
+
+/** vanilla piston_bottom.png: the cobblestone back, edged darker */
+function pistonBottom(cobble: TexImage): TexImage {
+  return frame(cobble, 0.72);
+}
+
+/** vanilla piston_inner.png: inside an extended base, the cobblestone round the iron socket the arm runs through */
+function pistonInner(cobble: TexImage): TexImage {
+  const t = frame(cobble, 0.8);
+  for (let y = 0; y < 16; y++)
+    for (let x = 0; x < 16; x++) {
+      const d = Math.max(Math.abs(x - 7.5), Math.abs(y - 7.5));
+      if (d < 2) plot(t, x, y, x + y < 15 ? 0xb4b4b4 : 0x8c8c8c);
+      else if (d < 3) plot(t, x, y, x + y < 15 ? 0x3e3e3e : 0x6e6e6e);
+      else if (d < 4) plot(t, x, y, mulC(getPx(t, x, y), 0.8));
+    }
+  return t;
+}
+
 /** add the redstone components' block textures to a registry (textures/blocks.ts) */
 export function registerRedstoneTextures(T: Record<string, () => TexImage | { w: number; h: number; frames: Uint8ClampedArray[] }>): void {
   const G = T as Record<string, Gen>;
@@ -165,4 +229,9 @@ export function registerRedstoneTextures(T: Record<string, () => TexImage | { w:
     for (const vertical of [false, true]) G[`${dropper ? 'dropper' : 'dispenser'}_front${vertical ? '_vertical' : ''}`] = () => dispenserFront(dropper, vertical);
   G['tripwire_hook'] = tripwireHook;
   G['tripwire'] = tripwire;
+  G['piston_top'] = () => pistonTop(G['oak_planks']());
+  G['piston_top_sticky'] = () => pistonTopSticky(G['oak_planks']());
+  G['piston_side'] = () => pistonSide(G['oak_planks'](), G['cobblestone']());
+  G['piston_bottom'] = () => pistonBottom(G['cobblestone']());
+  G['piston_inner'] = () => pistonInner(G['cobblestone']());
 }

@@ -3,8 +3,8 @@
 // piston*, tripwire*) and the blockstate files' rotations; shapes are vanilla's VoxelShapes. What they do is in
 // game/redstone (wire.ts, torch.ts, repeater.ts, piston.ts, dispenser.ts, tripwire.ts).
 
-import { registerBlock, P, Layer, Box, StateView, enumProp, intProp, boolProp } from './block';
-import { torchModel, wallTorchModel, orientable, cube, type ModelDef, type ElementDef, type FaceDef, type UV4, type Variant } from './models';
+import { registerBlock, P, Layer, Box, StateView, enumProp, intProp, boolProp, faceMaskFromBoxes } from './block';
+import { torchModel, wallTorchModel, orientable, cube, cubeBottomTop, type ModelDef, type ElementDef, type FaceDef, type UV4, type Variant } from './models';
 import type { DirName } from './dir';
 import { POWER } from './blocksRedstone';
 
@@ -211,6 +211,103 @@ function dispenserModel(kind: 'dispenser' | 'dropper'): (s: StateView) => Varian
   };
 }
 
+// ---------------------------------------------------------------------------
+// Pistons (vanilla PistonBaseBlock, PistonHeadBlock, MovingPistonBlock; models template_piston, piston_base and
+// template_piston_head, blockstates piston.json and piston_head.json)
+
+/** vanilla template_piston, facing north: the platform north, the bottom south, the sides' wooden edge toward the platform */
+function pistonModel(platform: string): ModelDef {
+  const side: UV4 = [0, 0, 16, 16];
+  return {
+    particle: 'piston_side',
+    elements: [
+      {
+        from: [0, 0, 0], to: [16, 16, 16],
+        faces: {
+          down: f('piston_side', side, 'down', { rot: 180 }), up: f('piston_side', side, 'up'),
+          north: f(platform, [0, 0, 16, 16], 'north'), south: f('piston_bottom', [0, 0, 16, 16], 'south'),
+          west: f('piston_side', side, 'west', { rot: 270 }), east: f('piston_side', side, 'east', { rot: 90 }),
+        },
+      },
+    ],
+  };
+}
+
+/** vanilla piston_base: extended, the base is 12 deep with its inside showing where the head was */
+function pistonBaseModel(): ModelDef {
+  const side: UV4 = [0, 4, 16, 16];
+  return {
+    particle: 'piston_side',
+    elements: [
+      {
+        from: [0, 0, 4], to: [16, 16, 16],
+        faces: {
+          down: f('piston_side', side, 'down', { rot: 180 }), up: f('piston_side', side, 'up'),
+          north: f('piston_inner', [0, 0, 16, 16]), south: f('piston_bottom', [0, 0, 16, 16], 'south'),
+          west: f('piston_side', side, 'west', { rot: 270 }), east: f('piston_side', side, 'east', { rot: 90 }),
+        },
+      },
+    ],
+  };
+}
+
+/**
+ * vanilla template_piston_head: the platform (its back the plain top whatever the front) with the wooden edge round
+ * it, and the wooden arm reaching back 16 (4 into the base) or, short, 12
+ */
+function pistonHeadModel(platform: string, short: boolean): ModelDef {
+  const edge: UV4 = [0, 0, 16, 4];
+  const z1 = short ? 16 : 20;
+  const arm: UV4 = [0, 0, z1 - 4, 4];
+  return {
+    particle: platform,
+    elements: [
+      {
+        from: [0, 0, 0], to: [16, 16, 4],
+        faces: {
+          down: f('piston_side', edge, 'down', { rot: 180 }), up: f('piston_side', edge, 'up'),
+          north: f(platform, [0, 0, 16, 16], 'north'), south: f('piston_top', [0, 0, 16, 16]),
+          west: f('piston_side', [16, 0, 0, 4], 'west', { rot: 90 }), east: f('piston_side', edge, 'east', { rot: 270 }),
+        },
+      },
+      {
+        from: [6, 6, 4], to: [10, 10, z1],
+        faces: {
+          down: f('piston_side', arm, undefined, { rot: 90 }), up: f('piston_side', arm, undefined, { rot: 270 }),
+          west: f('piston_side', arm, undefined, { rot: 90 }), east: f('piston_side', arm, undefined, { rot: 270 }),
+        },
+      },
+    ],
+  };
+}
+
+/** vanilla blockstates piston.json / piston_head.json: north as modelled, the others turned (up and down about x) */
+function facingVariant(model: ModelDef, facing: string): Variant {
+  if (facing === 'up') return { model, x: 270 };
+  if (facing === 'down') return { model, x: 90 };
+  return { model, y: HOR_Y[facing] };
+}
+
+/** vanilla PistonBaseBlock *_AABB: an extended base */
+const PISTON_BASE_SHAPES: Record<string, Box> = {
+  east: bx(0, 0, 0, 12, 16, 16), west: bx(4, 0, 0, 16, 16, 16), south: bx(0, 0, 0, 16, 16, 12), north: bx(0, 0, 4, 16, 16, 16), up: bx(0, 0, 0, 16, 12, 16), down: bx(0, 4, 0, 16, 16, 16),
+};
+/** vanilla PistonHeadBlock *_AABB (the platform), *_ARM_AABB and SHORT_*_ARM_AABB */
+const PISTON_PLATFORM: Record<string, Box> = {
+  east: bx(12, 0, 0, 16, 16, 16), west: bx(0, 0, 0, 4, 16, 16), south: bx(0, 0, 12, 16, 16, 16), north: bx(0, 0, 0, 16, 16, 4), up: bx(0, 12, 0, 16, 16, 16), down: bx(0, 0, 0, 16, 4, 16),
+};
+const PISTON_ARM: Record<string, Box> = {
+  up: bx(6, -4, 6, 10, 12, 10), down: bx(6, 4, 6, 10, 20, 10), south: bx(6, 6, -4, 10, 10, 12), north: bx(6, 6, 4, 10, 10, 20), east: bx(-4, 6, 6, 12, 10, 10), west: bx(4, 6, 6, 20, 10, 10),
+};
+const PISTON_ARM_SHORT: Record<string, Box> = {
+  up: bx(6, 0, 6, 10, 12, 10), down: bx(6, 4, 6, 10, 16, 10), south: bx(6, 6, 0, 10, 10, 12), north: bx(6, 6, 4, 10, 10, 16), east: bx(0, 6, 6, 12, 10, 10), west: bx(4, 6, 6, 16, 10, 10),
+};
+
+/** vanilla PistonHeadBlock.calculateShape */
+export function pistonHeadShape(facing: string, short: boolean): Box[] {
+  return [PISTON_PLATFORM[facing], (short ? PISTON_ARM_SHORT : PISTON_ARM)[facing]];
+}
+
 /** vanilla TripWireBlock AABB and NOT_ATTACHED_AABB */
 const WIRE_ATTACHED_SHAPE = bx(0, 1, 0, 16, 2.5, 16);
 const WIRE_LOOSE_SHAPE = bx(0, 0, 0, 16, 8, 16);
@@ -270,6 +367,35 @@ export function registerRedstoneComponents(): void {
       props: [P.facing, TRIGGERED], defaults: { facing: 'north' }, hardness: 3.5, sound: 'stone', tool: 'pickaxe', requiresTool: true,
       model: dispenserModel(kind),
     });
+
+  // Pistons: whole when retracted; extended, the base is 12 deep and the head stands in front (vanilla strength 1.5)
+  {
+    const base = pistonBaseModel();
+    for (const [name, platform] of [['piston', 'piston_top'], ['sticky_piston', 'piston_top_sticky']]) {
+      const retracted = pistonModel(platform);
+      const shape = (s: StateView): Box[] | 'full' => (s.get('extended') ? [PISTON_BASE_SHAPES[s.get('facing') as string]] : 'full');
+      registerBlock(name, {
+        props: [EXTENDED, P.facing], defaults: { facing: 'north' }, hardness: 1.5, sound: 'stone', tool: 'pickaxe',
+        collision: shape, opaque: (s) => !s.get('extended'), opacity: (s) => (s.get('extended') ? 0 : 15),
+        faceOcclusion: (s) => (s.get('extended') ? faceMaskFromBoxes([PISTON_BASE_SHAPES[s.get('facing') as string]]) : 63),
+        model: (s) => facingVariant(s.get('extended') ? base : retracted, s.get('facing') as string),
+        // vanilla piston_inventory / sticky_piston_inventory: the platform on top
+        itemModel: cubeBottomTop('piston_side', 'piston_bottom', platform),
+      });
+    }
+    const heads = [false, true].map((sticky) => [false, true].map((short) => pistonHeadModel(sticky ? 'piston_top_sticky' : 'piston_top', short)));
+    registerBlock('piston_head', {
+      props: [P.facing, SHORT, PISTON_TYPE], defaults: { facing: 'north' }, hardness: 1.5, sound: 'stone', tool: 'pickaxe', item: false, noDrop: true,
+      collision: (s) => pistonHeadShape(s.get('facing') as string, s.get('short') as boolean), opaque: false, opacity: 0, aoCaster: false,
+      faceOcclusion: (s) => faceMaskFromBoxes([PISTON_PLATFORM[s.get('facing') as string]]),
+      model: (s) => facingVariant(heads[s.get('type') === 'sticky' ? 1 : 0][s.get('short') ? 1 : 0], s.get('facing') as string),
+    });
+    // what's being moved: invisible, its block entity drawn sliding along, its shape the moving block's
+    registerBlock('moving_piston', {
+      props: [P.facing, PISTON_TYPE], defaults: { facing: 'north' }, hardness: -1, resistance: 0, sound: 'stone', item: false, noDrop: true,
+      collision: 'none', outline: [], opaque: false, opacity: 0, aoCaster: false, layer: Layer.NONE,
+    });
+  }
 
   // Tripwire hook: it breaks at once, and a piston breaks it too (vanilla pushReaction DESTROY)
   {

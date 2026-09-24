@@ -61,6 +61,7 @@ import { crossbowTexture, crossbowChargeProgress, isCharged } from '../item/cros
 import { SpawnerBlockEntity, EnchantingTableBlockEntity } from '../world/blockEntity';
 import { bookModel, bookTexture, renderTableBook } from './bookRenderer';
 import { VillageBlockRenderers } from './villageRenderers';
+import { PistonRenderer } from './pistonRenderer';
 import { createMob } from '../game/spawner';
 import { ArmorLayer, renderHeadItem, PIGLIN_HEAD_ITEM_SCALE } from './armorLayer';
 import type { ArmorModelSet } from './armorLayer';
@@ -133,6 +134,8 @@ export class EntityRenderDispatcher {
   private readonly armor: ArmorLayer;
   /** the bell (and the other village blocks' block entity renderers) */
   private readonly village: VillageBlockRenderers;
+  /** the pistons' moving blocks */
+  private readonly pistons = new PistonRenderer();
   private readonly endCrystals: EndCrystalRenderer;
   private readonly dragons: EnderDragonRenderer;
 
@@ -301,6 +304,7 @@ export class EntityRenderDispatcher {
     this.renderSpawners(b, level, cam, partial, frustum);
     this.renderEnchantingBooks(b, level, cam, partial, frustum);
     this.village.render(b, level, cam, partial, frustum);
+    this.pistons.render(b, this.items, level, cam, partial, frustum);
     b.setOverlay(0, 0, 0, 0);
     b.flush();
     if (this.shadows.length) this.renderShadows(b, level, cam);

@@ -75,7 +75,8 @@ export class FluidTicker {
       return fs.type === type || (FLAGS[st] & F_WATERLOGGED) === 0 && BLOCKS[STATE_BLOCK[st]].s.fluid !== undefined;
     }
     const b = BLOCKS[STATE_BLOCK[st]];
-    if (b.name === 'ladder' || b.name.endsWith('_sign') || b.name.endsWith('_door')) return false;
+    // (a moving piston is solid to fluids: vanilla forceSolidOn)
+    if (b.name === 'ladder' || b.name.endsWith('_sign') || b.name.endsWith('_door') || b.name === 'moving_piston') return false;
     // vanilla SimpleWaterloggedBlock.canPlaceLiquid: only water itself (a source) gets in, never a flow, and never
     // lava, so rails, glow lichen and the like stand in the way of a flow rather than wash away
     if (b.propIndex('waterlogged') >= 0) return false;
