@@ -319,6 +319,8 @@ ITEMS.get('end_rod')!.creativeTab = 'functional';
 // the shulker's shell, and the boxes made from it: one to a stack (what's in one shows in its tooltip,
 // game/shulkerBox.ts)
 reg({ id: 'shulker_shell', texture: 'shulker_shell', creativeTab: 'ingredients' });
+// (and the shulker's spawn egg)
+reg({ id: 'shulker_spawn_egg', texture: 'shulker_spawn_egg', creativeTab: 'spawn_eggs' });
 for (const [id] of SHULKER_BOXES) Object.assign(ITEMS.get(id)!, { maxStack: 1, creativeTab: 'colored' });
 Object.assign(ITEMS.get('dragon_egg')!, { rarity: 'epic', creativeTab: 'functional' });
 reg({ id: 'enchanted_book', texture: 'enchanted_book', maxStack: 1, rarity: 'uncommon', glint: true });

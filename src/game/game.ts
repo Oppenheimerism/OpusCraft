@@ -68,6 +68,7 @@ import { OVERWORLD, THE_NETHER, THE_END, dimensionById, teleportationScale, type
 import { PortalPoi, portalRectangle, relativePortalPosition, portalExit, createPortal, isPortal, portalAxis, type PortalRect } from './portal';
 import { setVillageMenuHook } from './villageBlocks';
 import { setShulkerBoxMenuHook } from './shulkerBox';
+import { tickOuterEndProgress } from './outerEndProgress';
 import { openJobSite } from './jobSites';
 import { endPortalTravel, PortalArrivals } from './endTravel';
 import { EndDragonFight, ARENA_TICKET_LEVEL } from './endDragonFight';
@@ -863,6 +864,8 @@ export class Game {
     const kn = k ? entityDisplayName(k) : '';
     switch (source) {
       case 'mob':
+      // (vanilla mob_projectile's message is mob's: a shulker's bullet)
+      case 'mobProjectile':
         return `${n} was slain by ${kn}`;
       case 'player':
         return `${n} was slain by ${kn}`;
@@ -1739,6 +1742,8 @@ export class Game {
       if (this.world.dim.id === 'the_nether' && this.level.fortresses().pieceAt(Math.floor(p.x), Math.floor(p.y), Math.floor(p.z))) this.advancements.trigger('structure', { structures: ['fortress'] });
       if (this.world.dim.id === 'overworld' && this.level.strongholds().pieceAt(Math.floor(p.x), Math.floor(p.y), Math.floor(p.z))) this.advancements.trigger('structure', { structures: ['stronghold'] });
     }
+    // (Stage 4: the outer End) Great View From Up Here
+    tickOuterEndProgress(this.level, p, this.advancements);
     // vanilla trackEnteredOrExitedLavaOnVehicle: how far a mount has carried the player across lava (ride_entity_in_lava)
     const v = p.vehicle;
     if (v?.inLava) {

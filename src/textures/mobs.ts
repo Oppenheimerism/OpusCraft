@@ -1994,6 +1994,7 @@ const EGGS: [string, number, number][] = [
   ['zombified_piglin', 0xea9393, 0x4c7129],
   ['ghast', 0xf9f9f9, 0xbcbcbc],
   ['blaze', 0xf6b201, 0xfff87e],
+  ['shulker', 0x946794, 0x4d3852],
   ['wither_skeleton', 0x141414, 0x474d4d],
   ['hoglin', 0xc66e55, 0x5f6464],
   ['strider', 0x9c3436, 0x4d494d],

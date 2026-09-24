@@ -1,6 +1,9 @@
 // The shulker's shell as it's drawn (vanilla ShulkerModel): a shulker box in the world (vanilla ShulkerBoxRenderer:
-// the lid rising half a block and turning three quarters round as it opens). Drawn with the entity batch after the
-// entities, like the other block entity renderers.
+// the lid rising half a block and turning three quarters round as it opens), drawn with the entity batch after the
+// entities like the other block entity renderers; the shulker itself (vanilla ShulkerRenderer: the shell turned to
+// the face it clings to, the lid lifting a block and twisting right round as it opens, the head turning inside, and
+// gliding in over 6 ticks after a teleport); and its bullet (vanilla ShulkerBulletRenderer: the spark tumbling, in a
+// faint glow half again its size).
 
 import type { GL } from './gl';
 import { createTexture } from './gl';
@@ -10,9 +13,22 @@ import type { Camera } from './renderer';
 import type { Frustum } from '../core/math';
 import type { Level } from '../game/level';
 import { BLOCKS, STATE_BLOCK } from '../world/block';
+import { DIR_NAMES, OPPOSITE } from '../world/dir';
 import { ShulkerBoxBlockEntity } from '../world/shulkerBoxEntity';
 import { shulkerBoxColor } from '../world/blocksShulker';
-import { shulkerTexture, SHULKER_TEX_W, SHULKER_TEX_H } from '../textures/shulker';
+import type { Shulker } from '../entity/shulker';
+import type { ShulkerBullet } from '../entity/shulkerBullet';
+import { shulkerTexture, sparkTexture, SHULKER_TEX_W, SHULKER_TEX_H } from '../textures/shulker';
+
+const DEG = Math.PI / 180;
+
+/** vanilla Mth.rotLerp */
+function rotLerp(p: number, a: number, b: number): number {
+  let d = b - a;
+  while (d < -180) d += 360;
+  while (d >= 180) d -= 360;
+  return a + p * d;
+}
 
 /** vanilla BlockEntityRenderer.getViewDistance */
 const VIEW_DISTANCE = 64;
@@ -57,11 +73,24 @@ export function rotateToFacing(pose: PoseStack, facing: string): void {
   }
 }
 
+/** vanilla ShulkerBulletModel.createBodyLayer (64x32): three plates crossed at the middle */
+function bulletModel(): ModelPart {
+  return new ModelPart([
+    { x: -4, y: -4, z: -1, w: 8, h: 8, d: 2, u: 0, v: 0 },
+    { x: -1, y: -4, z: -4, w: 2, h: 8, d: 8, u: 0, v: 10 },
+    { x: -4, y: -1, z: -4, w: 8, h: 2, d: 8, u: 20, v: 0 },
+  ]);
+}
+
 export class ShulkerRenderers {
   private readonly pose = new PoseStack();
   /** vanilla ModelLayers.SHULKER_BOX: the shell without the head */
   private readonly box = shulkerModel();
+  /** vanilla ModelLayers.SHULKER */
+  private readonly mob = shulkerModel();
+  private readonly bullet = bulletModel();
   private readonly textures = new Map<string, WebGLTexture>();
+  private sparkTex: WebGLTexture | null = null;
 
   constructor(private readonly gl: GL) {
     this.box.head.visible = false;
@@ -102,6 +131,76 @@ export class ShulkerRenderers {
       b.begin(this.state(this.texture(color)));
       this.renderBox(b, block.get<string>(st, 'facing'), be.getProgress(partial), dx, dy, dz);
     }
+  }
+
+  /**
+   * vanilla ShulkerRenderer (a LivingEntityRenderer): at camera-relative (dx, dy, dz), the batch's light already the
+   * shulker's. Its shell never turns (the client's body yaw is always 0: setupRotations with yBodyRot + 180), dying it
+   * tips over, and it's stood on the face it clings to (rotateAround the attach face's opposite, about its middle)
+   */
+  renderShulker(b: EntityBatch, e: Shulker, dx: number, dy: number, dz: number, partial: number): void {
+    const off = e.renderOffset(partial);
+    if (off) {
+      dx += off[0];
+      dy += off[1];
+      dz += off[2];
+    }
+    const pose = this.pose, m = this.mob;
+    // (vanilla getOverlayCoords: red while hurt or dying)
+    if (e.hurtTime > 0 || e.deathTime > 0) b.setOverlay(1, 0, 0, 0.3);
+    else b.setOverlay(0, 0, 0, 0);
+    b.begin(this.state(this.texture(e.color)));
+    pose.reset();
+    pose.translate(dx, dy, dz);
+    if (e.deathTime > 0) {
+      let f = ((e.deathTime + partial - 1) / 20) * 1.6;
+      f = Math.sqrt(Math.max(0, f));
+      pose.rotZ(Math.min(1, f) * 90);
+    }
+    pose.translate(0, 0.5, 0);
+    rotateToFacing(pose, DIR_NAMES[OPPOSITE[e.attachFace]]);
+    pose.translate(0, -0.5, 0);
+    pose.scale(-1, -1, 1);
+    pose.translate(0, -1.501, 0);
+    // vanilla ShulkerModel.setupAnim: the lid up (a whole block when open, bobbing a little) and twisting right round
+    const peek = e.peekAt(partial);
+    const f1 = (0.5 + peek) * Math.PI;
+    const f2 = -1 + Math.sin(f1);
+    const f3 = f1 > Math.PI ? Math.sin((e.tickCount + partial) * 0.1) * 0.7 : 0;
+    m.lid.y = 16 + Math.sin(f1) * 8 + f3;
+    m.lid.yRot = peek > 0.3 ? f2 * f2 * f2 * f2 * Math.PI * 0.125 : 0;
+    m.head.xRot = (e.pitchO + (e.pitch - e.pitchO) * partial) * DEG;
+    m.head.yRot = (e.headYaw - 180) * DEG;
+    m.root.render(b, pose, SHULKER_TEX_W, SHULKER_TEX_H);
+  }
+
+  /**
+   * vanilla ShulkerBulletRenderer: the spark tumbling (its yaw and pitch along its flight, and a slow spin on all three
+   * axes), at full block light, and a faint (0x26 alpha) glow of it half again as big
+   */
+  renderBullet(b: EntityBatch, e: ShulkerBullet, dx: number, dy: number, dz: number, partial: number): void {
+    if (!this.sparkTex) {
+      const t = sparkTexture();
+      this.sparkTex = createTexture(this.gl, t.w, t.h, new Uint8Array(t.data.buffer, t.data.byteOffset, t.data.byteLength));
+    }
+    const pose = this.pose, m = this.bullet;
+    const age = e.tickCount + partial;
+    b.lightB = 15 * 16;
+    b.setOverlay(0, 0, 0, 0);
+    pose.reset();
+    pose.translate(dx, dy + 0.15, dz);
+    pose.rotY(Math.sin(age * 0.1) * 180);
+    pose.rotX(Math.cos(age * 0.1) * 180);
+    pose.rotZ(Math.sin(age * 0.15) * 360);
+    pose.scale(-0.5, -0.5, 0.5);
+    m.yRot = rotLerp(partial, e.yawO, e.yaw) * DEG;
+    m.xRot = (e.pitchO + (e.pitch - e.pitchO) * partial) * DEG;
+    b.begin(this.state(this.sparkTex));
+    m.render(b, pose, 64, 32);
+    pose.scale(1.5, 1.5, 1.5);
+    // (vanilla RenderType.entityTranslucent)
+    b.begin({ texture: this.sparkTex, cutoff: 0.01, blend: true, cull: false, lit: true, useLightmap: true });
+    m.render(b, pose, 64, 32, 1, 1, 1, 0x26 / 255);
   }
 
   /** vanilla ShulkerBoxRenderer.render: the shell turned to its facing, the lid up and round by `progress` */

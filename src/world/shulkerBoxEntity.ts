@@ -163,6 +163,12 @@ export class ShulkerBoxBlockEntity extends BarrelBlockEntity {
     for (const e of level.getEntities(box)) {
       // (vanilla PushReaction.IGNORE: spectators)
       if ((e as { gameMode?: string }).gameMode === 'spectator') continue;
+      // (vanilla Shulker.move(MoverType.SHULKER_BOX): a shulker in the lid's way teleports off: entity/shulker)
+      const s = e as { moveByShulkerBox?: () => void };
+      if (s.moveByShulkerBox) {
+        s.moveByShulkerBox();
+        continue;
+      }
       e.move((box.maxX - box.minX + 0.01) * dx, (box.maxY - box.minY + 0.01) * dy, (box.maxZ - box.minZ + 0.01) * dz);
     }
   }

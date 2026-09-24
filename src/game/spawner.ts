@@ -28,6 +28,7 @@ import { Bat } from '../entity/bat';
 import { Boat, createBoat, BOAT_TYPES } from '../entity/boat';
 import { EndCrystal } from '../entity/endCrystal';
 import { EnderDragon } from '../entity/enderDragon';
+import { Shulker } from '../entity/shulker';
 import { moonPhase } from '../render/environment';
 import { tickInhabitedTime } from './difficulty';
 import { BIOMES } from '../world/gen/biomes';
@@ -76,6 +77,9 @@ export function createMob(type: string, level: Level): Mob | null {
   const f = MOB_TYPES[type];
   return f ? f(level) : null;
 }
+
+// (Stage 4: the outer End) the shulker
+MOB_TYPES.shulker = (l) => new Shulker(l);
 
 /** serialize an entity for chunk storage (mobs, dropped items, minecarts); riders go inside their vehicle's record */
 export function saveEntity(e: Entity): SavedEntity | null {
@@ -178,6 +182,9 @@ export function entityDisplayName(e: Entity | string): string {
   const t = typeof e === 'string' ? e : e.type;
   return ENTITY_NAMES[t] ?? t;
 }
+
+// (Stage 4: the outer End)
+Object.assign(ENTITY_NAMES, { shulker: 'Shulker', shulker_bullet: 'Shulker Bullet' });
 
 /** entity type ids accepted by /summon */
 export function summonableTypes(): string[] {

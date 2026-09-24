@@ -36,6 +36,8 @@ export type Criterion =
   | { t: 'enchanted_item' }
   | { t: 'changed_dimension'; from?: string; to?: string }
   | { t: 'nether_travel'; distance: number }
+  /** vanilla LevitationTrigger: floated (under Levitation) at least that far from where it took hold, up or down */
+  | { t: 'levitation'; minY: number }
   /** vanilla item_durability_changed: that item wore, the player riding that mount */
   | { t: 'item_durability'; item: string; vehicle: string }
   /** vanilla ride_entity_in_lava: carried that far across lava (horizontally) on that mount, in that dimension */
@@ -196,7 +198,7 @@ const A: AdvancementDef[] = [
   { id: 'end/enter_end_gateway', parent: 'end/kill_dragon', title: 'Remote Getaway', description: 'Escape the island', icon: 'ender_pearl', frame: 'task', criteria: { entered_end_gateway: { t: 'enter_block', block: 'end_gateway' } } },
   { id: 'end/find_end_city', parent: 'end/enter_end_gateway', title: 'The City at the End of the Game', description: 'Go on in, what could happen?', icon: 'purpur_block', frame: 'task', criteria: one(never) },
   { id: 'end/elytra', parent: 'end/find_end_city', title: "Sky's the Limit", description: 'Find Elytra', icon: 'elytra', frame: 'goal', criteria: one(never) },
-  { id: 'end/levitate', parent: 'end/find_end_city', title: 'Great View From Up Here', description: 'Levitate up 50 blocks from the attacks of a Shulker', icon: 'shulker_shell', frame: 'challenge', criteria: one(never) },
+  { id: 'end/levitate', parent: 'end/find_end_city', title: 'Great View From Up Here', description: 'Levitate up 50 blocks from the attacks of a Shulker', icon: 'shulker_shell', frame: 'challenge', criteria: { levitated: { t: 'levitation', minY: 50 } } },
   { id: 'end/respawn_dragon', parent: 'end/kill_dragon', title: 'The End... Again...', description: 'Respawn the Ender Dragon', icon: 'end_crystal', frame: 'goal', criteria: { summoned_dragon: { t: 'summoned_entity', entity: 'ender_dragon' } } },
   { id: 'end/dragon_breath', parent: 'end/kill_dragon', title: 'You Need a Mint', description: "Collect Dragon's Breath in a Glass Bottle", icon: 'dragon_breath', frame: 'goal', criteria: { dragon_breath: inv('dragon_breath') } },
 
@@ -449,6 +451,8 @@ export interface TriggerPayload {
   dimension?: { from: string; to: string };
   /** horizontal distance travelled through the Nether (vanilla NetherTravelTrigger) */
   netherTravel?: number;
+  /** how far the player is, up or down, from where their Levitation took hold (levitation) */
+  levitation?: { dy: number };
   /** the worn item and what the player rides (item_durability) */
   durability?: { item: string; vehicle: string | null };
   /** a ride across lava so far (ride_in_lava) */
@@ -609,6 +613,8 @@ function matches(c: Criterion, p: TriggerPayload): boolean {
       return p.enteredBlock === c.block;
     case 'nether_travel':
       return p.netherTravel !== undefined && p.netherTravel >= c.distance;
+    case 'levitation':
+      return !!p.levitation && p.levitation.dy >= c.minY;
     case 'killed_by_crossbow': {
       // vanilla KilledByCrossbowTrigger.TriggerInstance.matches: each victim predicate takes its own kill
       const k = p.crossbowKills;

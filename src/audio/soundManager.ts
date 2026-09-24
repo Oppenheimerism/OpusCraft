@@ -47,6 +47,8 @@ function categoryOf(name: string): Category {
   if (name === 'block.end_portal.spawn') return 'hostile';
   // vanilla ChorusFruitItem plays its teleport as SoundSource.PLAYERS
   if (name === 'item.chorus_fruit.teleport') return 'players';
+  // vanilla Shulker and ShulkerBullet.getSoundSource: HOSTILE
+  if (name.startsWith('entity.shulker')) return 'hostile';
   // vanilla CrossbowItem: the loading sounds are SoundSource.PLAYERS (the rest the shooter's source)
   if (name.startsWith('item.crossbow.')) return 'players';
   if (name.startsWith('block.') || name.startsWith('item.')) return 'blocks';
@@ -88,6 +90,8 @@ const ALIASES: [RegExp, string][] = [
   [/^entity\.generic\.death$/, 'entity.player.hurt'],
   // vanilla sounds.json: chorus fruit teleports with the enderman's portal samples
   [/^item\.chorus_fruit\.teleport$/, 'entity.enderman.teleport'],
+  // and a shulker teleports with them too
+  [/^entity\.shulker\.teleport$/, 'entity.enderman.teleport'],
   // vanilla sounds.json: some villagers at work make their workstation's own sound
   [/^entity\.villager\.work_weaponsmith$/, 'block.grindstone.use'],
   [/^entity\.villager\.work_armorer$/, 'block.blast_furnace.fire_crackle'],

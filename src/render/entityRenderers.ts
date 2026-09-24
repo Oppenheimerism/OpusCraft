@@ -65,6 +65,8 @@ import { SpawnerBlockEntity, EnchantingTableBlockEntity } from '../world/blockEn
 import { bookModel, bookTexture, renderTableBook } from './bookRenderer';
 import { VillageBlockRenderers } from './villageRenderers';
 import { ShulkerRenderers } from './shulkerRenderer';
+import { Shulker } from '../entity/shulker';
+import { ShulkerBullet } from '../entity/shulkerBullet';
 import { createMob } from '../game/spawner';
 import { ArmorLayer, renderHeadItem, PIGLIN_HEAD_ITEM_SCALE } from './armorLayer';
 import type { ArmorModelSet } from './armorLayer';
@@ -278,6 +280,8 @@ export class EntityRenderDispatcher {
       if (e instanceof Arrow) size *= 10;
       // (vanilla AbstractHurtingProjectile.shouldRenderAtSqrDistance: fireballs are seen from four times as far)
       else if (e instanceof Fireball) size *= 4;
+      // (vanilla ShulkerBullet.shouldRenderAtSqrDistance: within 128 blocks)
+      else if (e instanceof ShulkerBullet) size = 2;
       const maxD = size * 64 * opts.distanceScale;
       // (vanilla EndCrystalRenderer.shouldRender: a crystal with a beam is always drawn; the dragon is never culled)
       const beam = e instanceof EndCrystal && e.beamTarget !== null;
@@ -401,6 +405,8 @@ export class EntityRenderDispatcher {
     this.setLight(b, level, e, x, y, z);
     if (e instanceof ItemEntity) this.renderItemEntity(b, e, dx, dy, dz, p);
     else if (e instanceof EnderDragon) this.dragons.render(b, this.pose, e, dx, dy, dz, p);
+    else if (e instanceof Shulker) this.shulkers.renderShulker(b, e, dx, dy, dz, p);
+    else if (e instanceof ShulkerBullet) this.shulkers.renderBullet(b, e, dx, dy, dz, p);
     else if (e instanceof Mob) this.renderMob(b, e, dx, dy, dz, p);
     else if (e instanceof LivingEntity && e.type === 'player') this.renderPlayer(b, e as Player, dx, dy, dz, p);
     else if (e instanceof ThrownTrident) this.items.trident.renderThrown(b, this.pose, e, dx, dy, dz, p, rotLerp(p, e.yawO, e.yaw));

@@ -381,6 +381,8 @@ function snbtStack(e: string): ItemStack | null {
  * ArmorDropChances / HandDropChances, CanPickUpLoot, PersistenceRequired
  */
 function mobData(m: Mob, nbt: string): void {
+  // (a mob's own entity data, as a shulker's AttachFace, Peek and Color)
+  (m as { readEntityData?: (nbt: string) => void }).readEntityData?.(nbt);
   const slots = { ArmorItems: ['feet', 'legs', 'chest', 'head'], HandItems: ['mainhand', 'offhand'] } as const;
   for (const [key, names] of Object.entries(slots)) {
     const list = snbtEntries(nbt, key);

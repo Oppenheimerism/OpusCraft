@@ -213,3 +213,40 @@ export function registerShulkerBoxTextures(T: Record<string, () => TexDef>, name
     T[`${name}_bottom`] = () => cut(shulkerTexture(color), [[32, 28, 16, 16]]);
   }
 }
+
+let SPARK: TexImage | null = null;
+
+/**
+ * vanilla textures/entity/shulker/spark.png (64x32), the shulker bullet: three crossed plates (ShulkerBulletModel —
+ * 8x8x2 at 0,0, 2x8x8 at 0,10, 8x2x8 at 20,0), each broad face a glow, white at the heart through cream to a pale
+ * straw rim; the thin edges cream
+ */
+export function sparkTexture(): TexImage {
+  if (SPARK) return SPARK;
+  const t = img(64, 32);
+  const RING = [0xe6dca6, 0xf3ecc4, 0xfdf9e4, 0xffffff];
+  const broad = (ox: number, oy: number) => {
+    for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) setPx(t, ox + x, oy + y, RING[Math.min(x, y, 7 - x, 7 - y)]);
+  };
+  const fill = (ox: number, oy: number, w: number, h: number) => {
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) setPx(t, ox + x, oy + y, RING[1]);
+  };
+  // the plate across north-south (8x8x2): thin top, bottom and ends, broad faces at 2,2 and 12,2
+  fill(2, 0, 16, 2);
+  fill(0, 2, 2, 8);
+  fill(10, 2, 2, 8);
+  broad(2, 2);
+  broad(12, 2);
+  // the plate across east-west (2x8x8): thin top and bottom, and ends; broad faces at 0,18 and 10,18
+  fill(8, 10, 4, 8);
+  fill(8, 18, 2, 8);
+  fill(18, 18, 2, 8);
+  broad(0, 18);
+  broad(10, 18);
+  // the flat plate (8x2x8): broad top and bottom at 28,0 and 36,0, thin sides below them
+  broad(28, 0);
+  broad(36, 0);
+  fill(20, 8, 32, 2);
+  SPARK = t;
+  return t;
+}
