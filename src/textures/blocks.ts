@@ -28,6 +28,11 @@ import { FIRE_TEXTURES } from './mobs';
 import { registerEnchantingTextures } from './blocklib/enchanting';
 import { registerVillageTextures } from './blocklib/village';
 import { registerOuterEndTextures } from './blocklib/outerEnd';
+// (Stage 5: ocean)
+import { registerOceanTextures } from './blocklib/ocean';
+// (temples)
+import { registerRedstoneTextures } from './blocklib/redstone';
+import { registerArchaeologyTextures } from './blocklib/archaeology';
 
 type Gen = () => TexDef;
 export const BLOCK_TEXTURES: Record<string, Gen> = {};
@@ -337,6 +342,11 @@ T['furnace_front_on'] = () => UT.furnaceFront(true);
 T['bookshelf'] = () => UT.bookshelf();
 registerEnchantingTextures(T);
 registerVillageTextures(T);
+// (Stage 5: ocean)
+registerOceanTextures(T);
+// (temples)
+registerRedstoneTextures(T);
+registerArchaeologyTextures(T);
 T['glowstone'] = () => UT.glowstone();
 T['sea_lantern'] = () => UT.seaLantern();
 T['redstone_lamp'] = () => UT.redstoneLamp(false);

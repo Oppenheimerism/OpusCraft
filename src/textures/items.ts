@@ -15,7 +15,12 @@ import { ICON_ITEMS } from './itemlib/icons';
 import { END_ITEMS } from './itemlib/end';
 import { SMITHING_ITEMS } from './itemlib/smithing';
 import { BANNER_ITEMS } from './itemlib/banners';
+import { ARCHAEOLOGY_ITEMS } from './itemlib/archaeology';
 import { SPAWN_EGG_TEXTURES } from './mobs';
+// (Stage 4: illagers)
+import { ILLAGER_ITEMS } from './itemlib/illagers';
+// (Stage 5: ocean)
+import { OCEAN_ITEMS } from './itemlib/ocean';
 
 export const ITEM_TEXTURES: Record<string, () => TexImage> = {
   ...SPAWN_EGG_TEXTURES,
@@ -31,4 +36,7 @@ export const ITEM_TEXTURES: Record<string, () => TexImage> = {
   ...END_ITEMS,
   ...SMITHING_ITEMS,
   ...BANNER_ITEMS,
+  ...ILLAGER_ITEMS,
+  ...OCEAN_ITEMS,
+  ...ARCHAEOLOGY_ITEMS,
 };

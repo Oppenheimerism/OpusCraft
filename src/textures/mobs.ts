@@ -1711,7 +1711,7 @@ const EGG_SPOTS = [
   '................',
 ];
 
-function spawnEgg(base: number, spot: number): TexImage {
+export function spawnEgg(base: number, spot: number): TexImage {
   const t = img(16, 16);
   for (let y = 0; y < 16; y++)
     for (let x = 0; x < 16; x++) {
@@ -2008,6 +2008,7 @@ const EGGS: [string, number, number][] = [
   ['stray', 0x617677, 0xddeaea],
   ['drowned', 0x8ff1d7, 0x799c65],
   ['silverfish', 0x6e6e6e, 0x303030],
+  ['wolf', 0xd7d3d3, 0xceaf96], ['cat', 0xefc88e, 0x957256], ['ocelot', 0xefde7d, 0x564434],
 ];
 
 export const SPAWN_EGG_TEXTURES: Record<string, () => TexImage> = {};

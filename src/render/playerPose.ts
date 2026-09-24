@@ -21,9 +21,11 @@ export function playerArms(e: Player, mainArm: Arm): HumanoidArms {
     const s = inv.inHand(hand);
     if (!s) return 'empty';
     if (e.useHand === hand && e.useItem === s && e.useItemRemaining > 0) {
+      if (s.item.id === 'shield') return 'block';
       if (s.item.id === 'bow') return 'bow';
       if (s.item.id === 'crossbow') return 'crossbow_charge';
       if (s.item.id === 'trident') return 'throw_spear';
+      if (s.item.id === 'brush') return 'brush';
     } else if (!e.swinging && s.item.id === 'crossbow' && isCharged(s)) return 'crossbow_hold';
     return 'item';
   };
@@ -64,6 +66,8 @@ export function drawArmItem(b: EntityBatch, items: ItemRenderer, pose: PoseStack
   if (stack.item.id === 'crossbow') tex = crossbowTexture(stack, useTicks);
   // (vanilla's "throwing" model predicate: the trident is being drawn back)
   if (stack.item.id === 'trident' && useTicks >= 0) tex = 'trident_throwing';
+  // (vanilla's "blocking" model predicate: the shield is in use, held up)
+  if (stack.item.id === 'shield' && useTicks >= 0) tex = 'shield_blocking';
   items.render(b, pose, stack, left ? 'thirdperson_lefthand' : 'thirdperson_righthand', left, tex);
   pose.pop();
 }

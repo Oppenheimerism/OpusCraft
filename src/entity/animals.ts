@@ -196,11 +196,12 @@ export abstract class Animal extends AgeableMob {
     if (p.gameMode !== 'creative') p.inventory.consumeSelected(1);
   }
 
-  abstract makeBaby(): Animal;
+  /** vanilla getBreedOffspring (the other parent there too) */
+  abstract makeBaby(partner: Animal): Animal;
 
   /** vanilla Animal.spawnChildFromBreeding */
   spawnChildFromBreeding(partner: Animal): void {
-    const baby = this.makeBaby();
+    const baby = this.makeBaby(partner);
     baby.setAge(-24000);
     baby.moveTo(this.x, this.y, this.z, 0, 0);
     this.level.addEntity(baby);
@@ -232,13 +233,42 @@ export abstract class Animal extends AgeableMob {
 // ---------------------------------------------------------------------------
 // animal goals
 
+/**
+ * vanilla TemptGoal: a player within 10 holding something it wants draws it along; one that `canScare` is put off
+ * (for a while) by a player within 6 who moves or turns
+ */
 export class TemptGoal extends Goal {
-  private player: Player | null = null;
+  protected player: Player | null = null;
   private calmDown = 0;
   isRunning = false;
-  constructor(readonly mob: Animal, readonly speed: number, readonly items: Set<string>) {
+  /** where the player stood and looked (vanilla px, py, pz, pRotX, pRotY) */
+  private px = 0;
+  private py = 0;
+  private pz = 0;
+  private pRotX = 0;
+  private pRotY = 0;
+  constructor(readonly mob: Animal, readonly speed: number, readonly items: Set<string>, private readonly scary = false) {
     super();
     this.flags = Flag.MOVE | Flag.LOOK;
+  }
+  protected canScare(): boolean {
+    return this.scary;
+  }
+  override canContinueToUse(): boolean {
+    const p = this.player;
+    if (p && this.canScare()) {
+      if (this.mob.distanceToSqr(p.x, p.y, p.z) < 36) {
+        if ((p.x - this.px) ** 2 + (p.y - this.py) ** 2 + (p.z - this.pz) ** 2 > 0.010000000000000002) return false;
+        if (Math.abs(p.pitch - this.pRotX) > 5 || Math.abs(p.yaw - this.pRotY) > 5) return false;
+      } else {
+        this.px = p.x;
+        this.py = p.y;
+        this.pz = p.z;
+      }
+      this.pRotX = p.pitch;
+      this.pRotY = p.yaw;
+    }
+    return this.canUse();
   }
   private shouldFollow(p: Player): boolean {
     const s = p.inventory.selectedItem, o = p.inventory.offhand;
@@ -255,6 +285,10 @@ export class TemptGoal extends Goal {
     return this.player !== null;
   }
   override start(): void {
+    const p = this.player!;
+    this.px = p.x;
+    this.py = p.y;
+    this.pz = p.z;
     this.isRunning = true;
   }
   override stop(): void {

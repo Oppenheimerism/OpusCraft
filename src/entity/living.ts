@@ -10,6 +10,9 @@ import { MobEffectInstance, SavedEffect, saveEffect, loadEffect } from './effect
 import { burningTimeFactor, damageAfterProtection, damageProtection, waterMovementEfficiency } from '../item/enchantHelper';
 import { AABB } from '../core/aabb';
 import type { ItemStack } from '../item/item';
+// (Stage 4: shields)
+import { shieldTakesHit, shieldBlocked } from './shield';
+import { checkTotemDeathProtection } from './totem';
 
 /** damage sources that ignore armor (vanilla #bypasses_armor) */
 const BYPASSES_ARMOR = new Set(['onFire', 'inWall', 'drown', 'starve', 'fall', 'stalagmite', 'void', 'genericKill', 'magic', 'indirectMagic', 'wither', 'generic', 'cramming', 'flyIntoWall']);
@@ -67,7 +70,24 @@ export abstract class LivingEntity extends Entity {
   lastHurtByMob: LivingEntity | null = null;
   lastHurtByMobTimestamp = 0;
   lastHurtByPlayer: LivingEntity | null = null;
-  lastHurtMob: LivingEntity | null = null;
+  /** vanilla lastDamageSource and lastDamageStamp: what last hurt it, and when */
+  lastDamageSource: string | null = null;
+  lastDamageStamp = -1000;
+  /** vanilla getLastDamageSource: forgotten after 40 ticks */
+  recentDamageSource(): string | null {
+    return this.level.gameTime - this.lastDamageStamp > 40 ? null : this.lastDamageSource;
+  }
+  private lastHurtMobValue: LivingEntity | null = null;
+  /** vanilla lastHurtMobTimestamp: when it last hurt something (setLastHurtMob) */
+  lastHurtMobTimestamp = 0;
+  /** vanilla lastHurtMob: the last thing it hurt (setting it is vanilla setLastHurtMob, which notes when) */
+  get lastHurtMob(): LivingEntity | null {
+    return this.lastHurtMobValue;
+  }
+  set lastHurtMob(e: LivingEntity | null) {
+    this.lastHurtMobValue = e;
+    if (e) this.lastHurtMobTimestamp = this.tickCount;
+  }
   /** who dealt the killing blow and how (death messages, loot) */
   killer: Entity | null = null;
   /** vanilla autoSpinAttackTicks: ticks left of a riptide spin */
@@ -139,7 +159,7 @@ export abstract class LivingEntity extends Entity {
     if (this.health > 0 && this.isInWall()) this.hurt(1, 'inWall');
     if (this.lastHurtByPlayerTime > 0) this.lastHurtByPlayerTime--;
     else this.lastHurtByPlayer = null;
-    if (this.lastHurtMob && !this.lastHurtMob.isAlive) this.lastHurtMob = null;
+    if (this.lastHurtMobValue && !this.lastHurtMobValue.isAlive) this.lastHurtMobValue = null;
     if (this.lastHurtByMob) {
       if (!this.lastHurtByMob.isAlive || this.tickCount - this.lastHurtByMobTimestamp > 100) this.lastHurtByMob = null;
     }
@@ -835,6 +855,9 @@ export abstract class LivingEntity extends Entity {
     if (this.shrugsOffFire(source, attacker, direct)) return false;
     this.noActionTime = 0;
     if (amount < 0) amount = 0;
+    // (Stage 4: shields) vanilla isDamageSourceBlocked: a raised shield takes the hit, which goes on at 0 (entity/shield.ts)
+    const blocked = amount > 0 && shieldTakesHit(this, amount, source, attacker, direct);
+    if (blocked) amount = 0;
     // falling anvils, blocks and stalactites wear the helmet, which takes a quarter off the hit
     if (DAMAGES_HELMET.has(source) && this.hurtHelmet(amount)) amount *= 0.75;
     let fresh = true;
@@ -848,8 +871,11 @@ export abstract class LivingEntity extends Entity {
       this.lastHurt = amount;
       this.invulnerableTime = 20;
       this.actuallyHurt(source, amount);
-      this.hurtTime = this.hurtDuration = 10;
+      // (Stage 4: shields) a blocked hit's client sees event 29, not the damage event: no red flash
+      if (!blocked) this.hurtTime = this.hurtDuration = 10;
     }
+    this.lastDamageSource = source;
+    this.lastDamageStamp = this.level.gameTime;
     if (attacker instanceof LivingEntity && attacker !== this) {
       this.setLastHurtByMob(attacker);
       if (attacker.type === 'player') {
@@ -857,6 +883,8 @@ export abstract class LivingEntity extends Entity {
         this.lastHurtByPlayer = attacker;
       }
     }
+    // (Stage 4: shields) the shield's thud instead of knockback and the hurt sound; nothing was hurt
+    if (blocked) return shieldBlocked(this, source);
     if (fresh) {
       this.hurtDir = 0;
       if (!NO_KNOCKBACK.has(source) && (attacker || direct)) {
@@ -876,13 +904,16 @@ export abstract class LivingEntity extends Entity {
       }
       this.onHurt(source);
     }
-    if (this.health <= 0) {
+    // (Stage 4: totems) vanilla checkTotemDeathProtection: a totem in hand takes the death (entity/totem.ts), and
+    // then there's no hurt sound either
+    const dying = this.health <= 0;
+    if (dying && !checkTotemDeathProtection(this, source)) {
       // (vanilla DamageSource: the causing entity, else the direct one: an ownerless cloud or potion)
       this.killer = attacker ?? direct ?? null;
       this.deathSource = source;
       if (fresh) this.playDeathSound();
       this.die(source, attacker ?? null);
-    } else if (fresh) this.playHurtSound(source);
+    } else if (fresh && !dying) this.playHurtSound(source);
     // vanilla MobEffectInstance.onMobHurt for each effect it has (infested's silverfish)
     for (const inst of [...this.activeEffects.values()]) inst.effect.onMobHurt?.(this, inst.amplifier, source, amount);
     return true;

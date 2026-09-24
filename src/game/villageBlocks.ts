@@ -72,6 +72,10 @@ export function fillHeld(p: Player, filled: ItemStack): void {
 
 // ---------------------------------------------------------------------------
 // Bell (vanilla BellBlock)
+
+/** (Stage 4: raids) vanilla BellBlock.attemptToRing, for a villager sounding the alarm (game/raidVillagers.ts): set below */
+export const bellRinger: { ring: (level: Level, x: number, y: number, z: number, dir: Dir | null) => boolean } = { ring: () => false };
+
 {
   const bell = getBlock('bell');
   const attachment = (st: number) => bell.get<string>(st, 'attachment');
@@ -121,6 +125,7 @@ export function fillHeld(p: Player, filled: ItemStack): void {
     level.sound.play('block.bell.use', cx, cy, cz, 2, 1);
     return true;
   };
+  bellRinger.ring = ring;
 
   registerBehavior('bell', {
     // vanilla BellBlock.getStateForPlacement
@@ -210,6 +215,11 @@ const COMPOSTABLES: Record<string, number> = {};
   add(0.85, 'hay_block', 'brown_mushroom_block', 'red_mushroom_block', 'nether_wart_block', 'warped_wart_block', 'flowering_azalea', 'bread',
     'baked_potato', 'cookie', 'torchflower', 'pitcher_plant');
   add(1, 'cake', 'pumpkin_pie');
+}
+
+/** vanilla ComposterBlock.COMPOSTABLES.containsKey: whether `id` composts at all */
+export function isCompostable(id: string): boolean {
+  return COMPOSTABLES[id] !== undefined;
 }
 
 /** vanilla ComposterBlock.handleFill (level event 1500): the rustle, and green sparkles over what's in it */

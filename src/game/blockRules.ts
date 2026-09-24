@@ -515,12 +515,13 @@ const APPLE_CHANCES = [0.005, 0.0055555557, 0.00625, 0.008333334, 0.025];
 
 /**
  * a block's loot; `silk` / `fortune` = the breaking tool's silk touch and fortune levels, `be` the block entity it had
- * (vanilla LootContextParams.BLOCK_ENTITY: a banner's patterns go on its drop)
+ * (vanilla LootContextParams.BLOCK_ENTITY: a banner's patterns go on its drop); `harvest` false when it isn't a
+ * player breaking it (a piston: vanilla dropResources), so the tool a block wants from a player doesn't matter
  */
-export function blockDrops(state: number, tool: Item | null, r: Rand, silk = false, fortune = 0, be: BlockEntity | null = null): ItemStack[] {
+export function blockDrops(state: number, tool: Item | null, r: Rand, silk = false, fortune = 0, be: BlockEntity | null = null, harvest = true): ItemStack[] {
   const b = blk(state);
   const n = b.name;
-  if (b.requiresTool && !isCorrectTool(tool, b)) return [];
+  if (harvest && b.requiresTool && !isCorrectTool(tool, b)) return [];
   const own = behaviorOf(state)?.drops;
   if (own) return own(state, tool, r, silk, fortune, be);
   const shears = tool?.tool?.type === 'shears';

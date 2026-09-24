@@ -16,9 +16,23 @@ import { Strider } from '../entity/strider';
 import { Piglin } from '../entity/piglin';
 import { Villager } from '../entity/villager';
 import { Witch } from '../entity/witch';
+// (Stage 4: illagers)
+import { Pillager, Vindicator } from '../entity/illagers';
+import { Evoker, Vex } from '../entity/evoker';
+import { Ravager } from '../entity/ravager';
+import { PatrolSpawner } from './patrolSpawner';
+import { outpostSpawnsAt } from './outposts';
+import { checkPatrollingMonsterSpawnRules } from '../entity/raider';
+// (Stage 5: ocean)
+import { Guardian, ElderGuardian, checkGuardianSpawnRules } from '../entity/guardian';
+import { monumentSpawnsAt } from './monuments';
 import { Husk, Stray } from '../entity/biomeMonsters';
 import { Drowned, isInWaterPositionOk, drownedNaturalSpawnRules } from '../entity/drowned';
 import { Silverfish } from '../entity/silverfish';
+import { Wolf, wolfSpawnRulesOk } from '../entity/wolf';
+import { Cat, catHooks } from '../entity/cat';
+import { Ocelot } from '../entity/ocelot';
+import { CatSpawner } from './catSpawner';
 import { IronGolem } from '../entity/ironGolem';
 import { ZombieVillager } from '../entity/zombieVillager';
 import { Zombie, ZombifiedPiglin, Skeleton, WitherSkeleton, Creeper, Spider, CaveSpider, Enderman, Slime, MagmaCube, Monster, validSpawnBlock } from '../entity/monsters';
@@ -38,6 +52,10 @@ import { fluidType, FLUID_LAVA } from '../world/fluids';
 import { MIN_Y } from '../world/constants';
 import { AABB } from '../core/aabb';
 import { Rand, hash2 } from '../core/rng';
+import { structureMobsAt, inSwampHut } from './structureSpawns';
+
+// (temples) a cat in a swamp hut is the witch's black cat (vanilla #cats_spawn_as_black), and cats keep coming to one
+catHooks.inSwampHut = inSwampHut;
 
 export const MOB_TYPES: Record<string, (l: Level) => Mob> = {
   pig: (l) => new Pig(l),
@@ -71,8 +89,25 @@ export const MOB_TYPES: Record<string, (l: Level) => Mob> = {
   stray: (l) => new Stray(l),
   drowned: (l) => new Drowned(l),
   silverfish: (l) => new Silverfish(l),
+  wolf: (l) => new Wolf(l),
+  cat: (l) => new Cat(l),
+  ocelot: (l) => new Ocelot(l),
   ender_dragon: (l) => new EnderDragon(l),
 };
+
+// (Stage 4: illagers) the raiders and the vex
+Object.assign(MOB_TYPES, {
+  pillager: (l: Level) => new Pillager(l),
+  vindicator: (l: Level) => new Vindicator(l),
+  evoker: (l: Level) => new Evoker(l),
+  vex: (l: Level) => new Vex(l),
+  ravager: (l: Level) => new Ravager(l),
+});
+// (Stage 5: ocean) the guardians
+Object.assign(MOB_TYPES, {
+  guardian: (l: Level) => new Guardian(l),
+  elder_guardian: (l: Level) => new ElderGuardian(l),
+});
 
 export function createMob(type: string, level: Level): Mob | null {
   const f = MOB_TYPES[type];
@@ -166,22 +201,27 @@ function loadOne(d: SavedEntity, level: Level): Entity | null {
   return m;
 }
 
-/** entities that belong to chunk storage (a cart or boat carrying the player is saved with the player) */
+/** entities that belong to chunk storage (whatever carries the player is saved with the player: vanilla RootVehicle) */
 export function isChunkSaved(e: Entity): boolean {
-  if (e instanceof AbstractMinecart || e instanceof Boat) return !e.passengers.some((p) => p.type === 'player');
+  if (e.passengers.some((p) => p.type === 'player')) return false;
   if (e instanceof ItemFrame) return true;
-  return e instanceof Mob || e instanceof ItemEntity || e instanceof EndCrystal || e instanceof Arrow;
+  return e instanceof AbstractMinecart || e instanceof Boat || e instanceof Mob || e instanceof ItemEntity || e instanceof EndCrystal || e instanceof Arrow;
 }
 
 const ENTITY_NAMES: Record<string, string> = {
   pig: 'Pig', cow: 'Cow', sheep: 'Sheep', chicken: 'Chicken', zombie: 'Zombie', zombie_villager: 'Zombie Villager', skeleton: 'Skeleton', creeper: 'Creeper', spider: 'Spider',
   villager: 'Villager', iron_golem: 'Iron Golem', cave_spider: 'Cave Spider', enderman: 'Enderman', slime: 'Slime', magma_cube: 'Magma Cube', zombified_piglin: 'Zombified Piglin', ghast: 'Ghast', blaze: 'Blaze', wither_skeleton: 'Wither Skeleton', squid: 'Squid', bat: 'Bat', hoglin: 'Hoglin', zoglin: 'Zoglin', strider: 'Strider', piglin: 'Piglin',
-  witch: 'Witch', husk: 'Husk', stray: 'Stray', drowned: 'Drowned', silverfish: 'Silverfish', fireball: 'Fireball', small_fireball: 'Small Fireball',
+  witch: 'Witch', husk: 'Husk', stray: 'Stray', drowned: 'Drowned', silverfish: 'Silverfish', wolf: 'Wolf', cat: 'Cat', ocelot: 'Ocelot', fireball: 'Fireball', small_fireball: 'Small Fireball',
   arrow: 'Arrow', tnt: 'Primed TNT', lightning_bolt: 'Lightning Bolt', item: 'Item', experience_orb: 'Experience Orb', falling_block: 'Falling Block', player: 'Player',
   egg: 'Thrown Egg', snowball: 'Snowball', ender_pearl: 'Thrown Ender Pearl', potion: 'Potion', trident: 'Trident',
   minecart: 'Minecart', chest_minecart: 'Minecart with Chest', boat: 'Boat', chest_boat: 'Boat with Chest', end_crystal: 'End Crystal',
   ender_dragon: 'Ender Dragon', dragon_fireball: 'Dragon Fireball', area_effect_cloud: 'Area Effect Cloud',
 };
+
+// (Stage 4: illagers)
+Object.assign(ENTITY_NAMES, { pillager: 'Pillager', vindicator: 'Vindicator', evoker: 'Evoker', vex: 'Vex', ravager: 'Ravager', evoker_fangs: 'Evoker Fangs' });
+// (Stage 5: ocean)
+Object.assign(ENTITY_NAMES, { guardian: 'Guardian', elder_guardian: 'Elder Guardian' });
 
 /** vanilla entity type display names (death messages, commands) */
 export function entityDisplayName(e: Entity | string): string {
@@ -265,6 +305,22 @@ const NETHER_SPAWNS: Record<string, { monster: SpawnerData[]; creature: SpawnerD
 /** vanilla NetherFortressStructure.FORTRESS_ENEMIES: the monsters of a fortress */
 const FORTRESS_ENEMIES = [S_('blaze', 10, 2, 3), S_('zombified_piglin', 5, 4, 4), S_('wither_skeleton', 8, 5, 5), S_('skeleton', 2, 5, 5), S_('magma_cube', 3, 4, 4)];
 
+/**
+ * vanilla OverworldBiomes' wolves (1.20.5+): forests, taigas and groves, and the packs of the savanna plateau, the
+ * sparse jungle and the wooded badlands (each spawning its own coat, see WolfVariants)
+ */
+const WOLF_SPAWNS: Record<string, SpawnerData> = {
+  forest: S_('wolf', 5, 4, 4),
+  taiga: S_('wolf', 8, 4, 4),
+  snowy_taiga: S_('wolf', 8, 4, 4),
+  old_growth_pine_taiga: S_('wolf', 8, 4, 4),
+  old_growth_spruce_taiga: S_('wolf', 8, 4, 4),
+  grove: S_('wolf', 1, 1, 1),
+  savanna_plateau: S_('wolf', 8, 4, 8),
+  sparse_jungle: S_('wolf', 8, 2, 4),
+  wooded_badlands: S_('wolf', 2, 4, 8),
+};
+
 /** vanilla BiomeDefaultFeatures.endSpawns: the End's biomes have endermen, in fours, and nothing else */
 const END_SPAWN_BIOMES = new Set(['the_end', 'end_highlands', 'end_midlands', 'small_end_islands', 'end_barrens']);
 
@@ -282,8 +338,12 @@ function settingsFor(name: string): MobSettings {
   // vanilla OverworldBiomes.river, baseOceanSpawns and BiomeDefaultFeatures.warmOceanSpawns: drowned, one at a time
   // (a hundred in a river, one in a frozen river, five in every ocean)
   const drowned = name === 'river' ? 100 : name === 'frozen_river' ? 1 : name.endsWith('ocean') ? 5 : 0;
-  const monster = drowned ? [...base.monster, S_('drowned', drowned, 1, 1)] : base.monster;
-  return { ...base, monster, water, ambient };
+  // vanilla OverworldBiomes.jungle and bambooJungle: ocelots are on the monster list (a group of 1-3, or one)
+  const ocelots = name === 'jungle' ? S_('ocelot', 2, 1, 3) : name === 'bamboo_jungle' ? S_('ocelot', 2, 1, 1) : null;
+  const monster = [...base.monster, ...(drowned ? [S_('drowned', drowned, 1, 1)] : []), ...(ocelots ? [ocelots] : [])];
+  const wolves = WOLF_SPAWNS[name];
+  const creature = wolves ? [...base.creature, wolves] : base.creature;
+  return { ...base, creature, monster, water, ambient };
 }
 
 function settingsForLand(name: string): Omit<MobSettings, 'water' | 'ambient'> {
@@ -364,6 +424,10 @@ export class NaturalSpawner {
   private readonly rand = new Rand(0x5eed);
   /** world spawn (no natural spawns within 24 blocks) */
   spawnPos: [number, number, number] | null = null;
+  /** (Stage 4: patrols) */
+  readonly patrols = new PatrolSpawner();
+  /** vanilla CatSpawner */
+  readonly cats = new CatSpawner();
 
   constructor(readonly level: Level, readonly worldSeed: number) {}
 
@@ -388,6 +452,9 @@ export class NaturalSpawner {
     // and water creatures every tick
     const spawnFriendlies = lvl.gameTime % 400 === 0;
     const spawnEnemies = lvl.difficulty !== 'peaceful';
+    // (Stage 4: patrols) vanilla ServerLevel.tickCustomSpawners
+    this.patrols.tick(lvl, spawnEnemies);
+    this.cats.tick(lvl);
     const pcx = Math.floor(p.x) >> 4, pcz = Math.floor(p.z) >> 4;
     const r = Math.min(8, lvl.simulationDistance);
     const chunks: [number, number][] = [];
@@ -462,7 +529,7 @@ export class NaturalSpawner {
         lvl.addEntity(mob);
         spawned++;
         inGroup++;
-        if (spawned >= 4) return spawned;
+        if (spawned >= mob.maxSpawnClusterSize()) return spawned;
         void inGroup;
       }
     }
@@ -479,6 +546,15 @@ export class NaturalSpawner {
       const f = this.level.fortresses().at(x, y, z);
       if (f && (BLOCKS[STATE_BLOCK[w.getState(x, y - 1, z)]].name === 'nether_bricks' || f.pieces.some((p) => p.box.isInside(x, y, z)))) return FORTRESS_ENEMIES;
     }
+    // (Stage 4: outposts) a structure's spawn_overrides, bounding_box full (game/outposts.ts)
+    const so = outpostSpawnsAt(this.level, cat, x, y, z);
+    if (so) return so;
+    // (Stage 5: ocean) a monument's guardians (game/monuments.ts)
+    const mo = monumentSpawnsAt(this.level, cat, x, y, z);
+    if (mo) return mo;
+    // a structure's spawn_overrides (bounding_box piece | full) where it stands (game/structureSpawns)
+    const o = structureMobsAt(this.level, cat, x, y, z);
+    if (o) return o;
     const bs = biomeSettings(w.getBiome3(x, y, z));
     return cat === 'monster' ? bs.monster : cat === 'water_creature' ? bs.water : cat === 'ambient' ? bs.ambient : bs.creature;
   }
@@ -493,6 +569,8 @@ export class NaturalSpawner {
   private placementOk(type: string, x: number, y: number, z: number): boolean {
     if (type === 'squid') return this.isInWaterPositionOk(x, y, z);
     if (type === 'drowned') return isInWaterPositionOk(this.level, x, y, z);
+    // (Stage 5: ocean) vanilla SpawnPlacements: the guardian IN_WATER
+    if (type === 'guardian') return isInWaterPositionOk(this.level, x, y, z);
     if (type === 'strider') return fluidType(this.level.world.getState(x, y, z)) === FLUID_LAVA;
     return this.isSpawnPositionOk(x, y, z, FIRE_IMMUNE.has(type));
   }
@@ -560,6 +638,11 @@ export class NaturalSpawner {
         const biome = BIOMES[lvl.world.getBiome3(x, y, z)]?.name ?? '';
         return drownedNaturalSpawnRules(lvl, x, y, z, biome === 'river' || biome === 'frozen_river', this.rand);
       }
+      case 'wolf':
+        return wolfSpawnRulesOk(lvl, x, y, z);
+      case 'ocelot':
+        // vanilla Ocelot.checkOcelotSpawnRules: one try in three fails
+        return this.rand.nextInt(3) !== 0;
       case 'ghast':
         return Ghast.checkGhastSpawn(lvl, x, y, z, () => this.rand.nextFloat());
       case 'blaze':
@@ -569,6 +652,12 @@ export class NaturalSpawner {
         return Strider.checkStriderSpawn(lvl, x, y, z);
       case 'piglin':
         return Piglin.checkPiglinSpawn(lvl, x, y, z);
+      // (Stage 4: outposts)
+      case 'pillager':
+        return checkPatrollingMonsterSpawnRules(lvl, x, y, z);
+      // (Stage 5: ocean)
+      case 'guardian':
+        return checkGuardianSpawnRules(lvl, x, y, z, (n) => this.rand.nextInt(n));
       case 'hoglin':
         // vanilla Hoglin.checkHoglinSpawnRules: any light, just not on a nether wart block
         return BLOCKS[STATE_BLOCK[lvl.world.getState(x, y - 1, z)]].name !== 'nether_wart_block';

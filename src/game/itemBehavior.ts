@@ -17,6 +17,8 @@ export interface ItemBehavior {
   use?(level: Level, p: Player, stack: ItemStack): UseResult;
   /** vanilla Item.getUseAnimation for one that's used over time: drinking plays its sound as it goes */
   useAnim?: 'drink' | 'eat';
+  /** vanilla Item.onUseTick: each tick it's in use, with the ticks the use has left (the brush's strokes) */
+  useTick?(level: Level, p: Player, stack: ItemStack, remaining: number): void;
   /** vanilla Item.finishUsingItem: the use has run its course (the drink is drunk) */
   finishUsing?(level: Level, p: Player, stack: ItemStack): void;
   /** vanilla Item.inventoryTick: every tick it's in a player's inventory (`selected`: its slot's index is the hotbar's pick) */

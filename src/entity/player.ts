@@ -131,7 +131,7 @@ export class Player extends LivingEntity {
   onDeath: ((p: Player, source: string) => void) | null = null;
   /** spawns an item entity from the player (set by the game shell) */
   dropHandler: ((s: ItemStack, thrown: boolean) => void) | null = null;
-  lastDamageSource = '';
+  override lastDamageSource = '';
 
   constructor(level: Level) {
     super(level);

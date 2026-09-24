@@ -237,8 +237,8 @@ export class Interaction {
     if (GUARDED_BY_PIGLINS.has(b.name)) Piglin.angerNearbyPiglins(p, false);
     // vanilla BaseFireBlock.playerWillDestroy: punching out fire fizzes
     if (b.name === 'fire') this.level.sound.play('block.fire.extinguish', x + 0.5, y + 0.5, z + 0.5, 0.5, 2.6 + (Math.random() - Math.random()) * 0.8);
+    behaviorOf(st)?.playerWillDestroy?.(this.level, x, y, z, st, p, held);
     const silk = levelOf(held, 'silk_touch') > 0;
-    behaviorOf(st)?.playerWillDestroy?.(this.level, x, y, z, st, p);
     this.level.destroyBlock(x, y, z, survival, held?.item ?? null, true, held);
     if (survival && this.level.gameRules.doTileDrops) {
       const xp = blockExperience(st, held?.item ?? null, this.level.random, silk);
@@ -317,6 +317,17 @@ export class Interaction {
     // entity interaction (vanilla Player.interactOn → Mob.mobInteract)
     const e = this.entityHit;
     if (e && p.gameMode !== 'spectator') {
+      if (stack && stack.item.id.endsWith('_spawn_egg') && (e instanceof Animal || e instanceof Villager) && e.type === stack.item.id.slice(0, -10)) {
+        // spawn egg on a matching animal spawns a baby (vanilla SpawnEggItem.spawnOffspringFromSpawnEgg), before the
+        // animal's own use of the click (vanilla Mob.checkAndHandleImportantInteractions)
+        const baby = e instanceof Villager ? e.breedOffspring(e) : e.makeBaby(e);
+        baby.setAge(-24000);
+        baby.moveTo(e.x, e.y, e.z, 0, 0);
+        this.level.addEntity(baby);
+        if (p.gameMode !== 'creative') p.inventory.consumeSelected(1);
+        p.swing();
+        return 'success';
+      }
       if (e instanceof Animal && e.interact(p, stack)) {
         if (p.vehicle === e) this.onMounted?.();
         p.swing();
@@ -383,16 +394,6 @@ export class Interaction {
       // (an entity with its own vanilla interact: an item frame takes the item held out to it, or turns what it holds)
       const own = (e as { playerInteract?: (p: Player, stack: ItemStack | null) => boolean }).playerInteract;
       if (own && own.call(e, p, stack)) {
-        p.swing();
-        return 'success';
-      }
-      if (stack && stack.item.id.endsWith('_spawn_egg') && (e instanceof Animal || e instanceof Villager) && e.type === stack.item.id.slice(0, -10)) {
-        // spawn egg on a matching animal spawns a baby (vanilla SpawnEggItem.spawnOffspringFromSpawnEgg)
-        const baby = e instanceof Villager ? e.breedOffspring(e) : e.makeBaby();
-        baby.setAge(-24000);
-        baby.moveTo(e.x, e.y, e.z, 0, 0);
-        this.level.addEntity(baby);
-        if (p.gameMode !== 'creative') p.inventory.consumeSelected(1);
         p.swing();
         return 'success';
       }
@@ -732,6 +733,8 @@ export class Interaction {
     this.level.setBlock(x, y, z, st);
     // (vanilla BlockItem.updateBlockEntityComponents: a banner's patterns go onto its block entity)
     this.level.world.getBlockEntity(x, y, z)?.applyComponents(stack);
+    // vanilla Block.setPlacedBy
+    if (this.level.getState(x, y, z) === st) behaviorOf(st)?.setPlacedBy?.(this.level, x, y, z, st, p);
     this.onPlaced?.(BLOCKS[STATE_BLOCK[st]].name);
     const isBucket = stack.item.id.endsWith('_bucket');
     if (isBucket) this.level.sound.play(stack.item.id === 'lava_bucket' ? 'item.bucket.empty_lava' : 'item.bucket.empty', x + 0.5, y + 0.5, z + 0.5, 1, 1);
@@ -908,6 +911,12 @@ export class Interaction {
       return;
     }
     p.usingItemTicks = p.ticksUsingItem() + 1;
+    // vanilla ItemStack.onUseTick (the brush's strokes), which may stop the use
+    const useTick = itemBehaviorOf(u.item.id)?.useTick;
+    if (useTick) {
+      p.inventory.withHand(p.useHand, () => useTick(this.level, p, u, p.useItemRemaining));
+      if (!p.isUsingItem()) return;
+    }
     // vanilla shouldTriggerItemUseEffects: past the first 21.875 % of the use, every fourth tick
     if (useAnimation(u)) {
       const used = p.useDuration - p.useItemRemaining;
@@ -1080,18 +1089,22 @@ export class Interaction {
     const picked = this.entityHit && p.gameMode === 'creative' ? this.entityHit.pickResult() : null;
     if (!h && !picked) return;
     const b = h ? BLOCKS[STATE_BLOCK[h.state]] : null;
-    const it = picked ? getItem(picked) : itemForBlock(b!.name) ?? (b!.name === 'water' ? getItem('water_bucket') : undefined);
+    const own = h ? behaviorOf(h.state)?.cloneItem?.(h.state) : undefined;
+    // (a stack that depends on the block entity, a decorated pot's: matched with its components, as vanilla's findSlotMatchingItem)
+    const cloned = h && !picked ? behaviorOf(h.state)?.cloneStack?.(this.level, h.x, h.y, h.z, h.state) ?? null : null;
+    const it = cloned ? cloned.item : picked ? getItem(picked) : own ? getItem(own) : itemForBlock(b!.name) ?? (b!.name === 'water' ? getItem('water_bucket') : undefined);
     if (!it) return;
+    const matches = (s: ItemStack | null) => (cloned ? !!s?.sameItem(cloned) : s?.item === it);
     const inv = p.inventory;
     for (let i = 0; i < 9; i++) {
-      if (inv.main[i]?.item === it) {
+      if (matches(inv.main[i])) {
         inv.selected = i;
         inv.version++;
         return;
       }
     }
     if (p.gameMode !== 'creative') {
-      const slot = inv.findSlot((s) => s.item === it);
+      const slot = inv.findSlot((s) => matches(s));
       if (slot >= 9) {
         const tmp = inv.main[inv.selected];
         inv.main[inv.selected] = inv.main[slot];
@@ -1110,7 +1123,7 @@ export class Interaction {
         }
     }
     inv.selected = target;
-    inv.setSlot(target, new ItemStack(it, 1));
+    inv.setSlot(target, cloned ?? new ItemStack(it, 1));
   }
 
   /** vanilla SWAP_ITEM_WITH_OFFHAND (F): the two hands trade what they hold, and any use stops */

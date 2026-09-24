@@ -315,8 +315,16 @@ export abstract class MoveToBlockGoal extends Goal {
       this.nextStartTick--;
       return false;
     }
-    this.nextStartTick = reducedTickDelay(200 + this.mob.random.nextInt(200));
+    this.nextStartTick = this.nextStartDelay();
     return this.findNearestBlock();
+  }
+  /** vanilla MoveToBlockGoal.nextStartTick(mob): how long before it looks again */
+  protected nextStartDelay(): number {
+    return reducedTickDelay(200 + this.mob.random.nextInt(200));
+  }
+  /** vanilla isReachedTarget */
+  isReachedTarget(): boolean {
+    return this.reachedTarget;
   }
   override canContinueToUse(): boolean {
     return this.tryTicks >= -this.maxStayTicks && this.tryTicks <= 1200 && this.isValidTarget(this.bx, this.by, this.bz);
@@ -365,6 +373,60 @@ export abstract class MoveToBlockGoal extends Goal {
             return true;
           }
     return false;
+  }
+}
+
+/**
+ * vanilla AvoidEntityGoal: the nearest living thing of a kind within `maxDist` (seen, and one it could fight) sends it
+ * off somewhere up to 16 blocks away that isn't any nearer to it, walking, and at a sprint while it's within 7 blocks
+ */
+export class AvoidEntityGoal extends Goal {
+  protected toAvoid: LivingEntity | null = null;
+  private path: Path | null = null;
+  constructor(readonly mob: Mob, readonly avoid: (e: LivingEntity) => boolean, readonly maxDist: number, readonly walkSpeed: number, readonly sprintSpeed: number) {
+    super();
+    this.flags = Flag.MOVE;
+  }
+  /** vanilla TargetingConditions.forCombat().range(maxDist): alive, fair game, near enough (less if it's invisible), in sight */
+  private nearest(): LivingEntity | null {
+    const m = this.mob, d = this.maxDist;
+    let best: LivingEntity | null = null, bestD = Infinity;
+    for (const e of m.level.getEntities(new AABB(m.bb.minX - d, m.bb.minY - 3, m.bb.minZ - d, m.bb.maxX + d, m.bb.maxY + 3, m.bb.maxZ + d), undefined, m)) {
+      if (!(e instanceof LivingEntity) || !e.isAlive || !this.avoid(e)) continue;
+      if (!m.canAttack(e) || (m as { isAlliedTo?(o: LivingEntity): boolean }).isAlliedTo?.(e)) continue;
+      const r = Math.max(d * e.visibilityPercent(m), 2);
+      const d2 = m.distanceToSqr(e.x, e.y, e.z);
+      if (d2 > r * r || !m.sensing.hasLineOfSight(e)) continue;
+      if (d2 < bestD) {
+        bestD = d2;
+        best = e;
+      }
+    }
+    return best;
+  }
+  canUse(): boolean {
+    this.toAvoid = this.nearest();
+    const t = this.toAvoid;
+    if (!t) return false;
+    const pos = defaultRandomPosAway(this.mob, 16, 7, t.x, t.y, t.z);
+    if (!pos) return false;
+    const [x, y, z] = [pos[0] + 0.5, pos[1], pos[2] + 0.5];
+    if (t.distanceToSqr(x, y, z) < t.distanceToSqr(this.mob.x, this.mob.y, this.mob.z)) return false;
+    this.path = this.mob.navigation.createPath(x, y, z, 0);
+    return this.path !== null;
+  }
+  override canContinueToUse(): boolean {
+    return !this.mob.navigation.isDone();
+  }
+  override start(): void {
+    this.mob.navigation.moveToPath(this.path, this.walkSpeed);
+  }
+  override stop(): void {
+    this.toAvoid = null;
+  }
+  override tick(): void {
+    const t = this.toAvoid;
+    if (t) this.mob.navigation.speedModifier = this.mob.distanceToSqr(t.x, t.y, t.z) < 49 ? this.sprintSpeed : this.walkSpeed;
   }
 }
 
@@ -816,6 +878,50 @@ export class LeapAtTargetGoal extends Goal {
     m.dx = vx;
     m.dy = this.yd;
     m.dz = vz;
+  }
+}
+
+/**
+ * vanilla OcelotAttackGoal: after its target, creeping up from afar, dashing in over the last few blocks, and
+ * swiping once a second when it's close enough
+ */
+export class OcelotAttackGoal extends Goal {
+  private target: LivingEntity | null = null;
+  private attackTime = 0;
+  constructor(readonly mob: Mob) {
+    super();
+    this.flags = Flag.MOVE | Flag.LOOK;
+  }
+  canUse(): boolean {
+    const t = this.mob.target;
+    if (!t) return false;
+    this.target = t;
+    return true;
+  }
+  override canContinueToUse(): boolean {
+    const t = this.target;
+    if (!t || !t.isAlive || this.mob.distanceToSqr(t.x, t.y, t.z) > 225) return false;
+    return !this.mob.navigation.isDone() || this.canUse();
+  }
+  override stop(): void {
+    this.target = null;
+    this.mob.navigation.stop();
+  }
+  override requiresUpdateEveryTick(): boolean {
+    return true;
+  }
+  override tick(): void {
+    const m = this.mob, t = this.target!;
+    m.lookControl.setLookAtEntity(t, 30, 30);
+    const reach = m.width * 2 * m.width * 2;
+    const d2 = m.distanceToSqr(t.x, t.y, t.z);
+    const speed = d2 > reach && d2 < 16 ? 1.33 : d2 < 225 ? 0.6 : 0.8;
+    m.navigation.moveToEntity(t, speed);
+    this.attackTime = Math.max(this.attackTime - 1, 0);
+    if (d2 <= reach && this.attackTime <= 0) {
+      this.attackTime = 20;
+      m.doHurtTarget(t);
+    }
   }
 }
 

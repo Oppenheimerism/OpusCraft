@@ -51,6 +51,7 @@ import { MerchantMenu } from '../inventory/merchantMenu';
 import type { Villager } from '../entity/villager';
 import { hasVanishing } from '../item/enchantHelper';
 import { ChestBlockEntity, FurnaceBlockEntity, BarrelBlockEntity, BrewingStandBlockEntity } from '../world/blockEntity';
+import { catSittingOn } from '../entity/cat';
 import { useBed, findRespawn, BED_YROT, MSG, SleepHost } from './sleep';
 import { AmbientTicker } from './animateTick';
 import { ToastComponent, AdvancementToast, RecipeToast } from '../gui/toasts';
@@ -69,6 +70,8 @@ import { PortalPoi, portalRectangle, relativePortalPosition, portalExit, createP
 import { setVillageMenuHook } from './villageBlocks';
 import { setShulkerBoxMenuHook } from './shulkerBox';
 import { tickOuterEndProgress } from './outerEndProgress';
+import { setGenerateLootListener } from './archaeology';
+import { setPotCraftedListener } from './decoratedPot';
 import { openJobSite } from './jobSites';
 import { endPortalTravel, PortalArrivals } from './endTravel';
 import { EndDragonFight, ARENA_TICKET_LEVEL } from './endDragonFight';
@@ -405,6 +408,8 @@ export class Game {
     this.level.thunder = this.level.thunderO = meta.thundering ? 1 : 0;
     this.level.simulationDistance = this.opts.simulationDistance;
     this.level.gameRules = { ...DEFAULT_GAME_RULES, ...(meta.gameRules ?? {}) };
+    // (Stage 4: raids)
+    this.level.raids.load(meta.raids);
     this.worldSpawn = meta.worldSpawn ?? null;
     this.level.sound = this.sound;
     this.attachDragonFight();
@@ -417,6 +422,13 @@ export class Game {
     this.interaction.onOpenContainer = (kind, x, y, z) => this.openContainer(kind, x, y, z);
     setVillageMenuHook((kind, x, y, z) => this.openContainer(kind, x, y, z));
     setShulkerBoxMenuHook((menu) => this.containerScreenFactory && this.setScreen(this.containerScreenFactory(menu)));
+    // (the archaeology advancements: a suspicious block's loot rolled for the player, a pot made of four sherds)
+    setGenerateLootListener((p, table) => {
+      if (p === this.player) this.advancements.trigger('container_loot', { lootTable: table });
+    });
+    setPotCraftedListener((p, sides) => {
+      if (p === this.player) this.advancements.trigger('recipe_crafted', { crafted: { recipe: 'decorated_pot', ingredients: sides } });
+    });
     this.interaction.onOpenEntityContainer = (e) => this.openEntityContainer(e);
     this.interaction.onMounted = () => this.hud.setOverlayMessage(`Press ${keyDisplayName(KEYS.sneak)} to Dismount`);
     this.interaction.onUseBed = (x, y, z) => useBed(this.sleepHost(), x, y, z);
@@ -463,7 +475,7 @@ export class Game {
       blockHit: (x, y, z, s, f) => particles.blockHit(x, y, z, s, f),
       poof: (e) => particles.poof(e),
       spawn: (k, x, y, z, dx, dy, dz) => particles.spawn(k, x, y, z, dx, dy, dz),
-      emitAround: (k, e) => particles.emitAround(k, e),
+      emitAround: (k, e, life) => particles.emitAround(k, e, life),
       fallingDust: (x, y, z, c) => particles.fallingDust(x, y, z, c),
       blockParticle: (x, y, z, xd, yd, zd, st, bx, by, bz) => particles.blockParticle(x, y, z, xd, yd, zd, st, bx, by, bz),
       entityEffect: (x, y, z, c, a) => particles.entityEffect(x, y, z, c, a),
@@ -583,6 +595,8 @@ export class Game {
     m.portals = this.portalPoi.save();
     m.arrivals = this.arrivals.save();
     if (this.level.dragonFight) m.dragonFight = this.level.dragonFight.save();
+    // (Stage 4: raids)
+    m.raids = this.level.raids.save();
     const list = [];
     for (const c of this.world.chunks.values()) {
       if (!c.modified) continue;
@@ -782,8 +796,8 @@ export class Game {
     } else if (kind === 'chest') {
       const be = this.world.getBlockEntity(x, y, z);
       if (!(be instanceof ChestBlockEntity)) return;
-      // a solid block above keeps the lid shut (vanilla ChestBlock.isChestBlockedAt)
-      if (FLAGS[this.world.getState(x, y + 1, z)] & F_OPAQUE) return;
+      // a solid block above keeps the lid shut, and so does a cat sitting on it (vanilla ChestBlock.isChestBlockedAt)
+      if (FLAGS[this.world.getState(x, y + 1, z)] & F_OPAQUE || catSittingOn(this.level, x, y, z)) return;
       be.unpackLoot();
       this.setScreen(this.containerScreenFactory(new ChestMenu(p, be)));
       if (be.openCount++ === 0) this.sound.play('block.chest.open', x + 0.5, y + 0.5, z + 0.5, 0.5, Math.random() * 0.1 + 0.9);
@@ -857,10 +871,9 @@ export class Game {
     ctx.restore();
   }
 
-  /** vanilla combat tracker death messages */
-  deathMessage(source: string): string {
-    const n = this.playerName;
-    const k = this.player.killer;
+  /** vanilla combat tracker death messages (the player's, or a tame animal's for its owner) */
+  deathMessage(source: string, victim: LivingEntity = this.player, n = this.playerName): string {
+    const k = victim.killer;
     const kn = k ? entityDisplayName(k) : '';
     switch (source) {
       case 'mob':
@@ -870,15 +883,15 @@ export class Game {
       case 'player':
         return `${n} was slain by ${kn}`;
       case 'arrow':
-        return k && k !== this.player && k.type !== 'arrow' ? `${n} was shot by ${kn}` : `${n} was shot by Arrow`;
+        return k && k !== victim && k.type !== 'arrow' ? `${n} was shot by ${kn}` : `${n} was shot by Arrow`;
       case 'trident':
-        return k && k !== this.player && k.type !== 'trident' ? `${n} was impaled by ${kn}` : `${n} was impaled by Trident`;
+        return k && k !== victim && k.type !== 'trident' ? `${n} was impaled by ${kn}` : `${n} was impaled by Trident`;
       case 'explosion':
         return `${n} blew up`;
       case 'badRespawnPoint':
         return `${n} was killed by [Intentional Game Design]`;
       case 'playerExplosion':
-        return k === this.player || !k ? `${n} blew up` : `${n} was blown up by ${kn}`;
+        return k === victim || !k ? `${n} blew up` : `${n} was blown up by ${kn}`;
       case 'fall':
         return `${n} fell from a high place`;
       case 'drown':
@@ -1706,6 +1719,10 @@ export class Game {
     lvl.onBred = (child, cause) => {
       if (cause === this.player) this.advancements.trigger('breed', { breed: child.type });
     };
+    lvl.onTamed = (animal, by) => {
+      if (by === this.player) this.advancements.trigger('tame', { tame: { type: animal.type, variant: animal.variantId() } });
+    };
+    lvl.onTamedDeath = (animal, source) => this.chat(this.deathMessage(source, animal, entityDisplayName(animal)));
     lvl.onPlayerArrowHit = () => this.advancements.trigger('shoot_arrow');
     lvl.onPlayerTridentHit = () => this.advancements.trigger('throw_trident');
     lvl.onChanneledLightning = (victims) => this.advancements.trigger('channeled_lightning', { channeled: victims.map((e) => e.type) });
@@ -1716,6 +1733,8 @@ export class Game {
       if (e instanceof Piglin && e.isAdult() && stack?.item.id === 'gold_ingot') this.advancements.trigger('distract_piglin', { distract: 'directly' });
     };
     lvl.onPlayerCrossbowKill = (killed) => this.advancements.trigger('killed_by_crossbow', { crossbowKills: killed.map((e) => e.type) });
+    // (Stage 4) criteria met out in the world: shields, totems, raids
+    lvl.onPlayerTrigger = (p, type, payload) => p === this.player && this.advancements.trigger(type, payload);
     this.interaction.onShotCrossbow = () => this.advancements.trigger('shot_crossbow');
     this.interaction.onItemUsed = (hand) => this.renderer.hand.itemUsed(hand);
     this.interaction.onPlaced = (name) => this.advancements.trigger('place', { place: name });

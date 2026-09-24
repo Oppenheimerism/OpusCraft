@@ -39,6 +39,15 @@ import '../textures/biomeMobs';
 import '../textures/drowned';
 import '../textures/silverfish';
 import { silverfishModel, animateSilverfish } from './silverfishModel';
+import '../textures/wolf';
+import { wolfModel, animateWolf } from './wolfModel';
+import { Wolf } from '../entity/wolf';
+import '../textures/cat';
+import { catModel, animateCat } from './catModel';
+import { Cat } from '../entity/cat';
+import type { Ocelot } from '../entity/ocelot';
+import { AABB } from '../core/aabb';
+import { DYE_DIFFUSE } from '../entity/animals';
 import { Witch } from '../entity/witch';
 import { villagerTexture, zombieVillagerTexture } from '../textures/villager';
 import { ZombieVillager } from '../entity/zombieVillager';
@@ -55,6 +64,12 @@ import { EndCrystalRenderer } from './endCrystalRenderer';
 import { EnderDragon } from '../entity/enderDragon';
 import { DragonFireball } from '../entity/dragonFireball';
 import { EnderDragonRenderer } from './enderDragonRenderer';
+// (Stage 4: illagers)
+import { RaiderRenderers, RAIDER_SHADOW_RADII } from './illagerRenderers';
+// (Stage 5: ocean)
+import { OceanRenderers, OCEAN_SHADOW_RADII } from './oceanRenderers';
+import { Guardian } from '../entity/guardian';
+import { EvokerFangs } from '../entity/evoker';
 import type { Bat } from '../entity/bat';
 import type { Player } from '../entity/player';
 import { MOB_TEXTURES, FIRE_TEXTURES } from '../textures/mobs';
@@ -69,6 +84,8 @@ import { Shulker } from '../entity/shulker';
 import { ShulkerBullet } from '../entity/shulkerBullet';
 import { ItemFrame } from '../entity/itemFrame';
 import { ItemFrameRenderer } from './itemFrameRenderer';
+import { PistonRenderer } from './pistonRenderer';
+import { ArchaeologyRenderers } from './archaeologyRenderers';
 import { createMob } from '../game/spawner';
 import { ArmorLayer, renderHeadItem, PIGLIN_HEAD_ITEM_SCALE } from './armorLayer';
 import type { ArmorModelSet } from './armorLayer';
@@ -141,19 +158,41 @@ export class EntityRenderDispatcher {
   private readonly armor: ArmorLayer;
   /** the bell (and the other village blocks' block entity renderers) */
   private readonly village: VillageBlockRenderers;
+  /** the pistons' moving blocks */
+  private readonly pistons = new PistonRenderer();
+  /** the decorated pots, and the finds coming out of suspicious sand and gravel */
+  private readonly archaeology: ArchaeologyRenderers;
   private readonly endCrystals: EndCrystalRenderer;
   private readonly dragons: EnderDragonRenderer;
   /** shulker boxes (and the shulkers themselves) */
   private readonly shulkers: ShulkerRenderers;
   private readonly frames: ItemFrameRenderer;
+  /** (Stage 4: illagers) the pillager, vindicator, evoker, vex, ravager and the evoker's fangs */
+  private readonly raiders: RaiderRenderers;
+  /** (Stage 5: ocean) the guardians, their lasers, the elder's ghostly face */
+  private readonly ocean: OceanRenderers;
 
   constructor(private readonly gl: GL, private readonly items: ItemRenderer, private readonly skin: WebGLTexture) {
     this.armor = new ArmorLayer(gl);
     this.village = new VillageBlockRenderers(gl);
     this.shulkers = new ShulkerRenderers(gl);
     this.frames = new ItemFrameRenderer(gl, items);
+    this.archaeology = new ArchaeologyRenderers(gl);
     this.endCrystals = new EndCrystalRenderer(gl);
     this.dragons = new EnderDragonRenderer(gl, this.endCrystals.beam);
+    // (Stage 4: illagers) lent this dispatcher's living-renderer steps
+    this.raiders = new RaiderRenderers({
+      pose: this.pose,
+      items,
+      tex: (n) => this.tex(n),
+      setupLiving: (e, dx, dy, dz, p, flip, scale) => this.setupLiving(e, dx, dy, dz, p, flip, scale),
+      overlay: (b, e, white) => this.overlay(b, e, white),
+      drawBody: (b, e, def, t, baby, extra) => this.drawBody(b, e, def, t, baby, extra),
+      state: (t, extra) => this.state(t, extra),
+      attackAnim,
+    });
+    // (Stage 5: ocean) lent the same steps
+    this.ocean = new OceanRenderers(gl, this.raiders.kit);
     this.models = {
       pig: M.pigModel(),
       pig_saddle: M.pigModel(0.5),
@@ -192,6 +231,10 @@ export class EntityRenderDispatcher {
       drowned: M.drownedModel(),
       drowned_outer: M.drownedModel(0.25),
       silverfish: silverfishModel(),
+      wolf: wolfModel(),
+      cat: catModel(),
+      cat_collar: catModel(0.01),
+      ocelot: catModel(),
     };
     // vanilla textures/misc/shadow.png: soft black disc
     const n = 32, data = new Uint8Array(n * n * 4);
@@ -291,9 +334,11 @@ export class EntityRenderDispatcher {
       const maxD = size * 64 * opts.distanceScale;
       // (vanilla EndCrystalRenderer.shouldRender: a crystal with a beam is always drawn; the dragon is never culled)
       const beam = e instanceof EndCrystal && e.beamTarget !== null;
-      if (d2 >= maxD * maxD && !beam) continue;
+      // (Stage 5: ocean) vanilla GuardianRenderer.shouldRender: so is a guardian with its laser on
+      const laser = e instanceof Guardian && e.activeAttackTarget() !== null;
+      if (d2 >= maxD * maxD && !beam && !laser) continue;
       const hw = (bb.maxX - bb.minX) / 2 + 0.5, h = bb.maxY - bb.minY + 0.5;
-      if (!beam && !(e instanceof EnderDragon) && !frustum.testBox(dx - hw, dy - 0.5, dz - hw, dx + hw, dy + h, dz + hw)) continue;
+      if (!beam && !laser && !(e instanceof EnderDragon) && !frustum.testBox(dx - hw, dy - 0.5, dz - hw, dx + hw, dy + h, dz + hw)) continue;
       this.renderEntity(b, level, e, x, y, z, dx, dy, dz, partial, cam);
       drawn++;
       if (opts.shadows && !(e instanceof LivingEntity && e.isInvisible())) {
@@ -320,9 +365,13 @@ export class EntityRenderDispatcher {
     this.renderEnchantingBooks(b, level, cam, partial, frustum);
     this.village.render(b, level, cam, partial, frustum);
     this.shulkers.renderBlockEntities(b, level, cam, partial, frustum);
+    this.pistons.render(b, this.items, level, cam, partial, frustum);
+    this.archaeology.render(b, this.items, level, cam, partial, frustum);
     b.setOverlay(0, 0, 0, 0);
     b.flush();
     if (this.shadows.length) this.renderShadows(b, level, cam);
+    // (Stage 5: ocean) the elder guardian's ghostly face, over everything
+    this.ocean.renderAppearance(b, level, cam, partial);
   }
 
   /** vanilla ItemPickupParticle: `e` (a copy, for a dropped item) flies to `target` over the next three ticks */
@@ -403,8 +452,8 @@ export class EntityRenderDispatcher {
   private setLight(b: EntityBatch, level: Level, e: Entity, x: number, y: number, z: number): void {
     const l = level.world.getLight(Math.floor(x), Math.floor(y + e.eyeHeight), Math.floor(z));
     b.lightS = (l >> 4) * 16;
-    // (vanilla MagmaCubeRenderer and BlazeRenderer.getBlockLightLevel: they glow by their own light)
-    b.lightB = (e.isOnFire() || e instanceof MagmaCube || e instanceof Blaze ? 15 : l & 15) * 16;
+    // (vanilla MagmaCubeRenderer and BlazeRenderer.getBlockLightLevel: they glow by their own light; Stage 4: VexRenderer too)
+    b.lightB = (e.isOnFire() || e instanceof MagmaCube || e instanceof Blaze || e.type === 'vex' ? 15 : l & 15) * 16;
   }
 
   private renderEntity(b: EntityBatch, level: Level, e: Entity, x: number, y: number, z: number, dx: number, dy: number, dz: number, p: number, cam: Camera): void {
@@ -428,6 +477,7 @@ export class EntityRenderDispatcher {
     else if (e instanceof AbstractMinecart) this.renderMinecart(b, e, x, y, z, dx, dy, dz, p);
     else if (e instanceof Boat) this.renderBoat(b, e, dx, dy, dz, p);
     else if (e instanceof EndCrystal) this.endCrystals.render(b, this.pose, e, dx, dy, dz, p);
+    else if (e instanceof EvokerFangs) this.raiders.renderFangs(b, e, dx, dy, dz, p); // (Stage 4: illagers)
     // (at the renderer's offset: a crouching player's flames sink with it)
     if (e.isOnFire() && !(e instanceof ItemEntity) && !(e instanceof ExperienceOrb)) this.renderFlame(b, e, dx, dy + renderOffsetY(e), dz, cam.yaw, level.gameTime);
   }
@@ -478,6 +528,17 @@ export class EntityRenderDispatcher {
       // (vanilla: whirling in a riptide, laid along the look and spun about it)
       pose.rotX(-90 - e.pitch);
       pose.rotY((e.tickCount + p) * -75);
+    }
+    // vanilla CatRenderer.setupRotations: lying down, it rolls onto its side (a touch further over by a sleeper)
+    if (e instanceof Cat) {
+      const j = e.lieDown(p);
+      if (j > 0) {
+        pose.translate(0.4 * j, 0.15 * j, 0.1 * j);
+        pose.rotZ(90 * j);
+        const bx = Math.floor(e.x), by = Math.floor(e.y), bz = Math.floor(e.z);
+        const pl = e.level.player;
+        if (pl?.isSleeping() && pl.bb.intersects(new AABB(bx - 2, by - 2, bz - 2, bx + 3, by + 3, bz + 3))) pose.translate(0.15 * j, 0, 0);
+      }
     }
     // vanilla DrownedRenderer.setupRotations: swimming, it leans into its look, about the middle of its body
     if (e.type === 'drowned') {
@@ -536,11 +597,15 @@ export class EntityRenderDispatcher {
   }
 
   private renderMob(b: EntityBatch, e: Mob, dx: number, dy: number, dz: number, p: number): void {
+    // (Stage 4: illagers) the raiders have their own renderers
+    if (this.raiders.render(b, e, dx, dy, dz, p)) return;
+    // (Stage 5: ocean)
+    if (this.ocean.render(b, e, dx, dy, dz, p)) return;
     const type = e.type;
     const def = this.models[type];
     // (vanilla GhastRenderer.getTextureLocation: its face while charging a shot)
     // (vanilla StriderRenderer.getTextureLocation: purple while it's cold)
-    const tex = e instanceof Villager ? this.villagerTex(e) : e instanceof ZombieVillager ? this.zombieVillagerTex(e) : this.tex(e instanceof Ghast && e.charging ? 'ghast_shooting' : e instanceof Strider && e.suffocating ? 'strider_cold' : type);
+    const tex = e instanceof Villager ? this.villagerTex(e) : e instanceof ZombieVillager ? this.zombieVillagerTex(e) : this.tex(e instanceof Ghast && e.charging ? 'ghast_shooting' : e instanceof Strider && e.suffocating ? 'strider_cold' : e instanceof Wolf || e instanceof Cat ? e.texture() : type);
     if (!def || !tex) return;
     const baby = e.isBaby();
     let white = 0;
@@ -587,6 +652,8 @@ export class EntityRenderDispatcher {
     if (type === 'wither_skeleton') scale = (pose) => pose.scale(1.2, 1.2, 1.2);
     // vanilla StriderRenderer.scale: a baby is the whole model at half size
     if (type === 'strider' && baby) scale = (pose) => pose.scale(0.5, 0.5, 0.5);
+    // vanilla CatRenderer.scale
+    if (type === 'cat') scale = (pose) => pose.scale(0.8, 0.8, 0.8);
     // vanilla HuskRenderer.scale: 17/16
     if (type === 'husk') scale = (pose) => pose.scale(1.0625, 1.0625, 1.0625);
     // vanilla WitchRenderer.scale: 15/16
@@ -702,6 +769,31 @@ export class EntityRenderDispatcher {
       case 'silverfish':
         animateSilverfish(def.root, a.age);
         break;
+      case 'wolf': {
+        const w = e as Wolf;
+        animateWolf(def.root, {
+          limbSwing: a.limbSwing, limbAmount: a.limbAmount, headYaw: a.headYaw, headPitch: a.headPitch,
+          angry: w.isAngry(), sitting: w.inSittingPose, tailAngle: w.tailAngle(), headRoll: w.headRollAngle(p), bodyRoll: (o) => w.bodyRollAngle(p, o),
+        });
+        break;
+      }
+      case 'cat': {
+        const c = e as Cat;
+        animateCat(def.root, {
+          limbSwing: a.limbSwing, limbAmount: a.limbAmount, headYaw: a.headYaw, headPitch: a.headPitch,
+          crouching: c.crouching, sprinting: c.sprinting, sitting: c.inSittingPose, lieDown: c.lieDown(p), lieDownTail: c.lieDownTail(p), relaxStateOne: c.relaxStateOneAt(p),
+        });
+        break;
+      }
+      // (vanilla OcelotModel alone: it never sits or lies down)
+      case 'ocelot': {
+        const o = e as Ocelot;
+        animateCat(def.root, {
+          limbSwing: a.limbSwing, limbAmount: a.limbAmount, headYaw: a.headYaw, headPitch: a.headPitch,
+          crouching: o.crouching, sprinting: o.sprinting, sitting: false, lieDown: 0, lieDownTail: 0, relaxStateOne: 0,
+        });
+        break;
+      }
       case 'bat': {
         // vanilla AnimationState: seconds since each loop started (a tick is 50 ms)
         const bat = e as Bat;
@@ -712,7 +804,8 @@ export class EntityRenderDispatcher {
     }
     this.overlay(b, e, white);
     // vanilla BatModel renders entityCutout (culled: its flat wings have a front and a back side)
-    this.drawBody(b, e, def, tex, baby, type === 'bat' ? { cull: true } : undefined);
+    // (vanilla WolfRenderer.render: a wet wolf's coat is darker)
+    this.drawBody(b, e, def, tex, baby, type === 'bat' ? { cull: true } : undefined, e instanceof Wolf && e.wet ? e.wetShade(p) : 1);
     // vanilla SaddleLayer: the saddle texture over the same model (the pig's a half pixel bigger all round)
     if (e instanceof Strider && e.saddled && !e.isInvisible()) {
       const st = this.tex('strider_saddle');
@@ -737,6 +830,25 @@ export class EntityRenderDispatcher {
         const [r, g, bl] = sheepFurColor(e.color);
         b.begin(this.state(ft));
         this.drawModel(b, fur, baby, r, g, bl);
+      }
+    }
+    // vanilla WolfCollarLayer: a tame wolf's collar in its dye colour
+    if (e instanceof Wolf && e.isTame() && !e.isInvisible()) {
+      const ct = this.tex('wolf_collar');
+      if (ct) {
+        const c = DYE_DIFFUSE[e.collarColor];
+        b.begin(this.state(ct));
+        this.drawModel(b, def, baby, ((c >> 16) & 255) / 255, ((c >> 8) & 255) / 255, (c & 255) / 255);
+      }
+    }
+    // vanilla CatCollarLayer: a tame cat's collar in its dye colour, on a hair-bigger copy of the model
+    if (e instanceof Cat && e.isTame() && !e.isInvisible()) {
+      const cm = this.models.cat_collar, ct = this.tex('cat_collar');
+      if (cm && ct) {
+        const c = DYE_DIFFUSE[e.collarColor];
+        copyPose(def.root, cm.root);
+        b.begin(this.state(ct));
+        this.drawModel(b, cm, baby, ((c >> 16) & 255) / 255, ((c >> 8) & 255) / 255, (c & 255) / 255);
       }
     }
     // vanilla SkeletonClothingLayer: the stray's rags over its bones, posed as they are
@@ -827,13 +939,13 @@ export class EntityRenderDispatcher {
    * vanilla LivingEntityRenderer body pass: invisible entities skip it (their layers still draw), and a
    * spectator sees them at 15% opacity
    */
-  private drawBody(b: EntityBatch, e: LivingEntity, def: MobModelDef, tex: WebGLTexture, baby: boolean, extra?: Partial<DrawState>): void {
+  private drawBody(b: EntityBatch, e: LivingEntity, def: MobModelDef, tex: WebGLTexture, baby: boolean, extra?: Partial<DrawState>, shade = 1): void {
     if (!e.isInvisible()) {
       b.begin(this.state(tex, extra));
-      this.drawModel(b, def, baby);
+      this.drawModel(b, def, baby, shade, shade, shade);
     } else if (e.level.player?.gameMode === 'spectator') {
       b.begin(this.state(tex, { blend: true, cutoff: 0.01, depthWrite: false }));
-      this.drawModel(b, def, baby, 1, 1, 1, 38 / 255);
+      this.drawModel(b, def, baby, shade, shade, shade, 38 / 255);
       b.flush();
     }
   }
@@ -1435,6 +1547,10 @@ function shakeYaw(e: LivingEntity): number {
 
 /** vanilla renderer shadow radii (babies half) */
 function shadowRadius(e: Entity): number {
+  // (Stage 4: illagers)
+  if (RAIDER_SHADOW_RADII[e.type] !== undefined) return RAIDER_SHADOW_RADII[e.type];
+  // (Stage 5: ocean)
+  if (OCEAN_SHADOW_RADII[e.type] !== undefined) return OCEAN_SHADOW_RADII[e.type];
   let r = 0;
   switch (e.type) {
     case 'pig':
@@ -1463,6 +1579,11 @@ function shadowRadius(e: Entity): number {
     case 'zoglin':
       r = 0.7;
       break;
+    case 'cat':
+    case 'ocelot':
+      r = 0.4;
+      break;
+    case 'wolf':
     case 'strider':
     case 'villager':
     case 'end_crystal':

@@ -70,7 +70,10 @@ function searchText(s: ItemStack): string {
 }
 
 /** vanilla CreativeModeTabs.REDSTONE_BLOCKS, in its order (as far as the game has them) */
-const REDSTONE_ORDER = ['redstone', 'redstone_block', 'lever', 'oak_button', 'stone_button', 'oak_pressure_plate', 'stone_pressure_plate', 'light_weighted_pressure_plate', 'heavy_weighted_pressure_plate', 'tnt', 'redstone_lamp'];
+const REDSTONE_ORDER = [
+  'redstone', 'redstone_torch', 'redstone_block', 'repeater', 'lever', 'oak_button', 'stone_button', 'oak_pressure_plate', 'stone_pressure_plate', 'light_weighted_pressure_plate',
+  'heavy_weighted_pressure_plate', 'tripwire_hook', 'piston', 'sticky_piston', 'dispenser', 'dropper', 'tnt', 'redstone_lamp',
+];
 const REDSTONE = new Set(REDSTONE_ORDER);
 const FUNCTIONAL = new Set(['oak_sign', 'painting', 'item_frame', 'red_bed', 'jack_o_lantern', 'carved_pumpkin']);
 const DYE_ORDER = ['white', 'light_gray', 'gray', 'black', 'brown', 'red', 'orange', 'yellow', 'lime', 'green', 'cyan', 'light_blue', 'blue', 'purple', 'magenta', 'pink'];
@@ -143,6 +146,8 @@ function tabs(): Tab[] {
   byId.get('redstone_blocks')!.items.sort((a, b) => REDSTONE_ORDER.indexOf(a.id) - REDSTONE_ORDER.indexOf(b.id));
   const rank = (it: Item) => (FUNCTIONAL_ORDER.includes(it.id) ? FUNCTIONAL_ORDER.indexOf(it.id) : FUNCTIONAL_ORDER.length);
   byId.get('functional_blocks')!.items.sort((a, b) => rank(a) - rank(b));
+  // (Stage 4) vanilla CreativeModeTabs.SPAWN_EGGS: by name, wherever the eggs were registered
+  byId.get('spawn_eggs')!.items.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   byId.get('ingredients')!.extra = enchantedBooks(false);
   byId.get('search')!.items = listed;
   TABS = t;

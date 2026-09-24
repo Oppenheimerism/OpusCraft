@@ -10,11 +10,15 @@ import {
 import { registerExtraBlocks } from './blocksExtra';
 import { registerEnchantingBlocks } from './blocksEnchanting';
 import { registerRedstoneBlocks } from './blocksRedstone';
+import { registerRedstoneComponents } from './blocksRedstoneComponents';
+import { registerArchaeologyBlocks } from './blocksArchaeology';
 import { registerVillageBlocks } from './blocksVillage';
 import { registerEndBlocks } from './blocksEnd';
 import { registerBannerBlocks } from './blocksBanners';
 import { registerInfestedBlocks } from './blocksInfested';
 import { registerOuterEndBlocks } from './blocksOuterEnd';
+// (Stage 5: ocean)
+import { registerOceanBlocks } from './blocksOcean';
 
 const px = (v: number) => v / 16;
 const bx = (x0: number, y0: number, z0: number, x1: number, y1: number, z1: number): Box => [px(x0), px(y0), px(z0), px(x1), px(y1), px(z1)];
@@ -531,6 +535,10 @@ const SLAB_MATERIALS: [string, string, string, string, string, number, number?][
   ['cut_sandstone', 'sandstone_top', 'sandstone_top', 'cut_sandstone', 'stone', 0.8],
   ['end_stone_brick', 'end_stone_bricks', 'end_stone_bricks', 'end_stone_bricks', 'stone', 3, 9],
   ['purpur', 'purpur_block', 'purpur_block', 'purpur_block', 'stone', 1.5],
+  // (Stage 5: ocean)
+  ['prismarine', 'prismarine', 'prismarine', 'prismarine', 'stone', 1.5],
+  ['prismarine_brick', 'prismarine_bricks', 'prismarine_bricks', 'prismarine_bricks', 'stone', 1.5],
+  ['dark_prismarine', 'dark_prismarine', 'dark_prismarine', 'dark_prismarine', 'stone', 1.5],
 ];
 /** materials with a slab but no stairs in vanilla */
 const SLAB_ONLY = new Set(['smooth_stone', 'cut_sandstone']);
@@ -616,11 +624,15 @@ registerBlock('magma_block', { hardness: 0.5, sound: 'stone', tool: 'pickaxe', r
 registerExtraBlocks();
 registerEnchantingBlocks();
 registerRedstoneBlocks();
+registerRedstoneComponents();
+registerArchaeologyBlocks();
 registerVillageBlocks();
 registerEndBlocks();
 registerBannerBlocks();
 registerInfestedBlocks();
 registerOuterEndBlocks();
+// (Stage 5: ocean)
+registerOceanBlocks();
 
 finalizeBlocks();
 

@@ -5,6 +5,8 @@ export type GameRules = Record<string, boolean | number>;
 export const DEFAULT_GAME_RULES: GameRules = {
   announceAdvancements: true,
   commandBlockOutput: true,
+  // (Stage 4: raids)
+  disableRaids: false,
   doDaylightCycle: true,
   doEntityDrops: true,
   doFireTick: true,
@@ -29,6 +31,7 @@ export const DEFAULT_GAME_RULES: GameRules = {
   playersNetherPortalCreativeDelay: 1,
   playersNetherPortalDefaultDelay: 80,
   playersSleepingPercentage: 100,
+  projectilesCanBreakBlocks: true,
   randomTickSpeed: 3,
   sendCommandFeedback: true,
   showDeathMessages: true,

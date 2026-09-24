@@ -1,7 +1,8 @@
 // Base entity with vanilla-style movement/collision.
 
 import { AABB, collideWithBoxes } from '../core/aabb';
-import { COLLISION, FLAGS, F_WATER, F_LAVA, BLOCKS, STATE_BLOCK, F_CLIMBABLE } from '../world/block';
+import { COLLISION, FLAGS, F_WATER, F_LAVA, BLOCKS, STATE_BLOCK, F_CLIMBABLE, type Box } from '../world/block';
+import type { World } from '../world/world';
 import { DYNAMIC_SHAPE, dynamicCollision } from '../world/dynamicShapes';
 import { fluidType, fluidHeight, fluidFlow, FLUID_WATER, FLUID_LAVA, FLUID_NONE } from '../world/fluids';
 import type { Level } from '../game/level';
@@ -23,6 +24,12 @@ export type PortalKind = 'nether' | 'end' | 'end_gateway';
 
 /** vanilla LiquidBlock.STABLE_SHAPE's top: the half-block floor a lava-walker finds on still lava */
 const LAVA_FLOOR = 0.5;
+
+/**
+ * blocks whose collision comes from more than their state (by block id): a moving piston's is its block entity's
+ * moving block (game/redstone/piston.ts); null for none
+ */
+export const DYNAMIC_COLLISION: ((world: World, x: number, y: number, z: number, st: number) => Box[] | null)[] = [];
 
 /** a lava source (vanilla LiquidBlock LEVEL 0), the one kind of lava that bears a strider */
 function isLavaSource(st: number): boolean {
@@ -78,6 +85,8 @@ export abstract class Entity {
   fluidHeightWater = 0;
   fluidHeightLava = 0;
   noPhysics = false;
+  /** a piston is moving it (vanilla MoverType.PISTON, game/redstone/piston.ts): it doesn't back off an edge meanwhile */
+  pistonMoving = false;
   removed = false;
   tickCount = 0;
   stepHeight = 0;
@@ -455,7 +464,7 @@ export abstract class Entity {
             continue;
           }
           // (a shulker box's shape grows with its lid: world/dynamicShapes)
-          const boxes = DYNAMIC_SHAPE[st] ? dynamicCollision(world, x, y, z, st) : COLLISION[st];
+          const boxes = DYNAMIC_SHAPE[st] ? dynamicCollision(world, x, y, z, st) : COLLISION[st] ?? DYNAMIC_COLLISION[STATE_BLOCK[st]]?.(world, x, y, z, st);
           if (!boxes) continue;
           for (const c of boxes) {
             const b = new AABB(x + c[0], y + c[1], z + c[2], x + c[3], y + c[4], z + c[5]);
@@ -683,7 +692,7 @@ export abstract class Entity {
   }
 
   private maybeBackOffFromEdge(mx: number, my: number, mz: number): [number, number] {
-    if (!this.isSneakingForEdges() || my > 0 || !(this.onGround || this.fallDistance < this.stepHeight)) return [mx, mz];
+    if (this.pistonMoving || !this.isSneakingForEdges() || my > 0 || !(this.onGround || this.fallDistance < this.stepHeight)) return [mx, mz];
     const step = this.stepHeight;
     const test = (x: number, z: number) => this.collisionBoxes(this.bb.move(x, -step, z)).length === 0;
     while (mx !== 0 && test(mx, 0)) {

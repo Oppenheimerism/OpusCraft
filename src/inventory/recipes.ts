@@ -153,7 +153,8 @@ for (const [m, x] of ARMOR_MATS) {
   shaped(`${m}_boots`, 1, ['X X', 'X X'], { X: x });
 }
 shaped('bow', 1, [' #X', '# X', ' #X'], { '#': 'stick', X: 'string' });
-// vanilla crossbow ['#&#', '~$~', ' # ']: # stick, & iron ingot, ~ string, $ tripwire hook — left out, no tripwire hook yet
+shaped('shield', 1, ['WoW', 'WWW', ' W '], { W: '#planks', o: 'iron_ingot' });
+shaped('crossbow', 1, ['#&#', '~$~', ' # '], { '#': 'stick', '&': 'iron_ingot', '~': 'string', $: 'tripwire_hook' });
 shaped('arrow', 4, ['X', '#', 'Y'], { X: 'flint', '#': 'stick', Y: 'feather' });
 shaped('bucket', 1, ['# #', ' # '], { '#': 'iron_ingot' });
 shaped('shears', 1, [' #', '# '], { '#': 'iron_ingot' });
@@ -181,6 +182,16 @@ shaped('polished_blackstone_pressure_plate', 1, ['##'], { '#': 'polished_blackst
 shaped('light_weighted_pressure_plate', 1, ['##'], { '#': 'gold_ingot' });
 shaped('heavy_weighted_pressure_plate', 1, ['##'], { '#': 'iron_ingot' });
 shaped('redstone_lamp', 1, [' R ', 'RGR', ' R '], { R: 'redstone', G: 'glowstone' });
+shaped('redstone_torch', 1, ['X', '#'], { X: 'redstone', '#': 'stick' });
+shaped('repeater', 1, ['#X#', 'III'], { '#': 'redstone_torch', X: 'redstone', I: 'stone' });
+shaped('tripwire_hook', 2, ['I', 'S', '#'], { I: 'iron_ingot', S: 'stick', '#': '#planks' });
+shaped('dispenser', 1, ['###', '#X#', '#R#'], { '#': 'cobblestone', X: 'bow', R: 'redstone' });
+shaped('dropper', 1, ['###', '# #', '#R#'], { '#': 'cobblestone', R: 'redstone' });
+shaped('piston', 1, ['TTT', '#X#', '#R#'], { T: '#planks', '#': '#stone_crafting_materials', X: 'iron_ingot', R: 'redstone' });
+shaped('sticky_piston', 1, ['S', 'P'], { S: 'slime_ball', P: 'piston' });
+// archaeology (a decorated pot of sherds is a special recipe: game/decoratedPot.ts)
+shaped('brush', 1, ['X', '#', 'I'], { X: 'feather', '#': 'copper_ingot', I: 'stick' });
+shaped('decorated_pot', 1, [' # ', '# #', ' # '], { '#': 'brick' });
 shaped('glass_bottle', 3, ['# #', ' # '], { '#': 'glass' });
 shaped('lead', 2, ['~~ ', '~O ', '  ~'], { '~': 'string', O: 'slime_ball' });
 shaped('magma_block', 1, ['##', '##'], { '#': 'magma_cream' });
@@ -201,6 +212,7 @@ shapeless('mushroom_stew', 1, 'brown_mushroom', 'red_mushroom', 'bowl');
 shapeless('sugar', 1, 'sugar_cane');
 shaped('paper', 3, ['###'], { '#': 'sugar_cane' });
 shapeless('book', 1, 'paper', 'paper', 'paper', 'leather');
+shaped('leather', 1, ['##', '##'], { '#': 'rabbit_hide' });
 
 // ---------------------------------------------------------------------------
 // Storage blocks and nuggets
@@ -302,6 +314,8 @@ const SLABS: [string, string][] = [
   ['polished_blackstone', 'polished_blackstone'],
   ['polished_blackstone_brick', 'polished_blackstone_bricks'],
   ['end_stone_brick', 'end_stone_bricks'],
+  // (Stage 5: ocean)
+  ['prismarine', 'prismarine'], ['prismarine_brick', 'prismarine_bricks'], ['dark_prismarine', 'dark_prismarine'],
 ];
 for (const [n, mat] of SLABS) {
   shaped(`${n}_slab`, 6, ['###'], { '#': mat });
@@ -316,6 +330,8 @@ for (const [wall, mat] of [
   ['nether_brick_wall', 'nether_bricks'], ['red_nether_brick_wall', 'red_nether_bricks'],
   ['blackstone_wall', 'blackstone'], ['polished_blackstone_wall', 'polished_blackstone'], ['polished_blackstone_brick_wall', 'polished_blackstone_bricks'],
   ['end_stone_brick_wall', 'end_stone_bricks'],
+  // (Stage 5: ocean)
+  ['prismarine_wall', 'prismarine'],
 ]) shaped(wall, 6, ['###', '###'], { '#': mat });
 // doors, trapdoors, fences, gates
 for (const w of WOODS) {
@@ -383,6 +399,12 @@ shapeless('purple_dye', 2, 'blue_dye', 'red_dye');
 shapeless('magenta_dye', 2, 'purple_dye', 'pink_dye');
 shapeless('magenta_dye', 3, 'blue_dye', 'red_dye', 'pink_dye');
 shapeless('magenta_dye', 4, 'blue_dye', 'red_dye', 'red_dye', 'white_dye');
+
+// (Stage 5: ocean) the prismarines from their shards (the dark one dyed black), and the sea lantern
+shaped('prismarine', 1, ['SS', 'SS'], { S: 'prismarine_shard' });
+shaped('prismarine_bricks', 1, ['SSS', 'SSS', 'SSS'], { S: 'prismarine_shard' });
+shaped('dark_prismarine', 1, ['SSS', 'SIS', 'SSS'], { S: 'prismarine_shard', I: 'black_dye' });
+shaped('sea_lantern', 1, ['SCS', 'CCC', 'SCS'], { S: 'prismarine_shard', C: 'prismarine_crystals' });
 
 // drop recipes whose items don't exist in this game
 for (let i = RECIPES.length - 1; i >= 0; i--) {
@@ -489,6 +511,8 @@ smelt(['clay'], 'terracotta', 0.35);
 smelt(['cactus'], 'green_dye', 1.0);
 smelt(['potato'], 'baked_potato', 0.35);
 for (const m of ['beef', 'porkchop', 'chicken', 'mutton', 'cod', 'salmon']) smelt([m], `cooked_${m}`, 0.35);
+// (Stage 5: ocean) vanilla wet_sponge smelting: dried out (and a bucket in the fuel slot is filled: world/blockEntity.ts)
+smelt(['wet_sponge'], 'sponge', 0.15);
 
 export function smeltingResult(s: ItemStack | null): Smelt | null {
   return s ? SMELT.get(s.item.id) ?? null : null;

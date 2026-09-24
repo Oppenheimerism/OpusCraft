@@ -111,6 +111,8 @@ const isDigger = (it: Item) => it.tool?.type === 'pickaxe' || it.tool?.type === 
 export interface SpawnGroup {
   /** vanilla AgeableMob.AgeableMobGroupData: members so far, and the odds each after the first is a baby */
   ageable?: { size: number; babyChance: number };
+  /** vanilla Wolf.WolfPackData: the coat the pack shares */
+  wolfVariant?: string;
 }
 
 export abstract class Mob extends LivingEntity {
@@ -244,9 +246,9 @@ export abstract class Mob extends LivingEntity {
     this.baseAttackDamage = v;
   }
 
-  /** MOVEMENT_SPEED attribute value: assign the base, read it with speed / slowness applied */
+  /** MOVEMENT_SPEED attribute value: assign the base, read it with speed / slowness (and a sprint's +30%) applied */
   get moveSpeedAttr(): number {
-    return Math.max(0, this.baseMoveSpeed * this.speedEffectFactor());
+    return Math.max(0, this.baseMoveSpeed * (this.sprinting ? 1.3 : 1) * this.speedEffectFactor());
   }
   set moveSpeedAttr(v: number) {
     this.baseMoveSpeed = v;
@@ -917,6 +919,11 @@ export abstract class Mob extends LivingEntity {
   /** vanilla Mob.checkSpawnRules: walk target value must be non-negative */
   checkSpawnRules(): boolean {
     return this.walkTargetValue(Math.floor(this.x), Math.floor(this.y), Math.floor(this.z)) >= 0;
+  }
+
+  /** vanilla getMaxSpawnClusterSize: how many one spawning pass may bring at once */
+  maxSpawnClusterSize(): number {
+    return 4;
   }
 
   /** vanilla checkSpawnObstruction: no liquid inside and no collision */

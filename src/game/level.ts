@@ -34,6 +34,7 @@ import { AABB } from '../core/aabb';
 import type { DimensionType } from '../world/dimension';
 import { NetherGenerator } from '../world/gen/nether';
 import { villageLocator, type Villages } from '../world/gen/villages';
+import type { TamableAnimal } from '../entity/tamable';
 import { strongholdLocator, type Strongholds } from '../world/gen/stronghold';
 import type { NetherFortresses } from '../world/gen/fortress';
 import type { EndDragonFight } from './endDragonFight';
@@ -45,11 +46,20 @@ import './redstone/components';
 import './villageBlocks';
 import './banners';
 import './maps';
+// (Stage 4: the shield, raising it and decorating it; advancements met out in the world)
+import './shields';
+import type { Criterion, TriggerPayload } from './advancements';
 import './endPortal';
 import './infestedBlocks';
 import './golems';
 import './potionItems';
 import './potionEffects';
+// (Stage 4: raids)
+import { Raids } from './raids';
+// (Stage 5: ocean)
+import './ocean';
+// (temples)
+import './archaeology';
 
 export interface SoundSink {
   play(name: string, x: number, y: number, z: number, volume?: number, pitch?: number): void;
@@ -64,7 +74,7 @@ export interface ParticleSink {
   /** generic sprite particle by vanilla particle type name */
   spawn?(kind: string, x: number, y: number, z: number, dx: number, dy: number, dz: number): void;
   /** vanilla TrackingEmitter (crit sparks around an entity) */
-  emitAround?(kind: 'crit' | 'enchanted_hit', e: Entity): void;
+  emitAround?(kind: 'crit' | 'enchanted_hit' | 'totem_of_undying', e: Entity, lifetime?: number): void;
   /** vanilla FallingDustParticle tinted with a block's dust colour */
   fallingDust?(x: number, y: number, z: number, color: number): void;
   /** vanilla BLOCK particle (TerrainParticle with a starting speed) for the block at bx, by, bz */
@@ -85,6 +95,8 @@ export const UPDATE_CLIENTS = 2;
 export const UPDATE_KNOWN_SHAPE = 16;
 /** vanilla Block.UPDATE_ALL */
 export const UPDATE_ALL = UPDATE_NEIGHBORS | UPDATE_CLIENTS;
+/** vanilla Block.UPDATE_MOVE_BY_PISTON: onRemove and onPlace hear that a piston is moving the block (isMoving) */
+export const UPDATE_MOVE_BY_PISTON = 64;
 
 /**
  * a vanilla chunk ticket besides the player's and the dragon fight's (an end gateway's way out, the far side of one):
@@ -134,6 +146,10 @@ export class Level {
   readonly randomTicks: RandomTicker;
   /** scheduled block ticks (vanilla LevelTicks) */
   private readonly blockTicks = new LevelTicks();
+  /** vanilla ServerLevel.blockEvents: block events waiting for this tick's turn (a piston's push or pull), in order, once each */
+  private readonly blockEvents = new Map<string, [number, number, number, number, number, number]>();
+  /** vanilla ServerLevel.handlingTick: in the scheduled ticks and block events of a tick */
+  handlingTick = false;
   /** vanilla Level.neighborUpdater */
   private readonly neighborUpdater = new NeighborUpdater({
     runNeighborChanged: (x, y, z, source, fx, fy, fz, moving) => {
@@ -147,6 +163,8 @@ export class Level {
   readonly poi: PoiManager;
   /** vanilla ServerLevel.dragonFight: the End's (game/endDragonFight.ts), null elsewhere */
   dragonFight: EndDragonFight | null = null;
+  /** (Stage 4: raids) vanilla ServerLevel.raids (game/raids.ts) */
+  readonly raids: Raids = new Raids(this);
   /** chunk tickets by name (the game keeps what they name loaded) */
   readonly tickets = new Map<string, ChunkTicket>();
   /**
@@ -395,6 +413,10 @@ export class Level {
   onEntityDied: ((victim: LivingEntity, source: string, attacker: Entity | null) => void) | null = null;
   /** animals bred (the child, and who fed them) */
   onBred: ((child: Entity, cause: Entity | null) => void) | null = null;
+  /** a player tamed an animal (vanilla CriteriaTriggers.TAME_ANIMAL) */
+  onTamed: ((animal: TamableAnimal, by: Entity) => void) | null = null;
+  /** a tame animal died; its owner is told how (vanilla TamableAnimal.die) */
+  onTamedDeath: ((animal: TamableAnimal, source: string) => void) | null = null;
   /** an arrow the player shot hurt something (vanilla "Take Aim") */
   onPlayerArrowHit: ((target: Entity) => void) | null = null;
   /** a trident the player threw hurt something (vanilla "A Throwaway Joke") */
@@ -415,6 +437,8 @@ export class Level {
   onCuredZombieVillager: ((p: Player, v: Villager) => void) | null = null;
   /** a golem someone built came to life (vanilla CarvedPumpkinBlock.spawnGolemInWorld: summoned_entity) */
   onSummonedEntity: ((e: Entity) => void) | null = null;
+  /** (Stage 4) a player's advancement criterion met out in the world: a shield's block, a totem, a raid (vanilla CriteriaTriggers.*.trigger) */
+  onPlayerTrigger: ((p: Player, type: Criterion['t'], payload?: TriggerPayload) => void) | null = null;
 
   /**
    * vanilla LevelRenderer.destructionProgress: the cracks shown on blocks something other than the player is breaking
@@ -449,6 +473,8 @@ export class Level {
     else this.tickWeatherLevels();
     tickSleeping(this);
     this.updateSkyBrightness();
+    // (Stage 4: raids) vanilla ServerLevel.tick: the raids, before the entities
+    this.raids.tick();
     // (vanilla ServerLevel.tick: the dragon fight just before the entities)
     this.dragonFight?.tick();
     for (const [k, t] of this.tickets) if (t.until <= this.gameTime) this.tickets.delete(k);
@@ -466,8 +492,11 @@ export class Level {
     for (let i = 0; i < this.entities.length; i++) if (!this.entities[i].removed) this.entities[w++] = this.entities[i];
     this.entities.length = w;
     if (this.skyFlash > 0) this.skyFlash--;
+    this.handlingTick = true;
     this.runScheduledTicks();
     if (this.player) this.randomTicks.tick(this.player.x, this.player.z, this.simulationDistance);
+    this.runBlockEvents();
+    this.handlingTick = false;
     // block entities (furnaces, spawners, the enchanting table's book)
     for (const be of this.world.blockEntities.values()) {
       if (be.removed) continue;
@@ -513,6 +542,34 @@ export class Level {
 
   hasScheduledTick(x: number, y: number, z: number, block: number): boolean {
     return this.blockTicks.hasScheduledTick(x, y, z, block);
+  }
+
+  /** vanilla LevelTicks.willTickThisTick: `block`'s tick at (x, y, z) is among those being run this tick */
+  willTickThisTick(x: number, y: number, z: number, block: number): boolean {
+    return this.blockTicks.willTickThisTick(x, y, z, block);
+  }
+
+  /** vanilla Level.blockEvent: `block` at (x, y, z) gets triggerEvent(a, b) in this tick's block events (or the next's) */
+  blockEvent(x: number, y: number, z: number, block: number, a: number, b: number): void {
+    const key = `${x},${y},${z},${block},${a},${b}`;
+    if (!this.blockEvents.has(key)) this.blockEvents.set(key, [x, y, z, block, a, b]);
+  }
+
+  /** vanilla ServerLevel.runBlockEvents: each in turn (new ones too) while the block's still there; unloaded ones wait */
+  private runBlockEvents(): void {
+    const later: [string, [number, number, number, number, number, number]][] = [];
+    while (this.blockEvents.size) {
+      const [key, e] = this.blockEvents.entries().next().value!;
+      this.blockEvents.delete(key);
+      const [x, y, z, block, a, b] = e;
+      if (!this.world.isLoaded(x, z)) {
+        later.push([key, e]);
+        continue;
+      }
+      const st = this.world.getState(x, y, z);
+      if (STATE_BLOCK[st] === block) behaviorOf(st)?.triggerEvent?.(this, x, y, z, st, a, b);
+    }
+    for (const [key, e] of later) this.blockEvents.set(key, e);
   }
 
   private runScheduledTicks(): void {
@@ -630,20 +687,24 @@ export class Level {
     const old = this.world.setState(x, y, z, state);
     if (old === state) return old;
     // vanilla LevelChunk.setBlockState: the old block's onRemove, then (if it's still there) the new one's onPlace
-    behaviorOf(old)?.onRemove?.(this, x, y, z, old, state, false);
+    const moving = (f & UPDATE_MOVE_BY_PISTON) !== 0;
+    behaviorOf(old)?.onRemove?.(this, x, y, z, old, state, moving);
     if (this.world.getState(x, y, z) !== state) return old;
     // vanilla BaseRailBlock.onPlace: a new rail connects up (reshaping itself notifies the neighbours)
     if (STATE_BLOCK[old] !== STATE_BLOCK[state] && isRail(state)) railOnPlace(this, x, y, z, state);
-    behaviorOf(state)?.onPlace?.(this, x, y, z, state, old, false);
+    behaviorOf(state)?.onPlace?.(this, x, y, z, state, old, moving);
     if (this.world.getState(x, y, z) !== state) return old;
     if (f & UPDATE_NEIGHBORS) this.updateNeighborsAt(x, y, z, STATE_BLOCK[old]);
     if (!(f & UPDATE_KNOWN_SHAPE) && this.world.getState(x, y, z) === state) this.updateNeighbors(x, y, z, old);
     return old;
   }
 
-  /** vanilla Level.updateNeighborsAt: the six neighbours of (x, y, z) hear that `source` (a block id) there changed */
-  updateNeighborsAt(x: number, y: number, z: number, source: number): void {
-    this.neighborUpdater.updateNeighborsAt(x, y, z, source);
+  /**
+   * vanilla Level.updateNeighborsAt: the six neighbours of (x, y, z) hear that `source` (a block id) there changed;
+   * `skip` leaves out the one toward that direction (updateNeighborsAtExceptFromFacing)
+   */
+  updateNeighborsAt(x: number, y: number, z: number, source: number, skip = -1): void {
+    this.neighborUpdater.updateNeighborsAt(x, y, z, source, skip);
   }
 
   /** vanilla Level.neighborChanged: just the block at (x, y, z) hears it */
@@ -658,7 +719,7 @@ export class Level {
     const b = BLOCKS[STATE_BLOCK[st]];
     if (effects) {
       this.particles.blockBreak(x, y, z, st);
-      this.sound.play(`block.${b.sound}.break`, x + 0.5, y + 0.5, z + 0.5, 1, 0.8);
+      this.sound.play(behaviorOf(st)?.breakSound?.(st) ?? `block.${b.sound}.break`, x + 0.5, y + 0.5, z + 0.5, 1, 0.8);
     }
     const replacement = FLAGS[st] & F_WATERLOGGED ? S('water') : 0;
     // containers spill their contents (vanilla Containers.dropContents)

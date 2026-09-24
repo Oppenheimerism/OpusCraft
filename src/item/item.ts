@@ -206,13 +206,17 @@ for (const [mat, t] of Object.entries(TIERS)) {
 }
 reg({ id: 'shears', maxStack: 1, creativeTab: 'tools', texture: 'shears', tool: { type: 'shears', tier: 0, speed: 1.5, durability: 238 } });
 reg({ id: 'flint_and_steel', maxStack: 1, creativeTab: 'tools', texture: 'flint_and_steel', maxDamage: 64 });
+// vanilla BrushItem (game/archaeology.ts): brushes suspicious sand and gravel away, 64 uses
+reg({ id: 'brush', maxStack: 1, creativeTab: 'tools', texture: 'brush', maxDamage: 64 });
 // vanilla TridentItem: 9 attack damage, and thrown it hits for 8 (entity/thrownTrident.ts); with riptide it carries
 // its wielder through water and rain instead
 reg({ id: 'trident', maxStack: 1, creativeTab: 'combat', texture: 'trident', maxDamage: 250, attackDamage: 9, attackSpeed: 1.1, rarity: 'epic' });
 reg({ id: 'bow', maxStack: 1, creativeTab: 'combat', texture: 'bow', maxDamage: 384 });
-// vanilla CrossbowItem (models/item/crossbow.json: layer0 crossbow_standby); its recipe needs a tripwire hook,
-// which the game doesn't have yet, so it isn't craftable (creative, /give)
+// vanilla CrossbowItem (models/item/crossbow.json: layer0 crossbow_standby); crafted with a tripwire hook
 reg({ id: 'crossbow', maxStack: 1, creativeTab: 'combat', texture: 'crossbow_standby', maxDamage: 465 });
+// vanilla ShieldItem: 336 uses, repaired with planks; held up to block (entity/shield.ts), decorated with a banner
+// (game/shields.ts); drawn as its model (render/shieldRenderer.ts), the flat sprite standing in where no renderer is
+reg({ id: 'shield', maxStack: 1, creativeTab: 'combat', texture: 'shield', maxDamage: 336 });
 reg({ id: 'arrow', creativeTab: 'combat', texture: 'arrow' });
 // vanilla TippedArrowItem (models/item/tipped_arrow.json: layer0 the tinted head, layer1 the shaft; item/potions.ts)
 reg({ id: 'tipped_arrow', creativeTab: 'combat', texture: 'tipped_arrow_base' });
@@ -298,16 +302,27 @@ for (const [id, stack, fuel] of MISC) {
       reg({ id: `${w}_chest_boat`, name: `${prettyName(w)} Boat with Chest`, texture: `${w}_chest_boat`, maxStack: 1, creativeTab: 'tools' });
     }
 }
+// vanilla pottery sherds: what the desert pyramid's suspicious sand holds (archaeology/desert_pyramid), for the sides
+// of a decorated pot
+for (const s of ['archer', 'miner', 'prize', 'skull']) reg({ id: `${s}_pottery_sherd`, texture: `${s}_pottery_sherd` });
+// (the decorated pot is drawn by its block entity's renderer, render/archaeologyRenderers.ts: its sprite, the pot at the GUI's
+// angle, stands in only where nothing but the item's id is drawn)
+ITEMS.get('decorated_pot')!.texture = 'decorated_pot';
+for (const id of ['suspicious_sand', 'suspicious_gravel', 'decorated_pot']) ITEMS.get(id)!.creativeTab = 'functional';
 Object.assign(ITEMS.get('experience_bottle')!, { rarity: 'uncommon', glint: true });
 // vanilla Items.NAUTILUS_SHELL: uncommon
 ITEMS.get('nautilus_shell')!.rarity = 'uncommon';
 // brewing ingredients (vanilla Items: the glistering melon, the fermented eye, the rabbit's foot and the rest)
 for (const id of ['fermented_spider_eye', 'glistering_melon_slice', 'rabbit_foot', 'phantom_membrane', 'turtle_scute', 'breeze_rod']) reg({ id, texture: id });
+// vanilla Items.RABBIT_HIDE (four make a piece of leather)
+reg({ id: 'rabbit_hide', texture: 'rabbit_hide' });
 // vanilla Items.DRAGON_BREATH: uncommon, 64 to a stack, and its bottle is left over when it's brewed
 reg({ id: 'dragon_breath', name: "Dragon's Breath", texture: 'dragon_breath', rarity: 'uncommon', remainder: 'glass_bottle' });
 // the End: vanilla EnderEyeItem, and EndCrystalItem (rare, with the enchantment glint); the portal frame is a functional block
 reg({ id: 'ender_eye', texture: 'ender_eye', creativeTab: 'tools' });
 // (vanilla CreativeModeTabs.COMBAT lists the end crystal after the totem and TNT)
+// (Stage 4: illagers) vanilla TotemItem: one to a stack, uncommon; its death-cheating is entity/totem.ts
+reg({ id: 'totem_of_undying', maxStack: 1, creativeTab: 'combat', texture: 'totem_of_undying', rarity: 'uncommon' });
 reg({ id: 'end_crystal', texture: 'end_crystal', creativeTab: 'combat', rarity: 'rare', glint: true });
 ITEMS.get('end_portal_frame')!.creativeTab = 'functional';
 // the outer End: chorus fruit (vanilla ChorusFruitItem: always edible, and it teleports its eater, game/chorus.ts) and
@@ -350,9 +365,18 @@ reg({ id: 'potion', maxStack: 1, creativeTab: 'food', texture: 'potion' });
 reg({ id: 'splash_potion', maxStack: 1, creativeTab: 'food', texture: 'splash_potion' });
 reg({ id: 'lingering_potion', maxStack: 1, creativeTab: 'food', texture: 'lingering_potion' });
 // spawn eggs (creative tab order is alphabetical, like vanilla)
-for (const m of ['bat', 'blaze', 'cave_spider', 'chicken', 'cow', 'creeper', 'drowned', 'enderman', 'ghast', 'hoglin', 'husk', 'iron_golem', 'magma_cube', 'pig', 'piglin', 'sheep', 'silverfish', 'skeleton', 'slime', 'spider', 'squid', 'stray', 'strider', 'villager', 'witch', 'wither_skeleton', 'zoglin', 'zombie', 'zombie_villager', 'zombified_piglin']) {
+for (const m of ['bat', 'blaze', 'cat', 'cave_spider', 'chicken', 'cow', 'creeper', 'drowned', 'enderman', 'ghast', 'hoglin', 'husk', 'iron_golem', 'magma_cube', 'ocelot', 'pig', 'piglin', 'sheep', 'silverfish', 'skeleton', 'slime', 'spider', 'squid', 'stray', 'strider', 'villager', 'witch', 'wither_skeleton', 'wolf', 'zoglin', 'zombie', 'zombie_villager', 'zombified_piglin']) {
   reg({ id: `${m}_spawn_egg`, texture: `${m}_spawn_egg`, creativeTab: 'spawn_eggs' });
 }
+// (Stage 4: illagers) the raiders' eggs and the ominous bottle (vanilla OminousBottleItem: uncommon; drinking it for
+// bad omen comes with raids); the creative tab sorts the eggs by name
+for (const m of ['evoker', 'pillager', 'ravager', 'vex', 'vindicator']) reg({ id: `${m}_spawn_egg`, texture: `${m}_spawn_egg`, creativeTab: 'spawn_eggs' });
+reg({ id: 'ominous_bottle', creativeTab: 'food', texture: 'ominous_bottle', rarity: 'uncommon' });
+// (Stage 5: ocean) vanilla Items.PRISMARINE_SHARD / PRISMARINE_CRYSTALS (guardians', sea lanterns'); the wet sponge sits by the sponge
+for (const id of ['prismarine_shard', 'prismarine_crystals']) reg({ id, texture: id });
+ITEMS.get('wet_sponge')!.creativeTab = 'functional';
+// (Stage 5: ocean) the guardians' eggs
+for (const m of ['elder_guardian', 'guardian']) reg({ id: `${m}_spawn_egg`, texture: `${m}_spawn_egg`, creativeTab: 'spawn_eggs' });
 // sugar cane item places the block
 {
   const sc = ITEMS.get('sugar_cane');
@@ -400,6 +424,13 @@ for (const b of BLOCKS) {
   if (/^(tall_grass|large_fern|sunflower|lilac|rose_bush|peony)$/.test(b.name)) it.texture = 'block:' + b.name + (b.name === 'sunflower' ? '_front' : '_top');
 }
 
+// the redstone components' items (vanilla item/generated): the torch and tripwire hook as their block textures, the
+// repeater its own sprite
+for (const [id, tex] of [['redstone_torch', 'block:redstone_torch'], ['repeater', 'repeater'], ['tripwire_hook', 'block:tripwire_hook']]) {
+  const it = ITEMS.get(id);
+  if (it) it.texture = tex;
+}
+
 export function itemForBlock(name: string): Item | undefined {
   // (a block that is another's item's: a wall banner is its banner's)
   const own = BLOCK_BY_NAME.get(name)?.s.item;
@@ -425,6 +456,9 @@ export function blockForItem(it: Item): Block | undefined {
   if (it.id === 'melon_seeds') return getBlock('melon_stem');
   if (it.id === 'sweet_berries') return getBlock('sweet_berry_bush');
   if (it.id === 'glow_berries') return getBlock('cave_vines');
+  // (vanilla ItemNameBlockItem: redstone places redstone dust, string places tripwire)
+  if (it.id === 'redstone') return getBlock('redstone_wire');
+  if (it.id === 'string') return getBlock('tripwire');
   return it.block;
 }
 
@@ -454,6 +488,10 @@ export interface ItemTag {
   hideAdditional?: boolean;
   /** minecraft:banner_patterns: the layers over a banner's base colour, bottom first */
   patterns?: BannerLayer[];
+  /** minecraft:base_color: a shield's, from the banner that decorated it */
+  baseColor?: string;
+  /** minecraft:ominous_bottle_amplifier: the bad omen an ominous bottle gives (0-4) */
+  ominousAmplifier?: number;
   /** minecraft:map_id */
   mapId?: number;
   /** minecraft:map_post_processing: what a cartography table's result will do to its map when taken */
@@ -466,6 +504,8 @@ export interface ItemTag {
   book?: WrittenBook;
   /** minecraft:container: what a shulker box holds, slot by slot (the filled ones) */
   container?: ContainerSlot[];
+  /** minecraft:pot_decorations: a decorated pot's sides, back, left, right and front ('brick' for a plain one) */
+  potDecorations?: string[];
 }
 
 /** one filled slot of minecraft:container (vanilla ItemContainerContents.Slot) */
@@ -534,12 +574,15 @@ export function cloneTag(t: ItemTag | null): ItemTag | null {
   if (t.rarity) o.rarity = t.rarity;
   if (t.hideAdditional) o.hideAdditional = true;
   if (t.patterns?.length) o.patterns = t.patterns.map((l) => ({ ...l }));
+  if (t.baseColor !== undefined) o.baseColor = t.baseColor;
+  if (t.ominousAmplifier !== undefined) o.ominousAmplifier = t.ominousAmplifier;
   if (t.mapId !== undefined) o.mapId = t.mapId;
   if (t.mapPostProcessing) o.mapPostProcessing = t.mapPostProcessing;
   if (t.trim) o.trim = { ...t.trim };
   if (t.pages) o.pages = [...t.pages];
   if (t.book) o.book = { ...t.book, pages: [...t.book.pages] };
   if (t.container?.length) o.container = t.container.map((c) => ({ ...c, ...(c.tag ? { tag: cloneTag(c.tag)! } : {}) }));
+  if (t.potDecorations) o.potDecorations = [...t.potDecorations];
   return o;
 }
 
@@ -551,8 +594,10 @@ export function sameTag(a: ItemTag | null | undefined, b: ItemTag | null | undef
   return (
     sameEnchants(a?.enchantments, b?.enchantments) && sameEnchants(a?.stored, b?.stored) && a?.customName === b?.customName && (a?.repairCost ?? 0) === (b?.repairCost ?? 0) &&
     sameCharged(a?.charged, b?.charged) && a?.dyedColor === b?.dyedColor && !a?.dyedHidden === !b?.dyedHidden && samePotion(a?.potion, b?.potion) &&
-    a?.itemName === b?.itemName && a?.rarity === b?.rarity && !a?.hideAdditional === !b?.hideAdditional && sameData(a?.patterns?.length ? a.patterns : null, b?.patterns?.length ? b.patterns : null) &&
+    a?.itemName === b?.itemName && a?.rarity === b?.rarity && !a?.hideAdditional === !b?.hideAdditional && sameData(a?.patterns?.length ? a.patterns : null, b?.patterns?.length ? b.patterns : null) && a?.baseColor === b?.baseColor &&
+    a?.ominousAmplifier === b?.ominousAmplifier &&
     a?.mapId === b?.mapId && a?.mapPostProcessing === b?.mapPostProcessing && sameData(a?.trim, b?.trim) && sameData(a?.pages, b?.pages) && sameData(a?.book, b?.book) &&
+    sameData(a?.potDecorations, b?.potDecorations) &&
     sameData(a?.container?.length ? a.container : null, b?.container?.length ? b.container : null)
   );
 }

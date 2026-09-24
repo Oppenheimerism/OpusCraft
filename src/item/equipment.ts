@@ -46,8 +46,9 @@ export function equipableSlot(it: Item): ArmorSlot | null {
   return null;
 }
 
-/** vanilla LivingEntity.getEquipmentSlotForItem: the equipable's slot, else the main hand */
+/** vanilla LivingEntity.getEquipmentSlotForItem: the equipable's slot (a shield's the offhand), else the main hand */
 export function equipmentSlotForItem(it: Item): EquipSlot {
+  if (it.id === 'shield') return 'offhand';
   return equipableSlot(it) ?? 'mainhand';
 }
 

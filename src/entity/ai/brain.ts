@@ -139,8 +139,13 @@ export class Brain<E extends Owner, A extends string> {
   private active = new Set<A>();
   private lastScheduleUpdate = -9999;
 
-  constructor(private readonly defaultActivity: A, core: A[]) {
+  constructor(private defaultActivity: A, core: A[]) {
     for (const a of core) this.core.add(a);
+  }
+
+  /** vanilla setDefaultActivity (Stage 4: raids — a villager in a raid falls back on it rather than idling) */
+  setDefaultActivity(a: A): void {
+    this.defaultActivity = a;
   }
 
   /** vanilla addActivity / addActivityWithConditions */
