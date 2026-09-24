@@ -4,7 +4,8 @@
 // pulling / charged textures. The player goes through Interaction (use / tickUsingItem / releaseUsingItem);
 // mobs that fight with one (vanilla CrossbowAttackMob: piglins, pillagers) use the same calls.
 //
-// A mob, as vanilla's CrossbowAttack behaviour (PiglinAi) / RangedCrossbowAttackGoal (pillager) runs it:
+// A mob, as vanilla's CrossbowAttack behaviour (PiglinAi) runs it — while it holds a crossbow and sees its
+// target within CROSSBOW_RANGE (BehaviorUtils.isWithinAttackRange), looking at the target every tick:
 //
 //   UNCHARGED        mob.startUsingItem(); → CHARGING     (while it's using a crossbow, Mob.aiStep calls
 //                                                           crossbowUseTick: the loading sounds)
@@ -43,6 +44,8 @@ export const FIREWORK_POWER = 1.6;
 export const MOB_ARROW_POWER = 1.6;
 /** vanilla CrossbowItem.use: a player's shots have an inaccuracy of 1 */
 export const PLAYER_INACCURACY = 1;
+/** vanilla CrossbowItem.getDefaultProjectileRange: how close a mob comes before it shoots */
+export const CROSSBOW_RANGE = 8;
 
 const DIFFICULTY_ID: Record<string, number> = { peaceful: 0, easy: 1, normal: 2, hard: 3 };
 
