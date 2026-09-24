@@ -881,6 +881,50 @@ export class LeapAtTargetGoal extends Goal {
   }
 }
 
+/**
+ * vanilla OcelotAttackGoal: after its target, creeping up from afar, dashing in over the last few blocks, and
+ * swiping once a second when it's close enough
+ */
+export class OcelotAttackGoal extends Goal {
+  private target: LivingEntity | null = null;
+  private attackTime = 0;
+  constructor(readonly mob: Mob) {
+    super();
+    this.flags = Flag.MOVE | Flag.LOOK;
+  }
+  canUse(): boolean {
+    const t = this.mob.target;
+    if (!t) return false;
+    this.target = t;
+    return true;
+  }
+  override canContinueToUse(): boolean {
+    const t = this.target;
+    if (!t || !t.isAlive || this.mob.distanceToSqr(t.x, t.y, t.z) > 225) return false;
+    return !this.mob.navigation.isDone() || this.canUse();
+  }
+  override stop(): void {
+    this.target = null;
+    this.mob.navigation.stop();
+  }
+  override requiresUpdateEveryTick(): boolean {
+    return true;
+  }
+  override tick(): void {
+    const m = this.mob, t = this.target!;
+    m.lookControl.setLookAtEntity(t, 30, 30);
+    const reach = m.width * 2 * m.width * 2;
+    const d2 = m.distanceToSqr(t.x, t.y, t.z);
+    const speed = d2 > reach && d2 < 16 ? 1.33 : d2 < 225 ? 0.6 : 0.8;
+    m.navigation.moveToEntity(t, speed);
+    this.attackTime = Math.max(this.attackTime - 1, 0);
+    if (d2 <= reach && this.attackTime <= 0) {
+      this.attackTime = 20;
+      m.doHurtTarget(t);
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // doors and villages
 

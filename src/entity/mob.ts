@@ -921,12 +921,12 @@ export abstract class Mob extends LivingEntity {
     return this.walkTargetValue(Math.floor(this.x), Math.floor(this.y), Math.floor(this.z)) >= 0;
   }
 
-  /** vanilla checkSpawnObstruction: no liquid inside and no collision */
   /** vanilla getMaxSpawnClusterSize: how many one spawning pass may bring at once */
   maxSpawnClusterSize(): number {
     return 4;
   }
 
+  /** vanilla checkSpawnObstruction: no liquid inside and no collision */
   checkSpawnObstruction(): boolean {
     return this.isFree(this.bb);
   }

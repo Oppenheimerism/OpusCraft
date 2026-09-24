@@ -2,11 +2,11 @@
 // rougher, wavering cry; the purr, a low rattle of breath in and out; a purr running into a trilled meow; the hiss,
 // spat out and trailing off; a sharp yowl when hurt and a falling one when it dies; crunching on its fish; and the
 // short, rising chirrup it asks for food with. Takes as in vanilla's sounds.json: ambient 4, stray_ambient 4, purr 3,
-// purreow 2, hiss 3, hurt 3, death 2, eat 2, beg_for_food 3.
+// purreow 2, hiss 3, hurt 3, death 2, eat 2, beg_for_food 3. The ocelot's meow, hurt and death are the cat's own, quieter.
 
 import type { SoundGen } from '../synth';
 import { TAU, alloc, envAD, envBump, layer, lowpass, highpass, smooth } from './dsp';
-import { type Ctx, sound } from './registry';
+import { type Ctx, FX_PEAK, pitched, sound } from './registry';
 import { burst } from './texture';
 import { voice } from './voice';
 
@@ -205,15 +205,22 @@ function beg(c: Ctx): Float32Array {
 }
 
 export function catSounds(): Record<string, SoundGen> {
+  const ambient = sound('entity.cat.ambient', 4, meow);
+  const hurtS = sound('entity.cat.hurt', 3, hurt);
+  const deathS = sound('entity.cat.death', 2, death);
   return {
-    'entity.cat.ambient': sound('entity.cat.ambient', 4, meow),
+    'entity.cat.ambient': ambient,
     'entity.cat.stray_ambient': sound('entity.cat.stray_ambient', 4, strayMeow),
     'entity.cat.purr': sound('entity.cat.purr', 3, purr),
     'entity.cat.purreow': sound('entity.cat.purreow', 2, purreow),
     'entity.cat.hiss': sound('entity.cat.hiss', 3, hiss),
-    'entity.cat.hurt': sound('entity.cat.hurt', 3, hurt),
-    'entity.cat.death': sound('entity.cat.death', 2, death),
+    'entity.cat.hurt': hurtS,
+    'entity.cat.death': deathS,
     'entity.cat.eat': sound('entity.cat.eat', 2, eat),
     'entity.cat.beg_for_food': sound('entity.cat.beg_for_food', 3, beg),
+    // (vanilla sounds.json: an ocelot's are the cat's recordings, played quieter)
+    'entity.ocelot.ambient': pitched(ambient, 1, { peak: FX_PEAK * 0.3 }),
+    'entity.ocelot.hurt': pitched(hurtS, 1, { peak: FX_PEAK * 0.45 }),
+    'entity.ocelot.death': pitched(deathS, 1, { peak: FX_PEAK * 0.45 }),
   };
 }

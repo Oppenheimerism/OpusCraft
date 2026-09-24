@@ -28,6 +28,7 @@ import { Drowned, isInWaterPositionOk, drownedNaturalSpawnRules } from '../entit
 import { Silverfish } from '../entity/silverfish';
 import { Wolf, wolfSpawnRulesOk } from '../entity/wolf';
 import { Cat } from '../entity/cat';
+import { Ocelot } from '../entity/ocelot';
 import { CatSpawner } from './catSpawner';
 import { IronGolem } from '../entity/ironGolem';
 import { ZombieVillager } from '../entity/zombieVillager';
@@ -81,6 +82,7 @@ export const MOB_TYPES: Record<string, (l: Level) => Mob> = {
   silverfish: (l) => new Silverfish(l),
   wolf: (l) => new Wolf(l),
   cat: (l) => new Cat(l),
+  ocelot: (l) => new Ocelot(l),
   ender_dragon: (l) => new EnderDragon(l),
 };
 
@@ -184,7 +186,7 @@ export function isChunkSaved(e: Entity): boolean {
 const ENTITY_NAMES: Record<string, string> = {
   pig: 'Pig', cow: 'Cow', sheep: 'Sheep', chicken: 'Chicken', zombie: 'Zombie', zombie_villager: 'Zombie Villager', skeleton: 'Skeleton', creeper: 'Creeper', spider: 'Spider',
   villager: 'Villager', iron_golem: 'Iron Golem', cave_spider: 'Cave Spider', enderman: 'Enderman', slime: 'Slime', magma_cube: 'Magma Cube', zombified_piglin: 'Zombified Piglin', ghast: 'Ghast', blaze: 'Blaze', wither_skeleton: 'Wither Skeleton', squid: 'Squid', bat: 'Bat', hoglin: 'Hoglin', zoglin: 'Zoglin', strider: 'Strider', piglin: 'Piglin',
-  witch: 'Witch', husk: 'Husk', stray: 'Stray', drowned: 'Drowned', silverfish: 'Silverfish', wolf: 'Wolf', cat: 'Cat', fireball: 'Fireball', small_fireball: 'Small Fireball',
+  witch: 'Witch', husk: 'Husk', stray: 'Stray', drowned: 'Drowned', silverfish: 'Silverfish', wolf: 'Wolf', cat: 'Cat', ocelot: 'Ocelot', fireball: 'Fireball', small_fireball: 'Small Fireball',
   arrow: 'Arrow', tnt: 'Primed TNT', lightning_bolt: 'Lightning Bolt', item: 'Item', experience_orb: 'Experience Orb', falling_block: 'Falling Block', player: 'Player',
   egg: 'Thrown Egg', snowball: 'Snowball', ender_pearl: 'Thrown Ender Pearl', potion: 'Potion', trident: 'Trident',
   minecart: 'Minecart', chest_minecart: 'Minecart with Chest', boat: 'Boat', chest_boat: 'Boat with Chest', end_crystal: 'End Crystal',
@@ -306,7 +308,9 @@ function settingsFor(name: string): MobSettings {
   // vanilla OverworldBiomes.river, baseOceanSpawns and BiomeDefaultFeatures.warmOceanSpawns: drowned, one at a time
   // (a hundred in a river, one in a frozen river, five in every ocean)
   const drowned = name === 'river' ? 100 : name === 'frozen_river' ? 1 : name.endsWith('ocean') ? 5 : 0;
-  const monster = drowned ? [...base.monster, S_('drowned', drowned, 1, 1)] : base.monster;
+  // vanilla OverworldBiomes.jungle and bambooJungle: ocelots are on the monster list (a group of 1-3, or one)
+  const ocelots = name === 'jungle' ? S_('ocelot', 2, 1, 3) : name === 'bamboo_jungle' ? S_('ocelot', 2, 1, 1) : null;
+  const monster = [...base.monster, ...(drowned ? [S_('drowned', drowned, 1, 1)] : []), ...(ocelots ? [ocelots] : [])];
   const wolves = WOLF_SPAWNS[name];
   const creature = wolves ? [...base.creature, wolves] : base.creature;
   return { ...base, creature, monster, water, ambient };
@@ -598,6 +602,9 @@ export class NaturalSpawner {
       }
       case 'wolf':
         return wolfSpawnRulesOk(lvl, x, y, z);
+      case 'ocelot':
+        // vanilla Ocelot.checkOcelotSpawnRules: one try in three fails
+        return this.rand.nextInt(3) !== 0;
       case 'ghast':
         return Ghast.checkGhastSpawn(lvl, x, y, z, () => this.rand.nextFloat());
       case 'blaze':

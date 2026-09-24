@@ -4,12 +4,13 @@
 // belly and the chest; tabbies are striped across the back, down the legs and round the tail, with the M on the
 // brow; the colourpoints have dark ears, masks, legs and tails; the calico is patched orange and black on white. The
 // eyes (iris and slit) sit either side of the nose. And the collar (cat_collar.png), a band round the neck, pale to
-// take the dye. Original pixel art in the style of vanilla 1.21.
+// take the dye. And the ocelot (ocelot.png, the same layout): gold, spotted dark over the back and flanks, barred on the
+// brow, ringed down the legs and the tail to its black tip. Original pixel art in the style of vanilla 1.21.
 
 import { TexImage, img, mulC, mixC, Rand } from './tex';
 import { MOB_TEXTURES, boxFaces, noiseFace, paintFace, drawFace, pick, type Face, type Pal } from './mobs';
 
-type Pattern = 'plain' | 'tabby' | 'tuxedo' | 'points' | 'calico';
+type Pattern = 'plain' | 'tabby' | 'tuxedo' | 'points' | 'calico' | 'spots';
 
 interface CatLook {
   seed: number;
@@ -294,14 +295,43 @@ function calico(t: TexImage, r: Rand, k: CatLook): void {
   patchy(LEGS[1].left, (_x, y) => y < 5);
 }
 
+/** the ocelot: dark spots over the back and flanks (not the belly), bars over the brow, rings down the legs and the tail */
+function spots(t: TexImage, r: Rand, k: CatLook): void {
+  const m = k.mark!;
+  // a spot is a pixel and one more beside or below it, dropped at random where `keep` allows
+  const scatter = (f: Face, n: number, keep: (x: number, y: number, w: number, h: number) => boolean = () => true) => {
+    const [, , w, h] = f;
+    for (let i = 0; i < n; i++) {
+      const x = r.nextInt(w), y = r.nextInt(h);
+      if (!keep(x, y, w, h)) continue;
+      const [dx, dy] = r.chance(0.5) ? [1, 0] : [0, 1];
+      paintFace(t, f, (px, py, _c, fw, fh) => ((px === x && py === y) || (px === x + dx && py === y + dy && px < fw && py < fh) ? pick(r, m) : undefined));
+    }
+  };
+  scatter(BODY.back, 30);
+  scatter(BODY.right, 22, (x, _y, w) => x < w - 2);
+  scatter(BODY.left, 22, (x) => x > 1);
+  scatter(BODY.bottom, 5);
+  scatter(BODY.top, 3, (_x, y) => y < 2);
+  // the head: bars back over the crown, a line down each cheek, spots behind
+  paintFace(t, HEAD.top, (x, y) => ((x === 1 || x === 3) && y > 0 && r.chance(0.85) ? pick(r, m) : undefined));
+  drawFace(t, HEAD.front, ['.m.m.'], { m }, r);
+  paintFace(t, HEAD.right, (x, y, w) => (y === 2 && x < w - 1 && r.chance(0.8) ? pick(r, m) : undefined));
+  paintFace(t, HEAD.left, (x, y) => (y === 2 && x > 0 && r.chance(0.8) ? pick(r, m) : undefined));
+  scatter(HEAD.back, 4);
+  for (const l of LEGS) for (const f of LEG_SIDES(l)) scatter(f, l === LEGS[0] ? 2 : 3);
+  // the tail: rings, then the last two pixels black
+  for (const tl of TAILS) for (const f of TAIL_SIDES(tl)) paintFace(t, f, (_x, y) => (y % 3 === 1 ? pick(r, m) : undefined));
+  for (const f of [...TAIL_SIDES(TAILS[1]), TAILS[1].bottom]) paintFace(t, f, (_x, y, _w, h) => (f === TAILS[1].bottom || y >= h - 2 ? pick(r, m) : undefined));
+}
+
 /** the face: an eye either side of the nose (the iris out, the slit in) */
 function face(t: TexImage, k: CatLook, r: Rand): void {
   drawFace(t, HEAD.front, ['.....', 'ip.pi'], { i: k.iris, p: k.pupil }, r);
 }
 
-function catTexture(name: string): () => TexImage {
+function catTexture(k: CatLook): () => TexImage {
   return () => {
-    const k = LOOKS[name];
     const t = base(k);
     const r = new Rand(k.seed ^ 0x9a77e);
     if (k.pattern === 'tabby') tabby(t, r, k);
@@ -312,6 +342,7 @@ function catTexture(name: string): () => TexImage {
       if (k.white) for (const l of LEGS) for (const f of LEG_SIDES(l)) paintFace(t, f, (_x, y, _w, h) => (y >= h - 1 ? pick(r, k.white!) : undefined));
     }
     if (k.pattern === 'calico') calico(t, r, k);
+    if (k.pattern === 'spots') spots(t, r, k);
     // (Jellie: a grey tabby with a white chest and socks)
     if (k.pattern === 'tabby' && k.white) whiteParts(t, r, k, 2);
     face(t, k, r);
@@ -319,7 +350,17 @@ function catTexture(name: string): () => TexImage {
   };
 }
 
-for (const name of Object.keys(LOOKS)) MOB_TEXTURES['cat_' + name] = catTexture(name);
+for (const [name, k] of Object.entries(LOOKS)) MOB_TEXTURES['cat_' + name] = catTexture(k);
+
+/** vanilla ocelot.png */
+MOB_TEXTURES.ocelot = catTexture({
+  seed: 0x0ce107, pattern: 'spots',
+  fur: [0xe2b660, 0xdaac56, 0xeac06a, 0xd2a24e],
+  back: [0xc8983f, 0xbf8f3a, 0xd0a147],
+  light: [0xf4e3b6, 0xefd9a4, 0xf8ebcc],
+  mark: [0x3b2b1a, 0x2f2215, 0x46341f],
+  iris: 0x8fc43c, pupil: 0x16200a, nose: 0xb8765a, earIn: 0xd49a78,
+});
 
 /** vanilla cat_collar.png: a band round the body just behind the head, pale to take the dye */
 MOB_TEXTURES.cat_collar = () => {

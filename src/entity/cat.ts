@@ -10,7 +10,7 @@ import { TamableAnimal, SitWhenOrderedToGoal, FollowOwnerGoal, NonTameRandomTarg
 import type { Level } from '../game/level';
 import type { LootEntry, Mob, SpawnGroup, SpawnReason } from './mob';
 import { Goal, Flag } from './ai/goal';
-import { AvoidEntityGoal, FloatGoal, LeapAtTargetGoal, LookAtPlayerGoal, MoveToBlockGoal, WaterAvoidingRandomStrollGoal } from './ai/goals';
+import { AvoidEntityGoal, FloatGoal, LeapAtTargetGoal, LookAtPlayerGoal, MoveToBlockGoal, OcelotAttackGoal, WaterAvoidingRandomStrollGoal } from './ai/goals';
 import type { LivingEntity } from './living';
 import type { Player } from './player';
 import { ItemEntity } from './itemEntity';
@@ -537,49 +537,5 @@ class CatSitOnBlockGoal extends MoveToBlockGoal {
     }
     if (b.name === 'furnace' && b.get(st, 'lit') === true) return true;
     return b.name.endsWith('_bed') && b.get(st, 'part') !== 'head';
-  }
-}
-
-/**
- * vanilla OcelotAttackGoal: after its target, creeping up from afar, dashing in over the last few blocks, and
- * swiping once a second when it's close enough
- */
-class OcelotAttackGoal extends Goal {
-  private target: LivingEntity | null = null;
-  private attackTime = 0;
-  constructor(readonly mob: Mob) {
-    super();
-    this.flags = Flag.MOVE | Flag.LOOK;
-  }
-  canUse(): boolean {
-    const t = this.mob.target;
-    if (!t) return false;
-    this.target = t;
-    return true;
-  }
-  override canContinueToUse(): boolean {
-    const t = this.target;
-    if (!t || !t.isAlive || this.mob.distanceToSqr(t.x, t.y, t.z) > 225) return false;
-    return !this.mob.navigation.isDone() || this.canUse();
-  }
-  override stop(): void {
-    this.target = null;
-    this.mob.navigation.stop();
-  }
-  override requiresUpdateEveryTick(): boolean {
-    return true;
-  }
-  override tick(): void {
-    const m = this.mob, t = this.target!;
-    m.lookControl.setLookAtEntity(t, 30, 30);
-    const reach = m.width * 2 * m.width * 2;
-    const d2 = m.distanceToSqr(t.x, t.y, t.z);
-    const speed = d2 > reach && d2 < 16 ? 1.33 : d2 < 225 ? 0.6 : 0.8;
-    m.navigation.moveToEntity(t, speed);
-    this.attackTime = Math.max(this.attackTime - 1, 0);
-    if (d2 <= reach && this.attackTime <= 0) {
-      this.attackTime = 20;
-      m.doHurtTarget(t);
-    }
   }
 }

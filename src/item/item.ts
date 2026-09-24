@@ -339,7 +339,7 @@ reg({ id: 'potion', maxStack: 1, creativeTab: 'food', texture: 'potion' });
 reg({ id: 'splash_potion', maxStack: 1, creativeTab: 'food', texture: 'splash_potion' });
 reg({ id: 'lingering_potion', maxStack: 1, creativeTab: 'food', texture: 'lingering_potion' });
 // spawn eggs (creative tab order is alphabetical, like vanilla)
-for (const m of ['bat', 'blaze', 'cat', 'cave_spider', 'chicken', 'cow', 'creeper', 'drowned', 'enderman', 'ghast', 'hoglin', 'husk', 'iron_golem', 'magma_cube', 'pig', 'piglin', 'sheep', 'silverfish', 'skeleton', 'slime', 'spider', 'squid', 'stray', 'strider', 'villager', 'witch', 'wither_skeleton', 'wolf', 'zoglin', 'zombie', 'zombie_villager', 'zombified_piglin']) {
+for (const m of ['bat', 'blaze', 'cat', 'cave_spider', 'chicken', 'cow', 'creeper', 'drowned', 'enderman', 'ghast', 'hoglin', 'husk', 'iron_golem', 'magma_cube', 'ocelot', 'pig', 'piglin', 'sheep', 'silverfish', 'skeleton', 'slime', 'spider', 'squid', 'stray', 'strider', 'villager', 'witch', 'wither_skeleton', 'wolf', 'zoglin', 'zombie', 'zombie_villager', 'zombified_piglin']) {
   reg({ id: `${m}_spawn_egg`, texture: `${m}_spawn_egg`, creativeTab: 'spawn_eggs' });
 }
 // (Stage 4: illagers) the raiders' eggs and the ominous bottle (vanilla OminousBottleItem: uncommon; drinking it for

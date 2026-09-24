@@ -45,6 +45,7 @@ import { Wolf } from '../entity/wolf';
 import '../textures/cat';
 import { catModel, animateCat } from './catModel';
 import { Cat } from '../entity/cat';
+import type { Ocelot } from '../entity/ocelot';
 import { AABB } from '../core/aabb';
 import { DYE_DIFFUSE } from '../entity/animals';
 import { Witch } from '../entity/witch';
@@ -209,6 +210,7 @@ export class EntityRenderDispatcher {
       wolf: wolfModel(),
       cat: catModel(),
       cat_collar: catModel(0.01),
+      ocelot: catModel(),
     };
     // vanilla textures/misc/shadow.png: soft black disc
     const n = 32, data = new Uint8Array(n * n * 4);
@@ -740,6 +742,15 @@ export class EntityRenderDispatcher {
         animateCat(def.root, {
           limbSwing: a.limbSwing, limbAmount: a.limbAmount, headYaw: a.headYaw, headPitch: a.headPitch,
           crouching: c.crouching, sprinting: c.sprinting, sitting: c.inSittingPose, lieDown: c.lieDown(p), lieDownTail: c.lieDownTail(p), relaxStateOne: c.relaxStateOneAt(p),
+        });
+        break;
+      }
+      // (vanilla OcelotModel alone: it never sits or lies down)
+      case 'ocelot': {
+        const o = e as Ocelot;
+        animateCat(def.root, {
+          limbSwing: a.limbSwing, limbAmount: a.limbAmount, headYaw: a.headYaw, headPitch: a.headPitch,
+          crouching: o.crouching, sprinting: o.sprinting, sitting: false, lieDown: 0, lieDownTail: 0, relaxStateOne: 0,
         });
         break;
       }
@@ -1527,6 +1538,7 @@ function shadowRadius(e: Entity): number {
       r = 0.7;
       break;
     case 'cat':
+    case 'ocelot':
       r = 0.4;
       break;
     case 'wolf':
