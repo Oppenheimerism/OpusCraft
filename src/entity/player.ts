@@ -113,6 +113,8 @@ export class Player extends LivingEntity {
   /** vanilla respawnPosition: a bed, or a /spawnpoint (forced); null = world spawn */
   respawnPos: [number, number, number] | null = null;
   respawnForced = false;
+  /** vanilla ServerPlayer.seenCredits: they've left the End through its exit portal before (the End Poem and credits roll only the first time) */
+  seenCredits = false;
   /** bed head block while asleep (vanilla sleepingPos) */
   sleepingPos: [number, number, number] | null = null;
   /** vanilla sleepCounter: climbs to 100 asleep, then 100..110 fades back after waking */

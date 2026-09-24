@@ -12,6 +12,7 @@ import { EnchantmentMenu, AnvilMenu, GrindstoneMenu } from '../../inventory/ench
 import { EnchantmentScreen, AnvilScreen, GrindstoneScreen } from './enchanting';
 import { MerchantMenu } from '../../inventory/merchantMenu';
 import { MerchantScreen } from './merchant';
+import { WinScreen } from './winScreen';
 
 export function installScreens(game: Game): void {
   game.titleScreenFactory = () => new TitleScreen(game, false);
@@ -19,6 +20,7 @@ export function installScreens(game: Game): void {
   game.deathScreenFactory = () => new DeathScreen(game, game.deathMessage(game.player.lastDamageSource), !!game.meta?.hardcore);
   game.loadingScreenFactory = () => new LevelLoadingScreen(game);
   game.receivingScreenFactory = (reason) => new ReceivingLevelScreen(game, reason);
+  game.winScreenFactory = (onFinished) => new WinScreen(game, true, onFinished);
   game.chatScreenFactory = (initial) => new ChatScreen(game, initial);
   game.inBedScreenFactory = () => new InBedChatScreen(game);
   game.advancementsScreenFactory = () => new AdvancementsScreen(game);

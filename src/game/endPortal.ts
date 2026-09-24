@@ -130,7 +130,8 @@ registerBehavior('end_portal', {
   entityInside(_level, x, y, z, _st, e) {
     if (e.vehicle || e.removed) return;
     if (!(e.bb.maxY > y + 0.375 && e.bb.minY < y + 0.75)) return;
-    // (vanilla: a player leaving the End the first time sees the credits instead — they come with the dragon fight)
+    // (vanilla sends a player leaving the End the first time straight to the credits, not waiting for its portal
+    // time — which for an end portal is none: endTravel.ts rolls them on the way home)
     e.setAsInsidePortal('end', x, y, z);
   },
   /** vanilla EndPortalBlock.animateTick: smoke rising off it */

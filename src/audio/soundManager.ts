@@ -466,6 +466,20 @@ export class SoundManager {
     void this.playMusic(Math.floor(Math.random() * n), false, pool);
   }
 
+  /**
+   * vanilla MusicManager.tick while a screen sets the music with no gap between tracks (WinScreen's Musics.CREDITS),
+   * called each frame whatever the game is doing: that pool's music, cutting in, and again as soon as it ends
+   */
+  keepSituationalMusic(pool: string): void {
+    if ((this.musicPlaying || this.musicLoading) && this.musicPool === pool) return;
+    this.playSituationalMusic(pool);
+  }
+
+  /** vanilla MusicManager.stopPlaying(music): stop the music if it's that pool's */
+  stopSituationalMusic(pool: string): void {
+    if ((this.musicPlaying || this.musicLoading) && this.musicPool === pool) this.stopMusic();
+  }
+
   stopAll(): void {
     for (const e of this.active) {
       try {

@@ -141,6 +141,8 @@ export class Game {
   loadingScreenFactory: (() => Screen) | null = null;
   /** vanilla ReceivingLevelScreen, shown while changing dimension */
   receivingScreenFactory: ((reason: ReceivingReason) => Screen) | null = null;
+  /** vanilla WinScreen: the End Poem and the credits, `onFinished` once they're over or skipped */
+  winScreenFactory: ((onFinished: () => void) => Screen) | null = null;
   /** nether portal blocks in every dimension (vanilla POI records) */
   readonly portalPoi = new PortalPoi();
   /** what went through an end portal to the dimension that isn't loaded (game/endTravel.ts) */
@@ -501,6 +503,7 @@ export class Game {
         this.player.respawnPos = [pd.respawn[0], pd.respawn[1], pd.respawn[2]];
         this.player.respawnForced = pd.respawn[3] === 1;
       }
+      this.player.seenCredits = !!pd.seenCredits;
       this.spawnSearch = false;
       // vanilla RootVehicle: back in the minecart you left the game in
       const v = pd.vehicle && !pd.dead ? loadEntity(pd.vehicle, this.level) : null;
@@ -565,6 +568,7 @@ export class Game {
       effects: p.saveEffects(),
       vehicle: p.vehicle ? saveEntity(p.vehicle) : null,
       dimension: this.world.dim.id,
+      seenCredits: p.seenCredits || undefined,
     };
     m.portals = this.portalPoi.save();
     m.arrivals = this.arrivals.save();
@@ -1399,7 +1403,9 @@ export class Game {
         gl.viewport(0, 0, this.canvas.width, this.canvas.height);
         gl.clearColor(0, 0, 0, 1);
         gl.clear(gl.COLOR_BUFFER_BIT);
-        if (this.receivingPortal === 'end_portal') this.renderer.end.renderScreen(EndRenderer.shaderTime(this.level.gameTime, partial));
+        // (the level's clock stands still till the player is in: the client's keeps the starfield drifting — over the
+        // End Poem and the credits, minutes long)
+        if (this.receivingPortal === 'end_portal') this.renderer.end.renderScreen(EndRenderer.shaderTime(this.level.gameTime + this.ticks, partial));
         else this.overlay.renderScreenSprite('nether_portal', 1, this.canvas.width, this.canvas.height);
       } else if (this.panorama && this.panorama.state === 'ready') this.panorama.render(this.panoramaFade);
       else {
