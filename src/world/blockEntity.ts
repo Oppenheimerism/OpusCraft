@@ -254,11 +254,23 @@ export class EnchantingTableBlockEntity extends BlockEntity {
   }
 }
 
+/**
+ * vanilla TheEndPortalBlockEntity: nothing to keep, but it's what gets an end portal drawn (render/endRenderer.ts
+ * draws its up and down faces, vanilla shouldRenderFace: the Y axis only)
+ */
+export class EndPortalBlockEntity extends BlockEntity {
+  readonly id = 'end_portal';
+  constructor(x: number, y: number, z: number) {
+    super(x, y, z, 0);
+  }
+}
+
 export function createBlockEntity(name: string, x: number, y: number, z: number): BlockEntity | null {
   if (name === 'chest') return new ChestBlockEntity(x, y, z);
   if (name === 'enchanting_table') return new EnchantingTableBlockEntity(x, y, z);
   if (name === 'furnace') return new FurnaceBlockEntity(x, y, z);
   if (name === 'spawner') return new SpawnerBlockEntity(x, y, z);
+  if (name === 'end_portal') return new EndPortalBlockEntity(x, y, z);
   return null;
 }
 

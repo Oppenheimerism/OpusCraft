@@ -20,6 +20,7 @@ import { EntityRenderDispatcher, EntityRenderOptions } from './entityRenderers';
 import { buildParticleAtlas } from './particleAtlas';
 import type { BlindnessFog } from './effectVisuals';
 import { OVERWORLD, type DimensionType } from '../world/dimension';
+import { EndRenderer } from './endRenderer';
 
 export interface Camera {
   x: number;
@@ -64,6 +65,8 @@ export class Renderer {
   readonly hand: HandRenderer;
   readonly weather: WeatherRenderer;
   readonly entities: EntityRenderDispatcher;
+  /** the End's sky and the end portal's starfield */
+  readonly end: EndRenderer;
   private particleAtlas: ReturnType<typeof buildParticleAtlas> | null = null;
   particles: ParticleEngine | null = null;
   fancy = true;
@@ -94,6 +97,7 @@ export class Renderer {
     this.hand = new HandRenderer(gl, this.items);
     this.weather = new WeatherRenderer(gl);
     this.entities = new EntityRenderDispatcher(gl, this.items, this.hand.skinTexture);
+    this.end = new EndRenderer(gl);
   }
 
   resize(w: number, h: number): void {
@@ -128,7 +132,7 @@ export class Renderer {
     const lx = -Math.sin(yr) * Math.cos(pr), ly = -Math.sin(pr), lz = Math.cos(yr) * Math.cos(pr);
     const rdBlocks = this.renderDistance * 16;
     const sky = env.skyColor(colors.sky, tod, e.weather, e.partial);
-    let fog = env.fogColor(colors.fog, colors.sky, tod, e.weather, this.renderDistance, lx, ly, lz, cam.y, dim.effects.sky === 'normal', dim.minY);
+    let fog = env.fogColor(colors.fog, colors.sky, tod, e.weather, this.renderDistance, lx, ly, lz, cam.y, dim.effects.fog, dim.minY);
     let fogStart = rdBlocks - Math.min(Math.max(rdBlocks / 10, 4), 64);
     let fogEnd = rdBlocks;
     // vanilla FogShape: cylindrical for the ordinary distance fog, spherical for the rest
@@ -169,7 +173,7 @@ export class Renderer {
     }
     this.lastFog = fog;
     // lightmap
-    this.lightmap.update(env.skyDarken(tod, e.weather), e.weather.flash > 0, e.gamma, e.nightVision, dim.ambientLight);
+    this.lightmap.update(env.skyDarken(tod, e.weather), e.weather.flash > 0, e.gamma, e.nightVision, dim.ambientLight, dim.effects.forceBrightLightmap);
     // clear to fog color
     gl.viewport(0, 0, this.width, this.height);
     gl.clearColor(fog[0], fog[1], fog[2], 1);
@@ -192,6 +196,8 @@ export class Renderer {
         horizonDelta: cam.y - 63,
       });
     }
+    // (vanilla renderEndSky: under water too, not in lava or while blind)
+    if (!e.lava && !blind && dim.effects.sky === 'end') this.end.renderSky(this.proj, this.viewRot);
     const tp = {
       proj: this.proj,
       view: this.view,
@@ -215,6 +221,7 @@ export class Renderer {
     this.batch.light1 = dim.effects.constantAmbientLight ? [-0.2, -1.0, 0.7] : [-0.2, 1.0, 0.7];
     this.world.cull(tp, rdBlocks);
     this.world.drawOpaque(tp);
+    if (e.level) this.end.renderPortals(e.level.world, cam.x, cam.y, cam.z, this.proj, this.view, this.frustum, EndRenderer.shaderTime(e.level.gameTime, e.partial));
     if (e.level) this.renderEntities(e.level, cam, e.partial, fog, fogStart, fogEnd, e.entityOptions);
     this.world.drawTranslucent(tp);
     if (this.particles) {

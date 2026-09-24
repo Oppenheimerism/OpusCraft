@@ -5,6 +5,7 @@ import '../world/blocks';
 import { generateBlockTextures } from '../textures/index';
 import { Atlas } from '../render/atlas';
 import { Renderer, Camera } from '../render/renderer';
+import { EndRenderer } from '../render/endRenderer';
 import { World } from '../world/world';
 import { WorkerPool } from '../worker/pool';
 import { ChunkManager } from '../world/chunkManager';
@@ -65,6 +66,8 @@ import { OVERWORLD, THE_NETHER, dimensionById, teleportationScale, type Dimensio
 import { PortalPoi, portalRectangle, relativePortalPosition, portalExit, createPortal, isPortal, portalAxis, type PortalRect } from './portal';
 
 export type { GameOptions } from './options';
+/** vanilla ReceivingLevelScreen.Reason: what the loading screen shows while changing dimension */
+export type ReceivingReason = 'nether_portal' | 'end_portal' | 'other';
 
 export class Game {
   gl!: WebGL2RenderingContext;
@@ -131,13 +134,13 @@ export class Game {
   deathScreenFactory: (() => Screen) | null = null;
   loadingScreenFactory: (() => Screen) | null = null;
   /** vanilla ReceivingLevelScreen, shown while changing dimension */
-  receivingScreenFactory: ((portal: boolean) => Screen) | null = null;
+  receivingScreenFactory: ((reason: ReceivingReason) => Screen) | null = null;
   /** nether portal blocks in every dimension (vanilla POI records) */
   readonly portalPoi = new PortalPoi();
   /** after a change of dimension: puts the player in place once the chunks are in (false: wait some more) */
   private arrival: ((g: Game) => boolean) | null = null;
-  /** the loading screen shows the portal's swirl */
-  private receivingPortal = false;
+  /** the loading screen shows the nether portal's swirl or the end portal's starfield */
+  private receivingPortal: ReceivingReason | null = null;
   /** where the player left the Overworld for the Nether (vanilla enteredNetherPosition, not saved) */
   private enteredNetherAt: [number, number] | null = null;
   private leftOverworldAt: [number, number] | null = null;
@@ -355,7 +358,7 @@ export class Game {
     this.portalPoi.load(meta.portals);
     this.world.onPortalChanged = (x, y, z, present) => this.portalPoi.changed(this.world.dim.id, x, y, z, present);
     this.arrival = null;
-    this.receivingPortal = false;
+    this.receivingPortal = null;
     this.joined = false;
     this.renderer.world.meshes.forEach((_m, k) => this.renderer.world.dispose(k));
     this.chunks = new ChunkManager(this.world, this.pool, this.renderer.world);
@@ -963,10 +966,15 @@ export class Game {
   /**
    * Take the player to another dimension: what's loaded here is saved and let go, the player waits at
    * (x, y, z) on the "Loading terrain..." screen until the chunks round there are in, and then `arrive`
-   * puts them in place (returning false to wait again, having moved them somewhere else).
+   * puts them in place (returning false to wait again, having moved them somewhere else). `portal`: the
+   * player goes alive (through a portal, or teleported), not respawning — the loading screen then shows the
+   * nether portal's swirl to or from the Nether, the end portal's starfield to or from the End (vanilla
+   * ClientPacketListener.determineLevelLoadingReason).
    */
   changeDimension(dim: DimensionType, x: number, y: number, z: number, arrive: ((g: Game) => boolean) | null, portal: boolean): void {
     const p = this.player;
+    const from = this.world.dim.id, to = dim.id;
+    const reason: ReceivingReason = !portal ? 'other' : from === 'the_nether' || to === 'the_nether' ? 'nether_portal' : from === 'the_end' || to === 'the_end' ? 'end_portal' : 'other';
     if (p.isSleeping()) p.stopSleepInBed(true);
     p.removeVehicle();
     for (const c of [...this.world.chunks.values()]) {
@@ -987,8 +995,8 @@ export class Game {
     this.chunks.setCenter(x, z);
     this.arrival = arrive;
     this.spawned = false;
-    this.receivingPortal = portal;
-    this.setScreen(this.receivingScreenFactory ? this.receivingScreenFactory(portal) : null);
+    this.receivingPortal = reason === 'other' ? null : reason;
+    this.setScreen(this.receivingScreenFactory ? this.receivingScreenFactory(reason) : null);
   }
 
   /**
@@ -1189,7 +1197,7 @@ export class Game {
           this.arrival = null;
         }
         this.spawned = true;
-        this.receivingPortal = false;
+        this.receivingPortal = null;
         if (!this.joined) this.tutorial.start();
         this.joined = true;
         if (this.screen) this.setScreen(null);
@@ -1330,7 +1338,8 @@ export class Game {
         gl.viewport(0, 0, this.canvas.width, this.canvas.height);
         gl.clearColor(0, 0, 0, 1);
         gl.clear(gl.COLOR_BUFFER_BIT);
-        this.overlay.renderScreenSprite('nether_portal', 1, this.canvas.width, this.canvas.height);
+        if (this.receivingPortal === 'end_portal') this.renderer.end.renderScreen(EndRenderer.shaderTime(this.level.gameTime, partial));
+        else this.overlay.renderScreenSprite('nether_portal', 1, this.canvas.width, this.canvas.height);
       } else if (this.panorama && this.panorama.state === 'ready') this.panorama.render(this.panoramaFade);
       else {
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);

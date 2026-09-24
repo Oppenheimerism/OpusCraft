@@ -856,7 +856,7 @@ function tpCommand(c: Ctx): void {
     // to another dimension: the position as given (vanilla execute in doesn't scale it)
     p.yaw = yaw;
     p.pitch = pitch;
-    c.game.changeDimension(c.dim, x, y, z, null, false);
+    c.game.changeDimension(c.dim, x, y, z, null, true);
   } else c.game.teleport(x, y, z, yaw, pitch);
   c.ok(`Teleported ${c.game.playerName} to ${f6(x)}, ${f6(y)}, ${f6(z)}`);
 }

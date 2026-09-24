@@ -40,8 +40,10 @@ export class Lightmap {
    * @param gamma brightness option (0 moody .. 1 bright), default 0.5
    * @param nightVision 0..1
    * @param ambient the dimension's ambient light (0.1 in the Nether)
+   * @param forceBright vanilla forceBrightLightmap (the End): sky light plays no part, and the block light's
+   * colour is lifted a quarter of the way toward (0.99, 1.12, 1.0)
    */
-  update(skyDarken: number, flash: boolean, gamma: number, nightVision: number, ambient = 0): void {
+  update(skyDarken: number, flash: boolean, gamma: number, nightVision: number, ambient = 0, forceBright = false): void {
     const f1 = flash ? 1 : skyDarken * 0.95 + 0.05;
     // skyVec = (f, f, 1) lerp (1,1,1) 0.35
     const sv0 = skyDarken + (1 - skyDarken) * 0.35;
@@ -54,12 +56,19 @@ export class Lightmap {
         const br = brightness(j, ambient) * flick;
         const bg = br * ((br * 0.6 + 0.4) * 0.6 + 0.4);
         const bb = br * (br * br * 0.6 + 0.4);
-        let r = br + sv0 * skyB;
-        let g = bg + sv0 * skyB;
-        let b = bb + sv2 * skyB;
-        r += (0.75 - r) * 0.04;
-        g += (0.75 - g) * 0.04;
-        b += (0.75 - b) * 0.04;
+        let r: number, g: number, b: number;
+        if (forceBright) {
+          r = Math.min(1, Math.max(0, br + (0.99 - br) * 0.25));
+          g = Math.min(1, Math.max(0, bg + (1.12 - bg) * 0.25));
+          b = Math.min(1, Math.max(0, bb + (1.0 - bb) * 0.25));
+        } else {
+          r = br + sv0 * skyB;
+          g = bg + sv0 * skyB;
+          b = bb + sv2 * skyB;
+          r += (0.75 - r) * 0.04;
+          g += (0.75 - g) * 0.04;
+          b += (0.75 - b) * 0.04;
+        }
         if (nightVision > 0) {
           const m = Math.max(r, g, b);
           if (m < 1) {
