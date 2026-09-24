@@ -33,6 +33,8 @@ import { Piglin } from '../entity/piglin';
 import { Villager } from '../entity/villager';
 import { IronGolem } from '../entity/ironGolem';
 import '../textures/ironGolem';
+import '../textures/witch';
+import { Witch } from '../entity/witch';
 import { villagerTexture, zombieVillagerTexture } from '../textures/villager';
 import { ZombieVillager } from '../entity/zombieVillager';
 import { Fireball, LargeFireball } from '../entity/fireball';
@@ -162,6 +164,7 @@ export class EntityRenderDispatcher {
       villager: M.villagerModel(),
       zombie_villager: M.zombieVillagerModel(),
       iron_golem: M.ironGolemModel(),
+      witch: M.witchModel(),
     };
     // vanilla textures/misc/shadow.png: soft black disc
     const n = 32, data = new Uint8Array(n * n * 4);
@@ -527,6 +530,8 @@ export class EntityRenderDispatcher {
     if (type === 'wither_skeleton') scale = (pose) => pose.scale(1.2, 1.2, 1.2);
     // vanilla StriderRenderer.scale: a baby is the whole model at half size
     if (type === 'strider' && baby) scale = (pose) => pose.scale(0.5, 0.5, 0.5);
+    // vanilla WitchRenderer.scale: 15/16
+    if (type === 'witch') scale = (pose) => pose.scale(0.9375, 0.9375, 0.9375);
     // vanilla VillagerRenderer.scale: 15/16, a baby half that
     if (type === 'villager') {
       const f = baby ? 0.46875 : 0.9375;
@@ -617,6 +622,10 @@ export class EntityRenderDispatcher {
       case 'villager':
         M.animateVillager(def.root, a.limbSwing, a.limbAmount, a.age, a.headYaw, a.headPitch, (e as Villager).unhappyCounter > 0);
         break;
+      case 'witch':
+        // (vanilla WitchRenderer.render: setHoldingItem while there's something in its hand)
+        M.animateWitch(def.root, a.limbSwing, a.limbAmount, a.age, a.headYaw, a.headPitch, e.id, e.tickCount, !!e.mainHand);
+        break;
       case 'iron_golem': {
         const g = e as IronGolem;
         M.animateIronGolem(def.root, a.limbSwing, a.limbAmount, a.headYaw, a.headPitch, g.attackAnimationTick > 0 ? g.attackAnimationTick - p : 0, g.offerFlowerTick);
@@ -684,6 +693,27 @@ export class EntityRenderDispatcher {
       b.setOverlay(0, 0, 0, 0);
       const pose = this.pose;
       pose.push();
+      pose.translate(0, 0.4, -0.4);
+      pose.rotX(180);
+      this.items.render(b, pose, e.mainHand, 'ground');
+      pose.pop();
+    }
+    // vanilla WitchItemLayer: a potion it's drinking is tipped up to its lips, under the raised nose; anything else
+    // is held in the folded arms like a villager's
+    if (e instanceof Witch && e.mainHand) {
+      b.setOverlay(0, 0, 0, 0);
+      const pose = this.pose;
+      pose.push();
+      if (e.mainHand.item.id === 'potion') {
+        const head = def.root.child('head');
+        head.translateAndRotate(pose);
+        head.child('nose').translateAndRotate(pose);
+        pose.translate(0.0625, 0.25, 0);
+        pose.rotZ(180);
+        pose.rotX(140);
+        pose.rotZ(10);
+        pose.translate(0, -0.4, 0.4);
+      }
       pose.translate(0, 0.4, -0.4);
       pose.rotX(180);
       this.items.render(b, pose, e.mainHand, 'ground');

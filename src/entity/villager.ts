@@ -9,7 +9,7 @@
 // and VillagerGoalPackages' behaviours under the core activity and the current one.
 
 import { AgeableMob } from './animals';
-import type { MobCategory, SpawnGroup, SpawnReason } from './mob';
+import type { Mob, MobCategory, SpawnGroup, SpawnReason } from './mob';
 import type { Level } from '../game/level';
 import type { Entity } from './entity';
 import { LivingEntity } from './living';
@@ -1621,6 +1621,12 @@ function showTradesToPlayer(min: number, max: number): BehaviorControl<Villager>
 // ---------------------------------------------------------------------------
 
 /** vanilla Villager */
+/**
+ * what a villager becomes when lightning strikes it (vanilla Villager.thunderHit: a witch; set by witch.ts, which
+ * needs this module)
+ */
+export const lightningConversion: { witch: ((v: Villager) => Mob | null) | null } = { witch: null };
+
 export class Villager extends AgeableMob {
   readonly type = 'villager';
   readonly category: MobCategory = 'misc';
@@ -2298,6 +2304,12 @@ export class Villager extends AgeableMob {
       if (attacker.type === 'player' && this.isAlive) this.addParticlesAroundSelf('angry_villager');
     }
     return true;
+  }
+
+  /** vanilla Villager.thunderHit: struck by lightning (but in peaceful) it turns into a witch */
+  override thunderHit(bolt: Entity): void {
+    if (this.level.difficulty !== 'peaceful' && lightningConversion.witch?.(this)) return;
+    super.thunderHit(bolt);
   }
 
   override die(source: string, attacker: Entity | null = null): void {

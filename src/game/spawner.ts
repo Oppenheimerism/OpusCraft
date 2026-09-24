@@ -13,6 +13,7 @@ import { Hoglin, Zoglin } from '../entity/hoglin';
 import { Strider } from '../entity/strider';
 import { Piglin } from '../entity/piglin';
 import { Villager } from '../entity/villager';
+import { Witch } from '../entity/witch';
 import { IronGolem } from '../entity/ironGolem';
 import { ZombieVillager } from '../entity/zombieVillager';
 import { Zombie, ZombifiedPiglin, Skeleton, WitherSkeleton, Creeper, Spider, CaveSpider, Enderman, Slime, MagmaCube, Monster, validSpawnBlock } from '../entity/monsters';
@@ -57,6 +58,7 @@ export const MOB_TYPES: Record<string, (l: Level) => Mob> = {
   piglin: (l) => new Piglin(l),
   villager: (l) => new Villager(l),
   iron_golem: (l) => new IronGolem(l),
+  witch: (l) => new Witch(l),
 };
 
 export function createMob(type: string, level: Level): Mob | null {
@@ -191,7 +193,7 @@ const farmAnimals = (): SpawnerData[] => [
   { type: 'cow', weight: 8, min: 4, max: 4 },
 ];
 
-/** vanilla BiomeDefaultFeatures.monsters (witches not implemented yet) */
+/** vanilla BiomeDefaultFeatures.monsters */
 const monsters = (zombie = 95, skeleton = 100, zombieVillager = 5): SpawnerData[] => [
   { type: 'spider', weight: 100, min: 4, max: 4 },
   { type: 'zombie', weight: zombie, min: 4, max: 4 },
@@ -200,6 +202,7 @@ const monsters = (zombie = 95, skeleton = 100, zombieVillager = 5): SpawnerData[
   { type: 'creeper', weight: 100, min: 4, max: 4 },
   { type: 'slime', weight: 100, min: 4, max: 4 },
   { type: 'enderman', weight: 10, min: 1, max: 4 },
+  { type: 'witch', weight: 5, min: 1, max: 1 },
 ];
 
 const SQUID = (w: number, max = 4): SpawnerData[] => [{ type: 'squid', weight: w, min: 1, max }];

@@ -79,12 +79,12 @@ function brim(t: TexImage, r: Rand, pal: Pal, rad: number, band?: number, under 
 // the base villager (vanilla villager.png): bald, a long nose, a monobrow over green eyes, a brown robe and the
 // arms folded into its sleeves
 
-const SKIN: Pal = [0x946650, 0xa1705a, 0xad7b63, 0xb8866d, 0xc39175];
-const SKIN_W: Pal = [1, 2, 5, 5, 2];
-const BROW = 0x3b261a;
+export const SKIN: Pal = [0x946650, 0xa1705a, 0xad7b63, 0xb8866d, 0xc39175];
+export const SKIN_W: Pal = [1, 2, 5, 5, 2];
+export const BROW = 0x3b261a;
 const ROBE: Pal = [0x3c2820, 0x463028, 0x51382f, 0x5c4136, 0x674a3e];
 const ROBE_W: Pal = [1, 3, 6, 3, 1];
-const SHOE: Pal = [0x2a1d17, 0x33241c, 0x3d2b22];
+export const SHOE: Pal = [0x2a1d17, 0x33241c, 0x3d2b22];
 
 let BASE: TexImage | null = null;
 

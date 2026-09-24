@@ -25,6 +25,7 @@ import { zombieDoorSounds } from './gen/zombieDoor';
 import { villageSounds } from './gen/village';
 import { endSounds } from './gen/end';
 import { brewingSounds } from './gen/brewing';
+import { witchSounds } from './gen/witch';
 
 export const SAMPLE_RATE = 44100;
 
@@ -56,6 +57,7 @@ export const SOUNDS: Record<string, SoundGen> = {
   ...villageSounds(),
   ...endSounds(),
   ...brewingSounds(),
+  ...witchSounds(),
 };
 
 /** Number of in-game (overworld) music tracks. */

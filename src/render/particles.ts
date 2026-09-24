@@ -746,11 +746,11 @@ export class ParticleEngine {
   }
 
   /**
-   * vanilla SpellParticle for EFFECT and INSTANT_EFFECT (a splash potion's burst): a swirl, or an instant effect's
+   * vanilla SpellParticle for EFFECT, INSTANT_EFFECT (a splash potion's burst) and WITCH: a swirl, or an instant effect's
    * sparkle, rising, in the colour given; `power` flings it out (Particle.setPower). Only the vertical speed is
    * the caller's: the constructor makes up its own horizontal one, slowed tenfold when none was given
    */
-  spell(kind: 'effect' | 'instant_effect', x: number, y: number, z: number, xd: number, yd: number, zd: number, r: number, g: number, b: number, power = 1): void {
+  spell(kind: 'effect' | 'instant_effect' | 'witch', x: number, y: number, z: number, xd: number, yd: number, zd: number, r: number, g: number, b: number, power = 1): void {
     const p = this.base(kind, x, y, z);
     this.withSpeed(p, 0.5 - Math.random(), yd, 0.5 - Math.random());
     p.friction = 0.96;
@@ -764,7 +764,8 @@ export class ParticleEngine {
     p.size *= 0.75;
     p.lifetime = Math.floor(8 / (Math.random() * 0.8 + 0.2));
     p.physics = false;
-    p.frames = kind === 'instant_effect' ? SPELL : EFFECT;
+    // (vanilla particles/witch.json: the instant effect's sparkles; WitchProvider gives them their purple)
+    p.frames = kind === 'effect' ? EFFECT : SPELL;
     p.r = r;
     p.g = g;
     p.b = b;

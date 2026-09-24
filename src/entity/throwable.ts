@@ -35,19 +35,27 @@ export class ThrownItem extends Entity {
     return 0.03;
   }
 
-  /** vanilla Projectile.shootFromRotation + shoot */
+  /** vanilla Projectile.shootFromRotation: along the look, `zOff` degrees up, carrying the shooter's own motion */
   shootFromRotation(shooter: Entity, xRot: number, yRot: number, zOff: number, velocity: number, inaccuracy: number): void {
-    let x = -Math.sin(yRot / RAD) * Math.cos(xRot / RAD);
-    let y = -Math.sin((xRot + zOff) / RAD);
-    let z = Math.cos(yRot / RAD) * Math.cos(xRot / RAD);
+    const x = -Math.sin(yRot / RAD) * Math.cos(xRot / RAD);
+    const y = -Math.sin((xRot + zOff) / RAD);
+    const z = Math.cos(yRot / RAD) * Math.cos(xRot / RAD);
+    this.shoot(x, y, z, velocity, inaccuracy);
+    this.dx += shooter.x - shooter.xo;
+    this.dy += shooter.onGround ? 0 : shooter.y - shooter.yo;
+    this.dz += shooter.z - shooter.zo;
+  }
+
+  /** vanilla Projectile.shoot: off along (x, y, z) at `velocity`, a little astray (a triangle spread of `inaccuracy`) */
+  shoot(x: number, y: number, z: number, velocity: number, inaccuracy: number): void {
     const l = Math.sqrt(x * x + y * y + z * z) || 1;
     const tri = () => 0.0172275 * inaccuracy * (Math.random() - Math.random());
     x = (x / l + tri()) * velocity;
     y = (y / l + tri()) * velocity;
     z = (z / l + tri()) * velocity;
-    this.dx = x + (shooter.x - shooter.xo);
-    this.dy = y + (shooter.onGround ? 0 : shooter.y - shooter.yo);
-    this.dz = z + (shooter.z - shooter.zo);
+    this.dx = x;
+    this.dy = y;
+    this.dz = z;
     this.yaw = this.yawO = Math.atan2(x, z) * RAD;
     this.pitch = this.pitchO = Math.atan2(y, Math.sqrt(x * x + z * z)) * RAD;
   }

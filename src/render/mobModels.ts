@@ -186,6 +186,52 @@ export function animateVillager(root: ModelPart, limbSwing: number, limbAmount: 
   root.child('left_leg').yRot = 0;
 }
 
+/**
+ * vanilla WitchModel.createBodyLayer (64x128): the villager's body under a tall hat of four boxes, each set on the
+ * last a little further back and askew, the tip bent over; a wart on the nose
+ */
+export function witchModel(): MobModelDef {
+  const root = new ModelPart();
+  const head = root.add('head', part([{ x: -4, y: -10, z: -4, w: 8, h: 10, d: 8, u: 0, v: 0 }]));
+  const hat = head.add('hat', part([{ x: 0, y: 0, z: 0, w: 10, h: 2, d: 10, u: 0, v: 64 }], [-5, -10.03125, -5]));
+  const hat2 = hat.add('hat2', part([{ x: 0, y: 0, z: 0, w: 7, h: 4, d: 7, u: 0, v: 76 }], [1.75, -4, 2], [-0.05235988, 0, 0.02617994]));
+  const hat3 = hat2.add('hat3', part([{ x: 0, y: 0, z: 0, w: 4, h: 4, d: 4, u: 0, v: 87 }], [1.75, -4, 2], [-0.10471976, 0, 0.05235988]));
+  hat3.add('hat4', part([{ x: 0, y: 0, z: 0, w: 1, h: 2, d: 1, u: 0, v: 95, inflate: 0.25 }], [1.75, -2, 2], [-PI / 15, 0, 0.10471976]));
+  const nose = head.add('nose', part([{ x: -1, y: -1, z: -6, w: 2, h: 4, d: 2, u: 24, v: 0 }], [0, -2, 0]));
+  nose.add('mole', part([{ x: 0, y: 3, z: -6.75, w: 1, h: 1, d: 1, u: 0, v: 0, inflate: -0.25 }], [0, -2, 0]));
+  const body = root.add('body', part([{ x: -4, y: 0, z: -3, w: 8, h: 12, d: 6, u: 16, v: 20 }]));
+  body.add('jacket', part([{ x: -4, y: 0, z: -3, w: 8, h: 20, d: 6, u: 0, v: 38, inflate: 0.5 }]));
+  root.add('arms', part([
+    { x: -8, y: -2, z: -2, w: 4, h: 8, d: 4, u: 44, v: 22 },
+    { x: 4, y: -2, z: -2, w: 4, h: 8, d: 4, u: 44, v: 22, mirror: true },
+    { x: -4, y: 2, z: -2, w: 8, h: 4, d: 4, u: 40, v: 38 },
+  ], [0, 3, -1], [-0.75, 0, 0]));
+  root.add('right_leg', part([{ x: -2, y: 0, z: -2, w: 4, h: 12, d: 4, u: 0, v: 22 }], [-2, 12, 0]));
+  root.add('left_leg', part([{ x: -2, y: 0, z: -2, w: 4, h: 12, d: 4, u: 0, v: 22, mirror: true }], [2, 12, 0]));
+  return { root, texW: 64, texH: 128 };
+}
+
+/**
+ * vanilla WitchModel.setupAnim: the villager's, and the nose wobbling on its own slow clock (each witch's a little
+ * different: its id); drinking, it's tipped up out of the way of the bottle
+ */
+export function animateWitch(root: ModelPart, limbSwing: number, limbAmount: number, age: number, headYaw: number, headPitch: number, id: number, tickCount: number, holding: boolean): void {
+  animateVillager(root, limbSwing, limbAmount, age, headYaw, headPitch, false);
+  const nose = root.child('head').child('nose');
+  const f = 0.01 * (id % 10);
+  nose.x = 0;
+  nose.y = -2;
+  nose.z = 0;
+  nose.xRot = Math.sin(tickCount * f) * 4.5 * (PI / 180);
+  nose.yRot = 0;
+  nose.zRot = Math.cos(tickCount * f) * 2.5 * (PI / 180);
+  if (holding) {
+    nose.y = 1;
+    nose.z = -1.5;
+    nose.xRot = -0.9;
+  }
+}
+
 /** vanilla IronGolemModel.createBodyLayer (128x128) */
 export function ironGolemModel(): MobModelDef {
   const root = new ModelPart();

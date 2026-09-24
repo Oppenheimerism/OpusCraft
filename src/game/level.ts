@@ -69,7 +69,7 @@ export interface ParticleSink {
   /** vanilla DUST (DustParticle): a coloured speck, as powered redstone gives off */
   dust?(x: number, y: number, z: number, r: number, g: number, b: number, scale: number): void;
   /** vanilla EFFECT / INSTANT_EFFECT (SpellParticle) in a colour, flung out by `power` (a splash potion's burst) */
-  spell?(kind: 'effect' | 'instant_effect', x: number, y: number, z: number, xd: number, yd: number, zd: number, r: number, g: number, b: number, power: number): void;
+  spell?(kind: 'effect' | 'instant_effect' | 'witch', x: number, y: number, z: number, xd: number, yd: number, zd: number, r: number, g: number, b: number, power?: number): void;
 }
 
 /** vanilla Block.UPDATE_NEIGHBORS: setBlock tells the six neighbours (neighborChanged) */

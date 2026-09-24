@@ -673,6 +673,64 @@ export class HurtByTargetGoal extends TargetGoal {
   }
 }
 
+/** a mob that fights from afar (vanilla RangedAttackMob) */
+export interface RangedAttacker extends Mob {
+  performRangedAttack(target: LivingEntity, power: number): void;
+}
+
+/**
+ * vanilla RangedAttackGoal: close in on the target until it's within `attackRadius` and has been in sight a quarter
+ * of a second, then stand and let fly every `intervalMin`..`intervalMax` ticks (the further off, the longer), only
+ * while it can see it; the power it throws with is the distance over the radius (0.1 to 1)
+ */
+export class RangedAttackGoal extends Goal {
+  private target: LivingEntity | null = null;
+  private attackTime = -1;
+  private seeTime = 0;
+  private readonly attackRadiusSqr: number;
+  constructor(readonly mob: RangedAttacker, readonly speed: number, readonly intervalMin: number, readonly intervalMax: number, readonly attackRadius: number) {
+    super();
+    this.attackRadiusSqr = attackRadius * attackRadius;
+    this.flags = Flag.MOVE | Flag.LOOK;
+  }
+  canUse(): boolean {
+    const t = this.mob.target;
+    if (!t || !t.isAlive) return false;
+    this.target = t;
+    return true;
+  }
+  override canContinueToUse(): boolean {
+    return this.canUse() || (!!this.target && this.target.isAlive && !this.mob.navigation.isDone());
+  }
+  override stop(): void {
+    this.target = null;
+    this.seeTime = 0;
+    this.attackTime = -1;
+  }
+  override requiresUpdateEveryTick(): boolean {
+    return true;
+  }
+  override tick(): void {
+    const m = this.mob, t = this.target;
+    if (!t) return;
+    const d0 = m.distanceToSqr(t.x, t.y, t.z);
+    const see = m.sensing.hasLineOfSight(t);
+    if (see) this.seeTime++;
+    else this.seeTime = 0;
+    if (d0 <= this.attackRadiusSqr && this.seeTime >= 5) m.navigation.stop();
+    else m.navigation.moveToEntity(t, this.speed);
+    m.lookControl.setLookAtEntity(t, 30, 30);
+    const f = Math.sqrt(d0) / this.attackRadius;
+    if (--this.attackTime === 0) {
+      if (!see) return;
+      m.performRangedAttack(t, Math.max(0.1, Math.min(1, f)));
+      this.attackTime = Math.floor(f * (this.intervalMax - this.intervalMin) + this.intervalMin);
+    } else if (this.attackTime < 0) {
+      this.attackTime = Math.floor(this.intervalMin + f * (this.intervalMax - this.intervalMin));
+    }
+  }
+}
+
 /** vanilla RestrictSunGoal: stay in shade while it's day */
 export class RestrictSunGoal extends Goal {
   constructor(readonly mob: Mob) {
