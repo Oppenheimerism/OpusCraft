@@ -7,11 +7,13 @@ import { DOWN, UP, NORTH, SOUTH, WEST, EAST, DX, DZ, OPPOSITE, DIR_NAMES, AXIS_O
 import type { World } from '../world/world';
 import { AABB } from '../core/aabb';
 import { LivingEntity } from '../entity/living';
-import { registerBehavior } from './blockBehavior';
+import { registerBehavior, type ItemUseResult, type UseContext } from './blockBehavior';
 import type { PlaceContext } from './blockRules';
 import { hasNeighborSignal } from './redstone/signal';
 import { BellBlockEntity } from '../world/blockEntity';
-import { composterFloor } from '../world/blocksVillage';
+import { composterFloor, cauldronContentTop } from '../world/blocksVillage';
+import { isDyeable } from '../item/dyedColor';
+import type { Entity } from '../entity/entity';
 import { ItemStack } from '../item/item';
 import { ItemEntity } from '../entity/itemEntity';
 import type { Player } from '../entity/player';
@@ -288,5 +290,86 @@ export function fillHeld(p: Player, filled: ItemStack): void {
       const dz = DZ[f] !== 0 ? DZ[f] * 0.52 : d4;
       level.particles.spawn?.('smoke', x + 0.5 + dx, y + (Math.random() * 9) / 16, z + 0.5 + dz, 0, 0, 0);
     },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Cauldrons (vanilla CauldronInteraction, AbstractCauldronBlock, LayeredCauldronBlock, LavaCauldronBlock): buckets in
+// and out, leather washed clean, fire put out, lava that burns
+{
+  const cauldron = getBlock('cauldron'), waterCauldron = getBlock('water_cauldron'), lavaCauldron = getBlock('lava_cauldron');
+  const levelOf = (st: number) => waterCauldron.get<number>(st, 'level');
+  const at = (level: Level, x: number, y: number, z: number, sound: string) => level.sound.play(sound, x + 0.5, y + 0.5, z + 0.5, 1, 1);
+
+  /** vanilla CauldronInteraction.emptyBucket: the bucket's load in, the empty bucket back */
+  const emptyBucket = (level: Level, x: number, y: number, z: number, ctx: UseContext, now: number, sound: string): ItemUseResult => {
+    fillHeld(ctx.player, ItemStack.of('bucket'));
+    level.setBlock(x, y, z, now);
+    at(level, x, y, z, sound);
+    return 'success';
+  };
+  /** vanilla CauldronInteraction.fillBucket: the cauldron scooped out into the bucket */
+  const fillBucket = (level: Level, x: number, y: number, z: number, ctx: UseContext, filled: string, sound: string): ItemUseResult => {
+    fillHeld(ctx.player, ItemStack.of(filled));
+    level.setBlock(x, y, z, cauldron.defaultState);
+    at(level, x, y, z, sound);
+    return 'success';
+  };
+  /** vanilla CauldronInteraction.addDefaultInteractions: any cauldron takes a water or lava bucket, whatever was in it */
+  const pour = (level: Level, x: number, y: number, z: number, id: string, ctx: UseContext): ItemUseResult | null => {
+    if (id === 'water_bucket') return emptyBucket(level, x, y, z, ctx, waterCauldron.state({ level: 3 }), 'item.bucket.empty');
+    if (id === 'lava_bucket') return emptyBucket(level, x, y, z, ctx, lavaCauldron.defaultState, 'item.bucket.empty_lava');
+    return null;
+  };
+  /** vanilla LayeredCauldronBlock.lowerFillLevel */
+  const lowerFillLevel = (level: Level, x: number, y: number, z: number, st: number) => {
+    const l = levelOf(st) - 1;
+    level.setBlock(x, y, z, l === 0 ? cauldron.defaultState : waterCauldron.with(st, 'level', l));
+  };
+  /** vanilla AbstractCauldronBlock.isEntityInsideContent: down in whatever's in it (`top` in blocks) */
+  const inContent = (e: Entity, y: number, top: number) => e.y < y + top && e.bb.maxY > y + 0.25;
+  const drops = () => [ItemStack.of('cauldron')];
+
+  registerBehavior('cauldron', {
+    useItemOn: (level, x, y, z, _st, stack, ctx) => pour(level, x, y, z, stack.item.id, ctx) ?? 'pass',
+    drops,
+  });
+  registerBehavior('water_cauldron', {
+    useItemOn(level, x, y, z, st, stack, ctx) {
+      const id = stack.item.id;
+      const r = pour(level, x, y, z, id, ctx);
+      if (r) return r;
+      // (only a full one fills a bucket)
+      if (id === 'bucket') return levelOf(st) === 3 ? fillBucket(level, x, y, z, ctx, 'water_bucket', 'item.bucket.fill') : 'pass';
+      // vanilla CauldronInteraction.DYED_ITEM: dyed leather comes out undyed, for a level of water
+      if (isDyeable(stack.item) && stack.tag?.dyedColor !== undefined) {
+        delete stack.tag.dyedColor;
+        delete stack.tag.dyedHidden;
+        ctx.player.inventory.setSelectedItem(stack);
+        lowerFillLevel(level, x, y, z, st);
+        return 'success';
+      }
+      return 'pass';
+    },
+    // vanilla LayeredCauldronBlock.entityInside: a burning thing in the water is put out, and some water goes
+    entityInside(level, x, y, z, st, e) {
+      if (!e.isOnFire() || !inContent(e, y, cauldronContentTop(levelOf(st)) / 16)) return;
+      e.clearFire();
+      lowerFillLevel(level, x, y, z, st);
+    },
+    drops,
+  });
+  registerBehavior('lava_cauldron', {
+    useItemOn(level, x, y, z, _st, stack, ctx) {
+      const id = stack.item.id;
+      const r = pour(level, x, y, z, id, ctx);
+      if (r) return r;
+      return id === 'bucket' ? fillBucket(level, x, y, z, ctx, 'lava_bucket', 'item.bucket.fill_lava') : 'pass';
+    },
+    // vanilla LavaCauldronBlock.entityInside: as bad as lava (Entity.lavaHurt)
+    entityInside(_level, _x, y, _z, _st, e) {
+      if (inContent(e, y, 15 / 16)) (e as unknown as { lavaHurt(): void }).lavaHurt();
+    },
+    drops,
   });
 }

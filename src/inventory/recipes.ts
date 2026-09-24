@@ -103,6 +103,7 @@ shaped('barrel', 1, ['PSP', 'P P', 'PSP'], { P: '#planks', S: '#wooden_slabs' })
 shaped('composter', 1, ['# #', '# #', '###'], { '#': '#wooden_slabs' });
 shaped('smoker', 1, [' # ', '#X#', ' # '], { '#': ['#logs', '#crimson_stems', '#warped_stems'], X: 'furnace' });
 shaped('blast_furnace', 1, ['III', 'IXI', '###'], { I: 'iron_ingot', X: 'furnace', '#': 'smooth_stone' });
+shaped('cauldron', 1, ['# #', '# #', '###'], { '#': 'iron_ingot' });
 shaped('oak_sign', 3, ['###', '###', ' X '], { '#': 'oak_planks', X: 'stick' });
 // vanilla boat recipes: planks in a U, and a chest added to a boat
 for (const w of WOODS) {

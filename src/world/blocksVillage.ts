@@ -134,6 +134,49 @@ function composterShape(level: number): Box[] {
   return [bx(0, 0, 0, 16, h, 16), bx(0, h, 0, 2, 16, 16), bx(14, h, 0, 16, 16, 16), bx(2, h, 0, 14, 16, 2), bx(2, h, 14, 14, 16, 16)];
 }
 
+// ---------------------------------------------------------------------------
+// Cauldrons (vanilla AbstractCauldronBlock: CauldronBlock, LayeredCauldronBlock as the water cauldron,
+// LavaCauldronBlock; block/cauldron, and template_cauldron_level1 / level2 / full with water or lava in it)
+
+/** the four L-shaped legs, as two boxes each [x0, z0, x1, z1] (3 px tall) */
+const CAULDRON_LEGS: [number, number, number, number][] = [
+  [0, 0, 4, 2], [0, 2, 2, 4], [12, 0, 16, 2], [14, 2, 16, 4], [0, 14, 4, 16], [0, 12, 2, 14], [12, 14, 16, 16], [14, 12, 16, 14],
+];
+
+/** vanilla AbstractCauldronBlock.SHAPE: the legs, a floor at 3 to 4 px, walls two thick */
+const CAULDRON_SHAPE: Box[] = [
+  ...CAULDRON_LEGS.map(([x0, z0, x1, z1]) => bx(x0, 0, z0, x1, 3, z1)),
+  bx(0, 3, 0, 16, 4, 16),
+  bx(0, 4, 0, 2, 16, 16), bx(14, 4, 0, 16, 16, 16), bx(2, 4, 0, 14, 16, 2), bx(2, 4, 14, 14, 16, 16),
+];
+
+/** vanilla LayeredCauldronBlock.getContentHeight / LavaCauldronBlock: the surface, in pixels */
+export const cauldronContentTop = (level: number): number => 6 + 3 * level;
+
+function cauldronModel(content?: { tex: string; top: number; tint?: boolean }): ModelDef {
+  const side = 'cauldron_side', top = 'cauldron_top', inside = 'cauldron_inner', bottom = 'cauldron_bottom';
+  // (the inside faces vanish under a block on top, as vanilla's cull them with "up")
+  const elements: ElementDef[] = [
+    { from: [0, 3, 0], to: [2, 16, 16], faces: { down: f(inside), up: f(top, undefined, 'up'), north: f(side, undefined, 'north'), south: f(side, undefined, 'south'), west: f(side, undefined, 'west'), east: f(side, undefined, 'up') } },
+    { from: [2, 3, 2], to: [14, 4, 14], faces: { down: f(inside), up: f(inside, undefined, 'up') } },
+    { from: [14, 3, 0], to: [16, 16, 16], faces: { down: f(inside), up: f(top, undefined, 'up'), north: f(side, undefined, 'north'), south: f(side, undefined, 'south'), west: f(side, undefined, 'up'), east: f(side, undefined, 'east') } },
+    { from: [2, 3, 0], to: [14, 16, 2], faces: { down: f(inside), up: f(top, undefined, 'up'), north: f(side, undefined, 'north'), south: f(side, undefined, 'up') } },
+    { from: [2, 3, 14], to: [14, 16, 16], faces: { down: f(inside), up: f(top, undefined, 'up'), north: f(side, undefined, 'up'), south: f(side, undefined, 'south') } },
+  ];
+  for (const [x0, z0, x1, z1] of CAULDRON_LEGS) {
+    elements.push({
+      from: [x0, 0, z0], to: [x1, 3, z1],
+      faces: {
+        down: f(bottom, undefined, 'down'),
+        north: f(side, undefined, z0 === 0 ? 'north' : undefined), south: f(side, undefined, z1 === 16 ? 'south' : undefined),
+        west: f(side, undefined, x0 === 0 ? 'west' : undefined), east: f(side, undefined, x1 === 16 ? 'east' : undefined),
+      },
+    });
+  }
+  if (content) elements.push({ from: [2, 4, 2], to: [14, content.top, 14], faces: { up: { tex: content.tex, cull: 'up', tint: content.tint ? 0 : undefined } } });
+  return { particle: side, elements };
+}
+
 /** face bits (1 << dir) of the four sides and the bottom: full faces for neighbours to cull against and hang things on */
 const SIDES_AND_BOTTOM = 0b111101;
 
@@ -172,6 +215,22 @@ export function registerVillageBlocks(): void {
         return level ? { parts: [{ model: base }, { model: contents[level] }] } : { model: base };
       },
     });
+  }
+  {
+    // (vanilla: strength 2, a pickaxe to drop, no occlusion; the lava one glows)
+    const base = {
+      hardness: 2, sound: 'stone', tool: 'pickaxe' as const, requiresTool: true, mapColor: 0x707070,
+      opaque: false, aoCaster: false, opacity: 0, collision: CAULDRON_SHAPE,
+    };
+    const empty = cauldronModel();
+    registerBlock('cauldron', { ...base, model: () => ({ model: empty }) });
+    const water = [1, 2, 3].map((l) => cauldronModel({ tex: 'water_still', top: cauldronContentTop(l), tint: true }));
+    registerBlock('water_cauldron', {
+      ...base, props: [intProp('level', 1, 3)], defaults: { level: 1 }, tint: 'water', item: false,
+      model: (s) => ({ model: water[s.get<number>('level') - 1] }),
+    });
+    const lava = cauldronModel({ tex: 'lava_still', top: 15 });
+    registerBlock('lava_cauldron', { ...base, light: 15, item: false, model: () => ({ model: lava }) });
   }
   // Smoker and blast furnace (vanilla SmokerBlock, BlastFurnaceBlock: furnaces with their own recipes; block/smoker is
   // orientable_with_bottom, block/blast_furnace orientable, each with an _on front)

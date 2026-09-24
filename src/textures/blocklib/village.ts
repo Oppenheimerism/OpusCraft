@@ -2,7 +2,7 @@
 // barrel, composter, smoker, blast furnace, cauldron, lectern, the cartography / fletching / smithing tables,
 // loom, stonecutter, brewing stand, flower pot and campfire.
 
-import { TexImage, TexDef, AnimTex, img, setPx, getPx, mixC, mulC, anim, Rand } from '../tex';
+import { TexImage, TexDef, AnimTex, img, setPx, getPx, mixC, mulC, anim, clear, Rand } from '../tex';
 import { N, rng, fbm, quantize, paint, white } from './core';
 import { planks, WOOD, WoodDef } from './wood';
 import { speckled } from './terrain';
@@ -312,6 +312,65 @@ export function blastFurnaceTop(): TexImage {
   return t;
 }
 
+// ---------------------------------------------------------------------------
+// Cauldron: dark cast iron, a lighter lip round the rim, four stubby legs (the side's bottom corners)
+
+const CAST = [0x1c1c1c, 0x282828, 0x333333, 0x3e3e3e, 0x4a4a4a, 0x595959, 0x6d6d6d];
+
+function castIron(seed: string): TexImage {
+  const tones = quantize(fbm(rng(seed), [[8, 8, 0.5], [4, 4, 0.3]], 0.2), [1, 3, 7, 3, 1]);
+  return paint(tones.map((k) => k + 1), CAST);
+}
+
+export function cauldronSide(): TexImage {
+  const t = castIron('cauldron_side');
+  for (let x = 0; x < N; x++) {
+    // the lip, and its shadow
+    setPx(t, x, 0, CAST[6]);
+    setPx(t, x, 1, CAST[5]);
+    setPx(t, x, 2, CAST[1]);
+    // the belly's band, low down
+    setPx(t, x, 10, mixC(getPx(t, x, 10), CAST[5], 0.5));
+    setPx(t, x, 11, mixC(getPx(t, x, 11), CAST[0], 0.4));
+    setPx(t, x, 12, CAST[1]);
+  }
+  // the legs (the bottom three rows at each end; nothing between them)
+  for (let y = 13; y < N; y++)
+    for (let x = 0; x < N; x++) {
+      if (x >= 4 && x < 12) clear(t, x, y);
+      else if (x === 0 || x === 12) setPx(t, x, y, CAST[5]);
+      else if (x === 3 || x === 15) setPx(t, x, y, CAST[1]);
+    }
+  return t;
+}
+
+export function cauldronTop(): TexImage {
+  const t = img();
+  const r = rng('cauldron_top');
+  for (let y = 0; y < N; y++)
+    for (let x = 0; x < N; x++) {
+      const d = Math.min(x, y, 15 - x, 15 - y);
+      // the rim, two pixels wide (the middle is open)
+      if (d > 1) continue;
+      setPx(t, x, y, d === 0 ? CAST[5] : r.chance(0.3) ? CAST[5] : CAST[6]);
+    }
+  return t;
+}
+
+export function cauldronInner(): TexImage {
+  const t = castIron('cauldron_inner');
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) setPx(t, x, y, mulC(getPx(t, x, y), 0.85));
+  return t;
+}
+
+export function cauldronBottom(): TexImage {
+  const t = castIron('cauldron_bottom');
+  // the soles of the legs at the corners catch a little light
+  for (const [x0, y0] of [[0, 0], [12, 0], [0, 12], [12, 12]])
+    for (let y = y0; y < y0 + 4; y++) for (let x = x0; x < x0 + 4; x++) setPx(t, x, y, mixC(getPx(t, x, y), CAST[5], 0.35));
+  return t;
+}
+
 export function registerVillageTextures(T: Reg): void {
   T['bell_bottom'] = bellBottom;
   T['barrel_side'] = barrelSide;
@@ -332,4 +391,8 @@ export function registerVillageTextures(T: Reg): void {
   T['blast_furnace_front'] = () => blastFurnaceFront(false);
   T['blast_furnace_front_on'] = () => flickering((i) => blastFurnaceFront(true, i));
   T['blast_furnace_top'] = blastFurnaceTop;
+  T['cauldron_side'] = cauldronSide;
+  T['cauldron_top'] = cauldronTop;
+  T['cauldron_inner'] = cauldronInner;
+  T['cauldron_bottom'] = cauldronBottom;
 }

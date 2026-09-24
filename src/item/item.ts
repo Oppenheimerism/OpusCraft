@@ -299,7 +299,7 @@ for (const b of BLOCKS) {
   const it = ITEMS.get(b.name);
   if (!it || !it.block) continue;
   const n = b.name;
-  if (n.endsWith('_door') || n.endsWith('_bed') || n === 'lantern' || n === 'soul_lantern' || n === 'chain' || n === 'bell') {
+  if (n.endsWith('_door') || n.endsWith('_bed') || n === 'lantern' || n === 'soul_lantern' || n === 'chain' || n === 'bell' || n === 'cauldron') {
     it.texture = n;
     if (n.endsWith('_bed')) it.maxStack = 1;
   }
@@ -335,6 +335,7 @@ export function itemForBlock(name: string): Item | undefined {
   if (name === 'soul_wall_torch') return ITEMS.get('soul_torch');
   if (name === 'cave_vines' || name === 'cave_vines_plant') return ITEMS.get('glow_berries');
   if (name === 'big_dripleaf_stem') return ITEMS.get('big_dripleaf');
+  if (name === 'water_cauldron' || name === 'lava_cauldron') return ITEMS.get('cauldron');
   return ITEMS.get(name);
 }
 
