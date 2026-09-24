@@ -14,6 +14,13 @@ Branch: `claude/stoic-johnson-waevai` (from main at 5dfd44d).
 
 ## 2. Shared files changed (all additive hooks)
 
+**Merging into main.** Main has moved on since my M3 merge (it's at 87eb99f now: the shield, illagers and raids, cats
+and ocelots, ocean monuments). A trial merge (`git merge-tree`) conflicts in 13 files: `src/game/advancements.ts`,
+`commands.ts`, `level.ts`, `spawner.ts`, `src/gui/guiGraphics.ts`, `src/inventory/recipes.ts`, `src/item/item.ts`,
+`src/render/handRenderer.ts`, `itemRenderer.ts`, `model.ts`, `src/textures/blocks.ts`, `src/textures/items.ts` and
+`src/world/gen/generator.ts`. I didn't merge it in this time (this session wasn't cleared to); my side of each is
+listed below. After the merge, see Cats in the open points.
+
 - `src/world/gen/generator.ts`: builds `this.temples = new Temples(...)` next to the villages and hands it to the decorator.
   `firstFreeHeight(x, z, oceanFloor = false)` gained the flag (OCEAN_FLOOR_WG: water doesn't stop the scan), for the
   pyramid's height; the one changed line is the aquifer check at the end of the loop.
@@ -144,7 +151,11 @@ M4 (all additive):
 - **Suspicious sand:** done in M4: the collapsed roof's spot and 5-7 of the cellar's (vanilla's choice from M1) are
   suspicious sand with archaeology/desert_pyramid, seeded by BlockPos.asLong as vanilla does, so each block holds what
   vanilla's would at that position (a java.util.Random nextInt(8)).
-- **Cats (hooks):** `SwampHutPiece.spawnCat` and the creature override in `structureSpawns.ts` (`HOOK(cats)`).
+- **Cats (hooks):** `SwampHutPiece.spawnCat` (`swampHut.ts`) and the creature override in `structureSpawns.ts`
+  (`HOOK(cats)`). Main now has cats, and its `src/entity/cat.ts` leaves `catHooks.inSwampHut` for the hut to set.
+  After the merge: set it with the witch override's test (inside a piece box of
+  `templesFor(level.seed).startsNear('swamp_hut', x >> 4, z >> 4)`, overworld only); spawnCat puts a persistent cat
+  at the piece's (2, 2, 5), finalized as a structure spawn so it comes out black; the override is cat, weight 1, 1-1.
 - **Dune armor trim template** is in the loot table (weight 1 vs 6 empty, count 2) but rolls nothing until the item exists
   (the existing convention).
 - Structure order in the step: vanilla goes by name (desert_pyramid, igloo, jungle_pyramid, pillager_outpost, …,
