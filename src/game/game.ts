@@ -1486,6 +1486,15 @@ export class Game {
       entityOptions: { shadows: this.opts.entityShadows, drawPlayer: this.thirdPerson > 0 && !camOverride, distanceScale: this.opts.entityDistanceScaling, skinParts: this.skinParts(), mainArm: this.opts.mainHand },
     });
     if (camOverride) return;
+    // (vanilla LevelRenderer: the cracks others are making in blocks within 32, forgotten after 400 ticks unchanged)
+    for (const [id, d] of this.level.destroyProgress) {
+      if (this.level.gameTime - d.time > 400) {
+        this.level.destroyProgress.delete(id);
+        continue;
+      }
+      if ((d.x - cam.x) ** 2 + (d.y - cam.y) ** 2 + (d.z - cam.z) ** 2 > 1024) continue;
+      this.overlay.renderCrack(this.renderer, cam, d.x, d.y, d.z, w.getState(d.x, d.y, d.z), d.stage);
+    }
     const hit = this.interaction.hit;
     if (hit && !this.hideGui && p.gameMode !== 'spectator') {
       this.overlay.renderSelection(this.renderer, cam, hit.x, hit.y, hit.z, hit.state);

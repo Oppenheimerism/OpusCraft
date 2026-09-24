@@ -145,7 +145,10 @@ export class PoiManager {
     if (!s.size) this.taken.delete(k);
   }
 
-  /** the sections (x, y, z) holding village points (all kinds are), in the chunks within `r` of a chunk */
+  /**
+   * the village centres (vanilla PoiManager.isVillageCenter: sections holding a village point someone has claimed, a
+   * bed, a workstation or a bell), as sections (x, y, z), in the chunks within `r` of a chunk
+   */
   villageSectionsNear(cx0: number, cz0: number, r: number): [number, number, number][] {
     const out: [number, number, number][] = [];
     const seen = new Set<string>();
@@ -155,7 +158,7 @@ export class PoiManager {
         if (!c) continue;
         for (const p of this.chunkPois(c).values()) {
           const k = cx + ',' + (p[1] >> 4) + ',' + cz;
-          if (seen.has(k)) continue;
+          if (seen.has(k) || !this.isOccupied(p[0], p[1], p[2])) continue;
           seen.add(k);
           out.push([cx, p[1] >> 4, cz]);
         }
@@ -164,11 +167,11 @@ export class PoiManager {
   }
 
   /**
-   * vanilla PoiManager.sectionsToVillage: how many sections (at most 6, diagonals counting one) this section is from
-   * one holding a villager's point: a bed, a workstation or a bell
+   * vanilla PoiManager.sectionsToVillage: how many sections (diagonals counting one) this section is from a village
+   * centre, 0 to 6, or 7 when it's further than that
    */
   sectionsToVillage(sx: number, sy: number, sz: number): number {
-    let best = 6;
+    let best = 7;
     for (const [x, y, z] of this.villageSectionsNear(sx, sz, 6)) best = Math.min(best, Math.max(Math.abs(x - sx), Math.abs(y - sy), Math.abs(z - sz)));
     return best;
   }

@@ -5,9 +5,11 @@ import { Goal, Flag, reducedTickDelay } from './goal';
 import type { Mob } from '../mob';
 import type { Path } from './pathfinder';
 import { LivingEntity } from '../living';
-import { FLAGS, F_WATER, F_COLLIDE, F_OPAQUE } from '../../world/block';
+import { BLOCKS, STATE_BLOCK, FLAGS, F_WATER, F_COLLIDE, F_OPAQUE } from '../../world/block';
 import { MIN_Y, MAX_Y } from '../../world/constants';
 import type { Player } from '../player';
+import type { Difficulty } from '../../game/difficulty';
+import { AABB } from '../../core/aabb';
 
 // ---------------------------------------------------------------------------
 // random positions
@@ -45,18 +47,23 @@ function hasMalus(m: Mob, x: number, y: number, z: number): boolean {
   return m.malus(t) !== 0;
 }
 
-function bestOf(m: Mob, gen: () => Pos | null): Pos | null {
+/** vanilla RandomPos.generateRandomPos: the best-scoring of ten tries (none when every one scores -∞) */
+function bestScored(gen: () => Pos | null, score: (p: Pos) => number): Pos | null {
   let best: Pos | null = null, bestV = -Infinity;
   for (let i = 0; i < 10; i++) {
     const p = gen();
     if (!p) continue;
-    const v = m.walkTargetValue(p[0], p[1], p[2]);
+    const v = score(p);
     if (v > bestV) {
       bestV = v;
       best = p;
     }
   }
   return best;
+}
+
+function bestOf(m: Mob, gen: () => Pos | null): Pos | null {
+  return bestScored(gen, (p) => m.walkTargetValue(p[0], p[1], p[2]));
 }
 
 /** vanilla DefaultRandomPos.getPos */
@@ -142,9 +149,9 @@ export function landRandomPosTowards(m: Mob, radius: number, yRange: number, tx:
   });
 }
 
-/** vanilla LandRandomPos.getPos */
-export function landRandomPos(m: Mob, radius: number, yRange: number): Pos | null {
-  return bestOf(m, () => {
+/** vanilla LandRandomPos.getPos (with a scorer of its own, or the mob's walk target value) */
+export function landRandomPos(m: Mob, radius: number, yRange: number, score?: (p: Pos) => number): Pos | null {
+  return bestScored(() => {
     const p = towardDirection(m, randomDirection(m, radius, yRange));
     if (outsideLimits(p) || !m.navigation.isStableDestination(p[0], p[1], p[2])) return null;
     let y = p[1];
@@ -154,7 +161,7 @@ export function landRandomPos(m: Mob, radius: number, yRange: number): Pos | nul
     }
     if (isWater(m, p[0], y, p[2]) || hasMalus(m, p[0], y, p[2])) return null;
     return [p[0], y, p[2]];
-  });
+  }, score ?? ((p) => m.walkTargetValue(p[0], p[1], p[2])));
 }
 
 // ---------------------------------------------------------------------------
@@ -621,8 +628,19 @@ export class NearestAttackableMobGoal extends TargetGoal {
 /** vanilla HurtByTargetGoal */
 export class HurtByTargetGoal extends TargetGoal {
   private timestamp = 0;
+  private alertSameType = false;
+  private toIgnoreAlert: readonly string[] = [];
   constructor(mob: Mob) {
     super(mob, true);
+  }
+  /**
+   * vanilla setAlertOthers: when it's hurt, others of its kind about (its subkinds too, but not the types listed)
+   * with nothing to fight go for whoever did it
+   */
+  setAlertOthers(...ignore: string[]): this {
+    this.alertSameType = true;
+    this.toIgnoreAlert = ignore;
+    return this;
   }
   canUse(): boolean {
     const m = this.mob;
@@ -635,7 +653,23 @@ export class HurtByTargetGoal extends TargetGoal {
     this.targetMob = m.target;
     this.timestamp = m.lastHurtByMobTimestamp;
     this.unseenMemoryTicks = 300;
+    if (this.alertSameType) this.alertOthers();
     super.start();
+  }
+  /** vanilla alertOthers: those within its follow range (10 up or down) */
+  protected alertOthers(): void {
+    const m = this.mob, d = m.followRange, by = m.lastHurtByMob;
+    if (!by) return;
+    const kind = m.constructor as abstract new (...a: never[]) => Mob;
+    const box = new AABB(m.x - d, m.y - 10, m.z - d, m.x + 1 + d, m.y + 11, m.z + 1 + d);
+    for (const e of m.level.getEntities(box, (e) => e instanceof kind)) {
+      const o = e as Mob;
+      if (o === m || o.target !== null || this.toIgnoreAlert.includes(o.type)) continue;
+      this.alertOther(o, by);
+    }
+  }
+  protected alertOther(o: Mob, target: LivingEntity): void {
+    o.setTarget(target);
   }
 }
 
@@ -724,6 +758,217 @@ export class LeapAtTargetGoal extends Goal {
     m.dx = vx;
     m.dy = this.yd;
     m.dz = vz;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// doors and villages
+
+/** vanilla DoorBlock.isWoodenDoor: a door a hand can open (any but iron) */
+export function isWoodenDoor(st: number): boolean {
+  const n = BLOCKS[STATE_BLOCK[st]].name;
+  return n.endsWith('_door') && n !== 'iron_door';
+}
+
+/** vanilla BlockPos.closerToCenterThan */
+function closerToCenter(p: Pos, m: Mob, d: number): boolean {
+  return (p[0] + 0.5 - m.x) ** 2 + (p[1] + 0.5 - m.y) ** 2 + (p[2] + 0.5 - m.z) ** 2 < d * d;
+}
+
+/**
+ * vanilla DoorInteractGoal: a mob that paths through doors, bumping into a wooden door, one of those on the next
+ * two nodes of its path within 1.5 (or the one it's standing in); it's done with the door once past it
+ */
+export abstract class DoorInteractGoal extends Goal {
+  protected doorPos: Pos = [0, 0, 0];
+  protected hasDoor = false;
+  private passed = false;
+  private doorOpenDirX = 0;
+  private doorOpenDirZ = 0;
+  constructor(readonly mob: Mob) {
+    super();
+  }
+  /** vanilla isOpen */
+  protected isOpen(): boolean {
+    if (!this.hasDoor) return false;
+    const [x, y, z] = this.doorPos;
+    const st = this.mob.level.world.getState(x, y, z);
+    const b = BLOCKS[STATE_BLOCK[st]];
+    if (!b.name.endsWith('_door')) {
+      this.hasDoor = false;
+      return false;
+    }
+    return b.get(st, 'open') === true;
+  }
+  private woodenDoorAt(p: Pos): boolean {
+    return isWoodenDoor(this.mob.level.world.getState(p[0], p[1], p[2]));
+  }
+  canUse(): boolean {
+    const m = this.mob;
+    if (!m.horizontalCollision) return false;
+    const nav = m.navigation;
+    const path = nav.path;
+    if (!path || path.isDone() || !nav.canOpenDoors) return false;
+    for (let i = 0; i < Math.min(path.nextNodeIndex + 2, path.nodes.length); i++) {
+      const n = path.nodes[i];
+      this.doorPos = [n.x, n.y + 1, n.z];
+      if (m.distanceToSqr(n.x, m.y, n.z) > 2.25) continue;
+      this.hasDoor = this.woodenDoorAt(this.doorPos);
+      if (this.hasDoor) return true;
+    }
+    this.doorPos = [Math.floor(m.x), Math.floor(m.y) + 1, Math.floor(m.z)];
+    this.hasDoor = this.woodenDoorAt(this.doorPos);
+    return this.hasDoor;
+  }
+  override canContinueToUse(): boolean {
+    return !this.passed;
+  }
+  override start(): void {
+    this.passed = false;
+    this.doorOpenDirX = Math.fround(this.doorPos[0] + 0.5 - this.mob.x);
+    this.doorOpenDirZ = Math.fround(this.doorPos[2] + 0.5 - this.mob.z);
+  }
+  override requiresUpdateEveryTick(): boolean {
+    return true;
+  }
+  override tick(): void {
+    const f = Math.fround(this.doorPos[0] + 0.5 - this.mob.x), f1 = Math.fround(this.doorPos[2] + 0.5 - this.mob.z);
+    if (this.doorOpenDirX * f + this.doorOpenDirZ * f1 < 0) this.passed = true;
+  }
+}
+
+/**
+ * vanilla BreakDoorGoal: on the difficulties it's let (and with mobGriefing), a mob stopped by a closed wooden door
+ * hammers at it, the door cracking a little more every 24 ticks, and after 12 s knocks it down
+ */
+export class BreakDoorGoal extends DoorInteractGoal {
+  protected breakTime = 0;
+  /** (vanilla never resets it: a second door starts from where the first left off) */
+  protected lastBreakProgress = -1;
+  constructor(mob: Mob, readonly validDifficulty: (d: Difficulty) => boolean, protected doorBreakTime = -1) {
+    super(mob);
+  }
+  protected getDoorBreakTime(): number {
+    return Math.max(240, this.doorBreakTime);
+  }
+  override canUse(): boolean {
+    if (!super.canUse()) return false;
+    if (!this.mob.level.gameRules.mobGriefing) return false;
+    return this.validDifficulty(this.mob.level.difficulty) && !this.isOpen();
+  }
+  override start(): void {
+    super.start();
+    this.breakTime = 0;
+  }
+  override canContinueToUse(): boolean {
+    const m = this.mob;
+    return this.breakTime <= this.getDoorBreakTime() && !this.isOpen() && closerToCenter(this.doorPos, m, 2) && this.validDifficulty(m.level.difficulty);
+  }
+  override stop(): void {
+    super.stop();
+    const [x, y, z] = this.doorPos;
+    this.mob.level.destroyBlockProgress(this.mob.id, x, y, z, -1);
+  }
+  override tick(): void {
+    super.tick();
+    const m = this.mob, lvl = m.level, [x, y, z] = this.doorPos;
+    if (m.random.nextInt(20) === 0) {
+      // (vanilla level event 1019)
+      const r = lvl.random;
+      lvl.sound.play('entity.zombie.attack_wooden_door', x + 0.5, y + 0.5, z + 0.5, 2, (r.nextFloat() - r.nextFloat()) * 0.2 + 1);
+      if (!m.swinging) m.swing();
+    }
+    this.breakTime++;
+    const i = Math.trunc(Math.fround(Math.fround(this.breakTime / this.getDoorBreakTime()) * 10));
+    if (i !== this.lastBreakProgress) {
+      lvl.destroyBlockProgress(m.id, x, y, z, i);
+      this.lastBreakProgress = i;
+    }
+    if (this.breakTime === this.getDoorBreakTime() && this.validDifficulty(lvl.difficulty)) {
+      // (the half it hammered goes quietly; the other half breaks with it, dust, sound and the door dropping)
+      lvl.setBlock(x, y, z, 0);
+      // (vanilla level event 1021)
+      const r = lvl.random;
+      lvl.sound.play('entity.zombie.break_wooden_door', x + 0.5, y + 0.5, z + 0.5, 2, (r.nextFloat() - r.nextFloat()) * 0.2 + 1);
+    }
+  }
+}
+
+/**
+ * vanilla MoveThroughVillageGoal: near a village (at night, if `onlyAtNight`), a walk to one of its lived-in places (a
+ * claimed bed, workstation or bell) it hasn't been to lately; through doors only if it can deal with them, and then
+ * only as far as the first
+ */
+export class MoveThroughVillageGoal extends Goal {
+  private path: Path | null = null;
+  private poiPos: Pos = [0, 0, 0];
+  private readonly visited: Pos[] = [];
+  constructor(readonly mob: Mob, readonly speed: number, readonly onlyAtNight: boolean, readonly distanceToPoi: number, readonly canDealWithDoors: () => boolean) {
+    super();
+    this.flags = Flag.MOVE;
+  }
+  canUse(): boolean {
+    const m = this.mob;
+    this.updateVisited();
+    if (this.onlyAtNight && m.level.isDay()) return false;
+    const poi = m.level.poi;
+    const bx = Math.floor(m.x), by = Math.floor(m.y), bz = Math.floor(m.z);
+    if (poi.sectionsToVillage(bx >> 4, by >> 4, bz >> 4) > 6) return false;
+    // (vanilla PoiManager.find: a lived-in village point within 10 it hasn't visited)
+    const near = (p: Pos): Pos | null => {
+      for (const q of poi.findAll(p[0], p[1], p[2], 10, () => true, false)) if (poi.isOccupied(q[0], q[1], q[2]) && this.hasNotVisited(q)) return [q[0], q[1], q[2]];
+      return null;
+    };
+    const spot = landRandomPos(m, 15, 7, (p) => {
+      if (!poi.isVillage(p[0], p[1], p[2])) return -Infinity;
+      const q = near(p);
+      return q ? -((q[0] - bx) ** 2 + (q[1] - by) ** 2 + (q[2] - bz) ** 2) : -Infinity;
+    });
+    if (!spot) return false;
+    const found = near(spot);
+    if (!found) return false;
+    this.poiPos = found;
+    const nav = m.navigation;
+    const could = nav.canOpenDoors;
+    nav.canOpenDoors = this.canDealWithDoors();
+    this.path = nav.createPath(found[0], found[1], found[2], 0);
+    nav.canOpenDoors = could;
+    if (!this.path) {
+      const t = defaultRandomPosTowards(m, 10, 7, found[0] + 0.5, found[2] + 0.5, Math.PI / 2);
+      if (!t) return false;
+      nav.canOpenDoors = this.canDealWithDoors();
+      this.path = nav.createPath(t[0] + 0.5, t[1], t[2] + 0.5, 0);
+      nav.canOpenDoors = could;
+      if (!this.path) return false;
+    }
+    // (no further than the first door on the way)
+    const w = m.level.world;
+    for (const n of this.path.nodes) {
+      if (isWoodenDoor(w.getState(n.x, n.y + 1, n.z))) {
+        this.path = nav.createPath(n.x, n.y, n.z, 0);
+        break;
+      }
+    }
+    return this.path !== null;
+  }
+  override canContinueToUse(): boolean {
+    const m = this.mob;
+    if (m.navigation.isDone()) return false;
+    return !closerToCenter(this.poiPos, m, m.width + this.distanceToPoi);
+  }
+  override start(): void {
+    this.mob.navigation.moveToPath(this.path, this.speed);
+  }
+  override stop(): void {
+    const m = this.mob;
+    if (m.navigation.isDone() || closerToCenter(this.poiPos, m, this.distanceToPoi)) this.visited.push(this.poiPos);
+  }
+  private hasNotVisited(p: readonly [number, number, number, ...unknown[]]): boolean {
+    return !this.visited.some((q) => q[0] === p[0] && q[1] === p[1] && q[2] === p[2]);
+  }
+  /** vanilla updateVisited: it forgets the oldest past 15 */
+  private updateVisited(): void {
+    if (this.visited.length > 15) this.visited.shift();
   }
 }
 

@@ -363,6 +363,18 @@ export class Level {
   /** a golem someone built came to life (vanilla CarvedPumpkinBlock.spawnGolemInWorld: summoned_entity) */
   onSummonedEntity: ((e: Entity) => void) | null = null;
 
+  /**
+   * vanilla LevelRenderer.destructionProgress: the cracks shown on blocks something other than the player is breaking
+   * (a zombie at a door), by the breaker's id, with when each was last changed
+   */
+  readonly destroyProgress = new Map<number, { x: number; y: number; z: number; stage: number; time: number }>();
+
+  /** vanilla Level.destroyBlockProgress: breaker `id` has cracked a block to `stage` (0-9); anything else clears it */
+  destroyBlockProgress(id: number, x: number, y: number, z: number, stage: number): void {
+    if (stage >= 0 && stage < 10) this.destroyProgress.set(id, { x, y, z, stage, time: this.gameTime });
+    else this.destroyProgress.delete(id);
+  }
+
   /** vanilla: entities tick only inside the simulation distance (and in loaded chunks) */
   isEntityTicking(x: number, z: number): boolean {
     const bx = Math.floor(x), bz = Math.floor(z);

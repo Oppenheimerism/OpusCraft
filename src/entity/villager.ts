@@ -184,9 +184,9 @@ const key = (p: Pos): string => p.join(',');
 const walkTo = (p: Pos, speed: number, closeEnough: number): WalkTarget => ({ x: p[0] + 0.5, y: p[1], z: p[2] + 0.5, entity: null, speed, closeEnough });
 const walkAfter = (e: Entity, speed: number, closeEnough: number): WalkTarget => ({ x: e.x, y: e.y, z: e.z, entity: e, speed, closeEnough });
 
-/** vanilla PoiManager.sectionsToVillage over sections known to hold village points: Chebyshev, at most 6 */
+/** vanilla PoiManager.sectionsToVillage over the village centres known: Chebyshev, 7 when further than 6 */
 function sectionsTo(sections: readonly Pos[], sx: number, sy: number, sz: number): number {
-  let best = 6;
+  let best = 7;
   for (const [x, y, z] of sections) best = Math.min(best, Math.max(Math.abs(x - sx), Math.abs(y - sy), Math.abs(z - sz)));
   return best;
 }

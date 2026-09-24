@@ -35,6 +35,14 @@ export class PathNavigation {
     return this.evaluator.canFloat;
   }
 
+  /** vanilla GroundPathNavigation.setCanOpenDoors: closed wooden doors count as a way through */
+  set canOpenDoors(v: boolean) {
+    this.evaluator.canOpenDoors = v;
+  }
+  get canOpenDoors(): boolean {
+    return this.evaluator.canOpenDoors;
+  }
+
   private canUpdatePath(): boolean {
     return this.mob.onGround || this.mob.inWater || this.mob.inLava;
   }

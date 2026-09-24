@@ -1,7 +1,7 @@
 // Hostile mobs (vanilla Monster / Zombie / Skeleton / Creeper / Spider) and
 // their combat goals.
 
-import { Mob, LootEntry, MobCategory } from './mob';
+import { Mob, LootEntry, MobCategory, isValidEmptySpawnBlock } from './mob';
 import type { SpawnReason } from './mob';
 import type { Level } from '../game/level';
 import type { DifficultyInstance } from '../game/difficulty';
@@ -10,6 +10,7 @@ import { Goal, Flag } from './ai/goal';
 import {
   FloatGoal, WaterAvoidingRandomStrollGoal, LookAtPlayerGoal, RandomLookAroundGoal, MeleeAttackGoal,
   NearestAttackablePlayerGoal, NearestAttackableMobGoal, HurtByTargetGoal, RestrictSunGoal, FleeSunGoal, LeapAtTargetGoal,
+  BreakDoorGoal, MoveThroughVillageGoal,
 } from './ai/goals';
 import { LivingEntity } from './living';
 import type { Player } from './player';
@@ -127,28 +128,143 @@ class ZombieAttackGoal extends MeleeAttackGoal {
   }
 }
 
+/** vanilla Zombie.createAttributes: FOLLOW_RANGE and MAX_HEALTH */
+const ZOMBIE_FOLLOW_RANGE = 35;
+const ZOMBIE_HEALTH = 20;
+
+/** vanilla SpawnPlacements ON_GROUND: a floor to stand on and room for the feet and head */
+function groundSpawnOk(level: Level, x: number, y: number, z: number, fireImmune: boolean): boolean {
+  const w = level.world;
+  return validSpawnBlock(level, x, y - 1, z, fireImmune) && isValidEmptySpawnBlock(w.getState(x, y, z)) && isValidEmptySpawnBlock(w.getState(x, y + 1, z));
+}
+
 export class Zombie extends Monster {
   readonly type: string = 'zombie';
   baby = false;
+  /** vanilla canBreakDoors */
+  private breaksDoors = false;
+  /** vanilla Zombie.breakDoorGoal: only on hard */
+  private readonly breakDoorGoal = new BreakDoorGoal(this, (d) => d === 'hard');
+  /**
+   * vanilla SPAWN_REINFORCEMENTS_CHANCE: the base it rolled, a leader's bonus, and the charge (-0.05 for each
+   * reinforcement it has called, and -0.05 if it came as one)
+   */
+  private reinforceBase = 0;
+  private reinforceBonus = 0;
+  private reinforceCharge = 0;
+  /** vanilla handleAttributes' modifiers: knockback resistance, follow range and (a leader's) health */
+  private kbBonus = 0;
+  private followBonus = 0;
+  private healthBonus = 0;
   constructor(level: Level) {
     super(level);
     this.setSize(0.6, 1.95);
-    this.maxHealth = this.health = 20;
+    this.maxHealth = this.health = ZOMBIE_HEALTH;
     this.moveSpeedAttr = 0.23;
     this.attackDamage = 3;
     this.baseArmor = 2;
-    this.followRange = 35;
+    this.followRange = ZOMBIE_FOLLOW_RANGE;
   }
   protected registerGoals(): void {
     this.goalSelector.addGoal(8, new LookAtPlayerGoal(this, 8));
     this.goalSelector.addGoal(8, new RandomLookAroundGoal(this));
     this.goalSelector.addGoal(2, new ZombieAttackGoal(this, 1.0, false));
+    this.goalSelector.addGoal(6, new MoveThroughVillageGoal(this, 1.0, true, 4, () => this.canBreakDoors()));
     this.goalSelector.addGoal(7, new WaterAvoidingRandomStrollGoal(this, 1.0));
-    this.targetSelector.addGoal(1, new HurtByTargetGoal(this));
+    this.targetSelector.addGoal(1, new HurtByTargetGoal(this).setAlertOthers('zombified_piglin'));
     this.targetSelector.addGoal(2, new NearestAttackablePlayerGoal(this, true));
     // (villagers even through walls; iron golems in sight)
     this.targetSelector.addGoal(3, new NearestAttackableMobGoal(this, (e) => e.type === 'villager', false));
     this.targetSelector.addGoal(3, new NearestAttackableMobGoal(this, (e) => e.type === 'iron_golem', true));
+  }
+  /** vanilla supportsBreakDoorGoal */
+  protected supportsBreakDoorGoal(): boolean {
+    return true;
+  }
+  canBreakDoors(): boolean {
+    return this.breaksDoors;
+  }
+  /** vanilla setCanBreakDoors: it paths through wooden doors, and hammers down any in its way */
+  setCanBreakDoors(b: boolean): void {
+    if (this.supportsBreakDoorGoal()) {
+      if (this.breaksDoors !== b) {
+        this.breaksDoors = b;
+        this.navigation.canOpenDoors = b;
+        if (b) this.goalSelector.addGoal(1, this.breakDoorGoal);
+        else this.goalSelector.removeGoal(this.breakDoorGoal);
+      }
+    } else if (this.breaksDoors) {
+      this.goalSelector.removeGoal(this.breakDoorGoal);
+      this.breaksDoors = false;
+    }
+  }
+  /** vanilla getAttributeValue(SPAWN_REINFORCEMENTS_CHANCE), 0-1 */
+  reinforcementChance(): number {
+    return Math.max(0, Math.min(1, this.reinforceBase + this.reinforceBonus + this.reinforceCharge));
+  }
+  /** vanilla randomizeReinforcementsChance */
+  protected randomizeReinforcementsChance(): void {
+    this.reinforceBase = this.random.nextDouble() * Math.fround(0.1);
+  }
+  /**
+   * vanilla Zombie.handleAttributes: a touch of knockback resistance, sometimes a longer follow range, and now and
+   * then (the special multiplier in twenty) a leader: up to five times the health, far more likely to call for help,
+   * and it breaks down doors
+   */
+  protected handleAttributes(f: number): void {
+    this.randomizeReinforcementsChance();
+    this.kbBonus = this.random.nextDouble() * Math.fround(0.05);
+    const d0 = this.random.nextDouble() * 1.5 * f;
+    if (d0 > 1) this.followBonus = d0;
+    if (this.random.nextFloat() < Math.fround(f * Math.fround(0.05))) {
+      this.reinforceBonus = this.random.nextDouble() * 0.25 + 0.5;
+      this.healthBonus = this.random.nextDouble() * 3 + 1;
+      this.setCanBreakDoors(this.supportsBreakDoorGoal());
+    }
+    this.applyBonuses();
+  }
+  private applyBonuses(): void {
+    this.kbResist = this.kbBonus;
+    this.followRange = ZOMBIE_FOLLOW_RANGE * (1 + this.followBonus);
+    // (a leader's health is only its most: it comes with the usual 20)
+    this.maxHealth = ZOMBIE_HEALTH * (1 + this.healthBonus);
+  }
+  /**
+   * vanilla Zombie.hurt: on hard, hurt with someone to blame, it may (its reinforcement chance) call up another of its
+   * kind somewhere dark 7 to 40 blocks off (not within 7 of a player), who comes for the same foe
+   */
+  override hurt(amount: number, source: string, attacker?: Entity | null, direct?: Entity | null): boolean {
+    if (!super.hurt(amount, source, attacker, direct)) return false;
+    const lvl = this.level;
+    let t: LivingEntity | null = this.target;
+    if (!t && attacker instanceof LivingEntity) t = attacker;
+    if (t && lvl.difficulty === 'hard' && this.random.nextFloat() < this.reinforcementChance() && lvl.gameRules.doMobSpawning) this.callReinforcement(t);
+    return true;
+  }
+  /** vanilla SpawnPlacements.checkSpawnRules for a reinforcement: a zombie's, somewhere dark enough */
+  protected reinforcementSpawnRules(x: number, y: number, z: number): boolean {
+    return Monster.checkMonsterSpawn(this.level, x, y, z, () => this.level.random.nextFloat());
+  }
+  private callReinforcement(t: LivingEntity): void {
+    const lvl = this.level, r = this.random;
+    const i = Math.floor(this.x), j = Math.floor(this.y), k = Math.floor(this.z);
+    const z = new (this.constructor as new (l: Level) => Zombie)(lvl);
+    // (vanilla Mth.nextInt(random, 7, 40) * Mth.nextInt(random, -1, 1) on each axis)
+    const off = () => (r.nextInt(34) + 7) * (r.nextInt(3) - 1);
+    for (let l = 0; l < 50; l++) {
+      const x1 = i + off(), y1 = j + off(), z1 = k + off();
+      if (!groundSpawnOk(lvl, x1, y1, z1, z.fireImmune()) || !z.reinforcementSpawnRules(x1, y1, z1)) continue;
+      z.moveTo(x1, y1, z1, 0, 0);
+      const p = lvl.player;
+      if (p && p.isAlive && p.gameMode !== 'spectator' && p.distanceToSqr(x1, y1, z1) < 49) continue;
+      if (!z.checkSpawnObstruction() || lvl.getEntities(z.bb, (e) => e instanceof LivingEntity && e.isAlive).length) continue;
+      z.setTarget(t);
+      z.finalizeSpawn('reinforcement');
+      lvl.addEntity(z);
+      this.reinforceCharge -= 0.05;
+      z.reinforceCharge = Math.fround(-0.05);
+      break;
+    }
   }
   override isBaby(): boolean {
     return this.baby;
@@ -212,17 +328,20 @@ export class Zombie extends Monster {
   }
   /**
    * vanilla Zombie.finalizeSpawn: picks up loot with chance 0.55 × the special multiplier, one in twenty is a baby,
-   * then the armour and weapon, their enchantments and the Halloween pumpkin (no leader zombies, knockback or
-   * follow range bonuses, door breaking or chicken jockeys here)
+   * one in ten times the special multiplier breaks doors, then the armour and weapon, their enchantments, the
+   * Halloween pumpkin and the attribute bonuses (no chicken jockeys here)
    */
   override finalizeSpawn(reason?: SpawnReason): void {
     const d = this.spawnDifficulty();
-    this.canPickUpLoot = this.random.nextFloat() < Math.fround(0.55 * d.specialMultiplier());
+    const f = d.specialMultiplier();
+    this.canPickUpLoot = this.random.nextFloat() < Math.fround(0.55 * f);
     // (a conversion comes with vanilla's ZombieGroupData(false, true): as young as the villager was, no roll)
     if (reason !== 'conversion' && this.random.nextFloat() < 0.05) this.setBaby(true);
+    this.setCanBreakDoors(this.supportsBreakDoorGoal() && this.random.nextFloat() < Math.fround(f * Math.fround(0.1)));
     this.populateDefaultEquipmentSlots(d);
     this.populateDefaultEquipmentEnchantments(d);
     this.maybeHalloweenPumpkin();
+    this.handleAttributes(f);
   }
   /** vanilla Zombie.populateDefaultEquipmentSlots: the armour roll, then an iron sword or shovel 1% (hard: 5%) of the time */
   protected override populateDefaultEquipmentSlots(d: DifficultyInstance): void {
@@ -252,10 +371,26 @@ export class Zombie extends Monster {
     ];
   }
   protected override saveData(): Record<string, number | string | boolean> {
-    return { baby: this.baby };
+    const d: Record<string, number | string | boolean> = { baby: this.baby };
+    if (this.breaksDoors) d.breakDoors = true;
+    if (this.reinforceBase) d.reinforce = this.reinforceBase;
+    if (this.reinforceBonus) d.reinforceBonus = this.reinforceBonus;
+    if (this.reinforceCharge) d.reinforceCharge = this.reinforceCharge;
+    if (this.kbBonus) d.kbBonus = this.kbBonus;
+    if (this.followBonus) d.followBonus = this.followBonus;
+    if (this.healthBonus) d.healthBonus = this.healthBonus;
+    return d;
   }
   protected override loadData(d: Record<string, number | string | boolean>): void {
     if (d.baby) this.setBaby(true);
+    this.setCanBreakDoors(d.breakDoors === true);
+    this.reinforceBase = Number(d.reinforce ?? 0);
+    this.reinforceBonus = Number(d.reinforceBonus ?? 0);
+    this.reinforceCharge = Number(d.reinforceCharge ?? 0);
+    this.kbBonus = Number(d.kbBonus ?? 0);
+    this.followBonus = Number(d.followBonus ?? 0);
+    this.healthBonus = Number(d.healthBonus ?? 0);
+    this.applyBonuses();
   }
 }
 
@@ -315,6 +450,15 @@ export class ZombifiedPiglin extends Zombie {
   }
   protected override isSunSensitive(): boolean {
     return false;
+  }
+  /** vanilla ZombifiedPiglin.supportsBreakDoorGoal */
+  protected override supportsBreakDoorGoal(): boolean {
+    return false;
+  }
+  /** vanilla ZombifiedPiglin.randomizeReinforcementsChance: none (only a leader calls for help) */
+  protected override randomizeReinforcementsChance(): void {}
+  protected override reinforcementSpawnRules(x: number, y: number, z: number): boolean {
+    return ZombifiedPiglin.checkZombifiedPiglinSpawn(this.level, x, y, z);
   }
   isAngry(): boolean {
     return this.angerTime > 0;
