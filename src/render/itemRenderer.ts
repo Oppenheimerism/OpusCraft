@@ -10,6 +10,7 @@ import type { Item, ItemStack } from '../item/item';
 import { BLOCKS, LAYER, Layer } from '../world/block';
 import type { TexImage } from '../textures/tex';
 import { glintTexture, glintOffset, glintUV } from '../textures/glint';
+import { crossbowTexture } from '../item/crossbow';
 
 export type DisplayContext = 'gui' | 'ground' | 'fixed' | 'firstperson_righthand' | 'thirdperson_righthand' | 'head';
 
@@ -218,6 +219,8 @@ export class ItemRenderer {
           }
       }
     } else {
+      // a loaded crossbow's model follows its stack wherever it's drawn (on the ground, in a frame)
+      if (texture === undefined && it.id === 'crossbow') texture = crossbowTexture(stack, -1);
       const src = this.flatSource(it, texture);
       if (src) {
         const disp = it.id === 'bow' ? BOW_DISPLAY : it.id === 'crossbow' ? CROSSBOW_DISPLAY : isHandheld(it) ? HANDHELD_DISPLAY : GENERATED_DISPLAY;
