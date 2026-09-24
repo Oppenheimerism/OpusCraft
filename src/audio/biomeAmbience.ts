@@ -131,8 +131,9 @@ export class BiomeAmbience {
   music(game: Game): string | null {
     const p = game.player;
     const w = game.world;
-    // (vanilla Minecraft.getSituationalMusic: the End has its own, whatever the biome)
-    if (w.dim.id === 'the_end') return 'music.end';
+    // (vanilla Minecraft.getSituationalMusic: the End has its own, whatever the biome — the dragon's while its bar
+    // is up)
+    if (w.dim.id === 'the_end') return game.hud.bossOverlay.shouldPlayMusic() ? 'music.dragon' : 'music.end';
     const id = w.getBiome3(Math.floor(p.x), Math.floor(p.y), Math.floor(p.z));
     return BIOMES[id]?.ambient?.music ?? (w.dim.id === 'the_nether' ? 'music.nether.nether_wastes' : null);
   }

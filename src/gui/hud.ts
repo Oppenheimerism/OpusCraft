@@ -7,6 +7,7 @@ import { debugLines } from '../render/overlay';
 import { FLUID_WATER } from '../world/fluids';
 import { RARITY_COLOR, type ItemStack } from '../item/item';
 import { compareEffects } from '../entity/effects';
+import { BossHealthOverlay } from './bossOverlay';
 
 export class Hud {
   private tickCount = 0;
@@ -22,6 +23,8 @@ export class Hud {
   chat: { text: string; time: number }[] = [];
   title: { text: string; sub: string; time: number } | null = null;
   actionBar: { text: string; time: number } | null = null;
+  /** vanilla Gui.bossOverlay: the ender dragon's bar */
+  readonly bossOverlay = new BossHealthOverlay();
 
   /** vanilla Gui.setOverlayMessage (the action bar above the hotbar) */
   setOverlayMessage(text: string): void {
@@ -50,6 +53,7 @@ export class Hud {
     this.vignetteBrightness += (f - this.vignetteBrightness) * 0.01;
     if (this.actionBar && --this.actionBar.time <= 0) this.actionBar = null;
     if (this.title && --this.title.time <= 0) this.title = null;
+    this.bossOverlay.update([game.level.dragonFight?.shownBar() ?? null]);
   }
 
   addChat(text: string, tick: number): void {
@@ -63,6 +67,7 @@ export class Hud {
     if (p.gameMode === 'spectator') {
       this.renderCrosshair(g, game);
       this.renderEffects(g, game);
+      this.bossOverlay.render(g);
       return;
     }
     const cx = Math.floor(W / 2);
@@ -117,6 +122,7 @@ export class Hud {
       g.text(name, x, y, 0xffffff, true, alpha);
     }
     this.renderEffects(g, game);
+    this.bossOverlay.render(g);
     // vanilla Gui sleep overlay: darkens over 100 ticks asleep, clears over 10 after waking
     if (p.sleepCounter > 0) {
       let f = p.sleepCounter / 100;

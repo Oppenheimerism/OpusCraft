@@ -77,6 +77,8 @@ interface SpriteParticle {
   alpha?: number;
   /** vanilla Particle.stoppedByCollision: something stopped it rising or falling, and it moves no more */
   stopped?: boolean;
+  /** its friction slows it across but not up and down (vanilla DragonBreathParticle, till it lands) */
+  keepYSpeed?: boolean;
 }
 
 export interface SpriteRectUV {
@@ -91,6 +93,8 @@ const EXPLOSION = Array.from({ length: 16 }, (_, i) => `explosion_${i}`);
 const SWEEP = Array.from({ length: 8 }, (_, i) => `sweep_${i}`);
 /** vanilla particles/entity_effect.json: effect_7 down to effect_0 */
 const EFFECT = Array.from({ length: 8 }, (_, i) => `effect_${7 - i}`);
+/** vanilla particles/dragon_breath.json: generic_5 to generic_7 (the puffs here are numbered largest first) */
+const DRAGON_BREATH = ['generic_2', 'generic_1', 'generic_0'];
 /** vanilla particles/campfire_cosy_smoke.json and campfire_signal_smoke.json */
 const BIG_SMOKE = Array.from({ length: 12 }, (_, i) => `big_smoke_${i}`);
 
@@ -284,6 +288,27 @@ export class ParticleEngine {
         p.size *= 0.75 * mul;
         p.lifetime = Math.max(1, Math.floor((8 / (Math.random() * 0.8 + 0.2)) * mul));
         p.grow = true;
+        this.addSprite(p);
+        break;
+      }
+      case 'dragon_breath': {
+        // vanilla DragonBreathParticle: violet, drifting as sent, slowing across but not up or down (it has no
+        // collisions, so it never lands), speeding up across if it stops rising or falling
+        const p = this.base(kind, x, y, z);
+        p.friction = 0.96;
+        p.dx = xd;
+        p.dy = yd;
+        p.dz = zd;
+        p.r = 0.7176471 + Math.random() * (0.8745098 - 0.7176471);
+        p.g = 0;
+        p.b = 0.8235294 + Math.random() * (0.9764706 - 0.8235294);
+        p.size *= 0.75;
+        p.lifetime = Math.floor(20 / (Math.random() * 0.8 + 0.2));
+        p.physics = false;
+        p.speedUpWhenBlocked = true;
+        p.keepYSpeed = true;
+        p.grow = true;
+        p.frames = DRAGON_BREATH;
         this.addSprite(p);
         break;
       }
@@ -857,7 +882,7 @@ export class ParticleEngine {
         p.dz *= 1.1;
       }
       p.dx *= p.friction;
-      p.dy *= p.friction;
+      if (!p.keepYSpeed) p.dy *= p.friction;
       p.dz *= p.friction;
       if (p.onGround) {
         p.dx *= 0.7;

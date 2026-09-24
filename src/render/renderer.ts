@@ -49,6 +49,8 @@ export interface FrameEnv {
   lava?: 'normal' | 'fire_resistant' | 'spectator' | null;
   /** the dimension's sky, fog and light (vanilla DimensionSpecialEffects) */
   dim?: DimensionType;
+  /** a boss bar asks for the fog to close in (vanilla BossHealthOverlay.shouldCreateWorldFog: the dragon's) */
+  worldFog?: boolean;
   /** the biome fog and sky colours blended round the camera (environment.blendBiomeColors) */
   biomeColors?: { fog: env.RGB; sky: env.RGB };
   level?: Level;
@@ -148,8 +150,8 @@ export class Renderer {
       fogStart = -8;
       fogEnd = 96;
       fogShape = 0;
-    } else if (dim.effects.foggy) {
-      // vanilla isFoggyAt: the Nether's thick fog
+    } else if (dim.effects.foggy || e.worldFog) {
+      // vanilla isFoggyAt: the Nether's thick fog (and the dragon fight's)
       fogStart = rdBlocks * 0.05;
       fogEnd = Math.min(rdBlocks, 192) * 0.5;
       fogShape = 0;

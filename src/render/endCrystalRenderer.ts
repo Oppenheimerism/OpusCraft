@@ -1,7 +1,9 @@
 // vanilla EndCrystalRenderer: a bedrock plinth (when it shows its bottom), and
 // above it two glass cubes and the crystal cube, each turned 60° about the
 // diagonal and spinning about the vertical, the whole stack bobbing up and down.
-// Drawn cut out and double sided (vanilla RenderType.entityCutoutNoCull).
+// Drawn cut out and double sided (vanilla RenderType.entityCutoutNoCull). A
+// crystal with a beam target draws its beam to it (the fight's, when the dragon
+// is summoned); the healing beam to the dragon is the same (CrystalBeam).
 
 import type { GL } from './gl';
 import { createTexture } from './gl';
@@ -9,6 +11,7 @@ import type { EntityBatch, PoseStack, DrawState } from './entityRenderer';
 import { ModelPart } from './model';
 import type { EndCrystal } from '../entity/endCrystal';
 import { endCrystalTexture } from '../textures/endEntities';
+import { crystalBeamTexture } from '../textures/enderDragon';
 
 const SIN_45 = Math.sin(Math.PI / 4);
 
@@ -34,14 +37,66 @@ export function crystalBob(time: number, partial: number): number {
   return g - 1.4;
 }
 
+/** vanilla EnderDragonRenderer.renderCrystalBeams: the healing beam (vanilla RenderType.entitySmoothCutout) */
+export class CrystalBeam {
+  private tex: WebGLTexture | null = null;
+  private readonly p = [0, 0, 0];
+  private readonly n = [0, 0, 0];
+
+  constructor(private readonly gl: GL) {}
+
+  /**
+   * from two above the pose's origin along (x, y, z): eight-sided, narrow (0.15) and black where it starts, wide
+   * (0.75) and white where it ends, its texture repeating every 32 blocks and running along it with `time`
+   */
+  render(b: EntityBatch, pose: PoseStack, x: number, y: number, z: number, partial: number, time: number): void {
+    if (!this.tex) {
+      const t = crystalBeamTexture();
+      this.tex = createTexture(this.gl, t.w, t.h, new Uint8Array(t.data.buffer, t.data.byteOffset, t.data.byteLength), { clamp: false });
+    }
+    b.setOverlay(0, 0, 0, 0);
+    b.begin({ texture: this.tex, cutoff: 0.1, blend: false, cull: false, lit: true, useLightmap: true });
+    const f = Math.sqrt(x * x + z * z), len = Math.sqrt(x * x + y * y + z * z);
+    pose.push();
+    pose.translate(0, 2, 0);
+    pose.rotY(((-Math.atan2(z, x) - Math.PI / 2) * 180) / Math.PI);
+    pose.rotX(((-Math.atan2(f, y) - Math.PI / 2) * 180) / Math.PI);
+    const v0 = -(time + partial) * 0.01, v1 = len / 32 - (time + partial) * 0.01;
+    const P = this.p, N = this.n;
+    pose.transformNormal(0, -1, 0, N);
+    const vert = (px: number, py: number, pz: number, u: number, v: number, c: number) => {
+      pose.transform(px, py, pz, P);
+      b.vertexRaw(P[0], P[1], P[2], u, v, c, c, c, 1, N[0], N[1], N[2]);
+    };
+    let f4 = 0, f5 = 0.75, f6 = 0;
+    for (let j = 1; j <= 8; j++) {
+      const f7 = Math.sin((j * Math.PI * 2) / 8) * 0.75, f8 = Math.cos((j * Math.PI * 2) / 8) * 0.75, f9 = j / 8;
+      // (the quad as two triangles)
+      vert(f4 * 0.2, f5 * 0.2, 0, f6, v0, 0);
+      vert(f4, f5, len, f6, v1, 1);
+      vert(f7, f8, len, f9, v1, 1);
+      vert(f4 * 0.2, f5 * 0.2, 0, f6, v0, 0);
+      vert(f7, f8, len, f9, v1, 1);
+      vert(f7 * 0.2, f8 * 0.2, 0, f9, v0, 0);
+      f4 = f7;
+      f5 = f8;
+      f6 = f9;
+    }
+    pose.pop();
+  }
+}
+
 export class EndCrystalRenderer {
   private tex: WebGLTexture | null = null;
+  readonly beam: CrystalBeam;
   // vanilla EndCrystalRenderer.createBodyLayer (64x32)
   private readonly glass = new ModelPart([{ x: -4, y: -4, z: -4, w: 8, h: 8, d: 8, u: 0, v: 0 }]);
   private readonly cube = new ModelPart([{ x: -4, y: -4, z: -4, w: 8, h: 8, d: 8, u: 32, v: 0 }]);
   private readonly base = new ModelPart([{ x: -6, y: 0, z: -6, w: 12, h: 4, d: 12, u: 0, v: 16 }]);
 
-  constructor(private readonly gl: GL) {}
+  constructor(private readonly gl: GL) {
+    this.beam = new CrystalBeam(gl);
+  }
 
   private state(): DrawState {
     if (!this.tex) {
@@ -74,5 +129,13 @@ export class EndCrystalRenderer {
     rotAxis(pose, 60, SIN_45, 0, SIN_45);
     pose.rotY(g);
     this.cube.render(b, pose, 64, 32);
+    // its beam: from two above the target block's middle, to the crystal
+    const t = e.beamTarget;
+    if (t) {
+      const f5 = t[0] + 0.5 - e.x, f6 = t[1] + 0.5 - e.y, f7 = t[2] + 0.5 - e.z;
+      pose.reset();
+      pose.translate(dx + f5, dy + f6, dz + f7);
+      this.beam.render(b, pose, -f5, -f6 + f, -f7, partial, e.time);
+    }
   }
 }

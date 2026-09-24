@@ -41,6 +41,9 @@ import { AbstractMinecart } from '../entity/minecart';
 import { Boat } from '../entity/boat';
 import { EndCrystal } from '../entity/endCrystal';
 import { EndCrystalRenderer } from './endCrystalRenderer';
+import { EnderDragon } from '../entity/enderDragon';
+import { DragonFireball } from '../entity/dragonFireball';
+import { EnderDragonRenderer } from './enderDragonRenderer';
 import type { Bat } from '../entity/bat';
 import type { Player } from '../entity/player';
 import { MOB_TEXTURES, FIRE_TEXTURES } from '../textures/mobs';
@@ -123,11 +126,13 @@ export class EntityRenderDispatcher {
   /** the bell (and the other village blocks' block entity renderers) */
   private readonly village: VillageBlockRenderers;
   private readonly endCrystals: EndCrystalRenderer;
+  private readonly dragons: EnderDragonRenderer;
 
   constructor(private readonly gl: GL, private readonly items: ItemRenderer, private readonly skin: WebGLTexture) {
     this.armor = new ArmorLayer(gl);
     this.village = new VillageBlockRenderers(gl);
     this.endCrystals = new EndCrystalRenderer(gl);
+    this.dragons = new EnderDragonRenderer(gl, this.endCrystals.beam);
     this.models = {
       pig: M.pigModel(),
       pig_saddle: M.pigModel(0.5),
@@ -234,10 +239,14 @@ export class EntityRenderDispatcher {
       const bb = e.bb;
       let size = (bb.maxX - bb.minX + bb.maxY - bb.minY + bb.maxZ - bb.minZ) / 3 || 1;
       if (e instanceof Arrow) size *= 10;
+      // (vanilla AbstractHurtingProjectile.shouldRenderAtSqrDistance: fireballs are seen from four times as far)
+      else if (e instanceof Fireball) size *= 4;
       const maxD = size * 64 * opts.distanceScale;
-      if (d2 >= maxD * maxD) continue;
+      // (vanilla EndCrystalRenderer.shouldRender: a crystal with a beam is always drawn; the dragon is never culled)
+      const beam = e instanceof EndCrystal && e.beamTarget !== null;
+      if (d2 >= maxD * maxD && !beam) continue;
       const hw = (bb.maxX - bb.minX) / 2 + 0.5, h = bb.maxY - bb.minY + 0.5;
-      if (!frustum.testBox(dx - hw, dy - 0.5, dz - hw, dx + hw, dy + h, dz + hw)) continue;
+      if (!beam && !(e instanceof EnderDragon) && !frustum.testBox(dx - hw, dy - 0.5, dz - hw, dx + hw, dy + h, dz + hw)) continue;
       this.renderEntity(b, level, e, x, y, z, dx, dy, dz, partial, cam);
       drawn++;
       if (opts.shadows && !(e instanceof LivingEntity && e.isInvisible())) {
@@ -353,6 +362,7 @@ export class EntityRenderDispatcher {
   private renderEntity(b: EntityBatch, level: Level, e: Entity, x: number, y: number, z: number, dx: number, dy: number, dz: number, p: number, cam: Camera): void {
     this.setLight(b, level, e, x, y, z);
     if (e instanceof ItemEntity) this.renderItemEntity(b, e, dx, dy, dz, p);
+    else if (e instanceof EnderDragon) this.dragons.render(b, this.pose, e, dx, dy, dz, p);
     else if (e instanceof Mob) this.renderMob(b, e, dx, dy, dz, p);
     else if (e instanceof LivingEntity && e.type === 'player') this.renderPlayer(b, e as Player, dx, dy, dz, p);
     else if (e instanceof Arrow) this.renderArrow(b, e, dx, dy, dz, p);
@@ -360,6 +370,7 @@ export class EntityRenderDispatcher {
     else if (e instanceof PrimedTnt) this.renderTnt(b, e, dx, dy, dz, p);
     else if (e instanceof FallingBlockEntity) this.renderFalling(b, e, dx, dy, dz);
     else if (e instanceof ThrownItem) this.renderThrown(b, e, dx, dy, dz, cam);
+    else if (e instanceof DragonFireball) this.dragons.renderFireball(b, this.pose, dx, dy, dz, cam);
     else if (e instanceof Fireball) this.renderFireball(b, e, dx, dy, dz, cam);
     else if (e instanceof AbstractMinecart) this.renderMinecart(b, e, x, y, z, dx, dy, dz, p);
     else if (e instanceof Boat) this.renderBoat(b, e, dx, dy, dz, p);
@@ -1270,6 +1281,7 @@ function shadowRadius(e: Entity): number {
     case 'strider':
     case 'villager':
     case 'end_crystal':
+    case 'ender_dragon':
       r = 0.5;
       break;
     case 'bat':

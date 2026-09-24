@@ -164,6 +164,8 @@ export interface DrawState {
   useLightmap: boolean;
   /** additive blending (vanilla eyes render type) */
   additive?: boolean;
+  /** added on by its alpha (vanilla LIGHTNING_TRANSPARENCY, SRC_ALPHA, ONE: the dragon's death rays) */
+  lightning?: boolean;
   /** default true */
   depthWrite?: boolean;
   /** only where the depth already equals this geometry's (vanilla glint EQUAL_DEPTH_TEST) */
@@ -280,7 +282,7 @@ export class EntityBatch {
     s.vec4('u_fogColor', this.fogColor[0], this.fogColor[1], this.fogColor[2], 1);
     s.vec2('u_fog', this.fog[0], this.fog[1]);
     s.f('u_fogShape', this.fogShape);
-    s.f('u_additive', st.blend && st.additive ? 1 : 0);
+    s.f('u_additive', st.blend && (st.additive || st.lightning) ? 1 : 0);
     s.vec2('u_uvOffset', st.uvOffset?.[0] ?? 0, st.uvOffset?.[1] ?? 0);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, st.texture);
@@ -295,6 +297,7 @@ export class EntityBatch {
     if (st.blend) {
       gl.enable(gl.BLEND);
       if (st.additive) gl.blendFunc(gl.ONE, gl.ONE);
+      else if (st.lightning) gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
       else gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
     } else gl.disable(gl.BLEND);
     if (st.cull) gl.enable(gl.CULL_FACE);
@@ -321,5 +324,5 @@ export class EntityBatch {
 }
 
 function sameState(a: DrawState, b: DrawState): boolean {
-  return a.texture === b.texture && a.cutoff === b.cutoff && a.blend === b.blend && a.cull === b.cull && a.lit === b.lit && a.useLightmap === b.useLightmap && !!a.additive === !!b.additive && (a.depthWrite !== false) === (b.depthWrite !== false) && !!a.depthEqual === !!b.depthEqual && (a.colorWrite !== false) === (b.colorWrite !== false) && (a.uvOffset?.[0] ?? 0) === (b.uvOffset?.[0] ?? 0) && (a.uvOffset?.[1] ?? 0) === (b.uvOffset?.[1] ?? 0);
+  return a.texture === b.texture && a.cutoff === b.cutoff && a.blend === b.blend && a.cull === b.cull && a.lit === b.lit && a.useLightmap === b.useLightmap && !!a.additive === !!b.additive && !!a.lightning === !!b.lightning && (a.depthWrite !== false) === (b.depthWrite !== false) && !!a.depthEqual === !!b.depthEqual && (a.colorWrite !== false) === (b.colorWrite !== false) && (a.uvOffset?.[0] ?? 0) === (b.uvOffset?.[0] ?? 0) && (a.uvOffset?.[1] ?? 0) === (b.uvOffset?.[1] ?? 0);
 }

@@ -29,6 +29,11 @@ export class ChunkManager {
   paused = false;
   /** bumped when the world drops its chunks (a change of dimension): work for the old ones is thrown away */
   private epoch = 0;
+  /**
+   * squares of chunks kept loaded besides the player's circle, by name: chunk x, z and radius (vanilla chunk
+   * tickets — the dragon fight's arena, an end gateway's way out)
+   */
+  private readonly tickets = new Map<string, [number, number, number]>();
 
   constructor(readonly world: World, readonly pool: WorkerPool, readonly renderer: WorldRenderer) {
     pool.jobSource = () => this.nextJob();
@@ -48,6 +53,23 @@ export class ChunkManager {
     this.meshListIdx = 0;
     this.genQueueDirty = true;
     this.centerX = this.centerZ = Number.NaN;
+    this.tickets.clear();
+  }
+
+  /** keep the chunks within `t`'s radius (a square) of its chunk loaded under `name`; null lets them go */
+  setTicket(name: string, t: [number, number, number] | null): void {
+    const old = this.tickets.get(name);
+    if (t && old && old[0] === t[0] && old[1] === t[1] && old[2] === t[2]) return;
+    if (!t && !old) return;
+    if (t) this.tickets.set(name, t);
+    else this.tickets.delete(name);
+    this.genQueueDirty = true;
+    if (old) this.unloadFar();
+  }
+
+  private ticketed(cx: number, cz: number): boolean {
+    for (const [tx, tz, r] of this.tickets.values()) if (Math.abs(cx - tx) <= r && Math.abs(cz - tz) <= r) return true;
+    return false;
   }
 
   setCenter(x: number, z: number): void {
@@ -82,6 +104,15 @@ export class ChunkManager {
         if (this.world.chunks.has(key) || this.requested.has(key)) continue;
         q.push([cx, cz, d2]);
       }
+    for (const [tx, tz, r] of this.tickets.values())
+      for (let cz = tz - r; cz <= tz + r; cz++)
+        for (let cx = tx - r; cx <= tx + r; cx++) {
+          const dx = cx - this.centerX, dz = cz - this.centerZ, d2 = dx * dx + dz * dz;
+          if (d2 <= R * R + R) continue; // (queued above)
+          const key = Chunk.key(cx, cz);
+          if (this.world.chunks.has(key) || this.requested.has(key)) continue;
+          q.push([cx, cz, d2]);
+        }
     q.sort((a, b) => b[2] - a[2]); // pop from end = nearest
     this.genQueue = q.map(([x, z]) => [x, z]);
     this.genQueueDirty = false;
@@ -91,7 +122,7 @@ export class ChunkManager {
     const R = this.loadRadius + 2;
     for (const c of [...this.world.chunks.values()]) {
       const dx = c.cx - this.centerX, dz = c.cz - this.centerZ;
-      if (dx * dx + dz * dz > R * R + R) {
+      if (dx * dx + dz * dz > R * R + R && !this.ticketed(c.cx, c.cz)) {
         this.onChunkUnloaded?.(c);
         this.world.removeChunk(c.cx, c.cz);
         this.renderer.disposeChunk(c.cx, c.cz);
@@ -191,7 +222,7 @@ export class ChunkManager {
           this.requested.delete(key);
           const dx = cx - this.centerX, dz = cz - this.centerZ;
           const R = this.loadRadius + 2;
-          if (dx * dx + dz * dz > R * R + R) return; // moved away
+          if (dx * dx + dz * dz > R * R + R && !this.ticketed(cx, cz)) return; // moved away
           if (this.world.chunks.has(key)) return;
           this.stats.genMs += r.ms;
           this.stats.gens++;
