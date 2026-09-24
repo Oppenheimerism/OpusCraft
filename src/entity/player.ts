@@ -6,7 +6,7 @@ import type { Entity } from './entity';
 import { FLUID_WATER } from '../world/fluids';
 import type { Level } from '../game/level';
 import type { ItemStack } from '../item/item';
-import { Inventory } from '../item/inventory';
+import { Inventory, type Hand } from '../item/inventory';
 import { FoodData } from './food';
 import { ExperienceOrb } from './xpOrb';
 import { Arrow } from './arrow';
@@ -76,6 +76,8 @@ export class Player extends LivingEntity {
   useItem: ItemStack | null = null;
   useItemRemaining = 0;
   useDuration = 0;
+  /** vanilla getUsedItemHand */
+  useHand: Hand = 'main';
 
   isUsingItem(): boolean {
     return this.useItem !== null;
@@ -86,8 +88,15 @@ export class Player extends LivingEntity {
     return this.useItem ? this.useDuration - this.useItemRemaining : 0;
   }
 
+  /** a swing, by default with the hand an interaction under way is using */
+  override swing(hand: Hand = this.inventory.activeHand): void {
+    super.swing(hand);
+  }
+
+  /** (in the hand in use: see Inventory.activeHand) */
   startUsingItem(stack: ItemStack, duration: number): void {
     this.useItem = stack;
+    this.useHand = this.inventory.activeHand;
     this.useDuration = duration;
     this.useItemRemaining = duration;
     this.usingItemTicks = 1;

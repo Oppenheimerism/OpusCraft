@@ -1,6 +1,7 @@
 // LivingEntity: vanilla travel() physics, jumping, health, hurt/death, status effects.
 
 import { Entity } from './entity';
+import type { Hand } from '../item/inventory';
 import { FLUID_WATER, fluidType } from '../world/fluids';
 import { wrapDegrees } from '../core/math';
 import { FLAGS, F_AIR, F_OPAQUE, F_FULL_COLLISION, BLOCKS, STATE_BLOCK } from '../world/block';
@@ -431,10 +432,14 @@ export abstract class LivingEntity extends Entity {
     return f >= 0 ? 6 + (1 + f) * 2 : 6;
   }
 
-  swing(): void {
+  /** vanilla swingingArm: the hand the current swing is with */
+  swingingArm: Hand = 'main';
+
+  swing(hand: Hand = 'main'): void {
     if (!this.swinging || this.swingTime >= this.swingDuration() / 2 || this.swingTime < 0) {
       this.swingTime = -1;
       this.swinging = true;
+      this.swingingArm = hand;
     }
   }
 

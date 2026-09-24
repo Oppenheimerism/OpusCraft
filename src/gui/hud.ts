@@ -5,7 +5,7 @@ import { LivingEntity } from '../entity/living';
 import type { Game } from '../game/game';
 import { debugLines } from '../render/overlay';
 import { FLUID_WATER } from '../world/fluids';
-import { RARITY_COLOR } from '../item/item';
+import { RARITY_COLOR, type ItemStack } from '../item/item';
 import { compareEffects } from '../entity/effects';
 
 export class Hud {
@@ -71,10 +71,11 @@ export class Hud {
     // hotbar
     g.sprite('hotbar', cx - 91, H - 22, 182, 22);
     g.sprite('hotbar_selection', cx - 91 - 1 + p.inventory.selected * 20, H - 22 - 1, 24, 23);
-    for (let i = 0; i < 9; i++) {
-      const s = p.inventory.main[i];
-      if (!s) continue;
-      const x = cx - 90 + i * 20 + 2, y = H - 16 - 3;
+    // vanilla Gui.renderItemHotbar: what the offhand holds sits in its own slot on the off arm's side
+    const off = p.inventory.offhand;
+    const offLeft = game.opts.mainHand !== 'left';
+    if (off) g.sprite(offLeft ? 'hotbar_offhand_left' : 'hotbar_offhand_right', offLeft ? cx - 91 - 29 : cx + 91, H - 23, 29, 24);
+    const slot = (s: ItemStack, x: number, y: number) => {
       // vanilla Gui.renderSlot: a stack that just took items in bounces, squeezed narrow and tall
       const pop = s.popTime - partial;
       if (pop > 0) {
@@ -91,7 +92,12 @@ export class Hud {
         const i1 = y + Math.floor(16 * (1 - f));
         g.fill(x, i1, x + 16, i1 + Math.ceil(16 * f), 0x7fffffff);
       }
+    };
+    for (let i = 0; i < 9; i++) {
+      const s = p.inventory.main[i];
+      if (s) slot(s, cx - 90 + i * 20 + 2, H - 16 - 3);
     }
+    if (off) slot(off, offLeft ? cx - 91 - 26 : cx + 91 + 10, H - 16 - 3);
     const survival = p.gameMode === 'survival' || p.gameMode === 'adventure';
     if (survival) {
       this.renderXp(g, game, cx);

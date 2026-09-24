@@ -12,7 +12,7 @@ import type { TexImage } from '../textures/tex';
 import { glintTexture, glintOffset, glintUV } from '../textures/glint';
 import { crossbowTexture } from '../item/crossbow';
 
-export type DisplayContext = 'gui' | 'ground' | 'fixed' | 'firstperson_righthand' | 'thirdperson_righthand' | 'head';
+export type DisplayContext = 'gui' | 'ground' | 'fixed' | 'firstperson_righthand' | 'firstperson_lefthand' | 'thirdperson_righthand' | 'thirdperson_lefthand' | 'head';
 
 interface Transform {
   rot: [number, number, number];
@@ -25,7 +25,10 @@ const BLOCK_DISPLAY: Record<DisplayContext, Transform> = {
   ground: { rot: [0, 0, 0], trans: [0, 3, 0], scale: [0.25, 0.25, 0.25] },
   fixed: { rot: [0, 0, 0], trans: [0, 0, 0], scale: [0.5, 0.5, 0.5] },
   thirdperson_righthand: { rot: [75, 45, 0], trans: [0, 2.5, 0], scale: [0.375, 0.375, 0.375] },
+  thirdperson_lefthand: { rot: [75, 45, 0], trans: [0, 2.5, 0], scale: [0.375, 0.375, 0.375] },
   firstperson_righthand: { rot: [0, 45, 0], trans: [0, 0, 0], scale: [0.4, 0.4, 0.4] },
+  // (block/block.json turns the block round in the left hand; drawn left, every transform also mirrors)
+  firstperson_lefthand: { rot: [0, 225, 0], trans: [0, 0, 0], scale: [0.4, 0.4, 0.4] },
   head: { rot: [0, 0, 0], trans: [0, 0, 0], scale: [1, 1, 1] },
 };
 const GENERATED_DISPLAY: Record<DisplayContext, Transform> = {
@@ -33,25 +36,34 @@ const GENERATED_DISPLAY: Record<DisplayContext, Transform> = {
   ground: { rot: [0, 0, 0], trans: [0, 2, 0], scale: [0.5, 0.5, 0.5] },
   fixed: { rot: [0, 180, 0], trans: [0, 0, 0], scale: [1, 1, 1] },
   thirdperson_righthand: { rot: [0, 0, 0], trans: [0, 3, 1], scale: [0.55, 0.55, 0.55] },
+  thirdperson_lefthand: { rot: [0, 0, 0], trans: [0, 3, 1], scale: [0.55, 0.55, 0.55] },
   firstperson_righthand: { rot: [0, -90, 25], trans: [1.13, 3.2, 1.13], scale: [0.68, 0.68, 0.68] },
+  // (item/generated has no left-hand transforms: the right hand's, mirrored)
+  firstperson_lefthand: { rot: [0, -90, 25], trans: [1.13, 3.2, 1.13], scale: [0.68, 0.68, 0.68] },
   head: { rot: [0, 180, 0], trans: [0, 13, 7], scale: [1, 1, 1] },
 };
 const HANDHELD_DISPLAY: Record<DisplayContext, Transform> = {
   ...GENERATED_DISPLAY,
   thirdperson_righthand: { rot: [0, -90, 55], trans: [0, 4, 0.5], scale: [0.85, 0.85, 0.85] },
+  thirdperson_lefthand: { rot: [0, 90, -55], trans: [0, 4, 0.5], scale: [0.85, 0.85, 0.85] },
   firstperson_righthand: { rot: [0, -90, 25], trans: [1.13, 3.2, 1.13], scale: [0.68, 0.68, 0.68] },
+  firstperson_lefthand: { rot: [0, 90, -25], trans: [1.13, 3.2, 1.13], scale: [0.68, 0.68, 0.68] },
 };
 /** models/item/bow.json display */
 const BOW_DISPLAY: Record<DisplayContext, Transform> = {
   ...GENERATED_DISPLAY,
   thirdperson_righthand: { rot: [-80, 260, -40], trans: [-1, -2, 2.5], scale: [0.9, 0.9, 0.9] },
+  thirdperson_lefthand: { rot: [-80, -280, 40], trans: [-1, -2, 2.5], scale: [0.9, 0.9, 0.9] },
   firstperson_righthand: { rot: [0, -90, 25], trans: [1.13, 3.2, 1.13], scale: [0.68, 0.68, 0.68] },
+  firstperson_lefthand: { rot: [0, 90, -25], trans: [1.13, 3.2, 1.13], scale: [0.68, 0.68, 0.68] },
 };
 /** models/item/crossbow.json display (the pulling / loaded models inherit it) */
 const CROSSBOW_DISPLAY: Record<DisplayContext, Transform> = {
   ...GENERATED_DISPLAY,
   thirdperson_righthand: { rot: [-90, 0, -60], trans: [2, 0.1, -3], scale: [0.9, 0.9, 0.9] },
+  thirdperson_lefthand: { rot: [-90, 0, 30], trans: [2, 0.1, -3], scale: [0.9, 0.9, 0.9] },
   firstperson_righthand: { rot: [-90, 0, -55], trans: [1.13, 3.2, 1.13], scale: [0.68, 0.68, 0.68] },
+  firstperson_lefthand: { rot: [-90, 0, 35], trans: [1.13, 3.2, 1.13], scale: [0.68, 0.68, 0.68] },
 };
 // flat-in-world block items (plants, torch...) use item/generated with the block texture
 function isHandheld(it: Item): boolean {

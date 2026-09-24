@@ -10,7 +10,8 @@ import type { ItemRenderer } from './itemRenderer';
 import type { Camera } from './renderer';
 import type { Frustum } from '../core/math';
 import { wrapDegrees } from '../core/math';
-import { ModelPart, playerModel, animateHumanoid } from './model';
+import { ModelPart, playerModel, animateHumanoid, twoHanded, type HumanoidArmPose } from './model';
+import type { Hand } from '../item/inventory';
 import * as M from './mobModels';
 import type { MobModelDef } from './mobModels';
 import type { Level } from '../game/level';
@@ -52,6 +53,8 @@ export interface EntityRenderOptions {
   drawPlayer: boolean;
   distanceScale: number;
   skinParts?: Record<string, boolean>;
+  /** the player's main arm (options: Main Hand) */
+  mainArm?: 'left' | 'right';
 }
 
 const RAD = Math.PI / 180;
@@ -87,6 +90,7 @@ export class EntityRenderDispatcher {
   private base: Float32Array | null = null;
   private readonly spawnerPose = new PoseStack();
   private whiteTex: WebGLTexture | null = null;
+  private mainArm: 'left' | 'right' = 'right';
   /** vanilla ItemPickupParticle: what was just picked up, flying to whoever took it */
   private readonly pickups: { e: Entity; target: Entity; life: number; tx: number; ty: number; tz: number; txo: number; tyo: number; tzo: number }[] = [];
   private readonly boatModels: Record<string, M.BoatModelDef> = { boat: M.boatModel(), chest_boat: M.chestBoatModel() };
@@ -168,6 +172,7 @@ export class EntityRenderDispatcher {
   /** draw all entities; call between opaque and translucent terrain */
   render(b: EntityBatch, level: Level, cam: Camera, partial: number, frustum: Frustum, opts: EntityRenderOptions): void {
     this.shadows.length = 0;
+    this.mainArm = opts.mainArm ?? 'right';
     let drawn = 0;
     for (const e of level.entities) {
       if (e.removed) continue;
@@ -741,7 +746,7 @@ export class EntityRenderDispatcher {
     }
     // a mob's crossbow: drawn (useTicks: how long it's been using it) or loaded
     if (stack.item.id === 'crossbow') tex = crossbowTexture(stack, useTicks);
-    this.items.render(b, pose, stack, 'thirdperson_righthand', left, tex);
+    this.items.render(b, pose, stack, left ? 'thirdperson_lefthand' : 'thirdperson_righthand', left, tex);
     pose.pop();
   }
 
@@ -749,31 +754,41 @@ export class EntityRenderDispatcher {
     const crouch = e.crouching && !e.flying;
     const a = this.setupLiving(e, dx, dy + (crouch ? -0.125 : 0), dz, p, 90, (pose) => pose.scale(0.9375, 0.9375, 0.9375));
     const m = this.player;
-    const held = e.inventory.selectedItem;
-    // vanilla PlayerRenderer.getArmPose: CROSSBOW_CHARGE while drawing one, CROSSBOW_HOLD holding a loaded one (not mid-swing)
-    const drawing = !!held && e.useItem === held && e.useItemRemaining > 0;
-    const xbow = held?.item.id === 'crossbow' ? (drawing ? 'charge' : !e.swinging && isCharged(held) ? 'hold' : null) : null;
-    animateHumanoid(m, a.limbSwing, a.limbAmount, a.age, a.headYaw, a.headPitch, attackAnim(e, p), crouch, !!e.vehicle, xbow, xbow === 'charge' ? crossbowChargeProgress(held, e.ticksUsingItem()) : 0);
-    if (held && !xbow) {
-      const ra = m.child('right_arm');
-      ra.xRot = ra.xRot * 0.5 - Math.PI / 10;
-    }
+    const inv = e.inventory;
+    const mainArm = this.mainArm, offArm = mainArm === 'right' ? 'left' : 'right';
+    // vanilla PlayerRenderer.getArmPose: drawing a bow or crossbow, holding a loaded crossbow (not mid-swing), or just holding something
+    const armPose = (hand: Hand): HumanoidArmPose => {
+      const s = inv.inHand(hand);
+      if (!s) return 'empty';
+      if (e.useHand === hand && e.useItem === s && e.useItemRemaining > 0) {
+        if (s.item.id === 'bow') return 'bow';
+        if (s.item.id === 'crossbow') return 'crossbow_charge';
+      } else if (!e.swinging && s.item.id === 'crossbow' && isCharged(s)) return 'crossbow_hold';
+      return 'item';
+    };
+    const mainPose = armPose('main');
+    // (a two-handed pose in the main hand leaves the other arm just holding what it holds)
+    const offPose: HumanoidArmPose = twoHanded(mainPose) ? (inv.inHand('off') ? 'item' : 'empty') : armPose('off');
+    const using = e.isUsingItem() ? (e.useHand === 'main' ? mainArm : offArm) : null;
+    animateHumanoid(m, a.limbSwing, a.limbAmount, a.age, a.headYaw, a.headPitch, attackAnim(e, p), crouch, !!e.vehicle, {
+      right: mainArm === 'right' ? mainPose : offPose,
+      left: mainArm === 'right' ? offPose : mainPose,
+      mainArm,
+      usingArm: using,
+      attackArm: e.swingingArm === 'main' ? mainArm : offArm,
+      charge: e.useItem?.item.id === 'crossbow' ? crossbowChargeProgress(e.useItem, e.ticksUsingItem()) : 0,
+    });
     this.overlay(b, e);
-    // vanilla: an invisible player's body isn't drawn, the held item still is
+    // vanilla: an invisible player's body isn't drawn, the held items still are
     if (!e.isInvisible()) {
       b.begin(this.state(this.skin));
       m.render(b, this.pose, 64, 64);
     }
-    if (held) {
-      b.setOverlay(0, 0, 0, 0);
-      this.pose.push();
-      m.translateAndRotate(this.pose);
-      m.child('right_arm').translateAndRotate(this.pose);
-      this.pose.rotX(-90);
-      this.pose.rotY(180);
-      this.pose.translate(1 / 16, 0.125, -0.625);
-      this.items.render(b, this.pose, held, 'thirdperson_righthand', false, held.item.id === 'crossbow' ? crossbowTexture(held, e.useItem === held ? e.ticksUsingItem() : -1) : undefined);
-      this.pose.pop();
+    // vanilla PlayerItemInHandLayer: the right arm's item, then the left's
+    b.setOverlay(0, 0, 0, 0);
+    for (const arm of ['right', 'left'] as const) {
+      const s = inv.inHand(arm === mainArm ? 'main' : 'off');
+      if (s) this.drawHeldItem(b, m, s, false, e.useItem === s ? e.ticksUsingItem() : -1, arm === 'left');
     }
   }
 

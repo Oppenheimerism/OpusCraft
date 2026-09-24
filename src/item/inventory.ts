@@ -2,6 +2,9 @@
 
 import { ItemStack } from './item';
 
+/** vanilla InteractionHand */
+export type Hand = 'main' | 'off';
+
 export class Inventory {
   readonly main: (ItemStack | null)[] = new Array(36).fill(null);
   readonly armor: (ItemStack | null)[] = new Array(4).fill(null); // feet, legs, chest, head
@@ -9,14 +12,37 @@ export class Inventory {
   selected = 0;
   /** incremented on every change (for UI refresh) */
   version = 0;
+  /**
+   * the hand an interaction under way is using (vanilla passes an InteractionHand along): while it's the offhand,
+   * selectedItem, setSelectedItem and consumeSelected mean the offhand's stack
+   */
+  activeHand: Hand = 'main';
 
   get selectedItem(): ItemStack | null {
-    return this.main[this.selected];
+    return this.activeHand === 'off' ? this.offhand : this.main[this.selected];
   }
 
   setSelectedItem(s: ItemStack | null): void {
-    this.main[this.selected] = s && s.count > 0 ? s : null;
+    const v = s && s.count > 0 ? s : null;
+    if (this.activeHand === 'off') this.offhand = v;
+    else this.main[this.selected] = v;
     this.version++;
+  }
+
+  /** vanilla getItemInHand */
+  inHand(hand: Hand): ItemStack | null {
+    return hand === 'off' ? this.offhand : this.main[this.selected];
+  }
+
+  /** run `fn` with `hand` as the hand in use (see activeHand) */
+  withHand<T>(hand: Hand, fn: () => T): T {
+    const prev = this.activeHand;
+    this.activeHand = hand;
+    try {
+      return fn();
+    } finally {
+      this.activeHand = prev;
+    }
   }
 
   getSlot(i: number): ItemStack | null {
@@ -65,12 +91,12 @@ export class Inventory {
     if (this.offhand && this.offhand.popTime > 0) this.offhand.popTime--;
   }
 
-  /** Remove `count` from the selected slot. */
+  /** Remove `count` from the stack in the hand in use. */
   consumeSelected(count = 1): void {
-    const s = this.main[this.selected];
+    const s = this.selectedItem;
     if (!s) return;
     s.count -= count;
-    if (s.count <= 0) this.main[this.selected] = null;
+    if (s.count <= 0) this.setSelectedItem(null);
     this.version++;
   }
 

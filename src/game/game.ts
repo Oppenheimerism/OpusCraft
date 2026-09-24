@@ -1206,6 +1206,7 @@ export class Game {
       else if (code === KEYS.hideGui) this.hideGui = !this.hideGui;
       else if (code === KEYS.togglePerspective) this.thirdPerson = (this.thirdPerson + 1) % 3;
       else if (code === KEYS.drop) this.interaction.drop(inp.isDown('ControlLeft') || inp.isDown('MetaLeft'));
+      else if (code === KEYS.swapHands) this.interaction.swapHands();
       else {
         for (let d = 1; d <= 9; d++)
           if (code === KEYS[`hotbar${d}` as keyof typeof KEYS]) {
@@ -1422,7 +1423,7 @@ export class Game {
       dim: w.dim,
       biomeColors: blendBiomeColors(cam.x, cam.y, cam.z, (qx, qy, qz) => BIOMES[w.getBiome3(qx * 4 + 2, qy * 4 + 2, qz * 4 + 2)] ?? b),
       level: this.level,
-      entityOptions: { shadows: this.opts.entityShadows, drawPlayer: this.thirdPerson > 0 && !camOverride, distanceScale: this.opts.entityDistanceScaling },
+      entityOptions: { shadows: this.opts.entityShadows, drawPlayer: this.thirdPerson > 0 && !camOverride, distanceScale: this.opts.entityDistanceScaling, mainArm: this.opts.mainHand },
     });
     if (camOverride) return;
     const hit = this.interaction.hit;
@@ -1449,7 +1450,7 @@ export class Game {
       const l = this.world.getLight(Math.floor(ex), Math.floor(ey), Math.floor(ez));
       let hf = 1;
       if (eyeFluid === FLUID_WATER) hf *= 0.85714287;
-      this.renderer.hand.render(this.renderer.batch, p, partial, this.canvas.width, this.canvas.height, hf, handBob, (l & 15) * 16, (l >> 4) * 16, this.renderer.viewRot);
+      this.renderer.hand.render(this.renderer.batch, p, partial, this.canvas.width, this.canvas.height, hf, handBob, (l & 15) * 16, (l >> 4) * 16, this.renderer.viewRot, this.opts.mainHand);
     }
     if (this.thirdPerson === 0 && p.isOnFire() && p.gameMode !== 'spectator') {
       this.renderer.entities.renderScreenFire(this.renderer.batch, this.canvas.width, this.canvas.height, 70, this.level.gameTime);
@@ -1598,7 +1599,7 @@ export class Game {
     };
     lvl.onPlayerCrossbowKill = (killed) => this.advancements.trigger('killed_by_crossbow', { crossbowKills: killed.map((e) => e.type) });
     this.interaction.onShotCrossbow = () => this.advancements.trigger('shot_crossbow');
-    this.interaction.onItemUsed = () => this.renderer.hand.itemUsed();
+    this.interaction.onItemUsed = (hand) => this.renderer.hand.itemUsed(hand);
     this.interaction.onPlaced = (name) => this.advancements.trigger('place', { place: name });
     this.interaction.onConsumed = (id) => this.advancements.trigger('consume', { consume: id });
     this.interaction.onItemDurability = (item, vehicle) => this.advancements.trigger('item_durability', { durability: { item, vehicle } });
