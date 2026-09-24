@@ -1,5 +1,6 @@
 // Arrows (vanilla AbstractArrow / Arrow): flight, sticking into blocks,
-// entity hits with velocity-scaled damage, critical arrows, the bow's enchantments, pickup.
+// entity hits with velocity-scaled damage, critical arrows, the bow's enchantments, pickup,
+// a crossbow's piercing.
 
 import { Entity } from './entity';
 import type { Level } from '../game/level';
@@ -30,8 +31,15 @@ export class Arrow extends Entity {
   baseDamage = 2;
   crit = false;
   pickup: Pickup = 'disallowed';
-  /** vanilla firedFromWeapon: the bow it was shot from (power, punch) */
+  /** vanilla firedFromWeapon: the bow it was shot from (power, punch), or the crossbow */
   weapon: ItemStack | null = null;
+  /** vanilla pierceLevel (a crossbow's Piercing): passes through this many entities more than one */
+  pierceLevel = 0;
+  /** vanilla piercingIgnoreEntityIds / piercedAndKilledEntities */
+  private pierced: Set<Entity> | null = null;
+  private piercedAndKilled: LivingEntity[] | null = null;
+  /** vanilla soundEvent: what it hits with (a crossbow's arrows item.crossbow.hit until they land) */
+  hitSound = 'entity.arrow.hit';
   private readonly rnd = Math.random;
 
   constructor(level: Level, owner?: LivingEntity | null) {
@@ -121,11 +129,17 @@ export class Arrow extends Entity {
       y1 = blockHit.py;
       z1 = blockHit.pz;
     }
-    const ent = this.findHitEntity(x0, y0, z0, x1, y1, z1);
-    if (ent) this.onHitEntity(ent);
-    else if (blockHit) {
+    let ent = this.findHitEntity(x0, y0, z0, x1, y1, z1);
+    if (!ent && blockHit) {
       onProjectileHit(this.level, blockHit.x, blockHit.y, blockHit.z);
       this.onHitBlock(blockHit.px, blockHit.py, blockHit.pz, w.getState(blockHit.x, blockHit.y, blockHit.z));
+    }
+    // vanilla tick's hit loop: a piercing arrow goes on to the next entity along this tick's path (the block
+    // behind them waits for the next tick)
+    while (ent && !this.removed) {
+      this.onHitEntity(ent);
+      if (this.pierceLevel <= 0) break;
+      ent = this.findHitEntity(x0, y0, z0, x1, y1, z1);
     }
     if (this.removed) return;
     const vx = this.dx, vy = this.dy, vz = this.dz;
@@ -167,7 +181,7 @@ export class Arrow extends Entity {
     if (!(e instanceof LivingEntity) || !e.isPickable()) return false;
     if (e === this.owner && !this.leftOwner) return false;
     if (e.type === 'player' && (e as Player).gameMode === 'spectator') return false;
-    return true;
+    return !this.pierced?.has(e);
   }
 
   private findHitEntity(x0: number, y0: number, z0: number, x1: number, y1: number, z1: number): Entity | null {
@@ -191,6 +205,16 @@ export class Arrow extends Entity {
     const power = levelOf(this.weapon, 'power');
     if (this.weapon) base += damageBonus(this.weapon, e) + (power > 0 ? 0.5 * power + 0.5 : 0);
     let dmg = Math.ceil(Math.max(0, speed * base));
+    if (this.pierceLevel > 0) {
+      this.pierced ??= new Set();
+      this.piercedAndKilled ??= [];
+      // it has gone through all it can: the next one stops it
+      if (this.pierced.size >= this.pierceLevel + 1) {
+        this.remove();
+        return;
+      }
+      this.pierced.add(e);
+    }
     if (this.crit) dmg = Math.min(dmg + Math.floor(this.rnd() * (Math.floor(dmg / 2) + 2)), 2147483647);
     const owner = this.owner;
     if (owner instanceof LivingEntity && e instanceof LivingEntity) owner.lastHurtMob = e;
@@ -203,9 +227,15 @@ export class Arrow extends Entity {
         this.doKnockback(e);
         // the victim's thorns hurt the shooter
         doPostAttackEffects(e, owner, this.weapon, false);
+        if (!e.isAlive && this.piercedAndKilled) this.piercedAndKilled.push(e);
+        // vanilla KilledByCrossbowTrigger: everything this crossbow arrow has killed so far
+        if (owner && owner === this.level.player && this.weapon?.item.id === 'crossbow') {
+          if (this.piercedAndKilled) this.level.onPlayerCrossbowKill?.(this.piercedAndKilled);
+          else if (!e.isAlive) this.level.onPlayerCrossbowKill?.([e]);
+        }
       }
-      this.level.sound.play('entity.arrow.hit', this.x, this.y, this.z, 1, 1.2 / (this.rnd() * 0.2 + 0.9));
-      this.remove();
+      this.level.sound.play(this.hitSound, this.x, this.y, this.z, 1, 1.2 / (this.rnd() * 0.2 + 0.9));
+      if (this.pierceLevel <= 0) this.remove();
     } else {
       e.remainingFireTicks = fire;
       // deflect
@@ -249,10 +279,15 @@ export class Arrow extends Entity {
     this.dz = vz;
     const l = Math.sqrt(vx * vx + vy * vy + vz * vz) || 1;
     this.setPos(this.x - (vx / l) * 0.05, this.y - (vy / l) * 0.05, this.z - (vz / l) * 0.05);
-    this.level.sound.play('entity.arrow.hit', this.x, this.y, this.z, 1, 1.2 / (this.rnd() * 0.2 + 0.9));
+    this.level.sound.play(this.hitSound, this.x, this.y, this.z, 1, 1.2 / (this.rnd() * 0.2 + 0.9));
     this.inGround = true;
     this.shakeTime = 7;
     this.crit = false;
+    // once stuck it's a plain arrow: no more piercing, the ordinary hit sound
+    this.pierceLevel = 0;
+    this.hitSound = 'entity.arrow.hit';
+    this.pierced = null;
+    this.piercedAndKilled = null;
   }
 
   /** vanilla AbstractArrow.playerTouch */

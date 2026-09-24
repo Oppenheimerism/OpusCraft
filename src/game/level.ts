@@ -211,6 +211,8 @@ export class Level {
   onBred: ((child: Entity, cause: Entity | null) => void) | null = null;
   /** an arrow the player shot hurt something (vanilla "Take Aim") */
   onPlayerArrowHit: ((target: Entity) => void) | null = null;
+  /** a crossbow arrow the player shot killed something: all it has killed so far (vanilla killed_by_crossbow) */
+  onPlayerCrossbowKill: ((killed: Entity[]) => void) | null = null;
   /** an entity's time in a nether portal came up (the portal block it was in) */
   onPortal: ((e: Entity, x: number, y: number, z: number) => void) | null = null;
 

@@ -97,9 +97,9 @@ export function weaponOf(e: unknown): ItemStack | null {
 const TIER_VALUE: Record<string, number> = { wooden: 15, stone: 5, iron: 14, golden: 22, diamond: 10, netherite: 15 };
 const ARMOR_VALUE: Record<string, number> = { leather: 15, chainmail: 12, iron: 9, golden: 25, diamond: 10, netherite: 15, turtle: 9 };
 
-/** vanilla Item.getEnchantmentValue: tool tier / armour material enchantability, 1 for books, bows and rods */
+/** vanilla Item.getEnchantmentValue: tool tier / armour material enchantability, 1 for books, bows, crossbows and rods */
 export function enchantmentValue(it: Item): number {
-  if (it.id === 'book' || it.id === 'bow' || it.id === 'fishing_rod') return 1;
+  if (it.id === 'book' || it.id === 'bow' || it.id === 'crossbow' || it.id === 'fishing_rod') return 1;
   const mat = it.id.split('_')[0];
   if (it.tool && it.tool.type !== 'shears') return TIER_VALUE[mat] ?? 0;
   if (it.armor) return ARMOR_VALUE[mat] ?? 0;

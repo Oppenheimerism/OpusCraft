@@ -18,6 +18,7 @@ import { FLUID_WATER } from '../world/fluids';
 import type { SavedEffect } from './effects';
 import { damageBonus, entityLevel, hasVanishing, levelOf, lootingBonus } from '../item/enchantHelper';
 import { doPostAttackEffects } from '../game/enchantEffects';
+import { crossbowUseTick } from '../item/crossbow';
 
 export type MobCategory = 'monster' | 'creature' | 'ambient' | 'water_creature' | 'misc';
 
@@ -309,7 +310,11 @@ export abstract class Mob extends LivingEntity {
 
   override aiStep(): void {
     super.aiStep();
-    if (this.usingItem) this.useItemTicks++;
+    if (this.usingItem) {
+      // vanilla LivingEntity.updateUsingItem → CrossbowItem.onUseTick: a mob drawing a crossbow makes the loading sounds too
+      if (this.mainHand?.item.id === 'crossbow') crossbowUseTick(this.level, this, this.mainHand, this.useItemTicks);
+      this.useItemTicks++;
+    }
   }
 
   protected override updateBodyRotation(): void {
