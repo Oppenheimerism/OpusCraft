@@ -406,11 +406,12 @@ export function animateSkeletonMelee(root: ModelPart, attackTime: number, age: n
 
 // ---------------------------------------------------------------------------
 
-export function creeperModel(): MobModelDef {
+/** vanilla CreeperModel.createBodyLayer (its power layer is the same boxes blown up by 2) */
+export function creeperModel(g = 0): MobModelDef {
   const root = new ModelPart();
-  root.add('head', part([{ x: -4, y: -8, z: -4, w: 8, h: 8, d: 8, u: 0, v: 0 }], [0, 6, 0]));
-  root.add('body', part([{ x: -4, y: 0, z: -2, w: 8, h: 12, d: 4, u: 16, v: 16 }], [0, 6, 0]));
-  const leg: Cube = { x: -2, y: 0, z: -2, w: 4, h: 6, d: 4, u: 0, v: 16 };
+  root.add('head', part([{ x: -4, y: -8, z: -4, w: 8, h: 8, d: 8, u: 0, v: 0, inflate: g }], [0, 6, 0]));
+  root.add('body', part([{ x: -4, y: 0, z: -2, w: 8, h: 12, d: 4, u: 16, v: 16, inflate: g }], [0, 6, 0]));
+  const leg: Cube = { x: -2, y: 0, z: -2, w: 4, h: 6, d: 4, u: 0, v: 16, inflate: g };
   root.add('right_hind_leg', part([leg], [-2, 18, 4]));
   root.add('left_hind_leg', part([leg], [2, 18, 4]));
   root.add('right_front_leg', part([leg], [-2, 18, -4]));

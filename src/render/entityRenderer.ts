@@ -18,6 +18,7 @@ uniform vec3 u_light0;
 uniform vec3 u_light1;
 uniform float u_lit;
 uniform float u_fogShape;
+uniform vec2 u_uvOffset;
 out vec2 v_uv;
 out vec4 v_color;
 out vec2 v_lm;
@@ -26,7 +27,7 @@ out float v_dist;
 void main() {
   vec4 vp = u_view * vec4(a_pos, 1.0);
   gl_Position = u_proj * vp;
-  v_uv = a_uv;
+  v_uv = a_uv + u_uvOffset;
   vec3 n = normalize(a_normal);
   float l0 = max(0.0, dot(normalize(u_light0), n));
   float l1 = max(0.0, dot(normalize(u_light1), n));
@@ -46,6 +47,7 @@ uniform vec4 u_fogColor;
 uniform vec2 u_fog;
 uniform float u_alphaCutoff;
 uniform float u_useLightmap;
+uniform float u_additive;
 in vec2 v_uv;
 in vec4 v_color;
 in vec2 v_lm;
@@ -59,7 +61,9 @@ void main() {
   if (u_useLightmap > 0.5) c.rgb *= texture(u_lightmap, v_lm).rgb;
   if (v_dist > u_fog.x && u_fog.y > 0.0) {
     float f = v_dist < u_fog.y ? smoothstep(u_fog.x, u_fog.y, v_dist) : 1.0;
-    c.rgb = mix(c.rgb, u_fogColor.rgb, f * u_fogColor.a);
+    // (vanilla linear_fog_fade: what's added to the scene fades out into the fog rather than taking its colour)
+    if (u_additive > 0.5) c.rgb *= 1.0 - f * u_fogColor.a;
+    else c.rgb = mix(c.rgb, u_fogColor.rgb, f * u_fogColor.a);
   }
   o = c;
 }`;
@@ -166,6 +170,8 @@ export interface DrawState {
   depthEqual?: boolean;
   /** default true; false writes depth only (vanilla RenderType.waterMask) */
   colorWrite?: boolean;
+  /** added to every UV (vanilla OffsetTexturingStateShard: the energy swirl's scroll) */
+  uvOffset?: [number, number];
 }
 
 /** Accumulates quads for one texture/state, then flushes. */
@@ -270,6 +276,8 @@ export class EntityBatch {
     s.vec4('u_fogColor', this.fogColor[0], this.fogColor[1], this.fogColor[2], 1);
     s.vec2('u_fog', this.fog[0], this.fog[1]);
     s.f('u_fogShape', this.fogShape);
+    s.f('u_additive', st.blend && st.additive ? 1 : 0);
+    s.vec2('u_uvOffset', st.uvOffset?.[0] ?? 0, st.uvOffset?.[1] ?? 0);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, st.texture);
     s.i('u_tex', 0);
@@ -309,5 +317,5 @@ export class EntityBatch {
 }
 
 function sameState(a: DrawState, b: DrawState): boolean {
-  return a.texture === b.texture && a.cutoff === b.cutoff && a.blend === b.blend && a.cull === b.cull && a.lit === b.lit && a.useLightmap === b.useLightmap && !!a.additive === !!b.additive && (a.depthWrite !== false) === (b.depthWrite !== false) && !!a.depthEqual === !!b.depthEqual && (a.colorWrite !== false) === (b.colorWrite !== false);
+  return a.texture === b.texture && a.cutoff === b.cutoff && a.blend === b.blend && a.cull === b.cull && a.lit === b.lit && a.useLightmap === b.useLightmap && !!a.additive === !!b.additive && (a.depthWrite !== false) === (b.depthWrite !== false) && !!a.depthEqual === !!b.depthEqual && (a.colorWrite !== false) === (b.colorWrite !== false) && (a.uvOffset?.[0] ?? 0) === (b.uvOffset?.[0] ?? 0) && (a.uvOffset?.[1] ?? 0) === (b.uvOffset?.[1] ?? 0);
 }

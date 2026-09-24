@@ -30,6 +30,8 @@ import { Hoglin, Zoglin } from '../entity/hoglin';
 import { Strider } from '../entity/strider';
 import { Piglin } from '../entity/piglin';
 import { Fireball, LargeFireball } from '../entity/fireball';
+import { LightningBolt } from '../entity/lightning';
+import { Rand } from '../core/rng';
 import { Squid } from '../entity/water';
 import { ThrownItem } from '../entity/throwable';
 import { AbstractMinecart } from '../entity/minecart';
@@ -84,6 +86,7 @@ export class EntityRenderDispatcher {
   /** model matrix living renderers start from instead of identity (mobs drawn inside spawners) */
   private base: Float32Array | null = null;
   private readonly spawnerPose = new PoseStack();
+  private whiteTex: WebGLTexture | null = null;
   private readonly boatModels: Record<string, M.BoatModelDef> = { boat: M.boatModel(), chest_boat: M.chestBoatModel() };
   /** boat water masks, drawn once every entity is down so riders' legs aren't masked out */
   private readonly waterPatches: { m: Float32Array; part: ModelPart; tex: WebGLTexture; texW: number; texH: number }[] = [];
@@ -99,6 +102,7 @@ export class EntityRenderDispatcher {
       zombie: M.zombieModel(),
       skeleton: M.skeletonModel(),
       creeper: M.creeperModel(),
+      creeper_armor: M.creeperModel(2),
       spider: M.spiderModel(),
       cave_spider: M.spiderModel(),
       enderman: M.endermanModel(),
@@ -135,7 +139,8 @@ export class EntityRenderDispatcher {
     const gen = MOB_TEXTURES[name];
     if (!gen) return null;
     const img = gen();
-    t = createTexture(this.gl, img.w, img.h, new Uint8Array(img.data.buffer, img.data.byteOffset, img.data.byteLength));
+    // (the charged creeper's swirl scrolls, so its texture wraps)
+    t = createTexture(this.gl, img.w, img.h, new Uint8Array(img.data.buffer, img.data.byteOffset, img.data.byteLength), { clamp: name !== 'creeper_armor' });
     this.textures.set(name, t);
     return t;
   }
@@ -168,6 +173,12 @@ export class EntityRenderDispatcher {
       const x = e.lerpX(partial), y = e.lerpY(partial), z = e.lerpZ(partial);
       const dx = x - cam.x, dy = y - cam.y, dz = z - cam.z;
       const d2 = dx * dx + dy * dy + dz * dz;
+      if (e instanceof LightningBolt) {
+        // vanilla LightningBolt: never frustum culled (noCulling), but drawn only within 64 blocks
+        const md = 64 * opts.distanceScale;
+        if (d2 < md * md) this.renderLightning(b, e, dx, dy, dz);
+        continue;
+      }
       const bb = e.bb;
       let size = (bb.maxX - bb.minX + bb.maxY - bb.minY + bb.maxZ - bb.minZ) / 3 || 1;
       if (e instanceof Arrow) size *= 10;
@@ -504,6 +515,7 @@ export class EntityRenderDispatcher {
         this.drawModel(b, fur, baby, r, g, bl);
       }
     }
+    if (e instanceof Creeper && e.powered) this.drawPowerSwirl(b, e, def, p);
     if (spiderLike) this.drawEyes(b, def, 'spider_eyes', baby);
     if (e instanceof Enderman) {
       this.drawEyes(b, def, 'enderman_eyes', false);
@@ -595,6 +607,81 @@ export class EntityRenderDispatcher {
     b.flush();
     b.lightB = lb;
     b.lightS = ls;
+  }
+
+  /**
+   * vanilla CreeperPowerLayer (EnergySwirlLayer): the model blown up by 2 in creeper_armor, scrolling diagonally, added
+   * at half strength over whatever is behind — no lighting, no hurt flash, both sides
+   */
+  private drawPowerSwirl(b: EntityBatch, e: Creeper, def: MobModelDef, p: number): void {
+    const sm = this.models.creeper_armor, t = this.tex('creeper_armor');
+    if (!sm || !t) return;
+    copyPose(def.root, sm.root);
+    const f = e.tickCount + p;
+    const u = (f * 0.01) % 1;
+    b.setOverlay(0, 0, 0, 0);
+    b.begin(this.state(t, { cutoff: 0.1, blend: true, additive: true, lit: false, useLightmap: false, uvOffset: [u, u] }));
+    this.drawModel(b, sm, false, 0.5, 0.5, 0.5, 1);
+    b.flush();
+  }
+
+  /**
+   * vanilla LightningBoltRenderer: eight 16-block segments jittering down from the sky to the strike point, two
+   * branches off it, each drawn as four nested square tubes (the main one widening with height) in faint blue-white,
+   * added onto the scene
+   */
+  private renderLightning(b: EntityBatch, e: LightningBolt, dx: number, dy: number, dz: number): void {
+    this.whiteTex ??= createTexture(this.gl, 1, 1, new Uint8Array([255, 255, 255, 255]));
+    b.setOverlay(0, 0, 0, 0);
+    b.begin({ texture: this.whiteTex, cutoff: -1, blend: true, additive: true, cull: true, lit: false, useLightmap: false });
+    const xs = new Float32Array(8), zs = new Float32Array(8);
+    let fx = 0, fz = 0;
+    const r0 = new Rand(e.seed);
+    for (let i = 7; i >= 0; i--) {
+      xs[i] = fx;
+      zs[i] = fz;
+      fx += r0.nextInt(11) - 5;
+      fz += r0.nextInt(11) - 5;
+    }
+    // (vanilla blends SRC_ALPHA, ONE: colour 0.45, 0.45, 0.5 at alpha 0.3)
+    const cr = 0.45 * 0.3, cg = 0.45 * 0.3, cb = 0.5 * 0.3;
+    const quad = (x1: number, z1: number, j: number, x2: number, z2: number, o1: number, o2: number, e1: boolean, s1: boolean, e2: boolean, s2: boolean) => {
+      const y0 = dy + j * 16, y1 = dy + (j + 1) * 16;
+      const v = [
+        dx + x1 + (e1 ? o2 : -o2), y0, dz + z1 + (s1 ? o2 : -o2),
+        dx + x2 + (e1 ? o1 : -o1), y1, dz + z2 + (s1 ? o1 : -o1),
+        dx + x2 + (e2 ? o1 : -o1), y1, dz + z2 + (s2 ? o1 : -o1),
+        dx + x1 + (e2 ? o2 : -o2), y0, dz + z1 + (s2 ? o2 : -o2),
+      ];
+      for (const k of [0, 1, 2, 0, 2, 3]) b.vertexRaw(v[k * 3], v[k * 3 + 1], v[k * 3 + 2], 0, 0, cr, cg, cb, 0.3, 0, 1, 0);
+    };
+    for (let j = 0; j < 4; j++) {
+      const r1 = new Rand(e.seed);
+      for (let k = 0; k < 3; k++) {
+        const top = k > 0 ? 7 - k : 7;
+        const bottom = k > 0 ? top - 2 : 0;
+        let x = xs[top] - fx, z = zs[top] - fz;
+        for (let s = top; s >= bottom; s--) {
+          const px = x, pz = z;
+          if (k === 0) {
+            x += r1.nextInt(11) - 5;
+            z += r1.nextInt(11) - 5;
+          } else {
+            x += r1.nextInt(31) - 15;
+            z += r1.nextInt(31) - 15;
+          }
+          let o1 = 0.1 + j * 0.2;
+          if (k === 0) o1 *= s * 0.1 + 1;
+          let o2 = 0.1 + j * 0.2;
+          if (k === 0) o2 *= (s - 1) * 0.1 + 1;
+          quad(x, z, s, px, pz, o1, o2, false, false, true, false);
+          quad(x, z, s, px, pz, o1, o2, true, false, true, true);
+          quad(x, z, s, px, pz, o1, o2, true, true, false, true);
+          quad(x, z, s, px, pz, o1, o2, false, true, false, false);
+        }
+      }
+    }
+    b.flush();
   }
 
   /** vanilla ItemInHandLayer (the right hand, or the left) */

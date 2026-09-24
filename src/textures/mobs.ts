@@ -580,6 +580,29 @@ function creeper(): TexImage {
   return t;
 }
 
+/**
+ * the charged creeper's power layer (vanilla creeper_armor.png): wavy diagonal streaks of pale blue on nothing, tiling
+ * both ways so the scrolling swirl never shows a seam
+ */
+function creeperArmor(): TexImage {
+  const t = img(64, 32);
+  const r = new Rand(0xa2c0);
+  const TAU = Math.PI * 2;
+  for (let y = 0; y < 32; y++)
+    for (let x = 0; x < 64; x++) {
+      const w = 0.16 * Math.sin(TAU * (x / 32 - y / 16)) + 0.06 * Math.sin(TAU * (x / 16 + y / 32));
+      const b = (((x / 16 + y / 8 + w) % 1) + 1) % 1;
+      const b2 = (((x / 16 - y / 8 - w * 0.5) % 1) + 1) % 1;
+      let i = b < 0.34 ? 1 - Math.abs(b - 0.17) / 0.17 : 0;
+      i = Math.max(i, b2 < 0.12 ? 0.55 * (1 - Math.abs(b2 - 0.06) / 0.06) : 0);
+      i *= 0.8 + r.next() * 0.35;
+      if (i < 0.18) continue;
+      const k = Math.min(1, i);
+      plot(t, x, y, mixC(0x3f63d8, 0xbfe4ff, k * k));
+    }
+  return t;
+}
+
 // ---------------------------------------------------------------------------
 // Spider (64x32) + emissive eyes
 
@@ -1790,6 +1813,7 @@ export const MOB_TEXTURES: Record<string, () => TexImage> = {
   skeleton: () => skeleton(),
   wither_skeleton: () => skeleton(WITHER_SKELETON_LOOK),
   creeper,
+  creeper_armor: creeperArmor,
   spider: () => spider(),
   cave_spider: () => spider(CAVE_SPIDER_LOOK),
   spider_eyes: spiderEyes,

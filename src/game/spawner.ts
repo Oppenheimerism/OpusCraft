@@ -130,7 +130,7 @@ export function isChunkSaved(e: Entity): boolean {
 const ENTITY_NAMES: Record<string, string> = {
   pig: 'Pig', cow: 'Cow', sheep: 'Sheep', chicken: 'Chicken', zombie: 'Zombie', skeleton: 'Skeleton', creeper: 'Creeper', spider: 'Spider',
   cave_spider: 'Cave Spider', enderman: 'Enderman', slime: 'Slime', magma_cube: 'Magma Cube', zombified_piglin: 'Zombified Piglin', ghast: 'Ghast', blaze: 'Blaze', wither_skeleton: 'Wither Skeleton', squid: 'Squid', bat: 'Bat', hoglin: 'Hoglin', zoglin: 'Zoglin', strider: 'Strider', piglin: 'Piglin',
-  arrow: 'Arrow', tnt: 'Primed TNT', item: 'Item', experience_orb: 'Experience Orb', falling_block: 'Falling Block', player: 'Player',
+  arrow: 'Arrow', tnt: 'Primed TNT', lightning_bolt: 'Lightning Bolt', item: 'Item', experience_orb: 'Experience Orb', falling_block: 'Falling Block', player: 'Player',
   egg: 'Thrown Egg', snowball: 'Snowball', ender_pearl: 'Thrown Ender Pearl',
   minecart: 'Minecart', chest_minecart: 'Minecart with Chest', boat: 'Boat', chest_boat: 'Boat with Chest',
 };
@@ -144,7 +144,7 @@ export function entityDisplayName(e: Entity | string): string {
 
 /** entity type ids accepted by /summon */
 export function summonableTypes(): string[] {
-  return [...Object.keys(MOB_TYPES), 'tnt', 'experience_orb', 'arrow', ...MINECART_TYPES, ...BOAT_TYPES];
+  return [...Object.keys(MOB_TYPES), 'tnt', 'experience_orb', 'arrow', 'lightning_bolt', ...MINECART_TYPES, ...BOAT_TYPES];
 }
 
 /** vanilla MobCategory caps (per 289 spawnable chunks) */

@@ -701,6 +701,11 @@ export class Creeper extends Monster {
   swelling(p: number): number {
     return (this.oldSwell + (this.swell - this.oldSwell) * p) / (this.maxSwell - 2);
   }
+  /** vanilla Creeper.thunderHit: a strike charges it */
+  override thunderHit(bolt: Entity): void {
+    super.thunderHit(bolt);
+    this.powered = true;
+  }
   private explodeCreeper(): void {
     const f = this.powered ? 2 : 1;
     this.dead = true;
@@ -729,6 +734,14 @@ export class Creeper extends Monster {
   }
   override lootTable(): LootEntry[] {
     return [{ item: 'gunpowder', min: 0, max: 2 }];
+  }
+  protected override saveData(): Record<string, number | string | boolean> {
+    return { ...super.saveData(), powered: this.powered, ignited: this.ignited };
+  }
+  protected override loadData(d: Record<string, number | string | boolean>): void {
+    super.loadData(d);
+    this.powered = d.powered === true;
+    this.ignited = d.ignited === true;
   }
 }
 

@@ -803,6 +803,8 @@ export class Game {
         return `${n} went up in flames`;
       case 'onFire':
         return `${n} burned to death`;
+      case 'lightningBolt':
+        return `${n} was struck by lightning`;
       case 'inWall':
         return `${n} suffocated in a wall`;
       case 'cactus':

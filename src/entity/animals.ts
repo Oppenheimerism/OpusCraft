@@ -11,6 +11,7 @@ import { ItemStack, ITEMS } from '../item/item';
 import { BLOCKS, STATE_BLOCK, S } from '../world/block';
 import type { Entity } from './entity';
 import { LivingEntity } from './living';
+import { ZombifiedPiglin } from './monsters';
 import { ItemBasedSteering } from './steering';
 import { blockFree, floorHeight } from './dismount';
 import { AABB } from '../core/aabb';
@@ -519,6 +520,20 @@ export class Pig extends Animal {
       this.spawnAtLocation(ItemStack.of('saddle'));
       this.steering.saddled = false;
     }
+  }
+  /** vanilla Pig.thunderHit: struck by lightning it rises a zombified piglin with a golden sword (not in peaceful) */
+  override thunderHit(bolt: Entity): void {
+    if (this.level.difficulty === 'peaceful') {
+      super.thunderHit(bolt);
+      return;
+    }
+    const z = new ZombifiedPiglin(this.level);
+    z.mainHand = ItemStack.of('golden_sword');
+    z.moveTo(this.x, this.y, this.z, this.yaw, this.pitch);
+    z.setBaby(this.isBaby());
+    z.persistenceRequired = true;
+    this.level.addEntity(z);
+    this.remove();
   }
   protected override saveData(): Record<string, number | string | boolean> {
     return { ...super.saveData(), saddle: this.saddled };

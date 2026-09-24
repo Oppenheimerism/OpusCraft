@@ -219,6 +219,13 @@ export abstract class Entity {
     if (this.remainingFireTicks < t) this.remainingFireTicks = t;
   }
 
+  /** vanilla Entity.thunderHit: struck by lightning — set alight (unless already burning) and 5 damage */
+  thunderHit(_bolt: Entity): void {
+    this.remainingFireTicks++;
+    if (this.remainingFireTicks === 0) this.igniteForSeconds(8);
+    this.hurt(5, 'lightningBolt');
+  }
+
   clearFire(): void {
     this.remainingFireTicks = 0;
   }
