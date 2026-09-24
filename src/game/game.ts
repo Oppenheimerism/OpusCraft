@@ -16,6 +16,7 @@ import { mat4, translate, rotateX, rotateZ, rotateY, DEG, clamp } from '../core/
 import { BLOCKS, STATE_BLOCK, FLAGS, F_WATER, F_LAVA, F_OPAQUE, F_COLLIDE } from '../world/block';
 import { FLUID_WATER, FLUID_LAVA, fluidHeight } from '../world/fluids';
 import { BIOMES } from '../world/gen/biomes';
+import { biomeTemperature } from '../world/gen/temperature';
 import { ItemStack, ITEMS, saveStack, loadStack } from '../item/item';
 import { hasShapeUpdates, updateShape } from './shapeUpdates';
 import { MIN_Y, MAX_Y } from '../world/constants';
@@ -432,8 +433,7 @@ export class Game {
     this.ambient = new AmbientTicker(this.level);
     this.renderer.weather.tempAt = (biome, x, y, z) => {
       const b = BIOMES[biome];
-      if (y > 80) return b.temperature - ((Math.sin(x * 0.13 + z * 0.07) * 4 + y - 80) * 0.05) / 40;
-      return b.temperature;
+      return biomeTemperature(b.temperature, !!b.frozen, x, y, z);
     };
     this.hookPlayerSounds();
     this.hud = new Hud();

@@ -54,7 +54,7 @@ export class ChunkGenerator {
     this.seeds = SeedSource.fromWorldSeed(typeof seed === 'string' ? seed : BigInt(seed));
     this.router = new OverworldRouter(this.seeds);
     this.seedHash = hash32(this.seeds.lo ^ this.seeds.hi);
-    this.decorator = new Decorator(this.seedHash, this.router.n.patch, this.router.n.temperature_variation);
+    this.decorator = new Decorator(this.seedHash, this.router.n.patch);
     this.carvers = new Carvers(this.seedHash);
     this.decorator.mineshafts = new Mineshafts(this.seedHash, (x, z) => BIOMES[this.biomeAt(x, z)].name, (x, z) => this.router.preliminarySurface(this.column(x, z)));
     this.pointAquifer = new Aquifer(this.router, this.seedHash);

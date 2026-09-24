@@ -36,8 +36,9 @@ export class RandomTicker {
       for (let dx = -radiusChunks; dx <= radiusChunks; dx++) {
         const c = world.getChunk(ccx + dx, ccz + dz);
         if (!c) continue;
-        // (vanilla ServerLevel.tickChunk: the thunder roll comes before the chunk's block ticks)
+        // (vanilla ServerLevel.tickChunk: the thunder roll, then ice and snow, then the chunk's block ticks)
         this.level.tickThunder(c.cx, c.cz);
+        for (let k = 0; k < this.speed; k++) if (this.level.random.nextInt(48) === 0) this.level.tickPrecipitation(c.cx, c.cz);
         for (let si = 0; si < SECTIONS; si++) {
           const sec = c.blocks[si];
           if (!sec || c.nonAir[si] === 0) continue;

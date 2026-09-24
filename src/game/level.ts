@@ -28,6 +28,7 @@ import { levelOf } from '../item/enchantHelper';
 import { F_WATER, F_LAVA, F_REPLACEABLE } from '../world/block';
 import { skyDarkenInt, timeOfDay } from '../render/environment';
 import { BIOMES } from '../world/gen/biomes';
+import { coldEnoughToSnow } from '../world/gen/temperature';
 import { AABB } from '../core/aabb';
 import type { DimensionType } from '../world/dimension';
 import { NetherGenerator } from '../world/gen/nether';
@@ -198,7 +199,7 @@ export class Level {
     if (!this.isRaining() || !this.canSeeSky(x, y, z)) return false;
     const b = BIOMES[this.world.getBiome(x, z)];
     if (!b || !b.precipitation) return false;
-    return this.temperatureAt(b.temperature, y) >= 0.15;
+    return !coldEnoughToSnow(b.temperature, !!b.frozen, x, y, z);
   }
 
   /** vanilla Level.randValue: the cheap LCG behind getBlockRandomPos */
@@ -215,6 +216,58 @@ export class Level {
     const bolt = new LightningBolt(this);
     bolt.moveTo(x + 0.5, y, z + 0.5);
     this.addEntity(bolt);
+  }
+
+  /**
+   * vanilla ServerLevel.tickPrecipitation: in the cold, still water at the edge of open water freezes over (rain
+   * or shine), and while it's snowing a layer of snow settles on whatever will hold it
+   */
+  tickPrecipitation(cx: number, cz: number): void {
+    this.randValue = (Math.imul(this.randValue, 3) + 1013904223) | 0;
+    const i = this.randValue >> 2;
+    const x = cx * 16 + (i & 15), z = cz * 16 + ((i >> 8) & 15);
+    const y = this.motionBlockingHeight(x, z);
+    const b = BIOMES[this.world.getBiome(x, z)];
+    if (!b) return;
+    if (this.shouldFreeze(b.temperature, !!b.frozen, x, y - 1, z)) this.setBlock(x, y - 1, z, S('ice'));
+    if (!this.isRaining()) return;
+    const h = Number(this.gameRules.snowAccumulationHeight);
+    if (h > 0 && this.shouldSnow(b.temperature, !!b.frozen, x, y, z)) {
+      const st = this.world.getState(x, y, z);
+      const sb = BLOCKS[STATE_BLOCK[st]];
+      if (sb.name === 'snow') {
+        const layers = sb.get<number>(st, 'layers');
+        if (layers < Math.min(h, 8)) {
+          // (vanilla Block.pushEntitiesUp: whatever stood in the snow now stands on it)
+          const top = y + (layers * 2) / 16;
+          for (const e of this.getEntities(new AABB(x, y, z, x + 1, top, z + 1))) if (e.y < top) e.moveTo(e.x, top, e.z);
+          this.setBlock(x, y, z, sb.with(st, 'layers', layers + 1));
+        }
+      } else this.setBlock(x, y, z, S('snow'));
+    }
+    // (cauldrons catching the rain or snow: no cauldrons yet)
+  }
+
+  /** vanilla Biome.shouldFreeze(level, pos, true): a still water source, dim, cold, at the edge of open water */
+  private shouldFreeze(base: number, frozen: boolean, x: number, y: number, z: number): boolean {
+    if (y < MIN_Y || y >= MAX_Y || !coldEnoughToSnow(base, frozen, x, y, z)) return false;
+    const w = this.world;
+    if ((w.getLight(x, y, z) & 15) >= 10) return false;
+    const st = w.getState(x, y, z);
+    const wb = BLOCKS[STATE_BLOCK[st]];
+    if (wb.name !== 'water' || wb.get<number>(st, 'level') !== 0) return false;
+    const wet = (a: number, c: number) => (FLAGS[w.getState(a, y, c)] & F_WATER) !== 0;
+    return !(wet(x - 1, z) && wet(x + 1, z) && wet(x, z - 1) && wet(x, z + 1));
+  }
+
+  /** vanilla Biome.shouldSnow: cold, dim, open air (or snow) where a snow layer could lie */
+  private shouldSnow(base: number, frozen: boolean, x: number, y: number, z: number): boolean {
+    if (y < MIN_Y || y >= MAX_Y || !coldEnoughToSnow(base, frozen, x, y, z)) return false;
+    const w = this.world;
+    if ((w.getLight(x, y, z) & 15) >= 10) return false;
+    const st = w.getState(x, y, z);
+    if (!(FLAGS[st] & F_AIR) && BLOCKS[STATE_BLOCK[st]].name !== 'snow') return false;
+    return canSurvive(w, x, y, z, S('snow'));
   }
 
   /** vanilla findLightningTargetAround: the top of the column, or something alive under the open sky close by */
@@ -245,10 +298,6 @@ export class Level {
     return MIN_Y;
   }
 
-  /** biome temperature with the vanilla height falloff above y=80 */
-  temperatureAt(base: number, y: number): number {
-    return y > 80 ? base - ((y - 80) * 0.05) / 40 : base;
-  }
 
   /** called for every entity tick (spawner despawn checks etc.) */
   onEntityTick: ((e: Entity) => void) | null = null;
