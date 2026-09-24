@@ -48,6 +48,7 @@ import { ThrownItem } from '../entity/throwable';
 import { AbstractMinecart } from '../entity/minecart';
 import { Boat } from '../entity/boat';
 import { EndCrystal } from '../entity/endCrystal';
+import { EyeOfEnder } from '../entity/eyeOfEnder';
 import { EndCrystalRenderer } from './endCrystalRenderer';
 import { EnderDragon } from '../entity/enderDragon';
 import { DragonFireball } from '../entity/dragonFireball';
@@ -398,6 +399,7 @@ export class EntityRenderDispatcher {
     else if (e instanceof PrimedTnt) this.renderTnt(b, e, dx, dy, dz, p);
     else if (e instanceof FallingBlockEntity) this.renderFalling(b, e, dx, dy, dz);
     else if (e instanceof ThrownItem) this.renderThrown(b, e, dx, dy, dz, cam);
+    else if (e instanceof EyeOfEnder) this.renderEyeOfEnder(b, e, dx, dy, dz, cam);
     else if (e instanceof DragonFireball) this.dragons.renderFireball(b, this.pose, dx, dy, dz, cam);
     else if (e instanceof Fireball) this.renderFireball(b, e, dx, dy, dz, cam);
     else if (e instanceof AbstractMinecart) this.renderMinecart(b, e, x, y, z, dx, dy, dz, p);
@@ -1105,6 +1107,19 @@ export class EntityRenderDispatcher {
   private renderThrown(b: EntityBatch, e: ThrownItem, dx: number, dy: number, dz: number, cam: Camera): void {
     if (e.tickCount < 2 && dx * dx + dy * dy + dz * dz < 12.25) return;
     b.setOverlay(0, 0, 0, 0);
+    const pose = this.pose;
+    pose.reset();
+    pose.translate(dx, dy, dz);
+    pose.rotY(180 - cam.yaw);
+    pose.rotX(-cam.pitch);
+    this.items.render(b, pose, e.stack, 'ground');
+  }
+
+  /** vanilla ThrownItemRenderer(1, fullBright) for an eye of ender: the eye facing the camera, lit as if by a torch */
+  private renderEyeOfEnder(b: EntityBatch, e: EyeOfEnder, dx: number, dy: number, dz: number, cam: Camera): void {
+    if (e.tickCount < 2 && dx * dx + dy * dy + dz * dz < 12.25) return;
+    b.setOverlay(0, 0, 0, 0);
+    b.lightB = 240;
     const pose = this.pose;
     pose.reset();
     pose.translate(dx, dy, dz);
