@@ -13,6 +13,7 @@ import { VARIANT_ITEMS } from './itemlib/variants';
 import { EXTRA_ITEMS } from './itemlib/extras';
 import { ICON_ITEMS } from './itemlib/icons';
 import { END_ITEMS } from './itemlib/end';
+import { SMITHING_ITEMS } from './itemlib/smithing';
 import { SPAWN_EGG_TEXTURES } from './mobs';
 
 export const ITEM_TEXTURES: Record<string, () => TexImage> = {
@@ -27,4 +28,5 @@ export const ITEM_TEXTURES: Record<string, () => TexImage> = {
   ...EXTRA_ITEMS,
   ...ICON_ITEMS,
   ...END_ITEMS,
+  ...SMITHING_ITEMS,
 };

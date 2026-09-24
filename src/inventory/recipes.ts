@@ -189,6 +189,8 @@ shapeless('fire_charge', 3, 'gunpowder', 'blaze_powder', ['coal', 'charcoal']);
 shapeless('magma_cream', 1, 'blaze_powder', 'slime_ball');
 shapeless('ender_eye', 1, 'ender_pearl', 'blaze_powder');
 shaped('end_crystal', 1, ['GGG', 'GEG', 'GTG'], { G: 'glass', E: 'ender_eye', T: 'ghast_tear' });
+// vanilla copySmithingTemplate: a template copied with seven diamonds and the block it's made of
+shaped('netherite_upgrade_smithing_template', 2, ['#S#', '#C#', '###'], { '#': 'diamond', C: 'netherrack', S: 'netherite_upgrade_smithing_template' });
 
 // ---------------------------------------------------------------------------
 // Food

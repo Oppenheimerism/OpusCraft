@@ -281,6 +281,11 @@ reg({ id: 'ender_eye', texture: 'ender_eye', creativeTab: 'tools' });
 reg({ id: 'end_crystal', texture: 'end_crystal', creativeTab: 'combat', rarity: 'rare', glint: true });
 ITEMS.get('end_portal_frame')!.creativeTab = 'functional';
 reg({ id: 'enchanted_book', texture: 'enchanted_book', maxStack: 1, rarity: 'uncommon', glint: true });
+// vanilla SmithingTemplateItem.createNetheriteUpgradeTemplate: its hover text is the upgrade, what it applies to and needs
+reg({
+  id: 'netherite_upgrade_smithing_template', name: 'Smithing Template', texture: 'netherite_upgrade_smithing_template', rarity: 'uncommon',
+  lore: ['Netherite Upgrade', '', 'Applies to:', ' §9Diamond Equipment', 'Ingredients:', ' §9Netherite Ingot'],
+});
 for (const m of ['iron', 'golden', 'diamond']) reg({ id: `${m}_horse_armor`, texture: `${m}_horse_armor`, maxStack: 1, creativeTab: 'combat' });
 // vanilla 1.21 jukebox songs: disc name + "C418 - title" description
 for (const [id, desc, rarity] of [['music_disc_13', 'C418 - 13', 'uncommon'], ['music_disc_cat', 'C418 - cat', 'uncommon'], ['music_disc_otherside', 'Lena Raine - otherside', 'rare']] as [string, string, Rarity][]) {
@@ -379,6 +384,38 @@ export interface ItemTag {
   dyedColor?: number;
   /** minecraft:dyed_color show_in_tooltip: false */
   dyedHidden?: boolean;
+  /** minecraft:item_name: the name the stack goes by under any custom name (the ominous banner's) */
+  itemName?: string;
+  /** minecraft:rarity, over the item's own */
+  rarity?: Rarity;
+  /** minecraft:hide_additional_tooltip: no item-specific tooltip lines (the ominous banner's patterns) */
+  hideAdditional?: boolean;
+  /** minecraft:banner_patterns: the layers over a banner's base colour, bottom first */
+  patterns?: BannerLayer[];
+  /** minecraft:map_id */
+  mapId?: number;
+  /** minecraft:map_post_processing: what a cartography table's result will do to its map when taken */
+  mapPostProcessing?: 'lock' | 'scale';
+  /** minecraft:trim: an armour trim's pattern and material */
+  trim?: { pattern: string; material: string };
+  /** minecraft:writable_book_content: a book and quill's pages */
+  pages?: string[];
+  /** minecraft:written_book_content: a signed book */
+  book?: WrittenBook;
+}
+
+/** one layer of a banner's patterns (vanilla BannerPatternLayers.Layer) */
+export interface BannerLayer {
+  pattern: string;
+  color: string;
+}
+
+/** vanilla WrittenBookContent: title, author, how many copies from the original (0-3) and the pages */
+export interface WrittenBook {
+  title: string;
+  author: string;
+  generation: number;
+  pages: string[];
 }
 
 /** one of a crossbow's charged projectiles: the item, and vanilla INTANGIBLE_PROJECTILE (multishot's copies, creative's) */
@@ -397,8 +434,20 @@ export function cloneTag(t: ItemTag | null): ItemTag | null {
   if (t.charged?.length) o.charged = t.charged.map((p) => ({ ...p }));
   if (t.dyedColor !== undefined) o.dyedColor = t.dyedColor;
   if (t.dyedHidden) o.dyedHidden = true;
+  if (t.itemName !== undefined) o.itemName = t.itemName;
+  if (t.rarity) o.rarity = t.rarity;
+  if (t.hideAdditional) o.hideAdditional = true;
+  if (t.patterns?.length) o.patterns = t.patterns.map((l) => ({ ...l }));
+  if (t.mapId !== undefined) o.mapId = t.mapId;
+  if (t.mapPostProcessing) o.mapPostProcessing = t.mapPostProcessing;
+  if (t.trim) o.trim = { ...t.trim };
+  if (t.pages) o.pages = [...t.pages];
+  if (t.book) o.book = { ...t.book, pages: [...t.book.pages] };
   return o;
 }
+
+/** the newer components compared as data (JSON) */
+const sameData = (a: unknown, b: unknown): boolean => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
 
 function sameCharged(a: ChargedProjectile[] | undefined, b: ChargedProjectile[] | undefined): boolean {
   const la = a?.length ?? 0;
@@ -446,12 +495,15 @@ export class ItemStack {
     const a = this.tag, b = o.tag;
     return (
       sameEnchants(a?.enchantments, b?.enchantments) && sameEnchants(a?.stored, b?.stored) && a?.customName === b?.customName && (a?.repairCost ?? 0) === (b?.repairCost ?? 0) &&
-      sameCharged(a?.charged, b?.charged) && a?.dyedColor === b?.dyedColor && !a?.dyedHidden === !b?.dyedHidden
+      sameCharged(a?.charged, b?.charged) && a?.dyedColor === b?.dyedColor && !a?.dyedHidden === !b?.dyedHidden &&
+      a?.itemName === b?.itemName && a?.rarity === b?.rarity && !a?.hideAdditional === !b?.hideAdditional && sameData(a?.patterns?.length ? a.patterns : null, b?.patterns?.length ? b.patterns : null) &&
+      a?.mapId === b?.mapId && a?.mapPostProcessing === b?.mapPostProcessing && sameData(a?.trim, b?.trim) && sameData(a?.pages, b?.pages) && sameData(a?.book, b?.book)
     );
   }
-  /** vanilla getHoverName: the custom name, or the item's name */
+  /** vanilla getHoverName: the custom name, or the item's name (vanilla WrittenBookItem.getName: a signed book's title; the item_name component) */
   displayName(): string {
-    return this.tag?.customName ?? this.item.name;
+    const t = this.tag;
+    return t?.customName ?? (t?.book && t.book.title.trim() ? t.book.title : undefined) ?? t?.itemName ?? this.item.name;
   }
   get maxStack(): number {
     return this.item.maxStack;
@@ -465,7 +517,7 @@ export class ItemStack {
   }
   /** vanilla ItemStack.getRarity: enchanting bumps common/uncommon to rare and rare to epic */
   rarity(): Rarity {
-    const r = this.item.rarity ?? 'common';
+    const r = this.tag?.rarity ?? this.item.rarity ?? 'common';
     if (!this.isEnchanted()) return r;
     return r === 'common' || r === 'uncommon' ? 'rare' : 'epic';
   }

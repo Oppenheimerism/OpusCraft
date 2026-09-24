@@ -5,6 +5,8 @@ import type { Screen } from '../screen';
 import { setJobSiteScreens } from '../../game/jobSites';
 import { StonecutterMenu } from '../../inventory/stonecutterMenu';
 import { StonecutterScreen } from './stonecutter';
+import { SmithingMenu } from '../../inventory/smithingMenu';
+import { SmithingScreen } from './smithing';
 
 export function installJobSiteScreens(game: Game): void {
   setJobSiteScreens((kind, x, y, z): Screen | null => {
@@ -13,6 +15,8 @@ export function installJobSiteScreens(game: Game): void {
     switch (kind) {
       case 'stonecutter':
         return new StonecutterScreen(game, new StonecutterMenu(p, pos));
+      case 'smithing_table':
+        return new SmithingScreen(game, new SmithingMenu(p, pos));
     }
     return null;
   });
