@@ -3,9 +3,9 @@
 // sounds of each profession at its workstation.
 
 import type { SoundGen } from '../synth';
-import { alloc, envBump, envAD, layer, lowpass, highpass } from './dsp';
+import { alloc, envBump, layer, lowpass, highpass } from './dsp';
 import { type Ctx, sound } from './registry';
-import { burst, fireCrackles, impact, phisem, sweep, ticks, bubble, thump } from './texture';
+import { burst, impact, phisem, sweep, ticks, bubble } from './texture';
 import { voice } from './voice';
 
 interface Hum {
@@ -139,16 +139,9 @@ function celebrate(c: Ctx): Float32Array {
 }
 
 // ---------------------------------------------------------------------------
-// work foley (vanilla entity.villager.work_<profession>: the sounds of each workstation)
-
-/** a blast furnace or smoker's fire roaring up */
-function workFire(c: Ctx, dark: boolean): Float32Array {
-  const { sr, rng } = c;
-  const out = alloc(1.2, sr);
-  layer(out, 0.6, (b) => sweep(b, sr, rng, { dur: 1.1, f: (t) => (dark ? 380 : 600) + 400 * t, q: 0.8, amp: (t) => envBump(t, 0.25, 0.8), mode: 'bp' }));
-  layer(out, 1, (b) => fireCrackles(b, sr, rng, 0, 1.1, 18, 2));
-  return out;
-}
+// work foley (vanilla entity.villager.work_<profession>: the sounds of each workstation; the armorer, butcher,
+// farmer, fisherman, leatherworker, librarian and weaponsmith play their block's or item's own, aliased in the
+// sound manager)
 
 /** a pen or stylus scratching across paper (the cartography table) */
 function workCartographer(c: Ctx): Float32Array {
@@ -175,24 +168,6 @@ function workCleric(c: Ctx): Float32Array {
   return out;
 }
 
-/** a scoop of scraps squelching into the composter */
-function workFarmer(c: Ctx): Float32Array {
-  const { sr, rng } = c;
-  const out = alloc(0.7, sr);
-  layer(out, 1, (b) => phisem(b, sr, rng, { dur: 0.5, rate: 700, energy: (t) => envAD(t, 0.02, 0.15), grain: 0.004, heavy: 2, bands: [{ f: 700, q: 1.2, g: 1, spread: 0.3 }, { f: 1600, q: 2, g: 0.5, spread: 0.3 }] }));
-  layer(out, 0.4, (b) => thump(b, sr, { f0: 140, f1: 90, tau: 0.06 }));
-  return out;
-}
-
-/** a barrel's lid thumped open (fisherman) */
-function workFisherman(c: Ctx): Float32Array {
-  const { sr, rng } = c;
-  const out = alloc(0.6, sr);
-  layer(out, 1, (b) => impact(b, sr, rng, { modes: [180, 1, 0.12, 410, 0.6, 0.08, 730, 0.3, 0.05], jitter: 0.05, noise: 0.5, noiseTau: 0.02, noiseBp: [900, 1] }));
-  layer(out, 0.35, (b) => phisem(b, sr, rng, { t: 0.05, dur: 0.3, rate: 400, energy: (t) => envAD(t, 0.01, 0.1), grain: 0.003, bands: [{ f: 1400, q: 3, g: 1, spread: 0.2 }] }));
-  return out;
-}
-
 /** a knife whittling an arrow shaft (fletching table) */
 function workFletcher(c: Ctx): Float32Array {
   const { sr, rng } = c;
@@ -200,23 +175,6 @@ function workFletcher(c: Ctx): Float32Array {
   layer(out, 1, (b) => {
     for (let i = 0; i < 2; i++) sweep(b, sr, rng, { t: i * 0.25, dur: 0.18, f: (t) => 2600 - 4000 * t, q: 3, amp: (t) => envBump(t, 0.02, 0.15), mode: 'bp' });
   });
-  return out;
-}
-
-/** leather slapped down and smoothed (the cauldron, leatherworker) */
-function workLeatherworker(c: Ctx): Float32Array {
-  const { sr, rng } = c;
-  const out = alloc(0.6, sr);
-  layer(out, 1, (b) => burst(b, sr, rng, { dur: 0.12, tau: 0.03, bp: [600, 0.9], color: 'brown' }));
-  layer(out, 0.6, (b) => sweep(b, sr, rng, { t: 0.15, dur: 0.3, f: (t) => 900 + 600 * t, q: 1.2, amp: (t) => envBump(t, 0.05, 0.25), mode: 'bp' }));
-  return out;
-}
-
-/** a page turned at the lectern */
-function workLibrarian(c: Ctx): Float32Array {
-  const { sr, rng } = c;
-  const out = alloc(0.6, sr);
-  layer(out, 1, (b) => phisem(b, sr, rng, { dur: 0.4, rate: 1200, energy: (t) => envBump(t, 0.12, 0.25), grain: 0.0015, bands: [{ f: 3000, q: 0.8, g: 1, spread: 0.3 }, { f: 6000, q: 1, g: 0.5 }] }));
   return out;
 }
 
@@ -259,15 +217,9 @@ export function villagerSounds(): Record<string, SoundGen> {
     'entity.villager.hurt': sound('entity.villager.hurt', 4, hurt),
     'entity.villager.death': sound('entity.villager.death', 1, death),
     'entity.villager.celebrate': sound('entity.villager.celebrate', 2, celebrate),
-    'entity.villager.work_armorer': sound('entity.villager.work_armorer', 3, (c) => workFire(c, false)),
-    'entity.villager.work_butcher': sound('entity.villager.work_butcher', 3, (c) => workFire(c, true)),
     'entity.villager.work_cartographer': sound('entity.villager.work_cartographer', 3, workCartographer),
     'entity.villager.work_cleric': sound('entity.villager.work_cleric', 2, workCleric),
-    'entity.villager.work_farmer': sound('entity.villager.work_farmer', 3, workFarmer),
-    'entity.villager.work_fisherman': sound('entity.villager.work_fisherman', 2, workFisherman),
     'entity.villager.work_fletcher': sound('entity.villager.work_fletcher', 3, workFletcher),
-    'entity.villager.work_leatherworker': sound('entity.villager.work_leatherworker', 3, workLeatherworker),
-    'entity.villager.work_librarian': sound('entity.villager.work_librarian', 3, workLibrarian),
     'entity.villager.work_mason': sound('entity.villager.work_mason', 2, workMason),
     'entity.villager.work_shepherd': sound('entity.villager.work_shepherd', 2, workShepherd),
     'entity.villager.work_toolsmith': sound('entity.villager.work_toolsmith', 3, workToolsmith),

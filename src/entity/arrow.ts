@@ -131,7 +131,7 @@ export class Arrow extends Entity {
     }
     let ent = this.findHitEntity(x0, y0, z0, x1, y1, z1);
     if (!ent && blockHit) {
-      onProjectileHit(this.level, blockHit.x, blockHit.y, blockHit.z);
+      onProjectileHit(this.level, blockHit.x, blockHit.y, blockHit.z, blockHit, this);
       this.onHitBlock(blockHit.px, blockHit.py, blockHit.pz, w.getState(blockHit.x, blockHit.y, blockHit.z));
     }
     // vanilla tick's hit loop: a piercing arrow goes on to the next entity along this tick's path (the block

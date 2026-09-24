@@ -3,9 +3,10 @@
 
 import { SimpleContainer, isEmpty } from '../inventory/container';
 import { ItemStack, ITEMS, ItemTag, cloneTag } from '../item/item';
-import { smeltingResult, fuelTime } from '../inventory/recipes';
+import { cookingResult, cookingTime, burnDuration, type CookingKind } from '../inventory/recipes';
 import { BLOCKS, STATE_BLOCK } from './block';
 import type { Level } from '../game/level';
+import type { Entity } from '../entity/entity';
 import { fillContainer } from '../game/loot';
 
 export interface SavedBlockEntity {
@@ -55,7 +56,7 @@ export function blockEntityKey(x: number, y: number, z: number): string {
 }
 
 export class ChestBlockEntity extends BlockEntity {
-  readonly id = 'chest';
+  readonly id: string = 'chest';
   openCount = 0;
   /** vanilla LootTable / LootTableSeed: rolled when first opened or broken */
   lootTable: string | null = null;
@@ -80,15 +81,50 @@ export class ChestBlockEntity extends BlockEntity {
   }
 }
 
+/** vanilla Direction.getNormal of the six facings */
+const FACING_NORMAL: Record<string, [number, number, number]> = { down: [0, -1, 0], up: [0, 1, 0], north: [0, 0, -1], south: [0, 0, 1], west: [-1, 0, 0], east: [1, 0, 0] };
+
+/**
+ * vanilla BarrelBlockEntity: a chest's 27 slots behind a lid, open (the block's `open`) while anyone is looking
+ * inside (ContainerOpenersCounter: the first to look opens it, the last to leave shuts it)
+ */
+export class BarrelBlockEntity extends ChestBlockEntity {
+  override readonly id = 'barrel';
+  /** vanilla startOpen */
+  startOpen(level: Level): void {
+    if (!this.removed && this.openCount++ === 0) this.setOpen(level, true);
+  }
+  /** vanilla stopOpen */
+  stopOpen(level: Level): void {
+    if (this.removed || this.openCount === 0) return;
+    if (--this.openCount === 0) this.setOpen(level, false);
+  }
+  /** vanilla BarrelBlockEntity.onOpen / onClose: the lid's sound at its face, and the block's `open` */
+  private setOpen(level: Level, open: boolean): void {
+    const st = level.getState(this.x, this.y, this.z);
+    const b = BLOCKS[STATE_BLOCK[st]];
+    if (b.name !== 'barrel') return;
+    const [nx, ny, nz] = FACING_NORMAL[b.get<string>(st, 'facing')];
+    level.sound.play(open ? 'block.barrel.open' : 'block.barrel.close', this.x + 0.5 + nx / 2, this.y + 0.5 + ny / 2, this.z + 0.5 + nz / 2, 0.5, Math.random() * 0.1 + 0.9);
+    level.setBlock(this.x, this.y, this.z, b.with(st, 'open', open));
+  }
+}
+
+/**
+ * vanilla AbstractFurnaceBlockEntity, and its smoker and blast furnace (SmokerBlockEntity, BlastFurnaceBlockEntity:
+ * their own recipes, cooked in half the time on fuel that lasts half as long)
+ */
 export class FurnaceBlockEntity extends BlockEntity {
-  readonly id = 'furnace';
+  readonly id: CookingKind;
   litTime = 0;
   litDuration = 0;
   cookingProgress = 0;
-  cookingTotalTime = 200;
+  cookingTotalTime: number;
   storedXp = 0;
-  constructor(x: number, y: number, z: number) {
+  constructor(x: number, y: number, z: number, kind: CookingKind = 'furnace') {
     super(x, y, z, 3);
+    this.id = kind;
+    this.cookingTotalTime = cookingTime(kind);
   }
   get isLit(): boolean {
     return this.litTime > 0;
@@ -100,13 +136,13 @@ export class FurnaceBlockEntity extends BlockEntity {
     this.litTime = Number(d.litTime ?? 0);
     this.litDuration = Number(d.litDuration ?? 0);
     this.cookingProgress = Number(d.cook ?? 0);
-    this.cookingTotalTime = Number(d.cookTotal ?? 200);
+    this.cookingTotalTime = Number(d.cookTotal ?? cookingTime(this.id));
     this.storedXp = Number(d.xp ?? 0);
   }
 
   private canBurn(): boolean {
     const input = this.container.get(0);
-    const r = smeltingResult(input);
+    const r = cookingResult(this.id, input);
     if (!r) return false;
     const out = this.container.get(2);
     if (isEmpty(out)) return true;
@@ -116,7 +152,7 @@ export class FurnaceBlockEntity extends BlockEntity {
 
   private burn(): void {
     const input = this.container.get(0)!;
-    const r = smeltingResult(input)!;
+    const r = cookingResult(this.id, input)!;
     const out = this.container.get(2);
     if (isEmpty(out)) this.container.items[2] = ItemStack.of(r.result, 1);
     else out.count++;
@@ -134,7 +170,7 @@ export class FurnaceBlockEntity extends BlockEntity {
     const input = this.container.get(0);
     if (this.isLit || (!isEmpty(fuel) && !isEmpty(input))) {
       if (!this.isLit && this.canBurn()) {
-        this.litTime = fuelTime(fuel);
+        this.litTime = burnDuration(this.id, fuel);
         this.litDuration = this.litTime;
         if (this.isLit && fuel) {
           const id = fuel.item.id;
@@ -147,7 +183,7 @@ export class FurnaceBlockEntity extends BlockEntity {
         this.cookingProgress++;
         if (this.cookingProgress >= this.cookingTotalTime) {
           this.cookingProgress = 0;
-          this.cookingTotalTime = 200;
+          this.cookingTotalTime = cookingTime(this.id);
           this.burn();
         }
       } else this.cookingProgress = 0;
@@ -157,7 +193,7 @@ export class FurnaceBlockEntity extends BlockEntity {
     if (wasLit !== this.isLit) {
       const st = level.getState(this.x, this.y, this.z);
       const b = BLOCKS[STATE_BLOCK[st]];
-      if (b.name === 'furnace') level.setBlock(this.x, this.y, this.z, b.with(st, 'lit', this.isLit), false);
+      if (b.name === this.id) level.setBlock(this.x, this.y, this.z, b.with(st, 'lit', this.isLit), false);
     }
   }
 
@@ -254,11 +290,144 @@ export class EnchantingTableBlockEntity extends BlockEntity {
   }
 }
 
+/**
+ * vanilla BellBlockEntity: rung, the bell swings for 50 ticks (BellRenderer tips it away from the side it was struck
+ * on); the living things around it are remembered between rings, for 60 ticks
+ */
+export class BellBlockEntity extends BlockEntity {
+  readonly id = 'bell';
+  ticks = 0;
+  shaking = false;
+  /** the struck side (a Dir: 2 north, 3 south, 4 west, 5 east) */
+  clickDirection = 2;
+  lastRingTimestamp = -Infinity;
+  nearbyEntities: Entity[] | null = null;
+  constructor(x: number, y: number, z: number) {
+    super(x, y, z, 0);
+  }
+  /** vanilla onHit / triggerEvent(1): (re)start the swing */
+  onHit(dir: number): void {
+    this.clickDirection = dir;
+    this.ticks = 0;
+    this.shaking = true;
+  }
+  /** vanilla BellBlockEntity.tick (raiders nearby would make it resonate: there are none) */
+  override tick(): void {
+    if (this.shaking) this.ticks++;
+    if (this.ticks >= 50) {
+      this.shaking = false;
+      this.ticks = 0;
+    }
+  }
+}
+
+/**
+ * vanilla LecternBlockEntity: the book on the lectern (its one slot, so breaking the lectern drops it) and the page
+ * it lies open at
+ */
+export class LecternBlockEntity extends BlockEntity {
+  readonly id = 'lectern';
+  page = 0;
+  constructor(x: number, y: number, z: number) {
+    super(x, y, z, 1);
+  }
+  get book(): ItemStack | null {
+    return this.container.get(0);
+  }
+  /** vanilla setBook: a new book opens at its first page */
+  setBook(s: ItemStack | null): void {
+    this.container.items[0] = s;
+    this.page = 0;
+    this.container.changed();
+  }
+  protected override saveData(): Record<string, number> {
+    return { page: this.page };
+  }
+  protected override loadData(d: Record<string, number | string>): void {
+    this.page = Number(d.page ?? 0);
+  }
+}
+
+/**
+ * vanilla BrewingStandBlockEntity: three bottles (slots 0-2), the ingredient (3) and blaze powder for fuel (4); the
+ * block shows a bottle on each arm whose slot is filled. (No potions yet, so nothing brews: its menu is to come.)
+ */
+export class BrewingStandBlockEntity extends BlockEntity {
+  readonly id = 'brewing_stand';
+  brewTime = 0;
+  fuel = 0;
+  private lastBottles: boolean[] | null = null;
+  constructor(x: number, y: number, z: number) {
+    super(x, y, z, 5);
+  }
+  /** vanilla serverTick: blaze powder tops up the fuel; the arms follow the bottle slots */
+  override tick(level: Level): void {
+    const powder = this.container.get(4);
+    if (this.fuel <= 0 && powder && powder.item.id === 'blaze_powder') {
+      this.fuel = 20;
+      if (--powder.count <= 0) this.container.items[4] = null;
+      this.container.changed();
+    }
+    const bits = [0, 1, 2].map((i) => !isEmpty(this.container.get(i)));
+    if (this.lastBottles && bits.every((b, i) => b === this.lastBottles![i])) return;
+    this.lastBottles = bits;
+    const st = level.getState(this.x, this.y, this.z);
+    const b = BLOCKS[STATE_BLOCK[st]];
+    if (b.name !== 'brewing_stand') return;
+    let now = st;
+    bits.forEach((v, i) => (now = b.with(now, `has_bottle_${i}`, v)));
+    if (now !== st) level.setBlock(this.x, this.y, this.z, now, 2);
+  }
+  protected override saveData(): Record<string, number> {
+    return { brewTime: this.brewTime, fuel: this.fuel };
+  }
+  protected override loadData(d: Record<string, number | string>): void {
+    this.brewTime = Number(d.brewTime ?? 0);
+    this.fuel = Number(d.fuel ?? 0);
+  }
+}
+
+/**
+ * vanilla CampfireBlock.makeParticles: a puff of campfire smoke (a signal fire's rises far higher), and a wisp of
+ * ordinary smoke as well when it is being put out
+ */
+export function campfireSmoke(level: Level, x: number, y: number, z: number, signal: boolean, extra: boolean): void {
+  const side = () => (Math.random() < 0.5 ? 1 : -1);
+  const kind = signal ? 'campfire_signal_smoke' : 'campfire_cosy_smoke';
+  level.particles.spawn?.(kind, x + 0.5 + (Math.random() / 3) * side(), y + Math.random() + Math.random(), z + 0.5 + (Math.random() / 3) * side(), 0, 0.07, 0);
+  if (extra) level.particles.spawn?.('smoke', x + 0.5 + (Math.random() / 4) * side(), y + 0.4, z + 0.5 + (Math.random() / 4) * side(), 0, 0.005, 0);
+}
+
+/**
+ * vanilla CampfireBlockEntity (both campfires have one): four places round the fire for food to cook on (the cooking
+ * is still to come) and, while it burns, the smoke it gives off (particleTick)
+ */
+export class CampfireBlockEntity extends BlockEntity {
+  readonly id = 'campfire';
+  constructor(x: number, y: number, z: number) {
+    super(x, y, z, 4);
+  }
+  override tick(level: Level): void {
+    const st = level.getState(this.x, this.y, this.z);
+    const b = BLOCKS[STATE_BLOCK[st]];
+    if (b.propIndex('signal_fire') < 0 || !b.get(st, 'lit')) return;
+    if (Math.random() < 0.11) {
+      const signal = !!b.get(st, 'signal_fire');
+      for (let i = Math.floor(Math.random() * 2) + 2; i > 0; i--) campfireSmoke(level, this.x, this.y, this.z, signal, false);
+    }
+  }
+}
+
 export function createBlockEntity(name: string, x: number, y: number, z: number): BlockEntity | null {
   if (name === 'chest') return new ChestBlockEntity(x, y, z);
   if (name === 'enchanting_table') return new EnchantingTableBlockEntity(x, y, z);
-  if (name === 'furnace') return new FurnaceBlockEntity(x, y, z);
+  if (name === 'furnace' || name === 'smoker' || name === 'blast_furnace') return new FurnaceBlockEntity(x, y, z, name);
   if (name === 'spawner') return new SpawnerBlockEntity(x, y, z);
+  if (name === 'bell') return new BellBlockEntity(x, y, z);
+  if (name === 'barrel') return new BarrelBlockEntity(x, y, z);
+  if (name === 'lectern') return new LecternBlockEntity(x, y, z);
+  if (name === 'brewing_stand') return new BrewingStandBlockEntity(x, y, z);
+  if (name === 'campfire' || name === 'soul_campfire') return new CampfireBlockEntity(x, y, z);
   return null;
 }
 

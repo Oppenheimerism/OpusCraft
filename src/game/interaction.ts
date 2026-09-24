@@ -5,6 +5,7 @@ import type { Player } from '../entity/player';
 import { raycast, BlockHit } from './raycast';
 import { destroyProgress, placementState, canReplace, canSurvive, isCorrectTool, blockExperience, hasVacantFace } from './blockRules';
 import { behaviorOf } from './blockBehavior';
+import { lightCampfire, dowseCampfire } from './villageBlocks';
 import { openSound } from './redstone/components';
 import { BLOCKS, BLOCK_BY_NAME, STATE_BLOCK, FLAGS, F_AIR, F_WATER, F_LAVA, F_OPAQUE, F_REPLACEABLE, COLLISION, FACE_OCC, getBlock, S } from '../world/block';
 import { boneMealParticles, performBoneMeal } from './boneMeal';
@@ -375,10 +376,10 @@ export class Interaction {
     // blocks with a menu (vanilla Block.useWithoutItem: only on the main hand's turn)
     if (main && h && !secondary && p.gameMode !== 'spectator') {
       const name = BLOCKS[STATE_BLOCK[this.level.getState(h.x, h.y, h.z)]].name;
-      if ((name === 'crafting_table' || name === 'furnace' || name === 'chest' || name === 'enchanting_table' || name === 'grindstone' || name.endsWith('anvil')) && this.onOpenContainer) {
+      if ((name === 'crafting_table' || name === 'furnace' || name === 'chest' || name === 'enchanting_table' || name === 'grindstone' || name.endsWith('anvil') || name === 'barrel' || name === 'smoker' || name === 'blast_furnace') && this.onOpenContainer) {
         this.onOpenContainer(name, h.x, h.y, h.z);
-        // vanilla ChestBlock.useWithoutItem: piglins who see a chest opened take it badly
-        if (name === 'chest') Piglin.angerNearbyPiglins(p, true);
+        // vanilla ChestBlock / BarrelBlock.useWithoutItem: piglins who see a chest or barrel opened take it badly
+        if (name === 'chest' || name === 'barrel') Piglin.angerNearbyPiglins(p, true);
         p.swing();
         return 'success';
       }
@@ -442,6 +443,12 @@ export class Interaction {
     // replace the clicked block if replaceable (tall grass, snow layer 1...), else place against the face
     let x = h.x, y = h.y, z = h.z;
     const clicked = world.getState(x, y, z);
+    // vanilla BucketItem.emptyContents: a block that holds water (a campfire) takes it in where it stands
+    if (stack.item.id === 'water_bucket' && !world.dim.ultraWarm && behaviorOf(clicked)?.placeLiquid?.(this.level, x, y, z, clicked)) {
+      this.level.sound.play('item.bucket.empty', x + 0.5, y + 0.5, z + 0.5, 1, 1);
+      if (p.gameMode !== 'creative') p.inventory.setSelectedItem(ItemStack.of('bucket'));
+      return true;
+    }
     const clickedBlock = BLOCKS[STATE_BLOCK[clicked]];
     const replaceClicked =
       (FLAGS[clicked] & F_REPLACEABLE && clickedBlock !== block && !(clickedBlock.name === 'water' && block.name !== 'water')) ||
@@ -528,10 +535,24 @@ export class Interaction {
     const n = b.name;
     // (what the block does by itself, vanilla useWithoutItem: the main hand's turn, not sneaking with an item)
     const sneakingWithItem = secondary || !main;
+    const ctx = { player: p, face: h.face, hx: h.hx, hy: h.hy, hz: h.hz, hand: (main ? 'main' : 'off') as Hand };
+    // vanilla useItemOn: the held item on the block first, either hand (cauldrons, composters, lecterns, flower pots)
+    const useOn = behaviorOf(st)?.useItemOn;
+    let skipOwn = false;
+    if (!secondary && stack && useOn) {
+      const r = useOn(lvl, h.x, h.y, h.z, st, stack, ctx);
+      if (r === 'success') {
+        p.swing();
+        return true;
+      }
+      if (r === 'consume') return true;
+      skipOwn = r === 'skip';
+    }
     // levers and buttons
     const own = behaviorOf(st)?.use;
-    if (!sneakingWithItem && own && own(lvl, h.x, h.y, h.z, st, { player: p, face: h.face, hx: h.hx, hy: h.hy, hz: h.hz })) {
-      p.swing();
+    const used = !sneakingWithItem && !skipOwn && own ? own(lvl, h.x, h.y, h.z, st, ctx) : false;
+    if (used) {
+      if (used !== 'consume') p.swing();
       return true;
     }
     // doors, trapdoors, fence gates toggle by hand (iron ones need redstone)
@@ -610,11 +631,18 @@ export class Interaction {
       p.swing();
       return true;
     }
-    // vanilla FlintAndSteelItem.useOn: light a fire on the clicked face
+    // vanilla ShovelItem.useOn: a shovel puts out a lit campfire (not from underneath)
+    if (stack.item.tool?.type === 'shovel' && h.face !== 0 && dowseCampfire(lvl, h.x, h.y, h.z)) {
+      if (p.gameMode !== 'creative') this.damageHeld(1);
+      p.swing();
+      return true;
+    }
+    // vanilla FlintAndSteelItem.useOn: light a campfire that is out, else a fire on the clicked face
     if (id === 'flint_and_steel' || id === 'fire_charge') {
-      const fx = h.x + DX[h.face], fy = h.y + DY[h.face], fz = h.z + DZ[h.face];
-      if (canPlaceFire(lvl.world, fx, fy, fz, DIR_NAMES[dirFromYaw(p.yaw)])) {
-        placeFire(lvl, fx, fy, fz, fireStateAt(lvl.world, fx, fy, fz));
+      const lit = lightCampfire(lvl, h.x, h.y, h.z);
+      const fx = lit ? h.x : h.x + DX[h.face], fy = lit ? h.y : h.y + DY[h.face], fz = lit ? h.z : h.z + DZ[h.face];
+      if (lit || canPlaceFire(lvl.world, fx, fy, fz, DIR_NAMES[dirFromYaw(p.yaw)])) {
+        if (!lit) placeFire(lvl, fx, fy, fz, fireStateAt(lvl.world, fx, fy, fz));
         if (id === 'flint_and_steel') {
           lvl.sound.play('item.flintandsteel.use', fx + 0.5, fy + 0.5, fz + 0.5, 1, Math.random() * 0.4 + 0.8);
           if (p.gameMode !== 'creative') this.damageHeld(1);

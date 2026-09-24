@@ -465,13 +465,16 @@ export class CraftingScreen extends AbstractContainerScreen<CraftingMenu> {
   }
 }
 
+/** the furnace-like blocks' names (vanilla container.furnace / smoker / blast_furnace) */
+const FURNACE_TITLES = { furnace: 'Furnace', smoker: 'Smoker', blast_furnace: 'Blast Furnace' } as const;
+
 export class FurnaceScreen extends AbstractContainerScreen<FurnaceMenu> {
   constructor(game: Game, menu: FurnaceMenu) {
-    super(game, menu, 'Furnace');
+    super(game, menu, FURNACE_TITLES[menu.furnace.id]);
     this.titleLabelX = Math.floor((176 - 0) / 2);
   }
   override init(): void {
-    this.book ??= new RecipeBookComponent(this.game, 'furnace', this.menu);
+    this.book ??= new RecipeBookComponent(this.game, this.menu.furnace.id, this.menu);
     super.init();
     this.addRecipeBookButton(20, Math.floor(this.height / 2) - 49);
   }

@@ -14,6 +14,9 @@ import {
   BookType, BookCategory, BookRecipe, RecipeCollection, BOOK_TABS, collections, fits, countItems, assign, placeRecipe, gridCells, PlaceTarget,
 } from '../inventory/recipeBook';
 
+/** vanilla gui.recipebook.toggleRecipes.* */
+const FILTER_TEXT: Record<BookType, string> = { crafting: 'Showing Craftable', furnace: 'Showing Smeltable', smoker: 'Showing Smokable', blast_furnace: 'Showing Blastable' };
+
 const W = 147, H = 166;
 const PER_PAGE = 20;
 
@@ -260,7 +263,7 @@ export class RecipeBookComponent {
     if (!o) return;
     const rows = Math.ceil(o.buttons.length / o.cols);
     g.nineSlice('recipe_book_overlay_recipe', o.x, o.y, Math.min(o.buttons.length, o.cols) * 25 + 8, rows * 25 + 8, 4);
-    const furnace = this.type === 'furnace';
+    const furnace = this.type !== 'crafting';
     for (const b of o.buttons) {
       const hover = mx >= b.x && my >= b.y && mx < b.x + 24 && my < b.y + 24;
       const base = furnace ? 'recipe_book_furnace_overlay' : 'recipe_book_crafting_overlay';
@@ -313,7 +316,7 @@ export class RecipeBookComponent {
     const fx = x + 110, fy = y + 12;
     if (mx >= fx && my >= fy && mx < fx + 26 && my < fy + 16) {
       const f = this.book.filtering[this.type];
-      g.tooltip([f ? (this.type === 'furnace' ? 'Showing Smeltable' : 'Showing Craftable') : 'Showing All'], mx, my, true);
+      g.tooltip([f ? FILTER_TEXT[this.type] : 'Showing All'], mx, my, true);
       return true;
     }
     return false;

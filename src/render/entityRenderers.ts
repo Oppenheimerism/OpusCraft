@@ -47,6 +47,7 @@ import type { ItemStack } from '../item/item';
 import { crossbowTexture, crossbowChargeProgress, isCharged } from '../item/crossbow';
 import { SpawnerBlockEntity, EnchantingTableBlockEntity } from '../world/blockEntity';
 import { bookModel, bookTexture, renderTableBook } from './bookRenderer';
+import { VillageBlockRenderers } from './villageRenderers';
 import { createMob } from '../game/spawner';
 import { ArmorLayer, renderHeadItem, PIGLIN_HEAD_ITEM_SCALE } from './armorLayer';
 import type { ArmorModelSet } from './armorLayer';
@@ -117,9 +118,12 @@ export class EntityRenderDispatcher {
   /** boat water masks, drawn once every entity is down so riders' legs aren't masked out */
   private readonly waterPatches: { m: Float32Array; part: ModelPart; tex: WebGLTexture; texW: number; texH: number }[] = [];
   private readonly armor: ArmorLayer;
+  /** the bell (and the other village blocks' block entity renderers) */
+  private readonly village: VillageBlockRenderers;
 
   constructor(private readonly gl: GL, private readonly items: ItemRenderer, private readonly skin: WebGLTexture) {
     this.armor = new ArmorLayer(gl);
+    this.village = new VillageBlockRenderers(gl);
     this.models = {
       pig: M.pigModel(),
       pig_saddle: M.pigModel(0.5),
@@ -254,6 +258,7 @@ export class EntityRenderDispatcher {
     this.renderWaterPatches(b);
     this.renderSpawners(b, level, cam, partial, frustum);
     this.renderEnchantingBooks(b, level, cam, partial, frustum);
+    this.village.render(b, level, cam, partial, frustum);
     b.setOverlay(0, 0, 0, 0);
     b.flush();
     if (this.shadows.length) this.renderShadows(b, level, cam);

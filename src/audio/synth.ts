@@ -18,6 +18,7 @@ import { NETHER_MUSIC_POOLS, renderNetherMusic } from './gen/netherMusic';
 import { crossbowSounds } from './gen/crossbow';
 import { armorSounds } from './gen/armor';
 import { villagerSounds } from './gen/villager';
+import { villageSounds } from './gen/village';
 
 export const SAMPLE_RATE = 44100;
 
@@ -43,6 +44,7 @@ export const SOUNDS: Record<string, SoundGen> = {
   ...crossbowSounds(),
   ...armorSounds(),
   ...villagerSounds(),
+  ...villageSounds(),
 };
 
 /** Number of in-game (overworld) music tracks. */
@@ -202,6 +204,10 @@ const VOLUMES: Record<string, number> = {
   'entity.zombified_piglin.angry': 2,
   // blaze fireballs: level event 1018 plays the shoot sound at 2, once per fireball
   'entity.blaze.shoot': 2,
+  // village blocks: the bell carries twice as far (BellBlock.attemptToRing plays at 2)
+  'block.bell.use': 2,
+  'block.barrel.open': 0.5,
+  'block.barrel.close': 0.5,
 };
 
 /**

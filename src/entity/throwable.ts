@@ -79,7 +79,7 @@ export class ThrownItem extends Entity {
       return;
     }
     if (bh) {
-      onProjectileHit(this.level, bh.x, bh.y, bh.z);
+      onProjectileHit(this.level, bh.x, bh.y, bh.z, bh, this);
       this.onHit(bh.px, bh.py, bh.pz);
       return;
     }

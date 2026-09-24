@@ -98,6 +98,23 @@ shaped('bookshelf', 1, ['###', 'XXX', '###'], { '#': '#planks', X: 'book' });
 shaped('enchanting_table', 1, [' B ', 'D#D', '###'], { B: 'book', D: 'diamond', '#': 'obsidian' });
 shaped('anvil', 1, ['III', ' i ', 'iii'], { I: 'iron_block', i: 'iron_ingot' });
 shaped('grindstone', 1, ['I-I', '# #'], { I: 'stick', '-': 'stone_slab', '#': '#planks' });
+// the village job sites
+shaped('barrel', 1, ['PSP', 'P P', 'PSP'], { P: '#planks', S: '#wooden_slabs' });
+shaped('composter', 1, ['# #', '# #', '###'], { '#': '#wooden_slabs' });
+shaped('smoker', 1, [' # ', '#X#', ' # '], { '#': ['#logs', '#crimson_stems', '#warped_stems'], X: 'furnace' });
+shaped('blast_furnace', 1, ['III', 'IXI', '###'], { I: 'iron_ingot', X: 'furnace', '#': 'smooth_stone' });
+shaped('cauldron', 1, ['# #', '# #', '###'], { '#': 'iron_ingot' });
+shaped('flower_pot', 1, ['# #', ' # '], { '#': 'brick' });
+shaped('campfire', 1, [' S ', 'SCS', 'LLL'], { S: 'stick', C: '#coals', L: ['#logs', '#crimson_stems', '#warped_stems'] });
+shaped('soul_campfire', 1, [' S ', 'S#S', 'LLL'], { S: 'stick', '#': '#soul_fire_base_blocks', L: ['#logs', '#crimson_stems', '#warped_stems'] });
+shaped('lectern', 1, ['SSS', ' B ', ' S '], { S: '#wooden_slabs', B: 'bookshelf' });
+shaped('cartography_table', 1, ['@@', '##', '##'], { '@': 'paper', '#': '#planks' });
+shaped('fletching_table', 1, ['@@', '##', '##'], { '@': 'flint', '#': '#planks' });
+shaped('smithing_table', 1, ['@@', '##', '##'], { '@': 'iron_ingot', '#': '#planks' });
+shaped('loom', 1, ['@@', '##'], { '@': 'string', '#': '#planks' });
+shaped('stonecutter', 1, [' I ', '###'], { I: 'iron_ingot', '#': 'stone' });
+shaped('brewing_stand', 1, [' B ', '###'], { B: 'blaze_rod', '#': '#stone_crafting_materials' });
+shapeless('writable_book', 1, 'book', 'ink_sac', 'feather');
 shaped('oak_sign', 3, ['###', '###', ' X '], { '#': 'oak_planks', X: 'stick' });
 // vanilla boat recipes: planks in a U, and a chest added to a boat
 for (const w of WOODS) {
@@ -450,12 +467,69 @@ export function smeltingResult(s: ItemStack | null): Smelt | null {
   return s ? SMELT.get(s.item.id) ?? null : null;
 }
 
+// ---------------------------------------------------------------------------
+// Smoking and blasting (vanilla RecipeType.SMOKING / BLASTING: the smoker's food and the blast furnace's ores and
+// scrap metal, each done in 100 ticks)
+
+const SMOKE = new Map<string, Smelt>();
+const BLAST = new Map<string, Smelt>();
+/** smoking and blasting recipes as written (one per vanilla recipe) */
+export const SMOKING: { inputs: string[]; result: string; xp: number }[] = [];
+export const BLASTING: { inputs: string[]; result: string; xp: number }[] = [];
+function cook(map: Map<string, Smelt>, list: typeof SMOKING, inputs: string[], result: string, xp: number, oneRecipe = false): void {
+  const ok = inputs.filter((i) => ITEMS.has(i));
+  if (!ok.length || !ITEMS.has(result)) return;
+  for (const i of ok) map.set(i, { result, xp });
+  if (oneRecipe) list.push({ inputs: ok, result, xp });
+  else for (const i of ok) list.push({ inputs: [i], result, xp });
+}
+for (const m of ['beef', 'porkchop', 'chicken', 'mutton', 'cod', 'salmon', 'rabbit']) cook(SMOKE, SMOKING, [m], `cooked_${m}`, 0.35);
+cook(SMOKE, SMOKING, ['potato'], 'baked_potato', 0.35);
+cook(SMOKE, SMOKING, ['kelp'], 'dried_kelp', 0.1);
+cook(BLAST, BLASTING, ['iron_ore', 'deepslate_iron_ore', 'raw_iron'], 'iron_ingot', 0.7);
+cook(BLAST, BLASTING, ['gold_ore', 'deepslate_gold_ore', 'nether_gold_ore', 'raw_gold'], 'gold_ingot', 1.0);
+cook(BLAST, BLASTING, ['copper_ore', 'deepslate_copper_ore', 'raw_copper'], 'copper_ingot', 0.7);
+cook(BLAST, BLASTING, ['diamond_ore', 'deepslate_diamond_ore'], 'diamond', 1.0);
+cook(BLAST, BLASTING, ['emerald_ore', 'deepslate_emerald_ore'], 'emerald', 1.0);
+cook(BLAST, BLASTING, ['lapis_ore', 'deepslate_lapis_ore'], 'lapis_lazuli', 0.2);
+cook(BLAST, BLASTING, ['redstone_ore', 'deepslate_redstone_ore'], 'redstone', 0.7);
+cook(BLAST, BLASTING, ['coal_ore', 'deepslate_coal_ore'], 'coal', 0.1);
+cook(BLAST, BLASTING, ['nether_quartz_ore'], 'quartz', 0.2);
+cook(BLAST, BLASTING, ['ancient_debris'], 'netherite_scrap', 2.0);
+// (one recipe each: worn-out iron and gold gear back to nuggets)
+const GEAR = ['pickaxe', 'shovel', 'axe', 'hoe', 'sword', 'helmet', 'chestplate', 'leggings', 'boots'];
+cook(BLAST, BLASTING, [...GEAR.map((g) => `iron_${g}`), 'iron_horse_armor', ...GEAR.slice(5).map((g) => `chainmail_${g}`)], 'iron_nugget', 0.1, true);
+cook(BLAST, BLASTING, [...GEAR.map((g) => `golden_${g}`), 'golden_horse_armor'], 'gold_nugget', 0.1, true);
+
+/** the furnace-like blocks (their block entity's id) */
+export type CookingKind = 'furnace' | 'smoker' | 'blast_furnace';
+
+/** what `s` becomes in a furnace, smoker or blast furnace (null: that block doesn't take it) */
+export function cookingResult(kind: CookingKind, s: ItemStack | null): Smelt | null {
+  if (!s) return null;
+  const map = kind === 'smoker' ? SMOKE : kind === 'blast_furnace' ? BLAST : SMELT;
+  return map.get(s.item.id) ?? null;
+}
+
+/** vanilla recipe cooking times: 200 ticks in a furnace, 100 in a smoker or blast furnace */
+export function cookingTime(kind: CookingKind): number {
+  return kind === 'furnace' ? 200 : 100;
+}
+
+/** vanilla SmokerBlockEntity / BlastFurnaceBlockEntity.getBurnDuration: fuel burns twice as fast in them */
+export function burnDuration(kind: CookingKind, s: ItemStack | null): number {
+  const t = fuelTime(s);
+  return kind === 'furnace' ? t : Math.floor(t / 2);
+}
+
 /** vanilla AbstractFurnaceBlockEntity.getFuel burn times (ticks) */
 const FUEL: Record<string, number> = {
   lava_bucket: 20000, coal_block: 16000, blaze_rod: 2400, coal: 1600, charcoal: 1600,
   oak_boat: 1200, bow: 300, fishing_rod: 300, ladder: 300, crafting_table: 300, chest: 300, bookshelf: 300,
   oak_sign: 200, oak_door: 200, wooden_pickaxe: 200, wooden_axe: 200, wooden_shovel: 200, wooden_hoe: 200, wooden_sword: 200,
   stick: 100, bowl: 100, dead_bush: 100,
+  // (the wooden job sites)
+  lectern: 300, loom: 300, barrel: 300, cartography_table: 300, fletching_table: 300, smithing_table: 300, composter: 300,
 };
 export function fuelTime(s: ItemStack | null): number {
   if (!s) return 0;

@@ -139,7 +139,7 @@ export function getItem(id: string): Item {
 const BLOCK_TAB: [RegExp, string][] = [
   [/_(ore)$|^(stone|granite|diorite|andesite|deepslate|tuff|calcite|dirt|coarse_dirt|podzol|mycelium|grass_block|sand|red_sand|gravel|clay|bedrock|obsidian|snow_block|ice|packed_ice|blue_ice|mud|rooted_dirt|moss_block|dripstone_block|magma_block|powder_snow|raw_.*_block|netherrack|soul_sand|soul_soil|basalt|blackstone|crimson_nylium|warped_nylium|nether_wart_block|warped_wart_block|ancient_debris|crimson_stem|warped_stem|crimson_fungus|warped_fungus|crimson_roots|warped_roots|nether_sprouts|weeping_vines|twisting_vines|shroomlight)$/, 'natural'],
   [/_log$|_wood$|_leaves$|_sapling$|^(short_grass|fern|dead_bush|tall_grass|large_fern|dandelion|poppy|blue_orchid|allium|azure_bluet|.*_tulip|oxeye_daisy|cornflower|lily_of_the_valley|sunflower|lilac|rose_bush|peony|brown_mushroom|red_mushroom|sugar_cane|cactus|pumpkin|melon|lily_pad|vine|seagrass|kelp|sweet_berry_bush|cobweb|carved_pumpkin|jack_o_lantern|hay_block|moss_carpet|azalea|flowering_azalea|hanging_roots|spore_blossom|big_dripleaf|small_dripleaf)$/, 'natural'],
-  [/^(crafting_table|furnace|chest|bookshelf|ladder|(soul_)?torch|glowstone|sea_lantern|spawner|tnt|sponge|(soul_)?lantern|chain|enchanting_table|grindstone|(chipped_|damaged_)?anvil)$|_bed$/, 'functional'],
+  [/^(crafting_table|furnace|chest|bookshelf|ladder|(soul_)?torch|glowstone|sea_lantern|spawner|tnt|sponge|(soul_)?lantern|chain|enchanting_table|grindstone|(chipped_|damaged_)?anvil|bell|barrel|composter|smoker|blast_furnace|cauldron|lectern|cartography_table|fletching_table|smithing_table|loom|stonecutter|brewing_stand|flower_pot|(soul_)?campfire)$|_bed$/, 'functional'],
   [/_carpet$|_stained_glass$|_stained_glass_pane$/, 'colored'],
 ];
 
@@ -203,6 +203,8 @@ reg({ id: 'warped_fungus_on_a_stick', maxStack: 1, creativeTab: 'tools', texture
 reg({ id: 'compass', creativeTab: 'tools', texture: 'compass' });
 reg({ id: 'clock', creativeTab: 'tools', texture: 'clock' });
 reg({ id: 'map', creativeTab: 'tools', texture: 'map' });
+// vanilla WritableBookItem: a lectern takes it (writing in it is still to come)
+reg({ id: 'writable_book', name: 'Book and Quill', maxStack: 1, creativeTab: 'tools', texture: 'writable_book' });
 reg({ id: 'bucket', maxStack: 16, creativeTab: 'tools', texture: 'bucket' });
 reg({ id: 'water_bucket', maxStack: 1, creativeTab: 'tools', texture: 'water_bucket' });
 reg({ id: 'lava_bucket', maxStack: 1, creativeTab: 'tools', texture: 'lava_bucket', fuel: 20000 });
@@ -299,7 +301,7 @@ for (const b of BLOCKS) {
   const it = ITEMS.get(b.name);
   if (!it || !it.block) continue;
   const n = b.name;
-  if (n.endsWith('_door') || n.endsWith('_bed') || n === 'lantern' || n === 'soul_lantern' || n === 'chain') {
+  if (n.endsWith('_door') || n.endsWith('_bed') || n === 'lantern' || n === 'soul_lantern' || n === 'chain' || n === 'bell' || n === 'cauldron' || n === 'brewing_stand' || n === 'flower_pot' || n === 'campfire' || n === 'soul_campfire') {
     it.texture = n;
     if (n.endsWith('_bed')) it.maxStack = 1;
   }
@@ -335,6 +337,9 @@ export function itemForBlock(name: string): Item | undefined {
   if (name === 'soul_wall_torch') return ITEMS.get('soul_torch');
   if (name === 'cave_vines' || name === 'cave_vines_plant') return ITEMS.get('glow_berries');
   if (name === 'big_dripleaf_stem') return ITEMS.get('big_dripleaf');
+  if (name === 'water_cauldron' || name === 'lava_cauldron') return ITEMS.get('cauldron');
+  // (vanilla FlowerPotBlock.getCloneItemStack: a potted plant picks as its plant)
+  if (name.startsWith('potted_')) return ITEMS.get(name.slice(7).replace(/^(flowering_)?azalea_bush$/, '$1azalea'));
   return ITEMS.get(name);
 }
 

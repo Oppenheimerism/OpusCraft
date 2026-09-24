@@ -4,13 +4,15 @@
 // their inventory can make, and moving a clicked recipe's ingredients into a
 // crafting grid or furnace.
 
-import { RECIPES, SMELTING, expand, CraftingRecipe } from './recipes';
+import { RECIPES, SMELTING, SMOKING, BLASTING, expand, CraftingRecipe } from './recipes';
 import { ITEMS, ItemStack } from '../item/item';
 
-export type BookType = 'crafting' | 'furnace';
+export type BookType = 'crafting' | 'furnace' | 'smoker' | 'blast_furnace';
 export type BookCategory =
   | 'crafting_search' | 'crafting_equipment' | 'crafting_building_blocks' | 'crafting_misc' | 'crafting_redstone'
-  | 'furnace_search' | 'furnace_food' | 'furnace_blocks' | 'furnace_misc';
+  | 'furnace_search' | 'furnace_food' | 'furnace_blocks' | 'furnace_misc'
+  | 'smoker_search' | 'smoker_food' | 'blast_furnace_search' | 'blast_furnace_blocks' | 'blast_furnace_misc';
+export const BOOK_TYPES: BookType[] = ['crafting', 'furnace', 'smoker', 'blast_furnace'];
 
 /** vanilla RecipeBookCategories per book, in tab order, with their icons */
 export const BOOK_TABS: Record<BookType, { category: BookCategory; icons: string[] }[]> = {
@@ -26,6 +28,15 @@ export const BOOK_TABS: Record<BookType, { category: BookCategory; icons: string
     { category: 'furnace_food', icons: ['porkchop'] },
     { category: 'furnace_blocks', icons: ['stone'] },
     { category: 'furnace_misc', icons: ['lava_bucket', 'emerald'] },
+  ],
+  smoker: [
+    { category: 'smoker_search', icons: ['compass'] },
+    { category: 'smoker_food', icons: ['porkchop'] },
+  ],
+  blast_furnace: [
+    { category: 'blast_furnace_search', icons: ['compass'] },
+    { category: 'blast_furnace_blocks', icons: ['redstone_ore'] },
+    { category: 'blast_furnace_misc', icons: ['iron_shovel', 'golden_leggings'] },
   ],
 };
 
@@ -142,10 +153,24 @@ for (const s of SMELTING) {
     s.inputs.length === 1 ? `${s.result}_from_smelting_${s.inputs[0]}` : `${s.result}_from_smelting`,
   );
 }
+// (vanilla: everything smoked is food; a blasted block goes under blocks, anything else under misc)
+for (const s of SMOKING) {
+  addRecipe(
+    { type: 'smoker', category: 'smoker_food', group: '', result: s.result, count: 1, shaped: false, width: 0, height: 0, slots: [new Set(s.inputs)], xp: s.xp, unlockBy: new Set(s.inputs) },
+    `${s.result}_from_smoking`,
+  );
+}
+for (const s of BLASTING) {
+  const category: BookCategory = ITEMS.get(s.result)?.block ? 'blast_furnace_blocks' : 'blast_furnace_misc';
+  addRecipe(
+    { type: 'blast_furnace', category, group: s.inputs.length === 1 ? s.result : '', result: s.result, count: 1, shaped: false, width: 0, height: 0, slots: [new Set(s.inputs)], xp: s.xp, unlockBy: new Set(s.inputs) },
+    s.inputs.length === 1 ? `${s.result}_from_blasting_${s.inputs[0]}` : `${s.result}_from_blasting`,
+  );
+}
 
 /** vanilla Recipe.canCraftInDimensions */
 export function fits(r: BookRecipe, w: number, h: number): boolean {
-  if (r.type === 'furnace') return true;
+  if (r.type !== 'crafting') return true;
   return r.shaped ? r.width <= w && r.height <= h : r.slots.length <= w * h;
 }
 
@@ -163,7 +188,7 @@ let COLLECTIONS: Map<BookType, RecipeCollection[]> | null = null;
 export function collections(type: BookType): RecipeCollection[] {
   if (!COLLECTIONS) {
     COLLECTIONS = new Map();
-    for (const t of ['crafting', 'furnace'] as BookType[]) {
+    for (const t of BOOK_TYPES) {
       const list: RecipeCollection[] = [];
       const byGroup = new Map<string, RecipeCollection>();
       for (const r of BOOK_RECIPES) {
@@ -248,8 +273,8 @@ export class PlayerRecipeBook {
   readonly known = new Set<string>();
   /** newly unlocked recipes (their tab bounces until they've been shown) */
   readonly highlight = new Set<string>();
-  open: Record<BookType, boolean> = { crafting: false, furnace: false };
-  filtering: Record<BookType, boolean> = { crafting: false, furnace: false };
+  open: Record<BookType, boolean> = { crafting: false, furnace: false, smoker: false, blast_furnace: false };
+  filtering: Record<BookType, boolean> = { crafting: false, furnace: false, smoker: false, blast_furnace: false };
   /** called with newly unlocked recipes (recipe toast) */
   onUnlock: ((recipes: BookRecipe[]) => void) | null = null;
 

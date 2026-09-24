@@ -12,12 +12,12 @@ import { burningTimeFactor, damageAfterProtection, damageProtection, waterMoveme
 /** damage sources that ignore armor (vanilla #bypasses_armor) */
 const BYPASSES_ARMOR = new Set(['onFire', 'inWall', 'drown', 'starve', 'fall', 'stalagmite', 'void', 'genericKill', 'magic', 'wither', 'generic', 'cramming', 'flyIntoWall']);
 /** damage sources that never knock back (vanilla #no_knockback) */
-const NO_KNOCKBACK = new Set(['explosion', 'playerExplosion', 'badRespawnPoint', 'fall', 'stalagmite', 'drown', 'starve', 'onFire', 'inFire', 'lava', 'lightningBolt', 'inWall', 'void', 'genericKill', 'magic', 'wither', 'cactus', 'sweetBerryBush', 'generic']);
+const NO_KNOCKBACK = new Set(['explosion', 'playerExplosion', 'badRespawnPoint', 'fall', 'stalagmite', 'drown', 'starve', 'onFire', 'inFire', 'campfire', 'lava', 'lightningBolt', 'inWall', 'void', 'genericKill', 'magic', 'wither', 'cactus', 'sweetBerryBush', 'generic']);
 /** vanilla #bypasses_resistance */
 const BYPASSES_RESISTANCE = new Set(['void', 'genericKill']);
 /** vanilla #damages_helmet */
 const DAMAGES_HELMET = new Set(['anvil', 'fallingBlock', 'fallingStalactite']);
-export const FIRE_SOURCES = new Set(['onFire', 'inFire', 'lava', 'hotFloor', 'fireball']);
+export const FIRE_SOURCES = new Set(['onFire', 'inFire', 'campfire', 'lava', 'hotFloor', 'fireball']);
 /** vanilla Player.getDestroySpeed: mining fatigue multiplier per amplifier (capped at IV) */
 const FATIGUE_DIG = [0.3, 0.09, 0.0027, 8.1e-4];
 

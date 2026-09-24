@@ -49,7 +49,7 @@ import { EnchantmentMenu, AnvilMenu, GrindstoneMenu } from '../inventory/enchant
 import { MerchantMenu } from '../inventory/merchantMenu';
 import type { Villager } from '../entity/villager';
 import { hasVanishing } from '../item/enchantHelper';
-import { ChestBlockEntity, FurnaceBlockEntity } from '../world/blockEntity';
+import { ChestBlockEntity, FurnaceBlockEntity, BarrelBlockEntity } from '../world/blockEntity';
 import { useBed, findRespawn, BED_YROT, MSG, SleepHost } from './sleep';
 import { AmbientTicker } from './animateTick';
 import { ToastComponent, AdvancementToast, RecipeToast } from '../gui/toasts';
@@ -65,6 +65,7 @@ import { ChestBoat } from '../entity/boat';
 import { nightVisionScale, blindnessFog, applyNausea } from '../render/effectVisuals';
 import { OVERWORLD, THE_NETHER, dimensionById, teleportationScale, type DimensionType } from '../world/dimension';
 import { PortalPoi, portalRectangle, relativePortalPosition, portalExit, createPortal, isPortal, portalAxis, type PortalRect } from './portal';
+import { setVillageMenuHook } from './villageBlocks';
 
 export type { GameOptions } from './options';
 
@@ -399,6 +400,7 @@ export class Game {
     this.level.addEntity(this.player);
     this.interaction = new Interaction(this.level, this.player);
     this.interaction.onOpenContainer = (kind, x, y, z) => this.openContainer(kind, x, y, z);
+    setVillageMenuHook((kind, x, y, z) => this.openContainer(kind, x, y, z));
     this.interaction.onOpenEntityContainer = (e) => this.openEntityContainer(e);
     this.interaction.onMounted = () => this.hud.setOverlayMessage(`Press ${keyDisplayName(KEYS.sneak)} to Dismount`);
     this.interaction.onUseBed = (x, y, z) => useBed(this.sleepHost(), x, y, z);
@@ -706,7 +708,7 @@ export class Game {
     p.onHurtSound = (pl, src) => {
       if (src === 'fall' || src === 'stalagmite') return;
       // vanilla Player.getHurtSound: fire / drowning / freezing variants
-      const name = src === 'onFire' || src === 'inFire' || src === 'lava' ? 'entity.player.hurt_on_fire' : src === 'drown' ? 'entity.player.hurt_drown' : src === 'freeze' ? 'entity.player.hurt_freeze' : src === 'sweetBerryBush' ? 'entity.player.hurt_sweet_berry_bush' : 'entity.player.hurt';
+      const name = src === 'onFire' || src === 'inFire' || src === 'campfire' || src === 'lava' ? 'entity.player.hurt_on_fire' : src === 'drown' ? 'entity.player.hurt_drown' : src === 'freeze' ? 'entity.player.hurt_freeze' : src === 'sweetBerryBush' ? 'entity.player.hurt_sweet_berry_bush' : 'entity.player.hurt';
       this.sound.play(name, pl.x, pl.y, pl.z, 1, (Math.random() - Math.random()) * 0.2 + 1);
     };
     p.onFall = (pl, _dmg, dist) => {
@@ -737,7 +739,7 @@ export class Game {
     if (!this.containerScreenFactory) return;
     const p = this.player;
     if (kind === 'crafting_table') this.setScreen(this.containerScreenFactory(new CraftingMenu(p, [x, y, z])));
-    else if (kind === 'furnace') {
+    else if (kind === 'furnace' || kind === 'smoker' || kind === 'blast_furnace') {
       const be = this.world.getBlockEntity(x, y, z);
       if (be instanceof FurnaceBlockEntity) this.setScreen(this.containerScreenFactory(new FurnaceMenu(p, be)));
     } else if (kind === 'chest') {
@@ -748,12 +750,21 @@ export class Game {
       be.unpackLoot();
       this.setScreen(this.containerScreenFactory(new ChestMenu(p, be)));
       if (be.openCount++ === 0) this.sound.play('block.chest.open', x + 0.5, y + 0.5, z + 0.5, 0.5, Math.random() * 0.1 + 0.9);
+    } else if (kind === 'barrel') {
+      // vanilla BarrelBlock.useWithoutItem: a chest's menu, titled Barrel; the lid opens
+      const be = this.world.getBlockEntity(x, y, z);
+      if (!(be instanceof BarrelBlockEntity)) return;
+      be.unpackLoot();
+      this.setScreen(this.containerScreenFactory(new ChestMenu(p, be, 'Barrel')));
+      be.startOpen(this.level);
     } else if (kind === 'enchanting_table') {
       const m = new EnchantmentMenu(p, [x, y, z]);
       m.onEnchanted = () => this.advancements.trigger('enchanted_item');
       this.setScreen(this.containerScreenFactory(m));
     } else if (kind.endsWith('anvil')) this.setScreen(this.containerScreenFactory(new AnvilMenu(p, [x, y, z])));
     else if (kind === 'grindstone') this.setScreen(this.containerScreenFactory(new GrindstoneMenu(p, [x, y, z])));
+    // (cartography_table, loom, stonecutter, smithing_table, brewing_stand and a lectern's book come here too, from
+    // game/villageBlocks: their screens are still to come)
   }
 
   /** a villager started trading with the player (vanilla Merchant.openTradingScreen) */
@@ -776,6 +787,7 @@ export class Game {
 
   /** chest closed (called by the chest screen) */
   chestClosed(be: ChestBlockEntity): void {
+    if (be instanceof BarrelBlockEntity) return be.stopOpen(this.level);
     be.openCount = Math.max(0, be.openCount - 1);
     if (be.openCount === 0) this.sound.play('block.chest.close', be.x + 0.5, be.y + 0.5, be.z + 0.5, 0.5, Math.random() * 0.1 + 0.9);
   }
@@ -830,6 +842,7 @@ export class Game {
       case 'lava':
         return `${n} tried to swim in lava`;
       case 'inFire':
+      case 'campfire':
         return `${n} went up in flames`;
       case 'onFire':
         return `${n} burned to death`;
@@ -1582,7 +1595,7 @@ export class Game {
   /** vanilla RecipeToast.addOrUpdate for each newly unlocked recipe */
   private onRecipesUnlocked(rs: BookRecipe[]): void {
     for (const r of rs) {
-      const symbol = r.type === 'furnace' ? 'furnace' : 'crafting_table';
+      const symbol = r.type === 'crafting' ? 'crafting_table' : r.type;
       const t = this.toasts.get<RecipeToast>('recipe');
       if (t) t.addItem(r.result, symbol);
       else this.toasts.add(new RecipeToast(r.result, symbol));

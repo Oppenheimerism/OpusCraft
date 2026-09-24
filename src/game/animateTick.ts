@@ -109,7 +109,8 @@ export class AmbientTicker {
       const fs = fluidStateOf(st);
       if (fs.type !== 0) h = Math.max(h, (FLAGS[w.getState(x, y + 1, z)] & (F_WATER | F_LAVA)) ? 1 : fs.amount / 9);
       const n2 = BLOCKS[STATE_BLOCK[st]].name;
-      const smoke = FLAGS[st] & F_LAVA || n2 === 'magma_block' || (n2 === 'campfire' && BLOCKS[STATE_BLOCK[st]].get(st, 'lit'));
+      // (vanilla CampfireBlock.isLitCampfire: either campfire)
+      const smoke = FLAGS[st] & F_LAVA || n2 === 'magma_block' || ((n2 === 'campfire' || n2 === 'soul_campfire') && BLOCKS[STATE_BLOCK[st]].get(st, 'lit'));
       lvl.particles.spawn?.(smoke ? 'smoke' : 'rain', x + d0, y + h, z + d1, 0, 0, 0);
     }
     if (hit && Math.floor(Math.random() * 3) < this.rainSoundTime++) {
