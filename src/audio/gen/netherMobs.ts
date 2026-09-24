@@ -755,7 +755,7 @@ function striderEat(c: Ctx): Float32Array {
   return out;
 }
 
-/** Saddling a strider: the leather saddle flops on (a dull slap and a creak) with a buckle clink. */
+/** Saddling a strider (or a pig): the leather saddle flops on (a dull slap and a creak) with a buckle clink. */
 function saddle(c: Ctx): Float32Array {
   const { sr, rng } = c;
   const out = alloc(0.6, sr);
@@ -1313,6 +1313,8 @@ export function netherMobSounds(): Record<string, SoundGen> {
     'entity.strider.step_lava': sound('entity.strider.step_lava', 5, striderStepLava),
     'entity.strider.eat': sound('entity.strider.eat', 3, striderEat),
     'entity.strider.saddle': sound('entity.strider.saddle', 1, saddle),
+    // (vanilla: the pig's saddle is the same leather sound)
+    'entity.pig.saddle': sound('entity.pig.saddle', 1, saddle),
 
     'entity.hoglin.ambient': sound('entity.hoglin.ambient', 5, hoglinAmbient),
     'entity.hoglin.angry': sound('entity.hoglin.angry', 4, hoglinAngry),

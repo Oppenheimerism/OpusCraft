@@ -14,7 +14,8 @@ import { LookAtPlayerGoal, MoveToBlockGoal, PanicGoal, RandomLookAroundGoal, Ran
 import { PathNavigation } from './ai/navigation';
 import { PathType } from './ai/pathfinder';
 import { ZombifiedPiglin } from './monsters';
-import { blockFree, floorHeight } from './boat';
+import { blockFree, floorHeight } from './dismount';
+import { ItemBasedSteering } from './steering';
 import { ItemStack } from '../item/item';
 import { FLAGS, F_LAVA, F_FULL_COLLISION } from '../world/block';
 import { fluidType, FLUID_LAVA } from '../world/fluids';
@@ -100,11 +101,7 @@ export class Strider extends Animal {
   protected adultHeight = 1.7;
   /** vanilla DATA_SUFFOCATING: out of lava and cold */
   suffocating = false;
-  saddled = false;
-  // vanilla ItemBasedSteering: a boost from the stick lasts 7-49 s
-  private boosting = false;
-  private boostTime = 0;
-  private boostTimeTotal = 0;
+  readonly steering = new ItemBasedSteering();
   private panicGoal: PanicGoal | null = null;
   private temptGoal: TemptGoal | null = null;
 
@@ -211,9 +208,13 @@ export class Strider extends Animal {
     return this.isAlive && !this.isBaby();
   }
 
+  get saddled(): boolean {
+    return this.steering.saddled;
+  }
+
   /** vanilla equipSaddle */
   equipSaddle(withSound: boolean): void {
-    this.saddled = true;
+    this.steering.saddled = true;
     if (withSound) this.level.sound.play('entity.strider.saddle', this.x, this.y, this.z, 0.5, 1);
   }
 
@@ -229,18 +230,9 @@ export class Strider extends Animal {
     return !this.isVehicle() && this.eyeFluid !== FLUID_LAVA;
   }
 
-  /** vanilla ItemSteerable.boost (ItemBasedSteering): a burst of 7-49 s, not while one lasts */
+  /** vanilla ItemSteerable.boost */
   boost(): boolean {
-    if (this.boosting) return false;
-    this.boosting = true;
-    this.boostTime = 0;
-    this.boostTimeTotal = this.random.nextInt(841) + 140;
-    return true;
-  }
-
-  /** vanilla ItemBasedSteering.boostFactor: up to 2.15 times as fast at its peak */
-  private boostFactor(): number {
-    return this.boosting ? 1 + 1.15 * Math.sin((this.boostTime / this.boostTimeTotal) * Math.PI) : 1;
+    return this.steering.boost(this.random);
   }
 
   /** vanilla Strider.tickRidden: faces where its rider looks */
@@ -248,7 +240,7 @@ export class Strider extends Animal {
     this.yaw = p.yaw % 360;
     this.pitch = (p.pitch * 0.5) % 360;
     this.yawO = this.bodyYaw = this.headYaw = this.yaw;
-    if (this.boosting && this.boostTime++ > this.boostTimeTotal) this.boosting = false;
+    this.steering.tickBoost();
   }
 
   /** vanilla getRiddenInput: always straight ahead */
@@ -257,7 +249,7 @@ export class Strider extends Animal {
   }
 
   protected override riddenSpeed(): number {
-    return this.moveSpeedAttr * (this.suffocating ? 0.35 : 0.55) * this.boostFactor();
+    return this.moveSpeedAttr * (this.suffocating ? 0.35 : 0.55) * this.steering.boostFactor();
   }
 
   /** vanilla getPassengerAttachmentPoint: the seat bobs with its stride */
@@ -355,7 +347,7 @@ export class Strider extends Animal {
     super.die(source, attacker);
     if (this.saddled) {
       this.spawnAtLocation(ItemStack.of('saddle'));
-      this.saddled = false;
+      this.steering.saddled = false;
     }
   }
 
@@ -417,6 +409,6 @@ export class Strider extends Animal {
 
   protected override loadData(d: Record<string, number | string | boolean>): void {
     super.loadData(d);
-    this.saddled = d.saddle === true;
+    this.steering.saddled = d.saddle === true;
   }
 }

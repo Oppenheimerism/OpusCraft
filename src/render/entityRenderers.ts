@@ -22,7 +22,7 @@ import { Arrow } from '../entity/arrow';
 import { ExperienceOrb } from '../entity/xpOrb';
 import { PrimedTnt } from '../entity/tnt';
 import { FallingBlockEntity } from '../entity/fallingBlock';
-import { Sheep, Chicken, sheepFurColor } from '../entity/animals';
+import { Sheep, Chicken, Pig, sheepFurColor } from '../entity/animals';
 import { Zombie, Skeleton, Creeper, Enderman, Slime, MagmaCube } from '../entity/monsters';
 import { Ghast } from '../entity/ghast';
 import { Blaze } from '../entity/blaze';
@@ -89,6 +89,7 @@ export class EntityRenderDispatcher {
   constructor(private readonly gl: GL, private readonly items: ItemRenderer, private readonly skin: WebGLTexture) {
     this.models = {
       pig: M.pigModel(),
+      pig_saddle: M.pigModel(0.5),
       cow: M.cowModel(),
       sheep: M.sheepModel(),
       sheep_fur: M.sheepFurModel(),
@@ -469,12 +470,20 @@ export class EntityRenderDispatcher {
     this.overlay(b, e, white);
     // vanilla BatModel renders entityCutout (culled: its flat wings have a front and a back side)
     this.drawBody(b, e, def, tex, baby, type === 'bat' ? { cull: true } : undefined);
-    // vanilla SaddleLayer: the saddle texture over the same model
+    // vanilla SaddleLayer: the saddle texture over the same model (the pig's a half pixel bigger all round)
     if (e instanceof Strider && e.saddled && !e.isInvisible()) {
       const st = this.tex('strider_saddle');
       if (st) {
         b.begin(this.state(st));
         this.drawModel(b, def, false);
+      }
+    }
+    if (e instanceof Pig && e.saddled && !e.isInvisible()) {
+      const sm = this.models.pig_saddle, st = this.tex('pig_saddle');
+      if (sm && st) {
+        copyPose(def.root, sm.root);
+        b.begin(this.state(st));
+        this.drawModel(b, sm, false);
       }
     }
     // layers (vanilla draws them even for invisible mobs: an invisible spider still shows its eyes)

@@ -29,10 +29,11 @@ function quadruped(legHeight: number, head: ModelPart, body: ModelPart, legPos: 
   return root;
 }
 
-export function pigModel(): MobModelDef {
-  const head = part([{ x: -4, y: -4, z: -8, w: 8, h: 8, d: 8, u: 0, v: 0 }, { x: -2, y: 0, z: -9, w: 4, h: 3, d: 1, u: 16, v: 16 }], [0, 12, -6]);
-  const body = part([{ x: -5, y: -10, z: -7, w: 10, h: 16, d: 8, u: 28, v: 8 }], [0, 11, 2], [PI / 2, 0, 0]);
-  const root = quadruped(6, head, body, [[-3, 18, 7], [3, 18, 7], [-3, 18, -5], [3, 18, -5]], { x: -2, y: 0, z: -2, w: 4, h: 6, d: 4, u: 0, v: 16 });
+/** vanilla PigModel; `g` inflates every cube (the saddle layer's CubeDeformation(0.5)) */
+export function pigModel(g = 0): MobModelDef {
+  const head = part([{ x: -4, y: -4, z: -8, w: 8, h: 8, d: 8, u: 0, v: 0, inflate: g }, { x: -2, y: 0, z: -9, w: 4, h: 3, d: 1, u: 16, v: 16, inflate: g }], [0, 12, -6]);
+  const body = part([{ x: -5, y: -10, z: -7, w: 10, h: 16, d: 8, u: 28, v: 8, inflate: g }], [0, 11, 2], [PI / 2, 0, 0]);
+  const root = quadruped(6, head, body, [[-3, 18, 7], [3, 18, 7], [-3, 18, -5], [3, 18, -5]], { x: -2, y: 0, z: -2, w: 4, h: 6, d: 4, u: 0, v: 16, inflate: g });
   return { root, texW: 64, texH: 32, baby: { headParts: ['head'], scaleHead: false, yHead: 4, zHead: 4, headScale: 2, bodyScale: 2, bodyY: 24 } };
 }
 

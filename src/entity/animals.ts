@@ -10,6 +10,30 @@ import type { Player } from './player';
 import { ItemStack, ITEMS } from '../item/item';
 import { BLOCKS, STATE_BLOCK, S } from '../world/block';
 import type { Entity } from './entity';
+import { LivingEntity } from './living';
+import { ItemBasedSteering } from './steering';
+import { blockFree, floorHeight } from './dismount';
+import { AABB } from '../core/aabb';
+import { DX, DZ, dirFromYaw } from '../world/dir';
+
+/** vanilla Direction.getClockWise over dir.ts indices (NORTH 2, SOUTH 3, WEST 4, EAST 5) */
+const CLOCKWISE: Record<number, number> = { 2: 5, 5: 3, 3: 4, 4: 2 };
+const OPPOSITE_H: Record<number, number> = { 2: 3, 3: 2, 4: 5, 5: 4 };
+
+/** vanilla DismountHelper.offsetsForDirection: the spots beside a mount to try, sides first, then behind, ahead */
+function dismountOffsets(d: number): [number, number][] {
+  const r = CLOCKWISE[d], l = OPPOSITE_H[r], b = OPPOSITE_H[d];
+  return [
+    [DX[r], DZ[r]],
+    [DX[l], DZ[l]],
+    [DX[b] + DX[r], DZ[b] + DZ[r]],
+    [DX[b] + DX[l], DZ[b] + DZ[l]],
+    [DX[d] + DX[r], DZ[d] + DZ[r]],
+    [DX[d] + DX[l], DZ[d] + DZ[l]],
+    [DX[b], DZ[b]],
+    [DX[d], DZ[d]],
+  ];
+}
 
 // ---------------------------------------------------------------------------
 
@@ -358,10 +382,15 @@ const PIG_FOOD = new Set(['carrot', 'potato', 'beetroot']);
 const WHEAT = new Set(['wheat']);
 const SEEDS = new Set(['wheat_seeds', 'melon_seeds', 'pumpkin_seeds', 'beetroot_seeds', 'torchflower_seeds', 'pitcher_pod']);
 
+/**
+ * vanilla Pig: saddle one and a player holding a carrot on a stick steers it where they look (a poke with the stick
+ * boosts it, see steering.ts)
+ */
 export class Pig extends Animal {
   readonly type = 'pig';
   protected adultWidth = 0.9;
   protected adultHeight = 0.9;
+  readonly steering = new ItemBasedSteering();
   constructor(level: Level) {
     super(level);
     this.setSize(0.9, 0.9);
@@ -402,6 +431,101 @@ export class Pig extends Animal {
   }
   override lootTable(): LootEntry[] {
     return [{ item: 'porkchop', min: 1, max: 3, cooked: 'cooked_porkchop' }];
+  }
+
+  // --- riding (vanilla Saddleable, ItemSteerable) ---
+
+  get saddled(): boolean {
+    return this.steering.saddled;
+  }
+  isSaddleable(): boolean {
+    return this.isAlive && !this.isBaby();
+  }
+  /** vanilla equipSaddle */
+  equipSaddle(withSound: boolean): void {
+    this.steering.saddled = true;
+    if (withSound) this.level.sound.play('entity.pig.saddle', this.x, this.y, this.z, 0.5, 1);
+  }
+  /** vanilla getControllingPassenger: a player holding a carrot on a stick steers a saddled one */
+  override controllingPassenger(): Entity | null {
+    const p = this.passengers[0] as Player | undefined;
+    if (this.saddled && p?.type === 'player' && (p.inventory.selectedItem?.item.id === 'carrot_on_a_stick' || p.inventory.offhand?.item.id === 'carrot_on_a_stick')) return p;
+    return super.controllingPassenger();
+  }
+  /** vanilla ItemSteerable.boost */
+  boost(): boolean {
+    return this.steering.boost(this.random);
+  }
+  /** vanilla Pig.tickRidden: faces where its rider looks */
+  protected override tickRidden(p: LivingEntity): void {
+    this.yaw = p.yaw % 360;
+    this.pitch = (p.pitch * 0.5) % 360;
+    this.yawO = this.bodyYaw = this.headYaw = this.yaw;
+    this.steering.tickBoost();
+  }
+  /** vanilla getRiddenInput: always straight ahead */
+  protected override riddenInput(): [number, number, number] {
+    return [0, 0, 1];
+  }
+  protected override riddenSpeed(): number {
+    return this.moveSpeedAttr * 0.225 * this.steering.boostFactor();
+  }
+  /** vanilla EntityType passengerAttachments(0.86875) */
+  override passengerAttachmentY(_p: Entity): number {
+    return 0.86875;
+  }
+  /**
+   * vanilla Pig.getDismountLocationForPassenger: beside it (the sides first, then the corners behind and ahead,
+   * then behind, then ahead of the way it faces), on a floor there, standing or else crouching; else on top of it
+   */
+  override dismountLocation(p: Entity): [number, number, number] {
+    if (!(p instanceof LivingEntity)) return super.dismountLocation(p);
+    const bx = Math.floor(this.x), by = Math.floor(this.y), bz = Math.floor(this.z);
+    const offsets = dismountOffsets(dirFromYaw(this.yaw));
+    const hw = p.width / 2;
+    for (const h of p.dismountHeights())
+      for (const [ox, oz] of offsets) {
+        const x = bx + ox, z = bz + oz;
+        const f = floorHeight(this.level, x, by, z);
+        if (!isFinite(f) || f >= 1) continue;
+        const sx = x + 0.5, sy = by + f, sz = z + 0.5;
+        if (!blockFree(this.level, new AABB(sx - hw, sy, sz - hw, sx + hw, sy + h, sz + hw))) continue;
+        p.setDismountHeight(h);
+        return [sx, sy, sz];
+      }
+    return super.dismountLocation(p);
+  }
+  /** vanilla Pig.mobInteract: a non-food click on a saddled, free pig climbs on (not sneaking); a saddle saddles it */
+  override interact(p: Player, stack: ItemStack | null): boolean {
+    const food = !!stack && this.isFood(stack);
+    if (!food && this.saddled && !this.isVehicle() && !p.isShiftKeyDown()) {
+      p.startRiding(this);
+      return true;
+    }
+    if (super.interact(p, stack)) return true;
+    // vanilla SaddleItem.interactLivingEntity
+    if (stack?.item.id === 'saddle' && !this.saddled && this.isSaddleable()) {
+      this.equipSaddle(true);
+      if (p.gameMode !== 'creative') p.inventory.consumeSelected(1);
+      return true;
+    }
+    return false;
+  }
+  /** vanilla dropEquipment: the saddle comes off */
+  override die(source: string, attacker: Entity | null = null): void {
+    if (this.dead) return;
+    super.die(source, attacker);
+    if (this.saddled) {
+      this.spawnAtLocation(ItemStack.of('saddle'));
+      this.steering.saddled = false;
+    }
+  }
+  protected override saveData(): Record<string, number | string | boolean> {
+    return { ...super.saveData(), saddle: this.saddled };
+  }
+  protected override loadData(d: Record<string, number | string | boolean>): void {
+    super.loadData(d);
+    this.steering.saddled = d.saddle === true;
   }
 }
 

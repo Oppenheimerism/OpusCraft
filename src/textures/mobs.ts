@@ -157,6 +157,38 @@ function pig(): TexImage {
   return t;
 }
 
+/**
+ * vanilla pig_saddle (64x32, the pig's layout, drawn on a model half a pixel bigger): a leather seat on the spine
+ * with flaps down the flanks and a girth strap under the belly, buckled on each side
+ */
+function pigSaddle(): TexImage {
+  const t = img(64, 32);
+  const r = new Rand(0x5add2e);
+  const LEATHER = [0x4f311c, 0x5c3a21, 0x6b4427, 0x7a4e2d, 0x885833];
+  const RIM = [0x3e2616, 0x472c19];
+  const STRAP = [0x2e1d11, 0x3a2516];
+  const leather = () => pick(r, LEATHER, [1, 2, 4, 3, 1]);
+  const body = boxFaces(28, 8, 10, 16, 8);
+  // the seat along the spine (rows run head to tail): pommel in front, cantle behind, a dark rim round it
+  paintFace(t, body.back, (x, y) => {
+    if (y < 4 || y > 11) return undefined;
+    if (x === 0 || x === 9 || y === 11) return pick(r, RIM);
+    if (y === 4 || y === 10) return pick(r, [0x92603a, 0x9e6a40]);
+    return leather();
+  });
+  // flaps from the spine edge down each flank, the girth across to the belly edge, a buckle midway
+  const flank = (x: number, y: number, fromSpine: number): number | undefined => {
+    if (y >= 5 && y <= 10 && fromSpine <= 3) return fromSpine === 3 || y === 5 || y === 10 ? pick(r, RIM) : leather();
+    if (y >= 7 && y <= 8 && fromSpine > 3) return fromSpine === 5 ? pick(r, [0x8e8e8e, 0xa8a8a8, 0x6e6e6e]) : pick(r, STRAP);
+    void x;
+    return undefined;
+  };
+  paintFace(t, body.right, (x, y) => flank(x, y, x));
+  paintFace(t, body.left, (x, y) => flank(x, y, 7 - x));
+  paintFace(t, body.front, (_x, y) => (y >= 7 && y <= 8 ? pick(r, STRAP) : undefined));
+  return t;
+}
+
 // ---------------------------------------------------------------------------
 // Cow (64x32)
 
@@ -1665,6 +1697,7 @@ function fire(seed: number, o: FireOpts, PAL = FIRE_PAL): AnimTex {
 
 export const MOB_TEXTURES: Record<string, () => TexImage> = {
   pig,
+  pig_saddle: pigSaddle,
   cow,
   sheep,
   sheep_fur: sheepFur,
