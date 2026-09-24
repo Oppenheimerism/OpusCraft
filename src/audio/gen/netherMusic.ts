@@ -5,6 +5,7 @@
 // wastes; a glassy, crystalline one for the forests; a deep choral one for the soul sand valley
 // and the basalt deltas. Everything lives below ~9 kHz, so tracks render at half the sample rate
 // and are upsampled at the end (about a second or two of work each, in the audio worker).
+// The note, instrument and mixing helpers are shared with the End's music (endMusic.ts).
 
 import {
   Rng,
@@ -30,9 +31,9 @@ import { MUSIC_PEAK } from './music';
 import { phisem, sweep, thump } from './texture';
 import { VOWELS } from './voice';
 
-type Fn = (t: number) => number;
+export type Fn = (t: number) => number;
 
-interface Note {
+export interface Note {
   t: number;
   dur: number;
   midi: number;
@@ -44,18 +45,18 @@ interface Note {
 const PC: Record<string, number> = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
 
 /** "C#3" -> MIDI note number */
-function nm(s: string): number {
+export function nm(s: string): number {
   const m = /^([A-G])([#b]?)(-?\d)$/.exec(s);
   if (!m) throw new Error(`netherMusic: bad note "${s}"`);
   return 12 * (+m[3] + 1) + PC[m[1]] + (m[2] === '#' ? 1 : m[2] === 'b' ? -1 : 0);
 }
-const chordOf = (s: string): number[] => s.trim().split(/\s+/).map(nm);
+export const chordOf = (s: string): number[] => s.trim().split(/\s+/).map(nm);
 
 /**
  * Melody in steps: "B4:3 C5:1 B4:4 | G#4:6 A4:2 | r:8" — note:steps (r = rest), "|" checks
  * the bar is full. Returns notes timed from `t0` with `step` seconds per step.
  */
-function melody(spec: string, t0: number, step: number, stepsPerBar: number, vel = 1): Note[] {
+export function melody(spec: string, t0: number, step: number, stepsPerBar: number, vel = 1): Note[] {
   const out: Note[] = [];
   let pos = 0;
   for (const tok of spec.trim().split(/\s+/)) {
@@ -107,7 +108,7 @@ function harmonics(f: number, maxF: number): number {
   return h;
 }
 
-interface SynthOpts {
+export interface SynthOpts {
   wave: 'saw' | 'square' | 'soft';
   /** unison voices and their spread in cents */
   voices: number;
@@ -122,7 +123,7 @@ interface SynthOpts {
 }
 
 /** Merge notes of the same pitch that touch or overlap into one held note (pads keep common tones). */
-function legato(notes: Note[]): Note[] {
+export function legato(notes: Note[]): Note[] {
   const by = new Map<number, Note[]>();
   for (const n of notes) {
     const l = by.get(n.midi);
@@ -149,7 +150,7 @@ function legato(notes: Note[]): Note[] {
 }
 
 /** Wavetable notes (drones, pads, choirs, leads) added into out; vibrato is applied at control rate. */
-function synth(out: Float32Array, sr: number, rng: Rng, notes: Note[], o: SynthOpts): void {
+export function synth(out: Float32Array, sr: number, rng: Rng, notes: Note[], o: SynthOpts): void {
   const BLK = 16;
   for (const nt of notes) {
     const f = mtof(nt.midi);
@@ -198,7 +199,7 @@ function synth(out: Float32Array, sr: number, rng: Rng, notes: Note[], o: SynthO
 }
 
 /** time-varying resonant low-pass over a whole bus, in place */
-function lowpassSweep(buf: Float32Array, sr: number, fc: Fn, q = 0.8): Float32Array {
+export function lowpassSweep(buf: Float32Array, sr: number, fc: Fn, q = 0.8): Float32Array {
   const f = new SVF(fc(0), q, sr);
   for (let i = 0; i < buf.length; i++) {
     if ((i & 31) === 0) f.set(fc(i / sr), q, sr);
@@ -254,7 +255,7 @@ function matchLevel(ref: Float32Array, x: Float32Array, sr: number, win = 0.5): 
 }
 
 /** Piano part: one cached take per pitch, velocity sets level and brightness, damper after the hold. */
-function piano(out: Float32Array, sr: number, rng: Rng, notes: Note[], seed: number, tone = 0.35): void {
+export function piano(out: Float32Array, sr: number, rng: Rng, notes: Note[], seed: number, tone = 0.35): void {
   const relTau = (m: number) => 0.12 + 0.35 * clamp((60 - m) / 36, 0, 1);
   // each pitch's take only needs to be as long as its longest hold plus the damper tail
   const need = new Map<number, number>();
@@ -286,7 +287,7 @@ function piano(out: Float32Array, sr: number, rng: Rng, notes: Note[], seed: num
 }
 
 /** A struck metal plate / gong: inharmonic partials with a long, darkening decay. */
-function gong(out: Float32Array, sr: number, t: number, f: number, vel: number, t60: number): void {
+export function gong(out: Float32Array, sr: number, t: number, f: number, vel: number, t60: number): void {
   const s = Math.max(0, Math.round(t * sr));
   const R = [1, 1.47, 2.09, 2.56, 3.14, 3.92, 4.73];
   const A = [1, 0.62, 0.45, 0.33, 0.24, 0.14, 0.08];
@@ -294,7 +295,7 @@ function gong(out: Float32Array, sr: number, t: number, f: number, vel: number, 
 }
 
 /** Filtered-noise swells (wind, breath, roars): a resonant band following fc(t), shaped by amp(t). */
-function noise(out: Float32Array, sr: number, rng: Rng, t: number, dur: number, fc: Fn, q: number, amp: Fn): void {
+export function noise(out: Float32Array, sr: number, rng: Rng, t: number, dur: number, fc: Fn, q: number, amp: Fn): void {
   sweep(out, sr, rng, { t, dur, f: fc, q, amp, color: 'pink' });
 }
 
@@ -316,7 +317,7 @@ function grind(out: Float32Array, sr: number, rng: Rng, t: number, dur: number, 
 }
 
 /** envelope: rises over a, holds, falls over r, all smooth; zero outside [t0, t0 + len] */
-const swell = (t0: number, len: number, a: number, r: number): Fn => (t) => {
+export const swell = (t0: number, len: number, a: number, r: number): Fn => (t) => {
   const u = t - t0;
   if (u <= 0 || u >= len) return 0;
   if (u < a) return smooth(u / a);
@@ -345,7 +346,7 @@ function activeRms(b: Float32Array): number {
 }
 
 /** A track being assembled at half rate: parts are rendered one at a time and mixed at a level in dB. */
-class Mix {
+export class Mix {
   readonly buf: Float32Array;
   constructor(readonly hs: number, readonly len: number) {
     this.buf = new Float32Array(Math.round(len * hs));
@@ -361,7 +362,7 @@ class Mix {
 /** Nether tracks sit a little louder than the calm overworld piano, as vanilla's do (RMS target, peak capped). */
 const TARGET_RMS = 0.105;
 
-function master(m: Mix, sr: number, verb: { t60: number; wet: number; size?: number }, fadeSec: number): Float32Array {
+export function master(m: Mix, sr: number, verb: { t60: number; wet: number; size?: number }, fadeSec: number, targetRms = TARGET_RMS): Float32Array {
   const hs = m.hs;
   const wet = reverb(m.buf, hs, { t60: verb.t60, hf: 0.3, size: verb.size ?? 1.8, pre: 0.03, wet: verb.wet, dry: 1, tail: Math.min(6, verb.t60), lowcut: 90, highcut: 6000 });
   let out = upsample2(wet);
@@ -390,7 +391,7 @@ function master(m: Mix, sr: number, verb: { t60: number; wet: number; size?: num
     out[i] -= mean;
     pk = Math.max(pk, Math.abs(out[i]));
   }
-  const g = Math.min(MUSIC_PEAK / pk, TARGET_RMS / Math.max(1e-9, activeRms(out)));
+  const g = Math.min(MUSIC_PEAK / pk, targetRms / Math.max(1e-9, activeRms(out)));
   for (let i = 0; i < out.length; i++) out[i] *= g;
   return out;
 }
