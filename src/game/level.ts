@@ -33,6 +33,7 @@ import { coldEnoughToSnow } from '../world/gen/temperature';
 import { AABB } from '../core/aabb';
 import type { DimensionType } from '../world/dimension';
 import { NetherGenerator } from '../world/gen/nether';
+import { villageLocator, type Villages } from '../world/gen/villages';
 import type { NetherFortresses } from '../world/gen/fortress';
 import { behaviorOf } from './blockBehavior';
 import { NeighborUpdater } from './neighborUpdater';
@@ -103,6 +104,7 @@ export class Level {
   particles: ParticleSink = NULL_PARTICLES;
   readonly random = new Rand(1234);
   private netherFortresses: NetherFortresses | null = null;
+  private overworldVillages: Villages | null = null;
   readonly fluids: FluidTicker;
   readonly randomTicks: RandomTicker;
   /** scheduled block ticks (vanilla LevelTicks) */
@@ -133,6 +135,11 @@ export class Level {
   /** the Nether's fortresses, laid out just as the chunk workers build them */
   fortresses(): NetherFortresses {
     return (this.netherFortresses ??= new NetherGenerator(this.seed).fortresses);
+  }
+
+  /** the Overworld's villages, placed just as the chunk workers place them (for /locate) */
+  villages(): Villages {
+    return (this.overworldVillages ??= villageLocator(this.seed));
   }
 
   addEntity(e: Entity): void {

@@ -244,6 +244,8 @@ export class Decorator {
   /** structure pieces placed in the UNDERGROUND_STRUCTURES step, before monster rooms */
   mineshafts: { place(ctx: GenContext, r: Rand): void } | null = null;
   geodes: { place(ctx: GenContext): void } | null = null;
+  /** villages, placed in the SURFACE_STRUCTURES step */
+  villages: { place(ctx: GenContext): void } | null = null;
 
   constructor(readonly seed: number, patchNoise: NormalNoise) {
     this.patchNoise = patchNoise;
@@ -260,6 +262,8 @@ export class Decorator {
     // --- mineshafts, then monster rooms (vanilla UNDERGROUND_STRUCTURES step)
     this.mineshafts?.place(ctx, new Rand(hash2(ctx.cx, ctx.cz, this.seed ^ 0x51ae), 5));
     this.monsterRooms(ctx, new Rand(hash2(ctx.cx, ctx.cz, this.seed ^ 0xd06e), 4));
+    // --- villages (vanilla SURFACE_STRUCTURES step)
+    this.villages?.place(ctx);
     // biome of the chunk center decides most decoration (vanilla decorates per biome present;
     // we use a few sample columns so borders mix naturally)
     // --- ores

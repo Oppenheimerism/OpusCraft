@@ -24,6 +24,7 @@ import { MOB_EFFECTS, MobEffect, MobEffectInstance, mobEffect } from '../entity/
 import { ENCHANTMENTS, areCompatible, canEnchant, enchantmentLine } from '../item/enchantments';
 import { craftingEnchants, setCraftingEnchants, weaponOf } from '../item/enchantHelper';
 import { DIMENSIONS, type DimensionType } from '../world/dimension';
+import type { VillageKind } from '../world/gen/villages';
 
 class CommandError extends Error {
   constructor(msg: string, readonly pos = -1) {
@@ -678,7 +679,13 @@ export const COMMANDS: Record<string, CommandDef> = {
       const dim = c.dim ?? c.game.world.dim;
       const p = c.game.player;
       const x = Math.floor(p.x), z = Math.floor(p.z);
-      const found = name === 'minecraft:fortress' && dim.id === 'the_nether' ? c.game.level.fortresses().nearest(x, z) : null;
+      const village = /^minecraft:village_(plains|desert|savanna|snowy|taiga)$/.exec(name)?.[1] as VillageKind | undefined;
+      const found =
+        name === 'minecraft:fortress' && dim.id === 'the_nether'
+          ? c.game.level.fortresses().nearest(x, z)
+          : village && dim.id === 'overworld'
+            ? c.game.level.villages().nearest(village, x, z)
+            : null;
       if (!found) throw new CommandError(`Could not find a structure of type "${name}" nearby`);
       c.ok(`The nearest ${name} is at §a[${found[0]}, ~, ${found[1]}]§r (${Math.floor(Math.hypot(found[0] - x, found[1] - z))} blocks away)`);
     },

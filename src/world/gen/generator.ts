@@ -10,6 +10,8 @@ import { Decorator } from './features';
 import { Carvers } from './carvers';
 import { Mineshafts } from './mineshaft';
 import { Geodes, SUB_AIR, SUB_SOLID, SUB_FLUID } from './geode';
+import { Villages } from './villages';
+import { worldSeed64 } from './jigsaw';
 import { S, getBlock } from '../block';
 import { MIN_Y, MAX_Y, SEA_LEVEL, COLUMN_VOLUME, colIndex, CAVE_BIOME_LEVELS, NO_CAVE_BIOME } from '../constants';
 import { hash3, hash2, hashFloat, hash32, Rand, hashString } from '../../core/rng';
@@ -49,6 +51,9 @@ export class ChunkGenerator {
   private readonly surfaceSecondary: NormalNoise;
   /** aquifer for single-block terrain queries (substanceAt) */
   private readonly pointAquifer: Aquifer;
+  readonly villages: Villages;
+  /** corner columns for terrain height queries, with the noise at their cell corners as it's needed */
+  private readonly heightCols = new Map<number, { c: ColumnSample; exactTop: number; corners: (Float32Array | undefined)[] }>();
 
   constructor(seed: string | number | bigint) {
     this.seeds = SeedSource.fromWorldSeed(typeof seed === 'string' ? seed : BigInt(seed));
@@ -62,6 +67,81 @@ export class ChunkGenerator {
     this.surfaceNoise = this.router.n.surface;
     this.surfaceSecondary = this.router.n.surface_secondary;
     this.clayBands = makeClayBands(new Rand(this.seedHash ^ 0xba4d, 3));
+    this.villages = new Villages(worldSeed64(seed), { firstFreeHeight: (x, z) => this.firstFreeHeight(x, z), quartBiome: (x, z) => this.quartBiome(x, z) });
+    this.decorator.villages = this.villages;
+  }
+
+  /** the biome a structure checks for (vanilla getNoiseBiome at the quart, without the fuzzy zoom) */
+  quartBiome(x: number, z: number): number {
+    return this.biomeAt(x & ~3, z & ~3);
+  }
+
+  private heightCol(x: number, z: number): { c: ColumnSample; exactTop: number; corners: (Float32Array | undefined)[] } {
+    const key = (x >> 2) * 131072 + (z >> 2);
+    let e = this.heightCols.get(key);
+    if (e) return e;
+    if (this.heightCols.size > 16384) this.heightCols.clear();
+    const c = this.router.column(x, z, newColumn());
+    // (as generate() does: corners above the highest one that may be solid aren't worked out)
+    let top = 0;
+    for (let j = NCY - 1; j >= 0; j--) {
+      if (this.router.slopedCheeseBase(MIN_Y + j * CELL_H, c) + 1.1 >= 0) {
+        top = j;
+        break;
+      }
+    }
+    e = { c, exactTop: Math.min(NCY - 1, top + 1), corners: new Array(NCY) };
+    this.heightCols.set(key, e);
+    return e;
+  }
+
+  /**
+   * vanilla getFirstFreeHeight(WORLD_SURFACE_WG): the first block above the bare noise terrain (water counts as
+   * terrain), read off one column exactly as generate() fills it, for structures laying themselves out
+   */
+  firstFreeHeight(x: number, z: number): number {
+    const x0 = Math.floor(x / CELL_W) * CELL_W, z0 = Math.floor(z / CELL_W) * CELL_W;
+    const cols = [this.heightCol(x0, z0), this.heightCol(x0 + CELL_W, z0), this.heightCol(x0, z0 + CELL_W), this.heightCol(x0 + CELL_W, z0 + CELL_W)];
+    const prelim = this.router.preliminarySurface(cols[0].c);
+    const tx = (x - x0) / CELL_W, tz = (z - z0) / CELL_W;
+    let topCell = 0;
+    for (const c of cols) topCell = Math.max(topCell, c.exactTop);
+    topCell = Math.min(NCY - 2, topCell);
+    const yStart = Math.max(MIN_Y + (topCell + 1) * CELL_H - 1, Math.min(prelim + 16, MAX_Y - 1), SEA_LEVEL - 1);
+    const cv = new Float32Array(8 * CHANNELS);
+    let cell = -1, allAir = false;
+    for (let y = yStart; y >= MIN_Y; y--) {
+      const cj = Math.floor((y - MIN_Y) / CELL_H);
+      if (cj !== cell) {
+        cell = cj;
+        let maxMain = -Infinity;
+        for (let n = 0; n < 8; n++) {
+          const di = n & 1, dj = (n >> 1) & 1, dk = (n >> 2) & 1;
+          const col = cols[di + dk * 2], j = cj + dj;
+          let v = col.corners[j];
+          if (!v) {
+            v = new Float32Array(CHANNELS);
+            this.router.corner(x0 + di * CELL_W, MIN_Y + j * CELL_H, z0 + dk * CELL_W, col.c, v, 0, j <= col.exactTop);
+            col.corners[j] = v;
+          }
+          cv.set(v, n * CHANNELS);
+          maxMain = Math.max(maxMain, v[CH_MAIN]);
+        }
+        allAir = maxMain < 0 && MIN_Y + cj * CELL_H >= SEA_LEVEL + 8;
+      }
+      if (allAir && y > prelim + 16) continue;
+      const ty = (y - (MIN_Y + cj * CELL_H)) / CELL_H;
+      let d = squeeze(0.64 * tri(cv, CH_MAIN, tx, ty, tz));
+      if (tri(cv, CH_NTOGGLE, tx, ty, tz) >= 0) {
+        const nd = tri(cv, CH_NTHICK, tx, ty, tz) + 1.5 * Math.max(Math.abs(tri(cv, CH_NRA, tx, ty, tz)), Math.abs(tri(cv, CH_NRB, tx, ty, tz)));
+        if (nd < d) d = nd;
+      }
+      if (d > 0) return y + 1;
+      if (y >= SEA_LEVEL && y > prelim + 16) continue;
+      const sub = this.pointAquifer.substance(x, y, z, d);
+      if (sub === -1 || sub === FLUID_WATER || sub === FLUID_LAVA) return y + 1;
+    }
+    return MIN_Y;
   }
 
   /**
@@ -156,6 +236,9 @@ export class ChunkGenerator {
         prelimCol[(lz << 4) | lx] = p;
       }
     const oreGap = router.n.ore_gap;
+    // structures nearby bend the terrain around themselves (vanilla Beardifier, added to the final density)
+    const beard = this.villages.beardFor(cx, cz);
+    const bY0 = beard ? beard.minY : Infinity, bY1 = beard ? beard.maxY : -Infinity;
     const cv = new Float32Array(8 * CHANNELS);
     for (let ck = 0; ck < 4; ck++)
       for (let ci = 0; ci < 4; ci++)
@@ -181,7 +264,8 @@ export class ChunkGenerator {
                 const lx = ci * 4 + dx;
                 const tx = dx / CELL_W;
                 const idx = colIndex(lx, y, lz);
-                if (allAir && y > prelimCol[(lz << 4) | lx] + 16) continue;
+                const bearded = y >= bY0 && y <= bY1;
+                if (allAir && !bearded && y > prelimCol[(lz << 4) | lx] + 16) continue;
                 const main = tri(cv, CH_MAIN, tx, ty, tz);
                 let d = squeeze(0.64 * main);
                 const tog = tri(cv, CH_NTOGGLE, tx, ty, tz);
@@ -190,6 +274,7 @@ export class ChunkGenerator {
                   if (nd < d) d = nd;
                 }
                 const x = x0 + lx, z = z0 + lz;
+                if (bearded) d += beard!.compute(x, y, z);
                 if (d > 0) {
                   // ore veins
                   let st = STONE;
@@ -214,7 +299,7 @@ export class ChunkGenerator {
                   }
                   blocks[idx] = st;
                 } else {
-                  if (y >= SEA_LEVEL && y > prelimCol[(lz << 4) | lx] + 16) continue; // open air
+                  if (!bearded && y >= SEA_LEVEL && y > prelimCol[(lz << 4) | lx] + 16) continue; // open air
                   const sub = aquifer.substance(x, y, z, d);
                   if (sub === -1) blocks[idx] = STONE;
                   else if (sub === FLUID_WATER) blocks[idx] = WATER;

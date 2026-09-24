@@ -68,6 +68,127 @@ export const LOOT_TABLES: Record<string, LootPool[]> = {
     },
     { rolls: 1, entries: [e('', 14), e('rib_armor_trim_smithing_template', 1)] },
   ],
+  // villages (chests/village/*)
+  'chests/village/village_weaponsmith': [
+    {
+      rolls: [3, 8],
+      entries: [
+        e('diamond', 3, [1, 3]), e('iron_ingot', 10, [1, 5]), e('gold_ingot', 5, [1, 3]), e('bread', 15, [1, 3]), e('apple', 15, [1, 3]),
+        e('iron_pickaxe', 5), e('iron_sword', 5), e('iron_chestplate', 5), e('iron_helmet', 5), e('iron_leggings', 5), e('iron_boots', 5),
+        e('obsidian', 5, [3, 7]), e('oak_sapling', 5, [3, 7]), e('saddle', 3), e('iron_horse_armor', 1), e('golden_horse_armor', 1), e('diamond_horse_armor', 1),
+      ],
+    },
+  ],
+  'chests/village/village_toolsmith': [
+    {
+      rolls: [3, 8],
+      entries: [
+        e('diamond', 1, [1, 3]), e('iron_ingot', 5, [1, 5]), e('gold_ingot', 1, [1, 3]), e('bread', 15, [1, 3]), e('iron_pickaxe', 1),
+        e('coal', 1, [1, 3]), e('stick', 20, [1, 3]), e('iron_shovel', 5),
+      ],
+    },
+  ],
+  'chests/village/village_armorer': [{ rolls: [1, 5], entries: [e('iron_ingot', 2, [1, 3]), e('bread', 4, [1, 4]), e('iron_helmet', 1), e('emerald', 1)] }],
+  'chests/village/village_cartographer': [
+    { rolls: [1, 5], entries: [e('map', 10, [1, 3]), e('paper', 15, [1, 5]), e('compass', 5), e('bread', 15, [1, 4]), e('stick', 5, [1, 2])] },
+  ],
+  'chests/village/village_mason': [
+    {
+      rolls: [1, 5],
+      entries: [
+        e('clay_ball', 1, [1, 3]), e('flower_pot', 1), e('stone', 2), e('stone_bricks', 2), e('bread', 4, [1, 4]), e('yellow_dye', 1),
+        e('smooth_stone', 1), e('emerald', 1),
+      ],
+    },
+  ],
+  'chests/village/village_shepherd': [
+    {
+      rolls: [1, 5],
+      entries: [
+        e('white_wool', 6, [1, 8]), e('black_wool', 3, [1, 3]), e('gray_wool', 2, [1, 3]), e('brown_wool', 2, [1, 3]), e('light_gray_wool', 2, [1, 3]),
+        e('emerald', 1), e('shears', 1), e('wheat', 6, [1, 6]),
+      ],
+    },
+  ],
+  'chests/village/village_butcher': [
+    { rolls: [1, 5], entries: [e('emerald', 1), e('porkchop', 6, [1, 3]), e('wheat', 6, [1, 3]), e('beef', 6, [1, 3]), e('mutton', 6, [1, 3]), e('coal', 3, [1, 3])] },
+  ],
+  'chests/village/village_fletcher': [
+    { rolls: [1, 5], entries: [e('emerald', 1), e('arrow', 2, [1, 3]), e('feather', 6, [1, 3]), e('egg', 2, [1, 3]), e('flint', 6, [1, 3]), e('stick', 6, [1, 3])] },
+  ],
+  'chests/village/village_fisher': [
+    {
+      rolls: [1, 5],
+      entries: [
+        e('emerald', 1), e('cod', 2, [1, 3]), e('salmon', 1, [1, 3]), e('water_bucket', 1, [1, 3]), e('barrel', 1, [1, 3]), e('wheat_seeds', 3, [1, 3]),
+        e('coal', 2, [1, 3]),
+      ],
+    },
+  ],
+  'chests/village/village_tannery': [
+    {
+      rolls: [1, 5],
+      entries: [
+        e('leather', 1, [1, 3]), e('leather_chestplate', 2), e('leather_boots', 2), e('leather_helmet', 2), e('bread', 5, [1, 4]), e('leather_leggings', 2),
+        e('saddle', 1), e('emerald', 1, [1, 4]),
+      ],
+    },
+  ],
+  'chests/village/village_temple': [
+    {
+      rolls: [3, 8],
+      entries: [
+        e('redstone', 2, [1, 4]), e('bread', 7, [1, 4]), e('rotten_flesh', 7, [1, 4]), e('lapis_lazuli', 1, [1, 4]), e('gold_ingot', 1, [1, 4]),
+        e('emerald', 1, [1, 4]),
+      ],
+    },
+  ],
+  'chests/village/village_plains_house': [
+    {
+      rolls: [3, 8],
+      entries: [
+        e('gold_nugget', 1, [1, 3]), e('dandelion', 2), e('poppy', 1), e('potato', 10, [1, 5]), e('bread', 10, [1, 4]), e('apple', 10, [1, 5]),
+        e('book', 1), e('feather', 1), e('emerald', 2, [1, 4]), e('oak_sapling', 5, [1, 2]),
+      ],
+    },
+  ],
+  'chests/village/village_taiga_house': [
+    {
+      rolls: [3, 8],
+      entries: [
+        e('iron_nugget', 1, [1, 5]), e('fern', 2), e('large_fern', 2), e('potato', 10, [1, 7]), e('sweet_berries', 5, [1, 7]), e('bread', 10, [1, 4]),
+        e('pumpkin_seeds', 5, [1, 5]), e('pumpkin_pie', 1), e('emerald', 2, [1, 4]), e('spruce_sapling', 5, [1, 5]), e('spruce_sign', 1),
+        e('spruce_log', 10, [1, 5]),
+      ],
+    },
+  ],
+  'chests/village/village_savanna_house': [
+    {
+      rolls: [3, 8],
+      entries: [
+        e('gold_nugget', 1, [1, 3]), e('short_grass', 5), e('tall_grass', 5), e('bread', 10, [1, 4]), e('wheat_seeds', 10, [1, 5]), e('emerald', 2, [1, 4]),
+        e('acacia_sapling', 10, [1, 2]), e('saddle', 1), e('torch', 1, [1, 2]), e('bucket', 1),
+      ],
+    },
+  ],
+  'chests/village/village_snowy_house': [
+    {
+      rolls: [3, 8],
+      entries: [
+        e('blue_ice', 1), e('snow_block', 4), e('potato', 10, [1, 7]), e('bread', 10, [1, 4]), e('beetroot_seeds', 10, [1, 5]), e('beetroot_soup', 1),
+        e('furnace', 1), e('emerald', 1, [1, 4]), e('snowball', 10, [1, 7]), e('coal', 5, [1, 4]),
+      ],
+    },
+  ],
+  'chests/village/village_desert_house': [
+    {
+      rolls: [3, 8],
+      entries: [
+        e('clay_ball', 1), e('green_dye', 1), e('cactus', 10, [1, 4]), e('wheat', 10, [1, 7]), e('bread', 10, [1, 4]), e('book', 1),
+        e('dead_bush', 2, [1, 3]), e('emerald', 1, [1, 3]),
+      ],
+    },
+  ],
 };
 
 /** vanilla Mth.nextInt(random, lo, hi) */
