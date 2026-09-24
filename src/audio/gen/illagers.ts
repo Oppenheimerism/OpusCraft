@@ -8,9 +8,11 @@
 // The fangs: jaws of bone snapping shut. The vex: a small shrill spirit — chittering, a hiss as it charges.
 // The ravager: a great beast's grumbling snorts, a bellowing roar, stamping feet, a bite, dazed groans.
 // The totem of undying: a bright magical chime-swell. Formant synthesis (voice.ts) and foley textures.
+// The raid (Stage 4): its horn, far off and mournful; the ominous bottle's dark wisp as it's drunk; the omens coming
+// on, a low foreboding swell; a bell humming with raiders about.
 
 import type { SoundGen } from '../synth';
-import { alloc, envAD, envBump, envPts, layer, lowpass, highpass, smooth } from './dsp';
+import { addOsc, alloc, envAD, envBump, envPts, layer, lowpass, highpass, smooth } from './dsp';
 import { type Ctx, sound } from './registry';
 import { burst, impact, sweep, thump } from './texture';
 import { voice, vowelGlide } from './voice';
@@ -379,6 +381,91 @@ function totemUse(c: Ctx): Float32Array {
   return reverbHalf(out, sr, { t60: 1.6, wet: 0.35, dry: 1 }).subarray(0, Math.round(3 * sr));
 }
 
+// ---------------------------------------------------------------------------
+// the raid
+
+/**
+ * vanilla event.raid.horn (event/raid/raidhorn_01-04): a great horn blown far off — a low brassy note swelling in,
+ * brightening as it's blown harder, a slight sag at the end, and the land's long echo
+ */
+function raidHorn(c: Ctx): Float32Array {
+  const { sr, rng, v } = c;
+  const dur = 4.4;
+  const out = alloc(dur + 0.1, sr);
+  const f0 = [92, 98, 87, 104][v % 4] * rng.range(0.99, 1.01);
+  const env = (t: number) => envPts(t / dur, [0, 0, 0.07, 0.7, 0.2, 0.95, 0.65, 1, 0.85, 0.75, 1, 0]);
+  const pitch = (t: number) => f0 * (1 - 0.05 * Math.exp(-t / 0.18) - 0.035 * smooth((t - dur * 0.78) / (dur * 0.22))) * (1 + 0.0035 * Math.sin(2 * Math.PI * 4.6 * t));
+  layer(out, 1, (b) => {
+    // brass: the upper harmonics come up the harder it's blown
+    for (let h = 1; h <= 12; h++) {
+      const w = 1 / Math.pow(h, 1.05);
+      addOsc(b, sr, 0.02, dur, (t) => pitch(t) * h, (t) => {
+        const e = env(t);
+        return w * e * Math.pow(e, (h - 1) * 0.4);
+      }, rng.range(0, 6.28));
+    }
+    lowpass(b, 2600, sr);
+  });
+  // the breath in it
+  layer(out, 0.07, (b) => sweep(b, sr, rng, { t: 0.02, dur, f: () => f0 * 7, q: 1.1, amp: env, color: 'pink' }));
+  return reverbHalf(out, sr, { t60: 3.2, wet: 0.6, dry: 1, pre: 0.05 });
+}
+
+/**
+ * vanilla item.ominous_bottle.dispose: the empty bottle gone in a dark wisp — a thin glassy shimmer that falls away
+ * into a low swirl
+ */
+function ominousBottleDispose(c: Ctx): Float32Array {
+  const { sr, rng } = c;
+  const out = alloc(1.6, sr);
+  layer(out, 0.6, (b) => {
+    for (let i = 0; i < 5; i++) {
+      const f = rng.range(2600, 4200);
+      impact(b, sr, rng, { t: i * rng.range(0.03, 0.06), modes: [f, 1, rng.range(0.25, 0.5), f * 1.47, 0.5, 0.2, f * 2.09, 0.25, 0.12], jitter: 0.004 });
+    }
+  });
+  layer(out, 1, (b) => sweep(b, sr, rng, { t: 0.05, dur: 1.4, f: (t) => 1800 * Math.pow(0.18, t / 1.4), q: 3, amp: (t) => envPts(t / 1.4, [0, 0, 0.12, 1, 0.5, 0.6, 1, 0]), color: 'pink' }));
+  layer(out, 0.45, (b) => {
+    addOsc(b, sr, 0.1, 1.4, (t) => 110 * (1 - 0.08 * t), (t) => envPts(t / 1.4, [0, 0, 0.3, 1, 1, 0]));
+    addOsc(b, sr, 0.1, 1.4, (t) => 116.5 * (1 - 0.08 * t), (t) => 0.8 * envPts(t / 1.4, [0, 0, 0.3, 1, 1, 0]));
+  });
+  return reverbHalf(out, sr, { t60: 1.2, wet: 0.3, dry: 1 });
+}
+
+/**
+ * vanilla event.mob_effect.bad_omen / raid_omen: an omen coming on — a low, close-voiced chord swelling out of a
+ * breath of wind (the raid's darker and more urgent, throbbing as it climbs)
+ */
+function omen(raid: boolean) {
+  return (c: Ctx): Float32Array => {
+    const { sr, rng } = c;
+    const dur = raid ? 2.4 : 2;
+    const out = alloc(dur, sr);
+    const base = raid ? 73.4 : 82.4;
+    const env = (t: number) => envPts(t / dur, [0, 0, 0.35, 1, 0.7, 0.8, 1, 0]);
+    layer(out, 1, (b) => {
+      for (const [r, a] of [[1, 1], [1.06, 0.7], [1.5, 0.5], [2, 0.45], [2.12, 0.3]] as const)
+        addOsc(b, sr, 0, dur, (t) => base * r * (raid ? 1 + 0.08 * smooth(t / dur) : 1), (t) => a * env(t) * (raid ? 0.75 + 0.25 * Math.sin(2 * Math.PI * 6 * t) : 1), rng.range(0, 6.28));
+      lowpass(b, 1400, sr);
+    });
+    layer(out, 0.35, (b) => sweep(b, sr, rng, { dur, f: (t) => 500 + 900 * smooth(t / dur), q: 1.4, amp: env, color: 'pink' }));
+    return reverbHalf(out, sr, { t60: 2, wet: 0.45, dry: 1 });
+  };
+}
+
+/** vanilla block.bell.resonate: the bell humming on after its stroke, its note throbbing as raiders are sensed */
+function bellResonate(c: Ctx): Float32Array {
+  const { sr, rng } = c;
+  const dur = 2.8;
+  const out = alloc(dur, sr);
+  const f = 392;
+  layer(out, 1, (b) => {
+    for (const [r, a] of [[0.5, 0.6], [1, 0.8], [1.2, 0.4], [2, 1], [3.01, 0.25]] as const)
+      addOsc(b, sr, 0, dur, (t) => f * r * (1 + 0.002 * Math.sin(2 * Math.PI * 1.3 * t)), (t) => a * envPts(t / dur, [0, 0, 0.15, 1, 0.6, 0.8, 1, 0]) * (0.6 + 0.4 * Math.sin(2 * Math.PI * 7 * t)), rng.range(0, 6.28));
+  });
+  return reverbHalf(out, sr, { t60: 1.5, wet: 0.35, dry: 1 });
+}
+
 export function illagerSounds(): Record<string, SoundGen> {
   return {
     'item.shield.block': sound('item.shield.block', 5, shieldBlock),
@@ -412,5 +499,10 @@ export function illagerSounds(): Record<string, SoundGen> {
     'entity.ravager.step': sound('entity.ravager.step', 5, ravagerStep),
     'entity.ravager.celebrate': sound('entity.ravager.celebrate', 2, ravagerAmbient),
     'item.totem.use': sound('item.totem.use', 1, totemUse),
+    'event.raid.horn': sound('event.raid.horn', 4, raidHorn),
+    'item.ominous_bottle.dispose': sound('item.ominous_bottle.dispose', 2, ominousBottleDispose),
+    'event.mob_effect.bad_omen': sound('event.mob_effect.bad_omen', 1, omen(false)),
+    'event.mob_effect.raid_omen': sound('event.mob_effect.raid_omen', 1, omen(true)),
+    'block.bell.resonate': sound('block.bell.resonate', 1, bellResonate),
   };
 }

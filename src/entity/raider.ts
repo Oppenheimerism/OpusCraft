@@ -30,7 +30,7 @@ export type RaiderSpawnReason = SpawnReason | 'patrol' | 'event';
 /** what a raider needs of the raid it's in (vanilla Raid) */
 export interface RaidLink {
   readonly id: number;
-  /** vanilla Raid.isActive: started, not over, and not paused for want of a player */
+  /** vanilla Raid.isActive: not stopped, and its village's middle is loaded */
   isActive(): boolean;
   isOver(): boolean;
   /** vanilla isLoss: the village fell */
@@ -39,9 +39,11 @@ export interface RaidLink {
   setLeader(wave: number, r: Raider): void;
   removeLeader(wave: number): void;
   removeFromRaid(r: Raider, wanderedOff: boolean): void;
+  /** vanilla addWaveMob: one of wave `wave` (a raider loaded from a save comes back, its health not counted again) */
+  addWaveMob(wave: number, r: Raider, countHealth: boolean): boolean;
   addHeroOfTheVillage(e: Entity): void;
   updateBossbar(): void;
-  /** vanilla getEnchantOdds: 0.1 on easy, 0.25 on normal, 0.5 on hard */
+  /** vanilla getEnchantOdds, by the raid omen level: 0.1 at 2, 0.25 at 3, 0.5 at 4, 0.75 at 5 (none at 1) */
   enchantOdds(): number;
   /** vanilla getNumGroups: the waves a raid on `d` has (3, 5, 7) */
   numGroups(d: Difficulty): number;
@@ -244,8 +246,8 @@ export class LongDistancePatrolGoal extends Goal {
  * lost its captain, and celebrates if the village falls; bored twice as fast; kept while its raid is on
  */
 export abstract class Raider extends PatrollingMonster {
-  raid: RaidLink | null = null;
-  /** (a loaded raider's raid, found again on its first tick) */
+  private currentRaid: RaidLink | null = null;
+  /** (a loaded raider's raid, found again the first time it's asked for, once the raids are there) */
   private raidId = -1;
   wave = 0;
   canJoinRaid = false;
@@ -265,6 +267,27 @@ export abstract class Raider extends PatrollingMonster {
   /** vanilla getCelebrateSound */
   abstract celebrateSound(): string;
 
+  /** vanilla getCurrentRaid */
+  get raid(): RaidLink | null {
+    if (this.raidId >= 0) this.rejoinSavedRaid();
+    return this.currentRaid;
+  }
+  /** vanilla setCurrentRaid */
+  set raid(r: RaidLink | null) {
+    this.currentRaid = r;
+    this.raidId = -1;
+  }
+
+  /** vanilla readAdditionalSaveData: back in its wave (its health counted already), and its wave's captain again if it was */
+  private rejoinSavedRaid(): void {
+    const raid = raidHooks.byId(this.level, this.raidId);
+    this.raidId = -1;
+    if (!raid) return;
+    this.currentRaid = raid;
+    raid.addWaveMob(this.wave, this, false);
+    if (this.patrolLeader) raid.setLeader(this.wave, this);
+  }
+
   hasRaid(): boolean {
     return this.raid !== null;
   }
@@ -283,10 +306,6 @@ export abstract class Raider extends PatrollingMonster {
    */
   override aiStep(): void {
     if (this.isAlive) {
-      if (this.raidId >= 0 && !this.raid) {
-        this.raid = raidHooks.byId(this.level, this.raidId);
-        this.raidId = -1;
-      }
       const raid = this.raid;
       if (this.canJoinRaid) {
         if (!raid) {

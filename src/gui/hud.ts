@@ -25,7 +25,7 @@ export class Hud {
   chat: { text: string; time: number }[] = [];
   title: { text: string; sub: string; time: number } | null = null;
   actionBar: { text: string; time: number } | null = null;
-  /** vanilla Gui.bossOverlay: the ender dragon's bar */
+  /** vanilla Gui.bossOverlay: the ender dragon's bar, a raid's */
   readonly bossOverlay = new BossHealthOverlay();
 
   /** vanilla Gui.setOverlayMessage (the action bar above the hotbar) */
@@ -56,7 +56,8 @@ export class Hud {
     this.vignetteBrightness += (f - this.vignetteBrightness) * 0.01;
     if (this.actionBar && --this.actionBar.time <= 0) this.actionBar = null;
     if (this.title && --this.title.time <= 0) this.title = null;
-    this.bossOverlay.update([game.level.dragonFight?.shownBar() ?? null]);
+    // (Stage 4: raids) and the raids' bars
+    this.bossOverlay.update([game.level.dragonFight?.shownBar() ?? null, ...game.level.raids.shownBars()]);
   }
 
   addChat(text: string, tick: number): void {

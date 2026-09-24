@@ -306,24 +306,32 @@ export class BellBlockEntity extends BlockEntity {
   clickDirection = 2;
   lastRingTimestamp = -Infinity;
   nearbyEntities: Entity[] | null = null;
+  /** (Stage 4: raids) vanilla resonating / resonationTicks: raiders were about as it rang, and it hums for two seconds */
+  resonating = false;
+  resonationTicks = 0;
   constructor(x: number, y: number, z: number) {
     super(x, y, z, 0);
   }
-  /** vanilla onHit / triggerEvent(1): (re)start the swing */
+  /** vanilla onHit / triggerEvent(1): (re)start the swing (and it may resonate again) */
   onHit(dir: number): void {
     this.clickDirection = dir;
     this.ticks = 0;
     this.shaking = true;
+    this.resonationTicks = 0;
   }
-  /** vanilla BellBlockEntity.tick (raiders nearby would make it resonate: there are none) */
-  override tick(): void {
+  /** vanilla BellBlockEntity.tick; with raiders about it resonates (game/raids.ts) */
+  override tick(level: Level): void {
     if (this.shaking) this.ticks++;
     if (this.ticks >= 50) {
       this.shaking = false;
       this.ticks = 0;
     }
+    bellHooks.tick?.(this, level);
   }
 }
+
+/** (Stage 4: raids) the bell's resonance with the raiders about, and their glow (game/raids.ts) */
+export const bellHooks: { tick: ((be: BellBlockEntity, level: Level) => void) | null } = { tick: null };
 
 /**
  * vanilla LecternBlockEntity: the book on the lectern (its one slot, so breaking the lectern drops it) and the page

@@ -403,6 +403,8 @@ export class Game {
     this.level.thunder = this.level.thunderO = meta.thundering ? 1 : 0;
     this.level.simulationDistance = this.opts.simulationDistance;
     this.level.gameRules = { ...DEFAULT_GAME_RULES, ...(meta.gameRules ?? {}) };
+    // (Stage 4: raids)
+    this.level.raids.load(meta.raids);
     this.worldSpawn = meta.worldSpawn ?? null;
     this.level.sound = this.sound;
     this.attachDragonFight();
@@ -580,6 +582,8 @@ export class Game {
     m.portals = this.portalPoi.save();
     m.arrivals = this.arrivals.save();
     if (this.level.dragonFight) m.dragonFight = this.level.dragonFight.save();
+    // (Stage 4: raids)
+    m.raids = this.level.raids.save();
     const list = [];
     for (const c of this.world.chunks.values()) {
       if (!c.modified) continue;

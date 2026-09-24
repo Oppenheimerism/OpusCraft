@@ -52,6 +52,9 @@ function categoryOf(name: string): Category {
   // (Stage 4: illagers) the totem is its user's (a player's, mostly); the raiders and the vex are hostile
   if (name === 'item.totem.use') return 'players';
   if (/^entity\.(pillager|vindicator|evoker|evoker_fangs|vex|ravager|illusioner)\./.test(name)) return 'hostile';
+  // (Stage 4: raids) the horn is vanilla's SoundSource.NEUTRAL; the bottle and the omens are the drinker's (a player's)
+  if (name === 'event.raid.horn') return 'friendly';
+  if (name.startsWith('item.ominous_bottle.') || name.startsWith('event.mob_effect.')) return 'players';
   if (name.startsWith('block.') || name.startsWith('item.')) return 'blocks';
   if (name.startsWith('weather.') || name.startsWith('entity.lightning')) return 'weather';
   if (name.startsWith('ambient.')) return 'ambient';

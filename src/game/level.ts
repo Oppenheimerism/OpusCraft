@@ -51,6 +51,8 @@ import './endPortal';
 import './golems';
 import './potionItems';
 import './potionEffects';
+// (Stage 4: raids)
+import { Raids } from './raids';
 
 export interface SoundSink {
   play(name: string, x: number, y: number, z: number, volume?: number, pitch?: number): void;
@@ -147,6 +149,8 @@ export class Level {
   readonly poi: PoiManager;
   /** vanilla ServerLevel.dragonFight: the End's (game/endDragonFight.ts), null elsewhere */
   dragonFight: EndDragonFight | null = null;
+  /** (Stage 4: raids) vanilla ServerLevel.raids (game/raids.ts) */
+  readonly raids: Raids = new Raids(this);
   /** chunk tickets by name (the game keeps what they name loaded) */
   readonly tickets = new Map<string, ChunkTicket>();
   /**
@@ -446,6 +450,8 @@ export class Level {
     else this.tickWeatherLevels();
     tickSleeping(this);
     this.updateSkyBrightness();
+    // (Stage 4: raids) vanilla ServerLevel.tick: the raids, before the entities
+    this.raids.tick();
     // (vanilla ServerLevel.tick: the dragon fight just before the entities)
     this.dragonFight?.tick();
     for (const [k, t] of this.tickets) if (t.until <= this.gameTime) this.tickets.delete(k);

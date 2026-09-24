@@ -62,6 +62,8 @@ export interface WorldMeta {
   arrivals?: Record<string, { entity: SavedEntity; surface?: boolean }[]>;
   /** vanilla level.dat DragonFight: the End's dragon fight (game/endDragonFight.ts) */
   dragonFight?: import('../game/endDragonFight').DragonFightData;
+  /** (Stage 4: raids) vanilla data/raids.dat, every dimension's (game/raids.ts) */
+  raids?: import('../game/raids').RaidsData;
   version: number;
   /** quick-test worlds are never written to storage */
   transient?: boolean;
