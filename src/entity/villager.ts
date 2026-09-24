@@ -1,0 +1,1666 @@
+// The villager (vanilla Villager, AbstractVillager, VillagerData and VillagerGoalPackages): the people of the
+// villages. Each wears its biome's clothes and takes up the profession of the first free workstation it reaches;
+// it claims a bed as its home and the village bell as its meeting point. Its day follows a schedule: work at its
+// workstation (restocking up to twice a day), gather by the bell in the afternoon, wander, and sleep in its bed at
+// night. A zombie or illager close by, or a hit, sends it running. Players trade with it; trades earn it
+// experience, and each of its five levels brings two more offers. Babies play instead of working.
+//
+// Vanilla runs this on a Brain; the port keeps its shape (ai/brain.ts): the memories below, sensors once a second,
+// and VillagerGoalPackages' behaviours under the core activity and the current one.
+
+import { AgeableMob } from './animals';
+import type { MobCategory, SpawnGroup, SpawnReason } from './mob';
+import type { Level } from '../game/level';
+import type { Entity } from './entity';
+import { LivingEntity } from './living';
+import type { Player } from './player';
+import { MobEffectInstance, MOB_EFFECTS } from './effects';
+import { defaultRandomPosTowards, landRandomPos, landRandomPosAway } from './ai/goals';
+import type { Node, Path } from './ai/pathfinder';
+import { Behavior, Brain, doNothing, oneShot, runOne, triggerOneShuffled, type BehaviorControl } from './ai/brain';
+import { MerchantOffer, VILLAGER_TRADES, addOffersFromListings, type SavedOffer } from './trading';
+import type { ItemStack } from '../item/item';
+import { BLOCKS, STATE_BLOCK, FLAGS, F_FULL_COLLISION } from '../world/block';
+import { BIOMES } from '../world/gen/biomes';
+import type { PoiKind } from '../game/poi';
+import { findStandUpPosition } from '../game/sleep';
+import { wrapDegrees } from '../core/math';
+
+// ---------------------------------------------------------------------------
+// Villager data
+
+/** vanilla VillagerType */
+export const VILLAGER_TYPES = ['desert', 'jungle', 'plains', 'savanna', 'snow', 'swamp', 'taiga'] as const;
+export type VillagerType = (typeof VILLAGER_TYPES)[number];
+
+/** vanilla VillagerProfession */
+export const PROFESSIONS = [
+  'none', 'armorer', 'butcher', 'cartographer', 'cleric', 'farmer', 'fisherman', 'fletcher', 'leatherworker', 'librarian', 'mason', 'nitwit',
+  'shepherd', 'toolsmith', 'weaponsmith',
+] as const;
+export type Profession = (typeof PROFESSIONS)[number];
+
+/** vanilla VillagerType.BY_BIOME (anything else is plains) */
+const TYPE_BY_BIOME: Record<string, VillagerType> = {
+  badlands: 'desert', desert: 'desert', eroded_badlands: 'desert', wooded_badlands: 'desert',
+  bamboo_jungle: 'jungle', jungle: 'jungle', sparse_jungle: 'jungle',
+  savanna_plateau: 'savanna', savanna: 'savanna', windswept_savanna: 'savanna',
+  deep_frozen_ocean: 'snow', frozen_ocean: 'snow', frozen_river: 'snow', ice_spikes: 'snow', snowy_beach: 'snow', snowy_taiga: 'snow', snowy_plains: 'snow',
+  grove: 'snow', snowy_slopes: 'snow', frozen_peaks: 'snow', jagged_peaks: 'snow',
+  swamp: 'swamp', mangrove_swamp: 'swamp',
+  old_growth_spruce_taiga: 'taiga', old_growth_pine_taiga: 'taiga', windswept_gravelly_hills: 'taiga', windswept_hills: 'taiga', taiga: 'taiga',
+  windswept_forest: 'taiga',
+};
+
+/** vanilla VillagerType.byBiome */
+export function villagerTypeAt(level: Level, x: number, y: number, z: number): VillagerType {
+  const b = BIOMES[level.world.getBiome3(Math.floor(x), Math.floor(y), Math.floor(z))];
+  return TYPE_BY_BIOME[b?.name ?? ''] ?? 'plains';
+}
+
+/** vanilla VillagerData.NEXT_LEVEL_XP_THRESHOLDS */
+const LEVEL_XP = [0, 10, 70, 150, 250];
+/** vanilla VillagerData.canLevelUp */
+export const canLevelUp = (l: number): boolean => l >= 1 && l < 5;
+/** vanilla VillagerData.getMinXpPerLevel / getMaxXpPerLevel: the experience bar's ends at a level */
+export const minXpPerLevel = (l: number): number => (canLevelUp(l) ? LEVEL_XP[l - 1] : 0);
+export const maxXpPerLevel = (l: number): number => (canLevelUp(l) ? LEVEL_XP[l] : 0);
+/** vanilla merchant.level.<n> */
+export const LEVEL_NAMES = ['Novice', 'Apprentice', 'Journeyman', 'Expert', 'Master'];
+
+/** the job sites (vanilla PoiTypes of the professions' heldJobSite) */
+const JOB_KINDS = new Set<PoiKind>(['armorer', 'butcher', 'cartographer', 'cleric', 'farmer', 'fisherman', 'fletcher', 'leatherworker', 'librarian', 'mason', 'shepherd', 'toolsmith', 'weaponsmith']);
+
+/** vanilla VillagerProfession.heldJobSite: its own workstation */
+const heldJobSite = (p: Profession) => (k: PoiKind): boolean => k === p;
+/** vanilla VillagerProfession.acquirableJobSite: any workstation while jobless, none for a nitwit */
+const acquirableJobSite = (p: Profession) => (k: PoiKind): boolean => (p === 'none' ? JOB_KINDS.has(k) : p !== 'nitwit' && k === p);
+
+// ---------------------------------------------------------------------------
+// Brain types
+
+type Pos = [number, number, number];
+
+export type VillagerActivity = 'core' | 'idle' | 'work' | 'meet' | 'rest' | 'play' | 'panic';
+
+/** vanilla WalkTarget: a spot, or an entity (EntityTracker), to come within `closeEnough` of (Manhattan blocks) */
+interface WalkTarget {
+  x: number;
+  y: number;
+  z: number;
+  entity: Entity | null;
+  speed: number;
+  closeEnough: number;
+}
+
+/** vanilla PositionTracker as a look target: an entity (at its eyes, or its feet) or the middle of a block */
+type LookTarget = { e: Entity; eyes: boolean } | Pos;
+
+/** vanilla MemoryModuleType values a villager keeps (null: absent) */
+export interface VillagerMemories {
+  home: Pos | null;
+  jobSite: Pos | null;
+  potentialJobSite: Pos | null;
+  meetingPoint: Pos | null;
+  walkTarget: WalkTarget | null;
+  lookTarget: LookTarget | null;
+  interactionTarget: LivingEntity | null;
+  /** PATH: the one MoveToTargetSink follows */
+  path: Path | null;
+  cantReachWalkTargetSince: number | null;
+  lastSlept: number | null;
+  lastWoken: number | null;
+  lastWorkedAtPoi: number | null;
+  /** HURT_BY: hurt in the last two seconds, when the sensor last looked */
+  hurtBy: boolean;
+  hurtByEntity: LivingEntity | null;
+  nearestHostile: LivingEntity | null;
+  doorsToClose: Pos[] | null;
+  /** NEAREST_LIVING_ENTITIES and NEAREST_VISIBLE_LIVING_ENTITIES, nearest first */
+  nearestLiving: LivingEntity[];
+  visibleLiving: LivingEntity[];
+  /** VISIBLE_VILLAGER_BABIES (never empty: an empty list is no memory) */
+  visibleBabies: Villager[] | null;
+}
+
+/** vanilla Schedule.VILLAGER_DEFAULT and VILLAGER_BABY: [time of day, activity from then] */
+const DEFAULT_SCHEDULE: [number, VillagerActivity][] = [[10, 'idle'], [2000, 'work'], [9000, 'meet'], [11000, 'idle'], [12000, 'rest']];
+const BABY_SCHEDULE: [number, VillagerActivity][] = [[10, 'idle'], [3000, 'play'], [6000, 'idle'], [10000, 'play'], [12000, 'rest']];
+
+/** vanilla Schedule.getActivityAt: the last change at or before the time of day (before the first, the day's last) */
+function scheduledActivity(s: [number, VillagerActivity][], dayTime: number): VillagerActivity {
+  const t = ((dayTime % 24000) + 24000) % 24000;
+  let a = s[s.length - 1][1];
+  for (const [at, act] of s) if (at <= t) a = act;
+  return a;
+}
+
+/** vanilla VillagerHostilesSensor.ACCEPTABLE_DISTANCE_FROM_HOSTILES */
+const HOSTILE_DISTANCE: Record<string, number> = {
+  drowned: 8, evoker: 12, husk: 8, illusioner: 12, pillager: 15, ravager: 12, vex: 8, vindicator: 10, zoglin: 10, zombie: 8, zombie_villager: 8,
+};
+
+/** vanilla VillagerGoalPackages' speed modifier (on the villager's 0.5 speed) and the slower stroll */
+const SPEED = 0.5;
+const STROLL = 0.4;
+const SENSE_RANGE = 16;
+
+// ---------------------------------------------------------------------------
+// helpers (vanilla BehaviorUtils and friends)
+
+const blk = (st: number) => BLOCKS[STATE_BLOCK[st]];
+const blockPos = (e: Entity): Pos => [Math.floor(e.x), Math.floor(e.y), Math.floor(e.z)];
+const manhattan = (a: Pos, b: Pos): number => Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2]);
+/** vanilla BlockPos.closerToCenterThan */
+const closerToCenter = (p: Pos, e: Entity, d: number): boolean => (p[0] + 0.5 - e.x) ** 2 + (p[1] + 0.5 - e.y) ** 2 + (p[2] + 0.5 - e.z) ** 2 < d * d;
+const samePos = (a: Pos | null, b: { x: number; y: number; z: number } | null): boolean => !!a && !!b && a[0] === b.x && a[1] === b.y && a[2] === b.z;
+const key = (p: Pos): string => p.join(',');
+
+const walkTo = (p: Pos, speed: number, closeEnough: number): WalkTarget => ({ x: p[0] + 0.5, y: p[1], z: p[2] + 0.5, entity: null, speed, closeEnough });
+const walkAfter = (e: Entity, speed: number, closeEnough: number): WalkTarget => ({ x: e.x, y: e.y, z: e.z, entity: e, speed, closeEnough });
+
+/** vanilla PoiManager.sectionsToVillage over sections known to hold village points: Chebyshev, at most 6 */
+function sectionsTo(sections: readonly Pos[], sx: number, sy: number, sz: number): number {
+  let best = 6;
+  for (const [x, y, z] of sections) best = Math.min(best, Math.max(Math.abs(x - sx), Math.abs(y - sy), Math.abs(z - sz)));
+  return best;
+}
+
+/** vanilla WalkTarget.getTarget().currentBlockPosition() */
+function walkTargetBlock(w: WalkTarget): Pos {
+  if (w.entity) [w.x, w.y, w.z] = [w.entity.x, w.entity.y, w.entity.z];
+  return [Math.floor(w.x), Math.floor(w.y), Math.floor(w.z)];
+}
+
+/** vanilla BehaviorUtils.setWalkAndLookTargetMemories (for a block) */
+function setWalkAndLook(v: Villager, p: Pos, speed: number, closeEnough: number): void {
+  v.mem.walkTarget = walkTo(p, speed, closeEnough);
+  v.mem.lookTarget = [p[0], p[1], p[2]];
+}
+
+/** vanilla PositionTracker.isVisibleBy: a living entity must be alive and among those the villager sees */
+function lookTargetVisible(v: Villager, t: LookTarget): boolean {
+  if (Array.isArray(t)) return true;
+  if (t.e instanceof LivingEntity) return t.e.isAlive && !t.e.removed && v.mem.visibleLiving.includes(t.e);
+  return !t.e.removed;
+}
+
+const isMobDoor = (st: number): boolean => {
+  const n = blk(st).name;
+  return n.endsWith('_door') && n !== 'iron_door';
+};
+
+/** vanilla BlockSetType door sounds (as game/redstone/components' openSound) */
+function doorSound(name: string, open: boolean): string {
+  const wood = /^(crimson|warped)_/.test(name) ? 'nether_wood' : name.startsWith('cherry_') ? 'cherry_wood' : 'wooden';
+  return `block.${wood}_door.${open ? 'open' : 'close'}`;
+}
+
+/** vanilla DoorBlock.setOpen (the other half follows by its shape update) */
+function setDoorOpen(v: Villager, p: Pos, open: boolean): void {
+  const st = v.level.world.getState(p[0], p[1], p[2]), b = blk(st);
+  if (!b.name.endsWith('_door') || b.get(st, 'open') === open) return;
+  v.level.setBlock(p[0], p[1], p[2], b.with(st, 'open', open), 2);
+  v.level.sound.play(doorSound(b.name, open), p[0] + 0.5, p[1] + 0.5, p[2] + 0.5, 1, v.random.nextFloat() * 0.1 + 0.9);
+}
+
+// ---------------------------------------------------------------------------
+// Core behaviours
+
+/** vanilla Swim(0.8) */
+function swim(): BehaviorControl<Villager> {
+  const should = (v: Villager) => (v.inWater && v.fluidHeightWater > (v.eyeHeight < 0.4 ? 0 : 0.4)) || v.inLava;
+  return new Behavior<Villager>({
+    canStart: should,
+    canStillUse: should,
+    tick: (v) => {
+      if (v.random.nextFloat() < 0.8) v.jumpControl.jump();
+    },
+  });
+}
+
+/**
+ * vanilla InteractWithDoor: opens the wooden doors on the path's last and next nodes and remembers them, and shuts
+ * those it has gone through once it's clear of them (not with another villager on the way through). It looks again
+ * only once it has been on a node a moment: in vanilla they bump into a door before they open it
+ */
+function interactWithDoor(): BehaviorControl<Villager> {
+  let lastNode: Node | null = null;
+  let cooldown = 0;
+  return oneShot<Villager>((v) => {
+    const path = v.mem.path;
+    if (!path || path.notStarted() || path.isDone()) return false;
+    const next = path.nextNode;
+    if (lastNode && next && lastNode.x === next.x && lastNode.y === next.y && lastNode.z === next.z) cooldown = 20;
+    else if (--cooldown > 0) return false;
+    lastNode = next;
+    const prev = path.previousNode!;
+    const w = v.level.world;
+    const a: Pos = [prev.x, prev.y, prev.z];
+    if (isMobDoor(w.getState(a[0], a[1], a[2]))) {
+      setDoorOpen(v, a, true);
+      rememberDoor(v, a);
+    }
+    const b: Pos = [next.x, next.y, next.z];
+    const st = w.getState(b[0], b[1], b[2]);
+    if (isMobDoor(st) && !blk(st).get(st, 'open')) {
+      setDoorOpen(v, b, true);
+      rememberDoor(v, b);
+    }
+    if (v.mem.doorsToClose) closeDoorsPassed(v, prev, next);
+    return true;
+  });
+}
+
+function rememberDoor(v: Villager, p: Pos): void {
+  const d = (v.mem.doorsToClose ??= []);
+  if (!d.some((q) => q[0] === p[0] && q[1] === p[1] && q[2] === p[2])) d.push(p);
+}
+
+/** vanilla InteractWithDoor.closeDoorsThatIHaveOpenedOrPassedThrough */
+function closeDoorsPassed(v: Villager, prev: Node | null, next: Node | null): void {
+  const doors = v.mem.doorsToClose;
+  if (!doors) return;
+  const w = v.level.world;
+  for (let i = doors.length - 1; i >= 0; i--) {
+    const p = doors[i];
+    if (samePos(p, prev) || samePos(p, next)) continue;
+    doors.splice(i, 1);
+    // (too far to bother, gone, or already shut: forgotten)
+    if (!closerToCenter(p, v, 3)) continue;
+    const st = w.getState(p[0], p[1], p[2]);
+    if (!isMobDoor(st) || !blk(st).get(st, 'open')) continue;
+    if (othersComingThroughDoor(v, p)) continue;
+    setDoorOpen(v, p, false);
+  }
+  if (!doors.length) v.mem.doorsToClose = null;
+}
+
+/** vanilla areOtherMobsComingThroughDoor: another villager within 2 whose path goes through the door now */
+function othersComingThroughDoor(v: Villager, p: Pos): boolean {
+  return v.mem.nearestLiving.some((e) => {
+    if (!(e instanceof Villager) || (p[0] + 0.5 - e.x) ** 2 + (p[1] + 0.5 - e.y) ** 2 + (p[2] + 0.5 - e.z) ** 2 >= 4) return false;
+    const path = e.mem.path;
+    if (!path || path.isDone()) return false;
+    const a = path.previousNode;
+    return !!a && (samePos(p, a) || samePos(p, path.nextNode));
+  });
+}
+
+/** vanilla LookAtTargetSink(45, 90): eyes on the look target while it's seen, then forget it */
+function lookAtTargetSink(): BehaviorControl<Villager> {
+  return new Behavior<Villager>({
+    min: 45,
+    max: 90,
+    canStart: (v) => !!v.mem.lookTarget,
+    canStillUse: (v) => !!v.mem.lookTarget && lookTargetVisible(v, v.mem.lookTarget),
+    tick: (v) => {
+      const t = v.mem.lookTarget;
+      if (!t) return;
+      if (Array.isArray(t)) v.lookControl.setLookAt(t[0] + 0.5, t[1] + 0.5, t[2] + 0.5);
+      else v.lookControl.setLookAt(t.e.x, t.e.y + (t.eyes ? t.e.eyeHeight : 0), t.e.z);
+    },
+    stop: (v) => {
+      v.mem.lookTarget = null;
+    },
+  });
+}
+
+const isHurt = (v: Villager) => v.mem.hurtBy;
+const hasHostile = (v: Villager) => !!v.mem.nearestHostile;
+
+/** vanilla VillagerPanicTrigger: hurt, or a hostile close by: drop what it was doing and panic */
+function panicTrigger(): BehaviorControl<Villager> {
+  return new Behavior<Villager>({
+    start: (v) => {
+      if (!isHurt(v) && !hasHostile(v)) return;
+      if (!v.brain.isActive('panic')) {
+        const m = v.mem;
+        m.path = null;
+        m.walkTarget = null;
+        m.lookTarget = null;
+        m.interactionTarget = null;
+      }
+      v.brain.setActiveActivityIfPossible('panic', v);
+    },
+    canStillUse: (v) => isHurt(v) || hasHostile(v),
+  });
+}
+
+/** vanilla WakeUp: out of bed whenever it isn't resting */
+function wakeUp(): BehaviorControl<Villager> {
+  return oneShot<Villager>((v) => {
+    if (v.brain.isActive('rest') || !v.isSleeping()) return false;
+    v.stopSleeping();
+    return true;
+  });
+}
+
+type PosMemory = 'home' | 'jobSite' | 'potentialJobSite' | 'meetingPoint';
+
+/** vanilla ValidateNearbyPoi: within 16 of the remembered point, forget it if it's gone, or a bed someone else is in */
+function validateNearbyPoi(mem: PosMemory, want: (v: Villager) => (k: PoiKind) => boolean): BehaviorControl<Villager> {
+  return oneShot<Villager>((v) => {
+    const p = v.mem[mem];
+    if (!p || !closerToCenter(p, v, 16)) return false;
+    const poi = v.level.poi;
+    if (!poi.exists(p[0], p[1], p[2], want(v))) v.mem[mem] = null;
+    else if (bedIsOccupied(v, p)) {
+      v.mem[mem] = null;
+      if (!bedIsOccupiedByVillager(v, p)) poi.release(p[0], p[1], p[2], v);
+    }
+    return true;
+  });
+}
+
+function bedIsOccupied(v: Villager, p: Pos): boolean {
+  const st = v.level.world.getState(p[0], p[1], p[2]), b = blk(st);
+  return b.name.endsWith('_bed') && b.get(st, 'occupied') === true && !v.isSleeping();
+}
+
+function bedIsOccupiedByVillager(v: Villager, p: Pos): boolean {
+  return v.level.entities.some((e) => e instanceof Villager && !e.removed && e.isSleeping() && samePos(e.sleepingPos, { x: p[0], y: p[1], z: p[2] }));
+}
+
+/**
+ * vanilla MoveToTargetSink (150-250 ticks at a time): a path to the walk target, a new one when the target has
+ * moved more than two blocks; done on arriving, or when the path runs out (a stuck one waits up to 2 s to retry)
+ */
+function moveToTargetSink(min = 150, max = 250): BehaviorControl<Villager> {
+  let path: Path | null = null;
+  let lastTarget: Pos | null = null;
+  let speed = 1;
+  let cooldown = 0;
+  const reached = (v: Villager, w: WalkTarget) => manhattan(walkTargetBlock(w), blockPos(v)) <= w.closeEnough;
+  const tryComputePath = (v: Villager, w: WalkTarget, now: number): boolean => {
+    const [x, y, z] = walkTargetBlock(w);
+    path = v.navigation.createPath(x + 0.5, y, z + 0.5, 0);
+    speed = w.speed;
+    if (reached(v, w)) {
+      v.mem.cantReachWalkTargetSince = null;
+      return false;
+    }
+    if (path?.canReach()) v.mem.cantReachWalkTargetSince = null;
+    else if (v.mem.cantReachWalkTargetSince === null) v.mem.cantReachWalkTargetSince = now;
+    if (path) return true;
+    const p = defaultRandomPosTowards(v, 10, 7, x + 0.5, z + 0.5, Math.PI / 2);
+    if (!p) return false;
+    path = v.navigation.createPath(p[0] + 0.5, p[1], p[2] + 0.5, 0);
+    return !!path;
+  };
+  const start = (v: Villager) => {
+    v.mem.path = path;
+    v.navigation.moveToPath(path, speed);
+  };
+  return new Behavior<Villager>({
+    min,
+    max,
+    canStart: (v, now) => {
+      if (v.mem.path || !v.mem.walkTarget) return false;
+      if (cooldown > 0) {
+        cooldown--;
+        return false;
+      }
+      const w = v.mem.walkTarget;
+      const got = reached(v, w);
+      if (!got && tryComputePath(v, w, now)) {
+        lastTarget = walkTargetBlock(w);
+        return true;
+      }
+      v.mem.walkTarget = null;
+      if (got) v.mem.cantReachWalkTargetSince = null;
+      return false;
+    },
+    start,
+    canStillUse: (v) => {
+      const w = v.mem.walkTarget;
+      if (!path || !lastTarget || !w) return false;
+      return !v.navigation.isDone() && !reached(v, w);
+    },
+    tick: (v, now) => {
+      const p = v.navigation.path;
+      if (path !== p) {
+        path = p;
+        v.mem.path = p;
+      }
+      const w = v.mem.walkTarget;
+      if (p && lastTarget && w) {
+        const t = walkTargetBlock(w);
+        if ((t[0] - lastTarget[0]) ** 2 + (t[1] - lastTarget[1]) ** 2 + (t[2] - lastTarget[2]) ** 2 > 4 && tryComputePath(v, w, now)) {
+          lastTarget = t;
+          start(v);
+        }
+      }
+    },
+    stop: (v) => {
+      const w = v.mem.walkTarget;
+      if (w && !reached(v, w) && v.navigation.isStuck) cooldown = v.random.nextInt(40);
+      v.navigation.stop();
+      v.mem.walkTarget = null;
+      v.mem.path = null;
+      path = null;
+    },
+  });
+}
+
+/** vanilla PoiCompetitorScan: of the villagers claiming the same workstation, the most experienced keeps it */
+function poiCompetitorScan(): BehaviorControl<Villager> {
+  return oneShot<Villager>((v) => {
+    const j = v.mem.jobSite;
+    if (!j) return false;
+    const k = v.level.poi.kindAt(j[0], j[1], j[2]);
+    if (!k) return true;
+    let winner: Villager = v;
+    for (const e of v.mem.nearestLiving) {
+      if (!(e instanceof Villager) || e === v || !e.isAlive) continue;
+      const ej = e.mem.jobSite;
+      if (!ej || ej[0] !== j[0] || ej[1] !== j[1] || ej[2] !== j[2] || !heldJobSite(e.profession)(k)) continue;
+      // (vanilla selectWinner: the loser forgets the workstation)
+      if (winner.xp > e.xp) e.mem.jobSite = null;
+      else {
+        winner.mem.jobSite = null;
+        winner = e;
+      }
+    }
+    return true;
+  });
+}
+
+/** vanilla LookAndFollowTradingPlayerSink: keeps close to, and eyes on, whoever it's trading with */
+function lookAndFollowTradingPlayer(): BehaviorControl<Villager> {
+  const can = (v: Villager) => {
+    const p = v.tradingPlayer;
+    return v.isAlive && !!p && !v.inWater && v.distanceToSqr(p.x, p.y, p.z) <= 16;
+  };
+  const follow = (v: Villager) => {
+    const p = v.tradingPlayer!;
+    v.mem.walkTarget = walkAfter(p, SPEED, 2);
+    v.mem.lookTarget = { e: p, eyes: true };
+  };
+  return new Behavior<Villager>({
+    timesOut: false,
+    canStart: can,
+    canStillUse: can,
+    start: follow,
+    tick: follow,
+    stop: (v) => {
+      v.mem.walkTarget = null;
+      v.mem.lookTarget = null;
+    },
+  });
+}
+
+/** vanilla AcquirePoi.JitteredLinearRetry: a point it couldn't reach is tried again later, and less often each time */
+interface Retry {
+  previous: number;
+  next: number;
+  delay: number;
+}
+
+function markAttempt(r: Retry, now: number, v: Villager): void {
+  r.previous = now;
+  r.delay = Math.min(r.delay + v.random.nextInt(40) + 40, 400);
+  r.next = now + r.delay;
+}
+
+/**
+ * vanilla AcquirePoi: every 1-2 s, of the nearest five free points of a kind within 48 (leaving out those it's
+ * waiting to retry), the first it has a way to; it takes a ticket there and remembers the place (with happy sparkles
+ * for a bed or the bell). Points it couldn't reach wait their turn to be tried again
+ */
+function acquirePoi(
+  mem: PosMemory,
+  absent: PosMemory[],
+  want: (v: Villager) => (k: PoiKind) => boolean,
+  onlyIfAdult: boolean,
+  sparkle: boolean,
+  poiOk: (v: Villager, p: Pos) => boolean = () => true,
+): BehaviorControl<Villager> {
+  let nextAt = 0;
+  const retries = new Map<string, Retry>();
+  return oneShot<Villager>((v, now) => {
+    if (v.mem[mem] || absent.some((m) => v.mem[m])) return false;
+    if (onlyIfAdult && v.isBaby()) return false;
+    if (nextAt === 0) {
+      nextAt = now + v.random.nextInt(20);
+      return false;
+    }
+    if (now < nextAt) return false;
+    nextAt = now + 20 + v.random.nextInt(20);
+    for (const [k, r] of retries) if (now - r.previous >= 400) retries.delete(k);
+    const [bx, by, bz] = blockPos(v);
+    const candidates: Pos[] = [];
+    for (const [x, y, z] of v.level.poi.findAll(bx, by, bz, 48, want(v), true)) {
+      const r = retries.get(key([x, y, z]));
+      if (r) {
+        if (now < r.next) continue;
+        markAttempt(r, now, v);
+      }
+      candidates.push([x, y, z]);
+      if (candidates.length >= 5) break;
+    }
+    const set = candidates.filter((p) => poiOk(v, p));
+    // (vanilla findPathToPois: one search for the nearest reachable; here each in turn, nearest first)
+    const range = mem === 'meetingPoint' ? 6 : 1;
+    let got: Pos | null = null;
+    for (const p of set) {
+      const path = v.navigation.createPathToBlock(p[0], p[1], p[2], range);
+      if (path?.canReach()) {
+        got = p;
+        break;
+      }
+    }
+    if (got && v.level.poi.take(got[0], got[1], got[2], v)) {
+      v.mem[mem] = got;
+      if (sparkle) v.addParticlesAroundSelf('happy_villager');
+      retries.clear();
+    } else {
+      for (const p of set) {
+        const k = key(p);
+        if (!retries.has(k)) {
+          const r: Retry = { previous: 0, next: 0, delay: 0 };
+          markAttempt(r, now, v);
+          retries.set(k, r);
+        }
+      }
+    }
+    return true;
+  });
+}
+
+/** vanilla VillagerGoalPackages.validateBedPoi: a bed nobody's in */
+function freeBed(v: Villager, p: Pos): boolean {
+  const st = v.level.world.getState(p[0], p[1], p[2]), b = blk(st);
+  return b.name.endsWith('_bed') && !b.get(st, 'occupied');
+}
+
+/** vanilla GoToPotentialJobSite: walks to the workstation it has its eye on for up to a minute, then gives up on it */
+function goToPotentialJobSite(): BehaviorControl<Villager> {
+  return new Behavior<Villager>({
+    min: 1200,
+    max: 1200,
+    canStart: (v) => {
+      if (!v.mem.potentialJobSite) return false;
+      const a = v.brain.activeNonCore();
+      return !a || a === 'idle' || a === 'work' || a === 'play';
+    },
+    canStillUse: (v) => !!v.mem.potentialJobSite,
+    tick: (v) => setWalkAndLook(v, v.mem.potentialJobSite!, SPEED, 1),
+    stop: (v) => {
+      const p = v.mem.potentialJobSite;
+      if (p) v.level.poi.release(p[0], p[1], p[2], v);
+      v.mem.potentialJobSite = null;
+    },
+  });
+}
+
+/**
+ * vanilla AssignProfessionFromJobSite: within two blocks of it (or at once, for a villager a village was built
+ * with), the workstation becomes its job site, and a jobless villager takes up its profession
+ */
+function assignProfessionFromJobSite(): BehaviorControl<Villager> {
+  return oneShot<Villager>((v) => {
+    const p = v.mem.potentialJobSite;
+    if (!p) return false;
+    if (!closerToCenter(p, v, 2) && !v.assignProfessionWhenSpawned) return false;
+    v.mem.potentialJobSite = null;
+    v.mem.jobSite = p;
+    v.addParticlesAroundSelf('happy_villager');
+    if (v.profession !== 'none') return true;
+    const k = v.level.poi.kindAt(p[0], p[1], p[2]);
+    if (k && JOB_KINDS.has(k)) {
+      v.setProfession(k as Profession);
+      v.refreshBrain();
+    }
+    return true;
+  });
+}
+
+/** vanilla ResetProfession: without a job site, a villager nobody has traded with yet forgets its profession */
+function resetProfession(): BehaviorControl<Villager> {
+  return oneShot<Villager>((v) => {
+    if (v.mem.jobSite) return false;
+    if (v.profession === 'none' || v.profession === 'nitwit' || v.xp !== 0 || v.merchantLevel > 1) return false;
+    v.setProfession('none');
+    v.refreshBrain();
+    return true;
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Activity behaviours
+
+/** vanilla SetEntityLookTarget: with nothing to look at, the nearest seen within `range` that fits */
+function lookAtNearest(pred: (e: LivingEntity) => boolean, range: number): BehaviorControl<Villager> {
+  return oneShot<Villager>((v) => {
+    if (v.mem.lookTarget) return false;
+    const e = v.mem.visibleLiving.find((e) => pred(e) && e.distanceToSqr(v.x, v.y, v.z) <= range * range);
+    if (!e) return false;
+    v.mem.lookTarget = { e, eyes: true };
+    return true;
+  });
+}
+
+const isType = (t: string) => (e: LivingEntity): boolean => e.type === t;
+const inCategory = (c: MobCategory) => (e: LivingEntity): boolean => (e as { category?: MobCategory }).category === c;
+
+/** vanilla getMinimalLookBehavior */
+function minimalLook(): BehaviorControl<Villager> {
+  return runOne<Villager>([
+    [lookAtNearest(isType('villager'), 8), 2],
+    [lookAtNearest(isType('player'), 8), 2],
+    [doNothing(30, 60), 8],
+  ]);
+}
+
+/** vanilla getFullLookBehavior (cats and the water mobs this game doesn't have yet never turn up) */
+function fullLook(): BehaviorControl<Villager> {
+  return runOne<Villager>([
+    [lookAtNearest(isType('cat'), 8), 8],
+    [lookAtNearest(isType('villager'), 8), 2],
+    [lookAtNearest(isType('player'), 8), 2],
+    [lookAtNearest(inCategory('creature'), 8), 1],
+    [lookAtNearest(inCategory('water_creature'), 8), 1],
+    [lookAtNearest(inCategory('monster'), 8), 1],
+    [doNothing(30, 60), 2],
+  ]);
+}
+
+/** vanilla UpdateActivityFromSchedule */
+function updateActivityFromSchedule(): BehaviorControl<Villager> {
+  return oneShot<Villager>((v, now) => {
+    v.updateActivityFromSchedule(now);
+    return true;
+  });
+}
+
+/**
+ * vanilla SetWalkTargetFromBlockMemory: more than `closeEnough` from the place, head there (over `tooFar`, a step
+ * its way); a place it hasn't been able to reach for `tooLong` ticks it lets go of
+ */
+function setWalkTargetFromBlockMemory(mem: PosMemory, speed: number, closeEnough: number, tooFar: number, tooLong: number): BehaviorControl<Villager> {
+  return oneShot<Villager>((v, now) => {
+    const p = v.mem[mem];
+    if (v.mem.walkTarget || !p) return false;
+    const cant = v.mem.cantReachWalkTargetSince;
+    const giveUp = () => {
+      v.releasePoi(mem);
+      v.mem.cantReachWalkTargetSince = now;
+    };
+    if (cant !== null && now - cant > tooLong) {
+      giveUp();
+      return true;
+    }
+    const bp = blockPos(v);
+    const d = manhattan(p, bp);
+    if (d > tooFar) {
+      let q: Pos | null = null;
+      // (vanilla keeps trying a thousand times)
+      for (let i = 0; i < 100 && (!q || manhattan(q, bp) > tooFar); i++) q = defaultRandomPosTowards(v, 15, 7, p[0] + 0.5, p[2] + 0.5, Math.PI / 2);
+      if (!q || manhattan(q, bp) > tooFar) {
+        giveUp();
+        return true;
+      }
+      v.mem.walkTarget = walkTo(q, speed, closeEnough);
+    } else if (d > closeEnough) v.mem.walkTarget = walkTo(p, speed, closeEnough);
+    return true;
+  });
+}
+
+/** vanilla StrollAroundPoi: near the place, a random spot about every 9 s */
+function strollAroundPoi(mem: PosMemory, speed: number, maxDist: number): (v: Villager, now: number) => boolean {
+  let nextAt = 0;
+  return (v, now) => {
+    const p = v.mem[mem];
+    if (!p || !closerToCenter(p, v, maxDist)) return false;
+    if (now <= nextAt) return true;
+    const q = landRandomPos(v, 8, 6);
+    v.mem.walkTarget = q ? walkTo(q, speed, 1) : null;
+    nextAt = now + 180;
+    return true;
+  };
+}
+
+/** vanilla StrollToPoi: near the place, back to it every 4 s */
+function strollToPoi(mem: PosMemory, speed: number, closeEnough: number, maxDist: number): BehaviorControl<Villager> {
+  let nextAt = 0;
+  return oneShot<Villager>((v, now) => {
+    const p = v.mem[mem];
+    if (!p || !closerToCenter(p, v, maxDist)) return false;
+    if (now <= nextAt) return true;
+    v.mem.walkTarget = walkTo(p, speed, closeEnough);
+    nextAt = now + 80;
+    return true;
+  });
+}
+
+/** vanilla WorkAtPoi: now and then (at most every 15 s), at its workstation: the work sound, and a restock if due */
+function workAtPoi(): BehaviorControl<Villager> {
+  let lastCheck = 0;
+  const near = (v: Villager) => !!v.mem.jobSite && closerToCenter(v.mem.jobSite, v, 1.73);
+  return new Behavior<Villager>({
+    canStart: (v, now) => {
+      if (!v.mem.jobSite || now - lastCheck < 300 || v.random.nextInt(2) !== 0) return false;
+      lastCheck = now;
+      return near(v);
+    },
+    start: (v, now) => {
+      v.mem.lastWorkedAtPoi = now;
+      const j = v.mem.jobSite!;
+      v.mem.lookTarget = [j[0], j[1], j[2]];
+      v.playWorkSound();
+      if (v.shouldRestock()) v.restock();
+    },
+    canStillUse: near,
+  });
+}
+
+/** vanilla SetLookAndInteract(PLAYER, 4): a player within 4 becomes whom it's dealing with */
+function setLookAndInteractWithPlayer(): BehaviorControl<Villager> {
+  return oneShot<Villager>((v) => {
+    if (v.mem.interactionTarget) return false;
+    const p = v.mem.visibleLiving.find((e) => e.type === 'player' && e.distanceToSqr(v.x, v.y, v.z) <= 16);
+    if (!p) return false;
+    v.mem.interactionTarget = p;
+    v.mem.lookTarget = { e: p, eyes: true };
+    return true;
+  });
+}
+
+/** vanilla InteractWith.of(type, 8, INTERACTION_TARGET, speed, 2): up to the nearest of a kind within 8 */
+function interactWith(type: string, speed: number): BehaviorControl<Villager> {
+  return oneShot<Villager>((v) => {
+    if (v.mem.walkTarget) return false;
+    const vis = v.mem.visibleLiving;
+    if (!vis.some(isType(type))) return false;
+    const t = vis.find((e) => e.type === type && e.distanceToSqr(v.x, v.y, v.z) <= 64);
+    if (t) {
+      v.mem.interactionTarget = t;
+      v.mem.lookTarget = { e: t, eyes: true };
+      v.mem.walkTarget = walkAfter(t, speed, 2);
+    }
+    return true;
+  });
+}
+
+/**
+ * vanilla VillageBoundRandomStroll: a random spot within 10 (7 up or down) inside a village; outside one, a step
+ * towards the nearest village section within two
+ */
+function villageBoundRandomStroll(speed: number, xz = 10, y = 7): BehaviorControl<Villager> {
+  return oneShot<Villager>((v) => {
+    if (v.mem.walkTarget) return false;
+    const poi = v.level.poi;
+    const [bx, by, bz] = blockPos(v);
+    let q: Pos | null;
+    if (poi.isVillage(bx, by, bz)) q = landRandomPos(v, xz, y);
+    else {
+      // (vanilla BehaviorUtils.findSectionClosestToVillage(level, section, 2))
+      const sx = bx >> 4, sy = by >> 4, sz = bz >> 4;
+      const near = poi.villageSectionsNear(sx, sz, 8);
+      let best = sectionsTo(near, sx, sy, sz), to: Pos | null = null;
+      for (let dx = -2; dx <= 2; dx++)
+        for (let dy = -2; dy <= 2; dy++)
+          for (let dz = -2; dz <= 2; dz++) {
+            if (!dx && !dy && !dz) continue;
+            const d = sectionsTo(near, sx + dx, sy + dy, sz + dz);
+            if (d < best) {
+              best = d;
+              to = [sx + dx, sy + dy, sz + dz];
+            }
+          }
+      q = to ? defaultRandomPosTowards(v, xz, y, to[0] * 16 + 8, to[2] * 16 + 8, Math.PI / 2) : landRandomPos(v, xz, y);
+    }
+    v.mem.walkTarget = q ? walkTo(q, speed, 0) : null;
+    return true;
+  });
+}
+
+/** vanilla SetWalkTargetFromLookTarget(speed, closeEnough): off towards whatever it's looking at */
+function walkToLookTarget(speed: number, closeEnough: number): BehaviorControl<Villager> {
+  return oneShot<Villager>((v) => {
+    const t = v.mem.lookTarget;
+    if (v.mem.walkTarget || !t) return false;
+    v.mem.walkTarget = Array.isArray(t) ? walkTo(t, speed, closeEnough) : walkAfter(t.e, speed, closeEnough);
+    return true;
+  });
+}
+
+/** vanilla SleepInBed: at its bed at night (not just woken, the bed free), it lies down; up again when rest is over */
+function sleepInBed(): BehaviorControl<Villager> {
+  let nextOkStartTime = 0;
+  return new Behavior<Villager>({
+    timesOut: false,
+    canStart: (v, now) => {
+      const h = v.mem.home;
+      if (!h || v.vehicle) return false;
+      const lw = v.mem.lastWoken;
+      if (lw !== null) {
+        const i = now - lw;
+        if (i > 0 && i < 100) return false;
+      }
+      return closerToCenter(h, v, 2) && freeBed(v, h);
+    },
+    canStillUse: (v) => {
+      const h = v.mem.home;
+      return !!h && v.brain.isActive('rest') && v.y > h[1] + 0.4 && closerToCenter(h, v, 1.14);
+    },
+    start: (v, now) => {
+      if (now <= nextOkStartTime) return;
+      if (v.mem.doorsToClose) closeDoorsPassed(v, null, null);
+      v.startSleeping(v.mem.home!);
+    },
+    stop: (v, now) => {
+      if (!v.isSleeping()) return;
+      v.stopSleeping();
+      nextOkStartTime = now + 40;
+    },
+  });
+}
+
+/** vanilla SetClosestHomeAsWalkTarget: homeless at night, off to the nearest bed within 48 it has a way to */
+function setClosestHomeAsWalkTarget(speed: number): BehaviorControl<Villager> {
+  let nextAt = 0;
+  const tried = new Map<string, number>();
+  return oneShot<Villager>((v, now) => {
+    if (v.mem.walkTarget || v.mem.home || now - nextAt < 20) return false;
+    const [bx, by, bz] = blockPos(v);
+    const all = v.level.poi.findAll(bx, by, bz, 48, (k) => k === 'home', false);
+    if (!all.length) return false;
+    const [cx, cy, cz] = all[0];
+    if ((cx - bx) ** 2 + (cy - by) ** 2 + (cz - bz) ** 2 <= 4) return false;
+    nextAt = now + v.random.nextInt(20);
+    const batch: Pos[] = [];
+    for (const [x, y, z] of all) {
+      const k = key([x, y, z]);
+      if (tried.has(k)) continue;
+      if (batch.length >= 4) break;
+      tried.set(k, nextAt + 40);
+      batch.push([x, y, z]);
+    }
+    let got: Pos | null = null;
+    for (const p of batch) {
+      if (v.navigation.createPathToBlock(p[0], p[1], p[2], 1)?.canReach()) {
+        got = p;
+        break;
+      }
+    }
+    if (got) v.mem.walkTarget = walkTo(got, speed, 1);
+    else if (batch.length < 4) for (const [k, t] of tried) if (t < nextAt) tried.delete(k);
+    return true;
+  });
+}
+
+/** vanilla InsideBrownianWalk: indoors, a shuffle to a spot beside it under a roof */
+function insideBrownianWalk(speed: number): BehaviorControl<Villager> {
+  return oneShot<Villager>((v) => {
+    if (v.mem.walkTarget) return false;
+    const [bx, by, bz] = blockPos(v);
+    const lvl = v.level;
+    if (lvl.canSeeSky(bx, by, bz)) return false;
+    const around: Pos[] = [];
+    for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (let dz = -1; dz <= 1; dz++) around.push([bx + dx, by + dy, bz + dz]);
+    for (let i = around.length - 1; i > 0; i--) {
+      const j = v.random.nextInt(i + 1);
+      [around[i], around[j]] = [around[j], around[i]];
+    }
+    // (vanilla loadedAndEntityCanStandOn: a block with a solid top to stand on)
+    const p = around.find(([x, y, z]) => !lvl.canSeeSky(x, y, z) && (FLAGS[lvl.world.getState(x, y, z)] & F_FULL_COLLISION) !== 0);
+    if (p) v.mem.walkTarget = walkTo(p, speed, 0);
+    return true;
+  });
+}
+
+/** vanilla GoToClosestVillage: outside a village at night, a walk towards the nearest one */
+function goToClosestVillage(speed: number, closeEnough: number): BehaviorControl<Villager> {
+  return oneShot<Villager>((v) => {
+    if (v.mem.walkTarget) return false;
+    const poi = v.level.poi;
+    const [bx, by, bz] = blockPos(v);
+    if (poi.isVillage(bx, by, bz)) return false;
+    const here = poi.sectionsToVillage(bx >> 4, by >> 4, bz >> 4);
+    let q: Pos | null = null;
+    for (let j = 0; j < 5; j++) {
+      const p = landRandomPos(v, 15, 7);
+      if (!p) continue;
+      const k = poi.sectionsToVillage(p[0] >> 4, p[1] >> 4, p[2] >> 4);
+      if (k < here) {
+        q = p;
+        break;
+      }
+      if (k === here) q = p;
+    }
+    if (q) v.mem.walkTarget = walkTo(q, speed, closeEnough);
+    return true;
+  });
+}
+
+/** vanilla SocializeAtBell: by the bell, now and then off to the nearest villager within 5½ */
+function socializeAtBell(v: Villager): boolean {
+  const m = v.mem, p = m.meetingPoint;
+  if (!p || m.interactionTarget || v.random.nextInt(100) !== 0 || !closerToCenter(p, v, 4)) return false;
+  if (!m.visibleLiving.some(isType('villager'))) return false;
+  const t = m.visibleLiving.find((e) => e.type === 'villager' && e.distanceToSqr(v.x, v.y, v.z) <= 32);
+  if (t) {
+    m.interactionTarget = t;
+    m.lookTarget = { e: t, eyes: true };
+    m.walkTarget = walkAfter(t, 0.3, 1);
+  }
+  return true;
+}
+
+/** vanilla VillagerCalmDown: nothing hurt it lately, no hostile near, the attacker 6 away: back to the schedule */
+function villagerCalmDown(): BehaviorControl<Villager> {
+  return oneShot<Villager>((v, now) => {
+    const m = v.mem, a = m.hurtByEntity;
+    const still = m.hurtBy || !!m.nearestHostile || (!!a && a.distanceToSqr(v.x, v.y, v.z) <= 36);
+    if (!still) {
+      m.hurtBy = false;
+      m.hurtByEntity = null;
+      v.updateActivityFromSchedule(now);
+    }
+    return true;
+  });
+}
+
+/**
+ * vanilla SetWalkTargetAwayFrom.entity(memory, speed, 6, false): within 6 of it, off up to 16 the other way (a walk
+ * target already leading away at this speed stays)
+ */
+function walkAwayFrom(get: (v: Villager) => LivingEntity | null, speed: number): BehaviorControl<Villager> {
+  return oneShot<Villager>((v) => {
+    const t = get(v);
+    if (!t) return false;
+    const w = v.mem.walkTarget;
+    if (w) return false;
+    if ((t.x - v.x) ** 2 + (t.y - v.y) ** 2 + (t.z - v.z) ** 2 >= 36) return false;
+    for (let i = 0; i < 10; i++) {
+      const p = landRandomPosAway(v, 16, 7, t.x, t.z);
+      if (p) {
+        v.mem.walkTarget = walkTo(p, speed, 0);
+        break;
+      }
+    }
+    return true;
+  });
+}
+
+/**
+ * vanilla PlayTagWithOtherKids: a baby now and then runs from a friend who's after it, or chases a friend (one
+ * somebody's already chasing, if fewer than six are)
+ */
+function playTagWithOtherKids(): BehaviorControl<Villager> {
+  return oneShot<Villager>((v) => {
+    const kids = v.mem.visibleBabies;
+    if (!kids || v.mem.walkTarget || v.random.nextInt(10) !== 0) return false;
+    const chase = (k: Villager) => {
+      v.mem.interactionTarget = k;
+      v.mem.lookTarget = { e: k, eyes: true };
+      v.mem.walkTarget = walkAfter(k, 0.6, 1);
+    };
+    if (!kids.some((k) => k.mem.interactionTarget === v)) {
+      const chasers = new Map<LivingEntity, number>();
+      for (const k of kids) {
+        const t = k.mem.interactionTarget;
+        if (t) chasers.set(t, (chasers.get(t) ?? 0) + 1);
+      }
+      const chased = [...chasers].filter(([, n]) => n > 0 && n <= 5).sort((a, b) => a[1] - b[1])[0];
+      if (chased && chased[0] instanceof Villager) chase(chased[0]);
+      else chase(kids[v.random.nextInt(kids.length)]);
+      return true;
+    }
+    for (let i = 0; i < 10; i++) {
+      const p = landRandomPos(v, 20, 8);
+      if (p && v.level.poi.isVillage(p[0], p[1], p[2])) {
+        v.mem.walkTarget = walkTo(p, 0.6, 0);
+        break;
+      }
+    }
+    return true;
+  });
+}
+
+// ---------------------------------------------------------------------------
+
+/** vanilla Villager */
+export class Villager extends AgeableMob {
+  readonly type = 'villager';
+  readonly category: MobCategory = 'misc';
+  protected readonly adultWidth = 0.6;
+  protected readonly adultHeight = 1.95;
+
+  villagerType: VillagerType = 'plains';
+  profession: Profession = 'none';
+  /** vanilla VillagerData.level: 1 (novice) to 5 (master) */
+  merchantLevel = 1;
+  /** vanilla villagerXp */
+  xp = 0;
+  private offers: MerchantOffer[] | null = null;
+  tradingPlayer: Player | null = null;
+  /** vanilla unhappyCounter: shaking its head */
+  unhappyCounter = 0;
+  private updateMerchantTimer = 0;
+  private increaseProfessionLevelOnUpdate = false;
+  private lastTradedPlayer: Player | null = null;
+  private lastRestockGameTime = 0;
+  private numberOfRestocksToday = 0;
+  private lastRestockCheckDayTime = 0;
+  /** vanilla assignProfessionWhenSpawned: one a village was built with takes the first workstation it finds at once */
+  assignProfessionWhenSpawned = false;
+  /** vanilla sleepingPos: the head of the bed it's asleep in */
+  sleepingPos: Pos | null = null;
+  /** the day the sensors run (vanilla Sensor timeToTick) */
+  private readonly sensePhase = Math.floor(Math.random() * 20);
+  /** vanilla lastDamageStamp: the game time it was last hurt */
+  private lastDamageStamp = -1000;
+
+  readonly mem: VillagerMemories = {
+    home: null, jobSite: null, potentialJobSite: null, meetingPoint: null, walkTarget: null, lookTarget: null, interactionTarget: null, path: null,
+    cantReachWalkTargetSince: null, lastSlept: null, lastWoken: null, lastWorkedAtPoi: null, hurtBy: false, hurtByEntity: null, nearestHostile: null,
+    doorsToClose: null, nearestLiving: [], visibleLiving: [], visibleBabies: null,
+  };
+  brain: Brain<Villager, VillagerActivity>;
+
+  constructor(level: Level) {
+    super(level);
+    this.setSize(0.6, 1.95);
+    this.maxHealth = this.health = 20;
+    this.moveSpeedAttr = 0.5;
+    this.followRange = 48;
+    // (vanilla: GroundPathNavigation.setCanOpenDoors, setCanFloat)
+    this.ownNavigation.evaluator.canOpenDoors = true;
+    this.ownNavigation.canFloat = true;
+    this.brain = this.makeBrain();
+  }
+
+  protected registerGoals(): void {
+    // (a brain mob: everything runs from customServerAiStep)
+  }
+
+  // --- the brain (vanilla Villager.registerBrainGoals) ------------------------
+
+  private makeBrain(): Brain<Villager, VillagerActivity> {
+    const b = new Brain<Villager, VillagerActivity>('idle', ['core']);
+    if (this.isBaby()) b.add('play', playPackage());
+    else b.add('work', workPackage(), (v) => !!v.mem.jobSite);
+    b.add('core', corePackage());
+    b.add('meet', meetPackage(), (v) => !!v.mem.meetingPoint);
+    b.add('rest', restPackage());
+    b.add('idle', idlePackage());
+    b.add('panic', panicPackage());
+    b.setActiveActivityIfPossible('idle', this);
+    return b;
+  }
+
+  /** vanilla Villager.refreshBrain: the behaviours made anew (a new profession, grown up); the memories stay */
+  refreshBrain(): void {
+    this.brain.stopAll(this, this.level.gameTime);
+    this.brain = this.makeBrain();
+    this.updateActivityFromSchedule(this.level.gameTime, true);
+  }
+
+  /** vanilla Brain.updateActivityFromSchedule */
+  updateActivityFromSchedule(now: number, force = false): void {
+    const want = scheduledActivity(this.isBaby() ? BABY_SCHEDULE : DEFAULT_SCHEDULE, this.level.dayTime);
+    if (force) this.brain.setActiveActivityIfPossible(want, this);
+    else this.brain.updateActivityFromSchedule(this, want, now);
+  }
+
+  protected override ageBoundaryReached(): void {
+    this.refreshBrain();
+  }
+
+  // --- sensing (vanilla NearestLivingEntitySensor, VillagerHostilesSensor, VillagerBabiesSensor, HurtBySensor) ---
+
+  /** vanilla Sensor.isEntityTargetable (TargetingConditions.forNonCombat().range(16)) */
+  private visible(e: LivingEntity): boolean {
+    if (e.type === 'player' && (e as Player).gameMode === 'spectator') return false;
+    const r = Math.max(SENSE_RANGE * e.visibilityPercent(this), 2);
+    return e.distanceToSqr(this.x, this.y, this.z) <= r * r && this.sensing.hasLineOfSight(e);
+  }
+
+  private sense(): void {
+    const m = this.mem, r = SENSE_RANGE, now = this.level.gameTime;
+    const near = this.level.getEntities(this.bb.inflate(r, r, r), (e) => e instanceof LivingEntity && e.isAlive, this) as LivingEntity[];
+    near.sort((a, b) => a.distanceToSqr(this.x, this.y, this.z) - b.distanceToSqr(this.x, this.y, this.z));
+    m.nearestLiving = near;
+    m.visibleLiving = near.filter((e) => this.visible(e));
+    m.nearestHostile = m.visibleLiving.find((e) => {
+      const d = HOSTILE_DISTANCE[e.type];
+      return d !== undefined && e.distanceToSqr(this.x, this.y, this.z) <= d * d;
+    }) ?? null;
+    const babies = m.visibleLiving.filter((e): e is Villager => e instanceof Villager && e.isBaby());
+    m.visibleBabies = babies.length ? babies : null;
+    // vanilla HurtBySensor: the last hit within two seconds, and who dealt it (forgotten once dead or gone)
+    if (now - this.lastDamageStamp <= 40) {
+      m.hurtBy = true;
+      const a = this.lastHurtByMob;
+      if (a) m.hurtByEntity = a;
+    } else m.hurtBy = false;
+    if (m.hurtByEntity && (!m.hurtByEntity.isAlive || m.hurtByEntity.removed)) m.hurtByEntity = null;
+    // (an entity memory lapses when the entity leaves the world)
+    const it = m.interactionTarget;
+    if (it && (it.removed || !it.isAlive)) m.interactionTarget = null;
+  }
+
+  // --- ticking ---------------------------------------------------------------
+
+  override tick(): void {
+    super.tick();
+    if (this.unhappyCounter > 0) this.unhappyCounter--;
+    // vanilla LivingEntity.tick: asleep in a bed that's gone
+    if (this.sleepingPos && !this.bedOrientation()) this.stopSleeping();
+  }
+
+  protected override customServerAiStep(): void {
+    const now = this.level.gameTime;
+    if ((this.tickCount + this.sensePhase) % 20 === 0 || this.tickCount === 1) this.sense();
+    this.brain.tick(this, now);
+    this.assignProfessionWhenSpawned = false;
+    if (!this.isTrading() && this.updateMerchantTimer > 0) {
+      this.updateMerchantTimer--;
+      if (this.updateMerchantTimer <= 0) {
+        if (this.increaseProfessionLevelOnUpdate) {
+          this.increaseMerchantCareer();
+          this.increaseProfessionLevelOnUpdate = false;
+        }
+        this.addEffect(new MobEffectInstance(MOB_EFFECTS.regeneration, 200, 0));
+      }
+    }
+    if (this.lastTradedPlayer) {
+      // (vanilla entity event 14)
+      this.addParticlesAroundSelf('happy_villager');
+      this.lastTradedPlayer = null;
+    }
+    if (this.profession === 'none' && this.isTrading()) this.stopTrading();
+    super.customServerAiStep();
+  }
+
+  // --- data ------------------------------------------------------------------
+
+  setProfession(p: Profession): void {
+    if (p !== this.profession) this.offers = null;
+    this.profession = p;
+  }
+
+  /** vanilla Villager.finalizeSpawn */
+  override finalizeSpawn(reason: SpawnReason, group?: SpawnGroup): void {
+    if (reason === 'breeding') this.setProfession('none');
+    if (reason === 'command' || reason === 'egg' || reason === 'spawner') this.villagerType = villagerTypeAt(this.level, this.x, this.y, this.z);
+    if (reason === 'structure') this.assignProfessionWhenSpawned = true;
+    super.finalizeSpawn(reason, group);
+  }
+
+  override removeWhenFarAway(): boolean {
+    return false;
+  }
+
+  override get eyeHeight(): number {
+    if (this.sleepingPos) return 0.2;
+    return this.isBaby() ? 0.81 : 1.62;
+  }
+
+  /** the eye height standing (vanilla getEyeHeight(Pose.STANDING)): where a sleeper's head lies */
+  standingEyeHeight(): number {
+    return this.isBaby() ? 0.81 : 1.62;
+  }
+
+  override refreshSize(): void {
+    if (this.sleepingPos) this.setSize(0.2, 0.2);
+    else super.refreshSize();
+  }
+
+  /** vanilla Villager.addParticlesAroundSelf (entity events 12-14: hearts, anger, sparkles) */
+  addParticlesAroundSelf(kind: string): void {
+    const r = this.random;
+    for (let i = 0; i < 5; i++) {
+      const dx = r.gaussian() * 0.02, dy = r.gaussian() * 0.02, dz = r.gaussian() * 0.02;
+      this.level.particles.spawn?.(kind, this.x + this.width * (2 * r.nextDouble() - 1), this.y + this.height * r.nextDouble() + 1, this.z + this.width * (2 * r.nextDouble() - 1), dx, dy, dz);
+    }
+  }
+
+  // --- points of interest ----------------------------------------------------
+
+  /** vanilla Villager.releasePoi: let go of the place's ticket and forget it */
+  releasePoi(mem: PosMemory): void {
+    const p = this.mem[mem];
+    if (p) this.level.poi.release(p[0], p[1], p[2], this);
+    this.mem[mem] = null;
+  }
+
+  /** vanilla releaseAllPois */
+  releaseAllPois(): void {
+    this.releasePoi('home');
+    this.releasePoi('jobSite');
+    this.releasePoi('potentialJobSite');
+    this.releasePoi('meetingPoint');
+  }
+
+  // --- sleeping (vanilla LivingEntity.startSleeping / stopSleeping, Villager's) -------------------------------
+
+  isSleeping(): boolean {
+    return this.sleepingPos !== null;
+  }
+
+  /** the bed's facing while asleep (vanilla getBedOrientation) */
+  bedOrientation(): string | null {
+    const p = this.sleepingPos;
+    if (!p) return null;
+    const st = this.level.world.getState(p[0], p[1], p[2]), b = blk(st);
+    return b.name.endsWith('_bed') ? b.get<string>(st, 'facing') : null;
+  }
+
+  startSleeping(p: Pos): void {
+    if (this.vehicle) this.stopRiding();
+    const [x, y, z] = p;
+    const st = this.level.world.getState(x, y, z), b = blk(st);
+    if (b.name.endsWith('_bed')) this.level.setBlock(x, y, z, b.with(st, 'occupied', true));
+    this.sleepingPos = [x, y, z];
+    this.setSize(0.2, 0.2);
+    this.setPos(x + 0.5, y + 0.6875, z + 0.5);
+    this.dx = this.dy = this.dz = 0;
+    this.mem.lastSlept = this.level.gameTime;
+    this.mem.walkTarget = null;
+    this.mem.cantReachWalkTargetSince = null;
+    this.navigation.stop();
+  }
+
+  stopSleeping(): void {
+    const p = this.sleepingPos;
+    if (!p) return;
+    this.sleepingPos = null;
+    const [x, y, z] = p;
+    const w = this.level.world;
+    const st = w.getState(x, y, z), b = blk(st);
+    this.refreshSize();
+    if (b.name.endsWith('_bed')) {
+      this.level.setBlock(x, y, z, b.with(st, 'occupied', false));
+      const at = findStandUpPosition(w, x, y, z, b.get<string>(st, 'facing'), this.yaw) ?? [x + 0.5, y + 1.1, z + 0.5];
+      const yaw = wrapDegrees((Math.atan2(z + 0.5 - at[2], x + 0.5 - at[0]) * 180) / Math.PI - 90);
+      this.moveTo(at[0], at[1], at[2], yaw, 0);
+    }
+    this.mem.lastWoken = this.level.gameTime;
+  }
+
+  // --- trading (vanilla AbstractVillager / Villager as a Merchant) ---------------------------------------------
+
+  isTrading(): boolean {
+    return this.tradingPlayer !== null;
+  }
+
+  /** vanilla AbstractVillager.getOffers: made the first time they're asked for */
+  getOffers(): MerchantOffer[] {
+    if (!this.offers) {
+      this.offers = [];
+      this.updateTrades();
+    }
+    return this.offers;
+  }
+
+  /** vanilla Villager.updateTrades: two more offers from the listings of its level */
+  private updateTrades(): void {
+    const listings = VILLAGER_TRADES[this.profession]?.[this.merchantLevel - 1];
+    if (listings) addOffersFromListings(this.getOffers(), listings, 2, this);
+  }
+
+  /** vanilla Villager.getBreedOffspring: the biome's type half the time, else either parent's; no profession */
+  breedOffspring(other: Villager): Villager {
+    const d = this.random.nextDouble();
+    const v = new Villager(this.level);
+    v.villagerType = d < 0.5 ? villagerTypeAt(this.level, this.x, this.y, this.z) : d < 0.75 ? this.villagerType : other.villagerType;
+    v.finalizeSpawn('breeding');
+    return v;
+  }
+
+  /** vanilla Villager.mobInteract; true when the click did something */
+  interact(p: Player, stack: ItemStack | null, main: boolean): boolean {
+    if (stack?.item.id === 'villager_spawn_egg' || !this.isAlive || this.isTrading() || this.isSleeping()) return false;
+    if (this.isBaby()) {
+      this.setUnhappy();
+      return true;
+    }
+    const none = this.getOffers().length === 0;
+    if (main && none) this.setUnhappy();
+    if (none) return true;
+    this.startTrading(p);
+    return true;
+  }
+
+  /** vanilla setUnhappy: a head shake and a grumble */
+  setUnhappy(): void {
+    this.unhappyCounter = 40;
+    this.playSound('entity.villager.no', this.soundVolume(), this.voicePitch());
+  }
+
+  private startTrading(p: Player): void {
+    this.tradingPlayer = p;
+    this.level.onOpenMerchant?.(this, p);
+  }
+
+  /** vanilla AbstractVillager.stopTrading (and Villager's: the player's discounts go) */
+  stopTrading(): void {
+    this.tradingPlayer = null;
+    for (const o of this.offers ?? []) o.specialPriceDiff = 0;
+  }
+
+  /** vanilla AbstractVillager.notifyTrade */
+  notifyTrade(o: MerchantOffer): void {
+    o.uses++;
+    this.ambientSoundTime = -this.ambientSoundInterval();
+    this.rewardTradeXp(o);
+  }
+
+  /** vanilla Villager.rewardTradeXp: experience for the villager, 3-6 orbs' worth for the player (5 more on a level up) */
+  private rewardTradeXp(o: MerchantOffer): void {
+    let i = 3 + this.random.nextInt(4);
+    this.xp += o.xp;
+    this.lastTradedPlayer = this.tradingPlayer;
+    if (this.shouldIncreaseLevel()) {
+      this.updateMerchantTimer = 40;
+      this.increaseProfessionLevelOnUpdate = true;
+      i += 5;
+    }
+    if (o.rewardExp) this.level.awardExperience(this.x, this.y + 0.5, this.z, i);
+  }
+
+  /** vanilla AbstractVillager.notifyTradeUpdated: a yes or a no as the player fills the payment slots */
+  notifyTradeUpdated(s: ItemStack | null): void {
+    if (this.ambientSoundTime > -this.ambientSoundInterval() + 20) {
+      this.ambientSoundTime = -this.ambientSoundInterval();
+      this.playSound(s && !s.isEmpty() ? 'entity.villager.yes' : 'entity.villager.no', this.soundVolume(), this.voicePitch());
+    }
+  }
+
+  private shouldIncreaseLevel(): boolean {
+    const l = this.merchantLevel;
+    return canLevelUp(l) && this.xp >= maxXpPerLevel(l);
+  }
+
+  private increaseMerchantCareer(): void {
+    this.merchantLevel++;
+    this.updateTrades();
+  }
+
+  /** vanilla canRestock: an employed villager's offers come back */
+  canRestock(): boolean {
+    return true;
+  }
+
+  /** vanilla Villager.restock */
+  restock(): void {
+    this.updateDemand();
+    for (const o of this.getOffers()) o.resetUses();
+    this.lastRestockGameTime = this.level.gameTime;
+    this.numberOfRestocksToday++;
+  }
+
+  private needsToRestock(): boolean {
+    return this.getOffers().some((o) => o.needsRestock());
+  }
+
+  private allowedToRestock(): boolean {
+    return this.numberOfRestocksToday === 0 || (this.numberOfRestocksToday < 2 && this.level.gameTime > this.lastRestockGameTime + 2400);
+  }
+
+  /** vanilla Villager.shouldRestock: twice a day at most, and only when something was bought */
+  shouldRestock(): boolean {
+    const now = this.level.gameTime, day = this.level.dayTime;
+    let fresh = now > this.lastRestockGameTime + 12000;
+    if (this.lastRestockCheckDayTime > 0) fresh ||= Math.floor(day / 24000) > Math.floor(this.lastRestockCheckDayTime / 24000);
+    this.lastRestockCheckDayTime = day;
+    if (fresh) {
+      this.lastRestockGameTime = now;
+      this.resetNumberOfRestocks();
+    }
+    return this.allowedToRestock() && this.needsToRestock();
+  }
+
+  /** vanilla resetNumberOfRestocks → catchUpDemand: the restocks missed come in at once */
+  private resetNumberOfRestocks(): void {
+    const i = 2 - this.numberOfRestocksToday;
+    if (i > 0) for (const o of this.getOffers()) o.resetUses();
+    for (let j = 0; j < i; j++) this.updateDemand();
+    this.numberOfRestocksToday = 0;
+  }
+
+  private updateDemand(): void {
+    for (const o of this.getOffers()) o.updateDemand();
+  }
+
+  /** vanilla getVillagerXp and the experience bar's ends */
+  xpProgress(): { min: number; max: number } {
+    return { min: minXpPerLevel(this.merchantLevel), max: maxXpPerLevel(this.merchantLevel) };
+  }
+
+  // --- sounds ------------------------------------------------------------------
+
+  override ambientSound(): string | null {
+    if (this.isSleeping()) return null;
+    return this.isTrading() ? 'entity.villager.trade' : 'entity.villager.ambient';
+  }
+
+  override hurtSound(): string {
+    return 'entity.villager.hurt';
+  }
+
+  override deathSound(): string {
+    return 'entity.villager.death';
+  }
+
+  /** vanilla VillagerProfession.workSound */
+  playWorkSound(): void {
+    if (this.profession === 'none' || this.profession === 'nitwit') return;
+    this.playSound(`entity.villager.work_${this.profession}`, this.soundVolume(), this.voicePitch());
+  }
+
+  // --- damage and death ----------------------------------------------------------
+
+  override hurt(amount: number, source: string, attacker?: Entity | null, direct?: Entity | null): boolean {
+    const ok = super.hurt(amount, source, attacker, direct);
+    if (!ok) return false;
+    this.lastDamageStamp = this.level.gameTime;
+    if (this.isSleeping()) this.stopSleeping();
+    // vanilla Villager.setLastHurtByMob: a player's hit angers it (entity event 13)
+    if (attacker?.type === 'player' && this.isAlive) this.addParticlesAroundSelf('angry_villager');
+    return true;
+  }
+
+  override die(source: string, attacker: Entity | null = null): void {
+    if (this.dead) return;
+    this.releaseAllPois();
+    super.die(source, attacker);
+    this.stopTrading();
+  }
+
+  // --- saving --------------------------------------------------------------------
+
+  protected override saveData(): Record<string, number | string | boolean> {
+    const m = this.mem;
+    const pos = (p: Pos | null) => (p ? key(p) : '');
+    const d: Record<string, number | string | boolean> = {
+      ...super.saveData(),
+      vtype: this.villagerType,
+      profession: this.profession,
+      level: this.merchantLevel,
+      xp: this.xp,
+      lastRestock: this.lastRestockGameTime,
+      restocksToday: this.numberOfRestocksToday,
+      lastRestockCheckDay: this.lastRestockCheckDayTime,
+      assignProfession: this.assignProfessionWhenSpawned,
+      home: pos(m.home),
+      jobSite: pos(m.jobSite),
+      potentialJobSite: pos(m.potentialJobSite),
+      meetingPoint: pos(m.meetingPoint),
+      sleeping: pos(this.sleepingPos),
+    };
+    if (this.offers) d.offers = JSON.stringify(this.offers.map((o) => o.save()));
+    if (m.lastSlept !== null) d.lastSlept = m.lastSlept;
+    if (m.lastWoken !== null) d.lastWoken = m.lastWoken;
+    if (m.lastWorkedAtPoi !== null) d.lastWorked = m.lastWorkedAtPoi;
+    return d;
+  }
+
+  protected override loadData(d: Record<string, number | string | boolean>): void {
+    super.loadData(d);
+    const m = this.mem;
+    if (VILLAGER_TYPES.includes(d.vtype as VillagerType)) this.villagerType = d.vtype as VillagerType;
+    if (PROFESSIONS.includes(d.profession as Profession)) this.profession = d.profession as Profession;
+    this.merchantLevel = Math.max(1, Math.min(5, Number(d.level ?? 1)));
+    this.xp = Number(d.xp ?? 0);
+    this.lastRestockGameTime = Number(d.lastRestock ?? 0);
+    this.numberOfRestocksToday = Number(d.restocksToday ?? 0);
+    this.lastRestockCheckDayTime = Number(d.lastRestockCheckDay ?? 0);
+    this.assignProfessionWhenSpawned = d.assignProfession === true;
+    if (typeof d.offers === 'string') this.offers = (JSON.parse(d.offers) as SavedOffer[]).map((o) => MerchantOffer.load(o)).filter((o): o is MerchantOffer => !!o);
+    const pos = (s: unknown): Pos | null => {
+      if (typeof s !== 'string' || !s) return null;
+      const p = s.split(',').map(Number);
+      return p.length === 3 && p.every(Number.isFinite) ? (p as Pos) : null;
+    };
+    // (vanilla keeps the tickets with the points; here the villager takes its own again)
+    for (const k of ['home', 'jobSite', 'potentialJobSite', 'meetingPoint'] as const) {
+      const p = pos(d[k]);
+      if (p && this.level.poi.take(p[0], p[1], p[2], this)) m[k] = p;
+    }
+    if (typeof d.lastSlept === 'number') m.lastSlept = d.lastSlept;
+    if (typeof d.lastWoken === 'number') m.lastWoken = d.lastWoken;
+    if (typeof d.lastWorked === 'number') m.lastWorkedAtPoi = d.lastWorked;
+    const s = pos(d.sleeping);
+    if (s) {
+      this.sleepingPos = s;
+      this.setSize(0.2, 0.2);
+    }
+    this.brain = this.makeBrain();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// VillagerGoalPackages
+
+type Pkg = [number, BehaviorControl<Villager>][];
+
+function corePackage(): Pkg {
+  return [
+    [0, swim()],
+    [0, interactWithDoor()],
+    [0, lookAtTargetSink()],
+    [0, panicTrigger()],
+    [0, wakeUp()],
+    // (ReactToBell and SetRaidStatus wait for raids)
+    [0, validateNearbyPoi('jobSite', (v) => heldJobSite(v.profession))],
+    [0, validateNearbyPoi('potentialJobSite', (v) => acquirableJobSite(v.profession))],
+    [1, moveToTargetSink()],
+    [2, poiCompetitorScan()],
+    [3, lookAndFollowTradingPlayer()],
+    // (GoToWantedItem waits for the villagers' pockets)
+    [6, acquirePoi('potentialJobSite', ['jobSite'], (v) => acquirableJobSite(v.profession), true, false)],
+    [7, goToPotentialJobSite()],
+    // (YieldJobSite waits too)
+    [10, acquirePoi('home', [], () => (k) => k === 'home', false, true, freeBed)],
+    [10, acquirePoi('meetingPoint', [], () => (k) => k === 'meeting', true, true)],
+    [10, assignProfessionFromJobSite()],
+    [10, resetProfession()],
+  ];
+}
+
+function workPackage(): Pkg {
+  return [
+    [5, minimalLook()],
+    [
+      5,
+      runOne<Villager>([
+        [workAtPoi(), 7],
+        [oneShot(strollAroundPoi('jobSite', STROLL, 4)), 2],
+        [strollToPoi('jobSite', STROLL, 1, 10), 5],
+        // (StrollToPoiList, HarvestFarmland and UseBonemeal wait for the farmers' fields)
+      ]),
+    ],
+    [10, setLookAndInteractWithPlayer()],
+    [2, setWalkTargetFromBlockMemory('jobSite', SPEED, 9, 100, 1200)],
+    [99, updateActivityFromSchedule()],
+  ];
+}
+
+function playPackage(): Pkg {
+  return [
+    [0, moveToTargetSink(100, 100)],
+    [5, fullLook()],
+    [5, playTagWithOtherKids()],
+    [
+      5,
+      runOne<Villager>(
+        [
+          [interactWith('villager', SPEED), 2],
+          [interactWith('cat', SPEED), 1],
+          [villageBoundRandomStroll(SPEED), 1],
+          [walkToLookTarget(SPEED, 2), 1],
+          [doNothing(20, 40), 2],
+        ],
+        (v) => !v.mem.visibleBabies,
+      ),
+    ],
+    [99, updateActivityFromSchedule()],
+  ];
+}
+
+function restPackage(): Pkg {
+  return [
+    [2, setWalkTargetFromBlockMemory('home', SPEED, 1, 150, 1200)],
+    [3, validateNearbyPoi('home', () => (k) => k === 'home')],
+    [3, sleepInBed()],
+    [
+      5,
+      runOne<Villager>(
+        [
+          [setClosestHomeAsWalkTarget(SPEED), 1],
+          [insideBrownianWalk(SPEED), 4],
+          [goToClosestVillage(SPEED, 4), 2],
+          [doNothing(20, 40), 2],
+        ],
+        (v) => !v.mem.home,
+      ),
+    ],
+    [5, minimalLook()],
+    [99, updateActivityFromSchedule()],
+  ];
+}
+
+function meetPackage(): Pkg {
+  return [
+    [2, triggerOneShuffled<Villager>([[strollAroundPoi('meetingPoint', STROLL, 40), 2], [socializeAtBell, 2]])],
+    [10, setLookAndInteractWithPlayer()],
+    [2, setWalkTargetFromBlockMemory('meetingPoint', SPEED, 6, 100, 200)],
+    [3, validateNearbyPoi('meetingPoint', () => (k) => k === 'meeting')],
+    [5, fullLook()],
+    [99, updateActivityFromSchedule()],
+  ];
+}
+
+function idlePackage(): Pkg {
+  return [
+    [
+      2,
+      runOne<Villager>([
+        [interactWith('villager', SPEED), 2],
+        [interactWith('cat', SPEED), 1],
+        [villageBoundRandomStroll(SPEED), 1],
+        [walkToLookTarget(SPEED, 2), 1],
+        [doNothing(30, 60), 1],
+      ]),
+    ],
+    [3, setLookAndInteractWithPlayer()],
+    [5, fullLook()],
+    [99, updateActivityFromSchedule()],
+  ];
+}
+
+function panicPackage(): Pkg {
+  const f = SPEED * 1.5;
+  return [
+    [0, villagerCalmDown()],
+    [1, walkAwayFrom((v) => v.mem.nearestHostile, f)],
+    [1, walkAwayFrom((v) => v.mem.hurtByEntity, f)],
+    [3, villageBoundRandomStroll(f, 2, 2)],
+    [5, minimalLook()],
+  ];
+}

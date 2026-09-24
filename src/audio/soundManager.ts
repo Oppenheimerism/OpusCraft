@@ -61,6 +61,8 @@ const ALIASES: [RegExp, string][] = [
   [/^block\.nether_wart\.place$/, 'item.nether_wart.plant'],
   // vanilla sounds.json: a lightning strike's crack is the explosion samples (random/explode1-4), played low
   [/^entity\.lightning_bolt\.impact$/, 'entity.generic.explode'],
+  // vanilla sounds.json: a weaponsmith at work is the grindstone's own sound
+  [/^entity\.villager\.work_weaponsmith$/, 'block.grindstone.use'],
 ];
 
 /** how late (ms) a sound that had to be generated first may still start */

@@ -44,6 +44,8 @@ export class World {
   dim: DimensionType = OVERWORLD;
   /** a nether portal block appeared or went (vanilla PoiManager: portals are found through their POI records) */
   onPortalChanged: ((x: number, y: number, z: number, present: boolean) => void) | null = null;
+  /** a block became another kind of block (the level's points of interest follow it) */
+  onTypeChanged: ((x: number, y: number, z: number, old: number, now: number) => void) | null = null;
   biomeBlend = 2;
   /** called when a section's mesh became stale */
   onDirty: ((c: Chunk, section: number) => void) | null = null;
@@ -132,6 +134,7 @@ export class World {
       this.blockChangedType(x, y, z, state, c);
       const pid = portalId();
       if (STATE_BLOCK[old] === pid || STATE_BLOCK[state] === pid) this.onPortalChanged?.(x, y, z, STATE_BLOCK[state] === pid);
+      this.onTypeChanged?.(x, y, z, old, state);
     }
     // heightmap
     const hi = (lz << 4) | lx;

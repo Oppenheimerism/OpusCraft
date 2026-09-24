@@ -63,6 +63,11 @@ export class PathNavigation {
     return this.createPath(e.x, e.y, e.z, accuracy);
   }
 
+  /** vanilla PathNavigation.createPath(Set<BlockPos>, accuracy): to the block itself, not the ground by it */
+  createPathToBlock(x: number, y: number, z: number, accuracy: number): Path | null {
+    return this.createPathRaw(x, y, z, accuracy);
+  }
+
   private createPathRaw(x: number, y: number, z: number, accuracy: number): Path | null {
     if (this.mob.y < MIN_Y || !this.canUpdatePath()) return null;
     if (this.path && !this.path.isDone() && this.targetPos && this.targetPos[0] === x && this.targetPos[1] === y && this.targetPos[2] === z) return this.path;

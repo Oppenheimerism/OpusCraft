@@ -46,6 +46,8 @@ import { GuiEntityRenderer } from '../render/guiEntity';
 import type { SkinParts } from '../render/entityRenderers';
 import { InventoryMenu, CraftingMenu, FurnaceMenu, ChestMenu } from '../inventory/menus';
 import { EnchantmentMenu, AnvilMenu, GrindstoneMenu } from '../inventory/enchantMenus';
+import { MerchantMenu } from '../inventory/merchantMenu';
+import type { Villager } from '../entity/villager';
 import { hasVanishing } from '../item/enchantHelper';
 import { ChestBlockEntity, FurnaceBlockEntity } from '../world/blockEntity';
 import { useBed, findRespawn, BED_YROT, MSG, SleepHost } from './sleep';
@@ -400,6 +402,7 @@ export class Game {
     this.interaction.onOpenEntityContainer = (e) => this.openEntityContainer(e);
     this.interaction.onMounted = () => this.hud.setOverlayMessage(`Press ${keyDisplayName(KEYS.sneak)} to Dismount`);
     this.interaction.onUseBed = (x, y, z) => useBed(this.sleepHost(), x, y, z);
+    this.level.onOpenMerchant = (v, p) => this.openMerchant(v, p);
     this.level.onPortal = (e, x, y, z) => {
       if (e === this.player) this.portalTravel(x, y, z);
     };
@@ -727,7 +730,7 @@ export class Game {
     };
   }
 
-  containerScreenFactory: ((menu: InventoryMenu | CraftingMenu | FurnaceMenu | ChestMenu | EnchantmentMenu | AnvilMenu | GrindstoneMenu) => Screen) | null = null;
+  containerScreenFactory: ((menu: InventoryMenu | CraftingMenu | FurnaceMenu | ChestMenu | EnchantmentMenu | AnvilMenu | GrindstoneMenu | MerchantMenu) => Screen) | null = null;
 
   /** right-clicked a block with a menu */
   openContainer(kind: string, x: number, y: number, z: number): void {
@@ -751,6 +754,17 @@ export class Game {
       this.setScreen(this.containerScreenFactory(m));
     } else if (kind.endsWith('anvil')) this.setScreen(this.containerScreenFactory(new AnvilMenu(p, [x, y, z])));
     else if (kind === 'grindstone') this.setScreen(this.containerScreenFactory(new GrindstoneMenu(p, [x, y, z])));
+  }
+
+  /** a villager started trading with the player (vanilla Merchant.openTradingScreen) */
+  openMerchant(v: Villager, p: Player): void {
+    if (p !== this.player || !this.containerScreenFactory) {
+      v.stopTrading();
+      return;
+    }
+    const m = new MerchantMenu(p, v);
+    m.onTraded = () => this.advancements.trigger('villager_trade', { tradeY: p.y });
+    this.setScreen(this.containerScreenFactory(m));
   }
 
   /** right-clicked a chest minecart or chest boat (vanilla ContainerEntity.interactWithContainerVehicle: no sound, no lid) */

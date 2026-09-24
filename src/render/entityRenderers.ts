@@ -30,6 +30,8 @@ import { Blaze } from '../entity/blaze';
 import { Hoglin, Zoglin } from '../entity/hoglin';
 import { Strider } from '../entity/strider';
 import { Piglin } from '../entity/piglin';
+import { Villager } from '../entity/villager';
+import { villagerTexture } from '../textures/villager';
 import { Fireball, LargeFireball } from '../entity/fireball';
 import { LightningBolt } from '../entity/lightning';
 import { Rand } from '../core/rng';
@@ -146,6 +148,7 @@ export class EntityRenderDispatcher {
       hoglin: M.hoglinModel(),
       zoglin: M.hoglinModel(),
       strider: M.striderModel(),
+      villager: M.villagerModel(),
     };
     // vanilla textures/misc/shadow.png: soft black disc
     const n = 32, data = new Uint8Array(n * n * 4);
@@ -168,6 +171,19 @@ export class EntityRenderDispatcher {
     // (the charged creeper's swirl scrolls, so its texture wraps)
     t = createTexture(this.gl, img.w, img.h, new Uint8Array(img.data.buffer, img.data.byteOffset, img.data.byteLength), { clamp: name !== 'creeper_armor' });
     this.textures.set(name, t);
+    return t;
+  }
+
+  /** a villager's skin for its type, profession and level (vanilla VillagerProfessionLayer's layers, painted as one) */
+  private villagerTex(v: Villager): WebGLTexture {
+    const baby = v.isBaby();
+    const key = `villager/${v.villagerType}/${baby ? 'none' : v.profession}/${v.merchantLevel}/${baby}`;
+    let t = this.textures.get(key);
+    if (!t) {
+      const img = villagerTexture(v.villagerType, v.profession, v.merchantLevel, baby);
+      t = createTexture(this.gl, img.w, img.h, new Uint8Array(img.data.buffer, img.data.byteOffset, img.data.byteLength), { clamp: true });
+      this.textures.set(key, t);
+    }
     return t;
   }
 
@@ -370,10 +386,10 @@ export class EntityRenderDispatcher {
     const headYaw = rotLerp(p, e.headYawO, e.headYaw);
     const net = wrapDegrees(headYaw - bodyYaw);
     const pitch = e.pitchO + (e.pitch - e.pitchO) * p;
-    const bed = e.type === 'player' ? (e as Player).bedOrientation() : null;
+    const bed = e.type === 'player' ? (e as Player).bedOrientation() : e instanceof Villager ? e.bedOrientation() : null;
     if (bed) {
-      // vanilla LivingEntityRenderer: a sleeper lies along the bed, head on the pillow
-      const f4 = 1.62 - 0.1;
+      // vanilla LivingEntityRenderer: a sleeper lies along the bed, head on the pillow (its standing eye height up it)
+      const f4 = (e instanceof Villager ? e.standingEyeHeight() : 1.62) - 0.1;
       pose.translate(-BED_STEP[bed][0] * f4, 0, -BED_STEP[bed][1] * f4);
       pose.rotY(SLEEP_ROT[bed]);
       pose.rotZ(flip);
@@ -436,7 +452,7 @@ export class EntityRenderDispatcher {
     const def = this.models[type];
     // (vanilla GhastRenderer.getTextureLocation: its face while charging a shot)
     // (vanilla StriderRenderer.getTextureLocation: purple while it's cold)
-    const tex = this.tex(e instanceof Ghast && e.charging ? 'ghast_shooting' : e instanceof Strider && e.suffocating ? 'strider_cold' : type);
+    const tex = e instanceof Villager ? this.villagerTex(e) : this.tex(e instanceof Ghast && e.charging ? 'ghast_shooting' : e instanceof Strider && e.suffocating ? 'strider_cold' : type);
     if (!def || !tex) return;
     const baby = e.isBaby();
     let white = 0;
@@ -483,6 +499,11 @@ export class EntityRenderDispatcher {
     if (type === 'wither_skeleton') scale = (pose) => pose.scale(1.2, 1.2, 1.2);
     // vanilla StriderRenderer.scale: a baby is the whole model at half size
     if (type === 'strider' && baby) scale = (pose) => pose.scale(0.5, 0.5, 0.5);
+    // vanilla VillagerRenderer.scale: 15/16, a baby half that
+    if (type === 'villager') {
+      const f = baby ? 0.46875 : 0.9375;
+      scale = (pose) => pose.scale(f, f, f);
+    }
     const spiderLike = type === 'spider' || type === 'cave_spider';
     const a = this.setupLiving(e, dx + jx, dy, dz + jz, p, spiderLike ? 180 : 90, scale);
     const attack = attackAnim(e, p);
@@ -557,6 +578,9 @@ export class EntityRenderDispatcher {
       case 'hoglin':
       case 'zoglin':
         M.animateHoglin(def.root, a.limbSwing, a.limbAmount, a.headYaw, (e as Hoglin | Zoglin).attackAnimationRemainingTicks, baby);
+        break;
+      case 'villager':
+        M.animateVillager(def.root, a.limbSwing, a.limbAmount, a.age, a.headYaw, a.headPitch, (e as Villager).unhappyCounter > 0);
         break;
       case 'bat': {
         // vanilla AnimationState: seconds since each loop started (a tick is 50 ms)
@@ -1224,6 +1248,7 @@ function shadowRadius(e: Entity): number {
       r = 0.7;
       break;
     case 'strider':
+    case 'villager':
       r = 0.5;
       break;
     case 'bat':

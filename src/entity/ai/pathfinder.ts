@@ -12,6 +12,8 @@ export const enum PathType {
   BLOCKED,
   OPEN,
   WALKABLE,
+  /** a closed wooden door, to a mob that opens doors */
+  WALKABLE_DOOR,
   TRAPDOOR,
   FENCE,
   LAVA,
@@ -21,6 +23,9 @@ export const enum PathType {
   DAMAGE_FIRE,
   DANGER_OTHER,
   DAMAGE_OTHER,
+  DOOR_OPEN,
+  DOOR_WOOD_CLOSED,
+  DOOR_IRON_CLOSED,
   LEAVES,
   DAMAGE_CAUTIOUS,
   DANGER_TRAPDOOR,
@@ -31,6 +36,7 @@ export const DEFAULT_MALUS: number[] = [];
 DEFAULT_MALUS[PathType.BLOCKED] = -1;
 DEFAULT_MALUS[PathType.OPEN] = 0;
 DEFAULT_MALUS[PathType.WALKABLE] = 0;
+DEFAULT_MALUS[PathType.WALKABLE_DOOR] = 0;
 DEFAULT_MALUS[PathType.TRAPDOOR] = 0;
 DEFAULT_MALUS[PathType.FENCE] = -1;
 DEFAULT_MALUS[PathType.LAVA] = -1;
@@ -40,6 +46,9 @@ DEFAULT_MALUS[PathType.DANGER_FIRE] = 8;
 DEFAULT_MALUS[PathType.DAMAGE_FIRE] = 16;
 DEFAULT_MALUS[PathType.DANGER_OTHER] = 8;
 DEFAULT_MALUS[PathType.DAMAGE_OTHER] = -1;
+DEFAULT_MALUS[PathType.DOOR_OPEN] = 0;
+DEFAULT_MALUS[PathType.DOOR_WOOD_CLOSED] = -1;
+DEFAULT_MALUS[PathType.DOOR_IRON_CLOSED] = -1;
 DEFAULT_MALUS[PathType.LEAVES] = -1;
 DEFAULT_MALUS[PathType.DAMAGE_CAUTIOUS] = 0;
 DEFAULT_MALUS[PathType.DANGER_TRAPDOOR] = 0;
@@ -99,6 +108,14 @@ export class Path {
   }
   get nextNode(): Node {
     return this.nodes[this.nextNodeIndex];
+  }
+  /** vanilla getPreviousNode */
+  get previousNode(): Node | null {
+    return this.nextNodeIndex > 0 ? this.nodes[this.nextNodeIndex - 1] : null;
+  }
+  /** vanilla notStarted */
+  notStarted(): boolean {
+    return this.nextNodeIndex <= 0;
   }
   get endNode(): Node | null {
     return this.nodes.length ? this.nodes[this.nodes.length - 1] : null;
@@ -202,6 +219,10 @@ export class WalkNodeEvaluator {
   private staticCache = new Map<number, PathType>();
   private mobCache = new Map<number, PathType>();
   canFloat = false;
+  /** vanilla canOpenDoors: closed wooden doors are a way through (villagers) */
+  canOpenDoors = false;
+  /** vanilla canPassDoors: open doors are a way through */
+  canPassDoors = true;
   private ew = 1;
   private eh = 1;
 
@@ -299,7 +320,13 @@ export class WalkNodeEvaluator {
     let mask = 0;
     for (let i = 0; i < this.ew; i++)
       for (let j = 0; j < this.eh; j++)
-        for (let l = 0; l < this.ew; l++) mask |= 1 << this.staticType(x + i, y + j, z + l);
+        for (let l = 0; l < this.ew; l++) {
+          // vanilla getPathTypeWithinMobBB: doors as this mob sees them
+          let t = this.staticType(x + i, y + j, z + l);
+          if (t === PathType.DOOR_WOOD_CLOSED && this.canOpenDoors && this.canPassDoors) t = PathType.WALKABLE_DOOR;
+          if (t === PathType.DOOR_OPEN && !this.canPassDoors) t = PathType.BLOCKED;
+          mask |= 1 << t;
+        }
     let res: PathType;
     if (mask & (1 << PathType.FENCE)) res = PathType.FENCE;
     else {
@@ -503,7 +530,8 @@ export function rawPathType(world: World, x: number, y: number, z: number): Path
   const f = FLAGS[st];
   if (f & F_AIR) return PathType.OPEN;
   const name = BLOCKS[STATE_BLOCK[st]].name;
-  if (name.endsWith('_door')) return BLOCKS[STATE_BLOCK[st]].get(st, 'open') ? PathType.OPEN : PathType.BLOCKED;
+  // (vanilla: a door that won't open by hand is iron)
+  if (name.endsWith('_door')) return BLOCKS[STATE_BLOCK[st]].get(st, 'open') ? PathType.DOOR_OPEN : name === 'iron_door' ? PathType.DOOR_IRON_CLOSED : PathType.DOOR_WOOD_CLOSED;
   if (name.endsWith('_fence_gate')) return BLOCKS[STATE_BLOCK[st]].get(st, 'open') ? PathType.OPEN : PathType.FENCE;
   if (name.endsWith('_trapdoor') || name === 'lily_pad') return PathType.TRAPDOOR;
   if (name === 'fire') return PathType.DAMAGE_FIRE;

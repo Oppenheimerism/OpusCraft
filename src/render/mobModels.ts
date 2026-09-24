@@ -127,6 +127,43 @@ export function zombieModel(): MobModelDef {
 }
 
 /**
+ * vanilla VillagerModel.createBodyModel: the tall head with its long nose, a hat layer and brim (drawn where an
+ * outfit has one), the robe and its long jacket, the folded arms, the legs
+ */
+export function villagerModel(): MobModelDef {
+  const root = new ModelPart();
+  const head = root.add('head', part([{ x: -4, y: -10, z: -4, w: 8, h: 10, d: 8, u: 0, v: 0 }]));
+  const hat = head.add('hat', part([{ x: -4, y: -10, z: -4, w: 8, h: 10, d: 8, u: 32, v: 0, inflate: 0.51 }]));
+  hat.add('hat_rim', part([{ x: -8, y: -8, z: -6, w: 16, h: 16, d: 1, u: 30, v: 47 }], [0, 0, 0], [-PI / 2, 0, 0]));
+  head.add('nose', part([{ x: -1, y: -1, z: -6, w: 2, h: 4, d: 2, u: 24, v: 0 }], [0, -2, 0]));
+  const body = root.add('body', part([{ x: -4, y: 0, z: -3, w: 8, h: 12, d: 6, u: 16, v: 20 }]));
+  body.add('jacket', part([{ x: -4, y: 0, z: -3, w: 8, h: 20, d: 6, u: 0, v: 38, inflate: 0.5 }]));
+  root.add('arms', part([
+    { x: -8, y: -2, z: -2, w: 4, h: 8, d: 4, u: 44, v: 22 },
+    { x: 4, y: -2, z: -2, w: 4, h: 8, d: 4, u: 44, v: 22, mirror: true },
+    { x: -4, y: 2, z: -2, w: 8, h: 4, d: 4, u: 40, v: 38 },
+  ], [0, 3, -1], [-0.75, 0, 0]));
+  root.add('right_leg', part([{ x: -2, y: 0, z: -2, w: 4, h: 12, d: 4, u: 0, v: 22 }], [-2, 12, 0]));
+  root.add('left_leg', part([{ x: -2, y: 0, z: -2, w: 4, h: 12, d: 4, u: 0, v: 22, mirror: true }], [2, 12, 0]));
+  return { root, texW: 64, texH: 64 };
+}
+
+/** vanilla VillagerModel.setupAnim: the head follows its gaze (shaking no when unhappy), the legs walk */
+export function animateVillager(root: ModelPart, limbSwing: number, limbAmount: number, age: number, headYaw: number, headPitch: number, unhappy: boolean): void {
+  const head = root.child('head');
+  head.yRot = headYaw * (PI / 180);
+  head.xRot = headPitch * (PI / 180);
+  if (unhappy) {
+    head.zRot = 0.3 * Math.sin(0.45 * age);
+    head.xRot = 0.4;
+  } else head.zRot = 0;
+  root.child('right_leg').xRot = Math.cos(limbSwing * 0.6662) * 1.4 * limbAmount * 0.5;
+  root.child('left_leg').xRot = Math.cos(limbSwing * 0.6662 + PI) * 1.4 * limbAmount * 0.5;
+  root.child('right_leg').yRot = 0;
+  root.child('left_leg').yRot = 0;
+}
+
+/**
  * vanilla GhastModel.createBodyLayer: a 16-block cube of a body and nine 2x2 tentacles under it, their lengths
  * those RandomSource.create(1660) deals out (nextInt(7) + 8)
  */

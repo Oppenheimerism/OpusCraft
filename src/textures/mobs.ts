@@ -18,15 +18,15 @@ import { BOAT_TEXTURES } from './boats';
 // ---------------------------------------------------------------------------
 // Helpers
 
-type Face = [number, number, number, number]; // x, y, w, h
-type FaceName = 'top' | 'bottom' | 'right' | 'front' | 'left' | 'back';
-type Box = Record<FaceName, Face>;
-type Pal = readonly number[];
+export type Face = [number, number, number, number]; // x, y, w, h
+export type FaceName = 'top' | 'bottom' | 'right' | 'front' | 'left' | 'back';
+export type Box = Record<FaceName, Face>;
+export type Pal = readonly number[];
 
-const FACES: FaceName[] = ['top', 'bottom', 'right', 'front', 'left', 'back'];
-const SIDES: FaceName[] = ['right', 'front', 'left', 'back'];
+export const FACES: FaceName[] = ['top', 'bottom', 'right', 'front', 'left', 'back'];
+export const SIDES: FaceName[] = ['right', 'front', 'left', 'back'];
 
-function boxFaces(u: number, v: number, w: number, h: number, d: number): Box {
+export function boxFaces(u: number, v: number, w: number, h: number, d: number): Box {
   return {
     top: [u + d, v, w, d],
     bottom: [u + d + w, v, w, d],
@@ -38,7 +38,7 @@ function boxFaces(u: number, v: number, w: number, h: number, d: number): Box {
 }
 
 /** Weighted palette pick. */
-function pick(r: Rand, pal: Pal, w?: Pal): number {
+export function pick(r: Rand, pal: Pal, w?: Pal): number {
   if (!w) return pal[r.nextInt(pal.length)];
   let s = 0;
   for (const x of w) s += x;
@@ -69,7 +69,7 @@ interface NoiseOpts {
 }
 
 /** Fill a face with palette noise. The field is equalized so `w` sets each band's coverage exactly. */
-function noiseFace(t: TexImage, f: Face, r: Rand, pal: Pal, o: NoiseOpts = {}): void {
+export function noiseFace(t: TexImage, f: Face, r: Rand, pal: Pal, o: NoiseOpts = {}): void {
   const [x0, y0, w, h] = f;
   const v = equalize(mottle(r, w, h, o.cell ?? 2, o.white ?? 0.5));
   const ws = o.w ?? pal.map(() => 1);
@@ -85,12 +85,12 @@ function noiseFace(t: TexImage, f: Face, r: Rand, pal: Pal, o: NoiseOpts = {}): 
     }
 }
 
-function noiseBox(t: TexImage, b: Box, r: Rand, pal: Pal, o: NoiseOpts = {}, faces: FaceName[] = FACES): void {
+export function noiseBox(t: TexImage, b: Box, r: Rand, pal: Pal, o: NoiseOpts = {}, faces: FaceName[] = FACES): void {
   for (const k of faces) noiseFace(t, b[k], r, pal, o);
 }
 
 /** Per-pixel edit of a face: return a color, null (clear) or undefined (keep). */
-function paintFace(t: TexImage, f: Face, fn: (x: number, y: number, c: number, w: number, h: number) => number | null | undefined): void {
+export function paintFace(t: TexImage, f: Face, fn: (x: number, y: number, c: number, w: number, h: number) => number | null | undefined): void {
   const [x0, y0, w, h] = f;
   for (let y = 0; y < h; y++)
     for (let x = 0; x < w; x++) {
@@ -100,7 +100,7 @@ function paintFace(t: TexImage, f: Face, fn: (x: number, y: number, c: number, w
     }
 }
 
-type Ink = number | null | Pal | (() => number);
+export type Ink = number | null | Pal | (() => number);
 
 /**
  * Draw string rows at (x0,y0). '.' keeps the existing pixel; every other char
@@ -118,12 +118,12 @@ function draw(t: TexImage, x0: number, y0: number, rows: readonly string[], inks
     }
 }
 
-function drawFace(t: TexImage, f: Face, rows: readonly string[], inks: Record<string, Ink>, r: Rand): void {
+export function drawFace(t: TexImage, f: Face, rows: readonly string[], inks: Record<string, Ink>, r: Rand): void {
   draw(t, f[0], f[1], rows, inks, r);
 }
 
 /** Sprinkle random pixels of `pal` over a face with probability p. */
-function fleck(t: TexImage, f: Face, r: Rand, p: number, pal: Pal, w?: Pal): void {
+export function fleck(t: TexImage, f: Face, r: Rand, p: number, pal: Pal, w?: Pal): void {
   paintFace(t, f, () => (r.chance(p) ? pick(r, pal, w) : undefined));
 }
 
@@ -1852,6 +1852,17 @@ MOB_PARTICLE_TEXTURES['enchanted_hit'] = () =>
   starParticle(['...g....', '.w.W.w..', '..WWW...', 'gWWWWWg.', '..WWW...', '.w.W.w..', '...g....', '........']);
 MOB_PARTICLE_TEXTURES['damage'] = () => heartParticle(0x000000, 0x5a0000, 0x8c0a0a, 0x420000);
 MOB_PARTICLE_TEXTURES['heart'] = () => heartParticle(0x3c0404, 0xe41c1c, 0xffffff, 0xae0f0f);
+// vanilla particle/angry: the dark cross of veins over a vexed villager
+MOB_PARTICLE_TEXTURES['angry_villager'] = () => pixelSprite([
+  '..d..d..',
+  '.dL..Ld.',
+  'dL....Ld',
+  '........',
+  '........',
+  'dL....Ld',
+  '.dL..Ld.',
+  '..d..d..',
+], { d: 0x303030, L: 0x6a6a6a });
 for (let i = 0; i < 8; i++) MOB_PARTICLE_TEXTURES['sweep_' + i] = () => sweepFrame(i);
 MOB_PARTICLE_TEXTURES['flame'] = () => flameParticle();
 MOB_PARTICLE_TEXTURES['soul_fire_flame'] = () => flameParticle(true);
@@ -1960,6 +1971,7 @@ const EGGS: [string, number, number][] = [
   ['strider', 0x9c3436, 0x4d494d],
   ['zoglin', 0xc66e55, 0xe6e6e6],
   ['piglin', 0x995f40, 0xf9f3a4],
+  ['villager', 0x563c33, 0xbd8b72],
 ];
 
 export const SPAWN_EGG_TEXTURES: Record<string, () => TexImage> = {};

@@ -367,8 +367,10 @@ export class ParticleEngine {
         this.addSprite(p);
         break;
       }
-      case 'heart': {
-        const p = this.base(kind, x, y, z);
+      case 'heart':
+      case 'angry_villager': {
+        // (vanilla HeartParticle; AngryVillagerProvider makes it half a block higher, white)
+        const p = this.base(kind, x, kind === 'angry_villager' ? y + 0.5 : y, z);
         this.withSpeed(p, xd, yd, zd);
         p.speedUpWhenBlocked = true;
         p.friction = 0.86;
@@ -380,7 +382,7 @@ export class ParticleEngine {
         p.lifetime = 16;
         p.physics = false;
         p.grow = true;
-        p.frames = ['heart'];
+        p.frames = [kind];
         p.frame = 0;
         this.addSprite(p);
         break;

@@ -6,6 +6,7 @@ import type { World } from '../world/world';
 import type { Level } from './level';
 import type { Player } from '../entity/player';
 import type { Entity } from '../entity/entity';
+import type { Villager } from '../entity/villager';
 import { explode } from './explosion';
 
 const blk = (st: number): Block => BLOCKS[STATE_BLOCK[st]];
@@ -157,7 +158,9 @@ export function useBed(host: SleepHost, x: number, y: number, z: number): void {
     return;
   }
   if (b.get(st, 'occupied')) {
-    // nobody (no villagers yet) can be in it unless it's us: clear a stale flag from an interrupted session
+    // vanilla kickVillagerOutOfBed: a villager asleep in it wakes up (and that's all the click does)
+    if (kickVillagerOutOfBed(host.level, x, y, z)) return;
+    // otherwise nobody can be in it unless it's us: clear a stale flag from an interrupted session
     const p = host.player;
     const ours = p.sleepingPos && p.sleepingPos[0] === x && p.sleepingPos[1] === y && p.sleepingPos[2] === z;
     if (ours) {
@@ -169,6 +172,19 @@ export function useBed(host: SleepHost, x: number, y: number, z: number): void {
   }
   const problem = startSleepInBed(host, x, y, z, st);
   if (problem) host.overlay(problem);
+}
+
+/** vanilla BedBlock.kickVillagerOutOfBed: wake the first villager asleep in the bed's head block */
+function kickVillagerOutOfBed(level: Level, x: number, y: number, z: number): boolean {
+  for (const e of level.entities) {
+    if (e.removed || e.type !== 'villager') continue;
+    const v = e as Villager;
+    const bb = v.bb;
+    if (!v.isSleeping() || bb.maxX <= x || bb.minX >= x + 1 || bb.maxY <= y || bb.minY >= y + 1 || bb.maxZ <= z || bb.minZ >= z + 1) continue;
+    v.stopSleeping();
+    return true;
+  }
+  return false;
 }
 
 /** vanilla ServerPlayer.startSleepInBed: returns the problem message, or null when asleep */

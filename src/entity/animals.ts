@@ -38,12 +38,10 @@ function dismountOffsets(d: number): [number, number][] {
 
 // ---------------------------------------------------------------------------
 
-export abstract class Animal extends Mob {
-  readonly category: MobCategory = 'creature';
+/** vanilla AgeableMob: grows up from a baby over 20 minutes; after breeding, a cooldown counts down the same way */
+export abstract class AgeableMob extends Mob {
   /** vanilla AgeableMob age: <0 baby (grows to 0), >0 breeding cooldown */
   age = 0;
-  inLove = 0;
-  loveCause: Player | null = null;
   protected abstract adultWidth: number;
   protected abstract adultHeight: number;
 
@@ -55,7 +53,11 @@ export abstract class Animal extends Mob {
     const wasBaby = this.isBaby();
     this.age = a;
     if (wasBaby !== this.isBaby() || this.width === 0.6) this.refreshSize();
+    if (wasBaby !== this.isBaby()) this.ageBoundaryReached();
   }
+
+  /** vanilla ageBoundaryReached: grown up (or made a baby) */
+  protected ageBoundaryReached(): void {}
 
   /**
    * vanilla AgeableMob.finalizeSpawn: in a spawn pack every animal after the first may come as a baby, 1 in 20
@@ -88,6 +90,24 @@ export abstract class Animal extends Mob {
       if (this.age < 0) this.setAge(this.age + 1);
       else if (this.age > 0) this.setAge(this.age - 1);
     }
+  }
+
+  protected override saveData(): Record<string, number | string | boolean> {
+    return { age: this.age };
+  }
+
+  protected override loadData(d: Record<string, number | string | boolean>): void {
+    this.setAge(Number(d.age ?? 0));
+  }
+}
+
+export abstract class Animal extends AgeableMob {
+  readonly category: MobCategory = 'creature';
+  inLove = 0;
+  loveCause: Player | null = null;
+
+  override aiStep(): void {
+    super.aiStep();
     if (this.age !== 0) this.inLove = 0;
     if (this.inLove > 0) {
       this.inLove--;
@@ -194,11 +214,11 @@ export abstract class Animal extends Mob {
   }
 
   protected override saveData(): Record<string, number | string | boolean> {
-    return { age: this.age, inLove: this.inLove };
+    return { ...super.saveData(), inLove: this.inLove };
   }
 
   protected override loadData(d: Record<string, number | string | boolean>): void {
-    this.setAge(Number(d.age ?? 0));
+    super.loadData(d);
     this.inLove = Number(d.inLove ?? 0);
   }
 

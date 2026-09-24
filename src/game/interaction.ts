@@ -20,6 +20,7 @@ import { LivingEntity } from '../entity/living';
 import { Animal } from '../entity/animals';
 import { Creeper, bowPower } from '../entity/monsters';
 import { Piglin, GUARDED_BY_PIGLINS } from '../entity/piglin';
+import { Villager } from '../entity/villager';
 import { Arrow } from '../entity/arrow';
 import { PrimedTnt } from '../entity/tnt';
 import { ThrownItem, ThrownKind } from '../entity/throwable';
@@ -329,6 +330,11 @@ export class Interaction {
           return 'success';
         }
       }
+      // vanilla Villager.mobInteract: trade, or a shake of the head
+      if (e instanceof Villager && e.interact(p, stack, main)) {
+        p.swing();
+        return 'success';
+      }
       // vanilla Minecart.interact (climb in) / MinecartChest.interact (ContainerEntity.interactWithContainerVehicle)
       if (e instanceof Minecart && e.interact(p)) {
         this.onMounted?.();
@@ -355,9 +361,9 @@ export class Interaction {
           return 'success';
         }
       }
-      if (stack && stack.item.id.endsWith('_spawn_egg') && e instanceof Animal && e.type === stack.item.id.slice(0, -10)) {
-        // spawn egg on a matching animal spawns a baby
-        const baby = e.makeBaby();
+      if (stack && stack.item.id.endsWith('_spawn_egg') && (e instanceof Animal || e instanceof Villager) && e.type === stack.item.id.slice(0, -10)) {
+        // spawn egg on a matching animal spawns a baby (vanilla SpawnEggItem.spawnOffspringFromSpawnEgg)
+        const baby = e instanceof Villager ? e.breedOffspring(e) : e.makeBaby();
         baby.setAge(-24000);
         baby.moveTo(e.x, e.y, e.z, 0, 0);
         this.level.addEntity(baby);

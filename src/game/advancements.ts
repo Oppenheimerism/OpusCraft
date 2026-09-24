@@ -41,6 +41,8 @@ export type Criterion =
    * player_interacted_with_entity (a gold ingot handed to one)
    */
   | { t: 'distract_piglin'; how: 'thrown' | 'directly' }
+  /** vanilla TradeTrigger: traded with a villager (standing at least that high) */
+  | { t: 'villager_trade'; minY?: number }
   | { t: 'impossible' };
 
 export interface AdvancementDef {
@@ -172,7 +174,7 @@ const A: AdvancementDef[] = [
   { id: 'adventure/spyglass_at_parrot', parent: 'adventure/root', title: 'Is It a Bird?', description: 'Look at a Parrot through a Spyglass', icon: 'spyglass', frame: 'task', criteria: one(never) },
   { id: 'adventure/kill_a_mob', parent: 'adventure/root', title: 'Monster Hunter', description: 'Kill any hostile monster', icon: 'iron_sword', frame: 'task', criteria: each(HOSTILE, (n) => ({ t: 'kill', type: n })), requirements: [HOSTILE] },
   { id: 'adventure/read_power_of_chiseled_bookshelf', parent: 'adventure/root', title: 'The Power of Books', description: 'Read the power signal of a Chiseled Bookshelf using a Comparator', icon: 'chiseled_bookshelf', frame: 'task', criteria: one(never) },
-  { id: 'adventure/trade', parent: 'adventure/root', title: 'What a Deal!', description: 'Successfully trade with a Villager', icon: 'emerald', frame: 'task', criteria: one(never) },
+  { id: 'adventure/trade', parent: 'adventure/root', title: 'What a Deal!', description: 'Successfully trade with a Villager', icon: 'emerald', frame: 'task', criteria: one({ t: 'villager_trade' }) },
   { id: 'adventure/trim_with_any_armor_pattern', parent: 'adventure/root', title: 'Crafting a New Look', description: 'Craft a trimmed armor at a Smithing Table', icon: 'dune_armor_trim_smithing_template', frame: 'task', criteria: one(never) },
   { id: 'adventure/honey_block_slide', parent: 'adventure/root', title: 'Sticky Situation', description: 'Jump into a Honey Block to break your fall', icon: 'honey_block', frame: 'task', criteria: one(never) },
   { id: 'adventure/ol_betsy', parent: 'adventure/root', title: "Ol' Betsy", description: 'Shoot a Crossbow', icon: 'crossbow', frame: 'task', criteria: one({ t: 'shot_crossbow' }) },
@@ -188,7 +190,7 @@ const A: AdvancementDef[] = [
   { id: 'adventure/kill_all_mobs', parent: 'adventure/kill_a_mob', title: 'Monsters Hunted', description: 'Kill one of every hostile monster', icon: 'diamond_sword', frame: 'challenge', criteria: each(HOSTILE, (n) => ({ t: 'kill', type: n })) },
   { id: 'adventure/totem_of_undying', parent: 'adventure/kill_a_mob', title: 'Postmortal', description: 'Use a Totem of Undying to cheat death', icon: 'totem_of_undying', frame: 'goal', criteria: one(never) },
   { id: 'adventure/summon_iron_golem', parent: 'adventure/trade', title: 'Hired Help', description: 'Summon an Iron Golem to help defend a village', icon: 'carved_pumpkin', frame: 'goal', criteria: one(never) },
-  { id: 'adventure/trade_at_world_height', parent: 'adventure/trade', title: 'Star Trader', description: 'Trade with a Villager at the build height limit', icon: 'emerald', frame: 'task', criteria: one(never) },
+  { id: 'adventure/trade_at_world_height', parent: 'adventure/trade', title: 'Star Trader', description: 'Trade with a Villager at the build height limit', icon: 'emerald', frame: 'task', criteria: one({ t: 'villager_trade', minY: 319 }) },
   { id: 'adventure/trim_with_all_exclusive_armor_patterns', parent: 'adventure/trim_with_any_armor_pattern', title: 'Smithing with Style', description: 'Apply these smithing templates at least once: Spire, Snout, Rib, Ward, Silence, Vex, Tide, Wayfinder', icon: 'silence_armor_trim_smithing_template', frame: 'challenge', criteria: one(never) },
   { id: 'adventure/two_birds_one_arrow', parent: 'adventure/ol_betsy', title: 'Two Birds, One Arrow', description: 'Kill two Phantoms with a piercing Arrow', icon: 'crossbow', frame: 'challenge', criteria: one({ t: 'killed_by_crossbow', victims: ['phantom', 'phantom'] }) },
   { id: 'adventure/whos_the_pillager_now', parent: 'adventure/ol_betsy', title: "Who's the Pillager Now?", description: 'Give a Pillager a taste of their own medicine', icon: 'crossbow', frame: 'task', criteria: one(never) },
@@ -420,6 +422,8 @@ export interface TriggerPayload {
   distract?: 'thrown' | 'directly';
   /** the types of everything one crossbow arrow has killed (killed_by_crossbow) */
   crossbowKills?: string[];
+  /** where the player stood for a trade (villager_trade) */
+  tradeY?: number;
 }
 
 export class PlayerAdvancements {
@@ -544,6 +548,8 @@ function matches(c: Criterion, p: TriggerPayload): boolean {
       return !!p.lavaRide && p.lavaRide.vehicle === c.vehicle && p.lavaRide.dimension === c.dimension && p.lavaRide.distance >= c.distance;
     case 'changed_dimension':
       return !!p.dimension && (!c.from || c.from === p.dimension.from) && (!c.to || c.to === p.dimension.to);
+    case 'villager_trade':
+      return p.tradeY !== undefined && (c.minY === undefined || p.tradeY >= c.minY);
     case 'nether_travel':
       return p.netherTravel !== undefined && p.netherTravel >= c.distance;
     case 'killed_by_crossbow': {

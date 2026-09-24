@@ -7,6 +7,7 @@ import type { ItemStack } from '../item/item';
 import { World } from '../world/world';
 import type { Entity } from '../entity/entity';
 import type { Player } from '../entity/player';
+import type { Villager } from '../entity/villager';
 import { LivingEntity } from '../entity/living';
 import { Rand } from '../core/rng';
 import { BLOCKS, STATE_BLOCK, FLAGS, F_AIR, F_WATERLOGGED, S } from '../world/block';
@@ -36,6 +37,7 @@ import type { NetherFortresses } from '../world/gen/fortress';
 import { behaviorOf } from './blockBehavior';
 import { NeighborUpdater } from './neighborUpdater';
 import { LevelTicks } from './ticks';
+import { PoiManager } from './poi';
 import './redstone/components';
 
 export interface SoundSink {
@@ -113,11 +115,15 @@ export class Level {
   });
   simulationDistance = 8;
   gameRules: GameRules = { ...DEFAULT_GAME_RULES };
+  /** vanilla ServerLevel.getPoiManager: the beds, workstations and bells villagers claim */
+  readonly poi: PoiManager;
 
   constructor(world: World, seed: string) {
     this.fluids = new FluidTicker(this);
     this.randomTicks = new RandomTicker(this);
     this.world = world;
+    this.poi = new PoiManager(world);
+    world.onTypeChanged = (x, y, z, old, now) => this.poi.changed(x, y, z, old, now);
     this.seed = seed;
     this.rainTime = 12000 + this.random.nextInt(168000);
     this.thunderTime = 12000 + this.random.nextInt(168000);
@@ -336,6 +342,8 @@ export class Level {
   onTake: ((e: Entity, taker: LivingEntity, amount: number) => void) | null = null;
   /** a mob picked up an item a player had thrown (vanilla thrown_item_picked_up_by_entity) */
   onThrownItemPickedUp: ((stack: ItemStack, by: Entity) => void) | null = null;
+  /** a villager opened its trading screen for a player (vanilla Merchant.openTradingScreen) */
+  onOpenMerchant: ((v: Villager, p: Player) => void) | null = null;
   /** a crossbow arrow the player shot killed something: all it has killed so far (vanilla killed_by_crossbow) */
   onPlayerCrossbowKill: ((killed: Entity[]) => void) | null = null;
   /** an entity's time in a nether portal came up (the portal block it was in) */

@@ -12,6 +12,7 @@ import { Blaze } from '../entity/blaze';
 import { Hoglin, Zoglin } from '../entity/hoglin';
 import { Strider } from '../entity/strider';
 import { Piglin } from '../entity/piglin';
+import { Villager } from '../entity/villager';
 import { Zombie, ZombifiedPiglin, Skeleton, WitherSkeleton, Creeper, Spider, CaveSpider, Enderman, Slime, MagmaCube, Monster, validSpawnBlock } from '../entity/monsters';
 import { Squid, WaterAnimal } from '../entity/water';
 import { AbstractMinecart, createMinecart, MINECART_TYPES } from '../entity/minecart';
@@ -50,6 +51,7 @@ export const MOB_TYPES: Record<string, (l: Level) => Mob> = {
   zoglin: (l) => new Zoglin(l),
   strider: (l) => new Strider(l),
   piglin: (l) => new Piglin(l),
+  villager: (l) => new Villager(l),
 };
 
 export function createMob(type: string, level: Level): Mob | null {
@@ -130,7 +132,7 @@ export function isChunkSaved(e: Entity): boolean {
 
 const ENTITY_NAMES: Record<string, string> = {
   pig: 'Pig', cow: 'Cow', sheep: 'Sheep', chicken: 'Chicken', zombie: 'Zombie', skeleton: 'Skeleton', creeper: 'Creeper', spider: 'Spider',
-  cave_spider: 'Cave Spider', enderman: 'Enderman', slime: 'Slime', magma_cube: 'Magma Cube', zombified_piglin: 'Zombified Piglin', ghast: 'Ghast', blaze: 'Blaze', wither_skeleton: 'Wither Skeleton', squid: 'Squid', bat: 'Bat', hoglin: 'Hoglin', zoglin: 'Zoglin', strider: 'Strider', piglin: 'Piglin',
+  villager: 'Villager', cave_spider: 'Cave Spider', enderman: 'Enderman', slime: 'Slime', magma_cube: 'Magma Cube', zombified_piglin: 'Zombified Piglin', ghast: 'Ghast', blaze: 'Blaze', wither_skeleton: 'Wither Skeleton', squid: 'Squid', bat: 'Bat', hoglin: 'Hoglin', zoglin: 'Zoglin', strider: 'Strider', piglin: 'Piglin',
   arrow: 'Arrow', tnt: 'Primed TNT', lightning_bolt: 'Lightning Bolt', item: 'Item', experience_orb: 'Experience Orb', falling_block: 'Falling Block', player: 'Player',
   egg: 'Thrown Egg', snowball: 'Snowball', ender_pearl: 'Thrown Ender Pearl',
   minecart: 'Minecart', chest_minecart: 'Minecart with Chest', boat: 'Boat', chest_boat: 'Boat with Chest',
@@ -139,6 +141,8 @@ const ENTITY_NAMES: Record<string, string> = {
 /** vanilla entity type display names (death messages, commands) */
 export function entityDisplayName(e: Entity | string): string {
   if (e instanceof Boat) return e.displayName();
+  // vanilla Villager.getTypeName: a villager with a job goes by it
+  if (e instanceof Villager && e.profession !== 'none') return e.profession[0].toUpperCase() + e.profession.slice(1);
   const t = typeof e === 'string' ? e : e.type;
   return ENTITY_NAMES[t] ?? t;
 }
