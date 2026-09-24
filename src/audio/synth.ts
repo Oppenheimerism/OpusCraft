@@ -30,6 +30,7 @@ import { biomeMobSounds } from './gen/biomeMobs';
 import { tridentSounds } from './gen/trident';
 import { drownedSounds } from './gen/drowned';
 import { jobSiteSounds } from './gen/jobSites';
+import { redstoneSounds } from './gen/redstone';
 
 export const SAMPLE_RATE = 44100;
 
@@ -67,6 +68,8 @@ export const SOUNDS: Record<string, SoundGen> = {
   ...drownedSounds(),
   ...jobSiteSounds(),
 };
+// (the redstone components' events, most of them on the samples above)
+Object.assign(SOUNDS, redstoneSounds(SOUNDS));
 
 /** Number of in-game (overworld) music tracks. */
 export const MUSIC_TRACK_COUNT: number = MUSIC_TRACKS;

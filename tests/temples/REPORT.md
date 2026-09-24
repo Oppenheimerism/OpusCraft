@@ -6,8 +6,8 @@ Branch: `claude/stoic-johnson-waevai` (from main at 5dfd44d).
 
 | Milestone | State | Commits |
 |---|---|---|
-| M1 desert pyramid and swamp hut | done | see `git log` (M1 commit: "Desert pyramids and swamp huts: ...") |
-| M2 redstone components | not started | |
+| M1 desert pyramid and swamp hut | done | 9aa2261 Desert pyramids and swamp huts: sandstone pyramids in the desert with four chests over a TNT trap … |
+| M2 redstone components | partly done: dust, torches, repeaters (M2a); tripwire, dispensers/droppers, pistons to come | M2a: "Redstone dust, redstone torches and repeaters: …" (see `git log`) |
 | M3 igloo and jungle temple | not started | |
 | M4 archaeology | not started | |
 
@@ -32,6 +32,18 @@ Branch: `claude/stoic-johnson-waevai` (from main at 5dfd44d).
 New files: `src/world/gen/temples.ts` (placement of all four kinds), `templePiece.ts` (ScatteredFeaturePiece and helpers),
 `desertPyramid.ts`, `swampHut.ts`, `src/game/temples.ts` (main-thread locator), `src/game/structureSpawns.ts`.
 
+M2 so far (all additive):
+- `src/world/blocks.ts`: `registerRedstoneComponents()` (new file `src/world/blocksRedstoneComponents.ts`) right after `registerRedstoneBlocks()`.
+- `src/game/blockBehavior.ts`: three optional hooks on `BlockBehavior`: `setPlacedBy`, `playerWillDestroy`, `triggerEvent` (block events, for pistons).
+- `src/game/interaction.ts`: calls `playerWillDestroy` just before `level.destroyBlock` in `destroyBlock`, and `setPlacedBy` after `setBlock` in `commitPlace`.
+- `src/game/level.ts`: `willTickThisTick(x, y, z, block)`; `updateNeighborsAt(x, y, z, source, skip = -1)` (vanilla updateNeighborsAtExceptFromFacing).
+- `src/render/mesher.ts`: `case 'redstone'` in `tintFor` (dust colour by power, `src/world/redstoneColor.ts`).
+- `src/item/item.ts`: `blockForItem`: redstone places `redstone_wire`; a small loop before `itemForBlock` giving the redstone torch and repeater items their flat sprites.
+- `src/audio/synth.ts`: `Object.assign(SOUNDS, redstoneSounds(SOUNDS))` after `SOUNDS` (`src/audio/gen/redstone.ts`).
+- `src/textures/blocks.ts`: `registerRedstoneTextures(T)` after `registerVillageTextures(T)` (`src/textures/blocklib/redstone.ts`).
+- `src/inventory/recipes.ts`: redstone torch and repeater after the redstone lamp. `src/gui/screens/creative.ts`: `REDSTONE_ORDER` extended.
+- `src/game/redstone/components.ts`: imports `./wire`, `./torch`, `./repeater` (new files; `support.ts` is vanilla isFaceSturdy).
+
 ## 3. Open points
 
 - **Heights.** Vanilla moves a pyramid to the lowest OCEAN_FLOOR_WG under it (minus 0-2) and a hut to the mean
@@ -53,6 +65,28 @@ New files: `src/world/gen/temples.ts` (placement of all four kinds), `templePiec
   (the existing convention).
 - Structure order in the step: vanilla goes by name (desert_pyramid, igloo, jungle_pyramid, pillager_outpost, …,
   swamp_hut, village_*); temples are placed together just before villages.
+- **Sturdy faces.** The redstone components use vanilla's isFaceSturdy from the collision shape (`support.ts`), so dust,
+  torches and repeaters go on glass as in vanilla. The game's existing `isSturdyFace` (blockRules) only reads the
+  occlusion bits, so plain torches and levers still can't go on glass; I left that alone.
+- **Dust.** Vanilla's per-direction `updateShape` is done for all sides at once (same results); dust's neighbour
+  updates walk the seven positions in java.util.HashSet order, as vanilla does. The overlay texture
+  (redstone_dust_overlay, fully transparent in vanilla) is left out of the models.
+
+## Work in progress (next steps, for the next session or after a context compaction)
+
+- **M2b tripwire**: register `tripwire_hook` (facing, powered, attached) and `tripwire` (powered, attached, disarmed,
+  n/e/s/w booleans, `item: 'string'`; `blockForItem('string')` → tripwire) in `blocksRedstoneComponents.ts` (props
+  already declared); behaviour `game/redstone/tripwire.ts` as vanilla TripWireHookBlock.calculateState (41 blocks),
+  TripWireBlock.updateSource (south and west), checkPressed + 10-tick recheck, `playerWillDestroy` with shears sets
+  DISARMED; sounds are already registered (`block.tripwire.*`). Recipe: tripwire hook ×2 (iron ingot, stick, planks);
+  the crossbow recipe (stick, iron, string, tripwire hook) becomes possible.
+- **M2c dispenser/dropper**: 9-slot block entity with loot table (register a factory in `createBlockEntity`),
+  getRandomSlot, TRIGGERED with a 4-tick delay, DispenseItemBehavior for every item the game has, the dropper into
+  containers; 3x3 menu/screen opened through a hook like `setVillageMenuHook`, GUI texture `dispenser` (176x166).
+- **M2d pistons**: Level block-event queue run after scheduled ticks (dispatches `triggerEvent`), PistonMovingBlockEntity
+  ticking in `world.blockEntities`, PistonStructureResolver (12), a PushReaction table, sticky pull, quasi-connectivity,
+  entity pushing, a renderer for moving blocks (after `village.render` in `render/entityRenderers.ts`), and a
+  collision hook for moving_piston in `entity.ts collisionBoxes`; piston sounds need synthesizing.
 
 ## 4. Tests
 
@@ -64,6 +98,14 @@ Run with `node tests/temples/<file>.mjs` (Node 22, after `npm ci`).
   in a real generated pyramid with a ticking Level (a zombie on the plate sets off all nine TNT; an item doesn't), the
   witch, the hut's spawn override through `NaturalSpawner.mobsAt`, `/locate` through `executeCommand`, and the cost
   (≈ the same ms per chunk with and without temples; looking up nearby temples is cached).
+- `tests/temples/m2.mjs`: **46 passed, 0 failed** so far. Dust (power 15 down to 0 along a line, connections, the end
+  of a line drawn through, cross/dot on right-click, a dot staying a dot, steps up and down a block, a block over the
+  lower dust cutting the step, on glass but not on a bottom slab, popping off without a floor, what it powers: the lamp
+  under it and the one it points into, not one beside it); torches (standing and wall placement, light 7, out 2 ticks
+  after its block is powered and lit 2 ticks after, strongly powering the block above, burning out after 8 toggles in
+  60 ticks with the fizz and smoke, relighting later); repeaters (placement facing, delays 1-4 exactly 2-8 ticks,
+  output 15 from an input of 1, no input from the side, right-click cycling, locking by a powered repeater into its
+  side and not by dust).
 
 ## 5. Browser checklist (seed 12345, `http://localhost:5173/?seed=12345`)
 
@@ -79,3 +121,9 @@ Coordinates from the locator (the start chunk's corner, as `/locate` prints it):
   y 63-69, porch and door on the south side. `/tp @s -4397 70 -2912`. Look at: the hut on oak stilts over water, the witch inside (it doesn't despawn),
   cauldron, crafting table, potted red mushroom. At night witches (and only witches) spawn inside the hut's box.
 - Jungle temple and igloo: M3.
+- **Redstone dust** (craft or /give redstone): lay a line from a redstone block — it glows darker further out, 15
+  blocks reach; right-click a lone piece: cross ↔ dot; it climbs the side of a block that has dust on top.
+- **Redstone torch** (redstone + stick): on a block with a lever, it goes out when the lever is on; a torch clock
+  (a torch powering its own block through dust) burns out with a fizz and smoke. Light level 7.
+- **Repeater** (3 stone, 2 torches, redstone): right-click to set 1-4; a second powered repeater pointing into its side
+  locks it (the bedrock bar shows).

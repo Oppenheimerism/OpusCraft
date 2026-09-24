@@ -507,6 +507,11 @@ export class Level {
     return this.blockTicks.hasScheduledTick(x, y, z, block);
   }
 
+  /** vanilla LevelTicks.willTickThisTick: `block`'s tick at (x, y, z) is among those being run this tick */
+  willTickThisTick(x: number, y: number, z: number, block: number): boolean {
+    return this.blockTicks.willTickThisTick(x, y, z, block);
+  }
+
   private runScheduledTicks(): void {
     if (!this.blockTicks.size) return;
     this.blockTicks.tick(this.gameTime, 65536, (x, z) => (this.world.isLoaded(x, z) ? 'run' : 'drop'), (x, y, z, type) => {
@@ -633,9 +638,12 @@ export class Level {
     return old;
   }
 
-  /** vanilla Level.updateNeighborsAt: the six neighbours of (x, y, z) hear that `source` (a block id) there changed */
-  updateNeighborsAt(x: number, y: number, z: number, source: number): void {
-    this.neighborUpdater.updateNeighborsAt(x, y, z, source);
+  /**
+   * vanilla Level.updateNeighborsAt: the six neighbours of (x, y, z) hear that `source` (a block id) there changed;
+   * `skip` leaves out the one toward that direction (updateNeighborsAtExceptFromFacing)
+   */
+  updateNeighborsAt(x: number, y: number, z: number, source: number, skip = -1): void {
+    this.neighborUpdater.updateNeighborsAt(x, y, z, source, skip);
   }
 
   /** vanilla Level.neighborChanged: just the block at (x, y, z) hears it */

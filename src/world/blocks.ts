@@ -10,6 +10,7 @@ import {
 import { registerExtraBlocks } from './blocksExtra';
 import { registerEnchantingBlocks } from './blocksEnchanting';
 import { registerRedstoneBlocks } from './blocksRedstone';
+import { registerRedstoneComponents } from './blocksRedstoneComponents';
 import { registerVillageBlocks } from './blocksVillage';
 import { registerEndBlocks } from './blocksEnd';
 import { registerBannerBlocks } from './blocksBanners';
@@ -613,6 +614,7 @@ registerBlock('magma_block', { hardness: 0.5, sound: 'stone', tool: 'pickaxe', r
 registerExtraBlocks();
 registerEnchantingBlocks();
 registerRedstoneBlocks();
+registerRedstoneComponents();
 registerVillageBlocks();
 registerEndBlocks();
 registerBannerBlocks();

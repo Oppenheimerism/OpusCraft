@@ -237,6 +237,7 @@ export class Interaction {
     if (GUARDED_BY_PIGLINS.has(b.name)) Piglin.angerNearbyPiglins(p, false);
     // vanilla BaseFireBlock.playerWillDestroy: punching out fire fizzes
     if (b.name === 'fire') this.level.sound.play('block.fire.extinguish', x + 0.5, y + 0.5, z + 0.5, 0.5, 2.6 + (Math.random() - Math.random()) * 0.8);
+    behaviorOf(st)?.playerWillDestroy?.(this.level, x, y, z, st, p, held);
     const silk = levelOf(held, 'silk_touch') > 0;
     this.level.destroyBlock(x, y, z, survival, held?.item ?? null, true, held);
     if (survival && this.level.gameRules.doTileDrops) {
@@ -724,6 +725,8 @@ export class Interaction {
     this.level.setBlock(x, y, z, st);
     // (vanilla BlockItem.updateBlockEntityComponents: a banner's patterns go onto its block entity)
     this.level.world.getBlockEntity(x, y, z)?.applyComponents(stack);
+    // vanilla Block.setPlacedBy
+    if (this.level.getState(x, y, z) === st) behaviorOf(st)?.setPlacedBy?.(this.level, x, y, z, st, p);
     this.onPlaced?.(BLOCKS[STATE_BLOCK[st]].name);
     const isBucket = stack.item.id.endsWith('_bucket');
     if (isBucket) this.level.sound.play(stack.item.id === 'lava_bucket' ? 'item.bucket.empty_lava' : 'item.bucket.empty', x + 0.5, y + 0.5, z + 0.5, 1, 1);

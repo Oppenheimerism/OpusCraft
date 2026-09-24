@@ -15,6 +15,10 @@ import { lookingDirections, type PlaceContext } from '../blockRules';
 import { hasNeighborSignal } from './signal';
 import { BUTTON_WOODS } from '../../world/blocksRedstone';
 import type { Level } from '../level';
+// the components: redstone dust, torches, repeaters, pistons, dispensers and droppers, tripwire
+import './wire';
+import './torch';
+import './repeater';
 
 const blk = (st: number): Block => BLOCKS[STATE_BLOCK[st]];
 

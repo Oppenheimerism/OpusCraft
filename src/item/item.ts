@@ -382,6 +382,12 @@ for (const b of BLOCKS) {
   if (/^(tall_grass|large_fern|sunflower|lilac|rose_bush|peony)$/.test(b.name)) it.texture = 'block:' + b.name + (b.name === 'sunflower' ? '_front' : '_top');
 }
 
+// the redstone components' items (vanilla item/generated): the torch as its block texture, the repeater its own sprite
+for (const [id, tex] of [['redstone_torch', 'block:redstone_torch'], ['repeater', 'repeater']]) {
+  const it = ITEMS.get(id);
+  if (it) it.texture = tex;
+}
+
 export function itemForBlock(name: string): Item | undefined {
   // (a block that is another's item's: a wall banner is its banner's)
   const own = BLOCK_BY_NAME.get(name)?.s.item;
@@ -407,6 +413,8 @@ export function blockForItem(it: Item): Block | undefined {
   if (it.id === 'melon_seeds') return getBlock('melon_stem');
   if (it.id === 'sweet_berries') return getBlock('sweet_berry_bush');
   if (it.id === 'glow_berries') return getBlock('cave_vines');
+  // (vanilla ItemNameBlockItem: redstone places redstone dust)
+  if (it.id === 'redstone') return getBlock('redstone_wire');
   return it.block;
 }
 
