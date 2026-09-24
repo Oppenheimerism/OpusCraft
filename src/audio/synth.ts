@@ -26,6 +26,7 @@ import { villageSounds } from './gen/village';
 import { endSounds } from './gen/end';
 import { brewingSounds } from './gen/brewing';
 import { witchSounds } from './gen/witch';
+import { biomeMobSounds } from './gen/biomeMobs';
 
 export const SAMPLE_RATE = 44100;
 
@@ -58,6 +59,7 @@ export const SOUNDS: Record<string, SoundGen> = {
   ...endSounds(),
   ...brewingSounds(),
   ...witchSounds(),
+  ...biomeMobSounds(),
 };
 
 /** Number of in-game (overworld) music tracks. */

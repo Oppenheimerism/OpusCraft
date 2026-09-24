@@ -34,6 +34,7 @@ import { Villager } from '../entity/villager';
 import { IronGolem } from '../entity/ironGolem';
 import '../textures/ironGolem';
 import '../textures/witch';
+import '../textures/biomeMobs';
 import { Witch } from '../entity/witch';
 import { villagerTexture, zombieVillagerTexture } from '../textures/villager';
 import { ZombieVillager } from '../entity/zombieVillager';
@@ -60,7 +61,7 @@ import { ArmorLayer, renderHeadItem, PIGLIN_HEAD_ITEM_SCALE } from './armorLayer
 import type { ArmorModelSet } from './armorLayer';
 
 /** the mobs with vanilla's HumanoidArmorLayer and CustomHeadLayer, and their armour models */
-const ARMOR_WEARERS: Record<string, ArmorModelSet> = { zombie: 'humanoid', zombie_villager: 'zombie_villager', skeleton: 'humanoid', wither_skeleton: 'humanoid', piglin: 'piglin', zombified_piglin: 'piglin' };
+const ARMOR_WEARERS: Record<string, ArmorModelSet> = { zombie: 'humanoid', husk: 'humanoid', zombie_villager: 'zombie_villager', skeleton: 'humanoid', stray: 'humanoid', wither_skeleton: 'humanoid', piglin: 'piglin', zombified_piglin: 'piglin' };
 
 export interface EntityRenderOptions {
   shadows: boolean;
@@ -165,6 +166,9 @@ export class EntityRenderDispatcher {
       zombie_villager: M.zombieVillagerModel(),
       iron_golem: M.ironGolemModel(),
       witch: M.witchModel(),
+      husk: M.zombieModel(),
+      stray: M.skeletonModel(),
+      stray_outer: M.strayOuterModel(),
     };
     // vanilla textures/misc/shadow.png: soft black disc
     const n = 32, data = new Uint8Array(n * n * 4);
@@ -530,6 +534,8 @@ export class EntityRenderDispatcher {
     if (type === 'wither_skeleton') scale = (pose) => pose.scale(1.2, 1.2, 1.2);
     // vanilla StriderRenderer.scale: a baby is the whole model at half size
     if (type === 'strider' && baby) scale = (pose) => pose.scale(0.5, 0.5, 0.5);
+    // vanilla HuskRenderer.scale: 17/16
+    if (type === 'husk') scale = (pose) => pose.scale(1.0625, 1.0625, 1.0625);
     // vanilla WitchRenderer.scale: 15/16
     if (type === 'witch') scale = (pose) => pose.scale(0.9375, 0.9375, 0.9375);
     // vanilla VillagerRenderer.scale: 15/16, a baby half that
@@ -567,6 +573,7 @@ export class EntityRenderDispatcher {
         break;
       }
       case 'zombie':
+      case 'husk':
       case 'zombie_villager':
         M.animateHumanoidMob(def.root, a.limbSwing, a.limbAmount, a.age, a.headYaw, a.headPitch, attack, 'empty', !!e.vehicle);
         M.animateZombieArms(def.root, (e as Zombie).aggressive, attack, a.age);
@@ -582,6 +589,7 @@ export class EntityRenderDispatcher {
         M.animatePiglinPose(def.root, (e as Piglin).armPose(), a.age, attack, crossbowChargeProgress(e.mainHand, e.useItemTicks));
         break;
       case 'skeleton':
+      case 'stray':
       case 'wither_skeleton': {
         const bow = e.mainHand?.item.id === 'bow';
         armPose = bow && e.aggressive ? 'bow' : 'empty';
@@ -666,6 +674,15 @@ export class EntityRenderDispatcher {
         const [r, g, bl] = sheepFurColor(e.color);
         b.begin(this.state(ft));
         this.drawModel(b, fur, baby, r, g, bl);
+      }
+    }
+    // vanilla SkeletonClothingLayer: the stray's rags over its bones, posed as they are
+    if (type === 'stray' && !e.isInvisible()) {
+      const cl = this.models.stray_outer, ct = this.tex('stray_overlay');
+      if (cl && ct) {
+        copyPose(def.root, cl.root);
+        b.begin(this.state(ct));
+        this.drawModel(b, cl, false);
       }
     }
     if (e instanceof Creeper && e.powered) this.drawPowerSwirl(b, e, def, p);
@@ -1324,7 +1341,7 @@ function attackAnim(e: LivingEntity, p: number): number {
  * it's cold): the body twitches ±1.26°
  */
 function shakeYaw(e: LivingEntity): number {
-  return (e instanceof Hoglin && e.isConverting()) || (e instanceof Piglin && e.isConverting()) || (e instanceof Strider && e.suffocating) || (e instanceof ZombieVillager && e.converting)
+  return (e instanceof Hoglin && e.isConverting()) || (e instanceof Piglin && e.isConverting()) || (e instanceof Strider && e.suffocating) || (e instanceof ZombieVillager && e.converting) || (e instanceof Zombie && e.underWaterConverting)
     ? Math.cos(e.tickCount * 3.25) * Math.PI * 0.4
     : 0;
 }
@@ -1384,10 +1401,12 @@ function shadowRadius(e: Entity): number {
       r = 0.25 * (e as Slime).size;
       break;
     case 'zombie':
+    case 'husk':
     case 'zombie_villager':
     case 'zombified_piglin':
     case 'piglin':
     case 'skeleton':
+    case 'stray':
     case 'wither_skeleton':
     case 'blaze':
     case 'creeper':

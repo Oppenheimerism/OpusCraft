@@ -315,7 +315,7 @@ reg({ id: 'potion', maxStack: 1, creativeTab: 'food', texture: 'potion' });
 reg({ id: 'splash_potion', maxStack: 1, creativeTab: 'food', texture: 'splash_potion' });
 reg({ id: 'lingering_potion', maxStack: 1, creativeTab: 'food', texture: 'lingering_potion' });
 // spawn eggs (creative tab order is alphabetical, like vanilla)
-for (const m of ['bat', 'blaze', 'cave_spider', 'chicken', 'cow', 'creeper', 'enderman', 'ghast', 'hoglin', 'iron_golem', 'magma_cube', 'pig', 'piglin', 'sheep', 'skeleton', 'slime', 'spider', 'squid', 'strider', 'villager', 'witch', 'wither_skeleton', 'zoglin', 'zombie', 'zombie_villager', 'zombified_piglin']) {
+for (const m of ['bat', 'blaze', 'cave_spider', 'chicken', 'cow', 'creeper', 'enderman', 'ghast', 'hoglin', 'husk', 'iron_golem', 'magma_cube', 'pig', 'piglin', 'sheep', 'skeleton', 'slime', 'spider', 'squid', 'stray', 'strider', 'villager', 'witch', 'wither_skeleton', 'zoglin', 'zombie', 'zombie_villager', 'zombified_piglin']) {
   reg({ id: `${m}_spawn_egg`, texture: `${m}_spawn_egg`, creativeTab: 'spawn_eggs' });
 }
 // sugar cane item places the block

@@ -309,7 +309,7 @@ function eggPlop(c: Ctx): Float32Array {
 
 // ------------------------------------------------------------------ zombie
 
-function zombieVoice(c: Ctx, d: number, base: number, fall: number, o: { breath?: number; attack?: number } = {}): Float32Array {
+export function zombieVoice(c: Ctx, d: number, base: number, fall: number, o: { breath?: number; attack?: number } = {}): Float32Array {
   const { sr, rng } = c;
   const out = alloc(d + 0.1, sr);
   const wob = rng.range(1.5, 3);
@@ -361,7 +361,7 @@ export function zombieStep(c: Ctx): Float32Array {
 
 // ------------------------------------------------------------------ skeleton
 
-function rattleInto(b: Float32Array, c: Ctx, t0: number, d: number, rate: number): void {
+export function rattleInto(b: Float32Array, c: Ctx, t0: number, d: number, rate: number): void {
   ticks(b, c.sr, c.rng, {
     t: t0,
     dur: d,
@@ -391,7 +391,7 @@ function skeletonSay(c: Ctx): Float32Array {
   return out;
 }
 
-function skeletonHurt(c: Ctx): Float32Array {
+export function skeletonHurt(c: Ctx): Float32Array {
   const { sr, rng } = c;
   const out = alloc(0.4, sr);
   layer(out, 1, (b) => {
@@ -402,7 +402,7 @@ function skeletonHurt(c: Ctx): Float32Array {
   return out;
 }
 
-function skeletonDeath(c: Ctx): Float32Array {
+export function skeletonDeath(c: Ctx): Float32Array {
   const { sr, rng } = c;
   const out = alloc(1.2, sr);
   layer(out, 1, (b) =>
@@ -428,7 +428,7 @@ function skeletonDeath(c: Ctx): Float32Array {
   return out;
 }
 
-function skeletonStep(c: Ctx): Float32Array {
+export function skeletonStep(c: Ctx): Float32Array {
   const { sr, rng } = c;
   const out = alloc(0.25, sr);
   layer(out, 1, (b) => {

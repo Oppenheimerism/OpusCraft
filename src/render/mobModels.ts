@@ -458,6 +458,23 @@ export function skeletonModel(): MobModelDef {
 }
 
 /**
+ * vanilla ModelLayers.STRAY_OUTER_LAYER (HumanoidModel.createMesh(0.25) on 64x32): the stray's clothes, the humanoid
+ * mesh a quarter pixel bigger all round (the hat three quarters), so the sleeves and trouser legs hang loose round
+ * the bones; posed as the skeleton is
+ */
+export function strayOuterModel(): MobModelDef {
+  const root = new ModelPart();
+  const head = root.add('head', part([{ x: -4, y: -8, z: -4, w: 8, h: 8, d: 8, u: 0, v: 0, inflate: 0.25 }]));
+  head.add('hat', part([{ x: -4, y: -8, z: -4, w: 8, h: 8, d: 8, u: 32, v: 0, inflate: 0.75 }]));
+  root.add('body', part([{ x: -4, y: 0, z: -2, w: 8, h: 12, d: 4, u: 16, v: 16, inflate: 0.25 }]));
+  root.add('right_arm', part([{ x: -3, y: -2, z: -2, w: 4, h: 12, d: 4, u: 40, v: 16, inflate: 0.25 }], [-5, 2, 0]));
+  root.add('left_arm', part([{ x: -1, y: -2, z: -2, w: 4, h: 12, d: 4, u: 40, v: 16, mirror: true, inflate: 0.25 }], [5, 2, 0]));
+  root.add('right_leg', part([{ x: -2, y: 0, z: -2, w: 4, h: 12, d: 4, u: 0, v: 16, inflate: 0.25 }], [-1.9, 12, 0]));
+  root.add('left_leg', part([{ x: -2, y: 0, z: -2, w: 4, h: 12, d: 4, u: 0, v: 16, mirror: true, inflate: 0.25 }], [1.9, 12, 0]));
+  return { root, texW: 64, texH: 32 };
+}
+
+/**
  * the right arm's pose. The crossbow ones (vanilla PiglinArmPose / IllagerArmPose CROSSBOW_CHARGE and
  * CROSSBOW_HOLD) pose both arms; as in PiglinModel / IllagerModel they're applied after the rest of the
  * humanoid animation (the idle sway included), with animateHumanoidMob's `crossbowCharge` (0..1) for the draw

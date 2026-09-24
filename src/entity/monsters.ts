@@ -1,7 +1,7 @@
 // Hostile mobs (vanilla Monster / Zombie / Skeleton / Creeper / Spider) and
 // their combat goals.
 
-import { Mob, LootEntry, MobCategory, isValidEmptySpawnBlock } from './mob';
+import { Mob, LootEntry, MobCategory, isValidEmptySpawnBlock, EQUIPMENT_SLOTS } from './mob';
 import type { SpawnReason } from './mob';
 import type { Level } from '../game/level';
 import type { DifficultyInstance } from '../game/difficulty';
@@ -23,6 +23,7 @@ import { explode } from '../game/explosion';
 import { clipBlocks } from '../game/raycast';
 import { canSurvive } from '../game/blockRules';
 import { AABB } from '../core/aabb';
+import { FLUID_WATER } from '../world/fluids';
 import { PathType } from './ai/pathfinder';
 import { MoveControl, MoveOp, rotlerp } from './ai/controls';
 import { reducedTickDelay } from './ai/goal';
@@ -266,6 +267,70 @@ export class Zombie extends Monster {
       break;
     }
   }
+  // --- drowning: a zombie long under water turns into a drowned, a husk into a zombie ------------------
+
+  /** vanilla inWaterTime: ticks its eyes have been under (-1: they're out) */
+  private inWaterTime = 0;
+  /** vanilla conversionTime: ticks left of turning, -1 when it isn't (vanilla DATA_DROWNED_CONVERSION_ID) */
+  private drownedConversionTime = -1;
+  /** vanilla isUnderWaterConverting: shaking as it turns */
+  get underWaterConverting(): boolean {
+    return this.drownedConversionTime >= 0;
+  }
+  /** vanilla convertsInWater, and what into: the type, and the sound it makes (level events 1040, 1041) */
+  protected underWaterConversion(): { type: string; sound: string } | null {
+    return { type: 'drowned', sound: 'entity.zombie.converted_to_drowned' };
+  }
+  /**
+   * vanilla Zombie.tick: with its eyes 30 seconds under water it starts to turn (if it's the kind that does, and the
+   * game has what it becomes), and 15 seconds later it has
+   */
+  override tick(): void {
+    if (this.isAlive && !this.removed) {
+      const conv = this.underWaterConversion();
+      if (this.drownedConversionTime >= 0) {
+        if (--this.drownedConversionTime < 0 && conv) this.convertToZombieType(conv.type, conv.sound);
+      } else if (conv && ZOMBIE_TYPES[conv.type]) {
+        if (this.eyeFluid === FLUID_WATER) {
+          if (++this.inWaterTime >= 600) this.drownedConversionTime = 300;
+        } else this.inWaterTime = -1;
+      }
+    }
+    if (!this.removed) super.tick();
+  }
+  /**
+   * vanilla Zombie.convertToZombieType (Mob.convertTo with its equipment): the new one where it stood, as young, as
+   * well kitted and as unlikely to despawn, rolled afresh for its attributes, breaking doors if this one did
+   */
+  protected convertToZombieType(type: string, sound: string): Zombie | null {
+    const make = ZOMBIE_TYPES[type];
+    if (!make) return null;
+    const z = make(this.level);
+    z.moveTo(this.x, this.y, this.z, this.yaw, this.pitch);
+    z.headYaw = z.headYawO = this.headYaw;
+    z.bodyYaw = z.bodyYawO = this.bodyYaw;
+    z.setBaby(this.baby);
+    z.persistenceRequired = this.persistenceRequired;
+    z.canPickUpLoot = this.canPickUpLoot;
+    for (const slot of EQUIPMENT_SLOTS) {
+      const it = this.getItemBySlot(slot);
+      if (!it) continue;
+      z.setItemSlot(slot, it.copy());
+      z.setDropChance(slot, this.equipmentDropChance(slot));
+    }
+    z.handleAttributes(z.spawnDifficulty().specialMultiplier());
+    z.setCanBreakDoors(z.supportsBreakDoorGoal() && this.canBreakDoors());
+    this.level.addEntity(z);
+    const vehicle = this.vehicle;
+    if (vehicle) {
+      this.stopRiding();
+      z.startRiding(vehicle, true);
+    }
+    this.remove();
+    this.level.sound.play(sound, this.x, this.y, this.z, 2, (this.random.nextFloat() - this.random.nextFloat()) * 0.2 + 1);
+    return z;
+  }
+
   override isBaby(): boolean {
     return this.baby;
   }
@@ -372,6 +437,8 @@ export class Zombie extends Monster {
   }
   protected override saveData(): Record<string, number | string | boolean> {
     const d: Record<string, number | string | boolean> = { baby: this.baby };
+    if (this.inWaterTime > 0) d.inWaterTime = this.inWaterTime;
+    if (this.drownedConversionTime >= 0) d.drownedConversionTime = this.drownedConversionTime;
     if (this.breaksDoors) d.breakDoors = true;
     if (this.reinforceBase) d.reinforce = this.reinforceBase;
     if (this.reinforceBonus) d.reinforceBonus = this.reinforceBonus;
@@ -383,6 +450,8 @@ export class Zombie extends Monster {
   }
   protected override loadData(d: Record<string, number | string | boolean>): void {
     if (d.baby) this.setBaby(true);
+    this.inWaterTime = Number(d.inWaterTime ?? 0);
+    this.drownedConversionTime = Number(d.drownedConversionTime ?? -1);
     this.setCanBreakDoors(d.breakDoors === true);
     this.reinforceBase = Number(d.reinforce ?? 0);
     this.reinforceBonus = Number(d.reinforceBonus ?? 0);
@@ -394,9 +463,12 @@ export class Zombie extends Monster {
   }
 }
 
-// ---------------------------------------------------------------------------
+/**
+ * the zombie kinds one can turn into another as (underwater: a zombie into a drowned, a husk into a zombie), by
+ * type; the ones in other modules add themselves
+ */
+export const ZOMBIE_TYPES: Record<string, ((l: Level) => Zombie) | undefined> = { zombie: (l) => new Zombie(l) };
 
-/** vanilla BowItem.getPowerForTime */
 // ---------------------------------------------------------------------------
 // Zombified piglin (vanilla ZombifiedPiglin extends Zombie, NeutralMob): left alone it wanders; strike one and it,
 // and every zombified piglin about with nothing to fight, turns on you and stays angry for 20-39 s once it loses you
@@ -454,6 +526,10 @@ export class ZombifiedPiglin extends Zombie {
   /** vanilla ZombifiedPiglin.supportsBreakDoorGoal */
   protected override supportsBreakDoorGoal(): boolean {
     return false;
+  }
+  /** vanilla ZombifiedPiglin.convertsInWater: it never drowns into anything */
+  protected override underWaterConversion(): null {
+    return null;
   }
   /** vanilla ZombifiedPiglin.randomizeReinforcementsChance: none (only a leader calls for help) */
   protected override randomizeReinforcementsChance(): void {}
@@ -586,6 +662,7 @@ export class ZombifiedPiglin extends Zombie {
   }
 }
 
+/** vanilla BowItem.getPowerForTime */
 export function bowPower(ticks: number): number {
   let f = ticks / 20;
   f = (f * f + f * 2) / 3;

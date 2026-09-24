@@ -14,6 +14,7 @@ import { Strider } from '../entity/strider';
 import { Piglin } from '../entity/piglin';
 import { Villager } from '../entity/villager';
 import { Witch } from '../entity/witch';
+import { Husk, Stray } from '../entity/biomeMonsters';
 import { IronGolem } from '../entity/ironGolem';
 import { ZombieVillager } from '../entity/zombieVillager';
 import { Zombie, ZombifiedPiglin, Skeleton, WitherSkeleton, Creeper, Spider, CaveSpider, Enderman, Slime, MagmaCube, Monster, validSpawnBlock } from '../entity/monsters';
@@ -59,6 +60,8 @@ export const MOB_TYPES: Record<string, (l: Level) => Mob> = {
   villager: (l) => new Villager(l),
   iron_golem: (l) => new IronGolem(l),
   witch: (l) => new Witch(l),
+  husk: (l) => new Husk(l),
+  stray: (l) => new Stray(l),
 };
 
 export function createMob(type: string, level: Level): Mob | null {
@@ -145,8 +148,9 @@ export function isChunkSaved(e: Entity): boolean {
 const ENTITY_NAMES: Record<string, string> = {
   pig: 'Pig', cow: 'Cow', sheep: 'Sheep', chicken: 'Chicken', zombie: 'Zombie', zombie_villager: 'Zombie Villager', skeleton: 'Skeleton', creeper: 'Creeper', spider: 'Spider',
   villager: 'Villager', iron_golem: 'Iron Golem', cave_spider: 'Cave Spider', enderman: 'Enderman', slime: 'Slime', magma_cube: 'Magma Cube', zombified_piglin: 'Zombified Piglin', ghast: 'Ghast', blaze: 'Blaze', wither_skeleton: 'Wither Skeleton', squid: 'Squid', bat: 'Bat', hoglin: 'Hoglin', zoglin: 'Zoglin', strider: 'Strider', piglin: 'Piglin',
+  witch: 'Witch', husk: 'Husk', stray: 'Stray', fireball: 'Fireball', small_fireball: 'Small Fireball',
   arrow: 'Arrow', tnt: 'Primed TNT', lightning_bolt: 'Lightning Bolt', item: 'Item', experience_orb: 'Experience Orb', falling_block: 'Falling Block', player: 'Player',
-  egg: 'Thrown Egg', snowball: 'Snowball', ender_pearl: 'Thrown Ender Pearl',
+  egg: 'Thrown Egg', snowball: 'Snowball', ender_pearl: 'Thrown Ender Pearl', potion: 'Potion',
   minecart: 'Minecart', chest_minecart: 'Minecart with Chest', boat: 'Boat', chest_boat: 'Boat with Chest', end_crystal: 'End Crystal',
 };
 
@@ -260,6 +264,9 @@ function settingsForLand(name: string): Omit<MobSettings, 'water' | 'ambient'> {
     case 'old_growth_birch_forest':
     case 'dark_forest':
     case 'taiga':
+    case 'snowy_taiga':
+    case 'grove':
+    case 'snowy_slopes':
     case 'old_growth_pine_taiga':
     case 'old_growth_spruce_taiga':
     case 'windswept_hills':
@@ -276,16 +283,17 @@ function settingsForLand(name: string): Omit<MobSettings, 'water' | 'ambient'> {
     case 'sparse_jungle':
     case 'bamboo_jungle':
       return { creature: [...farmAnimals(), { type: 'chicken', weight: 10, min: 4, max: 4 }], monster: monsters(), creatureProbability: 0.1 };
+    // vanilla BiomeDefaultFeatures.snowySpawns: fewer skeletons, and strays instead (no rabbits or polar bears yet)
     case 'snowy_plains':
     case 'ice_spikes':
-    case 'snowy_taiga':
-    case 'grove':
-    case 'snowy_slopes':
+      return { creature: [], monster: [...monsters(95, 20), S_('stray', 80, 4, 4)], creatureProbability: 0.07 };
+    // (goats and rabbits aren't in the game yet)
     case 'frozen_peaks':
     case 'jagged_peaks':
-      return { creature: [], monster: monsters(95, 20), creatureProbability: 0.07 };
+      return { creature: [], monster: monsters(), creatureProbability: 0.1 };
+    // vanilla BiomeDefaultFeatures.desertSpawns: few zombies, and husks (no rabbits yet)
     case 'desert':
-      return { creature: [], monster: monsters(19, 100, 1), creatureProbability: 0.1 };
+      return { creature: [], monster: [...monsters(19, 100, 1), S_('husk', 80, 4, 4)], creatureProbability: 0.1 };
     default:
       return none;
   }
@@ -498,6 +506,15 @@ export class NaturalSpawner {
         return MagmaCube.checkMagmaCubeSpawn(lvl);
       case 'zombified_piglin':
         return ZombifiedPiglin.checkZombifiedPiglinSpawn(lvl, x, y, z);
+      case 'husk':
+        // vanilla Husk.checkHuskSpawnRules: a monster's rules, under the open sky
+        return Monster.checkMonsterSpawn(lvl, x, y, z, () => this.rand.nextFloat()) && lvl.canSeeSky(x, y, z);
+      case 'stray': {
+        // vanilla Stray.checkStraySpawnRules: the same, but the sky is looked for from the top of any powder snow
+        let top = y + 1;
+        while (BLOCKS[STATE_BLOCK[lvl.world.getState(x, top, z)]].name === 'powder_snow') top++;
+        return Monster.checkMonsterSpawn(lvl, x, y, z, () => this.rand.nextFloat()) && lvl.canSeeSky(x, top - 1, z);
+      }
       case 'ghast':
         return Ghast.checkGhastSpawn(lvl, x, y, z, () => this.rand.nextFloat());
       case 'blaze':

@@ -92,6 +92,10 @@ export interface LootEntry {
   noLooting?: boolean;
   /** vanilla random_chance_with_enchanted_bonus: the chance with looting, [level I, per level above] */
   lootingChance?: [number, number];
+  /** vanilla enchanted_count_increase's limit: at most this many, looting and all */
+  limit?: number;
+  /** vanilla set_potion: the potion the item carries (a tipped arrow's) */
+  potion?: string;
 }
 
 export type SpawnReason = 'natural' | 'chunk' | 'egg' | 'command' | 'breeding' | 'spawner' | 'jockey' | 'structure' | 'summoned' | 'conversion' | 'reinforcement';
@@ -279,8 +283,9 @@ export abstract class Mob extends LivingEntity {
   isBaby(): boolean {
     return false;
   }
+  /** vanilla LivingEntity.canBreatheUnderwater (#can_breathe_under_water): the undead never drown */
   canBreatheUnderwater(): boolean {
-    return false;
+    return this.isUndead();
   }
 
   setSpeed(s: number): void {
@@ -867,10 +872,11 @@ export abstract class Mob extends LivingEntity {
       if (chance !== undefined && this.random.nextFloat() >= chance) continue;
       let n = e.min + this.random.nextInt(e.max - e.min + 1);
       if (!e.noLooting) n += lootingBonus(looting, () => this.random.nextFloat());
+      if (e.limit !== undefined) n = Math.min(n, e.limit);
       if (n <= 0) continue;
       const id = e.cooked && this.isOnFire() ? e.cooked : e.item;
       const it = ITEMS.get(id);
-      if (it) this.spawnAtLocation(new ItemStack(it, n));
+      if (it) this.spawnAtLocation(new ItemStack(it, n, 0, e.potion ? { potion: { potion: e.potion } } : null));
     }
   }
 
