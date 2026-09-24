@@ -124,6 +124,24 @@ export function landRandomPosAway(m: Mob, radius: number, yRange: number, ax: nu
   });
 }
 
+/** vanilla LandRandomPos.getPosTowards: somewhere up to `radius` off, within 90° of the way to a point, on land */
+export function landRandomPosTowards(m: Mob, radius: number, yRange: number, tx: number, tz: number): Pos | null {
+  const vx = tx - m.x, vz = tz - m.z;
+  return bestOf(m, () => {
+    const d = randomDirectionWithinRadians(m, radius, yRange, vx, vz, Math.PI / 2);
+    if (!d) return null;
+    const p = towardDirection(m, d);
+    if (outsideLimits(p) || !m.navigation.isStableDestination(p[0], p[1], p[2])) return null;
+    let y = p[1];
+    if (isSolid(m, p[0], y, p[2])) {
+      y++;
+      while (y < MAX_Y && isSolid(m, p[0], y, p[2])) y++;
+    }
+    if (isWater(m, p[0], y, p[2]) || hasMalus(m, p[0], y, p[2])) return null;
+    return [p[0], y, p[2]];
+  });
+}
+
 /** vanilla LandRandomPos.getPos */
 export function landRandomPos(m: Mob, radius: number, yRange: number): Pos | null {
   return bestOf(m, () => {
@@ -554,6 +572,45 @@ export class NearestAttackablePlayerGoal extends TargetGoal {
     if (this.mustSee && !m.sensing.hasLineOfSight(p)) return false;
     this.found = p;
     return true;
+  }
+  override start(): void {
+    this.mob.setTarget(this.found);
+    super.start();
+  }
+}
+
+/**
+ * vanilla NearestAttackableTargetGoal for mobs rather than the player: the nearest living thing `test` accepts within
+ * the follow range (a box that far out, 4 up and down; then TargetingConditions: in range as far as it can be seen,
+ * at least 2, and in sight if `mustSee`)
+ */
+export class NearestAttackableMobGoal extends TargetGoal {
+  private found: LivingEntity | null = null;
+  private readonly randomInterval: number;
+  constructor(mob: Mob, readonly test: (e: LivingEntity) => boolean, mustSee: boolean, randomInterval = 10, readonly extra: () => boolean = () => true) {
+    super(mob, mustSee);
+    this.randomInterval = reducedTickDelay(randomInterval);
+  }
+  canUse(): boolean {
+    const m = this.mob;
+    if (this.randomInterval > 0 && m.random.nextInt(this.randomInterval) !== 0) return false;
+    if (!this.extra()) return false;
+    const r = m.followRange;
+    let best: LivingEntity | null = null, bd = Infinity;
+    for (const e of m.level.getEntities(m.bb.inflate(r, 4, r), (e) => e instanceof LivingEntity && e !== m && e.isAlive)) {
+      const le = e as LivingEntity;
+      if (!this.test(le) || !m.canAttack(le)) continue;
+      const range = Math.max(r * le.visibilityPercent(m), 2);
+      if (le.distanceToSqr(m.x, m.y, m.z) > range * range) continue;
+      if (this.mustSee && !m.sensing.hasLineOfSight(le)) continue;
+      const d = le.distanceToSqr(m.x, m.y + m.eyeHeight, m.z);
+      if (d < bd) {
+        bd = d;
+        best = le;
+      }
+    }
+    this.found = best;
+    return best !== null;
   }
   override start(): void {
     this.mob.setTarget(this.found);

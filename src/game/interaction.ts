@@ -22,6 +22,7 @@ import { Animal } from '../entity/animals';
 import { Creeper, bowPower } from '../entity/monsters';
 import { Piglin, GUARDED_BY_PIGLINS } from '../entity/piglin';
 import { Villager } from '../entity/villager';
+import { IronGolem } from '../entity/ironGolem';
 import { Arrow } from '../entity/arrow';
 import { PrimedTnt } from '../entity/tnt';
 import { ThrownItem, ThrownKind } from '../entity/throwable';
@@ -330,6 +331,11 @@ export class Interaction {
       }
       // vanilla Villager.mobInteract: trade, or a shake of the head
       if (e instanceof Villager && e.interact(p, stack, main)) {
+        p.swing();
+        return 'success';
+      }
+      // vanilla IronGolem.mobInteract: an iron ingot to mend it
+      if (e instanceof IronGolem && e.interact(p, stack)) {
         p.swing();
         return 'success';
       }

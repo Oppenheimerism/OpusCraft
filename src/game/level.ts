@@ -41,6 +41,7 @@ import { PoiManager } from './poi';
 import './redstone/components';
 import './villageBlocks';
 import './endPortal';
+import './golems';
 
 export interface SoundSink {
   play(name: string, x: number, y: number, z: number, volume?: number, pitch?: number): void;
@@ -350,6 +351,8 @@ export class Level {
   onPlayerCrossbowKill: ((killed: Entity[]) => void) | null = null;
   /** an entity's time in a portal came up (the portal block it was in, and which kind) */
   onPortal: ((e: Entity, x: number, y: number, z: number, kind: 'nether' | 'end') => void) | null = null;
+  /** a golem someone built came to life (vanilla CarvedPumpkinBlock.spawnGolemInWorld: summoned_entity) */
+  onSummonedEntity: ((e: Entity) => void) | null = null;
 
   /** vanilla: entities tick only inside the simulation distance (and in loaded chunks) */
   isEntityTicking(x: number, z: number): boolean {

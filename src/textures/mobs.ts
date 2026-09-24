@@ -1972,6 +1972,7 @@ const EGGS: [string, number, number][] = [
   ['zoglin', 0xc66e55, 0xe6e6e6],
   ['piglin', 0x995f40, 0xf9f3a4],
   ['villager', 0x563c33, 0xbd8b72],
+  ['iron_golem', 0xdbcdc2, 0x74a332],
 ];
 
 export const SPAWN_EGG_TEXTURES: Record<string, () => TexImage> = {};

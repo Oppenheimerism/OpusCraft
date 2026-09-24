@@ -25,6 +25,7 @@ import { BLOCKS, STATE_BLOCK, FLAGS, F_FULL_COLLISION } from '../world/block';
 import { BIOMES } from '../world/gen/biomes';
 import type { PoiKind } from '../game/poi';
 import { findStandUpPosition } from '../game/sleep';
+import { summonGolemNear } from './ironGolem';
 import { wrapDegrees } from '../core/math';
 
 // ---------------------------------------------------------------------------
@@ -326,7 +327,10 @@ function lookAtTargetSink(): BehaviorControl<Villager> {
 const isHurt = (v: Villager) => v.mem.hurtBy;
 const hasHostile = (v: Villager) => !!v.mem.nearestHostile;
 
-/** vanilla VillagerPanicTrigger: hurt, or a hostile close by: drop what it was doing and panic */
+/**
+ * vanilla VillagerPanicTrigger: hurt, or a hostile close by: drop what it was doing and panic; and while it lasts,
+ * every 5 seconds, call for a golem if three want one
+ */
 function panicTrigger(): BehaviorControl<Villager> {
   return new Behavior<Villager>({
     start: (v) => {
@@ -336,11 +340,15 @@ function panicTrigger(): BehaviorControl<Villager> {
         m.path = null;
         m.walkTarget = null;
         m.lookTarget = null;
+        m.breedTarget = null;
         m.interactionTarget = null;
       }
       v.brain.setActiveActivityIfPossible('panic', v);
     },
     canStillUse: (v) => isHurt(v) || hasHostile(v),
+    tick: (v, now) => {
+      if (now % 100 === 0) v.spawnGolemIfNeeded(now, 3);
+    },
   });
 }
 
@@ -1357,6 +1365,8 @@ export class Villager extends AgeableMob {
   foodLevel = 0;
   /** vanilla lastGossipTime */
   lastGossipTime = 0;
+  /** vanilla GOLEM_DETECTED_RECENTLY: until when (it lasts 600 ticks from the sighting) */
+  golemDetectedUntil = -1;
 
   readonly mem: VillagerMemories = {
     home: null, jobSite: null, potentialJobSite: null, meetingPoint: null, walkTarget: null, lookTarget: null, interactionTarget: null, path: null,
@@ -1480,6 +1490,8 @@ export class Villager extends AgeableMob {
   protected override customServerAiStep(): void {
     const now = this.level.gameTime;
     if ((this.tickCount + this.sensePhase) % 20 === 0 || this.tickCount === 1) this.sense();
+    // vanilla GolemSensor: every 200 ticks, an iron golem among those nearby
+    if ((this.tickCount + this.sensePhase) % 200 === 0 && this.mem.nearestLiving.some((e) => e.type === 'iron_golem')) this.golemDetected(now);
     this.brain.tick(this, now);
     this.assignProfessionWhenSpawned = false;
     if (!this.isTrading() && this.updateMerchantTimer > 0) {
@@ -1701,6 +1713,38 @@ export class Villager extends AgeableMob {
     // (what they've heard of players waits for reputation)
     this.lastGossipTime = now;
     other.lastGossipTime = now;
+    this.spawnGolemIfNeeded(now, 5);
+  }
+
+  /** what the villagers think of a player (vanilla getPlayerReputation) */
+  playerReputation(_p: Entity): number {
+    return 0;
+  }
+
+  // --- iron golems ---------------------------------------------------------------------------------------------
+
+  /** vanilla GolemSensor.golemDetected */
+  golemDetected(now: number): void {
+    this.golemDetectedUntil = now + 600;
+  }
+
+  /** vanilla Villager.wantsToSpawnGolem: it slept within the last day, and hasn't seen a golem lately */
+  wantsToSpawnGolem(now: number): boolean {
+    const slept = this.mem.lastSlept;
+    if (slept === null || now - slept >= 24000) return false;
+    return now >= this.golemDetectedUntil;
+  }
+
+  /**
+   * vanilla Villager.spawnGolemIfNeeded: when enough of the villagers within 10 (of the first five that do) want a
+   * golem, one is summoned nearby, and they've all seen it
+   */
+  spawnGolemIfNeeded(now: number, min: number): void {
+    if (!this.wantsToSpawnGolem(now)) return;
+    const near = this.level.getEntities(this.bb.inflate(10, 10, 10), (e) => e instanceof Villager) as Villager[];
+    const want = near.filter((v) => v.wantsToSpawnGolem(now)).slice(0, 5);
+    if (want.length < min) return;
+    if (summonGolemNear(this.level, Math.floor(this.x), Math.floor(this.y), Math.floor(this.z))) for (const v of near) v.golemDetected(now);
   }
 
   // --- trading (vanilla AbstractVillager / Villager as a Merchant) ---------------------------------------------

@@ -31,6 +31,8 @@ import { Hoglin, Zoglin } from '../entity/hoglin';
 import { Strider } from '../entity/strider';
 import { Piglin } from '../entity/piglin';
 import { Villager } from '../entity/villager';
+import { IronGolem } from '../entity/ironGolem';
+import '../textures/ironGolem';
 import { villagerTexture } from '../textures/villager';
 import { Fireball, LargeFireball } from '../entity/fireball';
 import { LightningBolt } from '../entity/lightning';
@@ -157,6 +159,7 @@ export class EntityRenderDispatcher {
       zoglin: M.hoglinModel(),
       strider: M.striderModel(),
       villager: M.villagerModel(),
+      iron_golem: M.ironGolemModel(),
     };
     // vanilla textures/misc/shadow.png: soft black disc
     const n = 32, data = new Uint8Array(n * n * 4);
@@ -514,6 +517,12 @@ export class EntityRenderDispatcher {
       const f = baby ? 0.46875 : 0.9375;
       scale = (pose) => pose.scale(f, f, f);
     }
+    // vanilla IronGolemRenderer.setupRotations: it rocks from side to side as it walks
+    if (e instanceof IronGolem && e.walkAnimSpeed >= 0.01) {
+      const j = e.walkAnimPos - e.walkAnimSpeed * (1 - p) + 6;
+      const k = (Math.abs((j % 13) - 6.5) - 3.25) / 3.25;
+      scale = (pose) => pose.rotZ(6.5 * k);
+    }
     const spiderLike = type === 'spider' || type === 'cave_spider';
     const a = this.setupLiving(e, dx + jx, dy, dz + jz, p, spiderLike ? 180 : 90, scale);
     const attack = attackAnim(e, p);
@@ -592,6 +601,11 @@ export class EntityRenderDispatcher {
       case 'villager':
         M.animateVillager(def.root, a.limbSwing, a.limbAmount, a.age, a.headYaw, a.headPitch, (e as Villager).unhappyCounter > 0);
         break;
+      case 'iron_golem': {
+        const g = e as IronGolem;
+        M.animateIronGolem(def.root, a.limbSwing, a.limbAmount, a.headYaw, a.headPitch, g.attackAnimationTick > 0 ? g.attackAnimationTick - p : 0, g.offerFlowerTick);
+        break;
+      }
       case 'bat': {
         // vanilla AnimationState: seconds since each loop started (a tick is 50 ms)
         const bat = e as Bat;
@@ -630,6 +644,7 @@ export class EntityRenderDispatcher {
       }
     }
     if (e instanceof Creeper && e.powered) this.drawPowerSwirl(b, e, def, p);
+    if (e instanceof IronGolem) this.drawGolemLayers(b, e, def);
     if (spiderLike) this.drawEyes(b, def, 'spider_eyes', baby);
     if (e instanceof Enderman) {
       this.drawEyes(b, def, 'enderman_eyes', false);
@@ -685,6 +700,34 @@ export class EntityRenderDispatcher {
       b.begin(this.state(tex, { blend: true, cutoff: 0.01, depthWrite: false }));
       this.drawModel(b, def, baby, 1, 1, 1, 38 / 255);
       b.flush();
+    }
+  }
+
+  /**
+   * vanilla IronGolemCrackinessLayer (the cracks of how hurt it is, over the same model) and IronGolemFlowerLayer (the
+   * poppy in its right hand while it offers it)
+   */
+  private drawGolemLayers(b: EntityBatch, e: IronGolem, def: MobModelDef): void {
+    const cr = e.crackiness();
+    if (cr !== 'none' && !e.isInvisible()) {
+      const t = this.tex('iron_golem_crackiness_' + cr);
+      if (t) {
+        b.begin(this.state(t));
+        this.drawModel(b, def, false);
+      }
+    }
+    if (e.offerFlowerTick > 0) {
+      const pose = this.pose;
+      b.setOverlay(0, 0, 0, 0);
+      pose.push();
+      def.root.child('right_arm').translateAndRotate(pose);
+      pose.translate(-1.1875, 1.0625, -0.9375);
+      pose.translate(0.5, 0.5, 0.5);
+      pose.scale(0.5, 0.5, 0.5);
+      pose.rotX(-90);
+      pose.translate(-0.5, -0.5, -0.5);
+      this.items.renderBlockState(b, pose, S('poppy'));
+      pose.pop();
     }
   }
 
@@ -1271,6 +1314,9 @@ function shadowRadius(e: Entity): number {
     case 'villager':
     case 'end_crystal':
       r = 0.5;
+      break;
+    case 'iron_golem':
+      r = 0.7;
       break;
     case 'bat':
       r = 0.25;

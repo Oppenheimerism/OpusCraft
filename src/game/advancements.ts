@@ -43,6 +43,8 @@ export type Criterion =
   | { t: 'distract_piglin'; how: 'thrown' | 'directly' }
   /** vanilla TradeTrigger: traded with a villager (standing at least that high) */
   | { t: 'villager_trade'; minY?: number }
+  /** vanilla SummonedEntityTrigger: built a golem (or the wither) near enough to see it come to life */
+  | { t: 'summoned_entity'; entity: string }
   | { t: 'impossible' };
 
 export interface AdvancementDef {
@@ -194,7 +196,7 @@ const A: AdvancementDef[] = [
   { id: 'adventure/shoot_arrow', parent: 'adventure/kill_a_mob', title: 'Take Aim', description: 'Shoot something with an Arrow', icon: 'bow', frame: 'task', criteria: one({ t: 'shoot_arrow' }) },
   { id: 'adventure/kill_all_mobs', parent: 'adventure/kill_a_mob', title: 'Monsters Hunted', description: 'Kill one of every hostile monster', icon: 'diamond_sword', frame: 'challenge', criteria: each(HOSTILE, (n) => ({ t: 'kill', type: n })) },
   { id: 'adventure/totem_of_undying', parent: 'adventure/kill_a_mob', title: 'Postmortal', description: 'Use a Totem of Undying to cheat death', icon: 'totem_of_undying', frame: 'goal', criteria: one(never) },
-  { id: 'adventure/summon_iron_golem', parent: 'adventure/trade', title: 'Hired Help', description: 'Summon an Iron Golem to help defend a village', icon: 'carved_pumpkin', frame: 'goal', criteria: one(never) },
+  { id: 'adventure/summon_iron_golem', parent: 'adventure/trade', title: 'Hired Help', description: 'Summon an Iron Golem to help defend a village', icon: 'carved_pumpkin', frame: 'goal', criteria: one({ t: 'summoned_entity', entity: 'iron_golem' }) },
   { id: 'adventure/trade_at_world_height', parent: 'adventure/trade', title: 'Star Trader', description: 'Trade with a Villager at the build height limit', icon: 'emerald', frame: 'task', criteria: one({ t: 'villager_trade', minY: 319 }) },
   { id: 'adventure/trim_with_all_exclusive_armor_patterns', parent: 'adventure/trim_with_any_armor_pattern', title: 'Smithing with Style', description: 'Apply these smithing templates at least once: Spire, Snout, Rib, Ward, Silence, Vex, Tide, Wayfinder', icon: 'silence_armor_trim_smithing_template', frame: 'challenge', criteria: one(never) },
   { id: 'adventure/two_birds_one_arrow', parent: 'adventure/ol_betsy', title: 'Two Birds, One Arrow', description: 'Kill two Phantoms with a piercing Arrow', icon: 'crossbow', frame: 'challenge', criteria: one({ t: 'killed_by_crossbow', victims: ['phantom', 'phantom'] }) },
@@ -429,6 +431,8 @@ export interface TriggerPayload {
   crossbowKills?: string[];
   /** where the player stood for a trade (villager_trade) */
   tradeY?: number;
+  /** what the player built came to life (summoned_entity) */
+  summoned?: string;
 }
 
 export class PlayerAdvancements {
@@ -555,6 +559,8 @@ function matches(c: Criterion, p: TriggerPayload): boolean {
       return !!p.dimension && (!c.from || c.from === p.dimension.from) && (!c.to || c.to === p.dimension.to);
     case 'villager_trade':
       return p.tradeY !== undefined && (c.minY === undefined || p.tradeY >= c.minY);
+    case 'summoned_entity':
+      return p.summoned === c.entity;
     case 'nether_travel':
       return p.netherTravel !== undefined && p.netherTravel >= c.distance;
     case 'killed_by_crossbow': {

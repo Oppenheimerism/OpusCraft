@@ -163,6 +163,56 @@ export function animateVillager(root: ModelPart, limbSwing: number, limbAmount: 
   root.child('left_leg').yRot = 0;
 }
 
+/** vanilla IronGolemModel.createBodyLayer (128x128) */
+export function ironGolemModel(): MobModelDef {
+  const root = new ModelPart();
+  root.add('head', part([
+    { x: -4, y: -12, z: -5.5, w: 8, h: 10, d: 8, u: 0, v: 0 },
+    { x: -1, y: -5, z: -7.5, w: 2, h: 4, d: 2, u: 24, v: 0 },
+  ], [0, -7, -2]));
+  root.add('body', part([
+    { x: -9, y: -2, z: -6, w: 18, h: 12, d: 11, u: 0, v: 40 },
+    { x: -4.5, y: 10, z: -3, w: 9, h: 5, d: 6, u: 0, v: 70, inflate: 0.5 },
+  ], [0, -7, 0]));
+  root.add('right_arm', part([{ x: -13, y: -2.5, z: -3, w: 4, h: 30, d: 6, u: 60, v: 21 }], [0, -7, 0]));
+  root.add('left_arm', part([{ x: 9, y: -2.5, z: -3, w: 4, h: 30, d: 6, u: 60, v: 58 }], [0, -7, 0]));
+  root.add('right_leg', part([{ x: -3.5, y: -3, z: -3, w: 6, h: 16, d: 5, u: 37, v: 0 }], [-4, 11, 0]));
+  root.add('left_leg', part([{ x: -3.5, y: -3, z: -3, w: 6, h: 16, d: 5, u: 60, v: 0, mirror: true }], [5, 11, 0]));
+  return { root, texW: 128, texH: 128 };
+}
+
+/** vanilla Mth.triangleWave */
+export function triangleWave(f: number, g: number): number {
+  return (Math.abs((f % g) - g * 0.5) - g * 0.25) / (g * 0.25);
+}
+
+/**
+ * vanilla IronGolemModel.setupAnim and prepareMobModel: the head follows its gaze, the stiff legs swing, and the
+ * arms swing with them, or throw up together to strike (`attack`: the swing's ticks left, less the partial tick),
+ * or the right one holds out a flower (`flower`: the offer's ticks left)
+ */
+export function animateIronGolem(root: ModelPart, limbSwing: number, limbAmount: number, headYaw: number, headPitch: number, attack: number, flower: number): void {
+  const head = root.child('head');
+  head.yRot = headYaw * (PI / 180);
+  head.xRot = headPitch * (PI / 180);
+  const rl = root.child('right_leg'), ll = root.child('left_leg');
+  rl.xRot = -1.5 * triangleWave(limbSwing, 13) * limbAmount;
+  ll.xRot = 1.5 * triangleWave(limbSwing, 13) * limbAmount;
+  rl.yRot = 0;
+  ll.yRot = 0;
+  const ra = root.child('right_arm'), la = root.child('left_arm');
+  if (attack > 0) {
+    ra.xRot = -2 + 1.5 * triangleWave(attack, 10);
+    la.xRot = -2 + 1.5 * triangleWave(attack, 10);
+  } else if (flower > 0) {
+    ra.xRot = -0.8 + 0.025 * triangleWave(flower, 70);
+    la.xRot = 0;
+  } else {
+    ra.xRot = (-0.2 + 1.5 * triangleWave(limbSwing, 13)) * limbAmount;
+    la.xRot = (-0.2 - 1.5 * triangleWave(limbSwing, 13)) * limbAmount;
+  }
+}
+
 /**
  * vanilla GhastModel.createBodyLayer: a 16-block cube of a body and nine 2x2 tentacles under it, their lengths
  * those RandomSource.create(1660) deals out (nextInt(7) + 8)

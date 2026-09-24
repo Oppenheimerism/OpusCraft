@@ -19,6 +19,7 @@ import { END_MUSIC_POOLS, renderEndMusic } from './gen/endMusic';
 import { crossbowSounds } from './gen/crossbow';
 import { armorSounds } from './gen/armor';
 import { villagerSounds } from './gen/villager';
+import { ironGolemSounds } from './gen/ironGolem';
 import { villageSounds } from './gen/village';
 import { endSounds } from './gen/end';
 
@@ -46,6 +47,7 @@ export const SOUNDS: Record<string, SoundGen> = {
   ...crossbowSounds(),
   ...armorSounds(),
   ...villagerSounds(),
+  ...ironGolemSounds(),
   ...villageSounds(),
   ...endSounds(),
 };

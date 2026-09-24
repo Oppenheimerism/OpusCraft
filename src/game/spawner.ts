@@ -3,7 +3,7 @@
 
 import type { Level } from './level';
 import type { Entity } from '../entity/entity';
-import { Mob, MobCategory, SavedEntity, SpawnGroup } from '../entity/mob';
+import { Mob, MobCategory, SavedEntity, SpawnGroup, isValidEmptySpawnBlock } from '../entity/mob';
 import { ItemEntity } from '../entity/itemEntity';
 import { ItemStack, ITEMS, cloneTag } from '../item/item';
 import { Pig, Cow, Sheep, Chicken, Animal } from '../entity/animals';
@@ -13,6 +13,7 @@ import { Hoglin, Zoglin } from '../entity/hoglin';
 import { Strider } from '../entity/strider';
 import { Piglin } from '../entity/piglin';
 import { Villager } from '../entity/villager';
+import { IronGolem } from '../entity/ironGolem';
 import { Zombie, ZombifiedPiglin, Skeleton, WitherSkeleton, Creeper, Spider, CaveSpider, Enderman, Slime, MagmaCube, Monster, validSpawnBlock } from '../entity/monsters';
 import { Squid, WaterAnimal } from '../entity/water';
 import { AbstractMinecart, createMinecart, MINECART_TYPES } from '../entity/minecart';
@@ -53,6 +54,7 @@ export const MOB_TYPES: Record<string, (l: Level) => Mob> = {
   strider: (l) => new Strider(l),
   piglin: (l) => new Piglin(l),
   villager: (l) => new Villager(l),
+  iron_golem: (l) => new IronGolem(l),
 };
 
 export function createMob(type: string, level: Level): Mob | null {
@@ -138,7 +140,7 @@ export function isChunkSaved(e: Entity): boolean {
 
 const ENTITY_NAMES: Record<string, string> = {
   pig: 'Pig', cow: 'Cow', sheep: 'Sheep', chicken: 'Chicken', zombie: 'Zombie', skeleton: 'Skeleton', creeper: 'Creeper', spider: 'Spider',
-  villager: 'Villager', cave_spider: 'Cave Spider', enderman: 'Enderman', slime: 'Slime', magma_cube: 'Magma Cube', zombified_piglin: 'Zombified Piglin', ghast: 'Ghast', blaze: 'Blaze', wither_skeleton: 'Wither Skeleton', squid: 'Squid', bat: 'Bat', hoglin: 'Hoglin', zoglin: 'Zoglin', strider: 'Strider', piglin: 'Piglin',
+  villager: 'Villager', iron_golem: 'Iron Golem', cave_spider: 'Cave Spider', enderman: 'Enderman', slime: 'Slime', magma_cube: 'Magma Cube', zombified_piglin: 'Zombified Piglin', ghast: 'Ghast', blaze: 'Blaze', wither_skeleton: 'Wither Skeleton', squid: 'Squid', bat: 'Bat', hoglin: 'Hoglin', zoglin: 'Zoglin', strider: 'Strider', piglin: 'Piglin',
   arrow: 'Arrow', tnt: 'Primed TNT', lightning_bolt: 'Lightning Bolt', item: 'Item', experience_orb: 'Experience Orb', falling_block: 'Falling Block', player: 'Player',
   egg: 'Thrown Egg', snowball: 'Snowball', ender_pearl: 'Thrown Ender Pearl',
   minecart: 'Minecart', chest_minecart: 'Minecart with Chest', boat: 'Boat', chest_boat: 'Boat with Chest', end_crystal: 'End Crystal',
@@ -431,7 +433,7 @@ export class NaturalSpawner {
   /** vanilla SpawnPlacements ON_GROUND: valid floor, two empty blocks */
   private isSpawnPositionOk(x: number, y: number, z: number, fireImmune = false): boolean {
     const w = this.level.world;
-    return validSpawnBlock(this.level, x, y - 1, z, fireImmune) && emptySpawnBlock(w.getState(x, y, z)) && emptySpawnBlock(w.getState(x, y + 1, z));
+    return validSpawnBlock(this.level, x, y - 1, z, fireImmune) && isValidEmptySpawnBlock(w.getState(x, y, z)) && isValidEmptySpawnBlock(w.getState(x, y + 1, z));
   }
 
   /** vanilla SpawnPlacements: where each kind may appear (in water, in lava, else on the ground) */
@@ -592,14 +594,5 @@ export class NaturalSpawner {
   }
 }
 
-/** vanilla NaturalSpawner.isValidEmptySpawnBlock */
-function emptySpawnBlock(st: number): boolean {
-  const f = FLAGS[st];
-  if (f & F_FULL_COLLISION) return false;
-  if (f & (F_WATER | F_LAVA)) return false;
-  const n = BLOCKS[STATE_BLOCK[st]].name;
-  if (n.endsWith('rail') || n === 'fire' || n === 'cactus' || n === 'sweet_berry_bush' || n === 'wither_rose' || n === 'powder_snow' || n === 'redstone_wire') return false;
-  return true;
-}
 
 export { Animal };

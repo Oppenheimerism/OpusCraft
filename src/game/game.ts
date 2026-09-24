@@ -416,6 +416,9 @@ export class Game {
       if (kind === 'end') endPortalTravel(this, e);
       else if (e === this.player) this.portalTravel(x, y, z);
     };
+    this.level.onSummonedEntity = (e) => {
+      if (e.bb.inflate(5).intersects(this.player.bb)) this.advancements.trigger('summoned_entity', { summoned: e.type });
+    };
     // vanilla ClientPacketListener.handleTakeItemEntity: the pop, and what was taken flying to whoever took it
     this.level.onTake = (e, taker) => {
       const r = Math.random;

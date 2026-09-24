@@ -116,6 +116,11 @@ export class PoiManager {
     return s.size;
   }
 
+  /** vanilla PoiRecord.isOccupied: someone holds one of its tickets */
+  isOccupied(x: number, y: number, z: number): boolean {
+    return this.held(posKey(x, y, z)) > 0;
+  }
+
   hasSpace(x: number, y: number, z: number): boolean {
     const k = this.kindAt(x, y, z);
     return !!k && this.held(posKey(x, y, z)) < maxTickets(k);

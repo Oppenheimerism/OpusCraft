@@ -14,7 +14,7 @@ import type { Item } from '../item/item';
 import { ItemEntity } from './itemEntity';
 import { AABB } from '../core/aabb';
 import { Rand } from '../core/rng';
-import { BLOCKS, STATE_BLOCK, FLAGS, F_WATER } from '../world/block';
+import { BLOCKS, STATE_BLOCK, FLAGS, F_WATER, F_LAVA, F_FULL_COLLISION } from '../world/block';
 import { FLUID_WATER } from '../world/fluids';
 import type { SavedEffect } from './effects';
 import { damageBonus, entityLevel, hasBinding, hasVanishing, hurtAndBreak, levelOf, lootingBonus, enchantMobSpawnEquipment } from '../item/enchantHelper';
@@ -92,7 +92,7 @@ export interface LootEntry {
   lootingChance?: [number, number];
 }
 
-export type SpawnReason = 'natural' | 'chunk' | 'egg' | 'command' | 'breeding' | 'spawner' | 'jockey' | 'structure';
+export type SpawnReason = 'natural' | 'chunk' | 'egg' | 'command' | 'breeding' | 'spawner' | 'jockey' | 'structure' | 'summoned';
 
 /** vanilla Mob.DEFAULT_EQUIPMENT_DROP_CHANCE; 2 (a sure drop, kept as it was) once it's something the mob picked up */
 export const DEFAULT_DROP_CHANCE = 0.085;
@@ -977,3 +977,13 @@ function rotlerpSimple(from: number, to: number, max: number): number {
 
 /** vanilla PathfinderMob: land mobs with a walk-target preference */
 export abstract class PathfinderMob extends Mob {}
+
+/** vanilla NaturalSpawner.isValidEmptySpawnBlock */
+export function isValidEmptySpawnBlock(st: number): boolean {
+  const f = FLAGS[st];
+  if (f & F_FULL_COLLISION) return false;
+  if (f & (F_WATER | F_LAVA)) return false;
+  const n = BLOCKS[STATE_BLOCK[st]].name;
+  if (n.endsWith('rail') || n === 'fire' || n === 'cactus' || n === 'sweet_berry_bush' || n === 'wither_rose' || n === 'powder_snow' || n === 'redstone_wire') return false;
+  return true;
+}

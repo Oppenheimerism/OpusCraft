@@ -9,7 +9,7 @@ import type { EquipSlot } from '../item/enchantHelper';
 import { Goal, Flag } from './ai/goal';
 import {
   FloatGoal, WaterAvoidingRandomStrollGoal, LookAtPlayerGoal, RandomLookAroundGoal, MeleeAttackGoal,
-  NearestAttackablePlayerGoal, HurtByTargetGoal, RestrictSunGoal, FleeSunGoal, LeapAtTargetGoal,
+  NearestAttackablePlayerGoal, NearestAttackableMobGoal, HurtByTargetGoal, RestrictSunGoal, FleeSunGoal, LeapAtTargetGoal,
 } from './ai/goals';
 import { LivingEntity } from './living';
 import type { Player } from './player';
@@ -140,6 +140,9 @@ export class Zombie extends Monster {
     this.goalSelector.addGoal(7, new WaterAvoidingRandomStrollGoal(this, 1.0));
     this.targetSelector.addGoal(1, new HurtByTargetGoal(this));
     this.targetSelector.addGoal(2, new NearestAttackablePlayerGoal(this, true));
+    // (villagers even through walls; iron golems in sight)
+    this.targetSelector.addGoal(3, new NearestAttackableMobGoal(this, (e) => e.type === 'villager', false));
+    this.targetSelector.addGoal(3, new NearestAttackableMobGoal(this, (e) => e.type === 'iron_golem', true));
   }
   override isBaby(): boolean {
     return this.baby;
@@ -529,6 +532,7 @@ export class Skeleton extends Monster {
     this.goalSelector.addGoal(6, new RandomLookAroundGoal(this));
     this.targetSelector.addGoal(1, new HurtByTargetGoal(this));
     this.targetSelector.addGoal(2, new NearestAttackablePlayerGoal(this, true));
+    this.targetSelector.addGoal(3, new NearestAttackableMobGoal(this, (e) => e.type === 'iron_golem', true));
     this.reassessWeaponGoal();
   }
   /** vanilla AbstractSkeleton.reassessWeaponGoal */
@@ -841,6 +845,7 @@ export class Spider extends Monster {
     this.goalSelector.addGoal(6, new RandomLookAroundGoal(this));
     this.targetSelector.addGoal(1, new HurtByTargetGoal(this));
     this.targetSelector.addGoal(2, new SpiderTargetGoal(this, true));
+    this.targetSelector.addGoal(3, new NearestAttackableMobGoal(this, (e) => e.type === 'iron_golem', true, 10, () => this.lightMagic() < 0.5));
   }
   override get eyeHeight(): number {
     return 0.65;
@@ -1375,6 +1380,7 @@ export class Slime extends Monster {
     this.goalSelector.addGoal(3, new SlimeRandomDirectionGoal(this));
     this.goalSelector.addGoal(5, new SlimeKeepOnJumpingGoal(this));
     this.targetSelector.addGoal(1, new NearestAttackablePlayerGoal(this, true));
+    this.targetSelector.addGoal(3, new NearestAttackableMobGoal(this, (e) => e.type === 'iron_golem', true));
   }
   override get eyeHeight(): number {
     return 0.625 * 0.52 * this.size;
