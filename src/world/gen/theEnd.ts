@@ -20,6 +20,7 @@ import { LegacyRandom, SimplexNoise, seedLong } from './legacyRandom';
 import { squeeze } from './router';
 import { GenContext } from './context';
 import { B } from './biomes';
+import { placeEndPlatform, placeEndSpikes } from './endFeatures';
 import { S } from '../block';
 import { COLUMN_VOLUME, colIndex } from '../constants';
 import { Rand, hash2, hash32 } from '../../core/rng';
@@ -241,6 +242,11 @@ export class EndGenerator {
           if (this.biomeAt(x, z) === B.small_end_islands) this.endIsland(ctx, r, x, y, z);
         }
       }
+    }
+    // SURFACE_STRUCTURES — vanilla the_end: END_SPIKE (the pillars whose middles are in this chunk), then END_PLATFORM
+    if (ctx.biomes[0] === B.the_end || this.biomeOfChunk(ctx.cx, ctx.cz) === B.the_end) {
+      placeEndSpikes(ctx, this.seed, rand(4));
+      placeEndPlatform(ctx);
     }
   }
 

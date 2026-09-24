@@ -37,6 +37,8 @@ import { Squid } from '../entity/water';
 import { ThrownItem } from '../entity/throwable';
 import { AbstractMinecart } from '../entity/minecart';
 import { Boat } from '../entity/boat';
+import { EndCrystal } from '../entity/endCrystal';
+import { EndCrystalRenderer } from './endCrystalRenderer';
 import type { Bat } from '../entity/bat';
 import type { Player } from '../entity/player';
 import { MOB_TEXTURES, FIRE_TEXTURES } from '../textures/mobs';
@@ -115,9 +117,11 @@ export class EntityRenderDispatcher {
   /** boat water masks, drawn once every entity is down so riders' legs aren't masked out */
   private readonly waterPatches: { m: Float32Array; part: ModelPart; tex: WebGLTexture; texW: number; texH: number }[] = [];
   private readonly armor: ArmorLayer;
+  private readonly endCrystals: EndCrystalRenderer;
 
   constructor(private readonly gl: GL, private readonly items: ItemRenderer, private readonly skin: WebGLTexture) {
     this.armor = new ArmorLayer(gl);
+    this.endCrystals = new EndCrystalRenderer(gl);
     this.models = {
       pig: M.pigModel(),
       pig_saddle: M.pigModel(0.5),
@@ -338,6 +342,7 @@ export class EntityRenderDispatcher {
     else if (e instanceof Fireball) this.renderFireball(b, e, dx, dy, dz, cam);
     else if (e instanceof AbstractMinecart) this.renderMinecart(b, e, x, y, z, dx, dy, dz, p);
     else if (e instanceof Boat) this.renderBoat(b, e, dx, dy, dz, p);
+    else if (e instanceof EndCrystal) this.endCrystals.render(b, this.pose, e, dx, dy, dz, p);
     // (at the renderer's offset: a crouching player's flames sink with it)
     if (e.isOnFire() && !(e instanceof ItemEntity) && !(e instanceof ExperienceOrb)) this.renderFlame(b, e, dx, dy + renderOffsetY(e), dz, cam.yaw, level.gameTime);
   }
@@ -1224,6 +1229,7 @@ function shadowRadius(e: Entity): number {
       r = 0.7;
       break;
     case 'strider':
+    case 'end_crystal':
       r = 0.5;
       break;
     case 'bat':

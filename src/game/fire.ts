@@ -209,7 +209,8 @@ export function fireTick(level: Level, x: number, y: number, z: number, st: numb
   }
   const fire = blk(st);
   const bn = blk(w.getState(x, y - 1, z)).name;
-  const infiniburn = bn === 'netherrack' || bn === 'magma_block';
+  // vanilla dimensionType().infiniburn(): #infiniburn_overworld / _nether, and in the End #infiniburn_end adds bedrock
+  const infiniburn = bn === 'netherrack' || bn === 'magma_block' || (bn === 'bedrock' && w.dim.id === 'the_end');
   const age = fire.get<number>(st, 'age');
   if (!infiniburn && level.isRaining() && isNearRain(level, x, y, z) && r.nextFloat() < 0.2 + age * 0.03) {
     level.setBlock(x, y, z, 0);

@@ -20,6 +20,7 @@ import { LightningBolt } from '../entity/lightning';
 import { Creeper } from '../entity/monsters';
 import { createMinecart, MINECART_TYPES } from '../entity/minecart';
 import { createBoat, BOAT_TYPES, BOAT_WOODS } from '../entity/boat';
+import { EndCrystal } from '../entity/endCrystal';
 import { MOB_EFFECTS, MobEffect, MobEffectInstance, mobEffect } from '../entity/effects';
 import { ENCHANTMENTS, areCompatible, canEnchant, enchantmentLine } from '../item/enchantments';
 import { craftingEnchants, setCraftingEnchants, weaponOf } from '../item/enchantHelper';
@@ -639,6 +640,11 @@ export const COMMANDS: Record<string, CommandDef> = {
         const cart = createMinecart(type, lvl)!;
         cart.moveTo(x, y, z, 0, 0);
         e = cart;
+      } else if (type === 'end_crystal') {
+        // (entity data: {ShowBottom:0b} hides the plinth)
+        const cr = new EndCrystal(lvl, x, y, z);
+        if (c.args[4] && /ShowBottom:\s*(0b|false)/.test(c.line.slice(c.args[4].pos))) cr.showBottom = false;
+        e = cr;
       } else if (BOAT_TYPES.includes(type)) {
         // the wood is entity data in 1.21: /summon boat ~ ~ ~ {Type:"spruce"}
         const wood = c.args[4] ? /Type:\s*"?([a-z_]+)"?/.exec(c.line.slice(c.args[4].pos))?.[1] : undefined;
