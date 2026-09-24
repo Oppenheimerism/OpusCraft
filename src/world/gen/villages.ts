@@ -8,6 +8,10 @@ import { MIN_Y, MAX_Y } from '../constants';
 import type { GenContext } from './context';
 import { POOLS, Box, Beardifier, jigsawStart, jigsawAssemble, largeFeatureRandom, saltedRandom, worldSeed64, type Piece, type PoolElement } from './jigsaw';
 import { ZOMBIE_TOWN_CENTERS as PLAINS_ZOMBIES } from './villagePlains';
+import { DESERT_ZOMBIE_TOWN_CENTERS as DESERT_ZOMBIES } from './villageDesert';
+import { SAVANNA_ZOMBIE_TOWN_CENTERS as SAVANNA_ZOMBIES } from './villageSavanna';
+import { SNOWY_ZOMBIE_TOWN_CENTERS as SNOWY_ZOMBIES } from './villageSnowy';
+import { TAIGA_ZOMBIE_TOWN_CENTERS as TAIGA_ZOMBIES } from './villageTaiga';
 
 export type VillageKind = 'plains' | 'desert' | 'savanna' | 'snowy' | 'taiga';
 
@@ -32,7 +36,7 @@ const SIZE = 6, MAX_DISTANCE = 80;
  * Hook for zombie villages (vanilla's zombie town centers, weight 1 or 2 against 50-150): the start still draws them,
  * so villages come as often as in vanilla, but they're built as ordinary villages until zombie villagers exist
  */
-const ZOMBIE_STARTS = new Set<PoolElement>([...PLAINS_ZOMBIES]);
+const ZOMBIE_STARTS = new Set<PoolElement>([...PLAINS_ZOMBIES, ...DESERT_ZOMBIES, ...SAVANNA_ZOMBIES, ...SNOWY_ZOMBIES, ...TAIGA_ZOMBIES]);
 
 export interface VillageTerrain {
   /** vanilla getFirstFreeHeight(WORLD_SURFACE_WG) on the bare noise terrain */

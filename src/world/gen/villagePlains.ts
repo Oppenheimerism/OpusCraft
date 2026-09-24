@@ -3,7 +3,10 @@
 // structures: oak and cobblestone, dirt paths, hay and wool.
 
 import { template, pool, SingleElement, EMPTY, type JigsawSpec, type Template, type Processor } from './jigsaw';
-import { MOSSIFY_20, MOSSIFY_70, streetProcessor, villagersPool, feature, treeFeature, flowerPlain, pileHay, streetJ as street, houseJ as house, decorJ as decor, standJ } from './villageCommon';
+import {
+  MOSSIFY_20, MOSSIFY_70, streetProcessor, villagersPool, feature, treeFeature, flowerPlain, pileHay, streetJ as street, houseJ as house, decorJ as decor, standJ,
+  straightStreet, streetMap,
+} from './villageCommon';
 import { PLAINS_HOUSES, PK } from './villagePlainsHouses';
 
 const V = 'village/plains';
@@ -98,30 +101,7 @@ pool(`${V}/town_centers`, 'empty', [
 ]);
 
 // ---------------------------------------------------------------------------------------------------------------
-// Streets: a path three wide down the middle of five, streets joining at the ends, house plots along the sides and
-// decorations on the verges. They lie on the ground whatever its height (terrain matching)
-
-type Side = 'w' | 'e';
-
-/** a straight street running north-south, with house plots and verge decorations on the given sides */
-export function straightStreet(v: string, id: string, len: number, plots: [number, Side][], decors: [number, Side][], path = 'dirt_path'): Template {
-  const rows: string[] = [];
-  for (let z = 0; z < len; z++) rows.push('.ppp.');
-  return template(id, {
-    key: { p: path },
-    layers: [rows.join('|'), rows.map(() => '.....').join('|')],
-    jigsaws: [
-      street(2, 1, 0, 'north', `${v}/streets`), street(2, 1, len - 1, 'south', `${v}/streets`),
-      ...plots.map(([z, s]) => house(s === 'w' ? 0 : 4, 1, z, s === 'w' ? 'west' : 'east', `${v}/houses`)),
-      ...decors.map(([z, s]) => decor(s === 'w' ? 0 : 4, z, `${v}/decor`)),
-    ],
-  });
-}
-
-/** a street piece drawn as a map: 'p' path, '.' verge; connectors given */
-export function streetMap(id: string, rows: string[], jigsaws: JigsawSpec[], path = 'dirt_path'): Template {
-  return template(id, { key: { p: path, g: 'grass_block' }, layers: [rows.join('|'), rows.map((r) => '.'.repeat(r.length)).join('|')], jigsaws });
-}
+// Streets (see villageCommon's straightStreet and streetMap)
 
 const S = `${V}/streets`;
 const s = (n: string) => `${S}/${n}`;
@@ -149,14 +129,15 @@ const streets: [Template, number][] = [
 const PLAINS_STREET = streetProcessor('oak_planks', 0.1);
 pool(S, `${V}/terminators`, streets.map(([t, w]) => [terrain(t, PLAINS_STREET), w]));
 
-// the ends of streets that couldn't go on
+// the ends of streets that couldn't go on (savanna, snowy and taiga villages use them too, through their own street processors)
 const T = `${V}/terminators`;
-pool(T, 'empty', [
-  [terrain(streetMap(`${T}/terminator_01`, ['.ppp.', '.ppp.', '..p..'], [streetJ(2, 1, 0, 'north')]), PLAINS_STREET), 1],
-  [terrain(streetMap(`${T}/terminator_02`, ['.ppp.', '.gpg.'], [streetJ(2, 1, 0, 'north'), decorJ(2, 1)]), PLAINS_STREET), 1],
-  [terrain(streetMap(`${T}/terminator_03`, ['.ppp.'], [streetJ(2, 1, 0, 'north')]), PLAINS_STREET), 1],
-  [terrain(streetMap(`${T}/terminator_04`, ['.ppp.', 'ppppp', '.ppp.'], [streetJ(2, 1, 0, 'north'), decorJ(0, 2), decorJ(4, 2)]), PLAINS_STREET), 1],
-]);
+export const PLAINS_TERMINATORS: Template[] = [
+  streetMap(`${T}/terminator_01`, ['.ppp.', '.ppp.', '..p..'], [streetJ(2, 1, 0, 'north')]),
+  streetMap(`${T}/terminator_02`, ['.ppp.', '.gpg.'], [streetJ(2, 1, 0, 'north')]),
+  streetMap(`${T}/terminator_03`, ['.ppp.'], [streetJ(2, 1, 0, 'north')]),
+  streetMap(`${T}/terminator_04`, ['.ppp.', 'ppppp', '.ppp.'], [streetJ(2, 1, 0, 'north')]),
+];
+pool(T, 'empty', PLAINS_TERMINATORS.map((t) => [terrain(t, PLAINS_STREET), 1]));
 
 // ---------------------------------------------------------------------------------------------------------------
 // Decorations: lamp posts, oaks, flowers and hay

@@ -24,10 +24,94 @@ export const decorJ = (x: number, z: number, decor: string, final = 'air'): Jigs
 /** where someone (or something) is to stand: a villager, a cat, an animal, the iron golem */
 export const standJ = (x: number, y: number, z: number, final: string, from: string): JigsawSpec => ({ at: [x, y, z], facing: 'up', target: 'bottom', pool: from, final });
 
+/** a bed's two halves as template keys (foot and head), lying the way it faces: the head is on that side */
+export const bed = (color: string, facing: string, foot = 'b', head = 'h'): Record<string, string> => ({
+  [foot]: `${color}_bed[facing=${facing},part=foot]`,
+  [head]: `${color}_bed[facing=${facing},part=head]`,
+});
+
+export const rigid = (t: Template, ...p: Processor[]) => new SingleElement(t, 'rigid', p);
+export const terrain = (t: Template, ...p: Processor[]) => new SingleElement(t, 'terrain_matching', p);
+
+/** a kind of village's connectors and piece makers, tied to its pools and its blocks */
+export interface VillageKit {
+  V: string;
+  /** a street end, joining the kind's streets */
+  street(x: number, y: number, z: number, facing: Facing): JigsawSpec;
+  /** a house plot beside a street */
+  plot(x: number, y: number, z: number, facing: Facing): JigsawSpec;
+  /** a verge spot for the kind's decorations */
+  decor(x: number, z: number): JigsawSpec;
+  /**
+   * where one of the kind's villagers stands: the connector turns into the floor block given, or by default into the
+   * template's own block there
+   */
+  villager(x: number, z: number, floor?: string, y?: number): JigsawSpec;
+  golem(x: number, z: number, floor?: string, y?: number): JigsawSpec;
+  cat(x: number, z: number, floor?: string, y?: number): JigsawSpec;
+  animal(x: number, z: number, floor?: string, from?: string): JigsawSpec;
+  loot(x: number, y: number, z: number, table: string): { at: [number, number, number]; table: string };
+  /** a piece of the kind's houses pool */
+  house(name: string, spec: PieceSpec): Template;
+  /** any other piece of the kind (id under village/<kind>/) */
+  piece(id: string, spec: PieceSpec): Template;
+}
+
+export interface PieceSpec {
+  key?: Record<string, string>;
+  layers: string[];
+  jigsaws: JigsawSpec[];
+  loot?: { at: [number, number, number]; table: string }[];
+}
+
+export function villageKit(kind: string, blocks: Record<string, string>): VillageKit {
+  const V = `village/${kind}`;
+  const make = (id: string, spec: PieceSpec) => template(id, { key: { ...blocks, ...spec.key }, layers: spec.layers, jigsaws: spec.jigsaws, loot: spec.loot });
+  return {
+    V,
+    street: (x, y, z, facing) => streetJ(x, y, z, facing, `${V}/streets`),
+    plot: (x, y, z, facing) => houseJ(x, y, z, facing, `${V}/houses`),
+    decor: (x, z) => decorJ(x, z, `${V}/decor`),
+    villager: (x, z, floor = 'air', y = 0) => standJ(x, y, z, floor, `${V}/villagers`),
+    golem: (x, z, floor = 'air', y = 0) => standJ(x, y, z, floor, 'village/common/iron_golem'),
+    cat: (x, z, floor = 'air', y = 0) => standJ(x, y, z, floor, 'village/common/cats'),
+    animal: (x, z, floor = 'air', from = 'village/common/animals') => standJ(x, 0, z, floor, from),
+    loot: (x, y, z, table) => ({ at: [x, y, z], table: `chests/village/village_${table}` }),
+    house: (name, spec) => make(`${V}/houses/${name}`, spec),
+    piece: (id, spec) => make(`${V}/${id}`, spec),
+  };
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Streets: a path three wide down the middle of five, streets joining at the ends, house plots along the sides and
+// decorations on the verges. They lie on the ground whatever its height (terrain matching)
+
+type Side = 'w' | 'e';
+
+/** a straight street running north-south, with house plots and verge decorations on the given sides */
+export function straightStreet(v: string, id: string, len: number, plots: [number, Side][], decors: [number, Side][], path = 'dirt_path'): Template {
+  const rows: string[] = [];
+  for (let z = 0; z < len; z++) rows.push('.ppp.');
+  return template(id, {
+    key: { p: path },
+    layers: [rows.join('|'), rows.map(() => '.....').join('|')],
+    jigsaws: [
+      streetJ(2, 1, 0, 'north', `${v}/streets`), streetJ(2, 1, len - 1, 'south', `${v}/streets`),
+      ...plots.map(([z, s]) => houseJ(s === 'w' ? 0 : 4, 1, z, s === 'w' ? 'west' : 'east', `${v}/houses`)),
+      ...decors.map(([z, s]) => decorJ(s === 'w' ? 0 : 4, z, `${v}/decor`)),
+    ],
+  });
+}
+
+/** a street piece drawn as a map: 'p' path, 'g' ground, '.' verge; connectors given */
+export function streetMap(id: string, rows: string[], jigsaws: JigsawSpec[], path = 'dirt_path', ground = 'grass_block'): Template {
+  return template(id, { key: { p: path, g: ground }, layers: [rows.join('|'), rows.map((r) => '.'.repeat(r.length)).join('|')], jigsaws });
+}
+
 // ---------------------------------------------------------------------------------------------------------------
 // Pieces that are just an entity: one block, its connector (bottom, facing down) and whoever stands on it
 
-function entityPiece(id: string, entity: Omit<EntitySpec, 'at'>): Template {
+export function entityPiece(id: string, entity: Omit<EntitySpec, 'at'>): Template {
   return template(id, {
     key: {},
     layers: ['.'],
@@ -35,8 +119,6 @@ function entityPiece(id: string, entity: Omit<EntitySpec, 'at'>): Template {
     entities: [{ at: [0.5, 0, 0.5], ...entity }],
   });
 }
-
-const rigid = (t: Template, processors: Processor[] = []) => new SingleElement(t, 'rigid', processors);
 
 // vanilla VillagePools: the animals, sheep, cats, butcher's animals and iron golem pools
 const cow = entityPiece('village/common/animals/cows_1', { id: 'cow', health: 10 });
