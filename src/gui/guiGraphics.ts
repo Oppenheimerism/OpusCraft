@@ -170,15 +170,17 @@ export interface IconSource {
   /** draws an item icon for `id` into ctx at pixel coords (already scaled) */
   drawIcon(ctx: CanvasRenderingContext2D, id: string, px: number, py: number, size: number): boolean;
   /** adds the enchantment glint over the icon drawn at the same spot */
-  drawGlint?(ctx: CanvasRenderingContext2D, id: string, px: number, py: number, size: number): void;
+  drawGlint?(ctx: CanvasRenderingContext2D, id: string | CanvasImageSource, px: number, py: number, size: number): void;
 }
 
-/** stacks drawn by something other than their icon (vanilla BlockEntityWithoutLevelRenderer's items: banners) */
+/** stacks drawn by something other than their icon (vanilla BlockEntityWithoutLevelRenderer's items: banners, shields) */
 type StackIconHook = (g: GuiGraphics, s: ItemStack, x: number, y: number) => boolean;
-let stackIconHook: StackIconHook | null = null;
+const stackIconHooks = new Map<string, StackIconHook>();
 
-export function setStackIconHook(f: StackIconHook | null): void {
-  stackIconHook = f;
+/** the hook `key` draws the stacks it knows (a new one for the same key replaces it; null takes it away) */
+export function setStackIconHook(key: string, f: StackIconHook | null): void {
+  if (f) stackIconHooks.set(key, f);
+  else stackIconHooks.delete(key);
 }
 
 export class GuiGraphics {
@@ -395,7 +397,7 @@ export class GuiGraphics {
    * follow it (vanilla renders GUI items with the player as the entity: a crossbow drawn in the hotbar)
    */
   stack(s: ItemStack, x: number, y: number, ticksUsing = -1): boolean {
-    if (stackIconHook?.(this, s, x, y)) return true;
+    for (const hook of stackIconHooks.values()) if (hook(this, s, x, y)) return true;
     let id = s.item.id === 'crossbow' ? crossbowTexture(s, ticksUsing) ?? s.item.id : s.item.id;
     // (a dyed stack's or a potion's colour tints its icon: vanilla ItemColors)
     if (itemLayers(s.item)) id += `#${layerTint(s).toString(16)}`;

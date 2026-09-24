@@ -13,6 +13,7 @@ import { glintTexture, glintOffset, glintUV } from '../textures/glint';
 import { crossbowTexture } from '../item/crossbow';
 import { itemLayers, layerTint } from '../item/itemColors';
 import { TridentRenderer } from './tridentRenderer';
+import { ShieldRenderer, shieldDisplayScaleY } from './shieldRenderer';
 
 export type DisplayContext = 'gui' | 'ground' | 'fixed' | 'firstperson_righthand' | 'firstperson_lefthand' | 'thirdperson_righthand' | 'thirdperson_lefthand' | 'head';
 
@@ -119,10 +120,12 @@ export interface SpecialItemRenderer {
   /** its display transform's y scale in `ctx` (undefined: not one of its items) */
   displayScaleY(stack: ItemStack, ctx: DisplayContext): number | undefined;
 }
-let special: SpecialItemRenderer | null = null;
+const specials = new Map<string, SpecialItemRenderer>();
 
-export function setSpecialItemRenderer(r: SpecialItemRenderer | null): void {
-  special = r;
+/** the renderer `key` draws the items it knows (a new one for the same key replaces it; null takes it away) */
+export function setSpecialItemRenderer(key: string, r: SpecialItemRenderer | null): void {
+  if (r) specials.set(key, r);
+  else specials.delete(key);
 }
 
 export class ItemRenderer {
@@ -132,9 +135,12 @@ export class ItemRenderer {
   itemAtlasSize = 0;
   /** the trident's model: in flight, in the hand, and riptide's swirl */
   readonly trident: TridentRenderer;
+  /** the shield's model, and its inventory icon */
+  readonly shield: ShieldRenderer;
 
   constructor(private readonly gl: GL, readonly atlas: Atlas, itemTextures: Record<string, () => TexImage> | null, private readonly blockTexImages: Map<string, TexImage>) {
     this.trident = new TridentRenderer(gl);
+    this.shield = new ShieldRenderer(gl);
     // item atlas: grid of 16x16
     if (itemTextures) {
       const names = Object.keys(itemTextures);
@@ -226,9 +232,12 @@ export class ItemRenderer {
   }
 
   displayScaleY(stack: ItemStack, ctx: DisplayContext): number {
-    const sp = special?.displayScaleY(stack, ctx);
-    if (sp !== undefined) return sp;
+    for (const sr of specials.values()) {
+      const sp = sr.displayScaleY(stack, ctx);
+      if (sp !== undefined) return sp;
+    }
     const it = stack.item;
+    if (it.id === 'shield') return shieldDisplayScaleY(ctx);
     if (this.isBlockModel(it)) return BLOCK_DISPLAY[ctx].scale[1];
     return (isHandheld(it) ? HANDHELD_DISPLAY : GENERATED_DISPLAY)[ctx].scale[1];
   }
@@ -249,8 +258,14 @@ export class ItemRenderer {
 
   /** Render an item at the pose origin (model-space centered at 0). `texture` overrides the sprite (bow pulling). */
   render(batch: EntityBatch, pose: PoseStack, stack: ItemStack, ctx: DisplayContext, left = false, texture?: string): void {
-    if (special?.render(batch, pose, stack, ctx, left)) return;
+    for (const sr of specials.values()) if (sr.render(batch, pose, stack, ctx, left)) return;
     const it = stack.item;
+    // vanilla BlockEntityWithoutLevelRenderer: the shield is its model wherever it's drawn (`texture` 'shield_blocking':
+    // held up, shield_blocking.json's transforms)
+    if (it.id === 'shield') {
+      this.shield.renderItem(batch, pose, stack, ctx, left, texture === 'shield_blocking', ctx !== 'gui');
+      return;
+    }
     pose.push();
     if (this.isBlockModel(it)) {
       this.applyTransform(pose, BLOCK_DISPLAY[ctx], left);

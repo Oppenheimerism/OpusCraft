@@ -153,6 +153,7 @@ for (const [m, x] of ARMOR_MATS) {
   shaped(`${m}_boots`, 1, ['X X', 'X X'], { X: x });
 }
 shaped('bow', 1, [' #X', '# X', ' #X'], { '#': 'stick', X: 'string' });
+shaped('shield', 1, ['WoW', 'WWW', ' W '], { W: '#planks', o: 'iron_ingot' });
 // vanilla crossbow ['#&#', '~$~', ' # ']: # stick, & iron ingot, ~ string, $ tripwire hook — left out, no tripwire hook yet
 shaped('arrow', 4, ['X', '#', 'Y'], { X: 'flint', '#': 'stick', Y: 'feather' });
 shaped('bucket', 1, ['# #', ' # '], { '#': 'iron_ingot' });

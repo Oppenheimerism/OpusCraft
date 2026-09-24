@@ -57,6 +57,8 @@ export type Criterion =
   | { t: 'effects_changed'; effects: string[] }
   /** vanilla enter_block: stepped into that block (an end gateway) */
   | { t: 'enter_block'; block: string }
+  /** vanilla entity_hurt_player: a projectile's damage, blocked by a shield */
+  | { t: 'deflected_projectile' }
   | { t: 'impossible' };
 
 export interface AdvancementDef {
@@ -138,7 +140,7 @@ const A: AdvancementDef[] = [
   },
   { id: 'story/lava_bucket', parent: 'story/smelt_iron', title: 'Hot Stuff', description: 'Fill a Bucket with lava', icon: 'lava_bucket', frame: 'task', criteria: { lava_bucket: inv('lava_bucket') } },
   { id: 'story/iron_tools', parent: 'story/smelt_iron', title: "Isn't It Iron Pick", description: 'Upgrade your Pickaxe', icon: 'iron_pickaxe', frame: 'task', criteria: { iron_pickaxe: inv('iron_pickaxe') } },
-  { id: 'story/deflect_arrow', parent: 'story/obtain_armor', title: 'Not Today, Thank You', description: 'Deflect a projectile with a Shield', icon: 'shield', frame: 'task', criteria: one(never) },
+  { id: 'story/deflect_arrow', parent: 'story/obtain_armor', title: 'Not Today, Thank You', description: 'Deflect a projectile with a Shield', icon: 'shield', frame: 'task', criteria: one({ t: 'deflected_projectile' }) },
   { id: 'story/form_obsidian', parent: 'story/lava_bucket', title: 'Ice Bucket Challenge', description: 'Obtain a block of Obsidian', icon: 'obsidian', frame: 'task', criteria: { obsidian: inv('obsidian') } },
   { id: 'story/mine_diamond', parent: 'story/iron_tools', title: 'Diamonds!', description: 'Acquire diamonds', icon: 'diamond', frame: 'task', criteria: { diamond: inv('diamond') } },
   { id: 'story/enter_the_nether', parent: 'story/form_obsidian', title: 'We Need to Go Deeper', description: 'Build, light and enter a Nether Portal', icon: 'flint_and_steel', frame: 'task', criteria: { entered_nether: toNether } },
@@ -631,6 +633,7 @@ function matches(c: Criterion, p: TriggerPayload): boolean {
     case 'shot_crossbow':
     case 'fall_from_height':
     case 'enchanted_item':
+    case 'deflected_projectile':
       return true;
     default:
       return false;

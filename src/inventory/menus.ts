@@ -8,7 +8,7 @@ import { findRecipe, craftingRemainder, cookingResult, fuelTime, CraftingRecipe 
 import type { BrewingStandBlockEntity, ChestBlockEntity, FurnaceBlockEntity } from '../world/blockEntity';
 import { contentsOf, isBrewingIngredient } from '../item/potions';
 import { hasBinding } from '../item/enchantHelper';
-import { equipSound } from '../item/equipment';
+import { equipSound, equipmentSlotForItem } from '../item/equipment';
 import { applyDyes, dyeColorName, isDyeable } from '../item/dyedColor';
 import { customRecipeFor, type CustomRecipe } from './customRecipes';
 import { craftedBy } from '../game/itemBehavior';
@@ -195,6 +195,9 @@ export class InventoryMenu extends CraftingMenuBase {
     } else if (armor >= 0 && !this.slots[8 - armor].hasItem()) {
       const i = 8 - armor;
       if (!this.moveItemStackTo(s, i, i + 1, false)) return null;
+    } else if (equipmentSlotForItem(s.item) === 'offhand' && !this.slots[45].hasItem()) {
+      // (a shield goes to the offhand)
+      if (!this.moveItemStackTo(s, 45, 46, false)) return null;
     } else if (index >= 9 && index < 36) {
       if (!this.moveItemStackTo(s, 36, 45, false)) return null;
     } else if (index >= 36 && index < 45) {

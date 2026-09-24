@@ -1711,6 +1711,8 @@ export class Game {
       if (e instanceof Piglin && e.isAdult() && stack?.item.id === 'gold_ingot') this.advancements.trigger('distract_piglin', { distract: 'directly' });
     };
     lvl.onPlayerCrossbowKill = (killed) => this.advancements.trigger('killed_by_crossbow', { crossbowKills: killed.map((e) => e.type) });
+    // (Stage 4) criteria met out in the world: shields, totems, raids
+    lvl.onPlayerTrigger = (p, type, payload) => p === this.player && this.advancements.trigger(type, payload);
     this.interaction.onShotCrossbow = () => this.advancements.trigger('shot_crossbow');
     this.interaction.onItemUsed = (hand) => this.renderer.hand.itemUsed(hand);
     this.interaction.onPlaced = (name) => this.advancements.trigger('place', { place: name });

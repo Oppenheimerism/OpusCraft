@@ -10,6 +10,8 @@ import { MobEffectInstance, SavedEffect, saveEffect, loadEffect } from './effect
 import { burningTimeFactor, damageAfterProtection, damageProtection, waterMovementEfficiency } from '../item/enchantHelper';
 import { AABB } from '../core/aabb';
 import type { ItemStack } from '../item/item';
+// (Stage 4: shields)
+import { shieldTakesHit, shieldBlocked } from './shield';
 
 /** damage sources that ignore armor (vanilla #bypasses_armor) */
 const BYPASSES_ARMOR = new Set(['onFire', 'inWall', 'drown', 'starve', 'fall', 'stalagmite', 'void', 'genericKill', 'magic', 'indirectMagic', 'wither', 'generic', 'cramming', 'flyIntoWall']);
@@ -814,6 +816,9 @@ export abstract class LivingEntity extends Entity {
     if (this.shrugsOffFire(source, attacker, direct)) return false;
     this.noActionTime = 0;
     if (amount < 0) amount = 0;
+    // (Stage 4: shields) vanilla isDamageSourceBlocked: a raised shield takes the hit, which goes on at 0 (entity/shield.ts)
+    const blocked = amount > 0 && shieldTakesHit(this, amount, source, attacker, direct);
+    if (blocked) amount = 0;
     // falling anvils, blocks and stalactites wear the helmet, which takes a quarter off the hit
     if (DAMAGES_HELMET.has(source) && this.hurtHelmet(amount)) amount *= 0.75;
     let fresh = true;
@@ -827,7 +832,8 @@ export abstract class LivingEntity extends Entity {
       this.lastHurt = amount;
       this.invulnerableTime = 20;
       this.actuallyHurt(source, amount);
-      this.hurtTime = this.hurtDuration = 10;
+      // (Stage 4: shields) a blocked hit's client sees event 29, not the damage event: no red flash
+      if (!blocked) this.hurtTime = this.hurtDuration = 10;
     }
     if (attacker instanceof LivingEntity && attacker !== this) {
       this.setLastHurtByMob(attacker);
@@ -836,6 +842,8 @@ export abstract class LivingEntity extends Entity {
         this.lastHurtByPlayer = attacker;
       }
     }
+    // (Stage 4: shields) the shield's thud instead of knockback and the hurt sound; nothing was hurt
+    if (blocked) return shieldBlocked(this, source);
     if (fresh) {
       this.hurtDir = 0;
       if (!NO_KNOCKBACK.has(source) && (attacker || direct)) {

@@ -209,6 +209,9 @@ reg({ id: 'bow', maxStack: 1, creativeTab: 'combat', texture: 'bow', maxDamage: 
 // vanilla CrossbowItem (models/item/crossbow.json: layer0 crossbow_standby); its recipe needs a tripwire hook,
 // which the game doesn't have yet, so it isn't craftable (creative, /give)
 reg({ id: 'crossbow', maxStack: 1, creativeTab: 'combat', texture: 'crossbow_standby', maxDamage: 465 });
+// vanilla ShieldItem: 336 uses, repaired with planks; held up to block (entity/shield.ts), decorated with a banner
+// (game/shields.ts); drawn as its model (render/shieldRenderer.ts), the flat sprite standing in where no renderer is
+reg({ id: 'shield', maxStack: 1, creativeTab: 'combat', texture: 'shield', maxDamage: 336 });
 reg({ id: 'arrow', creativeTab: 'combat', texture: 'arrow' });
 // vanilla TippedArrowItem (models/item/tipped_arrow.json: layer0 the tinted head, layer1 the shaft; item/potions.ts)
 reg({ id: 'tipped_arrow', creativeTab: 'combat', texture: 'tipped_arrow_base' });
@@ -436,6 +439,8 @@ export interface ItemTag {
   hideAdditional?: boolean;
   /** minecraft:banner_patterns: the layers over a banner's base colour, bottom first */
   patterns?: BannerLayer[];
+  /** minecraft:base_color: a shield's, from the banner that decorated it */
+  baseColor?: string;
   /** minecraft:map_id */
   mapId?: number;
   /** minecraft:map_post_processing: what a cartography table's result will do to its map when taken */
@@ -505,6 +510,7 @@ export function cloneTag(t: ItemTag | null): ItemTag | null {
   if (t.rarity) o.rarity = t.rarity;
   if (t.hideAdditional) o.hideAdditional = true;
   if (t.patterns?.length) o.patterns = t.patterns.map((l) => ({ ...l }));
+  if (t.baseColor !== undefined) o.baseColor = t.baseColor;
   if (t.mapId !== undefined) o.mapId = t.mapId;
   if (t.mapPostProcessing) o.mapPostProcessing = t.mapPostProcessing;
   if (t.trim) o.trim = { ...t.trim };
@@ -521,7 +527,7 @@ export function sameTag(a: ItemTag | null | undefined, b: ItemTag | null | undef
   return (
     sameEnchants(a?.enchantments, b?.enchantments) && sameEnchants(a?.stored, b?.stored) && a?.customName === b?.customName && (a?.repairCost ?? 0) === (b?.repairCost ?? 0) &&
     sameCharged(a?.charged, b?.charged) && a?.dyedColor === b?.dyedColor && !a?.dyedHidden === !b?.dyedHidden && samePotion(a?.potion, b?.potion) &&
-    a?.itemName === b?.itemName && a?.rarity === b?.rarity && !a?.hideAdditional === !b?.hideAdditional && sameData(a?.patterns?.length ? a.patterns : null, b?.patterns?.length ? b.patterns : null) &&
+    a?.itemName === b?.itemName && a?.rarity === b?.rarity && !a?.hideAdditional === !b?.hideAdditional && sameData(a?.patterns?.length ? a.patterns : null, b?.patterns?.length ? b.patterns : null) && a?.baseColor === b?.baseColor &&
     a?.mapId === b?.mapId && a?.mapPostProcessing === b?.mapPostProcessing && sameData(a?.trim, b?.trim) && sameData(a?.pages, b?.pages) && sameData(a?.book, b?.book)
   );
 }

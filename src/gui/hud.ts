@@ -90,10 +90,10 @@ export class Hud {
       g.stack(s, x, y, p.useItem === s ? p.ticksUsingItem() : -1);
       if (pop > 0) g.popTransform();
       g.itemDecorations(s.count, s.damage, s.item.maxDamage, x, y);
-      // vanilla item cooldown overlay (ender pearls)
+      // vanilla item cooldown overlay (ender pearls, a knocked-down shield): the part of the cooldown left
       const cd = p.cooldowns.get(s.item.id);
       if (cd) {
-        const f = Math.max(0, Math.min(1, (cd - partial) / 20));
+        const f = Math.max(0, Math.min(1, (cd - partial) / (p.cooldownTotals.get(s.item.id) ?? 20)));
         const i1 = y + Math.floor(16 * (1 - f));
         g.fill(x, i1, x + 16, i1 + Math.ceil(16 * f), 0x7fffffff);
       }

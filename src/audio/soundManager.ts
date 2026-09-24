@@ -47,6 +47,8 @@ function categoryOf(name: string): Category {
   if (name === 'block.end_portal.spawn') return 'hostile';
   // vanilla CrossbowItem: the loading sounds are SoundSource.PLAYERS (the rest the shooter's source)
   if (name.startsWith('item.crossbow.')) return 'players';
+  // (the shield's thud and crack are its holder's: a player's)
+  if (name.startsWith('item.shield.')) return 'players';
   if (name.startsWith('block.') || name.startsWith('item.')) return 'blocks';
   if (name.startsWith('weather.') || name.startsWith('entity.lightning')) return 'weather';
   if (name.startsWith('ambient.')) return 'ambient';
@@ -84,6 +86,8 @@ const ALIASES: [RegExp, string][] = [
   [/^entity\.ender_dragon\.shoot$/, 'entity.ghast.shoot'],
   [/^entity\.ender_dragon\.ambient$/, 'entity.ender_dragon.growl'],
   [/^entity\.generic\.death$/, 'entity.player.hurt'],
+  // vanilla sounds.json: a shield breaking (or knocked down) is the item-break sample, random/break
+  [/^item\.shield\.break$/, 'entity.item.break'],
   // vanilla sounds.json: some villagers at work make their workstation's own sound
   [/^entity\.villager\.work_weaponsmith$/, 'block.grindstone.use'],
   [/^entity\.villager\.work_armorer$/, 'block.blast_furnace.fire_crackle'],
