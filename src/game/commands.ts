@@ -29,6 +29,8 @@ import { DIMENSIONS, type DimensionType } from '../world/dimension';
 import type { VillageKind } from '../world/gen/villages';
 // (Stage 4: outposts)
 import { locateOutpost } from './outposts';
+// (Stage 5: ocean)
+import { locateMonument } from './monuments';
 
 class CommandError extends Error {
   constructor(msg: string, readonly pos = -1) {
@@ -700,7 +702,10 @@ export const COMMANDS: Record<string, CommandDef> = {
               ? c.game.level.villages().nearest(village, x, z)
               : name === 'minecraft:pillager_outpost' && dim.id === 'overworld'
                 ? locateOutpost(c.game.level, x, z)
-                : null;
+                : // (Stage 5: ocean)
+                  name === 'minecraft:monument' && dim.id === 'overworld'
+                  ? locateMonument(c.game.level, x, z)
+                  : null;
       if (!found) throw new CommandError(`Could not find a structure of type "${name}" nearby`);
       c.ok(`The nearest ${name} is at §a[${found[0]}, ~, ${found[1]}]§r (${Math.floor(Math.hypot(found[0] - x, found[1] - z))} blocks away)`);
     },

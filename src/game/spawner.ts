@@ -25,6 +25,7 @@ import { outpostSpawnsAt } from './outposts';
 import { checkPatrollingMonsterSpawnRules } from '../entity/raider';
 // (Stage 5: ocean)
 import { Guardian, ElderGuardian, checkGuardianSpawnRules } from '../entity/guardian';
+import { monumentSpawnsAt } from './monuments';
 import { Husk, Stray } from '../entity/biomeMonsters';
 import { Drowned, isInWaterPositionOk, drownedNaturalSpawnRules } from '../entity/drowned';
 import { Silverfish } from '../entity/silverfish';
@@ -518,6 +519,9 @@ export class NaturalSpawner {
     // (Stage 4: outposts) a structure's spawn_overrides, bounding_box full (game/outposts.ts)
     const so = outpostSpawnsAt(this.level, cat, x, y, z);
     if (so) return so;
+    // (Stage 5: ocean) a monument's guardians (game/monuments.ts)
+    const mo = monumentSpawnsAt(this.level, cat, x, y, z);
+    if (mo) return mo;
     const bs = biomeSettings(w.getBiome3(x, y, z));
     return cat === 'monster' ? bs.monster : cat === 'water_creature' ? bs.water : cat === 'ambient' ? bs.ambient : bs.creature;
   }
