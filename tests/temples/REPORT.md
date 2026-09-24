@@ -10,7 +10,7 @@ Branch: `claude/stoic-johnson-waevai` (from main at 5dfd44d).
 | M2 redstone components | done: dust, torches, repeaters (M2a), tripwire (M2b), dispensers and droppers (M2c), pistons (M2d) | 74b9613 Redstone dust, redstone torches and repeaters: …; ef67ff5 Tripwire hooks and string: …; 18b3665 Dispensers and droppers: …; 73f0c79 Pistons and sticky pistons: … |
 | (merge) | main merged in (strongholds, silverfish, wolves); conflicts resolved keeping both sides | 9593ea6 Merge strongholds, silverfish in infested stone, and wolves from main into the temples branch |
 | M3 igloo and jungle temple | done | 1643560 Jungle temples and igloos: … |
-| M4 archaeology | done: the brush, suspicious sand and gravel, archaeology/desert_pyramid and the four sherds, decorated pots, the pyramid's suspicious sand (the game has no desert wells), and the two archaeology advancements | "Archaeology: …" (see `git log`; the commit after 1643560) |
+| M4 archaeology | done: the brush, suspicious sand and gravel, archaeology/desert_pyramid and the four sherds, decorated pots, the pyramid's suspicious sand (the game has no desert wells), and the two archaeology advancements | 487cc2c Archaeology: brush the suspicious sand in desert pyramids to dig out pottery sherds, … |
 
 ## 2. Shared files changed (all additive hooks)
 
