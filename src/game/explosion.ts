@@ -139,6 +139,9 @@ export function explode(level: Level, source: Entity | null, x: number, y: numbe
           else drops.push([s, bx, by, bz]);
         }
       }
+      // vanilla Block.onExplosionHit: whatever a broken block leaves besides its drops (an infested block's
+      // silverfish), whether or not the drops survive the blast
+      behaviorOf(st)?.spawnAfterBreak?.(level, bx, by, bz, st, null);
       const be = w.getBlockEntity(bx, by, bz);
       if (be) {
         be.unpackLoot();

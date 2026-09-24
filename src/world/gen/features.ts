@@ -56,6 +56,12 @@ const ORES: OreSpec[] = [
 ];
 
 const COPPER_LARGE: OreSpec = { ...ORES.find((o) => o.stone === 'copper_ore')!, size: 20 };
+/**
+ * vanilla ore_infested (BiomeDefaultFeatures.addInfestedStone, UNDERGROUND_DECORATION step): 14 veins of 9 a chunk,
+ * from the bottom of the world to y 63, silverfish in the stone (and deepslate) of the windswept hills and the
+ * mountains, the biomes with the extra emeralds
+ */
+const INFESTED_ORE: OreSpec = { stone: 'infested_stone', deep: 'infested_deepslate', size: 9, count: 14, height: ['uniform', -64, 63], biomes: ORES.find((o) => o.stone === 'emerald_ore')!.biomes };
 /** vanilla ore_clay, only in the lush caves */
 const CLAY_ORE: OreSpec = { stone: 'clay', size: 33, count: 46, height: ['uniform', -64, 256], rule: W_BASE_STONE };
 
@@ -246,6 +252,8 @@ export class Decorator {
   geodes: { place(ctx: GenContext): void } | null = null;
   /** villages, placed in the SURFACE_STRUCTURES step */
   villages: { place(ctx: GenContext): void } | null = null;
+  /** strongholds, placed in the STRONGHOLDS step */
+  strongholds: { place(ctx: GenContext): void } | null = null;
 
   constructor(readonly seed: number, patchNoise: NormalNoise) {
     this.patchNoise = patchNoise;
@@ -264,6 +272,8 @@ export class Decorator {
     this.monsterRooms(ctx, new Rand(hash2(ctx.cx, ctx.cz, this.seed ^ 0xd06e), 4));
     // --- villages (vanilla SURFACE_STRUCTURES step)
     this.villages?.place(ctx);
+    // --- strongholds (vanilla STRONGHOLDS step)
+    this.strongholds?.place(ctx);
     // biome of the chunk center decides most decoration (vanilla decorates per biome present;
     // we use a few sample columns so borders mix naturally)
     // --- ores
@@ -291,7 +301,14 @@ export class Decorator {
     if (DECO[centerBiome]?.disks || centerBiome === B.swamp || centerBiome === B.beach || centerBiome === B.plains || centerBiome === B.forest) {
       this.disks(ctx, r);
     }
-    // --- dripstone clusters and pointed dripstone (vanilla UNDERGROUND_DECORATION step)
+    // --- infested stone, then dripstone clusters and pointed dripstone (vanilla UNDERGROUND_DECORATION step)
+    if (INFESTED_ORE.biomes!.includes(centerBiome)) {
+      const ri = new Rand(hash2(ctx.cx, ctx.cz, this.seed ^ 0x51f1), 12);
+      for (let i = 0; i < 14; i++) {
+        const x = ctx.x0 + ri.nextInt(16), z = ctx.z0 + ri.nextInt(16);
+        placeOre(ctx, ri, INFESTED_ORE, x, sampleHeight(ri, INFESTED_ORE.height), z);
+      }
+    }
     dripstoneDecoration(ctx, new Rand(hash2(ctx.cx, ctx.cz, this.seed ^ 0xd21f), 9));
     // --- springs (vanilla FLUID_SPRINGS step)
     this.springs(ctx, new Rand(hash2(ctx.cx, ctx.cz, this.seed ^ 0x5b41), 3));

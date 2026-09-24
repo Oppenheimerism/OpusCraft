@@ -89,6 +89,15 @@ function transformState(st: number, flip: boolean, rot: boolean): number {
     if (rot) s = RAIL_CW[s];
     st = b.with(st, 'shape', s);
   }
+  // vanilla DoorBlock.mirror: a mirrored door hangs from its other side
+  if (flip && b.propIndex('hinge') >= 0) st = b.with(st, 'hinge', b.get(st, 'hinge') === 'left' ? 'right' : 'left');
+  // vanilla CrossCollisionBlock (fences, bars, panes) mirror/rotate: the connections turn with the piece
+  if (b.propIndex('north') >= 0 && b.propIndex('east') >= 0 && b.propIndex('south') >= 0 && b.propIndex('west') >= 0) {
+    let n = b.get(st, 'north'), e = b.get(st, 'east'), s = b.get(st, 'south'), w = b.get(st, 'west');
+    if (flip) [n, s] = [s, n];
+    if (rot) [n, e, s, w] = [w, n, e, s];
+    st = b.with(b.with(b.with(b.with(st, 'north', n), 'east', e), 'south', s), 'west', w);
+  }
   return st;
 }
 
@@ -164,7 +173,8 @@ export abstract class StructurePiece {
     ctx.set(wx, wy, wz, st);
     if (isLiquid(st)) ctx.scheduleFluid(wx, wy, wz);
     // vanilla SHAPE_CHECK_BLOCKS: connections are fixed up once the chunk loads
-    if (blockOf(st).name.endsWith('_fence')) ctx.markForPostprocessing(wx, wy, wz);
+    const n = blockOf(st).name;
+    if (n.endsWith('_fence') || n === 'iron_bars') ctx.markForPostprocessing(wx, wy, wz);
   }
 
   generateBox(ctx: GenContext, chunk: BoundingBox, x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, edge: number, inside: number, existingOnly: boolean): void {

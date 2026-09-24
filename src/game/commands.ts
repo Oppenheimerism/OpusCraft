@@ -690,9 +690,11 @@ export const COMMANDS: Record<string, CommandDef> = {
       const found =
         name === 'minecraft:fortress' && dim.id === 'the_nether'
           ? c.game.level.fortresses().nearest(x, z)
-          : village && dim.id === 'overworld'
-            ? c.game.level.villages().nearest(village, x, z)
-            : null;
+          : name === 'minecraft:stronghold' && dim.id === 'overworld'
+            ? c.game.level.strongholds().nearest(p.x, p.y, p.z)
+            : village && dim.id === 'overworld'
+              ? c.game.level.villages().nearest(village, x, z)
+              : null;
       if (!found) throw new CommandError(`Could not find a structure of type "${name}" nearby`);
       c.ok(`The nearest ${name} is at §a[${found[0]}, ~, ${found[1]}]§r (${Math.floor(Math.hypot(found[0] - x, found[1] - z))} blocks away)`);
     },

@@ -37,6 +37,8 @@ import '../textures/ironGolem';
 import '../textures/witch';
 import '../textures/biomeMobs';
 import '../textures/drowned';
+import '../textures/silverfish';
+import { silverfishModel, animateSilverfish } from './silverfishModel';
 import { Witch } from '../entity/witch';
 import { villagerTexture, zombieVillagerTexture } from '../textures/villager';
 import { ZombieVillager } from '../entity/zombieVillager';
@@ -48,6 +50,7 @@ import { ThrownItem } from '../entity/throwable';
 import { AbstractMinecart } from '../entity/minecart';
 import { Boat } from '../entity/boat';
 import { EndCrystal } from '../entity/endCrystal';
+import { EyeOfEnder } from '../entity/eyeOfEnder';
 import { EndCrystalRenderer } from './endCrystalRenderer';
 import { EnderDragon } from '../entity/enderDragon';
 import { DragonFireball } from '../entity/dragonFireball';
@@ -178,6 +181,7 @@ export class EntityRenderDispatcher {
       stray_outer: M.strayOuterModel(),
       drowned: M.drownedModel(),
       drowned_outer: M.drownedModel(0.25),
+      silverfish: silverfishModel(),
     };
     // vanilla textures/misc/shadow.png: soft black disc
     const n = 32, data = new Uint8Array(n * n * 4);
@@ -400,6 +404,7 @@ export class EntityRenderDispatcher {
     else if (e instanceof PrimedTnt) this.renderTnt(b, e, dx, dy, dz, p);
     else if (e instanceof FallingBlockEntity) this.renderFalling(b, e, dx, dy, dz);
     else if (e instanceof ThrownItem) this.renderThrown(b, e, dx, dy, dz, cam);
+    else if (e instanceof EyeOfEnder) this.renderEyeOfEnder(b, e, dx, dy, dz, cam);
     else if (e instanceof DragonFireball) this.dragons.renderFireball(b, this.pose, dx, dy, dz, cam);
     else if (e instanceof Fireball) this.renderFireball(b, e, dx, dy, dz, cam);
     else if (e instanceof AbstractMinecart) this.renderMinecart(b, e, x, y, z, dx, dy, dz, p);
@@ -580,7 +585,8 @@ export class EntityRenderDispatcher {
       scale = (pose) => pose.rotZ(6.5 * k);
     }
     const spiderLike = type === 'spider' || type === 'cave_spider';
-    const a = this.setupLiving(e, dx + jx, dy, dz + jz, p, spiderLike ? 180 : 90, scale);
+    // (vanilla SpiderRenderer / SilverfishRenderer.getFlipDegrees: they die rolled right over)
+    const a = this.setupLiving(e, dx + jx, dy, dz + jz, p, spiderLike || type === 'silverfish' ? 180 : 90, scale);
     const attack = attackAnim(e, p);
     let armPose: M.ArmPose = 'empty';
     switch (type) {
@@ -675,6 +681,9 @@ export class EntityRenderDispatcher {
         M.animateIronGolem(def.root, a.limbSwing, a.limbAmount, a.headYaw, a.headPitch, g.attackAnimationTick > 0 ? g.attackAnimationTick - p : 0, g.offerFlowerTick);
         break;
       }
+      case 'silverfish':
+        animateSilverfish(def.root, a.age);
+        break;
       case 'bat': {
         // vanilla AnimationState: seconds since each loop started (a tick is 50 ms)
         const bat = e as Bat;
@@ -1142,6 +1151,19 @@ export class EntityRenderDispatcher {
     this.items.render(b, pose, e.stack, 'ground');
   }
 
+  /** vanilla ThrownItemRenderer(1, fullBright) for an eye of ender: the eye facing the camera, lit as if by a torch */
+  private renderEyeOfEnder(b: EntityBatch, e: EyeOfEnder, dx: number, dy: number, dz: number, cam: Camera): void {
+    if (e.tickCount < 2 && dx * dx + dy * dy + dz * dz < 12.25) return;
+    b.setOverlay(0, 0, 0, 0);
+    b.lightB = 240;
+    const pose = this.pose;
+    pose.reset();
+    pose.translate(dx, dy, dz);
+    pose.rotY(180 - cam.yaw);
+    pose.rotX(-cam.pitch);
+    this.items.render(b, pose, e.stack, 'ground');
+  }
+
   /**
    * vanilla MinecartRenderer: drawn on the rail's centre line between its front and back wheel points
    * (0.3 either way), turned and tilted along the track, wobbling after a hit, with its block (the
@@ -1403,6 +1425,7 @@ function shadowRadius(e: Entity): number {
       r = 0.7;
       break;
     case 'chicken':
+    case 'silverfish':
       r = 0.3;
       break;
     case 'spider':

@@ -74,6 +74,11 @@ export interface BlockBehavior {
   placeLiquid?(level: Level, x: number, y: number, z: number, state: number): boolean;
   /** the block's loot table (vanilla block loot): what breaking it with `tool` drops, when it has one of its own */
   drops?(state: number, tool: Item | null, r: Rand, silk: boolean, fortune: number, be?: BlockEntity | null): ItemStack[];
+  /**
+   * vanilla spawnAfterBreak: the block was broken with its drops (by a player with `stack`, by a mob or a blast with
+   * nothing), and may leave something behind besides them (an infested block's silverfish)
+   */
+  spawnAfterBreak?(level: Level, x: number, y: number, z: number, state: number, stack: ItemStack | null): void;
   /** vanilla entityInside: `e`'s box overlaps the block */
   entityInside?(level: Level, x: number, y: number, z: number, state: number, e: Entity): void;
   /** vanilla animateTick (client ambient effects) */
