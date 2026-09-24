@@ -35,6 +35,7 @@ import type { DimensionType } from '../world/dimension';
 import { NetherGenerator } from '../world/gen/nether';
 import { villageLocator, type Villages } from '../world/gen/villages';
 import type { NetherFortresses } from '../world/gen/fortress';
+import type { EndDragonFight } from './endDragonFight';
 import { behaviorOf } from './blockBehavior';
 import { NeighborUpdater } from './neighborUpdater';
 import { LevelTicks } from './ticks';
@@ -81,6 +82,19 @@ export const UPDATE_KNOWN_SHAPE = 16;
 /** vanilla Block.UPDATE_ALL */
 export const UPDATE_ALL = UPDATE_NEIGHBORS | UPDATE_CLIENTS;
 
+/**
+ * a vanilla chunk ticket besides the player's and the dragon fight's (an end gateway's way out, the far side of one):
+ * the chunks `load` round chunk (cx, cz) kept loaded and those `ticking` round it with their entities ticking (-1:
+ * none), till game time `until`
+ */
+export interface ChunkTicket {
+  cx: number;
+  cz: number;
+  load: number;
+  ticking: number;
+  until: number;
+}
+
 /** the scheduled ticks that predate the block-behaviour ones (fluids, falling blocks, fire, dripleaves): one per position */
 const LEGACY_TICK = -1;
 
@@ -126,6 +140,15 @@ export class Level {
   gameRules: GameRules = { ...DEFAULT_GAME_RULES };
   /** vanilla ServerLevel.getPoiManager: the beds, workstations and bells villagers claim */
   readonly poi: PoiManager;
+  /** vanilla ServerLevel.dragonFight: the End's (game/endDragonFight.ts), null elsewhere */
+  dragonFight: EndDragonFight | null = null;
+  /** chunk tickets by name (the game keeps what they name loaded) */
+  readonly tickets = new Map<string, ChunkTicket>();
+  /**
+   * entities on their way through a portal whose far side is still loading (an end gateway's): held where they
+   * went in, not ticking, till `arrive` has put them there (true)
+   */
+  readonly inTransit = new Map<Entity, () => boolean>();
 
   constructor(world: World, seed: string) {
     this.fluids = new FluidTicker(this);
@@ -157,12 +180,22 @@ export class Level {
   /** entities whose bounding box intersects `box` */
   getEntities(box: AABB, filter?: (e: Entity) => boolean, except?: Entity | null): Entity[] {
     const out: Entity[] = [];
+    let dragons = false;
     for (const e of this.entities) {
       if (e.removed || e === except) continue;
+      if ((e as { subEntities?: Entity[] }).subEntities) dragons = true;
       if (!e.bb.intersects(box)) continue;
       if (filter && !filter(e)) continue;
       out.push(e);
     }
+    // vanilla Level.getEntities: the ender dragon's parts come after, wherever the dragon's own box is (not those of
+    // `except`'s own dragon)
+    if (dragons)
+      for (const e of this.entities) {
+        const parts = (e as { subEntities?: Entity[] }).subEntities;
+        if (!parts || e.removed || e === except) continue;
+        for (const p of parts) if (p !== except && p.bb.intersects(box) && (!filter || filter(p))) out.push(p);
+      }
     return out;
   }
 
@@ -199,6 +232,8 @@ export class Level {
 
   /** the player went to another dimension: what was here was saved and unloaded with its chunks */
   resetForDimension(): void {
+    this.tickets.clear();
+    this.inTransit.clear();
     const keep: Entity[] = this.player ? [this.player] : [];
     for (const e of this.entities) if (!keep.includes(e)) e.removed = true;
     this.entities.length = 0;
@@ -361,7 +396,7 @@ export class Level {
   /** a crossbow arrow the player shot killed something: all it has killed so far (vanilla killed_by_crossbow) */
   onPlayerCrossbowKill: ((killed: Entity[]) => void) | null = null;
   /** an entity's time in a portal came up (the portal block it was in, and which kind) */
-  onPortal: ((e: Entity, x: number, y: number, z: number, kind: 'nether' | 'end') => void) | null = null;
+  onPortal: ((e: Entity, x: number, y: number, z: number, kind: 'nether' | 'end' | 'end_gateway') => void) | null = null;
   /** a player cured a zombie villager (vanilla cured_zombie_villager) */
   onCuredZombieVillager: ((p: Player, v: Villager) => void) | null = null;
   /** a golem someone built came to life (vanilla CarvedPumpkinBlock.spawnGolemInWorld: summoned_entity) */
@@ -383,6 +418,9 @@ export class Level {
   isEntityTicking(x: number, z: number): boolean {
     const bx = Math.floor(x), bz = Math.floor(z);
     if (!this.world.isLoaded(bx, bz)) return false;
+    // (vanilla TicketType.DRAGON: the dragon fight keeps the island's middle ticking while a player is near)
+    if (this.dragonFight?.ticksChunk(bx >> 4, bz >> 4)) return true;
+    for (const t of this.tickets.values()) if (Math.abs((bx >> 4) - t.cx) <= t.ticking && Math.abs((bz >> 4) - t.cz) <= t.ticking) return true;
     const p = this.player;
     if (!p) return true;
     const dx = (bx >> 4) - (Math.floor(p.x) >> 4), dz = (bz >> 4) - (Math.floor(p.z) >> 4);
@@ -397,9 +435,13 @@ export class Level {
     else this.tickWeatherLevels();
     tickSleeping(this);
     this.updateSkyBrightness();
+    // (vanilla ServerLevel.tick: the dragon fight just before the entities)
+    this.dragonFight?.tick();
+    for (const [k, t] of this.tickets) if (t.until <= this.gameTime) this.tickets.delete(k);
+    for (const [e, arrive] of this.inTransit) if (e.removed || arrive()) this.inTransit.delete(e);
     for (let i = 0; i < this.entities.length; i++) {
       const e = this.entities[i];
-      if (e.removed || e.vehicle) continue;
+      if (e.removed || e.vehicle || this.inTransit.has(e)) continue;
       if (e !== this.player && !this.isEntityTicking(e.x, e.z)) continue;
       e.tick();
       if (!e.removed) this.onEntityTick?.(e);
@@ -497,7 +539,8 @@ export class Level {
       const st = this.world.getState(nx, ny, nz);
       const f = FLAGS[st];
       if (f & (F_WATER | F_LAVA) && BLOCKS[STATE_BLOCK[st]].s.fluid) this.scheduleTick(nx, ny, nz, fluidStateOf(st).type === 1 ? 5 : this.world.dim.ultraWarm ? 10 : 30);
-      else if (isGravityBlock(st)) this.scheduleTick(nx, ny, nz, 2);
+      // (vanilla FallingBlock.getDelayAfterPlace: 2, the dragon egg's 5)
+      else if (isGravityBlock(st)) this.scheduleTick(nx, ny, nz, BLOCKS[STATE_BLOCK[st]].name === 'dragon_egg' ? 5 : 2);
     }
   }
 
@@ -738,5 +781,5 @@ function fireId(): number {
 
 function isGravityBlock(st: number): boolean {
   const n = BLOCKS[STATE_BLOCK[st]].name;
-  return n === 'sand' || n === 'red_sand' || n === 'gravel' || n.endsWith('concrete_powder') || n.endsWith('anvil');
+  return n === 'sand' || n === 'red_sand' || n === 'gravel' || n.endsWith('concrete_powder') || n.endsWith('anvil') || n === 'dragon_egg';
 }

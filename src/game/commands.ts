@@ -607,7 +607,7 @@ export const COMMANDS: Record<string, CommandDef> = {
             p.health = 0;
             p.die('genericKill');
           }
-        } else if (e instanceof LivingEntity) {
+        } else if (e instanceof LivingEntity && e.type !== 'ender_dragon') {
           e.invulnerableTime = 0;
           e.hurt(Number.MAX_VALUE / 2, 'genericKill');
         } else e.kill();
@@ -866,10 +866,15 @@ function tpCommand(c: Ctx): void {
   if (c.args[off + 4]) pitch = Math.max(-90, Math.min(90, coord(c, off + 4, p.pitch, false)));
   if (y < -20000000 || y > 20000000 || Math.abs(x) > 30000000 || Math.abs(z) > 30000000) throw new CommandError('Invalid position for teleport');
   if (c.dim && c.dim !== c.game.world.dim) {
-    // to another dimension: the position as given (vanilla execute in doesn't scale it)
+    // to another dimension: the position as given (vanilla execute in doesn't scale it), and it counts as
+    // changing dimension (vanilla ServerPlayer.teleportTo → triggerDimensionChangeTriggers)
     p.yaw = yaw;
     p.pitch = pitch;
-    c.game.changeDimension(c.dim, x, y, z, null, true);
+    const from = c.game.world.dim, to = c.dim;
+    c.game.changeDimension(to, x, y, z, (g) => {
+      g.onChangedDimension(from, to);
+      return true;
+    }, true);
   } else c.game.teleport(x, y, z, yaw, pitch);
   c.ok(`Teleported ${c.game.playerName} to ${f6(x)}, ${f6(y)}, ${f6(z)}`);
 }

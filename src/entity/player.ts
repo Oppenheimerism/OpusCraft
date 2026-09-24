@@ -19,7 +19,7 @@ import { hurtAndBreak, oxygenBonus } from '../item/enchantHelper';
 export type GameMode = 'survival' | 'creative' | 'adventure' | 'spectator';
 
 /** damage types with 0 exhaustion (vanilla damage_type/*.json "exhaustion": 0.0) */
-const NO_EXHAUSTION = new Set(['magic', 'wither', 'onFire', 'fall', 'drown', 'starve', 'inWall', 'cramming', 'void', 'genericKill', 'generic', 'flyIntoWall']);
+const NO_EXHAUSTION = new Set(['magic', 'indirectMagic', 'wither', 'onFire', 'fall', 'drown', 'starve', 'inWall', 'cramming', 'void', 'genericKill', 'generic', 'flyIntoWall']);
 
 export interface PlayerInput {
   forward: boolean;
@@ -114,6 +114,8 @@ export class Player extends LivingEntity {
   /** vanilla respawnPosition: a bed, or a /spawnpoint (forced); null = world spawn */
   respawnPos: [number, number, number] | null = null;
   respawnForced = false;
+  /** vanilla ServerPlayer.seenCredits: they've left the End through its exit portal before (the End Poem and credits roll only the first time) */
+  seenCredits = false;
   /** bed head block while asleep (vanilla sleepingPos) */
   sleepingPos: [number, number, number] | null = null;
   /** vanilla sleepCounter: climbs to 100 asleep, then 100..110 fades back after waking */

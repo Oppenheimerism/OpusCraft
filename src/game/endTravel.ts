@@ -4,6 +4,12 @@
 // dropped), facing west; from the End back home — a player to their bed or the
 // world spawn, anything else to the top of the world spawn.
 //
+// The first time a player leaves the End that way (vanilla
+// ServerPlayer.showEndCredits), the End Poem and the credits roll on the way
+// home: out of the End at once, home loading behind them, and back at the bed
+// or the world spawn with everything they had once they're over or skipped
+// (vanilla WinScreen, then PERFORM_RESPAWN keeping everything).
+//
 // Only one dimension is loaded at a time, so a mob, an item or a cart that
 // goes through while the player stays behind is written down (PortalArrivals)
 // and put into the other dimension when the chunk it lands in there loads —
@@ -72,20 +78,57 @@ function playerThrough(g: Game, from: DimensionType, to: DimensionType): void {
     g.changeDimension(THE_END, x, y, z, arrive, true);
     return;
   }
-  // home: vanilla ServerPlayer.findRespawnPositionAndUseSpawnBlock(false, DO_NOTHING) — the bed (facing it) if it's
-  // still there and clear, else the world spawn; no sound
+  if (from === THE_END && !p.seenCredits) {
+    showEndCredits(g);
+    return;
+  }
+  goHome(g, from, null, false);
+}
+
+/**
+ * vanilla ServerPlayer.showEndCredits: seen now, out of the End, and the End Poem and the credits over the loading
+ * (vanilla ClientboundGameEventPacket.WIN_GAME); once they're done, home (PERFORM_RESPAWN)
+ */
+function showEndCredits(g: Game): void {
+  g.player.seenCredits = true;
+  let over = !g.winScreenFactory;
+  goHome(g, THE_END, () => over, true);
+  if (over) return;
+  g.setScreen(
+    g.winScreenFactory!(() => {
+      over = true;
+      // (home still loading: its "Loading terrain..." over the starfield, as after any end portal)
+      g.setScreen(g.receivingScreenFactory ? g.receivingScreenFactory('end_portal') : null);
+    }),
+  );
+}
+
+/**
+ * home from the End: vanilla ServerPlayer.findRespawnPositionAndUseSpawnBlock(false, DO_NOTHING) — the bed (facing
+ * it) if it's still there and clear, else the world spawn; no sound. `ready`: not until it says so (the credits).
+ * `respawn`: after the credits, as vanilla PlayerList.respawn(player, true) — a new player keeping everything but
+ * its fire and its breath, and a bed that's gone forgotten
+ */
+function goHome(g: Game, from: DimensionType, ready: (() => boolean) | null, respawn: boolean): void {
+  const p = g.player;
   const [bx, by, bz] = p.respawnPos ?? [p.spawnX, p.spawnY, p.spawnZ];
   const arrive = (g2: Game): boolean => {
+    if (ready && !ready()) return false;
     const pl = g2.player;
     const at = findRespawn(g2.level, pl);
     if (at) g2.teleport(at.x, at.y, at.z, at.yaw, 0);
     else {
-      // (vanilla DimensionTransition.missingRespawnBlock: told so, and the bed stays theirs)
+      // (vanilla DimensionTransition.missingRespawnBlock: told so; through the portal the bed stays theirs)
       if (pl.respawnPos) g2.chat(MSG.noRespawnBlock);
+      if (respawn) pl.respawnPos = null;
       g2.teleport(pl.spawnX + 0.5, pl.spawnY, pl.spawnZ + 0.5, 0, 0);
     }
+    if (respawn) {
+      pl.remainingFireTicks = 0;
+      pl.air = 300;
+    }
     pl.portalCooldown = pl.dimensionChangingDelay();
-    g2.onChangedDimension(from, to);
+    g2.onChangedDimension(from, OVERWORLD);
     return true;
   };
   g.changeDimension(OVERWORLD, bx + 0.5, by, bz + 0.5, arrive, true);

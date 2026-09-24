@@ -788,12 +788,14 @@ export abstract class LivingEntity extends Entity {
       this.hurtDir = 0;
       if (!NO_KNOCKBACK.has(source) && (attacker || direct)) {
         let kx: number, kz: number;
-        if (direct && direct !== attacker) {
+        if (direct && direct !== attacker && direct.type !== 'area_effect_cloud') {
           kx = -direct.dx;
           kz = -direct.dz;
         } else {
-          kx = attacker!.x - this.x;
-          kz = attacker!.z - this.z;
+          // (vanilla getSourcePosition: where the direct cause is — a lingering cloud's middle)
+          const src = direct ?? attacker!;
+          kx = src.x - this.x;
+          kz = src.z - this.z;
         }
         this.knockback(0.4, kx, kz);
         // vanilla indicateDamage
@@ -802,7 +804,8 @@ export abstract class LivingEntity extends Entity {
       this.onHurt(source);
     }
     if (this.health <= 0) {
-      this.killer = attacker ?? null;
+      // (vanilla DamageSource: the causing entity, else the direct one: an ownerless cloud or potion)
+      this.killer = attacker ?? direct ?? null;
       this.deathSource = source;
       if (fresh) this.playDeathSound();
       this.die(source, attacker ?? null);

@@ -119,3 +119,17 @@ export function endPortalFrameEye(): TexImage {
   eye.forEach((row, y) => [...row].forEach((ch, x) => setPx(t, 4 + x, 4 + y, pal[ch])));
   return t;
 }
+
+// ---------------------------------------------------------------------------
+// Dragon egg: near-black, flecked with dark violet, a few brighter purple specks catching the light
+
+export function dragonEgg(): TexImage {
+  const r = rng('dragon_egg');
+  const H = fbm(r, [[4, 4, 0.4], [2, 2, 0.35]], 0.5);
+  const tones = quantize(H, [3, 2.2, 1, 0.35]);
+  const t = paint(tones, [0x0c0910, 0x140e1a, 0x1d1426, 0x2b1d38]);
+  // violet flecks, and a scatter of brighter specks
+  for (let i = 0; i < 18; i++) setPx(t, r.nextInt(N), r.nextInt(N), r.chance(0.5) ? 0x3a2550 : 0x31203f);
+  for (let i = 0; i < 6; i++) setPx(t, r.nextInt(N), r.nextInt(N), r.chance(0.5) ? 0x5c3478 : 0x4a2c63);
+  return t;
+}

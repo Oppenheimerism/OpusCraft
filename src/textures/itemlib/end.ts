@@ -1,5 +1,6 @@
 // Items of the End: the end crystal (a magenta crystal cube inside its pale
-// glass cage, seen corner-on). The eye of ender is in extras.ts.
+// glass cage, seen corner-on) and the dragon head (the advancement icon of Free
+// the End). The eye of ender is in extras.ts.
 
 import { TexImage, img, plot } from '../tex';
 import type { Gen } from './common';
@@ -33,5 +34,92 @@ END_ITEMS['end_crystal'] = (): TexImage => {
     }
   // the glint on the crystal's top
   plot(t, 7, 5, 0xffe4fa);
+  return t;
+};
+
+/**
+ * vanilla DragonHeadModel's boxes (model units, y up here, the snout toward -z): the upper head, the upper lip and
+ * the jaw under it, two scales on top, two nostrils on the snout
+ */
+const DRAGON_HEAD: [number, number, number, number, number, number][] = [
+  [-8, -8, -10, 8, 8, 6],
+  [-6, -4, -24, 6, 1, -8],
+  [-6, -8, -24, 6, -4, -8],
+  [-5, 8, -4, -3, 12, 2],
+  [3, 8, -4, 5, 12, 2],
+  [-5, 1, -22, -3, 3, -18],
+  [3, 1, -22, 5, 3, -18],
+];
+
+/**
+ * the dragon head as the inventory shows it (vanilla draws the model itself): seen from above, its snout toward the
+ * lower left — the top lightest, the front mid, the side darkest, a purple eye on the side — cast at 4x4 rays a
+ * pixel, each pixel the face most of them hit
+ */
+END_ITEMS['dragon_head'] = (): TexImage => {
+  const t = img(16, 16);
+  // looking down 30°, along (1, -0.816, 1): the front (-z) to the left, the side (-x) to the right
+  const d = [1, -0.8165, 1];
+  const dl = Math.hypot(d[0], d[1], d[2]);
+  const D = d.map((v) => v / dl);
+  const R = [-Math.SQRT1_2, 0, Math.SQRT1_2];
+  // up = right × forward
+  const U = [R[1] * D[2] - R[2] * D[1], R[2] * D[0] - R[0] * D[2], R[0] * D[1] - R[1] * D[0]];
+  const dot = (a: number[], b: number[]) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  // fit the model's corners into the icon, a pixel's margin round it
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  for (const b of DRAGON_HEAD)
+    for (let c = 0; c < 8; c++) {
+      const p = [b[c & 1 ? 3 : 0], b[c & 2 ? 4 : 1], b[c & 4 ? 5 : 2]];
+      const sx = dot(p, R), sy = dot(p, U);
+      x0 = Math.min(x0, sx);
+      x1 = Math.max(x1, sx);
+      y0 = Math.min(y0, sy);
+      y1 = Math.max(y1, sy);
+    }
+  const scale = Math.max(x1 - x0, y1 - y0) / 14.5;
+  const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+  /** what a ray through the icon at (px, py) hits first: 0 nothing, 1 top, 2 front, 3 side, 4 the eye */
+  const cast = (px: number, py: number): number => {
+    const sx = cx + (px - 8) * scale, sy = cy - (py - 8) * scale;
+    const o = [0, 1, 2].map((i) => R[i] * sx + U[i] * sy - D[i] * 100);
+    let best = Infinity, face = 0, hit: number[] = [];
+    for (const b of DRAGON_HEAD) {
+      let tmin = -Infinity, tmax = Infinity, axis = -1;
+      for (let i = 0; i < 3; i++) {
+        const a = (b[i] - o[i]) / D[i], c = (b[i + 3] - o[i]) / D[i];
+        const lo = Math.min(a, c), hi = Math.max(a, c);
+        if (lo > tmin) {
+          tmin = lo;
+          axis = i;
+        }
+        tmax = Math.min(tmax, hi);
+      }
+      if (tmin > tmax || tmin >= best) continue;
+      best = tmin;
+      face = axis === 1 ? 1 : axis === 2 ? 2 : 3;
+      hit = o.map((v, i) => v + D[i] * tmin);
+    }
+    // the eye: on the side of the upper head, near its front, high up
+    if (face === 3 && hit[0] < -7.9 && hit[2] < -5 && hit[1] > 2 && hit[1] < 5.5) return 4;
+    return face;
+  };
+  const COLORS = [0, 0x5e5966, 0x37333d, 0x1f1d23, 0xb04ee0];
+  for (let y = 0; y < 16; y++)
+    for (let x = 0; x < 16; x++) {
+      const n = [0, 0, 0, 0, 0];
+      for (let j = 0; j < 4; j++) for (let i = 0; i < 4; i++) n[cast(x + (i + 0.5) / 4, y + (j + 0.5) / 4)]++;
+      // (an eye counts where it shows at all)
+      if (n[4] >= 3) {
+        plot(t, x, y, COLORS[4]);
+        continue;
+      }
+      if (n[0] >= 8) continue;
+      let k = 1;
+      for (let f = 2; f <= 3; f++) if (n[f] > n[k]) k = f;
+      // a little scale texture: a scattering of the pixels a shade lighter
+      const c = COLORS[k];
+      plot(t, x, y, (x * 7 + y * 13) % 5 === 0 ? c + 0x080808 : c);
+    }
   return t;
 };

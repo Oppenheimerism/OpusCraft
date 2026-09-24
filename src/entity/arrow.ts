@@ -219,8 +219,8 @@ export class Arrow extends Entity {
   }
 
   private canHit(e: Entity): boolean {
-    // (vanilla canBeHitByProjectile: whatever can be picked — the living, and end crystals)
-    if (!(e instanceof LivingEntity || e.type === 'end_crystal') || !e.isPickable()) return false;
+    // (vanilla canBeHitByProjectile: whatever can be picked — the living, end crystals, the dragon's parts)
+    if (!(e instanceof LivingEntity || e.type === 'end_crystal' || e.type === 'ender_dragon') || !e.isPickable()) return false;
     if (e === this.owner && !this.leftOwner) return false;
     if (e.type === 'player' && (e as Player).gameMode === 'spectator') return false;
     return !this.pierced?.has(e);

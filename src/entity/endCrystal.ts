@@ -17,7 +17,7 @@ import { AABB } from '../core/aabb';
 import { registerItemBehavior } from '../game/itemBehavior';
 
 /** vanilla DamageTypeTags.IS_EXPLOSION */
-const EXPLOSION_SOURCES = new Set(['explosion', 'playerExplosion', 'badRespawnPoint', 'fireworks']);
+export const EXPLOSION_SOURCES = new Set(['explosion', 'playerExplosion', 'badRespawnPoint', 'fireworks']);
 
 export class EndCrystal extends Entity {
   readonly type = 'end_crystal';

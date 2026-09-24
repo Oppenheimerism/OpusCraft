@@ -53,3 +53,23 @@ export function endPortalTexture(): TexImage {
   }
   return t;
 }
+
+/**
+ * 16x16 (vanilla textures/entity/end_gateway_beam.png): the streaks an end gateway's beam is drawn with, light
+ * greys running along it (the beam tints them magenta or purple and scrolls them up), half see-through for its glow
+ */
+export function endGatewayBeamTexture(): TexImage {
+  const S = 16;
+  const r = new Rand(0x9a7e3b, 5);
+  const cols = valueNoise(r, S, 1, 3, 1), streaks = valueNoise(r, S, S, 1, 6), grain = valueNoise(r, S, S, 1, 2);
+  const t = img(S, S);
+  for (let y = 0; y < S; y++)
+    for (let x = 0; x < S; x++) {
+      const i = y * S + x;
+      const v = 0.6 * cols[x] + 0.3 * streaks[i] + 0.1 * grain[i];
+      const g = Math.round((0.68 + 0.32 * v) * 255);
+      t.data[i * 4] = t.data[i * 4 + 1] = t.data[i * 4 + 2] = g;
+      t.data[i * 4 + 3] = Math.round((0.45 + 0.55 * v) * 255);
+    }
+  return t;
+}

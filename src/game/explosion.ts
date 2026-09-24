@@ -16,7 +16,8 @@ import { ItemStack } from '../item/item';
 import { PrimedTnt } from '../entity/tnt';
 import { explosionKnockbackResistance } from '../item/enchantHelper';
 
-export type ExplosionKind = 'tnt' | 'mob' | 'block';
+/** vanilla Level.ExplosionInteraction: TNT, MOB (only while mobs may grief), BLOCK, NONE (hurts, but leaves the blocks) */
+export type ExplosionKind = 'tnt' | 'mob' | 'block' | 'none';
 
 /** vanilla Explosion.getSeenPercent: fraction of sample points on the entity with a clear line to the center */
 export function seenPercent(level: Level, x: number, y: number, z: number, e: Entity): number {
@@ -46,7 +47,7 @@ export function seenPercent(level: Level, x: number, y: number, z: number, e: En
 export function explode(level: Level, source: Entity | null, x: number, y: number, z: number, radius: number, fire: boolean, kind: ExplosionKind, damageSource?: string): void {
   const w = level.world;
   const rand = level.random;
-  const destroys = kind === 'mob' ? level.gameRules.mobGriefing : true;
+  const destroys = kind === 'none' ? false : kind === 'mob' ? level.gameRules.mobGriefing : true;
   // 1) blocks: 16x16x16 rays from the surface of a cube
   const toBlow = new Map<string, [number, number, number]>();
   if (destroys) {

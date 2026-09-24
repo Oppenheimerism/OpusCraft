@@ -6,6 +6,17 @@ import type { Game } from '../game/game';
 import { MinecartSounds } from './minecartSounds';
 import { BiomeAmbience } from './biomeAmbience';
 
+/**
+ * vanilla Musics: the situational music whose timing isn't the game music's (12000..24000 ticks apart, never
+ * cutting in) — the End's, and the dragon fight's and the credits', which cut off whatever else is playing and
+ * start at once
+ */
+const MUSIC_TIMING: Record<string, { min: number; max: number; replace: boolean }> = {
+  'music.end': { min: 6000, max: 24000, replace: true },
+  'music.dragon': { min: 0, max: 0, replace: true },
+  'music.credits': { min: 0, max: 0, replace: true },
+};
+
 const SR = 44100;
 
 /** a looping sound its owner updates every tick (vanilla AbstractTickableSoundInstance) */
@@ -39,7 +50,7 @@ function categoryOf(name: string): Category {
   if (name.startsWith('block.') || name.startsWith('item.')) return 'blocks';
   if (name.startsWith('weather.') || name.startsWith('entity.lightning')) return 'weather';
   if (name.startsWith('ambient.')) return 'ambient';
-  if (/entity\.(zombie|skeleton|creeper|spider|enderman|slime|witch|drowned|husk|stray|phantom)/.test(name)) return 'hostile';
+  if (/entity\.(zombie|skeleton|creeper|spider|enderman|slime|witch|drowned|husk|stray|phantom|ender_dragon|dragon_fireball)/.test(name)) return 'hostile';
   if (name.startsWith('entity.player') || name.startsWith('entity.generic') || name.startsWith('entity.item') || name.startsWith('entity.experience') || name.startsWith('entity.arrow')) return 'players';
   if (name.startsWith('entity.')) return 'friendly';
   if (name.startsWith('ui.')) return 'master';
@@ -67,6 +78,12 @@ const ALIASES: [RegExp, string][] = [
   [/^entity\.splash_potion\.break$/, 'block.glass.break'],
   // vanilla sounds.json: a lightning strike's crack is the explosion samples (random/explode1-4), played low
   [/^entity\.lightning_bolt\.impact$/, 'entity.generic.explode'],
+  // vanilla sounds.json: the dragon's fireball bursting and an end gateway opening are the explosion samples too, its
+  // spit the ghast's, its idle roar its growl, and a death that has none of its own the hurt grunt
+  [/^(entity\.dragon_fireball\.explode|block\.end_gateway\.spawn)$/, 'entity.generic.explode'],
+  [/^entity\.ender_dragon\.shoot$/, 'entity.ghast.shoot'],
+  [/^entity\.ender_dragon\.ambient$/, 'entity.ender_dragon.growl'],
+  [/^entity\.generic\.death$/, 'entity.player.hurt'],
   // vanilla sounds.json: some villagers at work make their workstation's own sound
   [/^entity\.villager\.work_weaponsmith$/, 'block.grindstone.use'],
   [/^entity\.villager\.work_armorer$/, 'block.blast_furnace.fire_crackle'],
@@ -103,6 +120,9 @@ export class SoundManager {
   private moodiness = 0;
   private active: { src: AudioBufferSourceNode; gain: GainNode; pan: StereoPannerNode; x: number; y: number; z: number; vol: number; range: number; cat: Category; ui: boolean }[] = [];
   private musicLoading = false;
+  /** the situational pool playing (or on its way), and a count that turns away a track that's been cut off */
+  private musicPool: string | null = null;
+  private musicReq = 0;
   private readonly loops: LoopSound[] = [];
   private readonly minecarts = new MinecartSounds(this);
   readonly biomeAmbience = new BiomeAmbience(this);
@@ -350,13 +370,22 @@ export class SoundManager {
     const biomeMood = this.biomeAmbience.tick(game);
     // game music (vanilla MusicManager: 12000..24000 tick gaps); a biome with its own music (the
     // Nether's music.nether.<biome>) picks from that pool when the next track is due
+    const situation = this.biomeAmbience.music(game);
+    const timing = situation ? MUSIC_TIMING[situation] : undefined;
+    // (vanilla MusicManager.tick: music that replaces cuts off other music, and comes after at most its longest gap)
+    if (timing?.replace && (this.musicPlaying || this.musicLoading) && this.musicPool !== situation) {
+      this.stopMusic();
+      this.nextSongDelay = Math.floor(Math.random() * (Math.floor(timing.min / 2) + 1));
+    }
+    if (timing) this.nextSongDelay = Math.min(this.nextSongDelay, timing.max);
     if (!this.musicPlaying && !this.musicLoading && this.musicCount > 0) {
       if (--this.nextSongDelay <= 0) {
-        this.nextSongDelay = 12000 + Math.floor(Math.random() * 12000);
-        const pool = this.biomeAmbience.music(game);
+        this.nextSongDelay = timing ? timing.min + Math.floor(Math.random() * (timing.max - timing.min + 1)) : 12000 + Math.floor(Math.random() * 12000);
+        const pool = situation;
         const n = pool ? (this.musicPools[pool] ?? 0) : 0;
         if (pool && n > 0) void this.playMusic(Math.floor(Math.random() * n), false, pool);
-        else void this.playMusic(Math.floor(Math.random() * this.musicCount));
+        // (the End's situations have only their own music)
+        else if (!timing) void this.playMusic(Math.floor(Math.random() * this.musicCount));
       }
     }
     // cave ambience (vanilla AmbientSoundHandler mood; biomes with their own mood use that instead)
@@ -380,12 +409,16 @@ export class SoundManager {
   private async playMusic(index: number, menu = false, pool?: string): Promise<void> {
     if (!this.ctx || !this.master) return;
     this.musicLoading = true;
+    this.musicPool = pool ?? null;
+    const req = ++this.musicReq;
     const d = await this.request(menu ? { type: 'menu' } : pool ? { type: 'pool', pool, index } : { type: 'music', index });
+    if (req !== this.musicReq) return;
     this.musicLoading = false;
     if (!d || !this.ctx) return;
     const b = this.ctx.createBuffer(1, d.length, SR);
     b.copyToChannel(d as Float32Array<ArrayBuffer>, 0);
     this.stopMusic();
+    this.musicPool = pool ?? null;
     const src = this.ctx.createBufferSource();
     src.buffer = b;
     const g = this.ctx.createGain();
@@ -424,6 +457,31 @@ export class SoundManager {
     this.musicPlaying = false;
     this.menuMusicStarted = false;
     this.nextSongDelay = 100;
+    // (a track still on its way is turned away when it comes)
+    this.musicReq++;
+    this.musicLoading = false;
+    this.musicPool = null;
+  }
+
+  /** start a situational pool's music now, whatever is playing (vanilla MusicManager.startPlaying: the credits') */
+  playSituationalMusic(pool: string): void {
+    const n = this.musicPools[pool] ?? 0;
+    if (!this.ctx || n <= 0) return;
+    void this.playMusic(Math.floor(Math.random() * n), false, pool);
+  }
+
+  /**
+   * vanilla MusicManager.tick while a screen sets the music with no gap between tracks (WinScreen's Musics.CREDITS),
+   * called each frame whatever the game is doing: that pool's music, cutting in, and again as soon as it ends
+   */
+  keepSituationalMusic(pool: string): void {
+    if ((this.musicPlaying || this.musicLoading) && this.musicPool === pool) return;
+    this.playSituationalMusic(pool);
+  }
+
+  /** vanilla MusicManager.stopPlaying(music): stop the music if it's that pool's */
+  stopSituationalMusic(pool: string): void {
+    if ((this.musicPlaying || this.musicLoading) && this.musicPool === pool) this.stopMusic();
   }
 
   stopAll(): void {

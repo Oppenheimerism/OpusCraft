@@ -62,6 +62,8 @@ export class ThrownItem extends Entity {
 
   override tick(): void {
     this.baseTick();
+    // (held at an end gateway while the far side loads: nothing more this tick)
+    if (this.level.inTransit.has(this)) return;
     if (!this.leftOwner) {
       const o = this.owner;
       this.leftOwner = !o || !o.bb.intersects(this.bb.expandTowards(this.dx, this.dy, this.dz).inflate(1));
@@ -78,7 +80,7 @@ export class ThrownItem extends Entity {
     // entity hits (vanilla ProjectileUtil.getEntityHitResult, margin 0.3)
     let hit: Entity | null = null, best = Infinity;
     const box = this.bb.expandTowards(this.dx, this.dy, this.dz).inflate(1);
-    for (const e of this.level.getEntities(box, (e) => (e instanceof LivingEntity || e.type === 'end_crystal') && e.isPickable(), this)) {
+    for (const e of this.level.getEntities(box, (e) => (e instanceof LivingEntity || e.type === 'end_crystal' || e.type === 'ender_dragon') && e.isPickable(), this)) {
       if (e === this.owner && !this.leftOwner) continue;
       if (e.type === 'player' && (e as Player).gameMode === 'spectator') continue;
       const h = e.bb.inflate(0.3).clip(x0, y0, z0, x1, y1, z1);
@@ -98,6 +100,9 @@ export class ThrownItem extends Entity {
       this.onHit(bh.px, bh.py, bh.pz, null);
       return;
     }
+    // vanilla ThrowableProjectile.tick: what it's in has its say (an end gateway takes it through)
+    this.checkInsideBlocks();
+    if (this.removed) return;
     const h = Math.sqrt(this.dx * this.dx + this.dz * this.dz);
     this.yaw = Math.atan2(this.dx, this.dz) * RAD;
     this.pitch = Math.atan2(this.dy, h) * RAD;

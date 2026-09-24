@@ -4,7 +4,8 @@
 import { SimpleContainer, isEmpty } from '../inventory/container';
 import { ItemStack, ITEMS, ItemTag, cloneTag } from '../item/item';
 import { cookingResult, cookingTime, burnDuration, type CookingKind } from '../inventory/recipes';
-import { BLOCKS, STATE_BLOCK } from './block';
+import { BLOCKS, STATE_BLOCK, FACE_OCC } from './block';
+import type { World } from './world';
 import type { Level } from '../game/level';
 import type { Entity } from '../entity/entity';
 import { fillContainer } from '../game/loot';
@@ -484,6 +485,82 @@ export class EndPortalBlockEntity extends BlockEntity {
   }
 }
 
+/**
+ * vanilla TheEndGatewayBlockEntity: how old it is (its magenta beam rises for the first 10 seconds), its cooldown
+ * (the purple flash each time something goes through, and every two minutes anyway), and where it leads — unknown
+ * till something first goes through one of the gateways round the main island, found then
+ */
+export class EndGatewayBlockEntity extends BlockEntity {
+  readonly id = 'end_gateway';
+  age = 0;
+  teleportCooldown = 0;
+  exitPortal: [number, number, number] | null = null;
+  exactTeleport = false;
+  constructor(x: number, y: number, z: number) {
+    super(x, y, z, 0);
+  }
+  /** vanilla isSpawning: the first 10 seconds */
+  isSpawning(): boolean {
+    return this.age < 200;
+  }
+  isCoolingDown(): boolean {
+    return this.teleportCooldown > 0;
+  }
+  /** vanilla getSpawnPercent */
+  spawnPercent(partial: number): number {
+    return Math.max(0, Math.min(1, (this.age + partial) / 200));
+  }
+  /** vanilla getCooldownPercent */
+  cooldownPercent(partial: number): number {
+    return 1 - Math.max(0, Math.min(1, (this.teleportCooldown - partial) / 40));
+  }
+  /**
+   * vanilla TheEndGatewayBlockEntity.portalTick: older by a tick; the cooldown runs down, or every 2 minutes starts
+   * (its beam flashes); the chunk is saved with it when either changes
+   */
+  override tick(level: Level): void {
+    const spawning = this.isSpawning(), cooling = this.isCoolingDown();
+    this.age++;
+    if (cooling) this.teleportCooldown--;
+    else if (this.age % 2400 === 0) this.teleportCooldown = 40;
+    if (spawning !== this.isSpawning() || cooling !== this.isCoolingDown()) {
+      const c = level.world.getChunk(this.x >> 4, this.z >> 4);
+      if (c) c.modified = true;
+    }
+  }
+  /** vanilla triggerCooldown (and the block event that tells the client) */
+  triggerCooldown(): void {
+    this.teleportCooldown = 40;
+  }
+  /**
+   * vanilla shouldRenderFace (Block.shouldRenderFace): the face toward `dir` (0 down, 1 up, 2 north, 3 south, 4 west,
+   * 5 east) shows unless the neighbour's face against it is whole
+   */
+  shouldRenderFace(w: World, dir: number): boolean {
+    const n = w.getState(this.x + (dir === 4 ? -1 : dir === 5 ? 1 : 0), this.y + (dir === 0 ? -1 : dir === 1 ? 1 : 0), this.z + (dir === 2 ? -1 : dir === 3 ? 1 : 0));
+    return ((FACE_OCC[n] >> (dir ^ 1)) & 1) === 0;
+  }
+  /** vanilla getParticleAmount: one for each face that shows */
+  particleAmount(w: World): number {
+    let n = 0;
+    for (let d = 0; d < 6; d++) if (this.shouldRenderFace(w, d)) n++;
+    return n;
+  }
+  protected override saveData(): Record<string, number | string> {
+    const d: Record<string, number | string> = { Age: this.age };
+    if (this.exitPortal) {
+      [d.ExitX, d.ExitY, d.ExitZ] = this.exitPortal;
+      if (this.exactTeleport) d.ExactTeleport = 1;
+    }
+    return d;
+  }
+  protected override loadData(d: Record<string, number | string>): void {
+    this.age = Number(d.Age ?? 0);
+    this.exitPortal = d.ExitX !== undefined ? [Number(d.ExitX), Number(d.ExitY), Number(d.ExitZ)] : null;
+    this.exactTeleport = d.ExactTeleport === 1;
+  }
+}
+
 export function createBlockEntity(name: string, x: number, y: number, z: number): BlockEntity | null {
   if (name === 'chest') return new ChestBlockEntity(x, y, z);
   if (name === 'enchanting_table') return new EnchantingTableBlockEntity(x, y, z);
@@ -495,6 +572,7 @@ export function createBlockEntity(name: string, x: number, y: number, z: number)
   if (name === 'brewing_stand') return new BrewingStandBlockEntity(x, y, z);
   if (name === 'campfire' || name === 'soul_campfire') return new CampfireBlockEntity(x, y, z);
   if (name === 'end_portal') return new EndPortalBlockEntity(x, y, z);
+  if (name === 'end_gateway') return new EndGatewayBlockEntity(x, y, z);
   return null;
 }
 

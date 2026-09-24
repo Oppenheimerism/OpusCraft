@@ -6,6 +6,7 @@ import { TAU, addOsc, alloc, envBump, layer, lowpass, reverb, upsample2 } from '
 import { type Ctx, sound } from './registry';
 import { burst, impact, sweep, thump } from './texture';
 import { reverbHalf } from './world';
+import { dragonSounds } from './dragon';
 
 /** half-rate render -> full rate, the images above ~10 kHz filtered off */
 function up2(x: Float32Array, sr: number): Float32Array {
@@ -115,5 +116,6 @@ export function endSounds(): Record<string, SoundGen> {
   return {
     'block.end_portal_frame.fill': sound('block.end_portal_frame.fill', 3, frameFill, { fadeOut: 0.2 }),
     'block.end_portal.spawn': sound('block.end_portal.spawn', 1, portalSpawn, { trimDb: -60, fadeOut: 0.5 }),
+    ...dragonSounds(),
   };
 }

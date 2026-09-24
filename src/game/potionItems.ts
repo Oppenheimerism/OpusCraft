@@ -7,6 +7,7 @@ import type { Player } from '../entity/player';
 import { ItemStack } from '../item/item';
 import { allEffects, contentsOf, potionStack } from '../item/potions';
 import { ThrownPotion } from '../entity/thrownPotion';
+import { takeDragonBreath } from '../entity/areaEffectCloud';
 import { raycast } from './raycast';
 import { BLOCKS, STATE_BLOCK, FLAGS, F_WATER, S } from '../world/block';
 import { fillHeld } from './villageBlocks';
@@ -70,14 +71,10 @@ function throwPotion(sound: string) {
 registerItemBehavior('splash_potion', { use: throwPotion('entity.splash_potion.throw') });
 registerItemBehavior('lingering_potion', { use: throwPotion('entity.lingering_potion.throw') });
 
-/** hooks for what the game has elsewhere: bottling the dragon's breath (the End's AreaEffectCloud) */
-export const BOTTLE_HOOKS: { dragonBreath: ((level: Level, p: Player) => boolean) | null } = { dragonBreath: null };
-
 // vanilla BottleItem.use: the dragon's breath if there's a cloud of it about, else water where the eye meets a source
 registerItemBehavior('glass_bottle', {
   use(level, p) {
-    if (BOTTLE_HOOKS.dragonBreath?.(level, p)) {
-      level.sound.play('item.bottle.fill_dragonbreath', p.x, p.y, p.z, 1, 1);
+    if (takeDragonBreath(level, p)) {
       fillHeld(p, ItemStack.of('dragon_breath'));
       p.swing();
       return 'success';

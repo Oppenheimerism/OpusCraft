@@ -64,10 +64,12 @@ import { Piglin, isLovedItem } from '../entity/piglin';
 import type { MinecartChest } from '../entity/minecart';
 import { ChestBoat } from '../entity/boat';
 import { nightVisionScale, blindnessFog, applyNausea } from '../render/effectVisuals';
-import { OVERWORLD, THE_NETHER, dimensionById, teleportationScale, type DimensionType } from '../world/dimension';
+import { OVERWORLD, THE_NETHER, THE_END, dimensionById, teleportationScale, type DimensionType } from '../world/dimension';
 import { PortalPoi, portalRectangle, relativePortalPosition, portalExit, createPortal, isPortal, portalAxis, type PortalRect } from './portal';
 import { setVillageMenuHook } from './villageBlocks';
 import { endPortalTravel, PortalArrivals } from './endTravel';
+import { EndDragonFight, ARENA_TICKET_LEVEL } from './endDragonFight';
+import { gatewayTravel } from './gatewayTravel';
 
 export type { GameOptions } from './options';
 /** vanilla ReceivingLevelScreen.Reason: what the loading screen shows while changing dimension */
@@ -139,6 +141,8 @@ export class Game {
   loadingScreenFactory: (() => Screen) | null = null;
   /** vanilla ReceivingLevelScreen, shown while changing dimension */
   receivingScreenFactory: ((reason: ReceivingReason) => Screen) | null = null;
+  /** vanilla WinScreen: the End Poem and the credits, `onFinished` once they're over or skipped */
+  winScreenFactory: ((onFinished: () => void) => Screen) | null = null;
   /** nether portal blocks in every dimension (vanilla POI records) */
   readonly portalPoi = new PortalPoi();
   /** what went through an end portal to the dimension that isn't loaded (game/endTravel.ts) */
@@ -400,6 +404,7 @@ export class Game {
     this.level.gameRules = { ...DEFAULT_GAME_RULES, ...(meta.gameRules ?? {}) };
     this.worldSpawn = meta.worldSpawn ?? null;
     this.level.sound = this.sound;
+    this.attachDragonFight();
     this.player = new Player(this.level);
     this.player.setGameMode(meta.gameMode as GameMode);
     this.player.food.difficulty = this.level.difficulty;
@@ -414,7 +419,11 @@ export class Game {
     this.level.onOpenMerchant = (v, p) => this.openMerchant(v, p);
     this.level.onPortal = (e, x, y, z, kind) => {
       if (kind === 'end') endPortalTravel(this, e);
-      else if (e === this.player) this.portalTravel(x, y, z);
+      else if (kind === 'end_gateway') {
+        // (vanilla enter_block: Remote Getaway)
+        if (e === this.player) this.advancements.trigger('enter_block', { enteredBlock: 'end_gateway' });
+        gatewayTravel(this.level, e, x, y, z);
+      } else if (e === this.player) this.portalTravel(x, y, z);
     };
     this.level.onCuredZombieVillager = () => this.advancements.trigger('cured_zombie_villager', { cured: true });
     this.level.onSummonedEntity = (e) => {
@@ -500,6 +509,7 @@ export class Game {
         this.player.respawnPos = [pd.respawn[0], pd.respawn[1], pd.respawn[2]];
         this.player.respawnForced = pd.respawn[3] === 1;
       }
+      this.player.seenCredits = !!pd.seenCredits;
       this.spawnSearch = false;
       // vanilla RootVehicle: back in the minecart you left the game in
       const v = pd.vehicle && !pd.dead ? loadEntity(pd.vehicle, this.level) : null;
@@ -564,9 +574,11 @@ export class Game {
       effects: p.saveEffects(),
       vehicle: p.vehicle ? saveEntity(p.vehicle) : null,
       dimension: this.world.dim.id,
+      seenCredits: p.seenCredits || undefined,
     };
     m.portals = this.portalPoi.save();
     m.arrivals = this.arrivals.save();
+    if (this.level.dragonFight) m.dragonFight = this.level.dragonFight.save();
     const list = [];
     for (const c of this.world.chunks.values()) {
       if (!c.modified) continue;
@@ -886,6 +898,7 @@ export class Game {
       case 'magic':
         return `${n} was killed by magic`;
       case 'indirectMagic':
+        // (vanilla death.attack.indirectMagic: whoever's cloud or potion it was, else the cloud or potion itself)
         return k ? `${n} was killed by ${kn} using magic` : `${n} was killed by magic`;
       case 'wither':
         return `${n} withered away`;
@@ -1037,9 +1050,11 @@ export class Game {
     }
     // (vanilla Minecraft.setLevel stops every sound, the music too; the portal's whoosh comes on arrival)
     this.sound.stopAll();
+    if (this.level.dragonFight && this.meta) this.meta.dragonFight = this.level.dragonFight.save();
     this.world.reset(dim);
     this.chunks.reset();
     this.level.resetForDimension();
+    this.attachDragonFight();
     this.renderer.particles?.clear();
     this.interaction.hit = null;
     p.moveTo(x, y, z, p.yaw, p.pitch);
@@ -1050,6 +1065,13 @@ export class Game {
     this.spawned = false;
     this.receivingPortal = reason === 'other' ? null : reason;
     this.setScreen(this.receivingScreenFactory ? this.receivingScreenFactory(reason) : null);
+  }
+
+  /** vanilla ServerLevel: the End has its dragon fight (saved with the world), nowhere else does */
+  private attachDragonFight(): void {
+    const f = this.world.dim === THE_END ? new EndDragonFight(this.level, this.meta?.dragonFight ?? null) : null;
+    if (f) f.onDragonSummoned = () => this.advancements.trigger('summoned_entity', { summoned: 'ender_dragon' });
+    this.level.dragonFight = f;
   }
 
   /**
@@ -1312,6 +1334,9 @@ export class Game {
     const target = clamp(1 + (p.fovModifier() - 1) * this.opts.fovEffects, 0.1, 1.5);
     this.fovMod += (target - this.fovMod) * 0.5;
     this.level.tick();
+    // (vanilla TicketType.DRAGON: the arena stays loaded while the fight has a player; and the level's own tickets)
+    this.chunks.setTicket('dragon', this.level.dragonFight?.ticketHeld ? [0, 0, ARENA_TICKET_LEVEL] : null);
+    this.chunks.setTickets('level', [...this.level.tickets.values()].map((t) => [t.cx, t.cz, t.load]));
     this.spawner?.tick();
     this.tickProgress();
     this.ambient?.tick(p.x, p.y, p.z);
@@ -1390,7 +1415,9 @@ export class Game {
         gl.viewport(0, 0, this.canvas.width, this.canvas.height);
         gl.clearColor(0, 0, 0, 1);
         gl.clear(gl.COLOR_BUFFER_BIT);
-        if (this.receivingPortal === 'end_portal') this.renderer.end.renderScreen(EndRenderer.shaderTime(this.level.gameTime, partial));
+        // (the level's clock stands still till the player is in: the client's keeps the starfield drifting — over the
+        // End Poem and the credits, minutes long)
+        if (this.receivingPortal === 'end_portal') this.renderer.end.renderScreen(EndRenderer.shaderTime(this.level.gameTime + this.ticks, partial));
         else this.overlay.renderScreenSprite('nether_portal', 1, this.canvas.width, this.canvas.height);
       } else if (this.panorama && this.panorama.state === 'ready') this.panorama.render(this.panoramaFade);
       else {
@@ -1490,6 +1517,7 @@ export class Game {
       waterFogColor: [((b.waterFog >> 16) & 255) / 255, ((b.waterFog >> 8) & 255) / 255, (b.waterFog & 255) / 255],
       lava: eyeFluid !== FLUID_LAVA ? null : p.gameMode === 'spectator' ? 'spectator' : p.hasEffect('fire_resistance') ? 'fire_resistant' : 'normal',
       dim: w.dim,
+      worldFog: this.hud.bossOverlay.shouldCreateWorldFog(),
       biomeColors: blendBiomeColors(cam.x, cam.y, cam.z, (qx, qy, qz) => BIOMES[w.getBiome3(qx * 4 + 2, qy * 4 + 2, qz * 4 + 2)] ?? b),
       level: this.level,
       entityOptions: { shadows: this.opts.entityShadows, drawPlayer: this.thirdPerson > 0 && !camOverride, distanceScale: this.opts.entityDistanceScaling, skinParts: this.skinParts(), mainArm: this.opts.mainHand },

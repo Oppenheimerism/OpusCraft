@@ -53,11 +53,15 @@ export interface WorldMeta {
     effects?: import('../entity/effects').SavedEffect[];
     /** the dimension the player is in (absent: the overworld) */
     dimension?: string;
+    /** vanilla seenCredits: they've left the End through its exit portal once (the credits roll only the first time) */
+    seenCredits?: boolean;
   } | null;
   /** nether portal blocks per dimension (vanilla POI records), as x, y, z triples */
   portals?: Record<string, number[]>;
   /** entities gone through an end portal to a dimension that wasn't loaded, by the chunk they arrive in (game/endTravel.ts) */
   arrivals?: Record<string, { entity: SavedEntity; surface?: boolean }[]>;
+  /** vanilla level.dat DragonFight: the End's dragon fight (game/endDragonFight.ts) */
+  dragonFight?: import('../game/endDragonFight').DragonFightData;
   version: number;
   /** quick-test worlds are never written to storage */
   transient?: boolean;

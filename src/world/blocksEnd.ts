@@ -55,6 +55,27 @@ function frameModel(eye: boolean): ModelDef {
   return m;
 }
 
+/**
+ * vanilla models/block/dragon_egg.json: eight stacked slabs of egg, narrow at the top, widest a third of the way up,
+ * each face showing the part of the texture it covers
+ */
+function dragonEggModel(): ModelDef {
+  const t = 'dragon_egg';
+  const slabs: [number, number, number, number][] = [
+    [6, 15, 10, 16], [5, 14, 11, 15], [4, 13, 12, 14], [3, 11, 13, 13], [2, 8, 14, 11], [1, 3, 15, 8], [2, 1, 14, 3], [3, 0, 13, 1],
+  ];
+  return {
+    particle: t,
+    elements: slabs.map(([a, y0, b2, y1]) => {
+      const side: UV4 = [a, 16 - y1, b2, 16 - y0];
+      return {
+        from: [a, y0, a] as [number, number, number], to: [b2, y1, b2] as [number, number, number],
+        faces: { down: f(t, [a, a, b2, b2]), up: f(t, [a, a, b2, b2]), north: f(t, side), south: f(t, side), west: f(t, side), east: f(t, side) },
+      };
+    }),
+  };
+}
+
 // vanilla blockstates/end_portal_frame.json: the model faces south
 const FRAME_Y: Record<string, number> = { south: 0, west: 90, north: 180, east: 270 };
 
@@ -75,6 +96,21 @@ export function registerEndBlocks(): void {
     opaque: false, aoCaster: false, faceOcclusion: 1,
     collision: (s: StateView) => (s.get('eye') ? [FRAME_BASE, FRAME_EYE] : [FRAME_BASE]),
     model: (s: StateView): ModelChoice => ({ model: s.get('eye') ? filled : empty, y: FRAME_Y[s.get<string>('facing')] }),
+  });
+
+  // vanilla EndGatewayBlock: like the portal, but a whole block (its faces all show the starfield) — drawn by its
+  // block entity's renderer (render/endRenderer.ts), its beam too
+  registerBlock('end_gateway', {
+    hardness: -1, resistance: 3600000, light: 15, collision: 'none', outline: 'full',
+    opaque: false, opacity: 0, faceOcclusion: 0x3f, aoCaster: false, item: false, noDrop: true, mapColor: MAP_BLACK,
+  });
+
+  // vanilla DragonEggBlock: a falling block, strength 3/9, a faint glow (light 1), its shape 1..15 across
+  const egg = dragonEggModel();
+  registerBlock('dragon_egg', {
+    hardness: 3, resistance: 9, light: 1, collision: [bx(1, 0, 1, 15, 16, 15)],
+    opaque: false, faceOcclusion: 0, aoCaster: false, mapColor: MAP_BLACK,
+    model: () => ({ model: egg }),
   });
 
   // vanilla EndPortalBlock: no collision, full light, unbreakable, no item; drawn by its block entity's renderer

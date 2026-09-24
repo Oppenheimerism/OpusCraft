@@ -18,7 +18,7 @@ function newUuid(): string {
 }
 
 /** which portal an entity stands in (vanilla PortalProcessor.portal: NetherPortalBlock or EndPortalBlock) */
-export type PortalKind = 'nether' | 'end';
+export type PortalKind = 'nether' | 'end' | 'end_gateway';
 
 /** vanilla LiquidBlock.STABLE_SHAPE's top: the half-block floor a lava-walker finds on still lava */
 const LAVA_FLOOR = 0.5;
@@ -219,8 +219,9 @@ export abstract class Entity {
       return;
     }
     p.inside = false;
-    // (an end portal takes anything alive at once — vanilla getPortalTransitionTime 0; only players use nether portals here)
-    const end = p.kind === 'end';
+    // (an end portal or gateway takes anything alive at once — vanilla getPortalTransitionTime 0; only players use
+    // nether portals here)
+    const end = p.kind !== 'nether';
     const can = end ? ((this as { isAlive?: boolean }).isAlive ?? !this.removed) && !this.vehicle : this.canChangeDimensions();
     if (!can || p.time++ < (end ? 0 : this.portalWaitTime())) return;
     this.portalCooldown = this.dimensionChangingDelay();

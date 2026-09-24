@@ -51,6 +51,8 @@ export type Criterion =
   | { t: 'brewed_potion' }
   /** vanilla EffectsChangedTrigger with a MobEffectsPredicate: all of these effects on the player at once */
   | { t: 'effects_changed'; effects: string[] }
+  /** vanilla enter_block: stepped into that block (an end gateway) */
+  | { t: 'enter_block'; block: string }
   | { t: 'impossible' };
 
 export interface AdvancementDef {
@@ -183,8 +185,16 @@ const A: AdvancementDef[] = [
   { id: 'nether/create_full_beacon', parent: 'nether/create_beacon', title: 'Beaconator', description: 'Bring a Beacon to full power', icon: 'beacon', frame: 'goal', criteria: one(never) },
   { id: 'nether/all_effects', parent: 'nether/all_potions', title: 'How Did We Get Here?', description: 'Have every effect applied at the same time', icon: 'bucket', frame: 'challenge', hidden: true, criteria: one(never) },
 
-  // --- The End (the rest of the tab comes with the dragon fight and the outer islands)
+  // --- The End (end cities, their elytra and shulkers aren't in the game yet)
   { id: 'end/root', parent: null, title: 'The End', description: 'Or the beginning?', icon: 'end_stone', frame: 'task', toast: false, announce: false, criteria: { entered_end: toEnd } },
+  { id: 'end/kill_dragon', parent: 'end/root', title: 'Free the End', description: 'Good luck', icon: 'dragon_head', frame: 'task', criteria: { killed_dragon: { t: 'kill', type: 'ender_dragon' } } },
+  { id: 'end/dragon_egg', parent: 'end/kill_dragon', title: 'The Next Generation', description: 'Hold the Dragon Egg', icon: 'dragon_egg', frame: 'goal', criteria: { dragon_egg: inv('dragon_egg') } },
+  { id: 'end/enter_end_gateway', parent: 'end/kill_dragon', title: 'Remote Getaway', description: 'Escape the island', icon: 'ender_pearl', frame: 'task', criteria: { entered_end_gateway: { t: 'enter_block', block: 'end_gateway' } } },
+  { id: 'end/find_end_city', parent: 'end/enter_end_gateway', title: 'The City at the End of the Game', description: 'Go on in, what could happen?', icon: 'purpur_block', frame: 'task', criteria: one(never) },
+  { id: 'end/elytra', parent: 'end/find_end_city', title: "Sky's the Limit", description: 'Find Elytra', icon: 'elytra', frame: 'goal', criteria: one(never) },
+  { id: 'end/levitate', parent: 'end/find_end_city', title: 'Great View From Up Here', description: 'Levitate up 50 blocks from the attacks of a Shulker', icon: 'shulker_shell', frame: 'challenge', criteria: one(never) },
+  { id: 'end/respawn_dragon', parent: 'end/kill_dragon', title: 'The End... Again...', description: 'Respawn the Ender Dragon', icon: 'end_crystal', frame: 'goal', criteria: { summoned_dragon: { t: 'summoned_entity', entity: 'ender_dragon' } } },
+  { id: 'end/dragon_breath', parent: 'end/kill_dragon', title: 'You Need a Mint', description: "Collect Dragon's Breath in a Glass Bottle", icon: 'dragon_breath', frame: 'goal', criteria: { dragon_breath: inv('dragon_breath') } },
 
   // --- Adventure
   {
@@ -453,6 +463,8 @@ export interface TriggerPayload {
   potion?: string;
   /** the effects the player has now (effects_changed) */
   effects?: Set<string>;
+  /** the block the player stepped into (enter_block) */
+  enteredBlock?: string;
 }
 
 export class PlayerAdvancements {
@@ -587,6 +599,8 @@ function matches(c: Criterion, p: TriggerPayload): boolean {
       return p.potion !== undefined;
     case 'effects_changed':
       return !!p.effects && c.effects.every((e) => p.effects!.has(e));
+    case 'enter_block':
+      return p.enteredBlock === c.block;
     case 'nether_travel':
       return p.netherTravel !== undefined && p.netherTravel >= c.distance;
     case 'killed_by_crossbow': {
