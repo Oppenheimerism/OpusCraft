@@ -321,6 +321,8 @@ ITEMS.get('end_rod')!.creativeTab = 'functional';
 reg({ id: 'shulker_shell', texture: 'shulker_shell', creativeTab: 'ingredients' });
 // (and the shulker's spawn egg)
 reg({ id: 'shulker_spawn_egg', texture: 'shulker_spawn_egg', creativeTab: 'spawn_eggs' });
+// the glow item frame (vanilla Items.GLOW_ITEM_FRAME; its entity is entity/itemFrame.ts, as the item frame's)
+reg({ id: 'glow_item_frame', texture: 'glow_item_frame', creativeTab: 'functional' });
 for (const [id] of SHULKER_BOXES) Object.assign(ITEMS.get(id)!, { maxStack: 1, creativeTab: 'colored' });
 Object.assign(ITEMS.get('dragon_egg')!, { rarity: 'epic', creativeTab: 'functional' });
 reg({ id: 'enchanted_book', texture: 'enchanted_book', maxStack: 1, rarity: 'uncommon', glint: true });

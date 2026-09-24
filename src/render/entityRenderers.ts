@@ -67,6 +67,8 @@ import { VillageBlockRenderers } from './villageRenderers';
 import { ShulkerRenderers } from './shulkerRenderer';
 import { Shulker } from '../entity/shulker';
 import { ShulkerBullet } from '../entity/shulkerBullet';
+import { ItemFrame } from '../entity/itemFrame';
+import { ItemFrameRenderer } from './itemFrameRenderer';
 import { createMob } from '../game/spawner';
 import { ArmorLayer, renderHeadItem, PIGLIN_HEAD_ITEM_SCALE } from './armorLayer';
 import type { ArmorModelSet } from './armorLayer';
@@ -143,11 +145,13 @@ export class EntityRenderDispatcher {
   private readonly dragons: EnderDragonRenderer;
   /** shulker boxes (and the shulkers themselves) */
   private readonly shulkers: ShulkerRenderers;
+  private readonly frames: ItemFrameRenderer;
 
   constructor(private readonly gl: GL, private readonly items: ItemRenderer, private readonly skin: WebGLTexture) {
     this.armor = new ArmorLayer(gl);
     this.village = new VillageBlockRenderers(gl);
     this.shulkers = new ShulkerRenderers(gl);
+    this.frames = new ItemFrameRenderer(gl, items);
     this.endCrystals = new EndCrystalRenderer(gl);
     this.dragons = new EnderDragonRenderer(gl, this.endCrystals.beam);
     this.models = {
@@ -282,6 +286,8 @@ export class EntityRenderDispatcher {
       else if (e instanceof Fireball) size *= 4;
       // (vanilla ShulkerBullet.shouldRenderAtSqrDistance: within 128 blocks)
       else if (e instanceof ShulkerBullet) size = 2;
+      // (vanilla ItemFrame.shouldRenderAtSqrDistance: as though 16 blocks across)
+      else if (e instanceof ItemFrame) size = 16;
       const maxD = size * 64 * opts.distanceScale;
       // (vanilla EndCrystalRenderer.shouldRender: a crystal with a beam is always drawn; the dragon is never culled)
       const beam = e instanceof EndCrystal && e.beamTarget !== null;
@@ -407,6 +413,7 @@ export class EntityRenderDispatcher {
     else if (e instanceof EnderDragon) this.dragons.render(b, this.pose, e, dx, dy, dz, p);
     else if (e instanceof Shulker) this.shulkers.renderShulker(b, e, dx, dy, dz, p);
     else if (e instanceof ShulkerBullet) this.shulkers.renderBullet(b, e, dx, dy, dz, p);
+    else if (e instanceof ItemFrame) this.frames.render(b, e, dx, dy, dz);
     else if (e instanceof Mob) this.renderMob(b, e, dx, dy, dz, p);
     else if (e instanceof LivingEntity && e.type === 'player') this.renderPlayer(b, e as Player, dx, dy, dz, p);
     else if (e instanceof ThrownTrident) this.items.trident.renderThrown(b, this.pose, e, dx, dy, dz, p, rotLerp(p, e.yawO, e.yaw));

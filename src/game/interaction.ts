@@ -380,6 +380,12 @@ export class Interaction {
           return 'success';
         }
       }
+      // (an entity with its own vanilla interact: an item frame takes the item held out to it, or turns what it holds)
+      const own = (e as { playerInteract?: (p: Player, stack: ItemStack | null) => boolean }).playerInteract;
+      if (own && own.call(e, p, stack)) {
+        p.swing();
+        return 'success';
+      }
       if (stack && stack.item.id.endsWith('_spawn_egg') && (e instanceof Animal || e instanceof Villager) && e.type === stack.item.id.slice(0, -10)) {
         // spawn egg on a matching animal spawns a baby (vanilla SpawnEggItem.spawnOffspringFromSpawnEgg)
         const baby = e instanceof Villager ? e.breedOffspring(e) : e.makeBaby();
@@ -520,7 +526,8 @@ export class Interaction {
         const bb = new AABB(x + c[0], y + c[1], z + c[2], x + c[3], y + c[4], z + c[5]);
         if (bb.intersects(p.bb)) return false;
         for (const e of this.level.entities) {
-          if (e !== p && !(e instanceof ItemEntity) && !e.removed && bb.intersects(e.bb)) return false;
+          // (vanilla Entity.blocksBuilding: an item frame doesn't stand in the way)
+          if (e !== p && !(e instanceof ItemEntity) && !e.removed && (e as { blocksBuilding?: boolean }).blocksBuilding !== false && bb.intersects(e.bb)) return false;
         }
       }
     }

@@ -12,6 +12,7 @@ import { type Ctx, sound } from './registry';
 import { burst, bubble, creak, impact, phisem, sweep, thump } from './texture';
 import { voice, vowelGlide } from './voice';
 import { reverbHalf } from './world';
+import { frameSounds } from './frames';
 
 /**
  * A flower growing: a soft wet pop as it swells, a hollow rising "bloop" with a woody knock under it, and a faint
@@ -397,5 +398,7 @@ export function outerEndSounds(): Record<string, SoundGen> {
     'entity.shulker.shoot': sound('entity.shulker.shoot', 4, shulkerShoot, { fadeOut: 0.1 }),
     'entity.shulker_bullet.hit': sound('entity.shulker_bullet.hit', 4, bulletHit, { fadeOut: 0.1 }),
     'entity.shulker_bullet.hurt': sound('entity.shulker_bullet.hurt', 4, bulletBreak, { fadeOut: 0.08 }),
+    // (item frames: the end ship hangs its elytra in one)
+    ...frameSounds(),
   };
 }

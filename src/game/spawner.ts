@@ -29,6 +29,7 @@ import { Boat, createBoat, BOAT_TYPES } from '../entity/boat';
 import { EndCrystal } from '../entity/endCrystal';
 import { EnderDragon } from '../entity/enderDragon';
 import { Shulker } from '../entity/shulker';
+import { ItemFrame } from '../entity/itemFrame';
 import { moonPhase } from '../render/environment';
 import { tickInhabitedTime } from './difficulty';
 import { BIOMES } from '../world/gen/biomes';
@@ -98,6 +99,8 @@ function saveWithPassengers(e: Entity): SavedEntity | null {
 function saveOne(e: Entity): SavedEntity | null {
   if (e instanceof Mob) return e.health > 0 && !e.removed ? e.save() : null;
   if (e instanceof AbstractMinecart || e instanceof Boat || e instanceof EndCrystal) return e.removed ? null : e.save();
+  // (vanilla: item frames are kept with their chunk, and what they hold)
+  if (e instanceof ItemFrame) return e.removed ? null : e.save();
   // (vanilla: arrows and tridents are kept with their chunk, stuck where they landed)
   if (e instanceof Arrow) return e.removed ? null : e.save();
   if (e instanceof ItemEntity && !e.removed) {
@@ -143,6 +146,11 @@ function loadOne(d: SavedEntity, level: Level): Entity | null {
     c.load(d);
     return c;
   }
+  if (d.id === 'item_frame' || d.id === 'glow_item_frame') {
+    const f = new ItemFrame(level, d.id);
+    f.load(d);
+    return f;
+  }
   const cart = createMinecart(d.id, level);
   if (cart) {
     cart.load(d);
@@ -161,6 +169,7 @@ function loadOne(d: SavedEntity, level: Level): Entity | null {
 /** entities that belong to chunk storage (a cart or boat carrying the player is saved with the player) */
 export function isChunkSaved(e: Entity): boolean {
   if (e instanceof AbstractMinecart || e instanceof Boat) return !e.passengers.some((p) => p.type === 'player');
+  if (e instanceof ItemFrame) return true;
   return e instanceof Mob || e instanceof ItemEntity || e instanceof EndCrystal || e instanceof Arrow;
 }
 
@@ -184,11 +193,11 @@ export function entityDisplayName(e: Entity | string): string {
 }
 
 // (Stage 4: the outer End)
-Object.assign(ENTITY_NAMES, { shulker: 'Shulker', shulker_bullet: 'Shulker Bullet' });
+Object.assign(ENTITY_NAMES, { shulker: 'Shulker', shulker_bullet: 'Shulker Bullet', item_frame: 'Item Frame', glow_item_frame: 'Glow Item Frame' });
 
 /** entity type ids accepted by /summon */
 export function summonableTypes(): string[] {
-  return [...Object.keys(MOB_TYPES), 'tnt', 'experience_orb', 'arrow', 'trident', 'lightning_bolt', ...MINECART_TYPES, ...BOAT_TYPES, 'end_crystal'];
+  return [...Object.keys(MOB_TYPES), 'tnt', 'experience_orb', 'arrow', 'trident', 'lightning_bolt', ...MINECART_TYPES, ...BOAT_TYPES, 'end_crystal', 'item_frame', 'glow_item_frame'];
 }
 
 /** vanilla MobCategory caps (per 289 spawnable chunks) */
