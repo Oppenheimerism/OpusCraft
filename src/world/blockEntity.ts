@@ -160,6 +160,8 @@ export class FurnaceBlockEntity extends BlockEntity {
     const out = this.container.get(2);
     if (isEmpty(out)) this.container.items[2] = ItemStack.of(r.result, 1);
     else out.count++;
+    // (Stage 5: ocean) vanilla AbstractFurnaceBlockEntity.burn: the water wrung from a wet sponge fills a bucket in the fuel slot
+    if (input.item.id === 'wet_sponge' && this.container.get(1)?.item.id === 'bucket') this.container.items[1] = ItemStack.of('water_bucket');
     input.count--;
     if (input.count <= 0) this.container.items[0] = null;
     this.storedXp += r.xp;

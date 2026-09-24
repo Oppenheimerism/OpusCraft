@@ -102,6 +102,8 @@ const ALIASES: [RegExp, string][] = [
   [/^entity\.villager\.work_fisherman$/, 'block.barrel.open'],
   [/^entity\.villager\.work_leatherworker$/, 'item.armor.equip_leather'],
   [/^entity\.villager\.work_librarian$/, 'item.book.page_turn'],
+  // (Stage 5: ocean) the wet sponge's steps and knocks are the dry one's (both stone's here)
+  [/^block\.wet_sponge\.(?!dries)/, 'block.stone.'],
 ];
 
 /** how late (ms) a sound that had to be generated first may still start */

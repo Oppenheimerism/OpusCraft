@@ -56,6 +56,8 @@ import './potionItems';
 import './potionEffects';
 // (Stage 4: raids)
 import { Raids } from './raids';
+// (Stage 5: ocean)
+import './ocean';
 
 export interface SoundSink {
   play(name: string, x: number, y: number, z: number, volume?: number, pitch?: number): void;
