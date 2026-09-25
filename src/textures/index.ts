@@ -24,6 +24,8 @@ export function collectBlockTextureNames(): Set<string> {
   const names = new Set<string>(['missing', 'water_still', 'water_flow', 'water_overlay', 'lava_still', 'lava_flow']);
   const seen = new Set<unknown>();
   for (const b of BLOCKS) {
+    // (an item model of its own draws with its own textures: a shulker box's top and bottom)
+    if (b.s.itemModel) modelTextures(b.s.itemModel, names);
     if (!b.s.model) continue;
     for (let st = b.baseState; st < b.baseState + b.stateCount; st++) {
       const choice: ModelChoice = b.s.model(STATE_VIEWS[st]);

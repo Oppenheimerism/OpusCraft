@@ -118,7 +118,8 @@ export class BitmapFont {
   }
 
   /** Draw text; supports §-color codes. Coordinates in GUI pixels. */
-  draw(ctx: CanvasRenderingContext2D, s: string, x: number, y: number, color: number, scale: number, alpha = 1): void {
+  /** `shadow`: the drop shadow's pass, every colour a code picks darkened as `color` was (vanilla dimFactor 0.25) */
+  draw(ctx: CanvasRenderingContext2D, s: string, x: number, y: number, color: number, scale: number, alpha = 1, shadow = false): void {
     let cx = x;
     let col = color;
     let bold = false;
@@ -131,7 +132,7 @@ export class BitmapFont {
         const code = s[++i].toLowerCase();
         // vanilla: a colour code also resets formatting; §l is bold, §o italic, §r resets everything
         if (COLOR_CODES[code] !== undefined) {
-          col = COLOR_CODES[code];
+          col = shadow ? shadowOf(COLOR_CODES[code]) : COLOR_CODES[code];
           bold = false;
           italic = false;
         } else if (code === 'l') bold = true;
@@ -354,7 +355,7 @@ export class GuiGraphics {
   }
 
   text(s: string, x: number, y: number, color = 0xffffff, shadow = true, alpha = 1): number {
-    if (shadow) this.font.draw(this.ctx, s, x + 1, y + 1, shadowOf(color), this.scale, alpha);
+    if (shadow) this.font.draw(this.ctx, s, x + 1, y + 1, shadowOf(color), this.scale, alpha, true);
     this.font.draw(this.ctx, s, x, y, color, this.scale, alpha);
     return x + this.font.width(s);
   }
