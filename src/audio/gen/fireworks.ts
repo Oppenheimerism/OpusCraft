@@ -135,14 +135,13 @@ function blastFar(big: boolean) {
 
 /** a scatter of crackles, dense at first and thinning out over `dur` (a star burning out) */
 function crackle(out: Float32Array, sr: number, rng: Rng, dur: number, peakRate: number, bright: number): void {
-  let t = 0;
-  for (;;) {
-    t += -Math.log(1 - rng.next()) / peakRate;
-    if (t >= dur) break;
+  // (the first a loud one straight away, as the stars catch)
+  let t = rng.range(0.001, 0.004);
+  for (let first = true; t < dur; first = false, t += -Math.log(1 - rng.next()) / peakRate) {
     // (thinned: fewer as it goes, as the stars go out one by one)
     const keep = Math.exp(-t / (dur * 0.38)) * (t < 0.05 ? t / 0.05 : 1);
-    if (rng.next() > keep) continue;
-    const a = 0.2 + 0.8 * Math.pow(rng.next(), 2);
+    if (!first && rng.next() > keep) continue;
+    const a = first ? 0.85 + 0.15 * rng.next() : 0.2 + 0.8 * Math.pow(rng.next(), 2);
     impact(out, sr, rng, {
       t,
       modes: [rng.range(1800, 4200) * bright, a * 0.5, 0.006, rng.range(4200, 7500) * bright, a * 0.3, 0.004],

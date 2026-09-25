@@ -104,15 +104,17 @@ export class FireworkRocket extends Entity {
     if (!this.leftOwner) this.leftOwner = this.checkLeftOwner();
     const a = this.attachedTo;
     if (a) {
-      // fixed to its glider: while they glide, pushed a tenth of the look on and half the way to one and a half times it
+      // fixed to its glider: while they glide, pushed a tenth of the look on and half the way to one and a half times it,
+      // riding out by the hand that holds a rocket
+      let ox = 0, oz = 0;
       if (a.fallFlying) {
         const [lx, ly, lz] = viewVector(a.pitch, a.yaw);
         a.dx += lx * 0.1 + (lx * 1.5 - a.dx) * 0.5;
         a.dy += ly * 0.1 + (ly * 1.5 - a.dy) * 0.5;
         a.dz += lz * 0.1 + (lz * 1.5 - a.dz) * 0.5;
+        [ox, oz] = handHoldingRocket(a);
       }
-      // (vanilla adds getHandHoldingItemAngle, out by the hand: here it rides at the glider's feet, unseen either way)
-      this.setPos(a.x, a.y, a.z);
+      this.setPos(a.x + ox, a.y, a.z + oz);
       this.dx = a.dx;
       this.dy = a.dy;
       this.dz = a.dz;
@@ -266,6 +268,21 @@ export class FireworkRocket extends Entity {
 }
 
 const isSpectator = (e: Entity): boolean => (e as { gameMode?: string }).gameMode === 'spectator';
+
+/**
+ * vanilla LivingEntity.getHandHoldingItemAngle(FIREWORK_ROCKET): half a block out to the side of the hand holding a
+ * rocket (the main hand's first; 80° round from where they face), nowhere if neither hand holds one
+ */
+function handHoldingRocket(a: LivingEntity): [number, number] {
+  const w = a as unknown as { inventory?: { inHand?(h: 'main' | 'off'): ItemStack | null }; mainArm?: 'left' | 'right' };
+  const inv = w.inventory;
+  if (!inv?.inHand) return [0, 0];
+  const main = inv.inHand('main')?.item.id === 'firework_rocket';
+  if (!main && inv.inHand('off')?.item.id !== 'firework_rocket') return [0, 0];
+  const right = (w.mainArm ?? 'right') === 'right' ? main : !main;
+  const [x, , z] = viewVector(0, a.yaw + (right ? 80 : -80));
+  return [x * 0.5, z * 0.5];
+}
 
 // ---------------------------------------------------------------------------
 // the item (vanilla FireworkRocketItem)
