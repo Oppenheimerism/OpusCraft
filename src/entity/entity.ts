@@ -594,7 +594,7 @@ export abstract class Entity {
         if (this.inWater) {
           if (sounds) this.playSwimSound();
           if (events) this.level.gameEvent?.('swim', this.x, this.y, this.z, { entity: this });
-        } else if (this.onGround || climbing) {
+        } else if (this.onGround || climbing || this.isOnRails()) {
           if (sounds) {
             this.playStepSound();
             const on = BLOCKS[STATE_BLOCK[onState]].name;
@@ -696,6 +696,11 @@ export abstract class Entity {
   /** vanilla MovementEmission.emitsEvents: its steps, swimming and wingbeats are game events (whatever makes step sounds, and some that don't) */
   protected emitsMovementEvents(): boolean {
     return this.makesStepSounds();
+  }
+
+  /** vanilla Entity.isOnRails: a minecart on its track (its going counts as steps) */
+  protected isOnRails(): boolean {
+    return false;
   }
 
   /**
@@ -950,6 +955,7 @@ export abstract class Entity {
   /** vanilla Entity.kill (/kill): gone for good */
   kill(): void {
     this.remove();
+    this.level.gameEvent?.('entity_die', this.x, this.y, this.z, { entity: this });
   }
 
   /** vanilla Entity.onBelowWorld: fallen out of the world, gone (living things take the void's damage instead) */

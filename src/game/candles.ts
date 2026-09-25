@@ -11,6 +11,7 @@ import { supportsCenter } from './redstone/support';
 import { ItemStack } from '../item/item';
 import { CANDLE_NAMES, CANDLE_LAYOUT } from '../world/blocksDeepDark';
 import type { Level } from './level';
+import type { Player } from '../entity/player';
 
 const blk = (st: number): Block => BLOCKS[STATE_BLOCK[st]];
 const CANDLE_SET = new Set(CANDLE_NAMES);
@@ -42,11 +43,15 @@ export function lightCandle(level: Level, x: number, y: number, z: number): bool
   return true;
 }
 
-/** vanilla AbstractCandleBlock.extinguish: out it goes (to `st`, lit or not), a puff of smoke from each wick and a hiss */
-function extinguish(level: Level, x: number, y: number, z: number, st: number): void {
+/**
+ * vanilla AbstractCandleBlock.extinguish: out it goes (to `st`, lit or not), a puff of smoke from each wick and a hiss;
+ * a game event, by the player who blew it out
+ */
+function extinguish(level: Level, x: number, y: number, z: number, st: number, by: Player | null = null): void {
   level.setBlock(x, y, z, blk(st).with(st, 'lit', false));
   for (const [ox, oy, oz] of offsets(st)) level.particles.spawn?.('smoke', x + ox, y + oy, z + oz, 0, 0.1, 0);
   level.sound.play('block.candle.extinguish', x + 0.5, y + 0.5, z + 0.5, 1, 1);
+  level.gameEvent('block_change', x + 0.5, y + 0.5, z + 0.5, { entity: by });
 }
 
 /** a lit candle put out where it stands (vanilla ThrownPotion.dowseFire: a splash of water); false if there's none */
@@ -79,7 +84,7 @@ for (const name of CANDLE_NAMES) {
     use(level, x, y, z, st, ctx) {
       const p = ctx.player;
       if (p.inventory.inHand('main') || p.gameMode === 'adventure' || p.gameMode === 'spectator' || !b.get(st, 'lit')) return false;
-      extinguish(level, x, y, z, st);
+      extinguish(level, x, y, z, st, p);
       return true;
     },
     // vanilla AbstractCandleBlock.onProjectileHit: something burning that strikes it lights it

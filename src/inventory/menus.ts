@@ -12,6 +12,7 @@ import { equipSound, equipmentSlotForItem, equipableSlot } from '../item/equipme
 import { applyDyes, dyeColorName, isDyeable } from '../item/dyedColor';
 import { customRecipeFor, type CustomRecipe } from './customRecipes';
 import { craftedBy } from '../game/itemBehavior';
+import { equipEvent } from '../game/vibrations';
 
 const ARMOR_ICONS = ['slot_boots', 'slot_leggings', 'slot_chestplate', 'slot_helmet'];
 const ARMOR_SLOT_OF: Record<string, number> = { feet: 0, legs: 1, chest: 2, head: 3 };
@@ -24,6 +25,7 @@ export class ArmorSlot extends Slot {
   override set(s: ItemStack | null): void {
     const old = this.item;
     super.set(s);
+    equipEvent(this.inv.player, old, s);
     if (!s || (old && old.sameItem(s)) || !this.mayPlace(s)) return;
     const p = this.inv.player, snd = equipSound(s.item);
     if (snd && p.gameMode !== 'spectator') p.level.sound.play(snd, p.x, p.y, p.z, 1, 1);

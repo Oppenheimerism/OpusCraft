@@ -94,7 +94,7 @@ export class FallingBlockEntity extends Entity {
       };
       if (this.cancelDrop) broken();
       else if (FLAGS[cur] & (F_AIR | F_REPLACEABLE) && !(FLAGS[cur] & F_LAVA) && canSurvive(this.level.world, bx, by, bz, this.state)) {
-        if (!(FLAGS[cur] & F_AIR) && !(FLAGS[cur] & F_WATER)) this.level.destroyBlock(bx, by, bz, true, null, false);
+        if (!(FLAGS[cur] & F_AIR) && !(FLAGS[cur] & F_WATER)) this.level.destroyBlock(bx, by, bz, true, null, false, null, false);
         this.level.setBlock(bx, by, bz, this.state);
         // vanilla AnvilBlock.onLand: level event 1031
         if (anvil) this.level.sound.play('block.anvil.land', bx + 0.5, by + 0.5, bz + 0.5, 0.3, Math.random() * 0.1 + 0.9);

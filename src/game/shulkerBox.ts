@@ -165,7 +165,9 @@ registerCustomRecipe({
 function lowerFillLevel(level: Level, x: number, y: number, z: number, st: number): void {
   const b = BLOCKS[STATE_BLOCK[st]];
   const l = b.get<number>(st, 'level') - 1;
-  level.setBlock(x, y, z, l === 0 ? getBlock('cauldron').defaultState : b.with(st, 'level', l));
+  const now = l === 0 ? getBlock('cauldron').defaultState : b.with(st, 'level', l);
+  level.setBlock(x, y, z, now);
+  level.gameEvent('block_change', x + 0.5, y + 0.5, z + 0.5, { state: now });
 }
 
 /**

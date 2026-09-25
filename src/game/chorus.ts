@@ -155,8 +155,8 @@ registerBehavior('chorus_flower', {
   tick: breakIfUnsupported,
   randomTick: flowerRandomTick,
   // vanilla ChorusFlowerBlock.onProjectileHit: a projectile breaks it off (dropping it)
-  projectileHit(level, x, y, z) {
-    level.destroyBlock(x, y, z, true);
+  projectileHit(level, x, y, z, _st, _hit, projectile) {
+    level.destroyBlock(x, y, z, true, null, true, null, projectile);
   },
 });
 
@@ -213,7 +213,9 @@ export function chorusTeleport(level: Level, e: Entity): boolean {
     const y = Math.min(Math.max(e.y + (Math.floor(Math.random() * 16) - 8), dim.minY), dim.minY + dim.logicalHeight - 1);
     const z = e.z + (Math.random() - 0.5) * 16;
     if (e.vehicle) e.stopRiding();
+    const ox = e.x, oy = e.y, oz = e.z;
     if (!randomTeleport(e, x, y, z, false)) continue;
+    level.gameEvent('teleport', ox, oy, oz, { entity: e });
     // (the eater has been put there: it sees its own particles round it, others the trail)
     e.xo = e.x;
     e.yo = e.y;

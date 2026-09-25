@@ -52,17 +52,21 @@ export function tryToStartFallFlying(e: LivingEntity): boolean {
 
 /**
  * vanilla LivingEntity.updateFallFlying (before travel): the glide goes on while it's off the ground, not riding and
- * not levitating, with a working elytra on; every twentieth tick of it the elytra wears a point
+ * not levitating, with a working elytra on; every twentieth tick of it the elytra wears a point, and every tenth
+ * the glide is a game event (ELYTRA_GLIDE)
  */
 export function updateFallFlying(e: LivingEntity): void {
   if (!e.fallFlying) return;
   const on = !e.onGround && !e.vehicle && !e.hasEffect('levitation') && canGlide(e);
   if (on) {
     const i = e.fallFlyTicks + 1;
-    if (i % 10 === 0 && (i / 10) % 2 === 0) {
-      const w = e as unknown as Wearer;
-      hurtAndBreak(chestItem(e)!, 1, w.gameMode === 'creative');
-      if (w.inventory) w.inventory.version++;
+    if (i % 10 === 0) {
+      if ((i / 10) % 2 === 0) {
+        const w = e as unknown as Wearer;
+        hurtAndBreak(chestItem(e)!, 1, w.gameMode === 'creative');
+        if (w.inventory) w.inventory.version++;
+      }
+      e.level.gameEvent?.('elytra_glide', e.x, e.y, e.z, { entity: e });
     }
   }
   e.fallFlying = on;

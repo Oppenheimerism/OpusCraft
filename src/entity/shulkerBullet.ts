@@ -15,7 +15,7 @@ import { doPostAttackEffects } from '../game/enchantEffects';
 import { FLAGS, F_AIR } from '../world/block';
 import { collisionFaceFull } from '../world/dynamicShapes';
 import { AXIS_OF, DOWN, DX, DY, DZ, EAST, NORTH, SOUTH, UP, WEST, type Dir } from '../world/dir';
-import { projectileShot } from '../game/vibrations';
+import { projectileShot, projectileLandedOn, projectileLandedAt } from '../game/vibrations';
 
 const RAD = 180 / Math.PI;
 /** vanilla SPEED: how fast it means to go (it speeds up 2.5% a tick while it has a target) */
@@ -201,9 +201,20 @@ export class ShulkerBullet extends Entity {
 
   /** vanilla onHit: whatever it hit, it's spent */
   private onHit(hit: { e: Entity } | { b: SegmentHit }): void {
-    if ('e' in hit) this.onHitEntity(hit.e);
-    else this.onHitBlock(hit.b);
+    if ('e' in hit) {
+      this.onHitEntity(hit.e);
+      projectileLandedOn(this, hit.e);
+    } else {
+      this.onHitBlock(hit.b);
+      projectileLandedAt(this, hit.b.x, hit.b.y, hit.b.z);
+    }
+    this.destroy();
+  }
+
+  /** vanilla destroy: gone, which is a game event (ENTITY_DAMAGE) where it was */
+  private destroy(): void {
     this.remove();
+    this.level.gameEvent?.('entity_damage', this.x, this.y, this.z, { entity: this });
   }
 
   /** vanilla onHitEntity: 4 damage (a mob's projectile), and a hit that lands sets the living floating for 10 seconds */
@@ -251,7 +262,7 @@ export class ShulkerBullet extends Entity {
     this.level.sound.play('entity.shulker_bullet.hurt', this.x, this.y, this.z, 1, 1);
     const r = this.random;
     for (let i = 0; i < 15; i++) this.level.particles.spawn?.('crit', this.x + r.gaussian() * 0.2, this.y + r.gaussian() * 0.2, this.z + r.gaussian() * 0.2, 0, 0, 0);
-    this.remove();
+    this.destroy();
     return true;
   }
 

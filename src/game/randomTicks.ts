@@ -122,7 +122,7 @@ export class RandomTicker {
     if (b.s.isLeaves) {
       if (b.get(st, 'persistent')) return;
       const d = b.get<number>(st, 'distance');
-      if (d === 7) lvl.destroyBlock(x, y, z, true, null, false);
+      if (d === 7) lvl.destroyBlock(x, y, z, true, null, false, null, false);
       return;
     }
     if (n in SAPLING_TREE) {
@@ -210,7 +210,7 @@ export class RandomTicker {
       return;
     }
     if (n === 'snow') {
-      if ((this.level.world.getLight(x, y, z) & 15) > 11) lvl.destroyBlock(x, y, z, true, null, false);
+      if ((this.level.world.getLight(x, y, z) & 15) > 11) lvl.destroyBlock(x, y, z, true, null, false, null, false);
       return;
     }
     if (n === 'farmland') {

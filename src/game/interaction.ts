@@ -46,6 +46,7 @@ import { MobEffectInstance, MOB_EFFECTS } from '../entity/effects';
 import { levelOf, miningEfficiency, submergedMiningSpeed, hurtAndBreak, hasBinding } from '../item/enchantHelper';
 import { armorIndex, equipSound, equipableSlot } from '../item/equipment';
 import type { Hand } from '../item/inventory';
+import { equipEvent } from './vibrations';
 import { isCharged, performShooting, shootingPower, PLAYER_INACCURACY, playerProjectile, useDuration, crossbowUseTick, releaseUsing as releaseCrossbow } from '../item/crossbow';
 
 
@@ -302,6 +303,9 @@ export class Interaction {
       const stack = p.inventory.inHand(hand), count = stack?.count ?? 0;
       const r = p.inventory.withHand(hand, () => this.useHand(hand));
       if (r === 'pass') continue;
+      // vanilla Mob.interact: a mob that took the click (a consumed interaction) is a game event, by the player
+      const e = this.entityHit;
+      if (this.usedOn === 'entity' && e instanceof Mob) this.level.gameEvent('entity_interact', e.x, e.y, e.z, { entity: p });
       // vanilla: the hand dips after an item's own use, or after using it on a block when that used some up (any, in creative)
       if (r === 'success' && (this.usedOn === 'item' || (this.usedOn === 'block' && stack && stack.count > 0 && (stack.count !== count || p.gameMode === 'creative')))) this.onItemUsed?.(hand);
       return;
@@ -659,6 +663,7 @@ export class Interaction {
       ItemEntity.drop(lvl, h.x, h.y, h.z, ItemStack.of('glow_berries'));
       lvl.sound.play('block.cave_vines.pick_berries', h.x + 0.5, h.y + 0.5, h.z + 0.5, 1, 0.8 + Math.random() * 0.4);
       lvl.setBlock(h.x, h.y, h.z, b.with(st, 'berries', false));
+      lvl.gameEvent('block_change', h.x + 0.5, h.y + 0.5, h.z + 0.5, { entity: p, state: b.with(st, 'berries', false) });
       p.swing();
       return true;
     }
@@ -668,6 +673,7 @@ export class Interaction {
       ItemEntity.drop(lvl, h.x, h.y, h.z, ItemStack.of('sweet_berries', 1 + Math.floor(Math.random() * 2) + (age === 3 ? 1 : 0)));
       lvl.sound.play('block.sweet_berry_bush.pick_berries', h.x + 0.5, h.y + 0.5, h.z + 0.5, 1, 0.8 + Math.random() * 0.4);
       lvl.setBlock(h.x, h.y, h.z, b.with(st, 'age', 1));
+      lvl.gameEvent('block_change', h.x + 0.5, h.y + 0.5, h.z + 0.5, { entity: p, state: b.with(st, 'age', 1) });
       p.swing();
       return true;
     }
@@ -683,6 +689,7 @@ export class Interaction {
       if (FLAGS[above] & F_AIR && (n === 'grass_block' || n === 'dirt' || n === 'dirt_path' || n === 'coarse_dirt' || n === 'rooted_dirt')) {
         const to = n === 'coarse_dirt' ? S('dirt') : n === 'rooted_dirt' ? S('dirt') : S('farmland');
         lvl.setBlock(h.x, h.y, h.z, to);
+        lvl.gameEvent('block_change', h.x + 0.5, h.y + 0.5, h.z + 0.5, { entity: p, state: to });
         if (n === 'rooted_dirt') ItemEntity.drop(lvl, h.x, h.y, h.z, ItemStack.of('hanging_roots'));
         lvl.sound.play('item.hoe.till', h.x + 0.5, h.y + 0.5, h.z + 0.5, 1, 1);
         if (p.gameMode !== 'creative') this.damageHeld(1);
@@ -693,6 +700,7 @@ export class Interaction {
     // vanilla AxeItem.useOn: strip a log, wood, stem or hyphae block, keeping its axis
     if (stack.item.tool?.type === 'axe' && /^(?!stripped_).+_(log|wood|stem|hyphae)$/.test(n) && BLOCK_BY_NAME.has('stripped_' + n)) {
       lvl.setBlock(h.x, h.y, h.z, S('stripped_' + n, { axis: b.get(st, 'axis') }));
+      lvl.gameEvent('block_change', h.x + 0.5, h.y + 0.5, h.z + 0.5, { entity: p, state: lvl.getState(h.x, h.y, h.z) });
       lvl.sound.play('item.axe.strip', h.x + 0.5, h.y + 0.5, h.z + 0.5, 1, 1);
       if (p.gameMode !== 'creative') this.damageHeld(1);
       p.swing();
@@ -700,6 +708,7 @@ export class Interaction {
     }
     // vanilla BoneMealItem.useOn
     if (id === 'bone_meal' && this.boneMeal(h.x, h.y, h.z, st)) {
+      lvl.gameEvent('item_interact_finish', p.x, p.y, p.z, { entity: p });
       if (p.gameMode !== 'creative') p.inventory.consumeSelected(1);
       lvl.sound.play('item.bone_meal.use', h.x + 0.5, h.y + 0.5, h.z + 0.5, 1, 1);
       this.growthParticles(h.x, h.y, h.z);
@@ -718,7 +727,7 @@ export class Interaction {
       return true;
     }
     // vanilla ShovelItem.useOn: a shovel puts out a lit campfire (not from underneath)
-    if (stack.item.tool?.type === 'shovel' && h.face !== 0 && dowseCampfire(lvl, h.x, h.y, h.z)) {
+    if (stack.item.tool?.type === 'shovel' && h.face !== 0 && dowseCampfire(lvl, h.x, h.y, h.z, p)) {
       if (p.gameMode !== 'creative') this.damageHeld(1);
       p.swing();
       return true;
@@ -729,6 +738,10 @@ export class Interaction {
       const fx = lit ? h.x : h.x + DX[h.face], fy = lit ? h.y : h.y + DY[h.face], fz = lit ? h.z : h.z + DZ[h.face];
       if (lit || canPlaceFire(lvl.world, fx, fy, fz, DIR_NAMES[dirFromYaw(p.yaw)])) {
         if (!lit) placeFire(lvl, fx, fy, fz, fireStateAt(lvl.world, fx, fy, fz));
+        // (vanilla: BLOCK_CHANGE for what was lit; the fire's BLOCK_PLACE, which flint and steel reports at the clicked
+        // block and a fire charge where the fire is)
+        const [ex, ey, ez] = lit || id === 'flint_and_steel' ? [h.x, h.y, h.z] : [fx, fy, fz];
+        lvl.gameEvent(lit ? 'block_change' : 'block_place', ex + 0.5, ey + 0.5, ez + 0.5, { entity: p });
         if (id === 'flint_and_steel') {
           lvl.sound.play('item.flintandsteel.use', fx + 0.5, fy + 0.5, fz + 0.5, 1, Math.random() * 0.4 + 0.8);
           if (p.gameMode !== 'creative') this.damageHeld(1);
@@ -953,6 +966,7 @@ export class Interaction {
     const creative = p.gameMode === 'creative';
     if (cur && ((hasBinding(cur) && !creative) || (cur.count === stack.count && cur.sameItem(stack)))) return false;
     inv.armor[i] = creative ? stack.copy() : stack;
+    equipEvent(p, cur, inv.armor[i]);
     if (cur) inv.setSelectedItem(cur);
     else if (!creative) inv.setSelectedItem(null);
     inv.version++;

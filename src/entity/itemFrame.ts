@@ -217,6 +217,7 @@ export class ItemFrame extends Entity {
     if (this.isInvulnerableTo(source, attacker)) return false;
     if (!EXPLOSION.has(source) && this.item) {
       this.dropFramed(attacker ?? null, false);
+      this.level.gameEvent?.('block_change', this.x, this.y, this.z, { entity: attacker ?? null });
       this.playSound(this.removeItemSound());
       return true;
     }
@@ -335,11 +336,13 @@ export class ItemFrame extends Entity {
     if (!this.item) {
       if (!stack || stack.count <= 0 || this.removed) return false;
       this.setItem(stack);
+      this.level.gameEvent?.('block_change', this.x, this.y, this.z, { entity: p });
       if (p.gameMode !== 'creative') p.inventory.consumeSelected(1);
       return true;
     }
     this.playSound(this.rotateItemSound());
     this.setRotation(this.rotation + 1);
+    this.level.gameEvent?.('block_change', this.x, this.y, this.z, { entity: p });
     return true;
   }
 

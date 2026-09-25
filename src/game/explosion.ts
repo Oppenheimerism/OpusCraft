@@ -47,6 +47,7 @@ export function seenPercent(level: Level, x: number, y: number, z: number, e: En
 export function explode(level: Level, source: Entity | null, x: number, y: number, z: number, radius: number, fire: boolean, kind: ExplosionKind, damageSource?: string): void {
   const w = level.world;
   const rand = level.random;
+  level.gameEvent('explode', x, y, z, { entity: source });
   const destroys = kind === 'none' ? false : kind === 'mob' ? level.gameRules.mobGriefing : true;
   // 1) blocks: 16x16x16 rays from the surface of a cube
   const toBlow = new Map<string, [number, number, number]>();

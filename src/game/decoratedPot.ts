@@ -148,14 +148,15 @@ registerBehavior('decorated_pot', {
       // (vanilla ServerLevel.sendParticles: 7, no spread, no speed)
       for (let i = 0; i < 7; i++) level.particles.spawn?.('dust_plume', x + 0.5, y + 1.2, z + 0.5, 0, 0, 0);
       be.container.changed();
+      level.gameEvent('block_change', x + 0.5, y + 0.5, z + 0.5, { entity: ctx.player });
       return 'consume';
     }
-    if (ctx.hand !== 'off') knock(level, x, y, z, st);
+    if (ctx.hand !== 'off') knock(level, x, y, z, st, ctx.player);
     return 'consume';
   },
   /** vanilla useWithoutItem: an empty hand knocks on it (no swing: the client's CONSUME from useItemOn) */
-  use(level, x, y, z, st) {
-    knock(level, x, y, z, st);
+  use(level, x, y, z, st, ctx) {
+    knock(level, x, y, z, st, ctx.player);
     return 'consume';
   },
   /** vanilla DecoratedPotBlockEntity.triggerEvent(1, style): the wobble starts now */
@@ -183,7 +184,7 @@ registerBehavior('decorated_pot', {
   projectileHit(level, x, y, z, st, _hit, projectile) {
     if (!IMPACT_PROJECTILES.has(projectile.type) || level.gameRules.projectilesCanBreakBlocks === false || !mayInteract(level, projectile)) return;
     level.world.setStateQuiet(x, y, z, pot.with(st, 'cracked', true));
-    level.destroyBlock(x, y, z, true, null, true);
+    level.destroyBlock(x, y, z, true, null, true, null, projectile);
   },
   /** vanilla getSoundType: a cracked pot's is SoundType.DECORATED_POT_CRACKED, whose break is the shatter */
   breakSound(st) {
@@ -196,12 +197,13 @@ registerBehavior('decorated_pot', {
   },
 });
 
-/** vanilla DecoratedPotBlock.useWithoutItem: the knock's sound and the other wobble */
-function knock(level: Level, x: number, y: number, z: number, _st: number): void {
+/** vanilla DecoratedPotBlock.useWithoutItem: the knock's sound and the other wobble, a game event by the player */
+function knock(level: Level, x: number, y: number, z: number, _st: number, by: Player): void {
   const be = level.world.getBlockEntity(x, y, z);
   if (!(be instanceof DecoratedPotBlockEntity)) return;
   level.sound.play('block.decorated_pot.insert_fail', x + 0.5, y + 0.5, z + 0.5, 1, 1);
   be.wobble(level, WOBBLE_NEGATIVE);
+  level.gameEvent('block_change', x + 0.5, y + 0.5, z + 0.5, { entity: by });
 }
 
 // vanilla DecoratedPotBlock.appendHoverText: for a decorated one, a blank line and then its front, left, right and

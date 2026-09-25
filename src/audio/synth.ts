@@ -45,6 +45,7 @@ import { illagerSounds } from './gen/illagers';
 import { oceanSounds } from './gen/ocean';
 // (the deep dark)
 import { sculkSounds } from './gen/sculk';
+import { wardenSounds } from './gen/warden';
 import { DISC_MUSIC_POOLS, renderDiscMusic } from './gen/disc5';
 
 export const SAMPLE_RATE = 44100;
@@ -101,6 +102,8 @@ Object.assign(SOUNDS, leashSounds());
 Object.assign(SOUNDS, llamaSounds(SOUNDS));
 // (the deep dark: sculk, its sensors, shrieker and catalyst; candles)
 Object.assign(SOUNDS, sculkSounds());
+// (the warden's voice: so far its answers to a shrieker's warnings)
+Object.assign(SOUNDS, wardenSounds());
 // (vanilla sounds.json: the snow golem's are the snow's breaking, the bow's and the shears')
 for (const [k, v] of Object.entries({ 'entity.snow_golem.hurt': 'block.snow.break', 'entity.snow_golem.death': 'block.snow.break', 'entity.snow_golem.shoot': 'entity.arrow.shoot', 'entity.snow_golem.shear': 'entity.sheep.shear' })) if (SOUNDS[v]) SOUNDS[k] = SOUNDS[v];
 // (the parrot, and the mobs it mimics: theirs pitched up, so it comes after them all)

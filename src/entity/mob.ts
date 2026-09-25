@@ -28,6 +28,7 @@ import { crossbowUseTick } from '../item/crossbow';
 import { CHARGED_CREEPER_HEADS } from '../world/blocksSkulls';
 import { LeashKnot, getOrCreateKnot } from './leash';
 import type { Player } from './player';
+import { equipEvent } from '../game/vibrations';
 
 /** where a saved lead's other end is: whoever held it (by uuid), or the fence it was tied to */
 export type SavedLeash = { uuid: string } | { x: number; y: number; z: number };
@@ -698,11 +699,14 @@ export abstract class Mob extends LivingEntity {
   }
 
   startUsingItem(): void {
+    // (vanilla LivingEntity.startUsingItem / stopUsingItem: beginning and ending are game events)
+    if (!this.usingItem) this.level.gameEvent?.('item_interact_start', this.x, this.y, this.z, { entity: this });
     this.usingItem = true;
     this.useItemTicks = 0;
   }
 
   stopUsingItem(): void {
+    if (this.usingItem) this.level.gameEvent?.('item_interact_finish', this.x, this.y, this.z, { entity: this });
     this.usingItem = false;
     this.useItemTicks = 0;
   }
@@ -730,6 +734,7 @@ export abstract class Mob extends LivingEntity {
    * same stack (enchanting spawn equipment) or the mob hasn't ticked yet (vanilla firstTick: spawning, loading)
    */
   protected onEquipItem(slot: EquipSlot, old: ItemStack | null, cur: ItemStack | null): void {
+    equipEvent(this, old, cur);
     if (!cur || (old && old.sameItem(cur)) || this.tickCount === 0) return;
     if (equipableSlot(cur.item) !== slot) return;
     const snd = equipSound(cur.item);

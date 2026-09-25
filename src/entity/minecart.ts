@@ -102,6 +102,15 @@ export abstract class AbstractMinecart extends Entity {
     for (const e of this.level.getEntities(box.inflate(1e-7), (e) => e.isPushable() && !e.noPhysics && !this.isPassengerOfSameVehicle(e), this)) out.push(e.bb);
   }
 
+  /** vanilla AbstractMinecart.getMovementEmission: EVENTS (no step sounds, but its going is heard by sculk) */
+  protected override emitsMovementEvents(): boolean {
+    return true;
+  }
+
+  protected override isOnRails(): boolean {
+    return this.onRails;
+  }
+
   override tick(): void {
     // vanilla ServerLevel.tickNonPassenger: old position, then AbstractMinecart.tick (no Entity.baseTick)
     this.xo = this.x;
@@ -364,6 +373,7 @@ export abstract class AbstractMinecart extends Entity {
     this.hurtDir = -this.hurtDir;
     this.hurtTime = 10;
     this.damage += amount * 10;
+    this.level.gameEvent?.('entity_damage', this.x, this.y, this.z, { entity: attacker ?? null });
     if (attacker?.type === 'player' && (attacker as Player).gameMode === 'creative') this.remove();
     else if (this.damage > 40) this.destroy();
     return true;

@@ -15,7 +15,7 @@ import { onProjectileHit } from '../game/blockRules';
 import { fireStateAt, placeFire } from '../game/fire';
 import { FLAGS, F_AIR } from '../world/block';
 import { DX, DY, DZ } from '../world/dir';
-import { projectileShot } from '../game/vibrations';
+import { projectileShot, projectileLandedOn, projectileLandedAt } from '../game/vibrations';
 
 const RAD = 180 / Math.PI;
 
@@ -75,11 +75,14 @@ export abstract class Fireball extends Entity {
       }
     }
     if (hit || bh) {
-      if (hit) this.hitEntity(hit);
-      else if (bh) {
+      if (hit) {
+        this.hitEntity(hit);
+        projectileLandedOn(this, hit);
+      } else if (bh) {
         // (vanilla Projectile.onHitBlock: the block hears of it first)
         onProjectileHit(lvl, bh.x, bh.y, bh.z, bh, this);
         this.hitBlock(bh.x, bh.y, bh.z, bh.face);
+        projectileLandedAt(this, bh.x, bh.y, bh.z);
       }
       this.onHit();
       return;

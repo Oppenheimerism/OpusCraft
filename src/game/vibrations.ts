@@ -7,8 +7,10 @@
 
 import type { Entity } from '../entity/entity';
 import type { Player } from '../entity/player';
+import type { ItemStack } from '../item/item';
 import type { Level } from './level';
 import { STATE_BLOCK, BLOCKS } from '../world/block';
+import { equipableSlot } from '../item/equipment';
 import { vibrationFrequency, GAME_EVENT_TAGS, dampensVibrations, occludesVibrations, itemDampensVibrations, type GameEventName, type GameEventContext } from './gameEvents';
 import type { GameEventListener } from './gameEventDispatcher';
 
@@ -135,10 +137,10 @@ const gameModeOf = (e: Entity): string | null => ('gameMode' in e ? String((e as
 /** vanilla Entity.isSteppingCarefully: sneaking */
 const steppingCarefully = (e: Entity): boolean => e.isShiftKeyDown();
 
-/** vanilla Entity.dampensVibrations: a dropped wool or carpet */
+/** vanilla Entity.dampensVibrations (ItemEntity's: its stack is #dampens_vibrations): a dropped wool or carpet */
 function entityDampens(e: Entity): boolean {
-  const item = (e as { item?: { item?: { id?: string } } }).item;
-  return e.type === 'item' && !!item?.item?.id && itemDampensVibrations(item.item.id);
+  const stack = (e as { stack?: ItemStack | null }).stack;
+  return e.type === 'item' && !!stack && itemDampensVibrations(stack.item.id);
 }
 
 /** vanilla VibrationSystem.User.isValidVibration */
@@ -242,6 +244,30 @@ export function projectileShot(e: Entity): void {
 /** vanilla HasBeenShot, loaded: a saved projectile doesn't tell of it again */
 export function markShot(e: Entity): void {
   SHOT.add(e);
+}
+
+/** vanilla Equipable.get: what can be put on (armour, an elytra, a carved pumpkin or a head, a shield, a horse's armour) */
+const isEquipable = (s: ItemStack): boolean => equipableSlot(s.item) !== null || s.item.id === 'shield' || s.item.id.endsWith('_horse_armor') || s.item.id === 'wolf_armor';
+
+/**
+ * vanilla LivingEntity.onEquipItem's game event: EQUIP when what went on is equipable, else UNEQUIP (taking a piece
+ * off, or something else in its place); never for the very same stack, for nothing where nothing was, on the first
+ * tick (spawning, loading) or from a spectator
+ */
+export function equipEvent(e: Entity, old: ItemStack | null, cur: ItemStack | null): void {
+  if ((!old && !cur) || (old && cur && old.sameItem(cur)) || e.tickCount === 0) return;
+  if ((e as { gameMode?: string }).gameMode === 'spectator') return;
+  e.level.gameEvent?.(cur && isEquipable(cur) ? 'equip' : 'unequip', e.x, e.y, e.z, { entity: e });
+}
+
+/** vanilla Projectile.onHit's PROJECTILE_LAND for an entity hit: where the entity stands */
+export function projectileLandedOn(e: Entity, hit: Entity): void {
+  e.level.gameEvent?.('projectile_land', hit.x, hit.y, hit.z, { entity: e });
+}
+
+/** vanilla Projectile.onHit's PROJECTILE_LAND for a block hit: at the block, as it is after the hit */
+export function projectileLandedAt(e: Entity, x: number, y: number, z: number): void {
+  e.level.gameEvent?.('projectile_land', x + 0.5, y + 0.5, z + 0.5, { entity: e, state: e.level.getState(x, y, z) });
 }
 
 /** vanilla VibrationSystem.Listener: a vibration user's ear, as its block entity (or the warden) hands it to the dispatcher */

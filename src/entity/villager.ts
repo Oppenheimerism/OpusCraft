@@ -830,7 +830,7 @@ function workAtComposter(v: Villager): void {
   }
   // compostItems
   let st = st0;
-  if (blk(st).get<number>(st, 'level') === 8) st = composterExtract(level, j[0], j[1], j[2], st);
+  if (blk(st).get<number>(st, 'level') === 8) st = composterExtract(level, j[0], j[1], j[2], st, v);
   const before = st;
   let room = 20;
   const seen = new Array(COMPOSTED_SEEDS.length).fill(0);
@@ -845,7 +845,7 @@ function workAtComposter(v: Villager): void {
     if (put <= 0) continue;
     room -= put;
     for (let m = 0; m < put; m++) {
-      st = composterInsert(level, j[0], j[1], j[2], st, s);
+      st = composterInsert(level, j[0], j[1], j[2], st, s, v);
       if (s.count <= 0) v.inventory[i] = null;
       if (blk(st).get<number>(st, 'level') === 7) {
         composterFillEffects(level, j[0], j[1], j[2], st, st !== before);
@@ -916,13 +916,14 @@ function harvestFarmland(): BehaviorControl<Villager> {
         const [x, y, z] = target;
         const st = w.getState(x, y, z);
         const below = blk(w.getState(x, y - 1, z)).name;
-        if (isMatureCrop(st)) level.destroyBlock(x, y, z, true);
+        if (isMatureCrop(st)) level.destroyBlock(x, y, z, true, null, true, null, v);
         if ((FLAGS[st] & F_AIR) !== 0 && below === 'farmland' && v.hasFarmSeeds()) {
           for (let i = 0; i < v.inventory.length; i++) {
             const s = v.inventory[i];
             const crop = s && PLANTABLE[s.item.id];
             if (!s || !crop) continue;
             level.setBlock(x, y, z, getBlock(crop).defaultState);
+            level.gameEvent('block_place', x + 0.5, y + 0.5, z + 0.5, { entity: v, state: getBlock(crop).defaultState });
             level.sound.play('item.crop.plant', x, y, z, 1, 1);
             if (--s.count <= 0) v.inventory[i] = null;
             break;

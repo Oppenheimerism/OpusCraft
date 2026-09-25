@@ -210,8 +210,10 @@ registerBehavior('tripwire', {
     if (!moving && STATE_BLOCK[now] !== STATE_BLOCK[st]) updateSource(level, x, y, z, wire().with(st, 'powered', true));
   },
   // vanilla playerWillDestroy: shears disarm it before it goes (without telling the neighbours)
-  playerWillDestroy(level, x, y, z, st, _player, held) {
-    if (held?.item.id === 'shears') level.setBlock(x, y, z, wire().with(st, 'disarmed', true), 4);
+  playerWillDestroy(level, x, y, z, st, player, held) {
+    if (held?.item.id !== 'shears') return;
+    level.setBlock(x, y, z, wire().with(st, 'disarmed', true), 4);
+    level.gameEvent('shear', x + 0.5, y + 0.5, z + 0.5, { entity: player });
   },
   entityInside(level, x, y, z, st) {
     if (!is(st, 'powered')) checkPressed(level, x, y, z);

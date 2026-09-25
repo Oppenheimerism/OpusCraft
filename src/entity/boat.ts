@@ -109,6 +109,11 @@ export class Boat extends Entity {
     return true;
   }
 
+  /** vanilla Boat.getMovementEmission: EVENTS (no step sounds, but its going is heard by sculk) */
+  protected override emitsMovementEvents(): boolean {
+    return true;
+  }
+
   /** vanilla Boat.canVehicleCollide: blocked by solid and pushable entities, never by its own riders */
   protected override entityCollisions(box: AABB, out: AABB[]): void {
     for (const e of this.level.getEntities(box.inflate(1e-7), (e) => (e.canBeCollidedWith() || e.isPushable()) && !e.noPhysics && !this.isPassengerOfSameVehicle(e), this)) out.push(e.bb);
@@ -292,7 +297,7 @@ export class Boat extends Entity {
     const x1 = Math.floor(b.maxX - 1e-7), y1 = Math.floor(b.maxY - 1e-7), z1 = Math.floor(b.maxZ - 1e-7);
     for (let x = x0; x <= x1; x++)
       for (let y = y0; y <= y1; y++)
-        for (let z = z0; z <= z1; z++) if (BLOCKS[STATE_BLOCK[w.getState(x, y, z)]].name === 'lily_pad') this.level.destroyBlock(x, y, z, true);
+        for (let z = z0; z <= z1; z++) if (BLOCKS[STATE_BLOCK[w.getState(x, y, z)]].name === 'lily_pad') this.level.destroyBlock(x, y, z, true, null, true, null, this);
   }
 
   setPaddleState(left: boolean, right: boolean): void {
@@ -543,6 +548,7 @@ export class Boat extends Entity {
     this.hurtDir = -this.hurtDir;
     this.hurtTime = 10;
     this.damage += amount * 10;
+    this.level.gameEvent?.('entity_damage', this.x, this.y, this.z, { entity: attacker ?? null });
     if (attacker?.type === 'player' && (attacker as Player).gameMode === 'creative') this.discard();
     else if (this.damage > 40) this.destroy();
     return true;

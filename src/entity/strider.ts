@@ -309,6 +309,7 @@ export class Strider extends Animal {
     // vanilla SaddleItem.interactLivingEntity
     if (stack?.item.id === 'saddle' && !this.saddled && this.isSaddleable()) {
       this.equipSaddle(true);
+      this.level.gameEvent?.('equip', this.x, this.y, this.z, { entity: this });
       if (p.gameMode !== 'creative') p.inventory.consumeSelected(1);
       return true;
     }

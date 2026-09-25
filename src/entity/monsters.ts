@@ -1000,7 +1000,10 @@ export class Creeper extends Monster {
     if (this.isAlive) {
       this.oldSwell = this.swell;
       if (this.ignited) this.swellDir = 1;
-      if (this.swellDir > 0 && this.swell === 0) this.playSound('entity.creeper.primed', 1, 0.5);
+      if (this.swellDir > 0 && this.swell === 0) {
+        this.playSound('entity.creeper.primed', 1, 0.5);
+        this.level.gameEvent?.('prime_fuse', this.x, this.y, this.z, { entity: this });
+      }
       this.swell += this.swellDir;
       if (this.swell < 0) this.swell = 0;
       if (this.swell >= this.maxSwell) {
@@ -1278,6 +1281,7 @@ class EndermanTakeBlockGoal extends Goal {
     const hit = clipBlocks(lvl.world, Math.floor(e.x) + 0.5, j + 0.5, Math.floor(e.z) + 0.5, i + 0.5, j + 0.5, k + 0.5);
     if (hit && (hit.x !== i || hit.y !== j || hit.z !== k)) return;
     lvl.setBlock(i, j, k, 0);
+    lvl.gameEvent?.('block_destroy', i + 0.5, j + 0.5, k + 0.5, { entity: e, state: st });
     e.carried = BLOCKS[STATE_BLOCK[st]].defaultState;
   }
 }
@@ -1300,6 +1304,7 @@ class EndermanLeaveBlockGoal extends Goal {
     if (!canSurvive(w, i, j, k, e.carried)) return;
     if (lvl.getEntities(new AABB(i, j, k, i + 1, j + 1, k + 1), undefined, e).length) return;
     lvl.setBlock(i, j, k, e.carried);
+    lvl.gameEvent?.('block_place', i + 0.5, j + 0.5, k + 0.5, { entity: e, state: e.carried });
     e.carried = 0;
   }
 }
@@ -1419,6 +1424,7 @@ export class Enderman extends Monster {
       const pz = oz + (this.z - oz) * d + (r.nextDouble() - 0.5) * this.width * 2;
       this.level.particles.spawn?.('portal', px, py, pz, (r.nextFloat() - 0.5) * 0.2, (r.nextFloat() - 0.5) * 0.2, (r.nextFloat() - 0.5) * 0.2);
     }
+    this.level.gameEvent?.('teleport', ox, oy, oz, { entity: this });
     this.level.sound.play('entity.enderman.teleport', ox, oy, oz, 1, 1);
     this.playSound('entity.enderman.teleport', 1, 1);
     return true;

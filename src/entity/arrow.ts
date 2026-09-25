@@ -18,7 +18,7 @@ import { ITEMS, cloneTag } from '../item/item';
 import { ItemEntity } from './itemEntity';
 import { damageBonus, levelOf } from '../item/enchantHelper';
 import { doPostAttackEffects } from '../game/enchantEffects';
-import { projectileShot } from '../game/vibrations';
+import { projectileShot, projectileLandedOn, projectileLandedAt } from '../game/vibrations';
 
 const RAD = 180 / Math.PI;
 
@@ -183,11 +183,13 @@ export class Arrow extends Entity {
     if (!ent && blockHit && !noPhysics) {
       onProjectileHit(this.level, blockHit.x, blockHit.y, blockHit.z, blockHit, this);
       this.onHitBlock(blockHit.px, blockHit.py, blockHit.pz, w.getState(blockHit.x, blockHit.y, blockHit.z));
+      projectileLandedAt(this, blockHit.x, blockHit.y, blockHit.z);
     }
     // vanilla tick's hit loop: a piercing arrow goes on to the next entity along this tick's path (the block
     // behind them waits for the next tick)
     while (ent && !this.removed) {
       this.onHitEntity(ent);
+      projectileLandedOn(this, ent);
       if (this.pierceLevel <= 0) break;
       ent = this.findHitEntity(x0, y0, z0, x1, y1, z1);
     }

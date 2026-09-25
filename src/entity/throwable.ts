@@ -9,7 +9,7 @@ import { onProjectileHit } from '../game/blockRules';
 import { ItemStack, ITEMS } from '../item/item';
 import { Chicken } from './animals';
 import type { Player } from './player';
-import { projectileShot } from '../game/vibrations';
+import { projectileShot, projectileLandedOn, projectileLandedAt } from '../game/vibrations';
 
 const RAD = 180 / Math.PI;
 
@@ -94,12 +94,14 @@ export class ThrownItem extends Entity {
     }
     if (hit) {
       this.onHitEntity(hit);
+      projectileLandedOn(this, hit);
       this.onHit(hit.x, hit.y, hit.z, hit);
       return;
     }
     if (bh) {
       onProjectileHit(this.level, bh.x, bh.y, bh.z, bh, this);
       this.onHitBlock(bh);
+      projectileLandedAt(this, bh.x, bh.y, bh.z);
       this.onHit(bh.px, bh.py, bh.pz, null);
       return;
     }

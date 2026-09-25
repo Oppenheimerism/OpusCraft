@@ -299,6 +299,7 @@ export class Shulker extends PathfinderMob {
       this.setAttachFace(d);
       this.playSound('entity.shulker.teleport', 1, 1);
       this.setPos(x + 0.5, y, z + 0.5);
+      this.level.gameEvent?.('teleport', bx + 0.5, by + 0.5, bz + 0.5, { entity: this });
       this.rawPeek = 0;
       this.setTarget(null);
       return true;

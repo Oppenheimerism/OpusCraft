@@ -2,6 +2,7 @@
 
 import { Entity } from './entity';
 import type { Level } from '../game/level';
+import type { GameEventName } from '../game/gameEvents';
 import { explode } from '../game/explosion';
 
 export class PrimedTnt extends Entity {
@@ -20,11 +21,12 @@ export class PrimedTnt extends Entity {
     this.owner = owner;
   }
 
-  /** vanilla TntBlock.prime */
-  static prime(level: Level, x: number, y: number, z: number, owner: Entity | null): PrimedTnt {
+  /** vanilla TntBlock.prime (and the game event it makes: PRIME_FUSE, or the dispenser's ENTITY_PLACE) */
+  static prime(level: Level, x: number, y: number, z: number, owner: Entity | null, event: GameEventName = 'prime_fuse'): PrimedTnt {
     const t = new PrimedTnt(level, x + 0.5, y, z + 0.5, owner);
     level.addEntity(t);
     level.sound.play('entity.tnt.primed', t.x, t.y, t.z, 1, 1);
+    level.gameEvent(event, x + 0.5, y + 0.5, z + 0.5, { entity: owner });
     return t;
   }
 

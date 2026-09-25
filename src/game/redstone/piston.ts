@@ -627,6 +627,7 @@ for (const kind of [piston, sticky]) {
         if (!moveBlocks(level, x, y, z, facing, true, isSticky)) return false;
         level.setBlock(x, y, z, out, UPDATE_MOVE_ALL);
         level.sound.play('block.piston.extend', x + 0.5, y + 0.5, z + 0.5, 0.5, r.nextFloat() * 0.25 + 0.6);
+        level.gameEvent('block_activate', x + 0.5, y + 0.5, z + 0.5, { state: out });
         return true;
       }
       const hx = x + DX[facing], hy = y + DY[facing], hz = z + DZ[facing];
@@ -656,6 +657,7 @@ for (const kind of [piston, sticky]) {
         }
       } else removeBlock(level, hx, hy, hz);
       level.sound.play('block.piston.contract', x + 0.5, y + 0.5, z + 0.5, 0.5, r.nextFloat() * 0.15 + 0.6);
+      level.gameEvent('block_deactivate', x + 0.5, y + 0.5, z + 0.5, { state: out });
       return true;
     },
   });

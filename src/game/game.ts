@@ -489,6 +489,10 @@ export class Game {
       entityEffect: (x, y, z, c, a) => particles.entityEffect(x, y, z, c, a),
       dust: (x, y, z, r, g, b, s) => particles.dust(x, y, z, r, g, b, s),
       spell: (k, x, y, z, xd, yd, zd, r, g, b, pw) => particles.spell(k, x, y, z, xd, yd, zd, r, g, b, pw),
+      vibration: (x, y, z, target, ticks) => particles.sculk.vibration(x, y, z, target, ticks),
+      shriek: (x, y, z, delay) => particles.sculk.shriek(x, y, z, delay),
+      sculkCharge: (x, y, z, xd, yd, zd, roll) => particles.sculk.sculkCharge(x, y, z, xd, yd, zd, roll),
+      dustTransition: (x, y, z, xd, yd, zd, from, to, scale) => particles.sculk.dustTransition(x, y, z, xd, yd, zd, from, to, scale),
     };
     this.spawner = new NaturalSpawner(this.level, hashString(meta.seed));
     this.spawner.traders.load(meta.wanderingTrader);

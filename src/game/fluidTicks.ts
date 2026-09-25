@@ -149,7 +149,7 @@ export class FluidTicker {
     if (cur.type === fs.type && cur.amount >= fs.amount && !fs.falling) return;
     if (!(FLAGS[st] & F_AIR) && cur.type === 0) {
       // wash away plants/torches with drops
-      this.level.destroyBlock(x, y, z, true, null, false);
+      this.level.destroyBlock(x, y, z, true, null, false, null, false);
     }
     this.level.setBlock(x, y, z, legacyBlock(fs));
     this.level.scheduleTick(x, y, z, this.tickDelay(fs.type));

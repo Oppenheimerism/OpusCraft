@@ -165,7 +165,7 @@ class SilverfishWakeUpFriendsGoal extends Goal {
           const x = bx + j, y = by + i, z = bz + k;
           const st = level.world.getState(x, y, z);
           if (!isInfestedBlock(st)) continue;
-          if (level.gameRules.mobGriefing) level.destroyBlock(x, y, z, true);
+          if (level.gameRules.mobGriefing) level.destroyBlock(x, y, z, true, null, true, null, s);
           else level.setBlock(x, y, z, hostStateByInfested(st));
           if (r.nextBool()) return;
         }

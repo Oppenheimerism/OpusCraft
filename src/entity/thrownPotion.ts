@@ -72,8 +72,8 @@ export class ThrownPotion extends ThrownItem {
   /** vanilla ThrownPotion.dowseFire: fire goes out, and lit candles, and a lit campfire */
   private dowseFire(x: number, y: number, z: number): void {
     const name = BLOCKS[STATE_BLOCK[this.level.getState(x, y, z)]].name;
-    if (name === 'fire' || name === 'soul_fire') this.level.destroyBlock(x, y, z, false);
-    else if (!extinguishCandle(this.level, x, y, z)) dowseCampfire(this.level, x, y, z);
+    if (name === 'fire' || name === 'soul_fire') this.level.destroyBlock(x, y, z, false, null, true, null, this);
+    else if (!extinguishCandle(this.level, x, y, z)) dowseCampfire(this.level, x, y, z, this.owner);
   }
 
   /** vanilla ThrownPotion.onHit, where the potion is (it breaks before it moves on) */

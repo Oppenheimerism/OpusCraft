@@ -10,6 +10,7 @@ import type { SpriteRect } from '../world/models';
 import { AABB, collideWithBoxes } from '../core/aabb';
 import { fluidHeight, fluidType, FLUID_WATER, FLUID_LAVA } from '../world/fluids';
 import { SGA_SPRITES } from '../textures/sga';
+import { SculkParticles } from './sculkParticles';
 
 interface Particle {
   x: number; y: number; z: number;
@@ -123,7 +124,12 @@ export class ParticleEngine {
   /** vanilla DripstoneFallAndLandParticle: a drip from a stalactite plays a sound where it lands */
   onDripstoneDripLand: ((x: number, y: number, z: number, lava: boolean) => void) | null = null;
 
-  constructor(private readonly atlas: Atlas, private readonly world: World, private readonly tintOf: (x: number, y: number, z: number, state: number) => number) {}
+  /** the deep dark's particles (render/sculkParticles.ts: vibrations, shrieks, sculk charges and souls) */
+  readonly sculk: SculkParticles;
+
+  constructor(private readonly atlas: Atlas, private readonly world: World, private readonly tintOf: (x: number, y: number, z: number, state: number) => number) {
+    this.sculk = new SculkParticles(world);
+  }
 
   private sprite(state: number): SpriteRect | null {
     const m = getStateModels(state);
@@ -921,6 +927,7 @@ export class ParticleEngine {
         break;
       }
       default:
+        this.sculk.spawn(kind, x, y, z, xd, yd, zd);
         break;
     }
   }
@@ -1279,6 +1286,7 @@ export class ParticleEngine {
   }
 
   tick(): void {
+    this.sculk.tick();
     this.tickSprites();
     let w = 0;
     for (let i = 0; i < this.list.length; i++) {
@@ -1359,6 +1367,7 @@ export class ParticleEngine {
 
   /** draw sprite particles (after terrain particles); translucent ones in a second, blended pass */
   renderSprites(batch: EntityBatch, cam: Camera, partial: number): void {
+    if (this.spriteTexture) this.sculk.render(batch, cam, partial, this.spriteTexture, this.spriteRects);
     if (!this.sprites.length || !this.spriteTexture) return;
     batch.begin({ texture: this.spriteTexture, cutoff: 0.1, blend: false, cull: false, lit: false, useLightmap: true });
     let translucent = false;
@@ -1457,9 +1466,10 @@ export class ParticleEngine {
   clear(): void {
     this.list.length = 0;
     this.sprites.length = 0;
+    this.sculk.clear();
   }
 
   get count(): number {
-    return this.list.length + this.sprites.length;
+    return this.list.length + this.sprites.length + this.sculk.count;
   }
 }

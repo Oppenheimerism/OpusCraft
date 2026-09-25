@@ -749,6 +749,7 @@ export class EnderDragon extends Mob {
   /** vanilla EnderDragon.kill (/kill): gone at once, and the fight is won */
   override kill(): void {
     this.remove();
+    this.level.gameEvent?.('entity_die', this.x, this.y, this.z, { entity: this });
     if (this.dragonFight) {
       this.dragonFight.updateDragon(this);
       this.dragonFight.setDragonKilled(this);
