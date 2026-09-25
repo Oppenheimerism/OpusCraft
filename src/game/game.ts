@@ -809,6 +809,9 @@ export class Game {
       if (rules.showDeathMessages) this.chat(this.deathMessage(source));
       if (!rules.keepInventory) {
         this.dropAllItems();
+        // vanilla LivingEntity.dropExperience: a player always drops some (Player.getBaseExperienceReward: 7 a level, at
+        // most 100), unless a sculk catalyst took it
+        if (!p.skipDropExperience && p.gameMode !== 'spectator') this.level.awardExperience?.(p.x, p.y, p.z, Math.min(100, p.xpLevel * 7));
         p.xpLevel = 0;
         p.xpProgress = 0;
       }
@@ -1054,8 +1057,12 @@ export class Game {
     p.air = 300;
     p.fallDistance = 0;
     p.removed = false;
-    p.xpLevel = 0;
-    p.xpProgress = 0;
+    // vanilla ServerPlayer.restoreFrom: keepInventory (or spectating) keeps the levels and the score as well
+    if (!this.level.gameRules.keepInventory && p.gameMode !== 'spectator') {
+      p.xpLevel = 0;
+      p.xpProgress = 0;
+      p.xpTotal = 0;
+    }
     p.sleepingPos = null;
     p.sleepCounter = 0;
     p.setSize(0.6, 1.8);
