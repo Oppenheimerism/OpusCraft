@@ -21,6 +21,7 @@ import { Strongholds, biomeAtY0, addBeards } from './stronghold';
 import { PillagerOutposts } from './outposts';
 // (Stage 5: ocean)
 import { OceanMonuments } from './monument';
+import { OceanStructures } from './oceanStructures';
 import { worldSeed64 } from './jigsaw';
 import { S, getBlock } from '../block';
 import { MIN_Y, MAX_Y, SEA_LEVEL, COLUMN_VOLUME, colIndex, CAVE_BIOME_LEVELS, NO_CAVE_BIOME } from '../constants';
@@ -77,6 +78,8 @@ export class ChunkGenerator {
   readonly outposts: PillagerOutposts;
   /** (Stage 5: ocean) */
   readonly monuments: OceanMonuments;
+  /** (Stage 5: ocean) shipwrecks, ocean ruins and buried treasure */
+  readonly oceanStructures: OceanStructures;
   /** corner columns for terrain height queries, with the noise at their cell corners as it's needed */
   private readonly heightCols = new Map<number, { c: ColumnSample; exactTop: number; corners: (Float32Array | undefined)[] }>();
 
@@ -107,6 +110,16 @@ export class ChunkGenerator {
     // (mansions) woodland mansions, placed after the temples
     this.mansions = new WoodlandMansions(worldSeed64(seed), { firstFreeHeight: (x, z) => this.firstFreeHeight(x, z), quartBiome: (x, z) => this.quartBiome(x, z) });
     this.decorator.temples = { place: (ctx) => (this.temples.place(ctx), this.mansions.place(ctx)) };
+    // (Stage 5: ocean) shipwrecks and ocean ruins after the temples and mansions (vanilla SURFACE_STRUCTURES), buried
+    // treasure after the mineshafts (UNDERGROUND_STRUCTURES' structures, so before the fossils below)
+    this.oceanStructures = new OceanStructures(worldSeed64(seed), (x, z) => this.quartBiome(x, z), {
+      firstFreeHeight: (x, z) => this.firstFreeHeight(x, z),
+      oceanFloorHeight: (x, z) => this.firstFreeHeight(x, z, true),
+    });
+    const landmarks = this.decorator.temples;
+    this.decorator.temples = { place: (ctx) => (landmarks?.place(ctx), this.oceanStructures.place(ctx)) };
+    const shafts = this.decorator.mineshafts;
+    this.decorator.mineshafts = { place: (ctx, r) => (shafts?.place(ctx, r), this.oceanStructures.placeUnderground(ctx)) };
     // (ruined portals) the step's last structures, placed after the villages; (desert wells) then the step's features
     this.ruinedPortals = new RuinedPortals(worldSeed64(seed), overworldPortalTerrain(this));
     this.desertWells = new DesertWells(this.seedHash, this);

@@ -72,6 +72,8 @@ export type Criterion =
   | { t: 'container_loot'; table: string }
   /** vanilla recipe_crafted: that recipe's result taken, each ingredient (an item, or a #tag) a different one of the grid's */
   | { t: 'recipe_crafted'; recipe: string; ingredients: string[] }
+  /** (Stage 5: ocean) vanilla filled_bucket: filled a bucket that comes out as one of these (a fish scooped up) */
+  | { t: 'filled_bucket'; items: string[] }
   | { t: 'impossible' };
 
 export interface AdvancementDef {
@@ -287,7 +289,7 @@ const A: AdvancementDef[] = [
   { id: 'husbandry/whole_pack', parent: 'husbandry/tame_an_animal', title: 'The Whole Pack', description: 'Tame one of each Wolf variant', icon: 'bone', frame: 'challenge', criteria: each(WOLF_VARIANT_IDS, (v) => ({ t: 'tame', type: 'wolf', variant: v })) },
   { id: 'husbandry/complete_catalogue', parent: 'husbandry/tame_an_animal', title: 'A Complete Catalogue', description: 'Tame all Cat variants!', icon: 'cod', frame: 'challenge', criteria: each(CAT_VARIANT_IDS, (v) => ({ t: 'tame', type: 'cat', variant: v })) },
   { id: 'husbandry/remove_wolf_armor', parent: 'husbandry/tame_an_animal', title: 'Shear Brilliance', description: 'Remove Wolf Armor from a Wolf using Shears', icon: 'shears', frame: 'task', criteria: one(never) },
-  { id: 'husbandry/tactical_fishing', parent: 'husbandry/fishy_business', title: 'Tactical Fishing', description: 'Catch a Fish... without a Fishing Rod!', icon: 'pufferfish_bucket', frame: 'task', criteria: one(never) },
+  { id: 'husbandry/tactical_fishing', parent: 'husbandry/fishy_business', title: 'Tactical Fishing', description: 'Catch a Fish... without a Fishing Rod!', icon: 'pufferfish_bucket', frame: 'task', criteria: one({ t: 'filled_bucket', items: ['cod_bucket', 'tropical_fish_bucket', 'pufferfish_bucket', 'salmon_bucket'] }) },
   { id: 'husbandry/leash_all_frog_variants', parent: 'husbandry/tadpole_in_a_bucket', title: 'When the Squad Hops into Town', description: 'Get each Frog variant on a Lead', icon: 'lead', frame: 'task', criteria: one(never) },
   { id: 'husbandry/feed_snifflet', parent: 'husbandry/obtain_sniffer_egg', title: 'Little Sniffs', description: 'Feed a Snifflet', icon: 'torchflower_seeds', frame: 'task', criteria: one(never) },
   { id: 'husbandry/balanced_diet', parent: 'husbandry/plant_seed', title: 'A Balanced Diet', description: "Eat everything that is edible, even if it's not good for you", icon: 'apple', frame: 'challenge', criteria: each(FOODS, (f) => ({ t: 'consume', item: f })) },
@@ -499,6 +501,8 @@ export interface TriggerPayload {
   lootTable?: string;
   /** a recipe whose result the player took, and the items in its grid (recipe_crafted) */
   crafted?: { recipe: string; ingredients: string[] };
+  /** (Stage 5: ocean) the bucket the player just filled (filled_bucket) */
+  filledBucket?: string;
 }
 
 export class PlayerAdvancements {
@@ -680,6 +684,9 @@ function matches(c: Criterion, p: TriggerPayload): boolean {
     case 'killed_raid_captain':
     case 'raid_won':
       return true;
+    // (Stage 5: ocean)
+    case 'filled_bucket':
+      return !!p.filledBucket && c.items.includes(p.filledBucket);
     default:
       return false;
   }

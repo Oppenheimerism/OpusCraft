@@ -1506,21 +1506,32 @@ export class OceanMonuments {
     }
   }
 
+  /**
+   * (Stage 5: ocean) the monuments whose box may hold (x, z), for their spawn overrides (vanilla getAllStructuresAt):
+   * the start's box is the building's, and the building is its one piece (its rooms are inside it)
+   */
+  startsAt(x: number, z: number): { bounds: BoundingBox; pieces: { box: BoundingBox }[] }[] {
+    return this.near(x >> 4, z >> 4).map((b) => ({ bounds: b.box, pieces: [b] }));
+  }
+
   /** vanilla StructureManager.getStructureAt (the structure's box: the building's) */
   structureAt(x: number, y: number, z: number): BoundingBox | null {
     for (const b of this.near(x >> 4, z >> 4)) if (b.box.isInside(x, y, z)) return b.box;
     return null;
   }
 
-  /** vanilla ChunkGenerator.getNearestGeneratedStructure for /locate (the first in the nearest ring): the start chunk's corner */
-  nearest(x: number, z: number, radius = 100): [number, number] | null {
+  /**
+   * vanilla ChunkGenerator.getNearestGeneratedStructure for /locate (the first in the nearest ring): the start chunk's
+   * corner; `skip`: starts to pass over (an explorer map's, already referenced)
+   */
+  nearest(x: number, z: number, radius = 100, skip?: (s: MonumentStub) => boolean): [number, number] | null {
     const rx0 = floorDiv(x >> 4, SPACING), rz0 = floorDiv(z >> 4, SPACING);
     for (let ring = 0; ring <= radius; ring++)
       for (let i = -ring; i <= ring; i++)
         for (let j = -ring; j <= ring; j++) {
           if (i !== -ring && i !== ring && j !== -ring && j !== ring) continue;
           const s = this.stub(rx0 + i, rz0 + j);
-          if (s) return [s.cx * 16, s.cz * 16];
+          if (s && !skip?.(s)) return [s.cx * 16, s.cz * 16];
         }
     return null;
   }

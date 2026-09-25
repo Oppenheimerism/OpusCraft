@@ -577,6 +577,85 @@ export class ParticleEngine {
         this.addSprite(p);
         break;
       }
+      // (Stage 5: ocean) vanilla SquidInkParticle.GlowInkProvider: the same, in its (byte-wrapped) mint green
+      case 'glow_squid_ink': {
+        const p = this.base(kind, x, y, z);
+        p.friction = 0.92;
+        p.size = 0.5;
+        p.r = 52 / 255;
+        p.g = 225 / 255;
+        p.b = 154 / 255;
+        p.lifetime = Math.floor((0.5 * 12) / (Math.random() * 0.8 + 0.2));
+        p.physics = false;
+        p.dx = xd;
+        p.dy = yd;
+        p.dz = zd;
+        p.sinkInAir = true;
+        this.addSprite(p);
+        break;
+      }
+      // (Stage 5: ocean) vanilla GlowParticle.GlowSquidProvider: a spark drifting off a glow squid, pale green or
+      // deep teal, brightening as it goes
+      case 'glow': {
+        const p = this.base(kind, x, y, z);
+        this.withSpeed(p, 0.5 - Math.random(), yd, 0.5 - Math.random());
+        p.dy *= 0.2;
+        if (xd === 0 && zd === 0) {
+          p.dx *= 0.1;
+          p.dz *= 0.1;
+        }
+        [p.r, p.g, p.b] = Math.random() < 0.5 ? [0.6, 1, 0.8] : [0.08, 0.4, 0.4];
+        p.lifetime = Math.floor(8 / (Math.random() * 0.8 + 0.2));
+        p.friction = 0.96;
+        p.speedUpWhenBlocked = true;
+        p.size *= 0.75;
+        p.physics = false;
+        p.lightMode = 'flame';
+        p.frames = ['glow'];
+        p.frame = 0;
+        this.addSprite(p);
+        break;
+      }
+      // (Stage 5: ocean) vanilla SuspendedTownParticle.DolphinSpeedProvider: a blue speck left in a dolphin's wake
+      case 'dolphin': {
+        const p = this.base(kind, x, y, z);
+        this.withSpeed(p, xd, yd, zd);
+        p.size *= Math.random() * 0.6 + 0.5;
+        p.dx *= 0.02;
+        p.dy *= 0.02;
+        p.dz *= 0.02;
+        p.lifetime = Math.floor(Math.floor(20 / (Math.random() * 0.8 + 0.2)) / 2);
+        p.physics = false;
+        p.friction = 0.99;
+        p.r = 0.3;
+        p.g = 0.5;
+        p.b = 1;
+        p.frames = ['generic_5'];
+        p.frame = 0;
+        this.addSprite(p);
+        break;
+      }
+      // (Stage 5: ocean) vanilla EnchantmentTableParticle.NautilusProvider: a conduit's spark, starting out at
+      // (x, y, z) + speed and homing in on (x, y, z) as an enchanting table's rune does, in the nautilus sprite
+      case 'nautilus': {
+        const p = this.base(kind, x + xd, y + yd, z + zd);
+        p.enchant = { x, y, z };
+        p.dx = xd;
+        p.dy = yd;
+        p.dz = zd;
+        p.size = 0.1 * (Math.random() * 0.5 + 0.2);
+        const f = Math.random() * 0.6 + 0.4;
+        p.r = 0.9 * f;
+        p.g = 0.9 * f;
+        p.b = f;
+        p.physics = false;
+        p.lifetime = Math.floor(Math.random() * 10) + 30;
+        p.frames = ['nautilus'];
+        p.frame = 0;
+        p.lightMode = 'enchant';
+        this.addSprite(p);
+        break;
+      }
       case 'item_slime':
       case 'item_cobweb':
       case 'item_splash_potion':

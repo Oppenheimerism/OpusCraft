@@ -25,7 +25,13 @@ import { outpostSpawnsAt } from './outposts';
 import { checkPatrollingMonsterSpawnRules } from '../entity/raider';
 // (Stage 5: ocean)
 import { Guardian, ElderGuardian, checkGuardianSpawnRules } from '../entity/guardian';
-import { monumentSpawnsAt } from './monuments';
+// (the monument's spawn overrides register themselves with structureSpawns)
+import './monuments';
+import { Cod, Salmon, Pufferfish, TropicalFish } from '../entity/fish';
+import { Dolphin } from '../entity/dolphin';
+import { GlowSquid } from '../entity/glowSquid';
+import { waterSpawnsFor } from './oceanSpawns';
+import { despawnDistance } from '../entity/mob';
 import { Husk, Stray } from '../entity/biomeMonsters';
 import { Drowned, isInWaterPositionOk, drownedNaturalSpawnRules } from '../entity/drowned';
 import { Silverfish } from '../entity/silverfish';
@@ -253,7 +259,7 @@ export function summonableTypes(): string[] {
 }
 
 /** vanilla MobCategory caps (per 289 spawnable chunks) */
-const CAPS: Record<MobCategory, number> = { monster: 70, creature: 10, ambient: 15, water_creature: 5, misc: -1 };
+const CAPS: Record<MobCategory, number> = { monster: 70, creature: 10, ambient: 15, water_creature: 5, misc: -1, axolotls: 5, underground_water_creature: 5, water_ambient: 20 };
 const SURFACE_SLIMES = new Set(['swamp', 'mangrove_swamp']);
 const MOON_BRIGHTNESS = [1, 0.75, 0.5, 0.25, 0, 0.25, 0.5, 0.75];
 
@@ -272,6 +278,8 @@ interface MobSettings {
   creatureProbability: number;
   /** vanilla MobSpawnSettings.mobSpawnCosts: type → [charge, energy budget] */
   costs?: Record<string, [number, number]>;
+  /** (Stage 5: ocean) the fish (water_ambient), the glow squid (underground_water_creature) and the axolotls */
+  more?: Partial<Record<MobCategory, SpawnerData[]>>;
 }
 
 const farmAnimals = (): SpawnerData[] => [
@@ -292,8 +300,6 @@ const monsters = (zombie = 95, skeleton = 100, zombieVillager = 5): SpawnerData[
   { type: 'enderman', weight: 10, min: 1, max: 4 },
   { type: 'witch', weight: 5, min: 1, max: 1 },
 ];
-
-const SQUID = (w: number, max = 4): SpawnerData[] => [{ type: 'squid', weight: w, min: 1, max }];
 
 const S_ = (type: string, weight: number, min: number, max: number): SpawnerData => ({ type, weight, min, max });
 const STRIDERS = [S_('strider', 60, 1, 2)];
@@ -341,9 +347,10 @@ function settingsFor(name: string): MobSettings {
   if (nether) return { ...nether, creatureProbability: 0.1, water: [], ambient: [] };
   if (END_SPAWN_BIOMES.has(name)) return { monster: [S_('enderman', 10, 4, 4)], creature: [], water: [], ambient: [], creatureProbability: 0.1 };
   const base = settingsForLand(name);
-  let water: SpawnerData[] = [];
-  if (name === 'river' || name === 'frozen_river') water = SQUID(2);
-  else if (name.endsWith('ocean')) water = SQUID(name.includes('cold') ? 3 : name.includes('lukewarm') || name.includes('warm') ? 10 : 1, name.includes('frozen') ? 4 : 4);
+  // (Stage 5: ocean) the water lists: squid and dolphins, the fish, the glow squid underground (game/oceanSpawns.ts)
+  const ws = waterSpawnsFor(name);
+  const water: SpawnerData[] = ws.water;
+  const more = { water_ambient: ws.water_ambient, underground_water_creature: ws.underground_water_creature, axolotls: ws.axolotls };
   // vanilla BiomeDefaultFeatures.caveSpawns (through commonSpawns, the mooshroom and cave biomes): bats
   // everywhere in the overworld but the deep dark
   const ambient = name === 'deep_dark' || name === 'the_void' ? [] : [{ type: 'bat', weight: 10, min: 8, max: 8 }];
@@ -355,7 +362,7 @@ function settingsFor(name: string): MobSettings {
   const monster = [...base.monster, ...(drowned ? [S_('drowned', drowned, 1, 1)] : []), ...(ocelots ? [ocelots] : [])];
   const wolves = WOLF_SPAWNS[name];
   const creature = wolves ? [...base.creature, wolves] : base.creature;
-  return { ...base, creature, monster, water, ambient };
+  return { ...base, creature, monster, water, ambient, more };
 }
 
 function settingsForLand(name: string): Omit<MobSettings, 'water' | 'ambient'> {
@@ -453,9 +460,10 @@ export class NaturalSpawner {
   constructor(readonly level: Level, readonly worldSeed: number) {}
 
   private counts(): Record<MobCategory, number> {
-    const c: Record<MobCategory, number> = { monster: 0, creature: 0, ambient: 0, water_creature: 0, misc: 0 };
+    const c: Record<MobCategory, number> = { monster: 0, creature: 0, ambient: 0, water_creature: 0, misc: 0, axolotls: 0, underground_water_creature: 0, water_ambient: 0 };
     for (const e of this.level.entities) {
-      if (!(e instanceof Mob) || e.removed || e.persistenceRequired) continue;
+      // (Stage 5: ocean) vanilla NaturalSpawner.createState: nor what never despawns anyway (a fish from a bucket)
+      if (!(e instanceof Mob) || e.removed || e.persistenceRequired || e.requiresCustomPersistence()) continue;
       if (!this.level.isEntityTicking(e.x, e.z)) continue;
       c[e.category]++;
     }
@@ -484,7 +492,8 @@ export class NaturalSpawner {
     if (!chunks.length) return;
     const counts = this.counts();
     const cats: MobCategory[] = [];
-    for (const cat of ['monster', 'creature', 'ambient', 'water_creature'] as MobCategory[]) {
+    // (Stage 5: ocean) vanilla NaturalSpawner.SPAWNING_CATEGORIES, in its order
+    for (const cat of ['monster', 'creature', 'ambient', 'axolotls', 'underground_water_creature', 'water_creature', 'water_ambient'] as MobCategory[]) {
       if (cat === 'creature' && !spawnFriendlies) continue;
       if (cat === 'monster' && !spawnEnemies) continue;
       const cap = Math.floor((CAPS[cat] * chunks.length) / 289);
@@ -534,7 +543,8 @@ export class NaturalSpawner {
           if (!data) break;
           tries = data.min + r.nextInt(1 + data.max - data.min);
         }
-        if (d2 > 128 * 128) continue;
+        // (Stage 5: ocean) vanilla isValidSpawnPostitionForType: not past its kind's despawn distance (fish: 64)
+        if (d2 > despawnDistance(cat) ** 2) continue;
         // vanilla canSpawnMobAt: the pack's kind must be on the list where each one lands
         if (!this.mobsAt(cat, x, y, z).includes(data)) continue;
         const placeOk = this.placementOk(data.type, x, y, z);
@@ -570,13 +580,12 @@ export class NaturalSpawner {
     // (Stage 4: outposts) a structure's spawn_overrides, bounding_box full (game/outposts.ts)
     const so = outpostSpawnsAt(this.level, cat, x, y, z);
     if (so) return so;
-    // (Stage 5: ocean) a monument's guardians (game/monuments.ts)
-    const mo = monumentSpawnsAt(this.level, cat, x, y, z);
-    if (mo) return mo;
     // a structure's spawn_overrides (bounding_box piece | full) where it stands (game/structureSpawns)
     const o = structureMobsAt(this.level, cat, x, y, z);
     if (o) return o;
     const bs = biomeSettings(w.getBiome3(x, y, z));
+    // (Stage 5: ocean)
+    if (cat === 'water_ambient' || cat === 'underground_water_creature' || cat === 'axolotls') return bs.more?.[cat] ?? [];
     return cat === 'monster' ? bs.monster : cat === 'water_creature' ? bs.water : cat === 'ambient' ? bs.ambient : bs.creature;
   }
 
@@ -590,8 +599,9 @@ export class NaturalSpawner {
   private placementOk(type: string, x: number, y: number, z: number): boolean {
     if (type === 'squid') return this.isInWaterPositionOk(x, y, z);
     if (type === 'drowned') return isInWaterPositionOk(this.level, x, y, z);
-    // (Stage 5: ocean) vanilla SpawnPlacements: the guardian IN_WATER
+    // (Stage 5: ocean) vanilla SpawnPlacements: the guardian IN_WATER, and the fish, dolphins and glow squid
     if (type === 'guardian') return isInWaterPositionOk(this.level, x, y, z);
+    if (IN_WATER.has(type)) return this.isInWaterPositionOk(x, y, z);
     if (type === 'strider') return fluidType(this.level.world.getState(x, y, z)) === FLUID_LAVA;
     return this.isSpawnPositionOk(x, y, z, FIRE_IMMUNE.has(type));
   }
@@ -679,6 +689,16 @@ export class NaturalSpawner {
       // (Stage 5: ocean)
       case 'guardian':
         return checkGuardianSpawnRules(lvl, x, y, z, (n) => this.rand.nextInt(n));
+      // vanilla SpawnPlacements: the fish and dolphins near the top of the sea (checkSurfaceWaterAnimalSpawnRules)
+      case 'cod':
+      case 'salmon':
+      case 'pufferfish':
+      case 'dolphin':
+        return WaterAnimal.checkSurfaceSpawn(lvl, x, y, z);
+      case 'tropical_fish':
+        return TropicalFish.checkTropicalFishSpawn(lvl, x, y, z, BIOMES[lvl.world.getBiome3(x, y, z)]?.name ?? '');
+      case 'glow_squid':
+        return GlowSquid.checkSpawn(lvl, x, y, z);
       case 'hoglin':
         // vanilla Hoglin.checkHoglinSpawnRules: any light, just not on a nether wart block
         return BLOCKS[STATE_BLOCK[lvl.world.getState(x, y - 1, z)]].name !== 'nether_wart_block';
@@ -779,3 +799,16 @@ export class NaturalSpawner {
 
 
 export { Animal };
+
+// (Stage 5: ocean) the fish, the dolphin and the glow squid
+Object.assign(MOB_TYPES, {
+  cod: (l: Level) => new Cod(l),
+  salmon: (l: Level) => new Salmon(l),
+  pufferfish: (l: Level) => new Pufferfish(l),
+  tropical_fish: (l: Level) => new TropicalFish(l),
+  dolphin: (l: Level) => new Dolphin(l),
+  glow_squid: (l: Level) => new GlowSquid(l),
+});
+Object.assign(ENTITY_NAMES, { cod: 'Cod', salmon: 'Salmon', pufferfish: 'Pufferfish', tropical_fish: 'Tropical Fish', dolphin: 'Dolphin', glow_squid: 'Glow Squid' });
+/** (Stage 5: ocean) vanilla SpawnPlacements IN_WATER: these spawn in water (the squid's and the guardian's are above) */
+const IN_WATER = new Set(['cod', 'salmon', 'pufferfish', 'tropical_fish', 'dolphin', 'glow_squid']);

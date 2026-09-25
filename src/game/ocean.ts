@@ -1,7 +1,12 @@
-// The ocean (Stage 5), gathered here so the level loads it with one import: sponges and sea lanterns (./sponge), and
-// the elder guardian's curse as the player meets it.
+// The ocean (Stage 5), gathered here so the level loads it with one import: sponges and sea lanterns (./sponge), the
+// buckets of fish (./fishBuckets), the wrecks', ruins' and buried treasure's loot (./oceanLoot), treasure and explorer
+// maps (./treasureMaps), the conduit (./conduit), and the elder guardian's curse as the player meets it.
 
 import './sponge';
+import './fishBuckets';
+import './oceanLoot';
+import './treasureMaps';
+import './conduit';
 import type { Level } from './level';
 import { guardianHooks } from '../entity/guardian';
 

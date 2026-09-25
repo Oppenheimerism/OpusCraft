@@ -389,6 +389,37 @@ for (const id of ['prismarine_shard', 'prismarine_crystals']) reg({ id, texture:
 ITEMS.get('wet_sponge')!.creativeTab = 'functional';
 // (Stage 5: ocean) the guardians' eggs
 for (const m of ['elder_guardian', 'guardian']) reg({ id: `${m}_spawn_egg`, texture: `${m}_spawn_egg`, creativeTab: 'spawn_eggs' });
+// (Stage 5: ocean) the tropical fish (vanilla Foods.TROPICAL_FISH), the buckets of fish (vanilla MobBucketItem: one to a
+// stack; game/fishBuckets.ts pours them out), the glow squid's ink sac and the new eggs, each put where vanilla's
+// creative tabs list it
+{
+  const after = (id: string, prev: string): void => {
+    const it = ITEM_LIST.splice(ITEM_LIST.findIndex((x) => x.id === id), 1)[0];
+    ITEM_LIST.splice(ITEM_LIST.findIndex((x) => x.id === prev) + 1, 0, it);
+  };
+  reg({ id: 'tropical_fish', texture: 'tropical_fish', creativeTab: 'food', food: { nutrition: 1, saturation: 0.1 } });
+  after('tropical_fish', 'cooked_salmon');
+  let prev = 'water_bucket';
+  for (const [f, n] of [['cod', 'Cod'], ['salmon', 'Salmon'], ['tropical_fish', 'Tropical Fish'], ['pufferfish', 'Pufferfish']]) {
+    reg({ id: `${f}_bucket`, name: `Bucket of ${n}`, texture: `${f}_bucket`, maxStack: 1, creativeTab: 'tools' });
+    after(`${f}_bucket`, prev);
+    prev = `${f}_bucket`;
+  }
+  reg({ id: 'glow_ink_sac', texture: 'glow_ink_sac' });
+  after('glow_ink_sac', 'ink_sac');
+  for (const m of ['cod', 'dolphin', 'glow_squid', 'pufferfish', 'salmon', 'tropical_fish']) reg({ id: `${m}_spawn_egg`, texture: `${m}_spawn_egg`, creativeTab: 'spawn_eggs' });
+  // (Stage 5: ocean, M5) vanilla Items.HEART_OF_THE_SEA (uncommon, buried treasure's), listed after the nautilus shell;
+  // the ocean ruins' pottery sherds, and then all the sherds in name order where the first of them was (as vanilla's
+  // creative tab lists them); the conduit (rare)
+  reg({ id: 'heart_of_the_sea', texture: 'heart_of_the_sea', rarity: 'uncommon' });
+  after('heart_of_the_sea', 'nautilus_shell');
+  for (const s of ['angler', 'blade', 'explorer', 'mourner', 'plenty', 'shelter', 'snort']) reg({ id: `${s}_pottery_sherd`, texture: `${s}_pottery_sherd` });
+  const sherds = ITEM_LIST.filter((x) => x.id.endsWith('_pottery_sherd')).sort((a, b) => (a.id < b.id ? -1 : 1));
+  const first = ITEM_LIST.findIndex((x) => x.id.endsWith('_pottery_sherd'));
+  for (const it of sherds) ITEM_LIST.splice(ITEM_LIST.indexOf(it), 1);
+  ITEM_LIST.splice(first, 0, ...sherds);
+  if (ITEMS.has('conduit')) ITEMS.get('conduit')!.rarity = 'rare';
+}
 // sugar cane item places the block
 {
   const sc = ITEMS.get('sugar_cane');
@@ -520,6 +551,12 @@ export interface ItemTag {
   potDecorations?: string[];
   /** minecraft:suspicious_stew_effects: what a suspicious stew gives when eaten (duration in ticks) */
   stewEffects?: { id: string; duration: number }[];
+  /** (Stage 5: ocean) minecraft:bucket_entity_data: what a bucket of fish keeps of it (Health, BucketVariantTag) */
+  bucketEntity?: Record<string, number | boolean>;
+  /** (Stage 5: ocean) minecraft:map_decorations: the markers an explorer map carries, by id (its target, "+") */
+  mapDecorations?: Record<string, { type: string; x: number; z: number; rotation: number }>;
+  /** (Stage 5: ocean) minecraft:map_color: the tint of the markings on an explorer map's sprite */
+  mapColor?: number;
 }
 
 /** one filled slot of minecraft:container (vanilla ItemContainerContents.Slot) */
@@ -598,6 +635,10 @@ export function cloneTag(t: ItemTag | null): ItemTag | null {
   if (t.container?.length) o.container = t.container.map((c) => ({ ...c, ...(c.tag ? { tag: cloneTag(c.tag)! } : {}) }));
   if (t.potDecorations) o.potDecorations = [...t.potDecorations];
   if (t.stewEffects) o.stewEffects = t.stewEffects.map((e) => ({ ...e }));
+  // (Stage 5: ocean)
+  if (t.bucketEntity) o.bucketEntity = { ...t.bucketEntity };
+  if (t.mapDecorations) o.mapDecorations = Object.fromEntries(Object.entries(t.mapDecorations).map(([k, v]) => [k, { ...v }]));
+  if (t.mapColor !== undefined) o.mapColor = t.mapColor;
   return o;
 }
 
@@ -613,7 +654,9 @@ export function sameTag(a: ItemTag | null | undefined, b: ItemTag | null | undef
     a?.ominousAmplifier === b?.ominousAmplifier &&
     a?.mapId === b?.mapId && a?.mapPostProcessing === b?.mapPostProcessing && sameData(a?.trim, b?.trim) && sameData(a?.pages, b?.pages) && sameData(a?.book, b?.book) &&
     sameData(a?.potDecorations, b?.potDecorations) && sameData(a?.stewEffects, b?.stewEffects) &&
-    sameData(a?.container?.length ? a.container : null, b?.container?.length ? b.container : null)
+    sameData(a?.container?.length ? a.container : null, b?.container?.length ? b.container : null) &&
+    // (Stage 5: ocean)
+    sameData(a?.bucketEntity, b?.bucketEntity) && sameData(a?.mapDecorations, b?.mapDecorations) && a?.mapColor === b?.mapColor
   );
 }
 
