@@ -21,15 +21,15 @@ import type { Player } from './player';
 import { Behavior, Brain, GateBehavior, oneShot, runOne, type BehaviorControl } from './ai/brain';
 import {
   animalMakeLove, at, babyFollowAdult, countDownCooldown, followTemptation, isEntityTargetable, isVisibleBy, lookAtPlayerSometimes, lookAtTargetSink,
-  moveToTargetSink, randomStroll, senseNearestAdult, senseNearestLiving, senseTempting, setWalkTargetFromLookTarget, trackerBlock, withinManhattan,
-  type Pos, type Tracker, type WalkTarget,
+  moveToTargetSink, randomStroll, senseNearestAdult, senseNearestLiving, senseTempting, setWalkTargetFromLookTarget, swimStroll, trackerBlock,
+  withinManhattan, type Pos, type Tracker, type WalkTarget,
 } from './ai/brainBehaviors';
 import type { LookControl } from './ai/controls';
 import { AmphibiousPathNavigation, type PathNavigation } from './ai/navigation';
 import { PathType, type Path } from './ai/pathfinder';
 import { defaultRandomPosTowards, landRandomPos } from './ai/goals';
 import { SmoothSwimmingLookControl, SmoothSwimmingMoveControl } from './dolphin';
-import { BUCKET_FISH, bucketMobPickup, randomSwimmablePos, type BucketEntityData, type Bucketable } from './fish';
+import { BUCKET_FISH, bucketMobPickup, type BucketEntityData, type Bucketable } from './fish';
 import { MOB_EFFECTS, MobEffectInstance } from './effects';
 import { ItemStack } from '../item/item';
 import { BLOCKS, STATE_BLOCK, FLAGS, F_AIR, F_WATER } from '../world/block';
@@ -119,41 +119,6 @@ function tryFindWater(range: number, speed: number): BehaviorControl<Axolotl> {
       a.walkTarget = { t: { pos: found }, speed, closeEnough: 0 };
     }
     next = now + 40;
-    return true;
-  });
-}
-
-/** vanilla RandomStroll's SWIM_XY_DISTANCE_TIERS */
-const SWIM_TIERS: [number, number][] = [[1, 1], [3, 3], [5, 5], [6, 5], [7, 7], [10, 7]];
-
-/**
- * vanilla RandomStroll.getTargetSwimPos: a random swimmable spot close by, then on along the same line further and
- * further out, the last one still in water
- */
-function swimTargetPos(a: Axolotl): [number, number, number] | null {
-  let v: [number, number, number] | null = null;
-  let v2: [number, number, number] | null = null;
-  for (const [h, vy] of SWIM_TIERS) {
-    if (!v) {
-      const p = randomSwimmablePos(a, h, vy);
-      v2 = p ? [p[0] + 0.5, p[1], p[2] + 0.5] : null;
-    } else {
-      const dx: number = v[0] - a.x, dy: number = v[1] - a.y, dz: number = v[2] - a.z;
-      const l: number = Math.sqrt(dx * dx + dy * dy + dz * dz);
-      v2 = l < 1e-4 ? [a.x, a.y, a.z] : [a.x + (dx / l) * h, a.y + (dy / l) * vy, a.z + (dz / l) * h];
-    }
-    if (!v2 || !waterFluidAt(a, Math.floor(v2[0]), Math.floor(v2[1]), Math.floor(v2[2]))) return v;
-    v = v2;
-  }
-  return v2;
-}
-
-/** vanilla RandomStroll.swim(0.5): in the water, off somewhere else in it */
-function swimStroll(speed: number): BehaviorControl<Axolotl> {
-  return oneShot<Axolotl>((a) => {
-    if (a.walkTarget || !a.inWater) return false;
-    const p = swimTargetPos(a);
-    a.walkTarget = p ? { t: { pos: [Math.floor(p[0]), Math.floor(p[1]), Math.floor(p[2])] }, speed, closeEnough: 0 } : null;
     return true;
   });
 }
@@ -249,7 +214,7 @@ function makeBrain(): Brain<Axolotl, Activity> {
       4,
       new GateBehavior<Axolotl>(
         [
-          [swimStroll(0.5), 2],
+          [swimStroll<Axolotl>(0.5), 2],
           [randomStroll(0.15, false), 2],
           [setWalkTargetFromLookTarget(canWalkToLookTarget, idleSpeed, 3), 3],
           [oneShot<Axolotl>((a) => a.inWater), 5],

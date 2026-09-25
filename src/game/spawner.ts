@@ -34,6 +34,9 @@ import { Turtle } from '../entity/turtle';
 import { Axolotl } from '../entity/axolotl';
 // (M8: goats)
 import { Goat } from '../entity/goat';
+// (M9: frogs)
+import { Frog } from '../entity/frog';
+import { Tadpole } from '../entity/tadpole';
 import { waterSpawnsFor } from './oceanSpawns';
 import { despawnDistance } from '../entity/mob';
 import { Husk, Stray } from '../entity/biomeMonsters';
@@ -421,8 +424,12 @@ function settingsForLand(name: string): Omit<MobSettings, 'water' | 'ambient'> {
     case 'birch_forest':
     case 'old_growth_birch_forest':
     case 'dark_forest':
-    case 'swamp':
       return { creature: farmAnimals(), monster: monsters(), creatureProbability: 0.1 };
+    // (M9: frogs) vanilla OverworldBiomes.swamp and mangroveSwamp: frogs in twos to fives, and a slime more among the
+    // monsters (the mangroves have no farm animals)
+    case 'swamp':
+    case 'mangrove_swamp':
+      return { creature: [...(name === 'swamp' ? farmAnimals() : []), S_('frog', 10, 2, 5)], monster: [...monsters(), S_('slime', 1, 1, 1)], creatureProbability: 0.1 };
     // vanilla OverworldBiomes.forest with isFlowerForest: rabbits
     case 'flower_forest':
       return { creature: [...farmAnimals(), S_('rabbit', 4, 2, 3)], monster: monsters(), creatureProbability: 0.1 };
@@ -780,6 +787,9 @@ export class NaturalSpawner {
       // (M8: goats) vanilla Goat.checkGoatSpawnRules: on #goats_spawnable_on, in the light
       case 'goat':
         return Goat.checkGoatSpawnRules(lvl, x, y, z);
+      // (M9: frogs) vanilla Frog.checkFrogSpawnRules: on #frogs_spawnable_on, in the light
+      case 'frog':
+        return Frog.checkFrogSpawnRules(lvl, x, y, z);
       case 'hoglin':
         // vanilla Hoglin.checkHoglinSpawnRules: any light, just not on a nether wart block
         return BLOCKS[STATE_BLOCK[lvl.world.getState(x, y - 1, z)]].name !== 'nether_wart_block';
@@ -900,5 +910,8 @@ Object.assign(ENTITY_NAMES, { axolotl: 'Axolotl' });
 // (M8: goats)
 Object.assign(MOB_TYPES, { goat: (l: Level) => new Goat(l) });
 Object.assign(ENTITY_NAMES, { goat: 'Goat' });
+// (M9: frogs)
+Object.assign(MOB_TYPES, { frog: (l: Level) => new Frog(l), tadpole: (l: Level) => new Tadpole(l) });
+Object.assign(ENTITY_NAMES, { frog: 'Frog', tadpole: 'Tadpole' });
 /** (Stage 5: ocean) vanilla SpawnPlacements IN_WATER: these spawn in water (the squid's and the guardian's are above) */
 const IN_WATER = new Set(['cod', 'salmon', 'pufferfish', 'tropical_fish', 'dolphin', 'glow_squid', 'axolotl']);

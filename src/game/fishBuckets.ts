@@ -49,8 +49,8 @@ function useFishBucket(level: Level, p: Player, stack: ItemStack): 'success' | '
   return 'success';
 }
 
-// (M7: and the bucket of axolotl, whose axolotl entity/axolotl.ts adds to BUCKET_FISH)
-for (const id of [...Object.keys(BUCKET_FISH), 'axolotl_bucket']) registerItemBehavior(id, { use: useFishBucket });
+// (M7: and the bucket of axolotl, whose axolotl entity/axolotl.ts adds to BUCKET_FISH; M9: frogs, and the tadpole's)
+for (const id of new Set([...Object.keys(BUCKET_FISH), 'axolotl_bucket', 'tadpole_bucket'])) registerItemBehavior(id, { use: useFishBucket });
 
 /**
  * vanilla MobBucketItem.appendHoverText: a bucket of tropical fish names the kind it holds, grey and slanted: one of

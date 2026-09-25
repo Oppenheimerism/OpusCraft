@@ -1708,8 +1708,10 @@ export class Slime extends Monster {
   override deathSound(): string {
     return this.size === 1 ? 'entity.slime.death_small' : 'entity.slime.death';
   }
+  /** vanilla entities/slime: a small one's 0-2 slime balls, or just one if a frog ate it (M9: frogs; `killer` its killer) */
   override lootTable(): LootEntry[] {
-    return this.size === 1 ? [{ item: 'slime_ball', min: 0, max: 2 }] : [];
+    if (this.size !== 1) return [];
+    return this.killer?.type === 'frog' ? [{ item: 'slime_ball', min: 1, max: 1, noLooting: true }] : [{ item: 'slime_ball', min: 0, max: 2 }];
   }
   /** vanilla Slime.remove: split into 2-4 smaller slimes */
   override remove(): void {
@@ -1797,6 +1799,12 @@ export class MagmaCube extends Slime {
   }
   /** vanilla entities/magma_cube: the bigger ones drop a magma cream one time in four (looting adds to it) */
   override lootTable(): LootEntry[] {
+    // (M9: frogs) eaten by a frog, a froglight of the frog's colour instead: pearlescent of a warm one, verdant of a
+    // cold one, ochre of a temperate one
+    if (this.killer?.type === 'frog') {
+      const v = (this.killer as { variant?: unknown }).variant;
+      return [{ item: v === 'warm' ? 'pearlescent_froglight' : v === 'cold' ? 'verdant_froglight' : 'ochre_froglight', min: 1, max: 1, noLooting: true }];
+    }
     return this.size > 1 ? [{ item: 'magma_cream', min: -2, max: 1 }] : [];
   }
   /** vanilla checkMagmaCubeSpawnRules: anywhere, in any light, but not in peaceful */

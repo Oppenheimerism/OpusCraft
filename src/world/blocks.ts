@@ -21,6 +21,8 @@ import { registerOuterEndBlocks } from './blocksOuterEnd';
 import { registerOceanBlocks } from './blocksOcean';
 // (fossils)
 import { registerFossilBlocks } from './blocksFossils';
+// (M9: frogs)
+import { registerFrogBlocks } from './blocksFrog';
 
 const px = (v: number) => v / 16;
 const bx = (x0: number, y0: number, z0: number, x1: number, y1: number, z1: number): Box => [px(x0), px(y0), px(z0), px(x1), px(y1), px(z1)];
@@ -637,6 +639,8 @@ registerOuterEndBlocks();
 registerOceanBlocks();
 // (fossils)
 registerFossilBlocks();
+// (M9: frogs) frogspawn and the froglights
+registerFrogBlocks();
 
 finalizeBlocks();
 

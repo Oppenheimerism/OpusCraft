@@ -882,8 +882,11 @@ type Vec3 = [number, number, number];
 
 interface AnimChannel {
   bone: string;
-  /** rotation keys are in degrees (KeyframeAnimations.degreeVec), position keys in pixels with +y up (posVec) */
-  target: 'rotation' | 'position';
+  /**
+   * rotation keys are in degrees (KeyframeAnimations.degreeVec), position keys in pixels with +y up (posVec); (M9:
+   * frogs) scale keys the scale itself (scaleVec)
+   */
+  target: 'rotation' | 'position' | 'scale';
   keys: [number, Vec3][];
 }
 
@@ -893,8 +896,11 @@ export interface AnimationDef {
   channels: AnimChannel[];
 }
 
-/** vanilla KeyframeAnimations.animate: offsets each bone's pose by its channels at `seconds` */
-export function applyAnimation(root: ModelPart, def: AnimationDef, seconds: number): void {
+/**
+ * vanilla KeyframeAnimations.animate: offsets each bone's pose by its channels at `seconds`, (M9: frogs) at `scale`
+ * of their strength (HierarchicalModel.animateWalk's)
+ */
+export function applyAnimation(root: ModelPart, def: AnimationDef, seconds: number, scale = 1): void {
   const t = def.looping ? seconds % def.length : seconds;
   for (const ch of def.channels) {
     const p = root.find(ch.bone);
@@ -906,7 +912,17 @@ export function applyAnimation(root: ModelPart, def: AnimationDef, seconds: numb
     const i = Math.max(0, j - 1), n = Math.min(k.length - 1, i + 1);
     const f = n !== i ? Math.max(0, Math.min(1, (t - k[i][0]) / (k[n][0] - k[i][0]))) : 0;
     const a = k[i][1], b = k[n][1];
-    const x = a[0] + (b[0] - a[0]) * f, y = a[1] + (b[1] - a[1]) * f, z = a[2] + (b[2] - a[2]) * f;
+    let x = a[0] + (b[0] - a[0]) * f, y = a[1] + (b[1] - a[1]) * f, z = a[2] + (b[2] - a[2]) * f;
+    // (M9: frogs) vanilla Targets.SCALE: the scale's offset from one, added on
+    if (ch.target === 'scale') {
+      p.xScale += (x - 1) * scale;
+      p.yScale += (y - 1) * scale;
+      p.zScale += (z - 1) * scale;
+      continue;
+    }
+    x *= scale;
+    y *= scale;
+    z *= scale;
     if (ch.target === 'rotation') {
       p.xRot += (x * PI) / 180;
       p.yRot += (y * PI) / 180;

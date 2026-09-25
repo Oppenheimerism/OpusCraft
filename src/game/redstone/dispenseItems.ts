@@ -632,3 +632,5 @@ const fishBucket = behavior((src, stack) => {
   return ItemStack.of('bucket');
 });
 Object.assign(BEHAVIORS, { cod_bucket: fishBucket, salmon_bucket: fishBucket, pufferfish_bucket: fishBucket, tropical_fish_bucket: fishBucket, axolotl_bucket: fishBucket });
+// (M9: frogs)
+Object.assign(BEHAVIORS, { tadpole_bucket: fishBucket });
