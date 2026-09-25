@@ -224,3 +224,77 @@ LOOT_TABLES['equipment/trial_chamber_ranged'] = [
   },
   { rolls: 1, entries: [nested('equipment/trial_chamber')] },
 ];
+
+// ---------------------------------------------------------------------------
+// what the trial chambers' own containers hold (vanilla loot_table/chests/trial_chambers/*, dispensers/trial_chambers/*
+// and pots/trial_chambers/corridor): the corridors' and the intersections' chests and barrels, the entrance halls'
+// chests, the chambers' supply chests, the dispensers in the walls and the corridors' pots. ('' is an empty entry;
+// what the game doesn't have yet, like scaffolding or bamboo hanging signs, rolls nothing.)
+
+/** an enchant_randomly entry (#on_random_loot) with set_damage */
+const worn = (item: string, weight: number, lo: number, hi: number, enchant = false): LootEntry => ({ item, weight, enchant, apply: damaged(lo, hi) });
+
+LOOT_TABLES['chests/trial_chambers/corridor'] = [
+  {
+    rolls: [1, 3],
+    entries: [
+      worn('iron_axe', 1, 0.4, 0.9, true), e('honeycomb', 1, [1, 8]), worn('stone_axe', 2, 0.15, 0.8, true), worn('stone_pickaxe', 2, 0.15, 0.8),
+      e('ender_pearl', 2, [1, 2]), e('bamboo_hanging_sign', 2, [1, 4]), e('bamboo_planks', 2, [1, 3]), e('scaffolding', 2, [2, 10]),
+      e('torch', 2, [1, 6]), e('tuff', 3, [8, 20]),
+    ],
+  },
+];
+LOOT_TABLES['chests/trial_chambers/entrance'] = [
+  { rolls: [2, 3], entries: [e('trial_key', 1), e('stick', 5, [2, 5]), e('wooden_axe', 10), e('honeycomb', 10, [2, 8]), e('arrow', 10, [5, 10])] },
+];
+LOOT_TABLES['chests/trial_chambers/intersection'] = [
+  {
+    rolls: [1, 3],
+    entries: [
+      e('diamond_block', 1), e('emerald_block', 5, [1, 3]), worn('diamond_axe', 5, 0.1, 0.5, true), worn('diamond_pickaxe', 5, 0.1, 0.5),
+      e('diamond', 10, [1, 2]), e('cake', 20, [1, 4]), e('amethyst_shard', 20, [8, 20]), e('iron_block', 20, [1, 2]),
+    ],
+  },
+];
+LOOT_TABLES['chests/trial_chambers/intersection_barrel'] = [
+  {
+    rolls: [1, 3],
+    entries: [
+      worn('diamond_axe', 1, 0.4, 0.9, true), worn('diamond_pickaxe', 1, 0.15, 0.8), e('diamond', 1), e('compass', 1), e('bucket', 1, [1, 2]),
+      worn('golden_axe', 4, 0.15, 0.8, true), worn('golden_pickaxe', 4, 0.15, 0.8), e('bamboo_planks', 5, [5, 15]), e('baked_potato', 10, [6, 10]),
+    ],
+  },
+];
+LOOT_TABLES['chests/trial_chambers/supply'] = [
+  {
+    rolls: [3, 5],
+    entries: [
+      e('arrow', 2, [4, 14]), withPotion('tipped_arrow', 1, 'poison', [4, 8]), withPotion('tipped_arrow', 1, 'slowness', [4, 8]),
+      e('baked_potato', 2, [2, 4]), e('glow_berries', 2, [2, 10]), e('acacia_planks', 1, [3, 6]), e('moss_block', 1, [2, 5]), e('bone_meal', 1, [2, 5]),
+      e('tuff', 1, [5, 10]), e('torch', 1, [3, 6]), withPotion('potion', 1, 'regeneration', [2, 2]), withPotion('potion', 1, 'strength', [2, 2]),
+      worn('stone_pickaxe', 2, 0.15, 0.8), e('milk_bucket', 1),
+    ],
+  },
+];
+LOOT_TABLES['dispensers/trial_chambers/chamber'] = [
+  {
+    rolls: 1,
+    entries: [
+      e('water_bucket', 4), e('arrow', 4, [4, 8]), e('snowball', 6, [4, 8]), e('egg', 2, [4, 8]), e('fire_charge', 6, [4, 8]),
+      withPotion('splash_potion', 1, 'slowness', [1, 5]), withPotion('splash_potion', 1, 'poison', [1, 5]), withPotion('splash_potion', 1, 'weakness', [1, 5]),
+      withPotion('lingering_potion', 1, 'slowness', [1, 5]), withPotion('lingering_potion', 1, 'poison', [1, 5]),
+      withPotion('lingering_potion', 1, 'weakness', [1, 5]), withPotion('lingering_potion', 1, 'healing', [1, 5]),
+    ],
+  },
+];
+LOOT_TABLES['dispensers/trial_chambers/corridor'] = [{ rolls: 1, entries: [e('arrow', 1, [4, 8])] }];
+LOOT_TABLES['dispensers/trial_chambers/water'] = [{ rolls: 1, entries: [e('water_bucket', 1)] }];
+LOOT_TABLES['pots/trial_chambers/corridor'] = [
+  {
+    rolls: 1,
+    entries: [
+      e('emerald', 125, [1, 3]), e('arrow', 100, [2, 8]), e('iron_ingot', 100, [1, 2]), e('trial_key', 10), e('music_disc_creator_music_box', 5),
+      e('diamond', 5, [1, 2]), e('enchanted_golden_apple', 1),
+    ],
+  },
+];

@@ -118,6 +118,10 @@ export interface JigsawSpec {
   joint?: 'rollable' | 'aligned';
   /** what the connector turns into (default air, which a legacy piece doesn't place) */
   final?: string;
+  /** (trial chambers) vanilla selection_priority: a piece's connectors are tried highest first (in random order among equals) */
+  selection?: number;
+  /** (trial chambers) vanilla placement_priority: a piece joined here has its own connectors seen to before lower ones' */
+  placement?: number;
 }
 
 export interface EntitySpec {
@@ -152,6 +156,9 @@ export interface Jigsaw {
   target: string;
   pool: string;
   rollable: boolean;
+  /** (trial chambers) vanilla selection_priority and placement_priority (0 unless given) */
+  selection: number;
+  placement: number;
 }
 
 export class Template {
@@ -203,6 +210,8 @@ export class Template {
           x: j.at[0], y: j.at[1], z: j.at[2], front: j.facing, top: vertical ? (j.top ?? 'north') : 'up',
           name: j.name ?? 'empty', target: j.target ?? 'empty', pool: j.pool ?? 'empty',
           rollable: (j.joint ?? (vertical ? 'rollable' : 'aligned')) === 'rollable',
+          selection: j.selection ?? 0,
+          placement: j.placement ?? 0,
         } as Jigsaw;
       })
       .sort((a, b) => a.y - b.y || a.x - b.x || a.z - b.z);
@@ -424,7 +433,7 @@ export type FeatureFn = (ctx: GenContext, x: number, y: number, z: number, r: Ra
 
 /** vanilla FeaturePoolElement: a placed feature grown where its one downward connector lands */
 export class FeatureElement extends PoolElement {
-  private static readonly JIGSAW: Jigsaw = { x: 0, y: 0, z: 0, front: 'down', top: 'south', name: 'bottom', target: 'empty', pool: 'empty', rollable: true };
+  private static readonly JIGSAW: Jigsaw = { x: 0, y: 0, z: 0, front: 'down', top: 'south', name: 'bottom', target: 'empty', pool: 'empty', rollable: true, selection: 0, placement: 0 };
   constructor(readonly feature: FeatureFn, readonly featureName: string) {
     super('rigid');
   }
@@ -507,7 +516,46 @@ export function shuffle<T>(l: T[], r: JavaRandom): void {
 function shuffledJigsaws(e: PoolElement, x: number, y: number, z: number, rot: number, r: JavaRandom): PlacedJigsaw[] {
   const l = e.jigsaws(x, y, z, rot);
   shuffle(l, r);
+  // (trial chambers) vanilla SinglePoolElement.sortBySelectionPriority: a stable sort, highest first
+  if (l.some((j) => j.info.selection)) l.sort((a, b) => b.info.selection - a.info.selection);
   return l;
+}
+
+/**
+ * (trial chambers) vanilla SequencedPriorityIterator: the pieces still to be seen to, a queue for each placement
+ * priority, the highest first, each in the order they came (with every priority 0: breadth first)
+ */
+class PriorityQueues<T> {
+  private readonly queues = new Map<number, { items: T[]; head: number }>();
+  private top: { items: T[]; head: number } | null = null;
+  private topPriority = -Infinity;
+
+  add(v: T, priority: number): void {
+    if (priority === this.topPriority && this.top) {
+      this.top.items.push(v);
+      return;
+    }
+    let q = this.queues.get(priority);
+    if (!q) this.queues.set(priority, (q = { items: [], head: 0 }));
+    q.items.push(v);
+    if (priority >= this.topPriority) {
+      this.top = q;
+      this.topPriority = priority;
+    }
+  }
+
+  next(): T | undefined {
+    const q = this.top;
+    if (!q) return undefined;
+    const v = q.items[q.head++];
+    if (q.head >= q.items.length) {
+      let best = -Infinity, bq: { items: T[]; head: number } | null = null;
+      for (const [p, o] of this.queues) if (p > best && o.head < o.items.length) (best = p), (bq = o);
+      this.top = bq;
+      this.topPriority = best;
+    }
+    return v;
+  }
 }
 
 /** vanilla JigsawBlock.canAttach */
@@ -562,24 +610,29 @@ export function jigsawStart(startPool: Pool, r: JavaRandom, cx: number, cz: numb
   return { piece, x: ix, y: k, z: iz };
 }
 
-/** vanilla JigsawPlacement.Placer: grow the structure breadth-first from its start piece */
-export function jigsawAssemble(start: JigsawStart, r: JavaRandom, maxDepth: number, maxDistance: number, expansionHack: boolean, height: (x: number, z: number) => number): Piece[] {
+/**
+ * vanilla JigsawPlacement.Placer: grow the structure breadth-first from its start piece. (trial chambers) `padding`:
+ * vanilla DimensionPadding, the blocks kept clear at the bottom and top of the world; `alias`: vanilla PoolAliasLookup,
+ * the pool a connector's pool stands for in this structure
+ */
+export function jigsawAssemble(
+  start: JigsawStart, r: JavaRandom, maxDepth: number, maxDistance: number, expansionHack: boolean, height: (x: number, z: number) => number,
+  padding = 0, alias: (pool: string) => string = (p) => p,
+): Piece[] {
   const pieces: Piece[] = [start.piece];
   if (maxDepth <= 0) return pieces;
   const i = start.x, m = start.y, j = start.z;
-  const free = new FreeSpace(new Box(i - maxDistance, Math.max(m - maxDistance, MIN_Y), j - maxDistance, i + maxDistance, Math.min(m + maxDistance, MAX_Y - 1), j + maxDistance));
+  const free = new FreeSpace(new Box(i - maxDistance, Math.max(m - maxDistance, MIN_Y + padding), j - maxDistance, i + maxDistance, Math.min(m + maxDistance, MAX_Y - 1 - padding), j + maxDistance));
   free.take(start.piece.box);
-  const queue: { piece: Piece; free: FreeSpace; depth: number }[] = [{ piece: start.piece, free, depth: 0 }];
-  for (let q = 0; q < queue.length; q++) {
-    const s = queue[q];
-    tryPlacingChildren(s.piece, s.free, s.depth, maxDepth, expansionHack, pieces, queue, r, height);
-  }
+  const queue = new PriorityQueues<{ piece: Piece; free: FreeSpace; depth: number }>();
+  queue.add({ piece: start.piece, free, depth: 0 }, 0);
+  for (let s = queue.next(); s; s = queue.next()) tryPlacingChildren(s.piece, s.free, s.depth, maxDepth, expansionHack, pieces, queue, r, height, alias);
   return pieces;
 }
 
 function tryPlacingChildren(
-  piece: Piece, free: FreeSpace, depth: number, maxDepth: number, expansionHack: boolean, pieces: Piece[], queue: { piece: Piece; free: FreeSpace; depth: number }[],
-  r: JavaRandom, height: (x: number, z: number) => number,
+  piece: Piece, free: FreeSpace, depth: number, maxDepth: number, expansionHack: boolean, pieces: Piece[], queue: PriorityQueues<{ piece: Piece; free: FreeSpace; depth: number }>,
+  r: JavaRandom, height: (x: number, z: number) => number, alias: (pool: string) => string,
 ): void {
   const element = piece.element;
   const rigid = element.projection === 'rigid';
@@ -591,7 +644,8 @@ function tryPlacingChildren(
     const tx = jig.x + fx, ty = jig.y + fy, tz = jig.z + fz;
     const jy = jig.y - i;
     let k = -1;
-    const p0 = POOLS.get(jig.info.pool);
+    // (trial chambers) the pool this structure's aliases make it
+    const p0 = POOLS.get(alias(jig.info.pool));
     if (!p0 || (p0.templates.length === 0 && jig.info.pool !== 'empty')) continue;
     const fb = POOLS.get(p0.fallback);
     if (!fb || (fb.templates.length === 0 && p0.fallback !== 'empty')) continue;
@@ -653,7 +707,7 @@ function tryPlacingChildren(
           piece.junctions.push({ x: tx, groundY: u - jy + s, z: tz });
           child.junctions.push({ x: jig.x, groundY: u - n + t, z: jig.z });
           pieces.push(child);
-          if (depth + 1 <= maxDepth) queue.push({ piece: child, free: space, depth: depth + 1 });
+          if (depth + 1 <= maxDepth) queue.add({ piece: child, free: space, depth: depth + 1 }, jig.info.placement);
           continue jigsawLoop;
         }
       }
@@ -676,8 +730,8 @@ const KERNEL = (() => {
   return k;
 })();
 
-/** vanilla Beardifier.getBeardContribution */
-function beard(x: number, y: number, z: number, yToGround: number): number {
+/** vanilla Beardifier.getBeardContribution ((trial chambers) exported: the trial chambers' junctions) */
+export function beard(x: number, y: number, z: number, yToGround: number): number {
   const i = x + 12, j = y + 12, k = z + 12;
   if (i < 0 || i >= 24 || j < 0 || j >= 24 || k < 0 || k >= 24) return 0;
   const d = yToGround + 0.5;

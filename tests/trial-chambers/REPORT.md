@@ -7,8 +7,8 @@ Branch: `claude/kind-mccarthy-eu2t01` (from main at ac9d889).
 | Milestone | State | Commits |
 |---|---|---|
 | M1 tuff, copper, lightning rod, items | done | 307e1f4 (the blocks, items, recipes and advancements), e6fd0e4 (the three discs' songs) |
-| M2 trial spawner and vault | done | the commit that adds this line ("Trial spawners and vaults: …") |
-| M3 trial chambers and `/locate` | not started | |
+| M2 trial spawner and vault | done | 1df4069 |
+| M3 trial chambers and `/locate` | done | the commit that adds this line ("Trial chambers: …") |
 | M4 breeze, wind charges, bogged, mace | not started | |
 | M5 crafter and advancements | not started | |
 
@@ -84,7 +84,57 @@ All small and additive; each new line is marked `(trial chambers)`.
 - New files besides those: `src/game/trialSpawner.ts`, `src/game/vault.ts`, `src/game/trialChamberSight.ts`,
   `src/game/honeyBottle.ts` and `src/entity/ominousItemSpawner.ts`.
 
+### M3
+
+- `src/world/gen/generator.ts`: imports `TrialChambers` and `quartBiome3d` (new `src/world/gen/trialChambers.ts`), a
+  `trialChambers` field, placed in the underground structures' step after the mineshafts and buried treasure and
+  before the fossils (vanilla `UNDERGROUND_STRUCTURES`), and `encapsulateFor(cx, cz)` added to the beard line (the
+  ground round them filled in).
+- `src/world/gen/jigsaw.ts`: `jigsawAssemble` takes two optional parameters, `padding` (vanilla `DimensionPadding`)
+  and `alias` (vanilla `PoolAliasLookup`); `beard` is exported. Connectors can carry vanilla's `selection_priority`
+  and `placement_priority` (`selection`, `placement`): a piece's connectors are sorted by the first after shuffling,
+  and the queue of pieces is vanilla's `SequencedPriorityIterator`. With every priority 0, as in all the other
+  structures, it's the same breadth-first queue as before (the temples', mansion's and villages' tests are unchanged).
+- `src/game/commands.ts`: `/locate structure trial_chambers` (new `src/game/trialChamberStructure.ts`, which also has
+  `inTrialChambers` for M5's advancement).
+- `src/game/decoratedPot.ts`: a pot can hold a loot table (`lootTable`, `lootSeed`, `unpackLoot`, saved and loaded),
+  rolled the first time it's looked in or broken, as vanilla's `RandomizableContainer`.
+- `src/game/trialChamberLoot.ts` (M2's): the structure's chest, barrel, dispenser and pot tables.
+- New besides: `src/world/gen/trialChamberPieces.ts` (the template grid, the pool element with the processors) and
+  `src/world/gen/trialChamberTemplates.ts` (every piece and pool).
+
 ## 3. Open points, deviations, uncertain values, hooks
+
+### M3
+
+- **The pieces are my own.** No vanilla structure files are used: every room, corridor and hallway is drawn in code in
+  tuff bricks, polished and chiseled tuff, waxed copper, grates and bulbs. The pool names, the eight chambers' names
+  (chamber_1, 2, 4, 8, assembly, eruption, slanted, pedestal), the start pool `trial_chambers/chamber/end`, the spawner
+  pools and the aliases are vanilla's; their shapes and the pools' weights are mine. I added a few pieces of my own: a
+  dead-end alcove (`corridor/end_1`), a hallway ending at a chamber's door, and a storeroom a door opens onto when no
+  chamber fits (most of the rest are walled off by a cap).
+- **Sizes.** The weights were tuned so a trial chambers has about 12 chambers (5 to 25), 250 to 800 pieces, and two
+  chambers opening off the end room. Over 12 structures on seed 12345, 79% of doors lead into a chamber or a storeroom.
+- **Placement is vanilla's.** Random spread 34/12, salt 94251327; the start height -40..-20 drawn first; the start
+  room at the chunk's corner lowered to it; the biome at the start's own height (so the deep dark, a cave biome, is
+  kept out); pool aliases from vanilla's positional random; size 20; 116 blocks across. `dimension_padding` 10 is from
+  memory.
+- **Priorities.** The doors are tried first in their piece (`selection_priority` 1), so a chamber gets its room before
+  the corridor goes on. Vanilla's own templates use these priorities, but I don't know their values.
+- **Every chamber is furnished.** The spawner, vault and supply chest pools fall back to themselves. So a chamber
+  placed at the structure's last step still gets them, where vanilla's empty fallback would leave it bare.
+- **Openings.** Where a door or a corridor's end is half blocked by a neighbour, or reaches the 116-block limit, it
+  opens onto the ground round. Vanilla does the same. The encapsulation keeps that ground solid (98% just round the
+  pieces in the test's chunks).
+- **Loot.** The tables' weights, counts and damage follow vanilla 1.21 as best I know them. Items the game lacks roll
+  nothing: bamboo planks, bamboo hanging signs, scaffolding and cake.
+- **Not there yet.** There are no candles (the game has none), so the decor is pots, flower pots with dead bushes,
+  and barrels. The dispensers aren't wired to anything. The breeze spawners show a placeholder until M4 brings the
+  breeze. The "poison skeleton" spawners name the bogged, which also comes in M4.
+- **Cost.** Chunks round a trial chambers take about 10% longer: 40.7 ms against 37.0, the best of five runs each.
+  Most of it is the encapsulation's per-block sum, which is cached per column. Laying one out takes about 15 ms, once
+  per structure.
+- **Deep dark.** `trialChambersBiome` already keeps out `B.deep_dark`; no hook needed.
 
 ### M2
 
@@ -150,10 +200,16 @@ on a failure.
 | `m2a-trial-spawner.mjs` | placing it and a spawn egg; who it sees (creative, spectators, range 14, line of sight through glass and bars but not stone), once a second; one player: 2 at once, 40 ticks apart, 6 in all, the reward, the 30-minute cooldown and the next trial; two players: the second joining unseen, 3 at once, 8 in all, a reward each; every config's numbers, slimes and baby zombies; peaceful and `doMobSpawning`; the 47/48-block tracking limit; saving; Bad Omen to Trial Omen, going ominous before, during and after a trial, armed mobs, item spawners every 8 s dropping the same thing, the ominous reward, and back to normal after the cooldown | all pass (90) |
 | `m2b-vault.mjs` | placing it; lighting up within 4 blocks and going idle past 4.5 (creative yes, spectators no, no sight needed); the display item and its spin; the keyhole sparks; refusals and their 15-tick limit, renamed and ominous keys; a key taking, unlocking, ejecting an item a second with rising pitch, and closing; once per player, the refusal sound, a second player; creative; the ominous vault; Under Lock and Key and Revaulting; the reward tables' odds; 128 players remembered; saving, and a vanilla config read in | all pass (59) |
 | `m2c-assets.mjs` | every texture of all 44 states (the ominous ones bluer, the lit ones brighter); the item icons and creative positions; both sound groups and every sound played, rendered clean; each new particle's lifetime, colour and motion, and its sprites on the sheet; the honey bottle (drunk when full, 40 ticks, food, poison cured, the bottle back, its own slurp, creative, A Balanced Diet); `/setblock` data for vaults and trial spawners; the cage renderers | all pass (54) |
+| `m3a-structure.mjs` | the start chunk against an independent java.util.Random with the salt; the start heights (all 21, the first draw); no deep dark, the biome at the start's height; the end room and its floor; the aliases against vanilla's positional random (300 starts), ranged and slow ranged together; 12 layouts: no overlaps, within 116 blocks and the padding, every spawner the structure's mob, every chamber furnished, 4 or more chambers, most doors leading somewhere; every piece walked from every way in to every way out, vault and chest; four whole structures walked from the end room to every vault, chest, barrel, dispenser and pot; the time to lay one out and to look for one | all pass (24) |
+| `m3b-generation.mjs` | real chunks at seed 12345's nearest: the end room, its entrance chests and their loot, the spawners' configs, the vaults normal and ominous and their facing, the pots, the ground round it solid, being in one; every loot table and spawner config the pieces name, what each table gives, the supply rolls, the dispenser's arrows, worn and enchanted tools; a pot's loot through saving, looking in and breaking, and its odds; every copper bulb against vanilla's positional random; nothing over a spawner, chest or bedrock; no waterlogging; the encapsulation against vanilla's formula at 900 points; `/locate` in the Overworld and the Nether; the cost per chunk | all pass (29) |
 
 Also run: `npm run typecheck` (clean); `tests/temples/*` and `tests/mansion/*` (all pass); `scripts/audio-check.mjs` (no
 warnings for the new sounds, except once a "slow" flag on the ominous spawner's boom at 24 ms against a 20 ms limit on
 its first, cold render; 15 ms when run again).
+
+For M3 the jigsaw engine changed under the villages and outposts too. Their layouts on made-up terrain (40,383 pieces
+over five village kinds and the outposts, 64 regions each) hash the same before and after. The pieces were also
+checked in the browser: screenshots of the end room and five chambers looked right, with no errors in the console.
 
 ## 5. Browser checklist
 
@@ -193,3 +249,19 @@ Start at `http://localhost:5173/?seed=12345` in creative.
   Revaulting is awarded.
 - **Honey bottle**: `/give @s minecraft:honey_bottle`. It can be drunk at full hunger, slurping, and it cures poison
   and leaves a glass bottle.
+- **Finding trial chambers**: `/locate structure minecraft:trial_chambers`. From the world spawn it answers
+  `[-480, ~, -304]`; the one nearest to 0,0 is at `[0, ~, 224]`. Both lie 20 to 50 blocks below y 0.
+- **Teleporting down to them**: use `/gamemode spectator` before a far `/tp`. The game lets a teleported player fall
+  before a far chunk has loaded, and 30 blocks down that ends in the void. Switch back to creative or survival once the
+  rooms are drawn.
+- **The trial chambers at -480, -304** (zombies, strays and cave spiders, all mobs the game has): `/tp @s -474 -33 -311`
+  stands in its end room, two entrance chests along the walls, doors into two chambers and corridors out of each end.
+  `/effect give @s minecraft:night_vision 99999 0` helps see the corridors.
+- **A spawner chamber**: `/tp @s -468 -33 -287 -90 0` stands in the doorway of a long hall of pillars (chamber_2),
+  looking in at three pedestals. `/difficulty normal` and `/gamemode survival`: the spawners wake one after another,
+  zombies, strays and cave spiders.
+- **By the vaults**: `/tp @s -463 -33 -279 0 10` in the same hall faces its two vaults on their copper dais.
+  `/give @s minecraft:trial_key 2` and use one on each.
+- **An ominous vault in place**: in the trial chambers at 0, 224, `/tp @s 7 -37 208 180 10` stands on the walkway of the
+  pit (chamber_4) facing its vault and its ominous vault. Its spawners (spiders and silverfish; the "poison skeleton"
+  ones wait for M4's bogged) are down in the pit.
