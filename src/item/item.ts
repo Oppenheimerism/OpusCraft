@@ -453,6 +453,32 @@ reg({ id: 'goat_horn', texture: 'goat_horn', maxStack: 1, creativeTab: 'tools' }
   if (h) ITEM_LIST.splice(j >= 0 ? j : ITEM_LIST.length, 0, h);
 }
 reg({ id: 'goat_spawn_egg', texture: 'goat_spawn_egg', creativeTab: 'spawn_eggs' });
+// (M9: frogs) the bucket of tadpole (vanilla MobBucketItem) after the axolotl's; the frog's and tadpole's eggs;
+// frogspawn drawn flat (vanilla item/frogspawn) with the natural blocks after the turtle egg; the froglights with the
+// functional blocks, after the glowstone (vanilla CreativeModeTabs.FUNCTIONAL_BLOCKS)
+{
+  const after = (id: string, prev: string): void => {
+    const i = ITEM_LIST.findIndex((x) => x.id === id);
+    if (i < 0 || !ITEMS.has(prev)) return;
+    const it = ITEM_LIST.splice(i, 1)[0];
+    ITEM_LIST.splice(ITEM_LIST.indexOf(ITEMS.get(prev)!) + 1, 0, it);
+  };
+  reg({ id: 'tadpole_bucket', name: 'Bucket of Tadpole', texture: 'tadpole_bucket', maxStack: 1, creativeTab: 'tools' });
+  after('tadpole_bucket', 'axolotl_bucket');
+  for (const m of ['frog', 'tadpole']) reg({ id: `${m}_spawn_egg`, texture: `${m}_spawn_egg`, creativeTab: 'spawn_eggs' });
+  if (ITEMS.has('frogspawn')) {
+    Object.assign(ITEMS.get('frogspawn')!, { texture: 'block:frogspawn', creativeTab: 'natural' });
+    after('frogspawn', 'turtle_egg');
+  }
+  let prev = 'glowstone';
+  for (const c of ['ochre', 'verdant', 'pearlescent']) {
+    const id = `${c}_froglight`;
+    if (!ITEMS.has(id)) continue;
+    ITEMS.get(id)!.creativeTab = 'functional';
+    after(id, prev);
+    prev = id;
+  }
+}
 // sugar cane item places the block
 {
   const sc = ITEMS.get('sugar_cane');

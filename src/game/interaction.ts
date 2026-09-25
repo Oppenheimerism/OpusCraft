@@ -50,6 +50,8 @@ import { isCharged, performShooting, shootingPower, PLAYER_INACCURACY, playerPro
 
 /** vanilla InteractionHand.values(): the order the hands get a go at a right click */
 const HANDS: readonly Hand[] = ['main', 'off'];
+/** (M9: frogs) vanilla PlaceOnWaterBlockItem: put on the water, never against a block's face */
+const PLACE_ON_WATER = new Set(['lily_pad', 'frogspawn']);
 export class Interaction {
   hit: BlockHit | null = null;
   /** entity under the crosshair (vanilla crosshairPickEntity) */
@@ -326,7 +328,10 @@ export class Interaction {
     const e = this.entityHit;
     if (e && p.gameMode !== 'spectator') {
       // vanilla Mob.interact: its lead let go or tied on, or a name tag's name, before anything the mob does itself
+      // (M9: frogs: the item as it was, for player_interacted_with_entity)
+      const heldBefore = stack?.copy() ?? null;
       if (e instanceof Mob && e.interactLeashOrName(p, stack)) {
+        this.onInteractedWithEntity?.(heldBefore, e);
         p.swing();
         return 'success';
       }
@@ -497,7 +502,8 @@ export class Interaction {
       }
       return 'success';
     }
-    if (h && stack) {
+    // (M9: frogs: vanilla PlaceOnWaterBlockItem.useOn passes, and its use places it)
+    if (h && stack && !PLACE_ON_WATER.has(stack.item.id)) {
       if (this.placeBlock(h, stack)) {
         p.swing();
         return 'success';
@@ -801,6 +807,18 @@ export class Interaction {
     // (an item's own use failing or passing gives the other hand its turn, as in vanilla startUseItem)
     const itemUse = itemBehaviorOf(it.id)?.use;
     if (itemUse) return itemUse(this.level, p, stack) === 'success';
+    // (M9: frogs) vanilla PlaceOnWaterBlockItem.use: looked at through anything but still water (ClipContext.Fluid.SOURCE_ONLY),
+    // it goes on the block above what's hit, if it can live there
+    if (PLACE_ON_WATER.has(it.id) && p.gameMode !== 'spectator') {
+      const pr = (p.pitch * Math.PI) / 180, yr = (p.yaw * Math.PI) / 180;
+      const look = (fluids: boolean) => raycast(this.level.world, p.x, p.y + p.eyeHeight, p.z, -Math.sin(yr) * Math.cos(pr), -Math.sin(pr), Math.cos(yr) * Math.cos(pr), this.reach(), fluids);
+      let h = look(true);
+      const b = h && BLOCKS[STATE_BLOCK[h.state]];
+      if (h && b && (b.name === 'water' || b.name === 'lava') && b.get<number>(h.state, 'level') !== 0) h = look(false);
+      if (!h || !this.placeBlock({ ...h, y: h.y + 1, hy: h.hy + 1 }, stack)) return false;
+      p.swing();
+      return true;
+    }
     // vanilla SpawnEggItem.use: aimed at a still pool of water or lava (ClipContext.Fluid.SOURCE_ONLY; a liquid block,
     // not a waterlogged one), the mob comes out in it
     if (it.id.endsWith('_spawn_egg') && p.gameMode !== 'spectator') {

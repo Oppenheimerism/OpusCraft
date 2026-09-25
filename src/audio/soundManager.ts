@@ -70,6 +70,10 @@ function categoryOf(name: string): Category {
   if (name === 'item.bucket.empty_fish' || name === 'item.bucket.empty_axolotl') return 'friendly';
   // (M8: goats) vanilla Goat.mobInteract plays the milking at the player (SoundSource.PLAYERS)
   if (name === 'entity.goat.milk' || name === 'entity.goat.screaming.milk') return 'players';
+  // (M9: frogs) a tadpole scooped up and poured out as a fish is; a frog lays its spawn with SoundSource.BLOCKS
+  if (name === 'item.bucket.fill_tadpole') return 'players';
+  if (name === 'item.bucket.empty_tadpole') return 'friendly';
+  if (name === 'entity.frog.lay_spawn') return 'blocks';
   // (Stage 4: raids) the horn is vanilla's SoundSource.NEUTRAL; the bottle and the omens are the drinker's (a player's)
   if (name === 'event.raid.horn') return 'friendly';
   if (name.startsWith('item.ominous_bottle.') || name.startsWith('event.mob_effect.')) return 'players';

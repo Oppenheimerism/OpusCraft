@@ -60,6 +60,8 @@ import './potionEffects';
 import { Raids } from './raids';
 // (Stage 5: ocean)
 import './ocean';
+// (M9: frogs) frogspawn hatching
+import './frogspawn';
 // (temples)
 import './archaeology';
 // (desert wells: their loot, the suspicious stew)

@@ -695,7 +695,8 @@ export const BUCKET_FISH: Record<string, (l: Level) => BucketMob> = {
 
 /** vanilla MobBucketItem's emptySound: a bucket of fish pours out with a fishy splash, a bucket of axolotl its own */
 export function bucketEmptySound(id: string): string {
-  return id === 'axolotl_bucket' ? 'item.bucket.empty_axolotl' : 'item.bucket.empty_fish';
+  // (M9: frogs) the tadpole's own
+  return id === 'axolotl_bucket' ? 'item.bucket.empty_axolotl' : id === 'tadpole_bucket' ? 'item.bucket.empty_tadpole' : 'item.bucket.empty_fish';
 }
 
 /**

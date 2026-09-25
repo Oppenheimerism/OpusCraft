@@ -79,6 +79,8 @@ import { ParrotRenderers, PARROT_SHADOW_RADII } from './parrotRenderer';
 import { PolarBearRenderers, POLAR_BEAR_SHADOW_RADII } from './polarBearRenderer';
 import { RabbitRenderers, RABBIT_SHADOW_RADII } from './rabbitRenderer';
 import { FoxRenderers, FOX_SHADOW_RADII } from './foxRenderer';
+// (M9: frogs)
+import { FrogRenderers, FROG_SHADOW_RADII } from './frogRenderer';
 import { LlamaSpit } from '../entity/llama';
 import { LeashKnot } from '../entity/leash';
 import { renderKnot, renderLeash } from './leashRenderer';
@@ -210,6 +212,8 @@ export class EntityRenderDispatcher {
   private readonly polarBears: PolarBearRenderers;
   private readonly rabbits: RabbitRenderers;
   private readonly foxes: FoxRenderers;
+  /** (M9: frogs) and tadpoles */
+  private readonly frogs: FrogRenderers;
   /** names over mobs, drawn once every entity is down */
   private readonly nameTags: NameTagRenderer;
   /** this frame's options: names shown at all (not with the GUI hidden), and what the crosshair is on */
@@ -249,6 +253,7 @@ export class EntityRenderDispatcher {
     this.polarBears = new PolarBearRenderers(this.raiders.kit);
     this.rabbits = new RabbitRenderers(this.raiders.kit);
     this.foxes = new FoxRenderers(this.raiders.kit);
+    this.frogs = new FrogRenderers(this.raiders.kit);
     this.nameTags = new NameTagRenderer(gl);
     this.models = {
       pig: M.pigModel(),
@@ -745,6 +750,8 @@ export class EntityRenderDispatcher {
     if (this.polarBears.render(b, e, dx, dy, dz, p)) return;
     if (this.rabbits.render(b, e, dx, dy, dz, p)) return;
     if (this.foxes.render(b, e, dx, dy, dz, p)) return;
+    // (M9: frogs)
+    if (this.frogs.render(b, e, dx, dy, dz, p)) return;
     const type = e.type;
     const def = this.models[type];
     // (vanilla GhastRenderer.getTextureLocation: its face while charging a shot)
@@ -1734,6 +1741,8 @@ function shadowRadius(e: Entity): number {
   if (OCEAN_SHADOW_RADII[e.type] !== undefined) return OCEAN_SHADOW_RADII[e.type] * (e instanceof Mob && e.isBaby() ? 0.5 : 1);
   // (M8: goats)
   if (GOAT_SHADOW_RADII[e.type] !== undefined) return GOAT_SHADOW_RADII[e.type] * (e instanceof Mob && e.isBaby() ? 0.5 : 1);
+  // (M9: frogs)
+  if (FROG_SHADOW_RADII[e.type] !== undefined) return FROG_SHADOW_RADII[e.type];
   // (Stage 6: tameable animals; a foal's is half)
   let r = HORSE_SHADOW_RADII[e.type] ?? LLAMA_SHADOW_RADII[e.type] ?? PARROT_SHADOW_RADII[e.type] ?? POLAR_BEAR_SHADOW_RADII[e.type] ?? RABBIT_SHADOW_RADII[e.type] ?? FOX_SHADOW_RADII[e.type] ?? 0;
   switch (e.type) {

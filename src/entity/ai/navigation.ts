@@ -193,7 +193,8 @@ export class PathNavigation {
     this.doStuckDetection(pos);
   }
 
-  private canCutCorner(t: PathType): boolean {
+  /** vanilla canCutCorner (M9: frogs keep to the path by the water's edge) */
+  protected canCutCorner(t: PathType): boolean {
     return t !== PathType.DANGER_FIRE && t !== PathType.DANGER_OTHER;
   }
 

@@ -1,6 +1,7 @@
 // Vanilla's common brain behaviours and sensors (net.minecraft.world.entity.ai.behavior and ai.sensing, 1.21), shared
-// by the mobs with brains (entity/ai/brain.ts): the axolotl's and the goat's. The memories are fields on the mob (null,
-// or -1, where it has none); each factory makes one behaviour for one mob's brain, as vanilla builds one per brain.
+// by the mobs with brains (entity/ai/brain.ts): the axolotl's and the goat's (M9: and the frog's and tadpole's). The
+// memories are fields on the mob (null, or -1, where it has none); each factory makes one behaviour for one mob's
+// brain, as vanilla builds one per brain.
 
 import type { Entity } from '../entity';
 import { LivingEntity } from '../living';
@@ -12,6 +13,7 @@ import type { Rand } from '../../core/rng';
 import { Behavior, oneShot, type BehaviorControl } from './brain';
 import type { Path } from './pathfinder';
 import { defaultRandomPosTowards, landRandomPos } from './goals';
+import { randomSwimmablePos } from '../fish';
 import { FLAGS, F_WATER } from '../../world/block';
 
 export type Pos = [number, number, number];
@@ -40,13 +42,16 @@ export interface BrainMemories {
 }
 export type BrainMob = Mob & BrainMemories;
 
-/** and those of an animal that's tempted by food, breeds, and keeps its young by the grown ones */
-export interface AnimalMemories extends BrainMemories {
-  nearestVisibleAdult: Animal | null;
+/** (M9: frogs) those of one tempted by food held out to it (a tadpole's too: it never has a partner to breed with) */
+export interface TemptedMemories extends BrainMemories {
   temptingPlayer: Player | null;
   temptationCooldown: number;
   isTempted: boolean;
   breedTarget: Animal | null;
+}
+/** and those of an animal that's tempted by food, breeds, and keeps its young by the grown ones */
+export interface AnimalMemories extends TemptedMemories {
+  nearestVisibleAdult: Animal | null;
 }
 export type BrainAnimal = Animal & AnimalMemories;
 
@@ -151,7 +156,7 @@ export function senseHurtBy(m: BrainMob & { hurtBy: string | null; hurtByEntity:
 }
 
 /** vanilla TemptingSensor: the nearest player within 10 (less if hard to see) holding its food, not riding it */
-export function senseTempting(m: BrainAnimal, isFood: (s: ItemStack) => boolean): void {
+export function senseTempting(m: BrainMob & TemptedMemories, isFood: (s: ItemStack) => boolean): void {
   const p = m.level.player;
   const holds = (s: ItemStack | null) => !!s && isFood(s);
   const ok = p && p.isAlive && p.gameMode !== 'spectator' && p.vehicle !== m && p.distanceToSqr(m.x, m.y, m.z) <= (10 * p.visibilityPercent(m)) ** 2;
@@ -342,7 +347,7 @@ export function animalMakeLove<E extends BrainAnimal>(speed = 1, close = 2): Beh
  * vanilla FollowTemptation: after the player holding its food (looking at them), up to `close` blocks off; losing
  * them (or breeding, or panicking), it pays no heed to food for five seconds
  */
-export function followTemptation<E extends BrainAnimal>(speed: (a: E) => number, close = 2.5): BehaviorControl<E> {
+export function followTemptation<E extends BrainMob & TemptedMemories>(speed: (a: E) => number, close = 2.5): BehaviorControl<E> {
   return new Behavior<E>({
     timesOut: false,
     canStart: (a) => a.temptationCooldown < 0 && a.temptingPlayer !== null && !a.breedTarget && !isPanicking(a),
@@ -384,6 +389,42 @@ export function randomStroll<E extends BrainMob>(speed: number, mayStrollFromWat
     if (a.walkTarget || (!mayStrollFromWater && a.inWater)) return false;
     const p = landRandomPos(a, 10, 7);
     a.walkTarget = p ? { t: { pos: p }, speed, closeEnough: 0 } : null;
+    return true;
+  });
+}
+
+/** vanilla RandomStroll's SWIM_XY_DISTANCE_TIERS */
+const SWIM_TIERS: [number, number][] = [[1, 1], [3, 3], [5, 5], [6, 5], [7, 7], [10, 7]];
+const waterAt = (a: BrainMob, x: number, y: number, z: number): boolean => (FLAGS[a.level.world.getState(x, y, z)] & F_WATER) !== 0;
+
+/**
+ * vanilla RandomStroll.getTargetSwimPos: a random swimmable spot close by, then on along the same line further and
+ * further out, the last one still in water
+ */
+function swimTargetPos(a: BrainMob): Pos | null {
+  let v: Pos | null = null;
+  let v2: Pos | null = null;
+  for (const [h, vy] of SWIM_TIERS) {
+    if (!v) {
+      const p = randomSwimmablePos(a, h, vy);
+      v2 = p ? [p[0] + 0.5, p[1], p[2] + 0.5] : null;
+    } else {
+      const dx: number = v[0] - a.x, dy: number = v[1] - a.y, dz: number = v[2] - a.z;
+      const l: number = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      v2 = l < 1e-4 ? [a.x, a.y, a.z] : [a.x + (dx / l) * h, a.y + (dy / l) * vy, a.z + (dz / l) * h];
+    }
+    if (!v2 || !waterAt(a, Math.floor(v2[0]), Math.floor(v2[1]), Math.floor(v2[2]))) return v;
+    v = v2;
+  }
+  return v2;
+}
+
+/** vanilla RandomStroll.swim(speed): in the water, off somewhere else in it (the axolotl's; M9: the frog's and the tadpole's) */
+export function swimStroll<E extends BrainMob>(speed: number): BehaviorControl<E> {
+  return oneShot<E>((a) => {
+    if (a.walkTarget || !a.inWater) return false;
+    const p = swimTargetPos(a);
+    a.walkTarget = p ? { t: { pos: [Math.floor(p[0]), Math.floor(p[1]), Math.floor(p[2])] }, speed, closeEnough: 0 } : null;
     return true;
   });
 }
