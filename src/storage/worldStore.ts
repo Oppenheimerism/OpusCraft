@@ -60,6 +60,8 @@ export interface WorldMeta {
     /** vanilla ShoulderEntityLeft / ShoulderEntityRight: the parrots riding on its shoulders */
     shoulderLeft?: SavedEntity | null;
     shoulderRight?: SavedEntity | null;
+    /** vanilla warden_spawn_tracker: the warning level sculk shriekers have raised */
+    wardenSpawnTracker?: import('../game/wardenSpawnTracker').WardenSpawnTrackerData;
   } | null;
   /** nether portal blocks per dimension (vanilla POI records), as x, y, z triples */
   portals?: Record<string, number[]>;

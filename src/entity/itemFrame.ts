@@ -468,6 +468,8 @@ for (const type of ['item_frame', 'glow_item_frame'] as const) {
       if (!frame.survives()) return 'fail';
       frame.playSound(frame.placeSound());
       level.addEntity(frame);
+      // (vanilla HangingEntityItem.useOn: ENTITY_PLACE where it hangs)
+      level.gameEvent?.('entity_place', frame.x, frame.y, frame.z, { entity: p });
       if (p.gameMode !== 'creative') p.inventory.consumeSelected(1);
       p.swing();
       return 'success';

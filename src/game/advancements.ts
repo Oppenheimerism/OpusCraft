@@ -74,6 +74,10 @@ export type Criterion =
   | { t: 'recipe_crafted'; recipe: string; ingredients: string[] }
   /** (Stage 5: ocean) vanilla filled_bucket: filled a bucket that comes out as one of these (a fish scooped up) */
   | { t: 'filled_bucket'; items: string[] }
+  /** (the deep dark) vanilla avoid_vibration: a sculk sensor or warden didn't hear the player, sneaking */
+  | { t: 'avoid_vibration' }
+  /** (the deep dark) vanilla kill_mob_near_sculk_catalyst: something the player hurt died by a catalyst, which took its experience */
+  | { t: 'kill_mob_near_sculk_catalyst' }
   | { t: 'impossible' };
 
 export interface AdvancementDef {
@@ -239,13 +243,14 @@ const A: AdvancementDef[] = [
   { id: 'adventure/lightning_rod_with_villager_no_fire', parent: 'adventure/root', title: 'Surge Protector', description: 'Protect a Villager from an undesired shock without starting a fire', icon: 'lightning_rod', frame: 'task', criteria: one(never) },
   { id: 'adventure/fall_from_world_height', parent: 'adventure/root', title: 'Caves & Cliffs', description: 'Free fall from the top of the world (build limit) to the bottom of the world and survive', icon: 'water_bucket', frame: 'task', criteria: one({ t: 'fall_from_height' }) },
   { id: 'adventure/salvage_sherd', parent: 'adventure/root', title: 'Respecting the Remnants', description: 'Brush a Suspicious block to obtain a Pottery Sherd', icon: 'brush', frame: 'task', criteria: each(ARCHAEOLOGY_TABLES, (n) => ({ t: 'container_loot', table: `archaeology/${n}` })), requirements: [ARCHAEOLOGY_TABLES] },
-  { id: 'adventure/avoid_vibration', parent: 'adventure/root', title: 'Sneak 100', description: 'Sneak near a Sculk Sensor or Warden to prevent it from detecting you', icon: 'sculk_sensor', frame: 'task', criteria: one(never) },
+  { id: 'adventure/avoid_vibration', parent: 'adventure/root', title: 'Sneak 100', description: 'Sneak near a Sculk Sensor or Warden to prevent it from detecting you', icon: 'sculk_sensor', frame: 'task', criteria: { avoid_vibration: { t: 'avoid_vibration' } } },
   { id: 'adventure/sleep_in_bed', parent: 'adventure/root', title: 'Sweet Dreams', description: 'Sleep in a Bed to change your respawn point', icon: 'red_bed', frame: 'task', criteria: one({ t: 'slept' }) },
   { id: 'adventure/minecraft_trials_edition', parent: 'adventure/root', title: 'Minecraft: Trial(s) Edition', description: 'Step foot in a Trial Chamber', icon: 'chiseled_tuff', frame: 'task', criteria: one(never) },
   { id: 'adventure/hero_of_the_village', parent: 'adventure/voluntary_exile', title: 'Hero of the Village', description: 'Successfully defend a village from a raid', icon: 'white_banner', frame: 'challenge', criteria: one({ t: 'raid_won' }) },
   { id: 'adventure/throw_trident', parent: 'adventure/kill_a_mob', title: 'A Throwaway Joke', description: 'Throw a Trident at something.\nNote: Throwing away your only weapon is not a good idea.', icon: 'trident', frame: 'task', criteria: one({ t: 'throw_trident' }) },
   { id: 'adventure/shoot_arrow', parent: 'adventure/kill_a_mob', title: 'Take Aim', description: 'Shoot something with an Arrow', icon: 'bow', frame: 'task', criteria: one({ t: 'shoot_arrow' }) },
   { id: 'adventure/kill_all_mobs', parent: 'adventure/kill_a_mob', title: 'Monsters Hunted', description: 'Kill one of every hostile monster', icon: 'diamond_sword', frame: 'challenge', criteria: each(HOSTILE, (n) => ({ t: 'kill', type: n })) },
+  { id: 'adventure/kill_mob_near_sculk_catalyst', parent: 'adventure/kill_a_mob', title: 'It Spreads', description: 'Kill a mob near a Sculk Catalyst', icon: 'sculk_catalyst', frame: 'challenge', hidden: true, criteria: { kill_mob_near_sculk_catalyst: { t: 'kill_mob_near_sculk_catalyst' } } },
   { id: 'adventure/totem_of_undying', parent: 'adventure/kill_a_mob', title: 'Postmortal', description: 'Use a Totem of Undying to cheat death', icon: 'totem_of_undying', frame: 'goal', criteria: one({ t: 'used_totem' }) },
   { id: 'adventure/summon_iron_golem', parent: 'adventure/trade', title: 'Hired Help', description: 'Summon an Iron Golem to help defend a village', icon: 'carved_pumpkin', frame: 'goal', criteria: one({ t: 'summoned_entity', entity: 'iron_golem' }) },
   { id: 'adventure/trade_at_world_height', parent: 'adventure/trade', title: 'Star Trader', description: 'Trade with a Villager at the build height limit', icon: 'emerald', frame: 'task', criteria: one({ t: 'villager_trade', minY: 319 }) },
@@ -683,6 +688,8 @@ function matches(c: Criterion, p: TriggerPayload): boolean {
     case 'used_totem':
     case 'killed_raid_captain':
     case 'raid_won':
+    case 'avoid_vibration':
+    case 'kill_mob_near_sculk_catalyst':
       return true;
     // (Stage 5: ocean)
     case 'filled_bucket':

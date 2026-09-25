@@ -538,6 +538,7 @@ export class Game {
       this.player.lastDeathLocation = pd.lastDeath ? { dim: pd.lastDeath.dim, pos: [...pd.lastDeath.pos] } : null;
       this.player.shoulderLeft = pd.shoulderLeft ?? null;
       this.player.shoulderRight = pd.shoulderRight ?? null;
+      this.player.wardenSpawnTracker.load(pd.wardenSpawnTracker);
       this.spawnSearch = false;
       // vanilla RootVehicle: back in the minecart you left the game in
       const v = pd.vehicle && !pd.dead ? loadEntity(pd.vehicle, this.level) : null;
@@ -606,6 +607,7 @@ export class Game {
       lastDeath: p.lastDeathLocation ?? undefined,
       shoulderLeft: p.shoulderLeft ?? undefined,
       shoulderRight: p.shoulderRight ?? undefined,
+      wardenSpawnTracker: p.wardenSpawnTracker.save(),
     };
     m.portals = this.portalPoi.save();
     m.arrivals = this.arrivals.save();
@@ -816,7 +818,11 @@ export class Game {
       if (FLAGS[this.world.getState(x, y + 1, z)] & F_OPAQUE || catSittingOn(this.level, x, y, z)) return;
       be.unpackLoot();
       this.setScreen(this.containerScreenFactory(new ChestMenu(p, be)));
-      if (be.openCount++ === 0) this.sound.play('block.chest.open', x + 0.5, y + 0.5, z + 0.5, 0.5, Math.random() * 0.1 + 0.9);
+      if (be.openCount++ === 0) {
+        this.sound.play('block.chest.open', x + 0.5, y + 0.5, z + 0.5, 0.5, Math.random() * 0.1 + 0.9);
+        // (vanilla ContainerOpenersCounter.incrementOpeners: CONTAINER_OPEN)
+        this.level.gameEvent('container_open', x + 0.5, y + 0.5, z + 0.5, { entity: p });
+      }
     } else if (kind === 'barrel') {
       // vanilla BarrelBlock.useWithoutItem: a chest's menu, titled Barrel; the lid opens
       const be = this.world.getBlockEntity(x, y, z);
@@ -857,13 +863,18 @@ export class Game {
     if (!this.containerScreenFactory) return;
     e.unpackLoot();
     this.setScreen(this.containerScreenFactory(new ChestMenu(this.player, e, entityDisplayName(e))));
+    // (vanilla ContainerEntity.interactWithContainerVehicle: CONTAINER_OPEN, where the vehicle is)
+    this.level.gameEvent('container_open', e.x, e.y, e.z, { entity: this.player });
   }
 
   /** chest closed (called by the chest screen) */
   chestClosed(be: ChestBlockEntity): void {
     if (be instanceof BarrelBlockEntity) return be.stopOpen(this.level);
     be.openCount = Math.max(0, be.openCount - 1);
-    if (be.openCount === 0) this.sound.play('block.chest.close', be.x + 0.5, be.y + 0.5, be.z + 0.5, 0.5, Math.random() * 0.1 + 0.9);
+    if (be.openCount !== 0) return;
+    this.sound.play('block.chest.close', be.x + 0.5, be.y + 0.5, be.z + 0.5, 0.5, Math.random() * 0.1 + 0.9);
+    // (vanilla decrementOpeners: CONTAINER_CLOSE)
+    this.level.gameEvent('container_close', be.x + 0.5, be.y + 0.5, be.z + 0.5, { entity: this.player });
   }
 
   private guiEntity: GuiEntityRenderer | null = null;

@@ -15,6 +15,7 @@ import { onProjectileHit } from '../game/blockRules';
 import { fireStateAt, placeFire } from '../game/fire';
 import { FLAGS, F_AIR } from '../world/block';
 import { DX, DY, DZ } from '../world/dir';
+import { projectileShot } from '../game/vibrations';
 
 const RAD = 180 / Math.PI;
 
@@ -47,6 +48,8 @@ export abstract class Fireball extends Entity {
       this.remove();
       return;
     }
+    // (vanilla Projectile.tick: the shot is a game event)
+    projectileShot(this);
     this.baseTick();
     const lvl = this.level;
     const x0 = this.x, y0 = this.y + this.height / 2, z0 = this.z;

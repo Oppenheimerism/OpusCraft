@@ -70,6 +70,8 @@ export abstract class LivingEntity extends Entity {
   hurtDir = 0;
   /** vanilla lastHurtByMob (cleared after 100 ticks) */
   lastHurtByMob: LivingEntity | null = null;
+  /** vanilla skipDropExperience (wasExperienceConsumed): a sculk catalyst took the experience it was to drop */
+  skipDropExperience = false;
   lastHurtByMobTimestamp = 0;
   lastHurtByPlayer: LivingEntity | null = null;
   /** vanilla lastDamageSource and lastDamageStamp: what last hurt it, and when */
@@ -1013,6 +1015,8 @@ export abstract class LivingEntity extends Entity {
     this.absorption -= a;
     amount -= a;
     this.health = Math.max(0, this.health - amount);
+    // (vanilla actuallyHurt: health taken is a game event, a vibration a sculk sensor hears)
+    if (amount !== 0) this.level.gameEvent?.('entity_damage', this.x, this.y, this.z, { entity: this });
   }
 
   knockback(strength: number, x: number, z: number): void {

@@ -67,6 +67,7 @@ import { MIN_Y } from '../world/constants';
 import { AABB } from '../core/aabb';
 import { Rand, hash2 } from '../core/rng';
 import { structureMobsAt, inSwampHut } from './structureSpawns';
+import { markShot } from './vibrations';
 
 // (temples) a cat in a swamp hut is the witch's black cat (vanilla #cats_spawn_as_black), and cats keep coming to one
 catHooks.inSwampHut = inSwampHut;
@@ -176,6 +177,8 @@ function saveOne(e: Entity): SavedEntity | null {
 /** vanilla EntityType.loadEntityRecursive: the entity with its riders on board */
 export function loadEntity(d: SavedEntity, level: Level): Entity | null {
   const e = loadOne(d, level);
+  // (vanilla HasBeenShot: a projectile back from its chunk has told of its shot already)
+  if (e) markShot(e);
   if (e && typeof d.data?.passengers === 'string') {
     for (const pd of JSON.parse(d.data.passengers) as SavedEntity[]) loadEntity(pd, level)?.startRiding(e, true);
   }

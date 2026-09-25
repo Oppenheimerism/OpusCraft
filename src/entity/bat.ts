@@ -99,6 +99,16 @@ export class Bat extends AmbientCreature {
     return false;
   }
 
+  /** (vanilla MovementEmission.EVENTS: its movement is heard by sculk sensors all the same) */
+  protected override emitsMovementEvents(): boolean {
+    return true;
+  }
+
+  /** vanilla Bat.isFlapping: a wingbeat every 10 ticks in flight (heard by sculk sensors) */
+  protected override isFlapping(): boolean {
+    return !this.resting && this.tickCount % 10 === 0;
+  }
+
   /** vanilla Bat.checkFallDamage: nothing, the fall distance never builds up */
   protected override checkFallDamage(): void {}
 

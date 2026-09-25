@@ -49,6 +49,11 @@ export class Silverfish extends Monster {
     return false;
   }
 
+  /** (vanilla MovementEmission.EVENTS: its movement is heard by sculk sensors all the same) */
+  protected override emitsMovementEvents(): boolean {
+    return true;
+  }
+
   /**
    * vanilla Silverfish.hurt: a blow from someone (or magic, #always_triggers_silverfish) makes it wake its friends
    */

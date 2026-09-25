@@ -18,6 +18,7 @@ import { ITEMS, cloneTag } from '../item/item';
 import { ItemEntity } from './itemEntity';
 import { damageBonus, levelOf } from '../item/enchantHelper';
 import { doPostAttackEffects } from '../game/enchantEffects';
+import { projectileShot } from '../game/vibrations';
 
 const RAD = 180 / Math.PI;
 
@@ -118,6 +119,8 @@ export class Arrow extends Entity {
   }
 
   override tick(): void {
+    // (vanilla Projectile.tick: the shot is a game event)
+    projectileShot(this);
     this.tickArrow();
     // vanilla Arrow.tick: a tipped arrow trails its colour (in the ground, a wisp every quarter second); stuck for half
     // a minute its potion is spent, with a last puff, and it's a plain arrow again

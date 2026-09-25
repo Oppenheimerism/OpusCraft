@@ -9,6 +9,7 @@ import { onProjectileHit } from '../game/blockRules';
 import { ItemStack, ITEMS } from '../item/item';
 import { Chicken } from './animals';
 import type { Player } from './player';
+import { projectileShot } from '../game/vibrations';
 
 const RAD = 180 / Math.PI;
 
@@ -61,6 +62,8 @@ export class ThrownItem extends Entity {
   }
 
   override tick(): void {
+    // (vanilla Projectile.tick: the throw is a game event)
+    projectileShot(this);
     this.baseTick();
     // (held at an end gateway while the far side loads: nothing more this tick)
     if (this.level.inTransit.has(this)) return;

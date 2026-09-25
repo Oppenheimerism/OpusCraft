@@ -15,6 +15,7 @@ import { doPostAttackEffects } from '../game/enchantEffects';
 import { FLAGS, F_AIR } from '../world/block';
 import { collisionFaceFull } from '../world/dynamicShapes';
 import { AXIS_OF, DOWN, DX, DY, DZ, EAST, NORTH, SOUTH, UP, WEST, type Dir } from '../world/dir';
+import { projectileShot } from '../game/vibrations';
 
 const RAD = 180 / Math.PI;
 /** vanilla SPEED: how fast it means to go (it speeds up 2.5% a tick while it has a target) */
@@ -141,6 +142,8 @@ export class ShulkerBullet extends Entity {
       this.remove();
       return;
     }
+    // (vanilla Projectile.tick: the shot is a game event)
+    projectileShot(this);
     if (!this.leftOwner) this.leftOwner = this.checkLeftOwner();
     this.baseTick();
     if (this.targetLost()) this.dy -= 0.04;

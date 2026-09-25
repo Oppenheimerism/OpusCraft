@@ -1035,6 +1035,8 @@ export abstract class Mob extends LivingEntity {
     this.navigation.stop();
     // vanilla Entity.killedEntity: the killer may take the body (a zombie's villager rises): then nothing drops
     if (attacker && !attacker.killedEntity(this)) return;
+    // (vanilla LivingEntity.die: the death is a game event, before the loot: a sculk catalyst may take the experience)
+    this.level.gameEvent?.('entity_die', this.x, this.y, this.z, { entity: this });
     const byPlayer = this.lastHurtByPlayerTime > 0;
     // the killer's looting (vanilla ATTACKING_ENTITY: the shooter for arrows)
     const looting = attacker instanceof LivingEntity ? entityLevel(attacker, 'looting') : 0;
@@ -1047,7 +1049,7 @@ export abstract class Mob extends LivingEntity {
         c.droppedSkulls = (c.droppedSkulls ?? 0) + 1;
         this.spawnAtLocation(ItemStack.of(head));
       }
-      if (byPlayer) this.level.awardExperience?.(this.x, this.y, this.z, this.experienceReward());
+      if (byPlayer && !this.skipDropExperience) this.level.awardExperience?.(this.x, this.y, this.z, this.experienceReward());
     }
   }
 

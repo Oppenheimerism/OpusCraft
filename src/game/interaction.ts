@@ -246,7 +246,7 @@ export class Interaction {
     if (b.name === 'fire') this.level.sound.play('block.fire.extinguish', x + 0.5, y + 0.5, z + 0.5, 0.5, 2.6 + (Math.random() - Math.random()) * 0.8);
     behaviorOf(st)?.playerWillDestroy?.(this.level, x, y, z, st, p, held);
     const silk = levelOf(held, 'silk_touch') > 0;
-    this.level.destroyBlock(x, y, z, survival, held?.item ?? null, true, held);
+    this.level.destroyBlock(x, y, z, survival, held?.item ?? null, true, held, p);
     if (survival && this.level.gameRules.doTileDrops) {
       const xp = blockExperience(st, held?.item ?? null, this.level.random, silk);
       if (xp > 0) this.level.awardExperience(x + 0.5, y + 0.5, z + 0.5, xp);
@@ -490,6 +490,8 @@ export class Interaction {
         // (vanilla EntityType.appendCustomNameConfig: an egg named on an anvil names what hatches)
         if (stack.tag?.customName !== undefined) mob.setCustomName(stack.tag.customName);
         this.level.addEntity(mob);
+        // (vanilla SpawnEggItem.useOn: ENTITY_PLACE at the block clicked)
+        this.level.gameEvent('entity_place', h.x + 0.5, h.y + 0.5, h.z + 0.5, { entity: p });
         if (p.gameMode !== 'creative') p.inventory.consumeSelected(1);
         p.swing();
       }
@@ -642,6 +644,8 @@ export class Interaction {
       }
       lvl.setBlock(h.x, h.y, h.z, ns);
       lvl.sound.play(openSound(n, b.get(ns, 'open') as boolean), h.x + 0.5, h.y + 0.5, h.z + 0.5, 1, Math.random() * 0.1 + 0.9);
+      // (vanilla: BLOCK_OPEN or BLOCK_CLOSE, by the player)
+      lvl.gameEvent(b.get(ns, 'open') ? 'block_open' : 'block_close', h.x + 0.5, h.y + 0.5, h.z + 0.5, { entity: p });
       p.swing();
       return true;
     }
@@ -707,6 +711,8 @@ export class Interaction {
       const cart = createMinecart(id, lvl)!;
       cart.moveTo(h.x + 0.5, h.y + 0.0625 + (isAscending(railShape(st)) ? 0.5 : 0), h.z + 0.5, 0, 0);
       lvl.addEntity(cart);
+      // (vanilla MinecartItem.useOn: ENTITY_PLACE on the rail, of what's under it)
+      lvl.gameEvent('entity_place', h.x + 0.5, h.y + 0.5, h.z + 0.5, { entity: p, state: lvl.getState(h.x, h.y - 1, h.z) });
       if (p.gameMode !== 'creative') p.inventory.consumeSelected(1);
       p.swing();
       return true;
@@ -782,6 +788,9 @@ export class Interaction {
     if (this.level.getState(x, y, z) === st) behaviorOf(st)?.setPlacedBy?.(this.level, x, y, z, st, p);
     this.onPlaced?.(BLOCKS[STATE_BLOCK[st]].name);
     const isBucket = stack.item.id.endsWith('_bucket');
+    // (vanilla BlockItem.place: BLOCK_PLACE, of what was placed; BucketItem.emptyContents: FLUID_PLACE)
+    if (isBucket && stack.item.id !== 'powder_snow_bucket') this.level.gameEvent('fluid_place', x + 0.5, y + 0.5, z + 0.5, { entity: p });
+    else this.level.gameEvent('block_place', x + 0.5, y + 0.5, z + 0.5, { entity: p, state: this.level.getState(x, y, z) });
     if (isBucket) this.level.sound.play(stack.item.id === 'lava_bucket' ? 'item.bucket.empty_lava' : 'item.bucket.empty', x + 0.5, y + 0.5, z + 0.5, 1, 1);
     else this.level.sound.play(`block.${sound}.place`, x + 0.5, y + 0.5, z + 0.5, 1, 0.8);
     if (p.gameMode !== 'creative') {
@@ -812,6 +821,8 @@ export class Interaction {
       mob.finalizeSpawn('egg');
       if (stack.tag?.customName !== undefined) mob.setCustomName(stack.tag.customName);
       this.level.addEntity(mob);
+      // (vanilla SpawnEggItem.use: ENTITY_PLACE in the pool)
+      this.level.gameEvent('entity_place', h.x + 0.5, h.y + 0.5, h.z + 0.5, { entity: p });
       if (p.gameMode !== 'creative') p.inventory.consumeSelected(1);
       p.swing();
       return true;
@@ -899,6 +910,8 @@ export class Interaction {
       if (h && FLAGS[h.state] & F_WATER && BLOCKS[STATE_BLOCK[h.state]].name === 'water' && BLOCKS[STATE_BLOCK[h.state]].get(h.state, 'level') === 0) {
         this.level.setBlock(h.x, h.y, h.z, 0);
         this.level.sound.play('item.bucket.fill', h.x + 0.5, h.y + 0.5, h.z + 0.5, 1, 1);
+        // (vanilla BucketItem.use: FLUID_PICKUP)
+        this.level.gameEvent('fluid_pickup', h.x + 0.5, h.y + 0.5, h.z + 0.5, { entity: p });
         if (p.gameMode !== 'creative') {
           if (stack.count === 1) p.inventory.setSelectedItem(ItemStack.of('water_bucket'));
           else {
@@ -911,6 +924,7 @@ export class Interaction {
       } else if (h && BLOCKS[STATE_BLOCK[h.state]].name === 'lava' && BLOCKS[STATE_BLOCK[h.state]].get(h.state, 'level') === 0) {
         this.level.setBlock(h.x, h.y, h.z, 0);
         this.level.sound.play('item.bucket.fill_lava', h.x + 0.5, h.y + 0.5, h.z + 0.5, 1, 1);
+        this.level.gameEvent('fluid_pickup', h.x + 0.5, h.y + 0.5, h.z + 0.5, { entity: p });
         if (p.gameMode !== 'creative') {
           if (stack.count === 1) p.inventory.setSelectedItem(ItemStack.of('lava_bucket'));
           else {
@@ -1000,6 +1014,8 @@ export class Interaction {
     if (it.food) {
       p.food.eat(it.food.nutrition, it.food.saturation);
       this.level.sound.play('entity.player.burp', p.x, p.y, p.z, 0.5, Math.random() * 0.1 + 0.9);
+      // (vanilla LivingEntity.eat: EAT)
+      this.level.gameEvent('eat', p.x, p.y, p.z, { entity: p });
       // vanilla LivingEntity.addEatEffect: each food effect rolls its probability
       for (const [id, ticks, amp, chance] of it.food.effects ?? []) {
         const e = MOB_EFFECTS[id];

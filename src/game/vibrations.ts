@@ -6,15 +6,13 @@
 // something sneaking makes no vibration by stepping, landing, swimming, eating or shooting.
 
 import type { Entity } from '../entity/entity';
+import type { Player } from '../entity/player';
 import type { Level } from './level';
 import { STATE_BLOCK, BLOCKS } from '../world/block';
-import { vibrationFrequency, GAME_EVENT_TAGS, dampensVibrations, occludesVibrations, itemDampensVibrations, type GameEventName } from './gameEvents';
+import { vibrationFrequency, GAME_EVENT_TAGS, dampensVibrations, occludesVibrations, itemDampensVibrations, type GameEventName, type GameEventContext } from './gameEvents';
+import type { GameEventListener } from './gameEventDispatcher';
 
-/** vanilla GameEvent.Context: what made the event, and the block it was done to or on */
-export interface GameEventContext {
-  entity?: Entity | null;
-  state?: number | null;
-}
+export type { GameEventContext };
 
 /** vanilla VibrationInfo */
 export interface VibrationInfo {
@@ -26,11 +24,14 @@ export interface VibrationInfo {
   entity: Entity | null;
   /** the owner of the projectile that made it, if one did */
   owner: Entity | null;
+  /** who made it and who shot it, as saved (looked up again once the vibration is back in the world) */
+  entityUuid?: string | null;
+  ownerUuid?: string | null;
 }
 
 /** vanilla VibrationSelector: of a tick's candidates, the nearest (on a tie the higher frequency), chosen the tick after */
 export class VibrationSelector {
-  private current: { info: VibrationInfo; tick: number } | null = null;
+  current: { info: VibrationInfo; tick: number } | null = null;
 
   addCandidate(info: VibrationInfo, tick: number): void {
     if (this.shouldReplace(info, tick)) this.current = { info, tick };
@@ -59,8 +60,51 @@ export class VibrationData {
   current: VibrationInfo | null = null;
   travelTime = 0;
   readonly selector = new VibrationSelector();
-  /** vanilla reloadVibrationParticle: the travelling particle is shown again once the listener is loaded */
-  reloadParticle = true;
+  /** vanilla reloadVibrationParticle: a vibration on its way when the listener was saved is shown again once it's back */
+  reloadParticle = false;
+
+  /** vanilla VibrationSystem.Data.CODEC: event, selector, event_delay */
+  save(): string {
+    const sel = this.selector.current;
+    return JSON.stringify({
+      ...(this.current ? { event: saveInfo(this.current) } : {}),
+      selector: sel ? { event: saveInfo(sel.info), tick: sel.tick } : {},
+      event_delay: this.travelTime,
+    });
+  }
+
+  load(text: string | number | undefined): void {
+    if (typeof text !== 'string') return;
+    try {
+      const d = JSON.parse(text) as { event?: SavedInfo; selector?: { event?: SavedInfo; tick?: number }; event_delay?: number };
+      this.current = d.event ? loadInfo(d.event) : null;
+      this.travelTime = Math.max(0, d.event_delay ?? 0);
+      const sel = d.selector?.event ? loadInfo(d.selector.event) : null;
+      this.selector.current = sel ? { info: sel, tick: d.selector?.tick ?? 0 } : null;
+      this.reloadParticle = true;
+    } catch {
+      // (a listener that can't be read starts afresh)
+    }
+  }
+}
+
+interface SavedInfo {
+  game_event: string;
+  distance: number;
+  pos: [number, number, number];
+  source?: string;
+  projectile_owner?: string;
+}
+
+function saveInfo(v: VibrationInfo): SavedInfo {
+  const source = v.entity?.uuid ?? v.entityUuid ?? undefined, owner = v.owner?.uuid ?? v.ownerUuid ?? undefined;
+  return { game_event: v.event, distance: v.distance, pos: [v.x, v.y, v.z], ...(source ? { source } : {}), ...(owner ? { projectile_owner: owner } : {}) };
+}
+
+function loadInfo(d: SavedInfo): VibrationInfo | null {
+  if (!vibrationFrequency(d.game_event) && !GAME_EVENT_TAGS.warden_can_listen.has(d.game_event)) return null;
+  const [x, y, z] = d.pos;
+  return { event: d.game_event as GameEventName, distance: d.distance, x, y, z, entity: null, owner: null, entityUuid: d.source ?? null, ownerUuid: d.projectile_owner ?? null };
 }
 
 /** vanilla VibrationSystem.User: the listener's side of it */
@@ -79,6 +123,8 @@ export interface VibrationUser {
   travelTime?(distance: number): number;
   /** vanilla onDataChanged */
   onDataChanged?(): void;
+  /** vanilla requiresAdjacentChunksToBeTicking: a vibration waits to be taken in till the chunks round it all tick */
+  readonly requiresAdjacentChunksToBeTicking?: boolean;
 }
 
 const travelTime = (user: VibrationUser, distance: number) => (user.travelTime ? user.travelTime(distance) : Math.floor(distance));
@@ -95,9 +141,6 @@ function entityDampens(e: Entity): boolean {
   return e.type === 'item' && !!item?.item?.id && itemDampensVibrations(item.item.id);
 }
 
-/** what's to award a player that sneaked by a sensor unheard (game/advancements: adventure/avoid_vibration) */
-export const vibrationHooks: { avoided: ((player: Entity) => void) | null } = { avoided: null };
-
 /** vanilla VibrationSystem.User.isValidVibration */
 export function isValidVibration(user: VibrationUser, event: GameEventName, ctx: GameEventContext): boolean {
   if (!(user.listenable ?? GAME_EVENT_TAGS.vibrations).has(event)) return false;
@@ -105,7 +148,8 @@ export function isValidVibration(user: VibrationUser, event: GameEventName, ctx:
   if (e) {
     if (gameModeOf(e) === 'spectator') return false;
     if (steppingCarefully(e) && GAME_EVENT_TAGS.ignore_vibrations_sneaking.has(event)) {
-      if (user.canTriggerAvoidVibration && gameModeOf(e) !== null) vibrationHooks.avoided?.(e);
+      // (vanilla CriteriaTriggers.AVOID_VIBRATION: Sneak 100)
+      if (user.canTriggerAvoidVibration && e.type === 'player') e.level.onPlayerTrigger?.(e as Player, 'avoid_vibration');
       return false;
     }
     if (entityDampens(e)) return false;
@@ -169,6 +213,140 @@ function woolInLine(level: Level, x0: number, y0: number, z0: number, x1: number
     if (occludesVibrations(level.getState(bx, by, bz))) return true;
   }
   return false;
+}
+
+/** vanilla Projectile: the entities that have an owner who shot or threw them */
+const PROJECTILES = new Set([
+  'arrow', 'spectral_arrow', 'trident', 'egg', 'snowball', 'ender_pearl', 'potion', 'experience_bottle', 'fireball', 'small_fireball',
+  'dragon_fireball', 'wither_skull', 'shulker_bullet', 'llama_spit', 'firework_rocket', 'fishing_bobber', 'wind_charge', 'breeze_wind_charge',
+]);
+
+/** vanilla VibrationInfo.getProjectileOwner: who shot or threw it, if it's a projectile */
+export function projectileOwner(e: Entity | null | undefined): Entity | null {
+  return e && PROJECTILES.has(e.type) ? ((e as { owner?: Entity | null }).owner ?? null) : null;
+}
+
+/** vanilla Projectile.hasBeenShot: the projectiles that have told of being shot (or were loaded, having done so) */
+const SHOT = new WeakSet<Entity>();
+
+/**
+ * vanilla Projectile.tick's first thing: once, PROJECTILE_SHOOT where the projectile is, by whoever shot or threw it
+ * (a sneaking player's shot isn't heard)
+ */
+export function projectileShot(e: Entity): void {
+  if (SHOT.has(e)) return;
+  SHOT.add(e);
+  e.level.gameEvent?.('projectile_shoot', e.x, e.y, e.z, { entity: projectileOwner(e) });
+}
+
+/** vanilla HasBeenShot, loaded: a saved projectile doesn't tell of it again */
+export function markShot(e: Entity): void {
+  SHOT.add(e);
+}
+
+/** vanilla VibrationSystem.Listener: a vibration user's ear, as its block entity (or the warden) hands it to the dispatcher */
+export class VibrationListener implements GameEventListener {
+  constructor(readonly user: VibrationUser, readonly data: VibrationData) {}
+
+  listenerPosition(): [number, number, number] | null {
+    return this.user.position();
+  }
+
+  listenerRadius(): number {
+    return this.user.radius;
+  }
+
+  /** vanilla handleGameEvent: nothing while a vibration is on its way; otherwise one it can hear, not stopped by wool */
+  handleGameEvent(level: Level, event: GameEventName, ctx: GameEventContext, x: number, y: number, z: number): boolean {
+    if (this.data.current) return false;
+    if (!isValidVibration(this.user, event, ctx)) return false;
+    const p = this.user.position();
+    if (!p) return false;
+    if (!this.user.canReceive(level, Math.floor(x), Math.floor(y), Math.floor(z), event, ctx)) return false;
+    if (isOccluded(level, x, y, z, p[0], p[1], p[2])) return false;
+    this.schedule(level, event, ctx, x, y, z, p);
+    return true;
+  }
+
+  /** vanilla forceScheduleVibration: a candidate however it came (something stepping on a sensor, sneaking or not) */
+  forceScheduleVibration(level: Level, event: GameEventName, ctx: GameEventContext, x: number, y: number, z: number): void {
+    const p = this.user.position();
+    if (p) this.schedule(level, event, ctx, x, y, z, p);
+  }
+
+  /** vanilla scheduleVibration: a candidate for this tick, as far as it is from the listener */
+  private schedule(level: Level, event: GameEventName, ctx: GameEventContext, x: number, y: number, z: number, p: [number, number, number]): void {
+    const distance = Math.fround(Math.sqrt((x - p[0]) ** 2 + (y - p[1]) ** 2 + (z - p[2]) ** 2));
+    const e = ctx.entity ?? null;
+    this.data.selector.addCandidate({ event, distance, x, y, z, entity: e, owner: projectileOwner(e) }, level.gameTime);
+  }
+}
+
+/** vanilla VibrationInfo.getEntity / getProjectileOwner: the entity itself, or the one of that uuid now in the level */
+function entityOf(level: Level, e: Entity | null, uuid: string | null | undefined): Entity | null {
+  if (e || !uuid) return e;
+  return level.entities.find((o) => o.hasUuid && o.uuid === uuid) ?? null;
+}
+
+/** vanilla VibrationSystem.Ticker.areAdjacentChunksTicking: the chunk the listener is in and the eight round it */
+function adjacentChunksTicking(level: Level, x: number, z: number): boolean {
+  const cx = x >> 4, cz = z >> 4;
+  for (let i = cx - 1; i <= cx + 1; i++) for (let j = cz - 1; j <= cz + 1; j++) if (!level.isEntityTicking(i * 16 + 8, j * 16 + 8)) return false;
+  return true;
+}
+
+/**
+ * vanilla VibrationSystem.Ticker.tick: each tick of a listener's block entity (or warden), the vibration chosen from
+ * the last tick's candidates sets off (the particle with it), and the one on its way comes a block nearer; once it's
+ * there the listener takes it in
+ */
+export function tickVibrations(level: Level, data: VibrationData, user: VibrationUser): void {
+  if (!data.current) trySelectAndScheduleVibration(level, data, user);
+  const v = data.current;
+  if (!v) return;
+  let changed = data.travelTime > 0;
+  tryReloadVibrationParticle(level, data, user);
+  data.travelTime = Math.max(0, data.travelTime - 1);
+  if (data.travelTime <= 0) changed = receiveVibration(level, data, user, v);
+  if (changed) user.onDataChanged?.();
+}
+
+/** vanilla trySelectAndScheduleVibration: the chosen candidate sets off, a vibration particle flying to the listener */
+function trySelectAndScheduleVibration(level: Level, data: VibrationData, user: VibrationUser): void {
+  const info = data.selector.chosenCandidate(level.gameTime);
+  if (!info) return;
+  data.current = info;
+  data.travelTime = travelTime(user, info.distance);
+  level.particles.vibration?.(info.x, info.y, info.z, () => user.position(), data.travelTime);
+  user.onDataChanged?.();
+  data.selector.startOver();
+}
+
+/** vanilla tryReloadVibrationParticle: a vibration that was on its way when saved is shown again from where it had got to */
+function tryReloadVibrationParticle(level: Level, data: VibrationData, user: VibrationUser): void {
+  if (!data.reloadParticle) return;
+  const v = data.current;
+  if (!v) {
+    data.reloadParticle = false;
+    return;
+  }
+  const to = user.position() ?? [v.x, v.y, v.z];
+  const i = data.travelTime, j = travelTime(user, v.distance);
+  const t = j > 0 ? 1 - i / j : 1;
+  level.particles.vibration?.(v.x + (to[0] - v.x) * t, v.y + (to[1] - v.y) * t, v.z + (to[2] - v.z) * t, () => user.position(), i);
+  data.reloadParticle = false;
+}
+
+/** vanilla receiveVibration: the listener takes the vibration in, from the block it happened in */
+function receiveVibration(level: Level, data: VibrationData, user: VibrationUser, v: VibrationInfo): boolean {
+  const bx = Math.floor(v.x), by = Math.floor(v.y), bz = Math.floor(v.z);
+  const p = user.position();
+  const lx = p ? Math.floor(p[0]) : bx, ly = p ? Math.floor(p[1]) : by, lz = p ? Math.floor(p[2]) : bz;
+  if (user.requiresAdjacentChunksToBeTicking && !adjacentChunksTicking(level, lx, lz)) return false;
+  const entity = entityOf(level, v.entity, v.entityUuid), owner = entityOf(level, v.owner, v.ownerUuid);
+  user.onReceive(level, bx, by, bz, v.event, entity, owner, distanceInBlocks(bx, by, bz, lx, ly, lz));
+  data.current = null;
+  return true;
 }
 
 /** the name of a block (for tests and messages) */

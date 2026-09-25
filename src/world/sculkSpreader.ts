@@ -24,6 +24,8 @@ export interface SculkLevel {
   chargeEvent?(x: number, y: number, z: number, data: number): void;
   /** vanilla Block.pushEntitiesUp: something standing where a block turned solid is lifted out */
   pushEntitiesUp?(x: number, y: number, z: number): void;
+  /** vanilla ChargeCursor.shouldUpdate: whether blocks tick at (x, y, z) (in the running level; world generation: always) */
+  ticksAt?(x: number, y: number, z: number): boolean;
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -344,6 +346,34 @@ export class SculkSpreader {
     this.cursors = [];
   }
 
+  /** vanilla SculkSpreader.save: the cursors (ChargeCursor.CODEC: pos, charge, decay_delay, update_delay, facings) */
+  save(): string {
+    return JSON.stringify(
+      this.cursors.map((c) => ({
+        pos: [c.x, c.y, c.z], charge: c.charge, decay_delay: c.decayDelay, update_delay: c.updateDelay,
+        ...(c.facings !== null ? { facings: DIR_NAMES.filter((_, d) => (c.facings! >> d) & 1) } : {}),
+      })),
+    );
+  }
+
+  /** vanilla SculkSpreader.load: at most 32 cursors */
+  load(text: string | number | undefined): void {
+    if (typeof text !== 'string') return;
+    try {
+      const list = JSON.parse(text) as { pos: [number, number, number]; charge: number; decay_delay?: number; update_delay?: number; facings?: string[] }[];
+      this.cursors = [];
+      for (const d of list.slice(0, 32)) {
+        const c = new ChargeCursor(d.pos[0], d.pos[1], d.pos[2], Math.max(0, Math.min(1000, d.charge)));
+        c.decayDelay = d.decay_delay ?? 1;
+        c.updateDelay = Math.max(0, d.update_delay ?? 0);
+        c.facings = d.facings ? d.facings.reduce((m, n) => m | (1 << DIR_NAMES.indexOf(n as (typeof DIR_NAMES)[number])), 0) : null;
+        this.cursors.push(c);
+      }
+    } catch {
+      // (cursors that can't be read are let go)
+    }
+  }
+
   /** vanilla updateCursors: each cursor takes its step; those that end on the same block are merged (not in world generation) */
   updateCursors(level: SculkLevel, rx: number, ry: number, rz: number, r: SculkRandom, convert: boolean): void {
     if (!this.cursors.length) return;
@@ -351,6 +381,8 @@ export class SculkSpreader {
     const at = new Map<string, ChargeCursor>();
     const totals = new Map<string, number>();
     for (const c of this.cursors) {
+      // vanilla ChargeCursor.isPosUnreasonable: one that has wandered over 1024 blocks off is dropped
+      if (Math.max(Math.abs(c.x - rx), Math.abs(c.y - ry), Math.abs(c.z - rz)) > 1024) continue;
       this.update(c, level, rx, ry, rz, r, convert);
       if (c.charge <= 0) {
         level.chargeEvent?.(c.x, c.y, c.z, 0);
@@ -382,7 +414,7 @@ export class SculkSpreader {
 
   /** vanilla ChargeCursor.update */
   private update(c: ChargeCursor, level: SculkLevel, rx: number, ry: number, rz: number, r: SculkRandom, convert: boolean): void {
-    if (c.charge <= 0) return;
+    if (c.charge <= 0 || (!this.isWorldGeneration && level.ticksAt && !level.ticksAt(c.x, c.y, c.z))) return;
     if (c.updateDelay > 0) {
       c.updateDelay--;
       return;

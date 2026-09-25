@@ -228,6 +228,7 @@ function setDoorOpen(v: Villager, p: Pos, open: boolean): void {
   if (!b.name.endsWith('_door') || b.get(st, 'open') === open) return;
   v.level.setBlock(p[0], p[1], p[2], b.with(st, 'open', open), 2);
   v.level.sound.play(doorSound(b.name, open), p[0] + 0.5, p[1] + 0.5, p[2] + 0.5, 1, v.random.nextFloat() * 0.1 + 0.9);
+  v.level.gameEvent?.(open ? 'block_open' : 'block_close', p[0] + 0.5, p[1] + 0.5, p[2] + 0.5, { entity: v });
 }
 
 // ---------------------------------------------------------------------------

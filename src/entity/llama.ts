@@ -22,6 +22,7 @@ import { LeashKnot } from './leash';
 import { clipBlocks } from '../game/raycast';
 import { onProjectileHit } from '../game/blockRules';
 import { isAir, FLAGS, F_WATER } from '../world/block';
+import { projectileShot } from '../game/vibrations';
 
 /** vanilla Llama.Variant, in id order */
 export const LLAMA_VARIANTS = ['creamy', 'white', 'brown', 'gray'] as const;
@@ -441,6 +442,8 @@ export class LlamaSpit extends Entity {
   }
 
   override tick(): void {
+    // (vanilla Projectile.tick: the spit is a game event)
+    projectileShot(this);
     this.baseTick();
     if (this.removed) return;
     const o = this.owner;

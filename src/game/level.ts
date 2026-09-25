@@ -66,6 +66,9 @@ import './desertWells';
 // (the deep dark: sculk and its kin, candles)
 import './sculk';
 import './candles';
+// (the deep dark: game events and the listeners that hear them)
+import { postGameEvent } from './gameEventDispatcher';
+import type { GameEventName, GameEventContext } from './gameEvents';
 
 export interface SoundSink {
   play(name: string, x: number, y: number, z: number, volume?: number, pitch?: number): void;
@@ -91,6 +94,14 @@ export interface ParticleSink {
   dust?(x: number, y: number, z: number, r: number, g: number, b: number, scale: number): void;
   /** vanilla EFFECT / INSTANT_EFFECT (SpellParticle) in a colour, flung out by `power` (a splash potion's burst) */
   spell?(kind: 'effect' | 'instant_effect' | 'witch', x: number, y: number, z: number, xd: number, yd: number, zd: number, r: number, g: number, b: number, power?: number): void;
+  /** vanilla VIBRATION (VibrationSignalParticle): from (x, y, z) to wherever `target` is, arriving in `ticks` */
+  vibration?(x: number, y: number, z: number, target: () => [number, number, number] | null, ticks: number): void;
+  /** vanilla SHRIEK (ShriekParticle): a ring rising from a shrieker, `delay` ticks from now */
+  shriek?(x: number, y: number, z: number, delay: number): void;
+  /** vanilla SCULK_CHARGE (SculkChargeParticle): a charge's glow on a face, turned `roll` */
+  sculkCharge?(x: number, y: number, z: number, xd: number, yd: number, zd: number, roll: number): void;
+  /** vanilla DUST_COLOR_TRANSITION (DustColorTransitionParticle): a speck going from one colour to another */
+  dustTransition?(x: number, y: number, z: number, xd: number, yd: number, zd: number, from: [number, number, number], to: [number, number, number], scale: number): void;
 }
 
 /** vanilla Block.UPDATE_NEIGHBORS: setBlock tells the six neighbours (neighborChanged) */
@@ -231,6 +242,14 @@ export class Level {
         for (const p of parts) if (p !== except && p.bb.intersects(box) && (!filter || filter(p))) out.push(p);
       }
     return out;
+  }
+
+  /**
+   * vanilla Level.gameEvent: `event` happened at (x, y, z), by `ctx.entity` (to `ctx.state`); the sculk sensors,
+   * shriekers, catalysts and wardens round about may hear it (game/gameEventDispatcher.ts)
+   */
+  gameEvent(event: GameEventName, x: number, y: number, z: number, ctx: GameEventContext = {}): void {
+    postGameEvent(this, event, x, y, z, ctx);
   }
 
   /** vanilla ExperienceOrb.award: split into orb sizes */
@@ -718,8 +737,11 @@ export class Level {
     this.neighborUpdater.neighborChanged(x, y, z, source, fx, fy, fz);
   }
 
-  /** Destroy a block: effects, drops, neighbour updates. `stack` = the breaking tool (silk touch, fortune). */
-  destroyBlock(x: number, y: number, z: number, drop: boolean, tool: Item | null = null, effects = true, stack: ItemStack | null = null): boolean {
+  /**
+   * Destroy a block: effects, drops, neighbour updates. `stack` = the breaking tool (silk touch, fortune); `breaker`:
+   * who broke it, for the game event (vanilla Level.destroyBlock's entity; false where vanilla removes it without one)
+   */
+  destroyBlock(x: number, y: number, z: number, drop: boolean, tool: Item | null = null, effects = true, stack: ItemStack | null = null, breaker: Entity | null | false = null): boolean {
     const st = this.world.getState(x, y, z);
     if (FLAGS[st] & F_AIR) return false;
     const b = BLOCKS[STATE_BLOCK[st]];
@@ -772,6 +794,8 @@ export class Level {
       this.updateNeighborsAt(other[0], other[1], other[2], b.id);
       this.updateNeighbors(other[0], other[1], other[2]);
     }
+    // (vanilla Level.destroyBlock: BLOCK_DESTROY, by whoever broke it, of what it was)
+    if (breaker !== false) this.gameEvent('block_destroy', x + 0.5, y + 0.5, z + 0.5, { entity: breaker, state: st });
     return true;
   }
 

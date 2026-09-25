@@ -715,5 +715,7 @@ export function useBoatItem(level: Level, p: Player, itemId: string, reach: numb
   boat.moveTo(hit.hx, hit.hy, hit.hz, p.yaw, 0);
   if (boat.collisionBoxes(boat.bb).length) return false;
   level.addEntity(boat);
+  // (vanilla BoatItem.use: ENTITY_PLACE where the eye ray met the world)
+  level.gameEvent?.('entity_place', hit.hx, hit.hy, hit.hz, { entity: p });
   return true;
 }

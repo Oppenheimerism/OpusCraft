@@ -5,6 +5,13 @@
 // (a death near it) and the warden. Each event has the vibration frequency a sensor gives off for it.
 
 import { BLOCKS, STATE_BLOCK } from '../world/block';
+import type { Entity } from '../entity/entity';
+
+/** vanilla GameEvent.Context: what made the event, and the block it was done to or on */
+export interface GameEventContext {
+  entity?: Entity | null;
+  state?: number | null;
+}
 
 /** vanilla GameEvent: every event, with its notification radius (16 unless it says otherwise) */
 export const GAME_EVENT_RADIUS: Record<string, number> = {};

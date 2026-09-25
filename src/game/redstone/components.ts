@@ -106,13 +106,14 @@ function registerAttached(name: string, b: BlockBehavior): void {
   };
   registerAttached('lever', {
     // vanilla LeverBlock.useWithoutItem / pull
-    use(level, x, y, z, st) {
+    use(level, x, y, z, st, ctx) {
       const b = blk(st);
       const now = b.with(st, 'powered', !powered(st));
       level.setBlock(x, y, z, now);
       updateAttached(level, x, y, z, now);
       if (powered(now)) particle(level, x, y, z, now, 1);
       level.sound.play('block.lever.click', x + 0.5, y + 0.5, z + 0.5, 0.3, powered(now) ? 0.6 : 0.5);
+      level.gameEvent(powered(now) ? 'block_activate' : 'block_deactivate', x + 0.5, y + 0.5, z + 0.5, { entity: ctx.player });
       return true;
     },
     animateTick(level, x, y, z, st) {
@@ -133,29 +134,32 @@ function registerAttached(name: string, b: BlockBehavior): void {
     const click = (level: Level, x: number, y: number, z: number, on: boolean) => level.sound.play(`block.${kind}.click_${on ? 'on' : 'off'}`, x + 0.5, y + 0.5, z + 0.5, 0.3, 1);
     /** vanilla ButtonBlock.checkPressed: is an arrow in it? (stone buttons never ask) */
     const checkPressed = (level: Level, x: number, y: number, z: number, st: number) => {
-      let arrow = false;
+      let arrow = false, by: Entity | null = null;
       if (arrows) {
         // (vanilla: arrows within the bounds of the button's shape)
         const [x0, y0, z0, x1, y1, z1] = OUTLINE[st][0];
-        arrow = level.getEntities(new AABB(x + x0, y + y0, z + z0, x + x1, y + y1, z + z1), (e) => e.type === 'arrow').length > 0;
+        by = level.getEntities(new AABB(x + x0, y + y0, z + z0, x + x1, y + y1, z + z1), (e) => e.type === 'arrow')[0] ?? null;
+        arrow = by !== null;
       }
       if (arrow !== powered(st)) {
         const now = blk(st).with(st, 'powered', arrow);
         level.setBlock(x, y, z, now);
         updateAttached(level, x, y, z, now);
         click(level, x, y, z, arrow);
+        level.gameEvent(arrow ? 'block_activate' : 'block_deactivate', x + 0.5, y + 0.5, z + 0.5, { entity: by });
       }
       if (arrow) level.scheduleBlockTick(x, y, z, STATE_BLOCK[st], ticks);
     };
     registerAttached(name, {
       // vanilla ButtonBlock.useWithoutItem / press
-      use(level, x, y, z, st) {
+      use(level, x, y, z, st, ctx) {
         if (powered(st)) return true;
         const now = blk(st).with(st, 'powered', true);
         level.setBlock(x, y, z, now);
         updateAttached(level, x, y, z, now);
         level.scheduleBlockTick(x, y, z, STATE_BLOCK[st], ticks);
         click(level, x, y, z, true);
+        level.gameEvent('block_activate', x + 0.5, y + 0.5, z + 0.5, { entity: ctx.player });
         return true;
       },
       tick(level, x, y, z, st) {
@@ -186,14 +190,19 @@ function registerAttached(name: string, b: BlockBehavior): void {
       level.updateNeighborsAt(x, y - 1, z, id);
     };
     /** vanilla BasePressurePlateBlock.checkPressed */
-    const checkPressed = (level: Level, x: number, y: number, z: number, st: number, current: number) => {
+    const checkPressed = (level: Level, x: number, y: number, z: number, st: number, current: number, by: Entity | null = null) => {
       const s = strength(level, x, y, z);
       if (current !== s) {
         level.setBlock(x, y, z, withSignal(st, s), 2);
         updateAround(level, x, y, z, STATE_BLOCK[st]);
       }
-      if (s === 0 && current > 0) level.sound.play(`block.${kind}.click_off`, x + 0.5, y + 0.1, z + 0.5, 0.3, 1);
-      else if (s > 0 && current === 0) level.sound.play(`block.${kind}.click_on`, x + 0.5, y + 0.1, z + 0.5, 0.3, 1);
+      if (s === 0 && current > 0) {
+        level.sound.play(`block.${kind}.click_off`, x + 0.5, y + 0.1, z + 0.5, 0.3, 1);
+        level.gameEvent('block_deactivate', x + 0.5, y + 0.5, z + 0.5, { entity: by });
+      } else if (s > 0 && current === 0) {
+        level.sound.play(`block.${kind}.click_on`, x + 0.5, y + 0.1, z + 0.5, 0.3, 1);
+        level.gameEvent('block_activate', x + 0.5, y + 0.5, z + 0.5, { entity: by });
+      }
       if (s > 0) level.scheduleBlockTick(x, y, z, STATE_BLOCK[st], pressedTime);
     };
     registerBehavior(name, {
@@ -205,9 +214,9 @@ function registerAttached(name: string, b: BlockBehavior): void {
         const i = signalFor(st);
         if (i > 0) checkPressed(level, x, y, z, st, i);
       },
-      entityInside(level, x, y, z, st) {
+      entityInside(level, x, y, z, st, e) {
         const i = signalFor(st);
-        if (i === 0) checkPressed(level, x, y, z, st, i);
+        if (i === 0) checkPressed(level, x, y, z, st, i, e);
       },
       onRemove(level, x, y, z, st, now) {
         if (STATE_BLOCK[now] !== STATE_BLOCK[st] && signalFor(st) > 0) updateAround(level, x, y, z, STATE_BLOCK[st]);
@@ -287,7 +296,10 @@ for (const b of BLOCKS) {
         const other = b.get(st, 'half') === 'lower' ? y + 1 : y - 1;
         const on = hasNeighborSignal(level.world, x, y, z) || hasNeighborSignal(level.world, x, other, z);
         if (source === b.id || on === b.get(st, 'powered')) return;
-        if (on !== b.get(st, 'open')) play(level, x, y, z, on);
+        if (on !== b.get(st, 'open')) {
+          play(level, x, y, z, on);
+          level.gameEvent(on ? 'block_open' : 'block_close', x + 0.5, y + 0.5, z + 0.5);
+        }
         level.setBlock(x, y, z, b.with(b.with(st, 'powered', on), 'open', on), 2);
       },
     });
@@ -301,6 +313,7 @@ for (const b of BLOCKS) {
         if (b.get(st, 'open') !== on) {
           now = b.with(now, 'open', on);
           play(level, x, y, z, on);
+          level.gameEvent(on ? 'block_open' : 'block_close', x + 0.5, y + 0.5, z + 0.5);
         }
         level.setBlock(x, y, z, now, 2);
       },
@@ -312,7 +325,10 @@ for (const b of BLOCKS) {
         const on = hasNeighborSignal(level.world, x, y, z);
         if (b.get(st, 'powered') === on) return;
         level.setBlock(x, y, z, b.with(b.with(st, 'powered', on), 'open', on), 2);
-        if (b.get(st, 'open') !== on) play(level, x, y, z, on);
+        if (b.get(st, 'open') !== on) {
+          play(level, x, y, z, on);
+          level.gameEvent(on ? 'block_open' : 'block_close', x + 0.5, y + 0.5, z + 0.5);
+        }
       },
     });
   }

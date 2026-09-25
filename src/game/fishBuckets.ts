@@ -41,7 +41,9 @@ function useFishBucket(level: Level, p: Player, stack: ItemStack): 'success' | '
     [x, y, z] = [nx, ny, nz];
     if (y < level.world.dim.minY || y >= level.world.dim.maxY || !emptyContents(level, x, y, z, 'water', 'item.bucket.empty_fish')) return 'fail';
   }
-  releaseBucketFish(level, stack, x, y, z);
+  // (vanilla BucketItem.emptyContents: FLUID_PLACE; MobBucketItem.spawn: ENTITY_PLACE)
+  level.gameEvent('fluid_place', x + 0.5, y + 0.5, z + 0.5, { entity: p });
+  if (releaseBucketFish(level, stack, x, y, z)) level.gameEvent('entity_place', x + 0.5, y + 0.5, z + 0.5, { entity: p });
   // vanilla ItemUtils.createFilledResult(stack, player, getEmptySuccessItem): the empty bucket in its place
   if (p.gameMode !== 'creative') p.inventory.setSelectedItem(ItemStack.of('bucket'));
   p.swing();

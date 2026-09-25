@@ -95,14 +95,18 @@ const FACING_NORMAL: Record<string, [number, number, number]> = { down: [0, -1, 
  */
 export class BarrelBlockEntity extends ChestBlockEntity {
   override readonly id: string = 'barrel';
-  /** vanilla startOpen */
+  /** vanilla startOpen (ContainerOpenersCounter.incrementOpeners: the first to look in is a game event) */
   startOpen(level: Level): void {
-    if (!this.removed && this.openCount++ === 0) this.setOpen(level, true);
+    if (this.removed || this.openCount++ !== 0) return;
+    this.setOpen(level, true);
+    level.gameEvent('container_open', this.x + 0.5, this.y + 0.5, this.z + 0.5, { entity: level.player });
   }
-  /** vanilla stopOpen */
+  /** vanilla stopOpen (decrementOpeners: so is the last to leave) */
   stopOpen(level: Level): void {
     if (this.removed || this.openCount === 0) return;
-    if (--this.openCount === 0) this.setOpen(level, false);
+    if (--this.openCount !== 0) return;
+    this.setOpen(level, false);
+    level.gameEvent('container_close', this.x + 0.5, this.y + 0.5, this.z + 0.5, { entity: level.player });
   }
   /** vanilla BarrelBlockEntity.onOpen / onClose: the lid's sound at its face, and the block's `open` */
   private setOpen(level: Level, open: boolean): void {

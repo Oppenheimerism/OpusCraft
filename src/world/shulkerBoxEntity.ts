@@ -179,7 +179,9 @@ export class ShulkerBoxBlockEntity extends BarrelBlockEntity {
     if (this.openCount < 0) this.openCount = 0;
     this.openCount++;
     this.openCountChanged();
-    if (this.openCount === 1) level.sound.play('block.shulker_box.open', this.x + 0.5, this.y + 0.5, this.z + 0.5, 0.5, level.random.nextFloat() * 0.1 + 0.9);
+    if (this.openCount !== 1) return;
+    level.gameEvent('container_open', this.x + 0.5, this.y + 0.5, this.z + 0.5, { entity: level.player });
+    level.sound.play('block.shulker_box.open', this.x + 0.5, this.y + 0.5, this.z + 0.5, 0.5, level.random.nextFloat() * 0.1 + 0.9);
   }
 
   /** vanilla stopOpen: the last to leave shuts it */
@@ -187,7 +189,9 @@ export class ShulkerBoxBlockEntity extends BarrelBlockEntity {
     if (this.removed) return;
     this.openCount--;
     this.openCountChanged();
-    if (this.openCount <= 0) level.sound.play('block.shulker_box.close', this.x + 0.5, this.y + 0.5, this.z + 0.5, 0.5, level.random.nextFloat() * 0.1 + 0.9);
+    if (this.openCount > 0) return;
+    level.gameEvent('container_close', this.x + 0.5, this.y + 0.5, this.z + 0.5, { entity: level.player });
+    level.sound.play('block.shulker_box.close', this.x + 0.5, this.y + 0.5, this.z + 0.5, 0.5, level.random.nextFloat() * 0.1 + 0.9);
   }
 
   /** vanilla triggerEvent(EVENT_SET_OPEN_COUNT): the lid starts up with the first to look in, down after the last */

@@ -89,6 +89,10 @@ export interface BlockBehavior {
   spawnAfterBreak?(level: Level, x: number, y: number, z: number, state: number, stack: ItemStack | null): void;
   /** vanilla entityInside: `e`'s box overlaps the block */
   entityInside?(level: Level, x: number, y: number, z: number, state: number, e: Entity): void;
+  /** vanilla stepOn: `e`, on the ground, stands on the block (the one 0.2 under its feet) this tick */
+  stepOn?(level: Level, x: number, y: number, z: number, state: number, e: Entity): void;
+  /** vanilla getAnalogOutputSignal: what a comparator reads from the block (those with hasAnalogOutputSignal) */
+  analogOutput?(level: Level, x: number, y: number, z: number, state: number): number;
   /** vanilla animateTick (client ambient effects) */
   animateTick?(level: Level, x: number, y: number, z: number, state: number): void;
   /** vanilla setPlacedBy: a player placed it (after it's in the world) */
