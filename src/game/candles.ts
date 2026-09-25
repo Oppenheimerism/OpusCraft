@@ -72,9 +72,9 @@ for (const name of CANDLE_NAMES) {
       const water = blk(cur).name === 'water' && blk(cur).get(cur, 'level') === 0;
       return b.with(b.defaultState, 'waterlogged', water);
     },
-    // vanilla CandleBlock.canBeReplaced: the same candles, fewer than four, and not while sneaking
-    canBeReplaced(st, block, sneaking) {
-      return !sneaking && block === b && b.get<number>(st, 'candles') < 4;
+    // vanilla CandleBlock.canBeReplaced: the same candles in hand, fewer than four, and not while sneaking
+    canBeReplaced(st, stack, sneaking) {
+      return !sneaking && stack.item.id === name && b.get<number>(st, 'candles') < 4;
     },
     // vanilla CandleBlock.canSurvive: something that holds up the middle of its top underneath
     canSurvive(world, x, y, z) {

@@ -85,7 +85,14 @@ interface SpriteParticle {
   fade?: [number, number, number];
   /** what its gravity and its friction are multiplied by each tick before it moves (vanilla DustPlumeParticle) */
   decay?: [number, number];
+  /** (fireworks) vanilla FireworkParticles.SparkParticle: whether it leaves a trail of sparks, and twinkles */
+  spark?: { trail: boolean; twinkle: boolean };
+  /** (fireworks) vanilla FireworkParticles.OverlayParticle: the explosion's flash, sized and faded by its age */
+  flash?: boolean;
 }
+
+/** a 0xRRGGBB colour as vanilla Particle.setColor's three floats */
+const rgb = (c: number): [number, number, number] => [((c >> 16) & 255) / 255, ((c >> 8) & 255) / 255, (c & 255) / 255];
 
 export interface SpriteRectUV {
   u0: number;
@@ -121,6 +128,8 @@ export class ParticleEngine {
   readonly max = 16384;
   spriteTexture: WebGLTexture | null = null;
   spriteRects: Record<string, SpriteRectUV> = {};
+  /** vanilla NoRenderParticle subclasses (a firework's Starter): ticked after the others, never drawn; false once done */
+  private readonly tickers: { tick(): boolean }[] = [];
   /** vanilla DripstoneFallAndLandParticle: a drip from a stalactite plays a sound where it lands */
   onDripstoneDripLand: ((x: number, y: number, z: number, lava: boolean) => void) | null = null;
 
@@ -271,13 +280,63 @@ export class ParticleEngine {
   }
 
   private addSprite(p: SpriteParticle): void {
-    if (this.sprites.length >= 4096) this.sprites.shift();
+    // (vanilla ParticleEngine: at most 16384 of a kind, the oldest dropped first; trimmed once a tick, tickSprites)
     this.sprites.push(p);
+  }
+
+  /** a NoRenderParticle: `t.tick()` every particle tick (after the particles) until it says it's done */
+  addTicker(t: { tick(): boolean }): void {
+    this.tickers.push(t);
+  }
+
+  /**
+   * (fireworks) vanilla FireworkParticles.SparkParticle as the FIREWORK particle type makes it (alpha 0.99): a
+   * SimpleAnimatedParticle of gravity 0.1 and friction 0.91, three quarters the size, 48-59 ticks, full bright, the
+   * glitter frames by age; past half its life it fades out, and toward its fade colour if it has one. `color` / `fade`:
+   * 0xRRGGBB, or -1 (white; no fade)
+   */
+  spark(x: number, y: number, z: number, xd: number, yd: number, zd: number, color = -1, fade = -1, trail = false, twinkle = false): SpriteParticle {
+    const p = this.base('firework', x, y, z);
+    p.dx = xd;
+    p.dy = yd;
+    p.dz = zd;
+    p.gravity = 0.1;
+    p.friction = 0.91;
+    p.size *= 0.75;
+    p.lifetime = 48 + Math.floor(Math.random() * 12);
+    p.frames = GLITTER;
+    p.fullBright = true;
+    p.alpha = 0.99;
+    p.animated = true;
+    if (color >= 0) [p.r, p.g, p.b] = rgb(color);
+    if (fade >= 0) p.fade = rgb(fade);
+    p.spark = { trail, twinkle };
+    this.addSprite(p);
+    return p;
+  }
+
+  /**
+   * (fireworks) vanilla FireworkParticles.OverlayParticle (the FLASH type) in a colour: four ticks of a glow, lit by
+   * where it is, swelling to 7.1 across and fading (renderSprite)
+   */
+  flash(x: number, y: number, z: number, color: number): void {
+    const p = this.base('flash', x, y, z);
+    p.lifetime = 4;
+    p.frames = ['flash'];
+    p.frame = 0;
+    p.alpha = 0.6;
+    p.flash = true;
+    [p.r, p.g, p.b] = rgb(color);
+    this.addSprite(p);
   }
 
   /** spawn by vanilla particle type name */
   spawn(kind: string, x: number, y: number, z: number, xd: number, yd: number, zd: number): void {
     switch (kind) {
+      // (fireworks) vanilla FireworkParticles.SparkProvider: a white spark (what a rocket trails)
+      case 'firework':
+        this.spark(x, y, z, xd, yd, zd);
+        break;
       case 'totem_of_undying': {
         // (Stage 4: totems) vanilla TotemParticle (a SimpleAnimatedParticle, gravity 1.25): flung out, falling, a
         // quarter of them gold and the rest green, glowing, fading over the second half of their 3 s
@@ -667,24 +726,9 @@ export class ParticleEngine {
       case 'item_splash_potion':
       case 'item_snowball':
       case 'item_ender_eye':
-      case 'item_egg': {
-        // vanilla BreakingItemParticle: a random quarter of the item sprite
-        const p = this.base(kind, x, y, z);
-        this.withSpeed(p, 0, 0, 0);
-        p.dx = p.dx * 0.1 + xd;
-        p.dy = p.dy * 0.1 + yd;
-        p.dz = p.dz * 0.1 + zd;
-        // (vanilla SlimeProvider / CobwebProvider make theirs without a speed)
-        if (kind === 'item_slime' || kind === 'item_cobweb') this.withSpeed(p, 0, 0, 0);
-        p.gravity = 1;
-        p.size /= 2;
-        p.frames = [kind === 'item_slime' ? 'item_slime_ball' : kind];
-        p.frame = 0;
-        const uo = Math.random() * 3, vo = Math.random() * 3;
-        p.sub = [uo / 4, vo / 4, (uo + 1) / 4, (vo + 1) / 4];
-        this.addSprite(p);
+      case 'item_egg':
+        this.breakingItem(kind, x, y, z, xd, yd, zd);
         break;
-      }
       case 'infested': {
         // vanilla SpellParticle.Provider: the infested effect's mites, rising like an effect's swirl
         const p = this.base(kind, x, y, z);
@@ -927,9 +971,30 @@ export class ParticleEngine {
         break;
       }
       default:
-        this.sculk.spawn(kind, x, y, z, xd, yd, zd);
+        // (foxes) the crumbs of any other item (whatever food a fox eats)
+        if (kind.startsWith('item_')) this.breakingItem(kind, x, y, z, xd, yd, zd);
+        // (the deep dark's own kinds: sculk_charge_pop, sculk_soul)
+        else this.sculk.spawn(kind, x, y, z, xd, yd, zd);
         break;
     }
+  }
+
+  /** vanilla BreakingItemParticle: a random quarter of the item sprite, falling */
+  private breakingItem(kind: string, x: number, y: number, z: number, xd: number, yd: number, zd: number): void {
+    const p = this.base(kind, x, y, z);
+    this.withSpeed(p, 0, 0, 0);
+    p.dx = p.dx * 0.1 + xd;
+    p.dy = p.dy * 0.1 + yd;
+    p.dz = p.dz * 0.1 + zd;
+    // (vanilla SlimeProvider / CobwebProvider make theirs without a speed)
+    if (kind === 'item_slime' || kind === 'item_cobweb') this.withSpeed(p, 0, 0, 0);
+    p.gravity = 1;
+    p.size /= 2;
+    p.frames = [kind === 'item_slime' ? 'item_slime_ball' : kind];
+    p.frame = 0;
+    const uo = Math.random() * 3, vo = Math.random() * 3;
+    p.sub = [uo / 4, vo / 4, (uo + 1) / 4, (vo + 1) / 4];
+    this.addSprite(p);
   }
 
   /**
@@ -1137,11 +1202,22 @@ export class ParticleEngine {
       if (p.kind === 'totem_of_undying' && p.age > p.lifetime / 2) p.alpha = 1 - (p.age - p.lifetime / 2) / p.lifetime;
       // vanilla LavaParticle.tick: embers trail smoke while young
       if (p.kind === 'lava' && Math.random() > p.age / p.lifetime) this.spawn('smoke', p.x, p.y, p.z, p.dx, p.dy, p.dz);
+      // (fireworks) vanilla SparkParticle.tick: through the first half of its life, every other tick, a spark where it
+      // is, still, in its colour and already half through its own life (and, vanilla's slip, never fading)
+      if (p.spark?.trail && p.age < Math.floor(p.lifetime / 2) && (p.age + p.lifetime) % 2 === 0) {
+        const t = this.spark(p.x, p.y, p.z, 0, 0, 0, -1, -1, false, p.spark.twinkle);
+        t.r = p.r;
+        t.g = p.g;
+        t.b = p.b;
+        t.age = Math.floor(t.lifetime / 2);
+      }
       list[w++] = p;
     }
     // particles spawned by emitters this tick were appended after n
     for (let i = n; i < list.length; i++) list[w++] = list[i];
     list.length = w;
+    // (vanilla EvictingQueue: past the limit the oldest go)
+    if (list.length > this.max) list.splice(0, list.length - this.max);
   }
 
   /** tick for particles with their own vanilla tick(); false = remove */
@@ -1288,6 +1364,10 @@ export class ParticleEngine {
   tick(): void {
     this.sculk.tick();
     this.tickSprites();
+    if (this.tickers.length) {
+      const t = this.tickers.splice(0);
+      for (const k of t) if (k.tick()) this.tickers.push(k);
+    }
     let w = 0;
     for (let i = 0; i < this.list.length; i++) {
       const p = this.list[i];
@@ -1384,6 +1464,8 @@ export class ParticleEngine {
 
   private renderSprite(batch: EntityBatch, p: SpriteParticle, cam: Camera, partial: number): void {
     if (p.emitter) return;
+    // (fireworks) vanilla SparkParticle.render: a twinkling spark shows through its first third, then three ticks in six
+    if (p.spark?.twinkle && !(p.age < Math.floor(p.lifetime / 3) || Math.floor((p.age + p.lifetime) / 3) % 2 === 0)) return;
     const yr = (cam.yaw * Math.PI) / 180, pr = (cam.pitch * Math.PI) / 180;
     const rx = -Math.cos(yr), rz = -Math.sin(yr);
     const ux = -Math.sin(yr) * Math.sin(pr), uy = Math.cos(pr), uz = Math.cos(yr) * Math.sin(pr);
@@ -1428,6 +1510,13 @@ export class ParticleEngine {
       f *= f;
       s *= 1 - f;
     }
+    let alpha = p.alpha ?? 1;
+    // (fireworks) vanilla OverlayParticle.getQuadSize and render: 7.1 sin(t / 4 pi) across, alpha 0.6 - t / 8
+    if (p.flash) {
+      const t = p.age + partial - 1;
+      s = 7.1 * Math.sin(t * 0.25 * Math.PI);
+      alpha = 0.6 - t * 0.25 * 0.5;
+    }
     let ru0 = r.u0, rv0 = r.v0, ru1 = r.u1, rv1 = r.v1;
     if (p.sub) {
       const du = r.u1 - r.u0, dv = r.v1 - r.v0;
@@ -1459,13 +1548,14 @@ export class ParticleEngine {
     ];
     for (const k of [0, 1, 2, 0, 2, 3]) {
       const q = v[k];
-      batch.vertexRaw(q[0], q[1], q[2], q[3], q[4], p.r, p.g, p.b, p.alpha ?? 1, 0, 1, 0);
+      batch.vertexRaw(q[0], q[1], q[2], q[3], q[4], p.r, p.g, p.b, alpha, 0, 1, 0);
     }
   }
 
   clear(): void {
     this.list.length = 0;
     this.sprites.length = 0;
+    this.tickers.length = 0;
     this.sculk.clear();
   }
 

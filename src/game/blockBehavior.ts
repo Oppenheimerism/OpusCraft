@@ -89,7 +89,7 @@ export interface BlockBehavior {
   spawnAfterBreak?(level: Level, x: number, y: number, z: number, state: number, stack: ItemStack | null): void;
   /** vanilla entityInside: `e`'s box overlaps the block */
   entityInside?(level: Level, x: number, y: number, z: number, state: number, e: Entity): void;
-  /** vanilla stepOn: `e`, on the ground, stands on the block (the one 0.2 under its feet) this tick */
+  /** vanilla stepOn: `e`, on the ground, stands on the block holding it up this tick (a sculk sensor or shrieker set off, a turtle egg underfoot) */
   stepOn?(level: Level, x: number, y: number, z: number, state: number, e: Entity): void;
   /** vanilla getAnalogOutputSignal: what a comparator reads from the block (those with hasAnalogOutputSignal) */
   analogOutput?(level: Level, x: number, y: number, z: number, state: number): number;
@@ -110,11 +110,13 @@ export interface BlockBehavior {
   cloneStack?(level: Level, x: number, y: number, z: number, state: number): ItemStack | null;
   /** vanilla getSoundType(state).getBreakSound(), where it isn't the block's own (a cracked pot's shatter) */
   breakSound?(state: number): string;
-  /**
-   * vanilla canBeReplaced(state, BlockPlaceContext): placing `block` (sneaking or not) goes into this block's place
-   * instead of against it (another candle into a candle: its count goes up)
-   */
-  canBeReplaced?(state: number, block: Block, sneaking: boolean): boolean;
+  // (Stage 5: ocean) the turtle egg's
+  /** vanilla fallOn: `e` landed on the block from `dist` up (before the landing's damage) */
+  fallOn?(level: Level, x: number, y: number, z: number, state: number, e: Entity, dist: number): void;
+  /** vanilla canBeReplaced(BlockPlaceContext): placing `stack` on the block goes into it (a turtle egg more in a clutch) */
+  canBeReplaced?(state: number, stack: ItemStack, sneaking: boolean): boolean;
+  /** vanilla playerDestroy: a survival player broke it, holding `held` (it's gone, and what it drops has dropped) */
+  playerDestroy?(level: Level, x: number, y: number, z: number, state: number, player: Player, held: ItemStack | null): void;
 }
 
 const BEHAVIORS: (BlockBehavior | undefined)[] = [];

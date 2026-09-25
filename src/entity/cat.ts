@@ -20,6 +20,7 @@ import { BLOCKS, STATE_BLOCK, FLAGS, F_AIR, F_COLLIDE, F_WATER, F_LAVA } from '.
 import { ChestBlockEntity } from '../world/blockEntity';
 import { moonPhase, timeOfDay } from '../render/environment';
 import type { Rand } from '../core/rng';
+import { babyTurtleOnLand } from './turtlePredators';
 
 // ---------------------------------------------------------------------------
 // coats
@@ -106,7 +107,8 @@ export class Cat extends TamableAnimal {
     this.goalSelector.addGoal(11, new WaterAvoidingRandomStrollGoal(this, 0.8, 1.0000001e-5));
     this.goalSelector.addGoal(12, new LookAtPlayerGoal(this, 10));
     this.targetSelector.addGoal(1, new NonTameRandomTargetGoal(this, (e) => e.type === 'rabbit', false));
-    // (vanilla NonTameRandomTargetGoal<Turtle>(BABY_ON_LAND_SELECTOR): baby turtles on land — no turtles yet)
+    // (Stage 5: ocean) vanilla NonTameRandomTargetGoal<Turtle>(BABY_ON_LAND_SELECTOR): baby turtles on land
+    this.targetSelector.addGoal(1, new NonTameRandomTargetGoal(this, babyTurtleOnLand, false));
   }
 
   // --- spawning and breeding ------------------------------------------------------------------------------------

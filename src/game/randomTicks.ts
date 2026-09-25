@@ -56,6 +56,7 @@ export class RandomTicker {
 
   private randomTick(x: number, y: number, z: number, st: number): void {
     const lvl = this.level;
+    // (Stage 5: ocean) a block with a random tick of its own (vanilla randomTick: a turtle egg's)
     const own = behaviorOf(st)?.randomTick;
     if (own) {
       own(lvl, x, y, z, st);

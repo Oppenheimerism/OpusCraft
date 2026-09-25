@@ -145,7 +145,7 @@ function clickTrain(b: Float32Array, sr: number, rng: Rng, t0: number, n: number
 }
 
 /** in the water: muffled, and ringing a little */
-function underwater(out: Float32Array, sr: number, muffle: number, wet: number): Float32Array {
+export function underwater(out: Float32Array, sr: number, muffle: number, wet: number): Float32Array {
   lowpass(out, muffle, sr);
   lowpass(out, muffle, sr);
   return reverbHalf(out, sr, { t60: 0.9, wet, dry: 1 });
@@ -236,7 +236,7 @@ function dolphinPlay(c: Ctx): Float32Array {
 }
 
 /** a splash of water: the thump of the body, the spray, the bubbles (`big` for a dolphin's own splash) */
-function waterSplash(c: Ctx, big: boolean): Float32Array {
+export function waterSplash(c: Ctx, big: boolean): Float32Array {
   const { sr, rng } = c;
   const d = big ? 0.9 : 0.6;
   const out = alloc(d, sr);
@@ -338,7 +338,7 @@ function glowSquidSquirt(c: Ctx): Float32Array {
 // buckets of fish
 
 /** the tin bucket's ring, struck softly */
-function bucketRing(b: Float32Array, sr: number, rng: Rng, t: number): void {
+export function bucketRing(b: Float32Array, sr: number, rng: Rng, t: number): void {
   const fb = rng.range(480, 600);
   impact(b, sr, rng, { t, modes: [fb, 1, 0.3, fb * 1.59, 0.6, 0.22, fb * 2.14, 0.4, 0.15, fb * 2.65, 0.3, 0.1], noise: 0.3, noiseTau: 0.002, noiseBp: [3000, 1] });
 }

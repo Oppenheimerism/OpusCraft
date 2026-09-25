@@ -99,6 +99,8 @@ export class ThrownPotion extends ThrownItem {
       if (le.isSensitiveToWater()) le.hurt(1, 'indirectMagic', this.owner, this);
       if (le.isOnFire() && le.isAlive) le.clearFire();
     }
+    // (Stage 5: ocean) and axolotls in reach are wetted again
+    for (const e of this.level.getEntities(box, (o) => o.type === 'axolotl')) (e as unknown as { rehydrate(): void }).rehydrate();
   }
 
   /**

@@ -21,6 +21,8 @@ import { registerOuterEndBlocks } from './blocksOuterEnd';
 import { registerOceanBlocks } from './blocksOcean';
 // (fossils)
 import { registerFossilBlocks } from './blocksFossils';
+// (M9: frogs)
+import { registerFrogBlocks } from './blocksFrog';
 // (the deep dark)
 import { registerDeepDarkBlocks } from './blocksDeepDark';
 
@@ -639,6 +641,8 @@ registerOuterEndBlocks();
 registerOceanBlocks();
 // (fossils)
 registerFossilBlocks();
+// (M9: frogs) frogspawn and the froglights
+registerFrogBlocks();
 // (the deep dark)
 registerDeepDarkBlocks();
 

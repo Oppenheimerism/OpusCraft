@@ -55,7 +55,20 @@ const NOT_SCARY_FOR_PUFFERFISH = new Set(['turtle', 'guardian', 'elder_guardian'
 /** vanilla bucket_entity_data: what the bucket keeps of its fish */
 export type BucketEntityData = Record<string, number | boolean>;
 
-export abstract class AbstractFish extends WaterAnimal {
+/** vanilla Bucketable: a mob a water bucket scoops up (the fish; M7: the axolotl too) */
+export interface Bucketable {
+  /** vanilla FROM_BUCKET: poured out of a bucket (it never despawns) */
+  fromBucket: boolean;
+  /** vanilla getBucketItemStack */
+  bucketItem(): string;
+  /** vanilla getPickupSound */
+  pickupSound(): string;
+  saveToBucketTag(stack: ItemStack): void;
+  loadFromBucketTag(d: BucketEntityData): void;
+}
+export type BucketMob = Mob & Bucketable;
+
+export abstract class AbstractFish extends WaterAnimal implements Bucketable {
   override readonly category: MobCategory = 'water_ambient';
   /** vanilla FROM_BUCKET: poured out of a bucket (it never despawns) */
   fromBucket = false;
@@ -127,6 +140,10 @@ export abstract class AbstractFish extends WaterAnimal {
 
   /** vanilla getBucketItemStack */
   abstract bucketItem(): string;
+  /** vanilla getPickupSound */
+  pickupSound(): string {
+    return 'item.bucket.fill_fish';
+  }
   protected abstract flopSound(): string;
 
   /** vanilla Bucketable.saveDefaultDataToBucketTag: its health (and what else it keeps) */
@@ -144,10 +161,9 @@ export abstract class AbstractFish extends WaterAnimal {
     return null;
   }
 
-  /** vanilla getSwimSound: entity.fish.swim, as loud as it's fast (Entity.vibrationAndSoundEffectsFromBlock) */
-  protected override playSwimSound(): void {
-    const v = Math.min(1, Math.sqrt(this.dx * this.dx * 0.2 + this.dy * this.dy + this.dz * this.dz * 0.2) * 0.35);
-    this.playSound('entity.fish.swim', v, 1 + (this.random.nextFloat() - this.random.nextFloat()) * 0.4);
+  /** vanilla getSwimSound: entity.fish.swim (Mob.playSwimSound: as loud as it's fast) */
+  protected override swimSound(): string {
+    return 'entity.fish.swim';
   }
 
   /** vanilla playStepSound: none */
@@ -166,9 +182,9 @@ export abstract class AbstractFish extends WaterAnimal {
  * vanilla Bucketable.bucketMobPickup: a water bucket scoops up a live fish (with the fill sound); in survival the
  * bucket becomes the fish's, in creative the fish's bucket comes as well (ItemUtils.createFilledResult)
  */
-export function bucketMobPickup(p: Player, stack: ItemStack | null, fish: AbstractFish): boolean {
+export function bucketMobPickup(p: Player, stack: ItemStack | null, fish: BucketMob): boolean {
   if (!stack || stack.item.id !== 'water_bucket' || !fish.isAlive) return false;
-  fish.playSound('item.bucket.fill_fish', 1, 1);
+  fish.playSound(fish.pickupSound(), 1, 1);
   const bucket = ItemStack.of(fish.bucketItem());
   fish.saveToBucketTag(bucket);
   if (p.gameMode === 'creative') {
@@ -670,18 +686,24 @@ class PufferfishPuffGoal extends Goal {
 // ---------------------------------------------------------------------------
 
 /** the fish each bucket holds (vanilla MobBucketItem's entity types) */
-export const BUCKET_FISH: Record<string, (l: Level) => AbstractFish> = {
+export const BUCKET_FISH: Record<string, (l: Level) => BucketMob> = {
   cod_bucket: (l) => new Cod(l),
   salmon_bucket: (l) => new Salmon(l),
   pufferfish_bucket: (l) => new Pufferfish(l),
   tropical_fish_bucket: (l) => new TropicalFish(l),
 };
 
+/** vanilla MobBucketItem's emptySound: a bucket of fish pours out with a fishy splash, a bucket of axolotl its own */
+export function bucketEmptySound(id: string): string {
+  // (M9: frogs) the tadpole's own
+  return id === 'axolotl_bucket' ? 'item.bucket.empty_axolotl' : id === 'tadpole_bucket' ? 'item.bucket.empty_tadpole' : 'item.bucket.empty_fish';
+}
+
 /**
  * vanilla MobBucketItem.checkExtraContent → spawn: the bucket's fish, let go at the bottom of the block its water went
  * into (EntityType.spawn, offset up out of anything solid there), from the bucket, as the bucket kept it
  */
-export function releaseBucketFish(level: Level, stack: ItemStack, x: number, y: number, z: number): AbstractFish | null {
+export function releaseBucketFish(level: Level, stack: ItemStack, x: number, y: number, z: number): BucketMob | null {
   const make = BUCKET_FISH[stack.item.id];
   if (!make) return null;
   const fish = make(level);

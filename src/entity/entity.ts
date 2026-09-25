@@ -6,6 +6,8 @@ import type { World } from '../world/world';
 import { DYNAMIC_SHAPE, dynamicCollision } from '../world/dynamicShapes';
 import { fluidType, fluidHeight, fluidFlow, FLUID_WATER, FLUID_LAVA, FLUID_NONE } from '../world/fluids';
 import type { Level } from '../game/level';
+// (M8: goats)
+import type { Player } from './player';
 import { setDripleafTilt } from '../game/blockRules';
 import { behaviorOf, behaviorOfBlock } from '../game/blockBehavior';
 
@@ -361,6 +363,14 @@ export abstract class Entity {
     else vehicle.passengers.push(this);
     // (vanilla Entity.addPassenger: the vehicle's game event, by the rider)
     this.level.gameEvent?.('entity_mount', vehicle.x, vehicle.y, vehicle.z, { entity: this });
+    // (M8: goats) vanilla: CriteriaTriggers.START_RIDING_TRIGGER for every player aboard the vehicle (or aboard its riders)
+    const aboard = [...vehicle.passengers];
+    for (let i = 0; i < aboard.length; i++) {
+      const p = aboard[i];
+      aboard.push(...p.passengers);
+      const v = p.vehicle;
+      if (p.type === 'player') this.level.onPlayerTrigger?.(p as unknown as Player, 'started_riding', { riding: { vehicle: v?.type ?? null, passengers: v ? v.passengers.map((e) => e.type) : [] } });
+    }
     return true;
   }
 
@@ -568,11 +578,10 @@ export abstract class Entity {
     if (colX) this.dx = 0;
     if (colZ) this.dz = 0;
     if (my !== ry) this.onLand();
-    // vanilla Block.stepOn: on the ground, the block under its feet feels it (a sculk sensor or shrieker set off)
+    // (Stage 5: ocean) vanilla Block.stepOn: what holds it up hears it (a turtle egg underfoot)
     if (this.onGround && !this.removed) {
-      const sx = Math.floor(this.x), sy = Math.floor(this.y - 0.2), sz = Math.floor(this.z);
-      const st = this.level.world.getState(sx, sy, sz);
-      behaviorOf(st)?.stepOn?.(this.level, sx, sy, sz, st, this);
+      const f = floorWithHook(this, 'stepOn');
+      if (f) behaviorOf(f[3])!.stepOn!(this.level, f[0], f[1], f[2], f[3], this);
     }
     if (!this.noPhysics && !this.vehicle) {
       // vanilla walkDist/moveDist accounting (step & swim sounds, view bobbing); riders don't walk
@@ -769,6 +778,9 @@ export abstract class Entity {
 
   protected checkFallDamage(dy: number, onGround: boolean): void {
     if (onGround) {
+      // (Stage 5: ocean) vanilla Block.fallOn: what it lands on hears it first (a turtle egg underfoot)
+      const f = this.fallDistance > 0 ? floorWithHook(this, 'fallOn') : null;
+      if (f) behaviorOf(f[3])!.fallOn!(this.level, f[0], f[1], f[2], f[3], this, this.fallDistance);
       if (this.fallDistance > 0) {
         this.causeFallDamage(this.fallDistance);
         // (vanilla: a landing is a game event, on what it landed on)
@@ -995,4 +1007,32 @@ function insideKind(st: number): number {
     BLOCKS.forEach((b, i) => (INSIDE![i] = kinds[b.name] ?? (behaviorOfBlock(i)?.entityInside ? INSIDE_BEHAVIOR : INSIDE_NONE)));
   }
   return INSIDE[STATE_BLOCK[st]];
+}
+
+/**
+ * (Stage 5: ocean) the block holding `e` up, when it's one with the `hook` (vanilla getOnPosLegacy through
+ * mainSupportingBlockPos: of the blocks whose shapes are just under its feet, the one nearest it). Only looked for
+ * when one of the blocks under it has such a hook
+ */
+function floorWithHook(e: Entity, hook: 'stepOn' | 'fallOn'): [number, number, number, number] | null {
+  const bb = e.bb, w = e.level.world;
+  const y = Math.floor(bb.minY - 1e-6);
+  const x0 = Math.floor(bb.minX), x1 = Math.floor(bb.maxX - 1e-7), z0 = Math.floor(bb.minZ), z1 = Math.floor(bb.maxZ - 1e-7);
+  let any = false;
+  for (let x = x0; x <= x1 && !any; x++) for (let z = z0; z <= z1 && !any; z++) if (behaviorOf(w.getState(x, y, z))?.[hook]) any = true;
+  if (!any) return null;
+  const under = new AABB(bb.minX, bb.minY - 1e-6, bb.minZ, bb.maxX, bb.minY, bb.maxZ);
+  let best: [number, number, number, number] | null = null, bd = Infinity;
+  for (let x = x0; x <= x1; x++)
+    for (let z = z0; z <= z1; z++) {
+      const st = w.getState(x, y, z);
+      const boxes = COLLISION[st];
+      if (!boxes || !boxes.some((c) => under.intersectsRaw(x + c[0], y + c[1], z + c[2], x + c[3], y + c[4], z + c[5]))) continue;
+      const d = (x + 0.5 - e.x) ** 2 + (y + 0.5 - e.y) ** 2 + (z + 0.5 - e.z) ** 2;
+      if (d < bd) {
+        bd = d;
+        best = [x, y, z, st];
+      }
+    }
+  return best && behaviorOf(best[3])?.[hook] ? best : null;
 }

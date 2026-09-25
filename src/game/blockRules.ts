@@ -414,9 +414,8 @@ function doorHinge(ctx: PlaceContext, facing: string): 'left' | 'right' {
   return (j >= 0 || !(d1 < 0.5)) && (j <= 0 || !(d1 > 0.5)) && (k >= 0 || !(d0 > 0.5)) && (k <= 0 || !(d0 < 0.5)) ? 'left' : 'right';
 }
 
-/** Is the target position replaceable by placing `block`? */
-export function canReplace(target: number, block: Block, sneaking = false): boolean {
-  if (behaviorOf(target)?.canBeReplaced?.(target, block, sneaking)) return true;
+/** Is the target position replaceable by placing `block`? (a block that takes the held item in, a candle or a turtle egg, is asked by the caller) */
+export function canReplace(target: number, block: Block): boolean {
   const f = FLAGS[target];
   if (f & F_AIR) return true;
   if (f & F_REPLACEABLE) {

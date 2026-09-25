@@ -6,6 +6,7 @@ import type { SavedEffect } from '../entity/effects';
 import type { ItemEntity } from '../entity/itemEntity';
 import { SHULKER_BOXES } from '../world/blocksShulker';
 import { SKULL_TYPES, SKULL_BLOCKS } from '../world/blocksSkulls';
+import type { Fireworks, FireworkExplosion } from './fireworks';
 
 export interface ToolInfo {
   type: ToolType;
@@ -100,6 +101,8 @@ const NAME_OVERRIDES: Record<string, string> = {
   mutton: 'Raw Mutton',
   cod: 'Raw Cod',
   salmon: 'Raw Salmon',
+  rabbit: 'Raw Rabbit',
+  rabbit_foot: "Rabbit's Foot",
   map: 'Empty Map',
   filled_map: 'Map',
   clock: 'Clock',
@@ -259,10 +262,12 @@ reg({ id: 'turtle_helmet', name: 'Turtle Shell', maxStack: 1, creativeTab: 'comb
 const FOOD: [string, number, number, Partial<FoodInfo>?][] = [
   ['apple', 4, 0.3], ['golden_apple', 4, 1.2, { alwaysEat: true }], ['bread', 5, 0.6], ['carrot', 3, 0.6], ['potato', 1, 0.3],
   ['baked_potato', 5, 0.6], ['beef', 3, 0.3], ['cooked_beef', 8, 0.8], ['porkchop', 3, 0.3], ['cooked_porkchop', 8, 0.8],
-  ['chicken', 2, 0.3], ['cooked_chicken', 6, 0.6], ['mutton', 2, 0.3], ['cooked_mutton', 6, 0.8], ['cod', 2, 0.1],
+  ['chicken', 2, 0.3], ['cooked_chicken', 6, 0.6], ['mutton', 2, 0.3], ['cooked_mutton', 6, 0.8], ['rabbit', 3, 0.3],
+  ['cooked_rabbit', 5, 0.6], ['cod', 2, 0.1],
   ['cooked_cod', 5, 0.6], ['salmon', 2, 0.1], ['cooked_salmon', 6, 0.8], ['cookie', 2, 0.1], ['melon_slice', 2, 0.3],
   ['sweet_berries', 2, 0.1], ['rotten_flesh', 4, 0.1], ['spider_eye', 2, 0.8], ['mushroom_stew', 6, 0.6, { remainder: 'bowl' }],
-  ['beetroot', 1, 0.6], ['beetroot_soup', 6, 0.6, { remainder: 'bowl' }], ['golden_carrot', 6, 1.2], ['poisonous_potato', 2, 0.3],
+  ['beetroot', 1, 0.6], ['beetroot_soup', 6, 0.6, { remainder: 'bowl' }], ['rabbit_stew', 10, 0.6, { remainder: 'bowl' }],
+  ['golden_carrot', 6, 1.2], ['poisonous_potato', 2, 0.3],
   ['pumpkin_pie', 8, 0.3], ['glow_berries', 2, 0.1], ['pufferfish', 1, 0.1],
   // (vanilla Foods.SUSPICIOUS_STEW; what else it gives is the stack's, game/desertWells.ts)
   ['suspicious_stew', 6, 0.6, { remainder: 'bowl', alwaysEat: true }],
@@ -345,6 +350,11 @@ reg({ id: 'shulker_spawn_egg', texture: 'shulker_spawn_egg', creativeTab: 'spawn
 reg({ id: 'glow_item_frame', texture: 'glow_item_frame', creativeTab: 'functional' });
 // the elytra (vanilla ElytraItem: 432 uses, epic; worn in the chest slot, entity/elytra.ts; its wings render/elytraLayer.ts)
 reg({ id: 'elytra', texture: 'elytra', maxStack: 1, creativeTab: 'tools', maxDamage: 432, rarity: 'epic' });
+// firework rockets (listed after the elytra, one of each flight duration) and firework stars (after the book): their data,
+// tooltips and recipes are item/fireworks.ts, the rocket in flight entity/fireworkRocket.ts
+reg({ id: 'firework_rocket', texture: 'firework_rocket', creativeTab: 'tools' });
+reg({ id: 'firework_star', texture: 'firework_star' });
+ITEM_LIST.splice(ITEM_LIST.findIndex((x) => x.id === 'book') + 1, 0, ITEM_LIST.pop()!);
 // mob heads (vanilla StandingAndWallBlockItem: uncommon, the dragon's epic), worn on the head (item/equipment.ts); drawn
 // by their model, render/skullRenderer.ts
 for (const t of SKULL_TYPES) Object.assign(ITEMS.get(SKULL_BLOCKS[t][0])!, { rarity: t === 'dragon' ? 'epic' : 'uncommon', creativeTab: 'functional' });
@@ -386,6 +396,9 @@ for (const m of ['donkey', 'horse', 'llama', 'mule', 'trader_llama']) reg({ id: 
 reg({ id: 'wandering_trader_spawn_egg', texture: 'wandering_trader_spawn_egg', creativeTab: 'spawn_eggs' });
 reg({ id: 'snow_golem_spawn_egg', texture: 'snow_golem_spawn_egg', creativeTab: 'spawn_eggs' });
 reg({ id: 'parrot_spawn_egg', texture: 'parrot_spawn_egg', creativeTab: 'spawn_eggs' });
+reg({ id: 'polar_bear_spawn_egg', texture: 'polar_bear_spawn_egg', creativeTab: 'spawn_eggs' });
+reg({ id: 'rabbit_spawn_egg', texture: 'rabbit_spawn_egg', creativeTab: 'spawn_eggs' });
+reg({ id: 'fox_spawn_egg', texture: 'fox_spawn_egg', creativeTab: 'spawn_eggs' });
 reg({ id: 'ominous_bottle', creativeTab: 'food', texture: 'ominous_bottle', rarity: 'uncommon' });
 // (Stage 5: ocean) vanilla Items.PRISMARINE_SHARD / PRISMARINE_CRYSTALS (guardians', sea lanterns'); the wet sponge sits by the sponge
 for (const id of ['prismarine_shard', 'prismarine_crystals']) reg({ id, texture: id });
@@ -422,6 +435,49 @@ for (const m of ['elder_guardian', 'guardian']) reg({ id: `${m}_spawn_egg`, text
   for (const it of sherds) ITEM_LIST.splice(ITEM_LIST.indexOf(it), 1);
   ITEM_LIST.splice(first, 0, ...sherds);
   if (ITEMS.has('conduit')) ITEMS.get('conduit')!.rarity = 'rare';
+  // (M6) the turtle's egg; the turtle egg drawn flat (vanilla item/turtle_egg), with the natural blocks
+  reg({ id: 'turtle_spawn_egg', texture: 'turtle_spawn_egg', creativeTab: 'spawn_eggs' });
+  if (ITEMS.has('turtle_egg')) Object.assign(ITEMS.get('turtle_egg')!, { texture: 'turtle_egg', creativeTab: 'natural' });
+  // (M7) the axolotl's bucket, after the fish's, and its egg
+  reg({ id: 'axolotl_bucket', name: 'Bucket of Axolotl', texture: 'axolotl_bucket', maxStack: 1, creativeTab: 'tools' });
+  after('axolotl_bucket', 'pufferfish_bucket');
+  reg({ id: 'axolotl_spawn_egg', texture: 'axolotl_spawn_egg', creativeTab: 'spawn_eggs' });
+}
+// (M8: goats) the goat horn (vanilla InstrumentItem: one to a stack; its calls and use in game/goatHorn.ts), in the
+// tools just before the music discs (vanilla CreativeModeTabs: after the boats and minecarts), and the goat's egg
+reg({ id: 'goat_horn', texture: 'goat_horn', maxStack: 1, creativeTab: 'tools' });
+{
+  const i = ITEM_LIST.findIndex((x) => x.id === 'goat_horn');
+  const h = i >= 0 ? ITEM_LIST.splice(i, 1)[0] : null;
+  const j = ITEM_LIST.findIndex((x) => x.id === 'music_disc_13');
+  if (h) ITEM_LIST.splice(j >= 0 ? j : ITEM_LIST.length, 0, h);
+}
+reg({ id: 'goat_spawn_egg', texture: 'goat_spawn_egg', creativeTab: 'spawn_eggs' });
+// (M9: frogs) the bucket of tadpole (vanilla MobBucketItem) after the axolotl's; the frog's and tadpole's eggs;
+// frogspawn drawn flat (vanilla item/frogspawn) with the natural blocks after the turtle egg; the froglights with the
+// functional blocks, after the glowstone (vanilla CreativeModeTabs.FUNCTIONAL_BLOCKS)
+{
+  const after = (id: string, prev: string): void => {
+    const i = ITEM_LIST.findIndex((x) => x.id === id);
+    if (i < 0 || !ITEMS.has(prev)) return;
+    const it = ITEM_LIST.splice(i, 1)[0];
+    ITEM_LIST.splice(ITEM_LIST.indexOf(ITEMS.get(prev)!) + 1, 0, it);
+  };
+  reg({ id: 'tadpole_bucket', name: 'Bucket of Tadpole', texture: 'tadpole_bucket', maxStack: 1, creativeTab: 'tools' });
+  after('tadpole_bucket', 'axolotl_bucket');
+  for (const m of ['frog', 'tadpole']) reg({ id: `${m}_spawn_egg`, texture: `${m}_spawn_egg`, creativeTab: 'spawn_eggs' });
+  if (ITEMS.has('frogspawn')) {
+    Object.assign(ITEMS.get('frogspawn')!, { texture: 'block:frogspawn', creativeTab: 'natural' });
+    after('frogspawn', 'turtle_egg');
+  }
+  let prev = 'glowstone';
+  for (const c of ['ochre', 'verdant', 'pearlescent']) {
+    const id = `${c}_froglight`;
+    if (!ITEMS.has(id)) continue;
+    ITEMS.get(id)!.creativeTab = 'functional';
+    after(id, prev);
+    prev = id;
+  }
 }
 // sugar cane item places the block
 {
@@ -603,6 +659,12 @@ export interface ItemTag {
   mapDecorations?: Record<string, { type: string; x: number; z: number; rotation: number }>;
   /** (Stage 5: ocean) minecraft:map_color: the tint of the markings on an explorer map's sprite */
   mapColor?: number;
+  /** minecraft:fireworks: a rocket's flight duration and stars (none: the rocket's default, a flight of 1; item/fireworks.ts) */
+  fireworks?: Fireworks;
+  /** minecraft:firework_explosion: a firework star's */
+  fireworkExplosion?: FireworkExplosion;
+  /** (M8: goats) minecraft:instrument: a goat horn's call (game/goatHorn.ts) */
+  instrument?: string;
 }
 
 /** one filled slot of minecraft:container (vanilla ItemContainerContents.Slot) */
@@ -685,7 +747,17 @@ export function cloneTag(t: ItemTag | null): ItemTag | null {
   if (t.bucketEntity) o.bucketEntity = { ...t.bucketEntity };
   if (t.mapDecorations) o.mapDecorations = Object.fromEntries(Object.entries(t.mapDecorations).map(([k, v]) => [k, { ...v }]));
   if (t.mapColor !== undefined) o.mapColor = t.mapColor;
+  // (fireworks)
+  if (t.fireworks) o.fireworks = { flightDuration: t.fireworks.flightDuration, explosions: t.fireworks.explosions.map(cloneExplosionData) };
+  if (t.fireworkExplosion) o.fireworkExplosion = cloneExplosionData(t.fireworkExplosion);
+  // (M8: goats)
+  if (t.instrument !== undefined) o.instrument = t.instrument;
   return o;
+}
+
+/** a firework explosion's copy, its fields in their order (compared as JSON) */
+function cloneExplosionData(e: FireworkExplosion): FireworkExplosion {
+  return { shape: e.shape, colors: [...e.colors], fadeColors: [...e.fadeColors], hasTrail: e.hasTrail, hasTwinkle: e.hasTwinkle };
 }
 
 /** the newer components compared as data (JSON) */
@@ -702,7 +774,11 @@ export function sameTag(a: ItemTag | null | undefined, b: ItemTag | null | undef
     sameData(a?.potDecorations, b?.potDecorations) && sameData(a?.stewEffects, b?.stewEffects) &&
     sameData(a?.container?.length ? a.container : null, b?.container?.length ? b.container : null) &&
     // (Stage 5: ocean)
-    sameData(a?.bucketEntity, b?.bucketEntity) && sameData(a?.mapDecorations, b?.mapDecorations) && a?.mapColor === b?.mapColor
+    sameData(a?.bucketEntity, b?.bucketEntity) && sameData(a?.mapDecorations, b?.mapDecorations) && a?.mapColor === b?.mapColor &&
+    // (fireworks)
+    sameData(a?.fireworks, b?.fireworks) && sameData(a?.fireworkExplosion, b?.fireworkExplosion) &&
+    // (M8: goats)
+    a?.instrument === b?.instrument
   );
 }
 

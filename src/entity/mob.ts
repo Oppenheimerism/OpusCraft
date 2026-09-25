@@ -134,6 +134,12 @@ export interface SpawnGroup {
   horseColor?: string;
   /** vanilla Llama.LlamaGroupData: the coat the herd shares */
   llamaVariant?: string;
+  /** (Stage 5: ocean) vanilla Axolotl.AxolotlGroupData: the two colours the group's axolotls come in */
+  axolotlVariants?: number[];
+  /** vanilla Rabbit.RabbitGroupData: the coat the group shares */
+  rabbitVariant?: number;
+  /** vanilla Fox.FoxGroupData: the type (red or snow) the group shares */
+  foxType?: number;
 }
 
 export abstract class Mob extends LivingEntity {
@@ -142,7 +148,7 @@ export abstract class Mob extends LivingEntity {
   readonly targetSelector = new GoalSelector();
   readonly lookControl: LookControl;
   private ownMoveControl: MoveControl;
-  private readonly ownJumpControl: JumpControl;
+  private ownJumpControl: JumpControl;
   readonly bodyControl: BodyRotationControl;
   /**
    * this mob's own navigation (goals use `navigation`, which is the mount's while this steers one); a drowned swaps
@@ -222,6 +228,9 @@ export abstract class Mob extends LivingEntity {
 
   get jumpControl(): JumpControl {
     return this.controlledVehicle()?.jumpControl ?? this.ownJumpControl;
+  }
+  set jumpControl(c: JumpControl) {
+    this.ownJumpControl = c;
   }
 
   /** vanilla Mob.getControllingPassenger: a mob up front steers (not a slime) */
@@ -635,6 +644,8 @@ export abstract class Mob extends LivingEntity {
   /** can this mob attack `e` (vanilla canAttack + TargetingConditions basics) */
   canAttack(e: LivingEntity | null): boolean {
     if (!e || !e.isAlive || e === this) return false;
+    // (Stage 5: ocean) vanilla LivingEntity.canAttack: only what can be seen as an enemy
+    if (!e.canBeSeenAsEnemy()) return false;
     if (e.type === 'player') {
       const gm = (e as unknown as { gameMode: string }).gameMode;
       if (gm === 'creative' || gm === 'spectator') return false;
@@ -770,6 +781,11 @@ export abstract class Mob extends LivingEntity {
   /** vanilla Mob.wantsToPickUp */
   wantsToPickUp(s: ItemStack): boolean {
     return this.canHoldItem(s);
+  }
+
+  /** vanilla Mob.canTakeItem: something can be put on it in that slot (a dispenser's armour): it's free, and it picks things up */
+  canTakeItem(slot: EquipSlot): boolean {
+    return !this.getItemBySlot(slot) && this.canPickUpLoot;
   }
 
   /** vanilla Mob.canHoldItem */
@@ -1002,6 +1018,16 @@ export abstract class Mob extends LivingEntity {
     return true;
   }
 
+  /** vanilla Entity.waterSwimSound: its splashes as it swims (getSwimSound), louder the faster it goes */
+  protected override playSwimSound(): void {
+    const v = Math.min(1, Math.sqrt(this.dx * this.dx * 0.2 + this.dy * this.dy + this.dz * this.dz * 0.2) * 0.35);
+    this.playSound(this.swimSound(), v, 1 + (this.random.nextFloat() - this.random.nextFloat()) * 0.4);
+  }
+  /** vanilla getSwimSound */
+  protected swimSound(): string {
+    return 'entity.generic.swim';
+  }
+
   protected override playStepSound(): void {
     const s = this.stepSound();
     if (s) {
@@ -1120,6 +1146,9 @@ export abstract class Mob extends LivingEntity {
 
   /** random per-spawn setup (sheep color, baby zombies...); `group` is shared by one spawn pack */
   finalizeSpawn(_reason: SpawnReason, _group?: SpawnGroup): void {}
+
+  /** vanilla Mob.onOffspringSpawnedFromEgg: a young one a player just made with a spawn egg used on this mob */
+  onOffspringSpawnedFromEgg(_p: Player, _child: Mob): void {}
 
   /** the DifficultyInstance vanilla hands finalizeSpawn: Level.getCurrentDifficultyAt(the mob's block) */
   protected spawnDifficulty(): DifficultyInstance {

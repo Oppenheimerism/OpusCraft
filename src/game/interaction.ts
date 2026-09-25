@@ -52,6 +52,8 @@ import { isCharged, performShooting, shootingPower, PLAYER_INACCURACY, playerPro
 
 /** vanilla InteractionHand.values(): the order the hands get a go at a right click */
 const HANDS: readonly Hand[] = ['main', 'off'];
+/** (M9: frogs) vanilla PlaceOnWaterBlockItem: put on the water, never against a block's face */
+const PLACE_ON_WATER = new Set(['lily_pad', 'frogspawn']);
 export class Interaction {
   hit: BlockHit | null = null;
   /** entity under the crosshair (vanilla crosshairPickEntity) */
@@ -248,6 +250,8 @@ export class Interaction {
     behaviorOf(st)?.playerWillDestroy?.(this.level, x, y, z, st, p, held);
     const silk = levelOf(held, 'silk_touch') > 0;
     this.level.destroyBlock(x, y, z, survival, held?.item ?? null, true, held, p);
+    // (Stage 5: ocean) vanilla Block.playerDestroy, for a block with more to do (a turtle egg breaks one egg at a time)
+    if (survival) behaviorOf(st)?.playerDestroy?.(this.level, x, y, z, st, p, held);
     if (survival && this.level.gameRules.doTileDrops) {
       const xp = blockExperience(st, held?.item ?? null, this.level.random, silk);
       if (xp > 0) this.level.awardExperience(x + 0.5, y + 0.5, z + 0.5, xp);
@@ -329,7 +333,10 @@ export class Interaction {
     const e = this.entityHit;
     if (e && p.gameMode !== 'spectator') {
       // vanilla Mob.interact: its lead let go or tied on, or a name tag's name, before anything the mob does itself
+      // (M9: frogs: the item as it was, for player_interacted_with_entity)
+      const heldBefore = stack?.copy() ?? null;
       if (e instanceof Mob && e.interactLeashOrName(p, stack)) {
+        this.onInteractedWithEntity?.(heldBefore, e);
         p.swing();
         return 'success';
       }
@@ -350,6 +357,7 @@ export class Interaction {
           if (stack.tag?.customName !== undefined) baby.setCustomName(stack.tag.customName);
           this.level.addEntity(baby);
           if (p.gameMode !== 'creative') p.inventory.consumeSelected(1);
+          e.onOffspringSpawnedFromEgg(p, baby);
           p.swing();
           return 'success';
         }
@@ -501,7 +509,8 @@ export class Interaction {
       }
       return 'success';
     }
-    if (h && stack) {
+    // (M9: frogs: vanilla PlaceOnWaterBlockItem.useOn passes, and its use places it)
+    if (h && stack && !PLACE_ON_WATER.has(stack.item.id)) {
       if (this.placeBlock(h, stack)) {
         p.swing();
         return 'success';
@@ -533,7 +542,9 @@ export class Interaction {
     const replaceClicked =
       (FLAGS[clicked] & F_REPLACEABLE && clickedBlock !== block && !(clickedBlock.name === 'water' && block.name !== 'water')) ||
       (clickedBlock === block && isMultiface(block.name) && hasVacantFace(clicked)) ||
-      !!behaviorOf(clicked)?.canBeReplaced?.(clicked, block, p.crouching);
+      // (Stage 5: ocean) vanilla canBeReplaced: a block the held one goes into (a turtle egg more in a clutch, a candle
+      // more in a group)
+      !!behaviorOf(clicked)?.canBeReplaced?.(clicked, stack, p.isShiftKeyDown());
     // slab merging into a double slab
     if (clickedBlock === block && block.name.endsWith('_slab')) {
       const type = block.get(clicked, 'type');
@@ -554,7 +565,7 @@ export class Interaction {
     if (y < world.dim.minY || y >= world.dim.maxY) return false;
     const target = world.getState(x, y, z);
     const targetBlock = BLOCKS[STATE_BLOCK[target]];
-    if (!(canReplace(target, block, p.crouching) || (targetBlock.name === 'water' && block.name !== 'water'))) {
+    if (!(canReplace(target, block) || (targetBlock.name === 'water' && block.name !== 'water') || behaviorOf(target)?.canBeReplaced?.(target, stack, p.isShiftKeyDown()))) {
       // slab into slab at adjacent position
       if (targetBlock === block && block.name.endsWith('_slab') && block.get(target, 'type') !== 'double') {
         return this.commitPlace(x, y, z, block.with(target, 'type', 'double'), stack, block.sound);
@@ -820,6 +831,18 @@ export class Interaction {
     // (an item's own use failing or passing gives the other hand its turn, as in vanilla startUseItem)
     const itemUse = itemBehaviorOf(it.id)?.use;
     if (itemUse) return itemUse(this.level, p, stack) === 'success';
+    // (M9: frogs) vanilla PlaceOnWaterBlockItem.use: looked at through anything but still water (ClipContext.Fluid.SOURCE_ONLY),
+    // it goes on the block above what's hit, if it can live there
+    if (PLACE_ON_WATER.has(it.id) && p.gameMode !== 'spectator') {
+      const pr = (p.pitch * Math.PI) / 180, yr = (p.yaw * Math.PI) / 180;
+      const look = (fluids: boolean) => raycast(this.level.world, p.x, p.y + p.eyeHeight, p.z, -Math.sin(yr) * Math.cos(pr), -Math.sin(pr), Math.cos(yr) * Math.cos(pr), this.reach(), fluids);
+      let h = look(true);
+      const b = h && BLOCKS[STATE_BLOCK[h.state]];
+      if (h && b && (b.name === 'water' || b.name === 'lava') && b.get<number>(h.state, 'level') !== 0) h = look(false);
+      if (!h || !this.placeBlock({ ...h, y: h.y + 1, hy: h.hy + 1 }, stack)) return false;
+      p.swing();
+      return true;
+    }
     // vanilla SpawnEggItem.use: aimed at a still pool of water or lava (ClipContext.Fluid.SOURCE_ONLY; a liquid block,
     // not a waterlogged one), the mob comes out in it
     if (it.id.endsWith('_spawn_egg') && p.gameMode !== 'spectator') {

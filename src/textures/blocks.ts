@@ -35,6 +35,8 @@ import { registerRedstoneTextures } from './blocklib/redstone';
 import { registerArchaeologyTextures } from './blocklib/archaeology';
 // (fossils)
 import { registerFossilTextures } from './blocklib/fossils';
+// (M9: frogs)
+import { registerFrogTextures } from './blocklib/frog';
 // (the deep dark)
 import { registerSculkTextures } from './blocklib/sculk';
 
@@ -353,6 +355,8 @@ registerRedstoneTextures(T);
 registerArchaeologyTextures(T);
 // (fossils)
 registerFossilTextures(T);
+// (M9: frogs) frogspawn, the ochre and pearlescent froglights
+registerFrogTextures(T);
 // (the deep dark)
 registerSculkTextures(T);
 T['glowstone'] = () => UT.glowstone();

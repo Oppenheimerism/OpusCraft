@@ -199,6 +199,8 @@ shaped('lead', 2, ['~~ ', '~O ', '  ~'], { '~': 'string', O: 'slime_ball' });
 shaped('magma_block', 1, ['##', '##'], { '#': 'magma_cream' });
 shapeless('blaze_powder', 2, 'blaze_rod');
 shapeless('fire_charge', 3, 'gunpowder', 'blaze_powder', ['coal', 'charcoal']);
+// vanilla firework_rocket_simple: three rockets of flight 1 (the item's default); the rest are special recipes (item/fireworks.ts)
+shapeless('firework_rocket', 3, 'paper', 'gunpowder');
 shapeless('magma_cream', 1, 'blaze_powder', 'slime_ball');
 shapeless('ender_eye', 1, 'ender_pearl', 'blaze_powder');
 shaped('end_crystal', 1, ['GGG', 'GEG', 'GTG'], { G: 'glass', E: 'ender_eye', T: 'ghast_tear' });
@@ -211,6 +213,9 @@ shaped('bread', 1, ['###'], { '#': 'wheat' });
 shaped('cookie', 8, ['#X#'], { '#': 'wheat', X: 'cocoa_beans' });
 shaped('golden_apple', 1, ['###', '#X#', '###'], { '#': 'gold_ingot', X: 'apple' });
 shapeless('mushroom_stew', 1, 'brown_mushroom', 'red_mushroom', 'bowl');
+// vanilla rabbit_stew_from_brown_mushroom and _from_red_mushroom: the rabbit over a carrot, a baked potato and a
+// mushroom, over the bowl
+for (const m of ['brown_mushroom', 'red_mushroom']) shaped('rabbit_stew', 1, [' R ', 'CPM', ' B '], { R: 'cooked_rabbit', C: 'carrot', P: 'baked_potato', M: m, B: 'bowl' });
 shapeless('sugar', 1, 'sugar_cane');
 shaped('paper', 3, ['###'], { '#': 'sugar_cane' });
 shapeless('book', 1, 'paper', 'paper', 'paper', 'leather');
@@ -528,7 +533,7 @@ smelt(['clay_ball'], 'brick', 0.3);
 smelt(['clay'], 'terracotta', 0.35);
 smelt(['cactus'], 'green_dye', 1.0);
 smelt(['potato'], 'baked_potato', 0.35);
-for (const m of ['beef', 'porkchop', 'chicken', 'mutton', 'cod', 'salmon']) smelt([m], `cooked_${m}`, 0.35);
+for (const m of ['beef', 'porkchop', 'chicken', 'mutton', 'cod', 'salmon', 'rabbit']) smelt([m], `cooked_${m}`, 0.35);
 // (Stage 5: ocean) vanilla wet_sponge smelting: dried out (and a bucket in the fuel slot is filled: world/blockEntity.ts)
 smelt(['wet_sponge'], 'sponge', 0.15);
 

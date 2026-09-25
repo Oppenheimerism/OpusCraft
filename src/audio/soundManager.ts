@@ -52,6 +52,8 @@ function categoryOf(name: string): Category {
   if (name.startsWith('entity.shulker')) return 'hostile';
   // vanilla ElytraOnPlayerSoundInstance: SoundSource.PLAYERS
   if (name === 'item.elytra.flying') return 'players';
+  // vanilla: a rocket's launch and its burst are SoundSource.AMBIENT (a dispenser's shot NEUTRAL)
+  if (name.startsWith('entity.firework_rocket.') && name !== 'entity.firework_rocket.shoot') return 'ambient';
   // vanilla CrossbowItem: the loading sounds are SoundSource.PLAYERS (the rest the shooter's source)
   if (name.startsWith('item.crossbow.')) return 'players';
   // (the shield's thud and crack are its holder's: a player's)
@@ -59,11 +61,19 @@ function categoryOf(name: string): Category {
   // (Stage 4: illagers) the totem is its user's (a player's, mostly); the raiders and the vex are hostile
   if (name === 'item.totem.use') return 'players';
   if (/^entity\.(pillager|vindicator|evoker|evoker_fangs|vex|ravager|illusioner)\./.test(name)) return 'hostile';
+  // (vanilla Rabbit.getSoundSource: the killer bunny's is HOSTILE, and only it bites)
+  if (name === 'entity.rabbit.attack') return 'hostile';
   // (Stage 5: ocean) the guardians are hostile
   if (/^entity\.(guardian|elder_guardian)\./.test(name)) return 'hostile';
   // (vanilla: a fish scooped up is the player's sound, one poured out SoundSource.NEUTRAL)
-  if (name === 'item.bucket.fill_fish') return 'players';
-  if (name === 'item.bucket.empty_fish') return 'friendly';
+  if (name === 'item.bucket.fill_fish' || name === 'item.bucket.fill_axolotl') return 'players';
+  if (name === 'item.bucket.empty_fish' || name === 'item.bucket.empty_axolotl') return 'friendly';
+  // (M8: goats) vanilla Goat.mobInteract plays the milking at the player (SoundSource.PLAYERS)
+  if (name === 'entity.goat.milk' || name === 'entity.goat.screaming.milk') return 'players';
+  // (M9: frogs) a tadpole scooped up and poured out as a fish is; a frog lays its spawn with SoundSource.BLOCKS
+  if (name === 'item.bucket.fill_tadpole') return 'players';
+  if (name === 'item.bucket.empty_tadpole') return 'friendly';
+  if (name === 'entity.frog.lay_spawn') return 'blocks';
   // (Stage 4: raids) the horn is vanilla's SoundSource.NEUTRAL; the bottle and the omens are the drinker's (a player's)
   if (name === 'event.raid.horn') return 'friendly';
   if (name.startsWith('item.ominous_bottle.') || name.startsWith('event.mob_effect.')) return 'players';
@@ -112,6 +122,8 @@ const ALIASES: [RegExp, string][] = [
   [/^entity\.shulker\.teleport$/, 'entity.enderman.teleport'],
   // vanilla sounds.json: a shield breaking (or knocked down) is the item-break sample, random/break
   [/^item\.shield\.break$/, 'entity.item.break'],
+  // vanilla sounds.json: a dispenser shoots a rocket with the bow's twang, random/bow
+  [/^entity\.firework_rocket\.shoot$/, 'entity.arrow.shoot'],
   // vanilla sounds.json: some villagers at work make their workstation's own sound
   [/^entity\.villager\.work_weaponsmith$/, 'block.grindstone.use'],
   [/^entity\.villager\.work_armorer$/, 'block.blast_furnace.fire_crackle'],

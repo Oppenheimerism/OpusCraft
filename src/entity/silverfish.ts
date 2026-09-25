@@ -9,7 +9,7 @@ import type { Level } from '../game/level';
 import type { LootEntry } from './mob';
 import type { Entity } from './entity';
 import { Goal, Flag, reducedTickDelay } from './ai/goal';
-import { FloatGoal, MeleeAttackGoal, RandomStrollGoal, HurtByTargetGoal, NearestAttackablePlayerGoal } from './ai/goals';
+import { ClimbOnTopOfPowderSnowGoal, FloatGoal, MeleeAttackGoal, RandomStrollGoal, HurtByTargetGoal, NearestAttackablePlayerGoal } from './ai/goals';
 import { isCompatibleHostBlock, isInfestedBlock, infestedStateByHost, hostStateByInfested } from '../world/blocksInfested';
 import { BLOCKS, STATE_BLOCK, COLLISION } from '../world/block';
 
@@ -104,36 +104,6 @@ export class Silverfish extends Monster {
   }
   override lootTable(): LootEntry[] {
     return [];
-  }
-}
-
-/**
- * vanilla ClimbOnTopOfPowderSnowGoal: a mob that can walk on powder snow (#powder_snow_walkable_mobs) and has sunk
- * into it keeps jumping until it's back on top
- */
-class ClimbOnTopOfPowderSnowGoal extends Goal {
-  constructor(readonly mob: Silverfish) {
-    super();
-    this.flags = Flag.JUMP;
-  }
-  private inPowderSnow(): boolean {
-    const b = this.mob.bb, w = this.mob.level.world;
-    for (let x = Math.floor(b.minX); x <= Math.floor(b.maxX - 1e-7); x++)
-      for (let y = Math.floor(b.minY); y <= Math.floor(b.maxY - 1e-7); y++)
-        for (let z = Math.floor(b.minZ); z <= Math.floor(b.maxZ - 1e-7); z++) if (BLOCKS[STATE_BLOCK[w.getState(x, y, z)]].name === 'powder_snow') return true;
-    return false;
-  }
-  canUse(): boolean {
-    if (!this.inPowderSnow()) return false;
-    const m = this.mob;
-    const above = m.level.world.getState(Math.floor(m.x), Math.floor(m.y) + 1, Math.floor(m.z));
-    return BLOCKS[STATE_BLOCK[above]].name === 'powder_snow' || !COLLISION[above]?.length;
-  }
-  override requiresUpdateEveryTick(): boolean {
-    return true;
-  }
-  override tick(): void {
-    this.mob.jumpControl.jump();
   }
 }
 

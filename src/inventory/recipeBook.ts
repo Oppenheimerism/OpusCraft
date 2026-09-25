@@ -98,6 +98,7 @@ function craftingGroup(result: string, r: CraftingRecipe): string {
   if (result.endsWith('_dye')) return result;
   if (result === 'stick') return 'sticks';
   if (result === 'bone_meal') return 'bonemeal';
+  if (result === 'rabbit_stew') return 'rabbit_stew';
   return '';
 }
 

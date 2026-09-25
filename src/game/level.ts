@@ -4,6 +4,7 @@ import { DEFAULT_GAME_RULES, GameRules } from './gameRules';
 import { FurnaceBlockEntity, SpawnerBlockEntity } from '../world/blockEntity';
 import { tickSpawner } from './baseSpawner';
 import type { ItemStack } from '../item/item';
+import type { FireworkExplosion } from '../item/fireworks';
 import { World } from '../world/world';
 import type { Entity } from '../entity/entity';
 import type { Player } from '../entity/player';
@@ -59,6 +60,8 @@ import './potionEffects';
 import { Raids } from './raids';
 // (Stage 5: ocean)
 import './ocean';
+// (M9: frogs) frogspawn hatching
+import './frogspawn';
 // (temples)
 import './archaeology';
 // (desert wells: their loot, the suspicious stew)
@@ -102,6 +105,8 @@ export interface ParticleSink {
   sculkCharge?(x: number, y: number, z: number, xd: number, yd: number, zd: number, roll: number): void;
   /** vanilla DUST_COLOR_TRANSITION (DustColorTransitionParticle): a speck going from one colour to another */
   dustTransition?(x: number, y: number, z: number, xd: number, yd: number, zd: number, from: [number, number, number], to: [number, number, number], scale: number): void;
+  /** (fireworks) vanilla ClientLevel.createFireworks for a rocket with stars: their burst (render/fireworkParticles.ts) */
+  fireworks?(x: number, y: number, z: number, xd: number, yd: number, zd: number, explosions: readonly FireworkExplosion[]): void;
 }
 
 /** vanilla Block.UPDATE_NEIGHBORS: setBlock tells the six neighbours (neighborChanged) */

@@ -3,7 +3,7 @@
 // FlyNodeEvaluator for what flies.
 
 import { BLOCKS, STATE_BLOCK, FLAGS, F_AIR, F_WATER, F_LAVA, F_LEAVES, COLLISION } from '../../world/block';
-import { MIN_Y } from '../../world/constants';
+import { MIN_Y, SEA_LEVEL } from '../../world/constants';
 import { AABB } from '../../core/aabb';
 import type { World } from '../../world/world';
 import { fluidType, FLUID_NONE, FLUID_WATER } from '../../world/fluids';
@@ -364,7 +364,7 @@ export class WalkNodeEvaluator implements NodeEvaluator {
   }
 
   floorLevel(x: number, y: number, z: number): number {
-    if (this.canFloat && FLAGS[this.world.getState(x, y, z)] & F_WATER) return y + 0.5;
+    if ((this.canFloat || this.isAmphibious()) && FLAGS[this.world.getState(x, y, z)] & F_WATER) return y + 0.5;
     return y - 1 + collisionTop(this.world.getState(x, y - 1, z));
   }
 
@@ -415,6 +415,11 @@ export class WalkNodeEvaluator implements NodeEvaluator {
       }
     }
     return this.startNode(ox, y, oz);
+  }
+
+  /** vanilla isAmphibious: water is somewhere to go in its own right (AmphibiousNodeEvaluator) */
+  protected isAmphibious(): boolean {
+    return false;
   }
 
   protected startNode(x: number, y: number, z: number): Node {
@@ -477,18 +482,18 @@ export class WalkNodeEvaluator implements NodeEvaluator {
   }
 
   /** vanilla findAcceptedNode */
-  private acceptedNode(x: number, y: number, z: number, vertical: number, nodeFloor: number, dx: number, dz: number, fromType: PathType): Node | null {
+  protected acceptedNode(x: number, y: number, z: number, vertical: number, nodeFloor: number, dx: number, dz: number, fromType: PathType): Node | null {
     let node: Node | null = null;
     const floor = this.floorLevel(x, y, z);
     if (floor - nodeFloor > this.jumpHeight()) return null;
     const t = this.mobType(x, y, z);
     const malus = this.mob.malus(t);
     if (malus >= 0) node = this.nodeWithMalus(x, y, z, t, malus);
-    if (t === PathType.WALKABLE) return node;
+    if (t === PathType.WALKABLE || (t === PathType.WATER && this.isAmphibious())) return node;
     if ((node === null || node.costMalus < 0) && vertical > 0 && t !== PathType.FENCE && t !== PathType.TRAPDOOR) {
       return this.tryJumpOn(x, y, z, vertical, nodeFloor, dx, dz, fromType);
     }
-    if (t === PathType.WATER && !this.canFloat) return this.firstNonWaterBelow(x, y, z, node);
+    if (t === PathType.WATER && !this.canFloat && !this.isAmphibious()) return this.firstNonWaterBelow(x, y, z, node);
     if (t === PathType.OPEN) return this.firstGroundBelow(x, y, z);
     return node;
   }
@@ -641,6 +646,80 @@ export class SwimNodeEvaluator implements NodeEvaluator {
         }
     const boxes = COLLISION[st];
     return boxes && boxes.length ? PathType.BLOCKED : PathType.WATER;
+  }
+}
+
+/** a mob whose maluses an evaluator may change while it finds a way (vanilla Mob.setPathfindingMalus) */
+type MalusSetter = PathMob & { setPathfindingMalus(t: PathType, v: number): void };
+
+/**
+ * vanilla AmphibiousNodeEvaluator (Stage 5: ocean; a turtle's, an axolotl's): it walks as the walkers do, but water
+ * is somewhere to be rather than something to get across — it swims up and down through it as well as along it, a
+ * cell of water costing nothing, dry ground 6 and water up against something solid 4 while it looks (the ground's and
+ * the border's costs put back after); in the water it starts from the cell at the corner of its feet.
+ * `prefersShallowSwimming` (an axolotl's) makes water more than ten below the sea a little dearer
+ */
+export class AmphibiousNodeEvaluator extends WalkNodeEvaluator {
+  private oldWalkable = 0;
+  private oldWaterBorder = 0;
+
+  constructor(readonly prefersShallowSwimming: boolean) {
+    super();
+  }
+
+  override prepare(world: World, mob: PathMob): void {
+    super.prepare(world, mob);
+    const m = mob as MalusSetter;
+    m.setPathfindingMalus(PathType.WATER, 0);
+    this.oldWalkable = m.malus(PathType.WALKABLE);
+    m.setPathfindingMalus(PathType.WALKABLE, 6);
+    this.oldWaterBorder = m.malus(PathType.WATER_BORDER);
+    m.setPathfindingMalus(PathType.WATER_BORDER, 4);
+  }
+
+  override done(): void {
+    const m = this.mob as MalusSetter;
+    m.setPathfindingMalus(PathType.WALKABLE, this.oldWalkable);
+    m.setPathfindingMalus(PathType.WATER_BORDER, this.oldWaterBorder);
+    super.done();
+  }
+
+  protected override isAmphibious(): boolean {
+    return true;
+  }
+
+  /** vanilla getStart: out of the water as a walker starts; in it, at the corner of its feet half a block up */
+  override getStart(): Node | null {
+    if (!this.mob.inWater) return super.getStart();
+    const bb = this.mob.bb;
+    return this.startNode(Math.floor(bb.minX), Math.floor(bb.minY + 0.5), Math.floor(bb.minZ));
+  }
+
+  /** vanilla getNeighbors: the walker's, then straight up and straight down where that's water */
+  override neighbors(out: Node[], node: Node): number {
+    let i = super.neighbors(out, node);
+    const above = this.mobType(node.x, node.y + 1, node.z);
+    const here = this.mobType(node.x, node.y, node.z);
+    const j = this.mob.malus(above) >= 0 ? Math.floor(Math.max(1, this.mob.stepHeight)) : 0;
+    const floor = this.floorLevel(node.x, node.y, node.z);
+    const up = this.acceptedNode(node.x, node.y + 1, node.z, Math.max(0, j - 1), floor, 0, 0, here);
+    const down = this.acceptedNode(node.x, node.y - 1, node.z, j, floor, 0, 0, here);
+    if (up && this.verticalOk(up, node)) out[i++] = up;
+    if (down && this.verticalOk(down, node) && here !== PathType.TRAPDOOR) out[i++] = down;
+    if (this.prefersShallowSwimming) for (let k = 0; k < i; k++) if (out[k].type === PathType.WATER && out[k].y < SEA_LEVEL - 10) out[k].costMalus++;
+    return i;
+  }
+
+  /** vanilla isVerticalNeighborValid: a way on (isNeighborValid) that is water */
+  private verticalOk(n: Node, from: Node): boolean {
+    return !n.closed && (n.costMalus >= 0 || from.costMalus < 0) && n.type === PathType.WATER;
+  }
+
+  /** vanilla AmphibiousNodeEvaluator.getPathType: water with something solid on any of its six sides is a water border */
+  override staticType(x: number, y: number, z: number): PathType {
+    if (this.rawType(x, y, z) !== PathType.WATER) return super.staticType(x, y, z);
+    for (const [dx, dy, dz] of DIRS6) if (this.rawType(x + dx, y + dy, z + dz) === PathType.BLOCKED) return PathType.WATER_BORDER;
+    return PathType.WATER;
   }
 }
 

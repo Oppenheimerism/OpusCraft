@@ -551,7 +551,12 @@ export function oxidizedCopperBulb(): TexImage {
 const VERDANT = [0x5c9a68, 0x78b277, 0x97c88c, 0xb6dba5, 0xd0e8be, 0xe6f2d6, 0xf6fae9];
 
 export function verdantFroglightSide(): TexImage {
-  const r = rng('verdant_froglight_side');
+  return froglightSide(VERDANT, 'verdant_froglight_side');
+}
+
+/** (M9: frogs) any froglight's side, in its palette from the veins' darkest to the glow's lightest */
+export function froglightSide(pal: number[], seed: string): TexImage {
+  const r = rng(seed);
   const tones = new Int32Array(N * N);
   const prof = [1, 4, 6, 4];
   for (let y = 0; y < N; y++)
@@ -571,11 +576,16 @@ export function verdantFroglightSide(): TexImage {
     tones[idx(x, 0)] = Math.min(tones[idx(x, 0)], 3);
     tones[idx(x, 15)] = Math.min(tones[idx(x, 15)], 2);
   }
-  return paint(tones, VERDANT);
+  return paint(tones, pal);
 }
 
 export function verdantFroglightTop(): TexImage {
-  const r = rng('verdant_froglight_top');
+  return froglightTop(VERDANT, 'verdant_froglight_top');
+}
+
+/** (M9: frogs) any froglight's top */
+export function froglightTop(pal: number[], seed: string): TexImage {
+  const r = rng(seed);
   const nz = fbm(r, [[8, 8, 0.6], [4, 4, 0.4]]);
   const tones = new Int32Array(N * N);
   for (let y = 0; y < N; y++)
@@ -589,5 +599,5 @@ export function verdantFroglightTop(): TexImage {
       if (k > 2 && r.chance(0.12)) k--;
       tones[i] = k;
     }
-  return paint(tones, VERDANT);
+  return paint(tones, pal);
 }

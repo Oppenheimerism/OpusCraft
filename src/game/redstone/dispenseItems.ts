@@ -1,8 +1,9 @@
 // What a dispenser does with each item (vanilla DispenseItemBehavior.bootStrap and the behaviours it registers, for
 // the items the game has and what they work on): it shoots arrows, tridents, eggs, snowballs, splash and lingering
-// potions, bottles o' enchanting and fire charges; sets down boats, minecarts, primed TNT and spawn eggs' mobs; empties and
-// fills buckets and bottles; uses bone meal, flint and steel and shears on what's in front; puts armour, carved
-// pumpkins and saddles on what stands there; and throws anything else out as an item (DefaultDispenseItemBehavior).
+// potions, bottles o' enchanting, fire charges and firework rockets; sets down boats, minecarts, primed TNT and spawn
+// eggs' mobs; empties and fills buckets and bottles; uses bone meal, flint and steel and shears on what's in front; puts
+// armour, carved pumpkins and saddles on what stands there; and throws anything else out as an item
+// (DefaultDispenseItemBehavior).
 
 import { BLOCKS, STATE_BLOCK, FLAGS, COLLISION, F_AIR, F_WATER, F_LAVA, F_REPLACEABLE, S, getBlock, type Block } from '../../world/block';
 import { DX, DY, DZ, UP, DOWN, NORTH, SOUTH, WEST, DIR_NAMES, type Dir } from '../../world/dir';
@@ -21,6 +22,7 @@ import { ThrownItem } from '../../entity/throwable';
 import { ThrownPotion } from '../../entity/thrownPotion';
 import { ThrownExperienceBottle } from '../../entity/thrownExperienceBottle';
 import { ThrownTrident } from '../../entity/thrownTrident';
+import { FireworkRocket } from '../../entity/fireworkRocket';
 import { SmallFireball } from '../../entity/fireball';
 import { PrimedTnt } from '../../entity/tnt';
 import { Pig, Sheep, DYE_COLORS } from '../../entity/animals';
@@ -31,7 +33,7 @@ import { createBoat, boatItemInfo } from '../../entity/boat';
 import { createMinecart } from '../../entity/minecart';
 import { createMob } from '../spawner';
 // (Stage 5: ocean)
-import { releaseBucketFish } from '../../entity/fish';
+import { bucketEmptySound, releaseBucketFish } from '../../entity/fish';
 import { behaviorOf } from '../blockBehavior';
 import { canSurvive } from '../blockRules';
 import { performBoneMeal, boneMealParticles } from '../boneMeal';
@@ -191,6 +193,21 @@ const arrow = projectile((src, [x, y, z], stack) => {
   if (stack.item.id !== 'arrow') a.setPickupStack(stack);
   return a;
 });
+
+/**
+ * vanilla FireworkRocketItem.asProjectile and its DispenseConfig: a rocket shot at an angle, poking out of the front
+ * (getEntityPokingOutOfBlockPos: its middle all but half a block out, less half its size, and half its height down),
+ * at 0.5 with a spread of 1, with the firework's shoot sound (level event 1004) instead of the launch click
+ */
+const fireworkRocket = behavior((src, stack) => {
+  const f = src.facing;
+  const out = 0.5000099999997474 - 0.125;
+  const p = FireworkRocket.shot(src.level, stack.copyWithCount(1), src.x + 0.5 + DX[f] * out, src.y + 0.5 + DY[f] * out - 0.125, src.z + 0.5 + DZ[f] * out);
+  p.shoot(DX[f], DY[f], DZ[f], 0.5, 1);
+  src.level.addEntity(p);
+  stack.count--;
+  return left(stack);
+}, (src) => src.level.sound.play('entity.firework_rocket.shoot', src.x + 0.5, src.y + 0.5, src.z + 0.5, 1, 1.2));
 
 /** vanilla TridentItem.asProjectile: it flies as an arrow does, and whoever finds it may pick it up */
 const trident = projectile((src, [x, y, z], stack) => {
@@ -494,9 +511,9 @@ function itemInSlot(e: LivingEntity, slot: EquipSlot): ItemStack | null {
   return null;
 }
 
-/** vanilla LivingEntity.canTakeItem: a player with that slot free, a mob that picks things up with it free */
+/** vanilla LivingEntity.canTakeItem: a player with that slot free, a mob as it says (one that picks things up, with it free) */
 function canTakeItem(e: LivingEntity, slot: EquipSlot): boolean {
-  if (e instanceof Mob) return !itemInSlot(e, slot) && e.canPickUpLoot;
+  if (e instanceof Mob) return e.canTakeItem(slot);
   if (e instanceof Player) return slot !== 'mainhand' && !itemInSlot(e, slot);
   return false;
 }
@@ -595,7 +612,7 @@ const skull = optional((src, stack) => {
 
 const BEHAVIORS: Record<string, DispenseBehavior> = {
   arrow, tipped_arrow: arrow, trident, egg: thrown('egg'), snowball: thrown('snowball'), splash_potion: potion, lingering_potion: potion,
-  experience_bottle: experienceBottle, fire_charge: fireCharge,
+  experience_bottle: experienceBottle, fire_charge: fireCharge, firework_rocket: fireworkRocket,
   tnt, minecart: minecart('minecart'), chest_minecart: minecart('chest_minecart'),
   water_bucket: fullBucket('water'), lava_bucket: fullBucket('lava'), bucket: emptyBucket,
   glass_bottle: glassBottle, potion: waterBottle,
@@ -625,10 +642,12 @@ export function dispenseBehaviorFor(stack: ItemStack): DispenseBehavior {
 // checkExtraContent) and leaves an empty bucket; where the water can't go, it's thrown out
 const fishBucket = behavior((src, stack) => {
   const [x, y, z] = front(src);
-  if (!emptyContents(src.level, x, y, z, 'water', 'item.bucket.empty_fish')) return DEFAULT_DISPENSE(src, stack);
+  if (!emptyContents(src.level, x, y, z, 'water', bucketEmptySound(stack.item.id))) return DEFAULT_DISPENSE(src, stack);
   releaseBucketFish(src.level, stack, x, y, z);
   // (vanilla MobBucketItem.checkExtraContent)
   src.level.gameEvent('entity_place', x + 0.5, y + 0.5, z + 0.5);
   return ItemStack.of('bucket');
 });
-Object.assign(BEHAVIORS, { cod_bucket: fishBucket, salmon_bucket: fishBucket, pufferfish_bucket: fishBucket, tropical_fish_bucket: fishBucket });
+Object.assign(BEHAVIORS, { cod_bucket: fishBucket, salmon_bucket: fishBucket, pufferfish_bucket: fishBucket, tropical_fish_bucket: fishBucket, axolotl_bucket: fishBucket });
+// (M9: frogs)
+Object.assign(BEHAVIORS, { tadpole_bucket: fishBucket });

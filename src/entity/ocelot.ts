@@ -9,6 +9,7 @@ import type { LootEntry, SpawnGroup, SpawnReason } from './mob';
 import { AvoidEntityGoal, FloatGoal, LeapAtTargetGoal, LookAtPlayerGoal, NearestAttackableMobGoal, OcelotAttackGoal, WaterAvoidingRandomStrollGoal } from './ai/goals';
 import type { Player } from './player';
 import type { ItemStack } from '../item/item';
+import { babyTurtleOnLand } from './turtlePredators';
 import { BLOCKS, STATE_BLOCK, FLAGS, F_LEAVES } from '../world/block';
 import { SEA_LEVEL } from '../world/constants';
 
@@ -45,7 +46,8 @@ export class Ocelot extends Animal {
     this.goalSelector.addGoal(10, new WaterAvoidingRandomStrollGoal(this, 0.8, 1.0000001e-5));
     this.goalSelector.addGoal(11, new LookAtPlayerGoal(this, 10));
     this.targetSelector.addGoal(1, new NearestAttackableMobGoal(this, (e) => e.type === 'chicken', false));
-    // (vanilla NearestAttackableTargetGoal<Turtle>(BABY_ON_LAND_SELECTOR): baby turtles on land — no turtles yet)
+    // (Stage 5: ocean) vanilla NearestAttackableTargetGoal<Turtle>(BABY_ON_LAND_SELECTOR): baby turtles on land, seen or not
+    this.targetSelector.addGoal(1, new NearestAttackableMobGoal(this, babyTurtleOnLand, false));
   }
 
   // --- spawning and breeding ------------------------------------------------------------------------------------

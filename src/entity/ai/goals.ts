@@ -5,7 +5,7 @@ import { Goal, Flag, reducedTickDelay } from './goal';
 import type { Mob } from '../mob';
 import { PathType, type Path } from './pathfinder';
 import { LivingEntity } from '../living';
-import { BLOCKS, STATE_BLOCK, FLAGS, F_WATER, F_COLLIDE, F_OPAQUE } from '../../world/block';
+import { BLOCKS, STATE_BLOCK, FLAGS, F_WATER, F_COLLIDE, F_OPAQUE, COLLISION } from '../../world/block';
 import { MIN_Y, MAX_Y } from '../../world/constants';
 import type { Player } from '../player';
 import type { Difficulty } from '../../game/difficulty';
@@ -276,6 +276,36 @@ export class FloatGoal extends Goal {
   }
 }
 
+/**
+ * vanilla ClimbOnTopOfPowderSnowGoal: a mob that can walk on powder snow (#powder_snow_walkable_mobs) and has sunk
+ * into it keeps jumping until it's back on top
+ */
+export class ClimbOnTopOfPowderSnowGoal extends Goal {
+  constructor(readonly mob: Mob) {
+    super();
+    this.flags = Flag.JUMP;
+  }
+  private inPowderSnow(): boolean {
+    const b = this.mob.bb, w = this.mob.level.world;
+    for (let x = Math.floor(b.minX); x <= Math.floor(b.maxX - 1e-7); x++)
+      for (let y = Math.floor(b.minY); y <= Math.floor(b.maxY - 1e-7); y++)
+        for (let z = Math.floor(b.minZ); z <= Math.floor(b.maxZ - 1e-7); z++) if (BLOCKS[STATE_BLOCK[w.getState(x, y, z)]].name === 'powder_snow') return true;
+    return false;
+  }
+  canUse(): boolean {
+    if (!this.inPowderSnow()) return false;
+    const m = this.mob;
+    const above = m.level.world.getState(Math.floor(m.x), Math.floor(m.y) + 1, Math.floor(m.z));
+    return BLOCKS[STATE_BLOCK[above]].name === 'powder_snow' || !COLLISION[above]?.length;
+  }
+  override requiresUpdateEveryTick(): boolean {
+    return true;
+  }
+  override tick(): void {
+    this.mob.jumpControl.jump();
+  }
+}
+
 export class PanicGoal extends Goal {
   protected px = 0;
   protected py = 0;
@@ -307,7 +337,7 @@ export class PanicGoal extends Goal {
     this.pz = p[2] + 0.5;
     return true;
   }
-  private lookForWater(r: number): Pos | null {
+  protected lookForWater(r: number): Pos | null {
     const m = this.mob;
     const bx = Math.floor(m.x), by = Math.floor(m.y), bz = Math.floor(m.z);
     let best: Pos | null = null, bd = Infinity;
@@ -1013,7 +1043,8 @@ export class FleeSunGoal extends Goal {
     if (!m.level.canSeeSky(Math.floor(m.x), Math.floor(m.y), Math.floor(m.z))) return false;
     return this.setWantedPos();
   }
-  private setWantedPos(): boolean {
+  /** vanilla setWantedPos (getHidePos): ten tries at somewhere within 10 across and 3 up or down, out of the sky, that it values below 0 */
+  protected setWantedPos(): boolean {
     const m = this.mob;
     const bx = Math.floor(m.x), by = Math.floor(m.y), bz = Math.floor(m.z);
     for (let i = 0; i < 10; i++) {

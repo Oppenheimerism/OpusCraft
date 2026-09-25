@@ -24,6 +24,7 @@ import { MIN_Y, MAX_Y } from '../world/constants';
 import { Overlay } from '../render/overlay';
 import { isAnim, TexImage } from '../textures/tex';
 import { ParticleEngine } from '../render/particles';
+import { createFireworks } from '../render/fireworkParticles';
 import { GuiGraphics, SpriteSheet, BitmapFont, autoGuiScale } from '../gui/guiGraphics';
 import { ItemIcons } from '../gui/itemIcons';
 import { Hud } from '../gui/hud';
@@ -489,6 +490,7 @@ export class Game {
       entityEffect: (x, y, z, c, a) => particles.entityEffect(x, y, z, c, a),
       dust: (x, y, z, r, g, b, s) => particles.dust(x, y, z, r, g, b, s),
       spell: (k, x, y, z, xd, yd, zd, r, g, b, pw) => particles.spell(k, x, y, z, xd, yd, zd, r, g, b, pw),
+      fireworks: (x, y, z, xd, yd, zd, ex) => void createFireworks(particles, this.level, x, y, z, xd, yd, zd, ex),
       vibration: (x, y, z, target, ticks) => particles.sculk.vibration(x, y, z, target, ticks),
       shriek: (x, y, z, delay) => particles.sculk.shriek(x, y, z, delay),
       sculkCharge: (x, y, z, xd, yd, zd, roll) => particles.sculk.sculkCharge(x, y, z, xd, yd, zd, roll),
@@ -908,6 +910,8 @@ export class Game {
     const kn = k ? entityDisplayName(k) : '';
     switch (source) {
       case 'mob':
+      // (M8: goats) vanilla mob_attack_no_aggro's message is mob's: a goat's ram
+      case 'mobAttackNoAggro':
       // (vanilla mob_projectile's message is mob's: a shulker's bullet)
       case 'mobProjectile':
         return `${n} was slain by ${kn}`;
@@ -928,6 +932,9 @@ export class Game {
       // (Stage 4: the outer End) an elytra into a wall
       case 'flyIntoWall':
         return `${n} experienced kinetic energy`;
+      // (fireworks: vanilla death.attack.fireworks, the rocket being the direct cause)
+      case 'fireworks':
+        return `${n} went off with a bang`;
       case 'drown':
         return `${n} drowned`;
       case 'starve':
@@ -1773,6 +1780,9 @@ export class Game {
     };
     this.interaction.onInteractedWithEntity = (stack, e) => {
       if (e instanceof Piglin && e.isAdult() && stack?.item.id === 'gold_ingot') this.advancements.trigger('distract_piglin', { distract: 'directly' });
+      // (M9: frogs) vanilla player_interacted_with_entity: what was in hand, on what kind of mob, of what variant
+      const variant = (e as { variant?: unknown }).variant;
+      this.advancements.trigger('player_interacted_with_entity', { interacted: { item: stack?.item.id ?? null, entity: e.type, variant: typeof variant === 'string' ? variant : undefined } });
     };
     lvl.onPlayerCrossbowKill = (killed) => this.advancements.trigger('killed_by_crossbow', { crossbowKills: killed.map((e) => e.type) });
     // (Stage 4) criteria met out in the world: shields, totems, raids

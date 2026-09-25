@@ -71,9 +71,16 @@ import { EnderDragonRenderer } from './enderDragonRenderer';
 import { RaiderRenderers, RAIDER_SHADOW_RADII } from './illagerRenderers';
 // (Stage 5: ocean)
 import { OceanRenderers, OCEAN_SHADOW_RADII } from './oceanRenderers';
+// (M8: goats)
+import { GoatRenderers, GOAT_SHADOW_RADII } from './goatRenderer';
 import { HorseRenderers, HORSE_SHADOW_RADII } from './horseRenderer';
 import { LlamaRenderers, LLAMA_SHADOW_RADII, renderSpit } from './llamaRenderer';
 import { ParrotRenderers, PARROT_SHADOW_RADII } from './parrotRenderer';
+import { PolarBearRenderers, POLAR_BEAR_SHADOW_RADII } from './polarBearRenderer';
+import { RabbitRenderers, RABBIT_SHADOW_RADII } from './rabbitRenderer';
+import { FoxRenderers, FOX_SHADOW_RADII } from './foxRenderer';
+// (M9: frogs)
+import { FrogRenderers, FROG_SHADOW_RADII } from './frogRenderer';
 import { LlamaSpit } from '../entity/llama';
 import { LeashKnot } from '../entity/leash';
 import { renderKnot, renderLeash } from './leashRenderer';
@@ -96,6 +103,8 @@ import { ItemFrame } from '../entity/itemFrame';
 import { ItemFrameRenderer } from './itemFrameRenderer';
 import { SkullRenderer } from './skullRenderer';
 import { ElytraLayer } from './elytraLayer';
+import { FireworkRocket } from '../entity/fireworkRocket';
+import { renderFireworkRocket } from './fireworkRenderer';
 import { viewVector } from '../entity/elytra';
 import { PistonRenderer } from './pistonRenderer';
 import { ArchaeologyRenderers } from './archaeologyRenderers';
@@ -192,12 +201,19 @@ export class EntityRenderDispatcher {
   private readonly raiders: RaiderRenderers;
   /** (Stage 5: ocean) the guardians, their lasers, the elder's ghostly face */
   private readonly ocean: OceanRenderers;
+  // (M8: goats)
+  private readonly goats: GoatRenderers;
   /** (Stage 6: tameable animals) horses, donkeys and mules, their markings and armour */
   private readonly horses: HorseRenderers;
   /** (Stage 6: tameable animals) llamas and their decor */
   private readonly llamas: LlamaRenderers;
   /** parrots, and the ones on a player's shoulders */
   private readonly parrots: ParrotRenderers;
+  private readonly polarBears: PolarBearRenderers;
+  private readonly rabbits: RabbitRenderers;
+  private readonly foxes: FoxRenderers;
+  /** (M9: frogs) and tadpoles */
+  private readonly frogs: FrogRenderers;
   /** names over mobs, drawn once every entity is down */
   private readonly nameTags: NameTagRenderer;
   /** this frame's options: names shown at all (not with the GUI hidden), and what the crosshair is on */
@@ -228,10 +244,16 @@ export class EntityRenderDispatcher {
     });
     // (Stage 5: ocean) lent the same steps
     this.ocean = new OceanRenderers(gl, this.raiders.kit);
+    // (M8: goats)
+    this.goats = new GoatRenderers(this.raiders.kit);
     // (Stage 6: tameable animals) and again
     this.horses = new HorseRenderers(this.raiders.kit);
     this.llamas = new LlamaRenderers(this.raiders.kit);
     this.parrots = new ParrotRenderers(this.raiders.kit);
+    this.polarBears = new PolarBearRenderers(this.raiders.kit);
+    this.rabbits = new RabbitRenderers(this.raiders.kit);
+    this.foxes = new FoxRenderers(this.raiders.kit);
+    this.frogs = new FrogRenderers(this.raiders.kit);
     this.nameTags = new NameTagRenderer(gl);
     this.models = {
       pig: M.pigModel(),
@@ -375,6 +397,8 @@ export class EntityRenderDispatcher {
       else if (e instanceof ShulkerBullet) size = 2;
       // (vanilla ItemFrame.shouldRenderAtSqrDistance: as though 16 blocks across)
       else if (e instanceof ItemFrame) size = 16;
+      // (vanilla FireworkRocketEntity.shouldRenderAtSqrDistance: within 64 blocks)
+      else if (e instanceof FireworkRocket) size = 1;
       const maxD = size * 64 * opts.distanceScale;
       // (vanilla EndCrystalRenderer.shouldRender: a crystal with a beam is always drawn; the dragon is never culled)
       const beam = e instanceof EndCrystal && e.beamTarget !== null;
@@ -519,6 +543,7 @@ export class EntityRenderDispatcher {
     else if (e instanceof PrimedTnt) this.renderTnt(b, e, dx, dy, dz, p);
     else if (e instanceof FallingBlockEntity) this.renderFalling(b, e, dx, dy, dz);
     else if (e instanceof ThrownItem) this.renderThrown(b, e, dx, dy, dz, cam);
+    else if (e instanceof FireworkRocket) renderFireworkRocket(b, this.pose, this.items, e, dx, dy, dz, cam);
     else if (e instanceof EyeOfEnder) this.renderEyeOfEnder(b, e, dx, dy, dz, cam);
     else if (e instanceof DragonFireball) this.dragons.renderFireball(b, this.pose, dx, dy, dz, cam);
     else if (e instanceof Fireball) this.renderFireball(b, e, dx, dy, dz, cam);
@@ -680,11 +705,12 @@ export class EntityRenderDispatcher {
     return { texture: tex, cutoff: 0.1, blend: false, cull: false, lit: true, useLightmap: true, ...extra };
   }
 
-  /** vanilla AgeableListModel.renderToBuffer */
+  /** vanilla AgeableListModel.renderToBuffer (or a model's own, in groups) */
   private drawModel(b: EntityBatch, def: MobModelDef, baby: boolean, r = 1, g = 1, bl = 1, a = 1): void {
     const pose = this.pose;
-    if (baby && def.babyGroups) {
-      for (const grp of def.babyGroups) {
+    const groups = baby ? def.babyGroups : def.groups;
+    if (groups) {
+      for (const grp of groups) {
         pose.push();
         pose.scale(grp.scale[0], grp.scale[1], grp.scale[2]);
         pose.translate(grp.translate[0], grp.translate[1], grp.translate[2]);
@@ -715,10 +741,17 @@ export class EntityRenderDispatcher {
     if (this.raiders.render(b, e, dx, dy, dz, p)) return;
     // (Stage 5: ocean)
     if (this.ocean.render(b, e, dx, dy, dz, p)) return;
+    // (M8: goats)
+    if (this.goats.render(b, e, dx, dy, dz, p)) return;
     // (Stage 6: tameable animals; a llama before the horses it's kin to)
     if (this.llamas.render(b, e, dx, dy, dz, p)) return;
     if (this.horses.render(b, e, dx, dy, dz, p)) return;
     if (this.parrots.render(b, e, dx, dy, dz, p)) return;
+    if (this.polarBears.render(b, e, dx, dy, dz, p)) return;
+    if (this.rabbits.render(b, e, dx, dy, dz, p)) return;
+    if (this.foxes.render(b, e, dx, dy, dz, p)) return;
+    // (M9: frogs)
+    if (this.frogs.render(b, e, dx, dy, dz, p)) return;
     const type = e.type;
     const def = this.models[type];
     // (vanilla GhastRenderer.getTextureLocation: its face while charging a shot)
@@ -1705,9 +1738,13 @@ function shadowRadius(e: Entity): number {
   // (Stage 4: illagers)
   if (RAIDER_SHADOW_RADII[e.type] !== undefined) return RAIDER_SHADOW_RADII[e.type];
   // (Stage 5: ocean)
-  if (OCEAN_SHADOW_RADII[e.type] !== undefined) return OCEAN_SHADOW_RADII[e.type];
+  if (OCEAN_SHADOW_RADII[e.type] !== undefined) return OCEAN_SHADOW_RADII[e.type] * (e instanceof Mob && e.isBaby() ? 0.5 : 1);
+  // (M8: goats)
+  if (GOAT_SHADOW_RADII[e.type] !== undefined) return GOAT_SHADOW_RADII[e.type] * (e instanceof Mob && e.isBaby() ? 0.5 : 1);
+  // (M9: frogs)
+  if (FROG_SHADOW_RADII[e.type] !== undefined) return FROG_SHADOW_RADII[e.type];
   // (Stage 6: tameable animals; a foal's is half)
-  let r = HORSE_SHADOW_RADII[e.type] ?? LLAMA_SHADOW_RADII[e.type] ?? PARROT_SHADOW_RADII[e.type] ?? 0;
+  let r = HORSE_SHADOW_RADII[e.type] ?? LLAMA_SHADOW_RADII[e.type] ?? PARROT_SHADOW_RADII[e.type] ?? POLAR_BEAR_SHADOW_RADII[e.type] ?? RABBIT_SHADOW_RADII[e.type] ?? FOX_SHADOW_RADII[e.type] ?? 0;
   switch (e.type) {
     case 'pig':
     case 'cow':

@@ -144,13 +144,13 @@ function useOn(sc, s, sneaking = false) {
   const { p, inter } = sc;
   p.inventory.main[0] = s;
   p.inventory.selected = 0;
-  p.crouching = sneaking;
+  p.crouching = p.input.sneak = sneaking;
   const ey = p.y + p.eyeHeight;
   p.pitch = (Math.atan2(ey - (G + 0.2), p.z - 0.5) * 180) / Math.PI;
   inter.pick(p.x, ey, p.z, p.yaw, p.pitch);
   inter.rightClickDelay = 0;
   inter.use(true, true);
-  p.crouching = false;
+  p.crouching = p.input.sneak = false;
 }
 
 {

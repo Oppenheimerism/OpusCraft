@@ -4,11 +4,13 @@ import type { GL } from './gl';
 import { createTexture } from './gl';
 import { MOB_PARTICLE_TEXTURES } from '../textures/mobs';
 import { ITEM_TEXTURES } from '../textures/items';
+import { ITEMS } from '../item/item';
 import { BLOCK_TEXTURES } from '../textures/blocks';
 import { isAnim } from '../textures/tex';
 import { sgaParticleTextures } from '../textures/sga';
 import { campfireSmokeTextures } from '../textures/campfireSmoke';
 import { glitterTextures } from '../textures/blocklib/outerEnd';
+import { fireworkParticleTextures } from '../textures/fireworks';
 import { sculkParticleTextures } from '../textures/sculkParticles';
 import type { SpriteRectUV } from './particles';
 
@@ -20,6 +22,8 @@ export function buildParticleAtlas(gl: GL): { texture: WebGLTexture; rects: Reco
   Object.assign(src, campfireSmokeTextures());
   // end rod motes and firework sparks (vanilla particle/glitter_0..7)
   Object.assign(src, glitterTextures());
+  // a firework's flash (vanilla particle/flash)
+  Object.assign(src, fireworkParticleTextures());
   // the deep dark's: vibration, shriek, sculk_charge_0..6, sculk_charge_pop_0..3, sculk_soul_0..10
   Object.assign(src, sculkParticleTextures());
   // item crumb particles (vanilla ItemParticleOption)
@@ -27,6 +31,8 @@ export function buildParticleAtlas(gl: GL): { texture: WebGLTexture; rects: Reco
   if (ITEM_TEXTURES['egg']) src['item_egg'] = ITEM_TEXTURES['egg'];
   if (ITEM_TEXTURES['snowball']) src['item_snowball'] = ITEM_TEXTURES['snowball'];
   if (ITEM_TEXTURES['ender_eye']) src['item_ender_eye'] = ITEM_TEXTURES['ender_eye'];
+  // (foxes) the crumbs of whatever food a mob eats: every food's sprite
+  for (const it of ITEMS.values()) if (it.food && it.texture && ITEM_TEXTURES[it.texture]) src[`item_${it.id}`] ??= ITEM_TEXTURES[it.texture];
   // (a splash potion's model's particle texture is its layer0, the untinted liquid: grey glass shards)
   if (ITEM_TEXTURES['potion_overlay']) src['item_splash_potion'] = ITEM_TEXTURES['potion_overlay'];
   if (BLOCK_TEXTURES['cobweb'])
