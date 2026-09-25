@@ -31,6 +31,15 @@ export abstract class TamableAnimal extends Animal {
     super(level);
   }
 
+  /** vanilla TamableAnimal.handleLeashAtDistance: sitting, it isn't pulled along (the lead still snaps past ten blocks) */
+  override handleLeashAtDistance(h: Entity, distance: number): boolean {
+    if (this.inSittingPose) {
+      if (distance > 10) this.dropLeash(true);
+      return false;
+    }
+    return super.handleLeashAtDistance(h, distance);
+  }
+
   isTame(): boolean {
     return this.tame;
   }
@@ -101,10 +110,10 @@ export abstract class TamableAnimal extends Animal {
 
   // --- going to its owner (vanilla 1.21 TamableAnimal) ----------------------------------------------------------
 
-  /** vanilla unableToMoveToOwner: told to sit, riding something, or its owner is a spectator */
+  /** vanilla unableToMoveToOwner: told to sit, riding something, on a lead, or its owner is a spectator */
   unableToMoveToOwner(): boolean {
     const o = this.owner();
-    return this.orderedToSit || !!this.vehicle || (!!o && (o as Player).gameMode === 'spectator');
+    return this.orderedToSit || !!this.vehicle || this.leashHolder !== null || (!!o && (o as Player).gameMode === 'spectator');
   }
 
   /** vanilla shouldTryTeleportToOwner: 12 blocks behind */

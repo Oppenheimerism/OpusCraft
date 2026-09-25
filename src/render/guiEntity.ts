@@ -1,13 +1,14 @@
 // Player model preview in inventory screens (vanilla
 // InventoryScreen.renderEntityInInventoryFollowsMouse), rendered offscreen and
 // copied onto the 2D GUI canvas. The player is drawn by the entity dispatcher,
-// as it is in the world: held items, the hurt flash, flames and all.
+// as it is in the world: held items, the hurt flash, flames and all. (A horse's
+// inventory shows the horse the same way.)
 
 import type { GL } from './gl';
 import { EntityBatch, PoseStack } from './entityRenderer';
 import type { EntityRenderDispatcher, EntityRenderOptions } from './entityRenderers';
 import { mat4, ortho } from '../core/math';
-import type { Player } from '../entity/player';
+import type { LivingEntity } from '../entity/living';
 
 export class GuiEntityRenderer {
   private fb: WebGLFramebuffer | null = null;
@@ -52,7 +53,7 @@ export class GuiEntityRenderer {
    * Draw the player into the GUI rect (x1,y1)-(x2,y2) (GUI pixels), `scale` GUI pixels per block,
    * looking toward the mouse. Returns a canvas to blit at (x1, y1).
    */
-  render(p: Player, opts: EntityRenderOptions, guiScale: number, x1: number, y1: number, x2: number, y2: number, scale: number, yOffset: number, mx: number, my: number): HTMLCanvasElement {
+  render(p: LivingEntity, opts: EntityRenderOptions, guiScale: number, x1: number, y1: number, x2: number, y2: number, scale: number, yOffset: number, mx: number, my: number): HTMLCanvasElement {
     const W = Math.max(1, Math.round((x2 - x1) * guiScale)), H = Math.max(1, Math.round((y2 - y1) * guiScale));
     this.ensure(W, H);
     const gl = this.gl;
@@ -87,7 +88,7 @@ export class GuiEntityRenderer {
     pose.translate(0, p.height / 2 + yOffset, 0);
     pose.rotZ(180);
     pose.rotX(f3 * 20);
-    this.entities.renderPlayerInGui(b, p, pose.m, opts);
+    this.entities.renderInGui(b, p, pose.m, opts);
     b.flush();
     p.bodyYaw = bodyYaw;
     p.headYaw = headYaw;

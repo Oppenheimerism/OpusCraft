@@ -168,6 +168,8 @@ export interface DrawState {
   lightning?: boolean;
   /** default true */
   depthWrite?: boolean;
+  /** default true; false draws over whatever's in front (vanilla NO_DEPTH_TEST: see-through name tags) */
+  depthTest?: boolean;
   /** only where the depth already equals this geometry's (vanilla glint EQUAL_DEPTH_TEST) */
   depthEqual?: boolean;
   /** default true; false writes depth only (vanilla RenderType.waterMask) */
@@ -304,6 +306,7 @@ export class EntityBatch {
     else gl.disable(gl.CULL_FACE);
     if (st.depthWrite === false) gl.depthMask(false);
     if (st.depthEqual) gl.depthFunc(gl.EQUAL);
+    if (st.depthTest === false) gl.disable(gl.DEPTH_TEST);
     if (st.colorWrite === false) gl.colorMask(false, false, false, false);
     gl.drawArrays(gl.TRIANGLES, 0, this.n);
     if (st.colorWrite === false) gl.colorMask(true, true, true, true);
@@ -312,6 +315,7 @@ export class EntityBatch {
     gl.disable(gl.BLEND);
     if (st.depthWrite === false) gl.depthMask(true);
     if (st.depthEqual) gl.depthFunc(gl.LEQUAL);
+    if (st.depthTest === false) gl.enable(gl.DEPTH_TEST);
     this.n = 0;
   }
 
@@ -324,5 +328,5 @@ export class EntityBatch {
 }
 
 function sameState(a: DrawState, b: DrawState): boolean {
-  return a.texture === b.texture && a.cutoff === b.cutoff && a.blend === b.blend && a.cull === b.cull && a.lit === b.lit && a.useLightmap === b.useLightmap && !!a.additive === !!b.additive && !!a.lightning === !!b.lightning && (a.depthWrite !== false) === (b.depthWrite !== false) && !!a.depthEqual === !!b.depthEqual && (a.colorWrite !== false) === (b.colorWrite !== false) && (a.uvOffset?.[0] ?? 0) === (b.uvOffset?.[0] ?? 0) && (a.uvOffset?.[1] ?? 0) === (b.uvOffset?.[1] ?? 0);
+  return a.texture === b.texture && a.cutoff === b.cutoff && a.blend === b.blend && a.cull === b.cull && a.lit === b.lit && a.useLightmap === b.useLightmap && !!a.additive === !!b.additive && !!a.lightning === !!b.lightning && (a.depthWrite !== false) === (b.depthWrite !== false) && (a.depthTest !== false) === (b.depthTest !== false) && !!a.depthEqual === !!b.depthEqual && (a.colorWrite !== false) === (b.colorWrite !== false) && (a.uvOffset?.[0] ?? 0) === (b.uvOffset?.[0] ?? 0) && (a.uvOffset?.[1] ?? 0) === (b.uvOffset?.[1] ?? 0);
 }

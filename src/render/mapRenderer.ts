@@ -30,7 +30,7 @@ interface GlyphUV {
 }
 
 /** the font's glyphs in a row, white, with a white texel after them (vanilla's white glyph, for the strip under a name) */
-function fontSheet(): { w: number; data: Uint8Array; glyphs: Map<string, GlyphUV>; white: [number, number] } {
+export function fontSheet(): { w: number; data: Uint8Array; glyphs: Map<string, GlyphUV>; white: [number, number] } {
   const chars = Object.keys(FONT.glyphs);
   let w = 0;
   const at: [string, number][] = [];

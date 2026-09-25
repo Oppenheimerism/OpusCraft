@@ -831,7 +831,8 @@ const HORSE_ARMOR = [
 ];
 const HORSE_ROWS = HORSE_ARMOR.map((r) => r.replace(/ /g, '').slice(0, 16).padEnd(16, '.'));
 for (const [m, ramp] of Object.entries({
-  leather: [0x3a2414, 0x5a3620, 0x74462a, 0x8c5836, 0xa06540, 0xb67c56],
+  // (leather's grey: its dye, or undyed leather's brown, tints it)
+  leather: [0x404040, 0x686868, 0x8e8e8e, 0xb4b4b4, 0xdcdcdc, 0xffffff],
   iron: [0x363636, 0x686868, 0x8a8a8a, 0xacacac, 0xc8c8c8, 0xe8e8e8],
   golden: [0x5c3a06, 0x9c640a, 0xc28a12, 0xe0b022, 0xf6d238, 0xfdea5c],
   diamond: [0x0c3a32, 0x14705f, 0x1c937f, 0x2cbba2, 0x44dcc6, 0x78f2e0],

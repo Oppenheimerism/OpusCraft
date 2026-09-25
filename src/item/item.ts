@@ -357,7 +357,7 @@ reg({
 for (const [id, rarity] of [['flower', 'common'], ['creeper', 'uncommon'], ['skull', 'uncommon'], ['mojang', 'epic'], ['globe', 'common'], ['piglin', 'uncommon'], ['flow', 'rare'], ['guster', 'rare']] as [string, Rarity][]) {
   reg({ id: `${id}_banner_pattern`, name: 'Banner Pattern', texture: 'banner_pattern', maxStack: 1, rarity });
 }
-for (const m of ['iron', 'golden', 'diamond']) reg({ id: `${m}_horse_armor`, texture: `${m}_horse_armor`, maxStack: 1, creativeTab: 'combat' });
+for (const m of ['leather', 'iron', 'golden', 'diamond']) reg({ id: `${m}_horse_armor`, texture: `${m}_horse_armor`, maxStack: 1, creativeTab: 'combat' });
 // vanilla 1.21 jukebox songs: disc name + "C418 - title" description
 for (const [id, desc, rarity] of [['music_disc_13', 'C418 - 13', 'uncommon'], ['music_disc_cat', 'C418 - cat', 'uncommon'], ['music_disc_otherside', 'Lena Raine - otherside', 'rare']] as [string, string, Rarity][]) {
   reg({ id, name: 'Music Disc', texture: id, maxStack: 1, creativeTab: 'tools', rarity, lore: [desc] });
@@ -377,6 +377,8 @@ for (const m of ['bat', 'blaze', 'cat', 'cave_spider', 'chicken', 'cow', 'creepe
 // (Stage 4: illagers) the raiders' eggs and the ominous bottle (vanilla OminousBottleItem: uncommon; drinking it for
 // bad omen comes with raids); the creative tab sorts the eggs by name
 for (const m of ['evoker', 'pillager', 'ravager', 'vex', 'vindicator']) reg({ id: `${m}_spawn_egg`, texture: `${m}_spawn_egg`, creativeTab: 'spawn_eggs' });
+// (Stage 6: tameable animals)
+for (const m of ['donkey', 'horse', 'llama', 'mule', 'trader_llama']) reg({ id: `${m}_spawn_egg`, texture: `${m}_spawn_egg`, creativeTab: 'spawn_eggs' });
 reg({ id: 'ominous_bottle', creativeTab: 'food', texture: 'ominous_bottle', rarity: 'uncommon' });
 // (Stage 5: ocean) vanilla Items.PRISMARINE_SHARD / PRISMARINE_CRYSTALS (guardians', sea lanterns'); the wet sponge sits by the sponge
 for (const id of ['prismarine_shard', 'prismarine_crystals']) reg({ id, texture: id });

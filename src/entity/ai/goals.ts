@@ -24,8 +24,30 @@ function randomDirection(m: Mob, h: number, v: number): Pos {
   return [i, j, k];
 }
 
-function towardDirection(m: Mob, d: Pos): Pos {
-  return [Math.floor(d[0] + m.x), Math.floor(d[1] + m.y), Math.floor(d[2] + m.z)];
+/**
+ * vanilla RandomPos.generateRandomPosTowardDirection: the offset from the mob, leaning up to half the range toward the
+ * middle of where it's kept (on a lead, near home) when it's kept somewhere
+ */
+function towardDirection(m: Mob, d: Pos, range: number): Pos {
+  let x = d[0], z = d[2];
+  if (m.hasRestriction() && range > 1) {
+    const [cx, , cz] = m.restrictCenter, r = m.random, h = range >> 1;
+    x += m.x > cx ? -r.nextInt(h) : r.nextInt(h);
+    z += m.z > cz ? -r.nextInt(h) : r.nextInt(h);
+  }
+  return [Math.floor(x + m.x), Math.floor(d[1] + m.y), Math.floor(z + m.z)];
+}
+
+/** vanilla GoalUtils.mobRestricted: kept somewhere near enough for a walk of `radius` to have to mind it */
+function mobRestricted(m: Mob, radius: number): boolean {
+  if (!m.hasRestriction()) return false;
+  const [cx, cy, cz] = m.restrictCenter;
+  return (cx + 0.5 - m.x) ** 2 + (cy + 0.5 - m.y) ** 2 + (cz + 0.5 - m.z) ** 2 < (m.restrictRadius + radius + 1) ** 2;
+}
+
+/** vanilla GoalUtils.isRestricted */
+function isRestricted(restricted: boolean, m: Mob, p: Pos): boolean {
+  return restricted && !m.isWithinRestriction(p[0], p[1], p[2]);
 }
 
 function outsideLimits(p: Pos): boolean {
@@ -68,9 +90,10 @@ function bestOf(m: Mob, gen: () => Pos | null): Pos | null {
 
 /** vanilla DefaultRandomPos.getPos */
 export function defaultRandomPos(m: Mob, radius: number, yRange: number): Pos | null {
+  const restricted = mobRestricted(m, radius);
   return bestOf(m, () => {
-    const p = towardDirection(m, randomDirection(m, radius, yRange));
-    if (outsideLimits(p) || !m.navigation.isStableDestination(p[0], p[1], p[2]) || hasMalus(m, p[0], p[1], p[2])) return null;
+    const p = towardDirection(m, randomDirection(m, radius, yRange), radius);
+    if (outsideLimits(p) || isRestricted(restricted, m, p) || !m.navigation.isStableDestination(p[0], p[1], p[2]) || hasMalus(m, p[0], p[1], p[2])) return null;
     return p;
   });
 }
@@ -78,12 +101,13 @@ export function defaultRandomPos(m: Mob, radius: number, yRange: number): Pos | 
 /** vanilla DefaultRandomPos.getPosAway: random position away from a point */
 export function defaultRandomPosAway(m: Mob, radius: number, yRange: number, ax: number, ay: number, az: number): Pos | null {
   const vx = m.x - ax, vz = m.z - az;
+  const restricted = mobRestricted(m, radius);
   return bestOf(m, () => {
     let d = randomDirection(m, radius, yRange);
     // keep only directions pointing away (vanilla generateRandomDirectionWithinRadians, simplified)
     if (d[0] * vx + d[2] * vz < 0) d = [-d[0], d[1], -d[2]];
-    const p = towardDirection(m, d);
-    if (outsideLimits(p) || !m.navigation.isStableDestination(p[0], p[1], p[2]) || hasMalus(m, p[0], p[1], p[2])) return null;
+    const p = towardDirection(m, d, radius);
+    if (outsideLimits(p) || isRestricted(restricted, m, p) || !m.navigation.isStableDestination(p[0], p[1], p[2]) || hasMalus(m, p[0], p[1], p[2])) return null;
     return p;
   });
 }
@@ -104,11 +128,12 @@ function randomDirectionWithinRadians(m: Mob, radius: number, yRange: number, dx
 /** vanilla DefaultRandomPos.getPosTowards: somewhere up to `radius` off in the direction of a point */
 export function defaultRandomPosTowards(m: Mob, radius: number, yRange: number, tx: number, tz: number, maxAngle: number): Pos | null {
   const vx = tx - m.x, vz = tz - m.z;
+  const restricted = mobRestricted(m, radius);
   return bestOf(m, () => {
     const d = randomDirectionWithinRadians(m, radius, yRange, vx, vz, maxAngle);
     if (!d) return null;
-    const p = towardDirection(m, d);
-    if (outsideLimits(p) || !m.navigation.isStableDestination(p[0], p[1], p[2]) || hasMalus(m, p[0], p[1], p[2])) return null;
+    const p = towardDirection(m, d, radius);
+    if (outsideLimits(p) || isRestricted(restricted, m, p) || !m.navigation.isStableDestination(p[0], p[1], p[2]) || hasMalus(m, p[0], p[1], p[2])) return null;
     return p;
   });
 }
@@ -116,11 +141,12 @@ export function defaultRandomPosTowards(m: Mob, radius: number, yRange: number, 
 /** vanilla LandRandomPos.getPosAway: somewhere up to `radius` off, within 90° of straight away from a point */
 export function landRandomPosAway(m: Mob, radius: number, yRange: number, ax: number, az: number): Pos | null {
   const vx = m.x - ax, vz = m.z - az;
+  const restricted = mobRestricted(m, radius);
   return bestOf(m, () => {
     const d = randomDirectionWithinRadians(m, radius, yRange, vx, vz, Math.PI / 2);
     if (!d) return null;
-    const p = towardDirection(m, d);
-    if (outsideLimits(p) || !m.navigation.isStableDestination(p[0], p[1], p[2])) return null;
+    const p = towardDirection(m, d, radius);
+    if (outsideLimits(p) || isRestricted(restricted, m, p) || !m.navigation.isStableDestination(p[0], p[1], p[2])) return null;
     let y = p[1];
     if (isSolid(m, p[0], y, p[2])) {
       y++;
@@ -134,11 +160,12 @@ export function landRandomPosAway(m: Mob, radius: number, yRange: number, ax: nu
 /** vanilla LandRandomPos.getPosTowards: somewhere up to `radius` off, within 90° of the way to a point, on land */
 export function landRandomPosTowards(m: Mob, radius: number, yRange: number, tx: number, tz: number): Pos | null {
   const vx = tx - m.x, vz = tz - m.z;
+  const restricted = mobRestricted(m, radius);
   return bestOf(m, () => {
     const d = randomDirectionWithinRadians(m, radius, yRange, vx, vz, Math.PI / 2);
     if (!d) return null;
-    const p = towardDirection(m, d);
-    if (outsideLimits(p) || !m.navigation.isStableDestination(p[0], p[1], p[2])) return null;
+    const p = towardDirection(m, d, radius);
+    if (outsideLimits(p) || isRestricted(restricted, m, p) || !m.navigation.isStableDestination(p[0], p[1], p[2])) return null;
     let y = p[1];
     if (isSolid(m, p[0], y, p[2])) {
       y++;
@@ -151,9 +178,10 @@ export function landRandomPosTowards(m: Mob, radius: number, yRange: number, tx:
 
 /** vanilla LandRandomPos.getPos (with a scorer of its own, or the mob's walk target value) */
 export function landRandomPos(m: Mob, radius: number, yRange: number, score?: (p: Pos) => number): Pos | null {
+  const restricted = mobRestricted(m, radius);
   return bestScored(() => {
-    const p = towardDirection(m, randomDirection(m, radius, yRange));
-    if (outsideLimits(p) || !m.navigation.isStableDestination(p[0], p[1], p[2])) return null;
+    const p = towardDirection(m, randomDirection(m, radius, yRange), radius);
+    if (outsideLimits(p) || isRestricted(restricted, m, p) || !m.navigation.isStableDestination(p[0], p[1], p[2])) return null;
     let y = p[1];
     if (isSolid(m, p[0], y, p[2])) {
       y++;
@@ -593,11 +621,15 @@ export abstract class TargetGoal extends Goal {
     super();
     this.flags = Flag.TARGET;
   }
+  /** vanilla getFollowDistance: how far off it'll go after a target (its follow range) */
+  protected followDistance(): number {
+    return this.mob.followRange;
+  }
   override canContinueToUse(): boolean {
     const m = this.mob;
     const t = m.target ?? this.targetMob;
     if (!t || !m.canAttack(t)) return false;
-    const d = m.followRange;
+    const d = this.followDistance();
     if (m.distanceToSqr(t.x, t.y, t.z) > d * d) return false;
     if (this.mustSee) {
       if (m.sensing.hasLineOfSight(t)) this.unseenTicks = 0;
@@ -635,7 +667,7 @@ export class NearestAttackablePlayerGoal extends TargetGoal {
     if (!p || !m.canAttack(p)) return false;
     // vanilla TargetingConditions: range scaled by getVisibilityPercent (sneaking, invisibility)
     const vis = p.visibilityPercent(m);
-    const range = Math.max(m.followRange * vis, 2);
+    const range = Math.max(this.followDistance() * vis, 2);
     if (Math.abs(p.y - m.y) > 4 + range) return false;
     if (m.distanceToSqr(p.x, p.y, p.z) > range * range) return false;
     if (this.mustSee && !m.sensing.hasLineOfSight(p)) return false;
@@ -664,7 +696,7 @@ export class NearestAttackableMobGoal extends TargetGoal {
     const m = this.mob;
     if (this.randomInterval > 0 && m.random.nextInt(this.randomInterval) !== 0) return false;
     if (!this.extra()) return false;
-    const r = m.followRange;
+    const r = this.followDistance();
     let best: LivingEntity | null = null, bd = Infinity;
     for (const e of m.level.getEntities(m.bb.inflate(r, 4, r), (e) => e instanceof LivingEntity && e !== m && e.isAlive)) {
       const le = e as LivingEntity;

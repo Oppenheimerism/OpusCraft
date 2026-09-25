@@ -14,6 +14,11 @@ import { wrapDegrees } from '../core/math';
 /** vanilla AmbientCreature: the AMBIENT mob category (cap 15, spawned every tick, even in peaceful) */
 export abstract class AmbientCreature extends Mob {
   readonly category: MobCategory = 'ambient';
+
+  /** vanilla AmbientCreature.canBeLeashed: a bat won't go on a lead */
+  override canBeLeashed(): boolean {
+    return false;
+  }
 }
 
 /** blocks that never conduct redstone although their collision is a full cube (vanilla isRedstoneConductor(Blocks::never)) */

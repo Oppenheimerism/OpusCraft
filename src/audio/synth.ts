@@ -35,6 +35,9 @@ import { archaeologySounds } from './gen/archaeology';
 import { silverfishSounds } from './gen/silverfish';
 import { wolfSounds } from './gen/wolf';
 import { catSounds } from './gen/cat';
+import { horseSounds } from './gen/horse';
+import { leashSounds } from './gen/leash';
+import { llamaSounds } from './gen/llama';
 import { illagerSounds } from './gen/illagers';
 // (Stage 5: ocean)
 import { oceanSounds } from './gen/ocean';
@@ -85,6 +88,11 @@ export const SOUNDS: Record<string, SoundGen> = {
 Object.assign(SOUNDS, redstoneSounds(SOUNDS));
 // (suspicious sand and gravel, the brush, the decorated pot)
 Object.assign(SOUNDS, archaeologySounds());
+// (Stage 6: tameable animals; the donkey's and mule's chest is the chicken's plop)
+Object.assign(SOUNDS, horseSounds(SOUNDS));
+// (the lead's knot round a fence)
+Object.assign(SOUNDS, leashSounds());
+Object.assign(SOUNDS, llamaSounds(SOUNDS));
 
 /** Number of in-game (overworld) music tracks. */
 export const MUSIC_TRACK_COUNT: number = MUSIC_TRACKS;

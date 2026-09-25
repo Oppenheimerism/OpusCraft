@@ -68,6 +68,12 @@ import { EnderDragonRenderer } from './enderDragonRenderer';
 import { RaiderRenderers, RAIDER_SHADOW_RADII } from './illagerRenderers';
 // (Stage 5: ocean)
 import { OceanRenderers, OCEAN_SHADOW_RADII } from './oceanRenderers';
+import { HorseRenderers, HORSE_SHADOW_RADII } from './horseRenderer';
+import { LlamaRenderers, LLAMA_SHADOW_RADII, renderSpit } from './llamaRenderer';
+import { LlamaSpit } from '../entity/llama';
+import { LeashKnot } from '../entity/leash';
+import { renderKnot, renderLeash } from './leashRenderer';
+import { NameTagRenderer } from './nameTagRenderer';
 import { Guardian } from '../entity/guardian';
 import { EvokerFangs } from '../entity/evoker';
 import type { Bat } from '../entity/bat';
@@ -104,6 +110,10 @@ export interface EntityRenderOptions {
   skinParts?: SkinParts;
   /** the player's main arm (options: Main Hand) */
   mainArm?: 'left' | 'right';
+  /** what the crosshair is on (vanilla crosshairPickEntity: a named mob shows its name then) */
+  crosshairEntity?: Entity | null;
+  /** names over mobs are drawn (vanilla Minecraft.renderNames: not with the GUI hidden) */
+  renderNames?: boolean;
 }
 
 /** options: Skin Customization (vanilla PlayerModelPart; the cape aside) */
@@ -178,6 +188,15 @@ export class EntityRenderDispatcher {
   private readonly raiders: RaiderRenderers;
   /** (Stage 5: ocean) the guardians, their lasers, the elder's ghostly face */
   private readonly ocean: OceanRenderers;
+  /** (Stage 6: tameable animals) horses, donkeys and mules, their markings and armour */
+  private readonly horses: HorseRenderers;
+  /** (Stage 6: tameable animals) llamas and their decor */
+  private readonly llamas: LlamaRenderers;
+  /** names over mobs, drawn once every entity is down */
+  private readonly nameTags: NameTagRenderer;
+  /** this frame's options: names shown at all (not with the GUI hidden), and what the crosshair is on */
+  private renderNames = true;
+  private crosshair: Entity | null = null;
 
   constructor(private readonly gl: GL, private readonly items: ItemRenderer, private readonly skin: WebGLTexture) {
     this.armor = new ArmorLayer(gl);
@@ -197,11 +216,16 @@ export class EntityRenderDispatcher {
       setupLiving: (e, dx, dy, dz, p, flip, scale) => this.setupLiving(e, dx, dy, dz, p, flip, scale),
       overlay: (b, e, white) => this.overlay(b, e, white),
       drawBody: (b, e, def, t, baby, extra) => this.drawBody(b, e, def, t, baby, extra),
+      drawModel: (b, def, baby, r, g, bl, a) => this.drawModel(b, def, baby, r, g, bl, a),
       state: (t, extra) => this.state(t, extra),
       attackAnim,
     });
     // (Stage 5: ocean) lent the same steps
     this.ocean = new OceanRenderers(gl, this.raiders.kit);
+    // (Stage 6: tameable animals) and again
+    this.horses = new HorseRenderers(this.raiders.kit);
+    this.llamas = new LlamaRenderers(this.raiders.kit);
+    this.nameTags = new NameTagRenderer(gl);
     this.models = {
       pig: M.pigModel(),
       pig_saddle: M.pigModel(0.5),
@@ -318,6 +342,8 @@ export class EntityRenderDispatcher {
     this.shadows.length = 0;
     this.mainArm = opts.mainArm ?? 'right';
     this.skinParts = opts.skinParts ?? ALL_SKIN_PARTS;
+    this.renderNames = opts.renderNames ?? true;
+    this.crosshair = opts.crosshairEntity ?? null;
     let drawn = 0;
     for (const e of level.entities) {
       if (e.removed) continue;
@@ -345,9 +371,11 @@ export class EntityRenderDispatcher {
       const beam = e instanceof EndCrystal && e.beamTarget !== null;
       // (Stage 5: ocean) vanilla GuardianRenderer.shouldRender: so is a guardian with its laser on
       const laser = e instanceof Guardian && e.activeAttackTarget() !== null;
-      if (d2 >= maxD * maxD && !beam && !laser) continue;
+      // (vanilla MobRenderer.shouldRender: out of sight or too far, a mob is still drawn while what holds its lead is in view)
+      const lead = e instanceof Mob && e.leashHolder !== null && leashHolderInView(e.leashHolder, cam, frustum);
+      if (d2 >= maxD * maxD && !beam && !laser && !lead) continue;
       const hw = (bb.maxX - bb.minX) / 2 + 0.5, h = bb.maxY - bb.minY + 0.5;
-      if (!beam && !laser && !(e instanceof EnderDragon) && !frustum.testBox(dx - hw, dy - 0.5, dz - hw, dx + hw, dy + h, dz + hw)) continue;
+      if (!beam && !laser && !lead && !(e instanceof EnderDragon) && !frustum.testBox(dx - hw, dy - 0.5, dz - hw, dx + hw, dy + h, dz + hw)) continue;
       this.renderEntity(b, level, e, x, y, z, dx, dy, dz, partial, cam);
       drawn++;
       if (opts.shadows && !(e instanceof LivingEntity && e.isInvisible())) {
@@ -382,6 +410,7 @@ export class EntityRenderDispatcher {
     if (this.shadows.length) this.renderShadows(b, level, cam);
     // (Stage 5: ocean) the elder guardian's ghostly face, over everything
     this.ocean.renderAppearance(b, level, cam, partial);
+    this.nameTags.flush(b, this.pose, cam.yaw, cam.pitch);
   }
 
   /** vanilla ItemPickupParticle: `e` (a copy, for a dropped item) flies to `target` over the next three ticks */
@@ -488,8 +517,38 @@ export class EntityRenderDispatcher {
     else if (e instanceof Boat) this.renderBoat(b, e, dx, dy, dz, p);
     else if (e instanceof EndCrystal) this.endCrystals.render(b, this.pose, e, dx, dy, dz, p);
     else if (e instanceof EvokerFangs) this.raiders.renderFangs(b, e, dx, dy, dz, p); // (Stage 4: illagers)
+    else if (e instanceof LlamaSpit) {
+      const t = this.tex('llama_spit');
+      if (t) renderSpit(b, this.pose, this.state(t), dx, dy, dz, rotLerp(p, e.yawO, e.yaw), e.pitchO + (e.pitch - e.pitchO) * p);
+    }
+    else if (e instanceof LeashKnot) {
+      const t = this.tex('lead_knot');
+      if (t) renderKnot(b, this.pose, this.state(t), dx, dy, dz);
+    }
+    if (e instanceof Mob) {
+      if (e.leashHolder) {
+        this.whiteTex ??= createTexture(this.gl, 1, 1, new Uint8Array([255, 255, 255, 255]));
+        renderLeash(b, { texture: this.whiteTex, cutoff: -1, blend: false, cull: false, lit: false, useLightmap: true }, e, e.leashHolder, cam.x, cam.y, cam.z, p, (lx, ly, lz) => level.world.getLight(lx, ly, lz));
+      }
+      // (vanilla EntityRenderer.render → renderNameTag, the light the mob's in)
+      if (this.showsName(e, dx * dx + dy * dy + dz * dz)) {
+        this.setLight(b, level, e, x, y, z);
+        this.nameTags.add(e.customName!, dx, dy + e.height + 0.5, dz, b.lightB, b.lightS);
+      }
+    }
     // (at the renderer's offset: a crouching player's flames sink with it)
     if (e.isOnFire() && !(e instanceof ItemEntity) && !(e instanceof ExperienceOrb)) this.renderFlame(b, e, dx, dy + renderOffsetY(e), dz, cam.yaw, level.gameTime);
+  }
+
+  /**
+   * vanilla LivingEntityRenderer.shouldShowName and MobRenderer.shouldShowName: a named mob within 64 blocks, not
+   * invisible and not carrying anyone, while it's looked at (always, with its name set visible); never with the GUI
+   * hidden
+   */
+  private showsName(e: Mob, d2: number): boolean {
+    if (!this.renderNames || e.customName === null || d2 >= 64 * 64) return false;
+    if (e.isInvisible() || e.passengers.length > 0) return false;
+    return e.customNameVisible || e === this.crosshair;
   }
 
   /**
@@ -497,6 +556,17 @@ export class EntityRenderDispatcher {
    * tick 1, full bright), from the screen's matrix `base`, at whatever angles the screen has given it; the camera
    * looks at it head on, so its flames face the screen
    */
+  /** an entity in a screen (the player in its inventory, a horse in its own), drawn as in the world */
+  renderInGui(b: EntityBatch, e: LivingEntity, base: Float32Array, opts: EntityRenderOptions): void {
+    if (e.type === 'player') return this.renderPlayerInGui(b, e as Player, base, opts);
+    if (!(e instanceof Mob)) return;
+    this.base = base;
+    b.lightB = b.lightS = 240;
+    this.renderMob(b, e, 0, 0, 0, 1);
+    this.base = null;
+    b.setOverlay(0, 0, 0, 0);
+  }
+
   renderPlayerInGui(b: EntityBatch, e: Player, base: Float32Array, opts: EntityRenderOptions): void {
     this.mainArm = opts.mainArm ?? 'right';
     this.skinParts = opts.skinParts ?? ALL_SKIN_PARTS;
@@ -538,6 +608,10 @@ export class EntityRenderDispatcher {
       // (vanilla: whirling in a riptide, laid along the look and spun about it)
       pose.rotX(-90 - e.pitch);
       pose.rotY((e.tickCount + p) * -75);
+    } else if (!bed && isUpsideDown(e)) {
+      // (vanilla isEntityUpsideDown: named Dinnerbone or Grumm, it's upside down)
+      pose.translate(0, e.height + 0.1, 0);
+      pose.rotZ(180);
     }
     // vanilla PlayerRenderer.setupRotations: gliding, a player tips over to lie along the look over the glide's first
     // ten ticks, then rolls toward the way it's actually going (the angle from the look to its motion, sideways)
@@ -600,7 +674,15 @@ export class EntityRenderDispatcher {
   /** vanilla AgeableListModel.renderToBuffer */
   private drawModel(b: EntityBatch, def: MobModelDef, baby: boolean, r = 1, g = 1, bl = 1, a = 1): void {
     const pose = this.pose;
-    if (baby && def.baby) {
+    if (baby && def.babyGroups) {
+      for (const grp of def.babyGroups) {
+        pose.push();
+        pose.scale(grp.scale[0], grp.scale[1], grp.scale[2]);
+        pose.translate(grp.translate[0], grp.translate[1], grp.translate[2]);
+        for (const n of grp.parts) def.root.child(n).render(b, pose, def.texW, def.texH, r, g, bl, a);
+        pose.pop();
+      }
+    } else if (baby && def.baby) {
       const bd = def.baby;
       pose.push();
       if (bd.scaleHead) {
@@ -624,6 +706,9 @@ export class EntityRenderDispatcher {
     if (this.raiders.render(b, e, dx, dy, dz, p)) return;
     // (Stage 5: ocean)
     if (this.ocean.render(b, e, dx, dy, dz, p)) return;
+    // (Stage 6: tameable animals; a llama before the horses it's kin to)
+    if (this.llamas.render(b, e, dx, dy, dz, p)) return;
+    if (this.horses.render(b, e, dx, dy, dz, p)) return;
     const type = e.type;
     const def = this.models[type];
     // (vanilla GhastRenderer.getTextureLocation: its face while charging a shot)
@@ -850,7 +935,7 @@ export class EntityRenderDispatcher {
       const fur = this.models.sheep_fur, ft = this.tex('sheep_fur');
       if (fur && ft) {
         copyPose(def.root, fur.root);
-        const [r, g, bl] = sheepFurColor(e.color);
+        const [r, g, bl] = e.customName === 'jeb_' ? jebColor(e, p) : sheepFurColor(e.color);
         b.begin(this.state(ft));
         this.drawModel(b, fur, baby, r, g, bl);
       }
@@ -1588,7 +1673,8 @@ function shadowRadius(e: Entity): number {
   if (RAIDER_SHADOW_RADII[e.type] !== undefined) return RAIDER_SHADOW_RADII[e.type];
   // (Stage 5: ocean)
   if (OCEAN_SHADOW_RADII[e.type] !== undefined) return OCEAN_SHADOW_RADII[e.type];
-  let r = 0;
+  // (Stage 6: tameable animals; a foal's is half)
+  let r = HORSE_SHADOW_RADII[e.type] ?? LLAMA_SHADOW_RADII[e.type] ?? 0;
   switch (e.type) {
     case 'pig':
     case 'cow':
@@ -1684,4 +1770,23 @@ function copyPose(from: ModelPart, to: ModelPart): void {
     t.yRot = c.yRot;
     t.zRot = c.zRot;
   }
+}
+
+/** vanilla MobRenderer.shouldRender's other half: the lead's holder (its culling box) is in view */
+function leashHolderInView(h: Entity, cam: Camera, frustum: Frustum): boolean {
+  const bb = h.bb;
+  return frustum.testBox(bb.minX - cam.x, bb.minY - cam.y, bb.minZ - cam.z, bb.maxX - cam.x, bb.maxY - cam.y, bb.maxZ - cam.z);
+}
+
+/** vanilla LivingEntityRenderer.isEntityUpsideDown: a mob named Dinnerbone or Grumm */
+function isUpsideDown(e: LivingEntity): boolean {
+  return e.type !== 'player' && (e.customName === 'Dinnerbone' || e.customName === 'Grumm');
+}
+
+/** vanilla SheepFurLayer for a sheep named jeb_: its wool runs through the sixteen colours, a second and a quarter each */
+function jebColor(e: Sheep, p: number): [number, number, number] {
+  const i = Math.floor(e.tickCount / 25) + e.id;
+  const a = sheepFurColor(i % 16), c = sheepFurColor((i + 1) % 16);
+  const f = ((e.tickCount % 25) + p) / 25;
+  return [a[0] + (c[0] - a[0]) * f, a[1] + (c[1] - a[1]) * f, a[2] + (c[2] - a[2]) * f];
 }

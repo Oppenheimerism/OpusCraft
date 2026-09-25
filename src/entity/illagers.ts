@@ -381,8 +381,9 @@ export class Vindicator extends AbstractIllager {
     this.setItemSlot('mainhand', s);
   }
 
-  /** vanilla setCustomName: "Johnny" */
-  setCustomName(name: string | null): void {
+  /** vanilla Vindicator.setCustomName: named "Johnny", it's Johnny */
+  override setCustomName(name: string | null): void {
+    super.setCustomName(name);
     if (!this.johnny && name === 'Johnny') this.johnny = true;
   }
 

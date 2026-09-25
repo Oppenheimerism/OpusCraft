@@ -291,9 +291,11 @@ export class ParticleEngine {
         this.addSprite(p);
         break;
       }
-      case 'poof': {
+      // (vanilla SpitParticle: a poof that falls)
+      case 'poof':
+      case 'spit': {
         const p = this.base(kind, x, y, z);
-        p.gravity = -0.1;
+        p.gravity = kind === 'spit' ? 0.5 : -0.1;
         p.friction = 0.9;
         p.dx = xd + (Math.random() * 2 - 1) * 0.05;
         p.dy = yd + (Math.random() * 2 - 1) * 0.05;

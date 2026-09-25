@@ -130,8 +130,14 @@ const sheepColor = (r: Rand) => {
 };
 const sheep1 = entityPiece('village/common/animals/sheep_1', { id: 'sheep', health: 8, init: sheepColor });
 const sheep2 = entityPiece('village/common/animals/sheep_2', { id: 'sheep', health: 8, init: sheepColor });
-// (horses aren't in the game yet: their records load as nothing until they are)
-const horses = [1, 2, 3, 4, 5].map((i) => entityPiece(`village/common/animals/horses_${i}`, { id: 'horse', health: 20 }));
+// (vanilla Horse.finalizeSpawn as the piece is placed: any coat and markings, and strengths of its own)
+const horseInit = (r: Rand) => ({
+  Variant: r.nextInt(7) | (r.nextInt(5) << 8),
+  MaxHealth: 15 + r.nextInt(8) + r.nextInt(9),
+  Speed: (0.45 + r.nextDouble() * 0.3 + r.nextDouble() * 0.3 + r.nextDouble() * 0.3) * 0.25,
+  JumpStrength: 0.4 + r.nextDouble() * 0.2 + r.nextDouble() * 0.2 + r.nextDouble() * 0.2,
+});
+const horses = [1, 2, 3, 4, 5].map((i) => entityPiece(`village/common/animals/horses_${i}`, { id: 'horse', health: 20, init: horseInit }));
 pool('village/common/animals', 'empty', [
   [rigid(cow), 7], [rigid(pig), 7], ...horses.map((h) => [rigid(h), 1] as [SingleElement, number]), [rigid(sheep1), 1], [rigid(sheep2), 1], [EMPTY, 5],
 ]);

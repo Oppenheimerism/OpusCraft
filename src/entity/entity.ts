@@ -876,6 +876,25 @@ export abstract class Entity {
     return [-Math.sin(yr) * Math.cos(pr), -Math.sin(pr), Math.cos(yr) * Math.cos(pr)];
   }
 
+  /** vanilla Entity.customName: a name tag's, an anvil-named spawn egg's, a command's (null: none) */
+  customName: string | null = null;
+  /** vanilla CustomNameVisible: the name shows over it whether it's looked at or not */
+  customNameVisible = false;
+
+  /** vanilla Entity.setCustomName */
+  setCustomName(name: string | null): void {
+    this.customName = name;
+  }
+
+  hasCustomName(): boolean {
+    return this.customName !== null;
+  }
+
+  /** vanilla Entity.getRopeHoldPosition: where a lead it holds hangs from (seven-tenths of its eyes' height) */
+  ropeHoldPosition(p: number): [number, number, number] {
+    return [this.lerpX(p), this.lerpY(p) + this.eyeHeight * 0.7, this.lerpZ(p)];
+  }
+
   /** vanilla Entity.kill (/kill): gone for good */
   kill(): void {
     this.remove();
