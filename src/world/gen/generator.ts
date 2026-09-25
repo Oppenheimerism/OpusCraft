@@ -12,6 +12,10 @@ import { Mineshafts } from './mineshaft';
 import { Geodes, SUB_AIR, SUB_SOLID, SUB_FLUID } from './geode';
 import { Villages } from './villages';
 import { Temples } from './temples';
+import { WoodlandMansions } from './mansion';
+import { RuinedPortals, overworldPortalTerrain } from './ruinedPortal';
+import { DesertWells } from './desertWell';
+import { Fossils, fossilTerrain } from './fossil';
 import { Strongholds, biomeAtY0, addBeards } from './stronghold';
 // (Stage 4: outposts)
 import { PillagerOutposts } from './outposts';
@@ -60,6 +64,14 @@ export class ChunkGenerator {
   readonly villages: Villages;
   /** desert pyramids, jungle temples, swamp huts and igloos (world/gen/temples) */
   readonly temples: Temples;
+  /** woodland mansions (world/gen/mansion) */
+  readonly mansions: WoodlandMansions;
+  /** ruined portals (world/gen/ruinedPortal) */
+  readonly ruinedPortals: RuinedPortals;
+  /** desert wells (world/gen/desertWell) */
+  readonly desertWells: DesertWells;
+  /** fossils (world/gen/fossil) */
+  readonly fossils: Fossils;
   readonly strongholds: Strongholds;
   /** (Stage 4: outposts) */
   readonly outposts: PillagerOutposts;
@@ -92,7 +104,18 @@ export class ChunkGenerator {
       oceanFloorHeight: (x, z) => this.firstFreeHeight(x, z, true),
       quartBiome: (x, z) => this.quartBiome(x, z),
     });
-    this.decorator.temples = this.temples;
+    // (mansions) woodland mansions, placed after the temples
+    this.mansions = new WoodlandMansions(worldSeed64(seed), { firstFreeHeight: (x, z) => this.firstFreeHeight(x, z), quartBiome: (x, z) => this.quartBiome(x, z) });
+    this.decorator.temples = { place: (ctx) => (this.temples.place(ctx), this.mansions.place(ctx)) };
+    // (ruined portals) the step's last structures, placed after the villages; (desert wells) then the step's features
+    this.ruinedPortals = new RuinedPortals(worldSeed64(seed), overworldPortalTerrain(this));
+    this.desertWells = new DesertWells(this.seedHash, this);
+    const villages = this.decorator.villages;
+    this.decorator.villages = { place: (ctx) => (villages?.place(ctx), this.ruinedPortals.place(ctx), this.desertWells.place(ctx)) };
+    // (fossils) the UNDERGROUND_STRUCTURES step's first features, after its structures and before the monster rooms
+    this.fossils = new Fossils(this.seedHash, fossilTerrain(this));
+    const mineshafts = this.decorator.mineshafts;
+    this.decorator.mineshafts = { place: (ctx, r) => (mineshafts?.place(ctx, r), this.fossils.place(ctx)) };
     this.strongholds = new Strongholds(worldSeed64(seed), biomeAtY0(this.router));
     this.decorator.strongholds = this.strongholds;
   }
@@ -195,6 +218,17 @@ export class ChunkGenerator {
     if (d > 0) return SUB_SOLID;
     const sub = this.pointAquifer.substance(x, y, z, d);
     return sub === -1 ? SUB_SOLID : sub === FLUID_WATER || sub === FLUID_LAVA ? SUB_FLUID : SUB_AIR;
+  }
+
+  /** the biome generate() gives a column (zoomBiome), worked out on its own for features that look outside their chunk */
+  columnBiome(x: number, z: number): number {
+    const cx = x >> 4, cz = z >> 4, qx = (x - 2) >> 2, qz = (z - 2) >> 2;
+    const quarts = new Int16Array(36);
+    for (let n = 0; n < 4; n++) {
+      const gx = qx + (n & 1), gz = qz + (n >> 1);
+      quarts[(gz - cz * 4 + 1) * 6 + (gx - cx * 4 + 1)] = this.quartBiome(gx * 4, gz * 4);
+    }
+    return this.zoomBiome(x, z, cx, cz, quarts);
   }
 
   /** Sample the surface biome at a block position (used for spawn search / F3). */

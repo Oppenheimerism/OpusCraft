@@ -33,6 +33,8 @@ import { locateOutpost } from './outposts';
 import { locateMonument } from './monuments';
 // (temples)
 import { templeKind, locateTemple } from './temples';
+import { locateMansion } from './mansions';
+import { isRuinedPortal, locateRuinedPortal } from './ruinedPortals';
 
 class CommandError extends Error {
   constructor(msg: string, readonly pos = -1) {
@@ -738,7 +740,13 @@ export const COMMANDS: Record<string, CommandDef> = {
                 : // (Stage 5: ocean)
                   name === 'minecraft:monument' && dim.id === 'overworld'
                   ? locateMonument(c.game.level, x, z)
-                  : null;
+                  : // (mansions)
+                    name === 'minecraft:mansion' && dim.id === 'overworld'
+                    ? locateMansion(c.game.level.seed, x, z)
+                    : // (ruined portals: the six kinds in the Overworld, the nether one in the Nether)
+                      isRuinedPortal(name)
+                      ? locateRuinedPortal(c.game.level.seed, dim.id, name, x, z)
+                      : null;
       if (!found) throw new CommandError(`Could not find a structure of type "${name}" nearby`);
       c.ok(`The nearest ${name} is at §a[${found[0]}, ~, ${found[1]}]§r (${Math.floor(Math.hypot(found[0] - x, found[1] - z))} blocks away)`);
     },

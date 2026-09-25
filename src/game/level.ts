@@ -60,6 +60,8 @@ import { Raids } from './raids';
 import './ocean';
 // (temples)
 import './archaeology';
+// (desert wells: their loot, the suspicious stew)
+import './desertWells';
 
 export interface SoundSink {
   play(name: string, x: number, y: number, z: number, volume?: number, pitch?: number): void;
