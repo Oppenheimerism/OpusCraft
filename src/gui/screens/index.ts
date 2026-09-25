@@ -1,8 +1,8 @@
 // Registers the screen factories the game shell uses.
 
 import type { Game } from '../../game/game';
-import { TitleScreen } from './menus';
-import { PauseScreen, DeathScreen, LevelLoadingScreen, ReceivingLevelScreen, ChatScreen, InBedChatScreen } from './ingame';
+import { TitleScreen, GenericMessageScreen } from './menus';
+import { PauseScreen, DeathScreen, LevelLoadingScreen, ReceivingLevelScreen, ChatScreen, InBedChatScreen, ClickToResumeScreen } from './ingame';
 import { executeCommand } from '../../game/commands';
 import { InventoryScreen, CraftingScreen, FurnaceScreen, ChestScreen, BrewingStandScreen } from './container';
 import { CreativeInventoryScreen } from './creative';
@@ -24,6 +24,8 @@ export function installScreens(game: Game): void {
   game.pauseScreenFactory = () => new PauseScreen(game);
   game.deathScreenFactory = () => new DeathScreen(game, game.deathMessage(game.player.lastDamageSource), !!game.meta?.hardcore);
   game.loadingScreenFactory = () => new LevelLoadingScreen(game);
+  game.resumeScreenFactory = () => new ClickToResumeScreen(game);
+  game.messageScreenFactory = (title) => new GenericMessageScreen(game, title);
   game.receivingScreenFactory = (reason) => new ReceivingLevelScreen(game, reason);
   game.winScreenFactory = (onFinished) => new WinScreen(game, true, onFinished);
   game.chatScreenFactory = (initial) => new ChatScreen(game, initial);

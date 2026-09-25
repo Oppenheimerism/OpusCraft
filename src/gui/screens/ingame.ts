@@ -111,6 +111,40 @@ export class DeathScreen extends Screen {
 
 // ---------------------------------------------------------------------------
 
+/**
+ * (browser) A page may only grab the mouse on a click or a key other than Escape: after an Escape closed a screen, or
+ * when the browser turned the lock down, the game waits here, paused, the world showing, for a click to carry on.
+ * Escape brings up the pause menu, as it would in the game.
+ */
+export class ClickToResumeScreen extends Screen {
+  constructor(game: Game) {
+    super(game, '');
+  }
+  init(): void {}
+  override shouldCloseOnEsc(): boolean {
+    return false;
+  }
+  override keyPressed(e: KeyboardEvent): boolean {
+    if (e.key === 'Escape') {
+      this.game.openPause();
+      return true;
+    }
+    return false;
+  }
+  override mouseClicked(): boolean {
+    this.game.setScreen(null);
+    return true;
+  }
+  override render(g: GuiGraphics, mx: number, my: number, partial: number): void {
+    g.centered('Click to return to game', Math.floor(this.width / 2), Math.floor(this.height / 2) - 24, 0xffffff, true);
+    void mx;
+    void my;
+    void partial;
+  }
+}
+
+// ---------------------------------------------------------------------------
+
 /** vanilla ReceivingLevelScreen: "Loading terrain..." until the chunks round the player are in (over the portal's swirl after a nether portal) */
 export class ReceivingLevelScreen extends Screen {
   /** (the mouse stays grabbed: the game carries straight on afterwards) */

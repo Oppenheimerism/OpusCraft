@@ -150,6 +150,10 @@ export class Game {
   pauseScreenFactory: (() => Screen) | null = null;
   deathScreenFactory: (() => Screen) | null = null;
   loadingScreenFactory: (() => Screen) | null = null;
+  /** (browser) the paused wait for a click that lets the page grab the mouse again */
+  resumeScreenFactory: (() => Screen) | null = null;
+  /** vanilla GenericMessageScreen ("Reading world data...", "Saving world") */
+  messageScreenFactory: ((title: string) => Screen) | null = null;
   /** vanilla ReceivingLevelScreen, shown while changing dimension */
   receivingScreenFactory: ((reason: ReceivingReason) => Screen) | null = null;
   /** vanilla WinScreen: the End Poem and the credits, `onFinished` once they're over or skipped */
@@ -339,10 +343,13 @@ export class Game {
       const s = this.screen;
       if (!locked && s && (s as { keepsMouse?: boolean }).keepsMouse && s.shouldCloseOnEsc() && document.hasFocus()) s.onClose();
     };
-    // the browser refused to grab the mouse (no recent click): show the pause menu so a click on
-    // "Back to Game" can grab it
+    // the browser refused to grab the mouse (no recent click: an Escape that closed a screen isn't one): wait, paused,
+    // for a click on the world to grab it
     inp.onLockError = () => {
-      if (this.inWorld && this.spawned && !this.screen && !inp.forceLocked) this.openPause();
+      if (this.inWorld && this.spawned && !this.screen && !inp.forceLocked) {
+        if (this.resumeScreenFactory) this.setScreen(this.resumeScreenFactory());
+        else this.openPause();
+      }
     };
   }
 
@@ -371,6 +378,8 @@ export class Game {
   // World lifecycle
 
   async startWorld(meta: WorldMeta): Promise<void> {
+    // vanilla WorldOpenFlows: a message at once while the save is read and the workers start, then LevelLoadingScreen
+    if (!this.inWorld && this.messageScreenFactory) this.setScreen(this.messageScreenFactory(meta.player ? 'Reading world data...' : 'Preparing for world creation...'));
     this.meta = meta;
     const workers = Math.max(2, Math.min(6, (navigator.hardwareConcurrency || 4) - 2));
     this.pool?.terminate();
