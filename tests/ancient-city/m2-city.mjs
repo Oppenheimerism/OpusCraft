@@ -6,6 +6,7 @@
 
 import { check, exitWithStatus } from './lib.mjs';
 import { loadModules } from '../../scripts/load.mjs';
+setTimeout(() => { console.log('TIMEOUT'); process.exit(2); }, 600000).unref();
 
 const { mods, close } = await loadModules([
   '/src/world/blocks.ts', '/src/world/gen/generator.ts', '/src/world/gen/ancientCity.ts', '/src/world/gen/ancientCityTemplates.ts', '/src/world/gen/jigsaw.ts',
