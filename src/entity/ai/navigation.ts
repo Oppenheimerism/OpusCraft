@@ -3,7 +3,7 @@
 // FlyingPathNavigation, for flying.
 
 import { clipBlocks, raycast } from '../../game/raycast';
-import { findPath, Path, PathType, WalkNodeEvaluator, SwimNodeEvaluator, FlyNodeEvaluator, type NodeEvaluator } from './pathfinder';
+import { findPath, Path, PathType, WalkNodeEvaluator, SwimNodeEvaluator, AmphibiousNodeEvaluator, FlyNodeEvaluator, type NodeEvaluator } from './pathfinder';
 import type { Mob } from '../mob';
 import type { Entity } from '../entity';
 import { FLAGS, F_AIR, F_COLLIDE, F_OPAQUE, F_FULL_COLLISION, COLLISION } from '../../world/block';
@@ -308,6 +308,62 @@ export class WaterBoundPathNavigation extends PathNavigation {
     if (d < 1e-7) return true;
     const h = raycast(this.mob.level.world, from[0], from[1], from[2], dx / d, dy / d, dz / d, d);
     return !h || h.dist > d;
+  }
+  /** vanilla setCanFloat: nothing (it swims) */
+  override set canFloat(_v: boolean) {}
+  override get canFloat(): boolean {
+    return false;
+  }
+}
+
+/**
+ * vanilla PathNavigation.isClearForMovementBetween (no fluids): nothing solid on the line from `from` to the point
+ * (raised half the mob's height)
+ */
+function clearForMovementBetween(mob: Mob, from: [number, number, number], to: [number, number, number]): boolean {
+  const dx = to[0] - from[0], dy = to[1] + mob.height * 0.5 - from[1], dz = to[2] - from[2];
+  const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+  if (d < 1e-7) return true;
+  const h = raycast(mob.level.world, from[0], from[1], from[2], dx / d, dy / d, dz / d, d);
+  return !h || h.dist > d;
+}
+
+/**
+ * vanilla AmphibiousPathNavigation (Stage 5: ocean; a turtle's, an axolotl's): paths over land and through water alike
+ * (AmphibiousNodeEvaluator, through open doors), followed from the middle of the mob's height whether it's on the
+ * ground, swimming or neither, to the nodes as they are (not the ground under them); in a liquid it may cut straight
+ * on to a node further along. Anywhere with something under it will do to head for
+ */
+export class AmphibiousPathNavigation extends PathNavigation {
+  private readonly amphibious: AmphibiousNodeEvaluator;
+
+  constructor(mob: Mob, prefersShallowSwimming = false) {
+    super(mob);
+    this.amphibious = new AmphibiousNodeEvaluator(prefersShallowSwimming);
+    this.amphibious.canPassDoors = true;
+  }
+
+  protected override pathEvaluator(): NodeEvaluator {
+    return this.amphibious;
+  }
+  protected override canUpdatePath(): boolean {
+    return true;
+  }
+  protected override tempMobPos(): [number, number, number] {
+    return [this.mob.x, this.mob.y + this.mob.height * 0.5, this.mob.z];
+  }
+  protected override groundY(_x: number, y: number, _z: number): number {
+    return y;
+  }
+  /** vanilla PathNavigation.createPath: to the block itself (no looking for ground) */
+  override createPath(x: number, y: number, z: number, accuracy: number): Path | null {
+    return this.createPathRaw(Math.floor(x), Math.floor(y), Math.floor(z), accuracy);
+  }
+  protected override canMoveDirectly(from: [number, number, number], to: [number, number, number]): boolean {
+    return (this.mob.inWater || this.mob.inLava) && clearForMovementBetween(this.mob, from, to);
+  }
+  override isStableDestination(x: number, y: number, z: number): boolean {
+    return !(FLAGS[this.mob.level.world.getState(x, y - 1, z)] & F_AIR);
   }
   /** vanilla setCanFloat: nothing (it swims) */
   override set canFloat(_v: boolean) {}

@@ -30,6 +30,7 @@ import './monuments';
 import { Cod, Salmon, Pufferfish, TropicalFish } from '../entity/fish';
 import { Dolphin } from '../entity/dolphin';
 import { GlowSquid } from '../entity/glowSquid';
+import { Turtle } from '../entity/turtle';
 import { waterSpawnsFor } from './oceanSpawns';
 import { despawnDistance } from '../entity/mob';
 import { Husk, Stray } from '../entity/biomeMonsters';
@@ -449,6 +450,9 @@ function settingsForLand(name: string): Omit<MobSettings, 'water' | 'ambient'> {
     // vanilla BiomeDefaultFeatures.dripstoneCavesSpawns: the usual, and drowned in fours in the caves' pools
     case 'dripstone_caves':
       return { creature: [], monster: [...monsters(), S_('drowned', 95, 4, 4)], creatureProbability: 0.1 };
+    // (Stage 5: ocean) vanilla OverworldBiomes.beach: turtles, two to five (not on a snowy beach or a stony shore)
+    case 'beach':
+      return { creature: [S_('turtle', 5, 2, 5)], monster: monsters(), creatureProbability: 0.1 };
     default:
       return none;
   }
@@ -744,6 +748,9 @@ export class NaturalSpawner {
         return TropicalFish.checkTropicalFishSpawn(lvl, x, y, z, BIOMES[lvl.world.getBiome3(x, y, z)]?.name ?? '');
       case 'glow_squid':
         return GlowSquid.checkSpawn(lvl, x, y, z);
+      // (Stage 5: ocean) vanilla Turtle.checkTurtleSpawnRules: on sand, low on the beach, in the light
+      case 'turtle':
+        return Turtle.checkTurtleSpawnRules(lvl, x, y, z);
       case 'hoglin':
         // vanilla Hoglin.checkHoglinSpawnRules: any light, just not on a nether wart block
         return BLOCKS[STATE_BLOCK[lvl.world.getState(x, y - 1, z)]].name !== 'nether_wart_block';
@@ -855,5 +862,8 @@ Object.assign(MOB_TYPES, {
   glow_squid: (l: Level) => new GlowSquid(l),
 });
 Object.assign(ENTITY_NAMES, { cod: 'Cod', salmon: 'Salmon', pufferfish: 'Pufferfish', tropical_fish: 'Tropical Fish', dolphin: 'Dolphin', glow_squid: 'Glow Squid' });
+// (Stage 5: ocean) the turtle
+Object.assign(MOB_TYPES, { turtle: (l: Level) => new Turtle(l) });
+Object.assign(ENTITY_NAMES, { turtle: 'Turtle' });
 /** (Stage 5: ocean) vanilla SpawnPlacements IN_WATER: these spawn in water (the squid's and the guardian's are above) */
 const IN_WATER = new Set(['cod', 'salmon', 'pufferfish', 'tropical_fish', 'dolphin', 'glow_squid']);

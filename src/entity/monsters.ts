@@ -27,6 +27,8 @@ import { FLUID_WATER } from '../world/fluids';
 import { PathType } from './ai/pathfinder';
 import { MoveControl, MoveOp, rotlerp } from './ai/controls';
 import { reducedTickDelay } from './ai/goal';
+// (Stage 5: ocean) the turtles' enemies
+import { ZombieAttackTurtleEggGoal, babyTurtleOnLand } from './turtlePredators';
 
 export const DIFFICULTY_ID: Record<string, number> = { peaceful: 0, easy: 1, normal: 2, hard: 3 };
 
@@ -173,9 +175,13 @@ export class Zombie extends Monster {
     this.followRange = ZOMBIE_FOLLOW_RANGE;
   }
   protected registerGoals(): void {
+    // (Stage 5: ocean) vanilla ZombieAttackTurtleEggGoal
+    this.goalSelector.addGoal(4, new ZombieAttackTurtleEggGoal(this, 1.0, 3));
     this.goalSelector.addGoal(8, new LookAtPlayerGoal(this, 8));
     this.goalSelector.addGoal(8, new RandomLookAroundGoal(this));
     this.addBehaviourGoals();
+    // (Stage 5: ocean) vanilla addBehaviourGoals' (and the drowned's) last: baby turtles on land, in sight
+    this.targetSelector.addGoal(5, new NearestAttackableMobGoal(this, babyTurtleOnLand, true));
   }
   /** vanilla addBehaviourGoals: how it fights, roams and picks its targets (the drowned has its own) */
   protected addBehaviourGoals(): void {
@@ -521,6 +527,8 @@ export class ZombifiedPiglin extends Zombie {
     this.attackDamage = 5;
   }
   protected override registerGoals(): void {
+    // (Stage 5: ocean) vanilla Zombie.registerGoals' ZombieAttackTurtleEggGoal (its own addBehaviourGoals hunts no turtles)
+    this.goalSelector.addGoal(4, new ZombieAttackTurtleEggGoal(this, 1.0, 3));
     this.goalSelector.addGoal(8, new LookAtPlayerGoal(this, 8));
     this.goalSelector.addGoal(8, new RandomLookAroundGoal(this));
     this.goalSelector.addGoal(2, new ZombieAttackGoal(this, 1.0, false));
@@ -785,6 +793,8 @@ export class Skeleton extends Monster {
     this.targetSelector.addGoal(1, new HurtByTargetGoal(this));
     this.targetSelector.addGoal(2, new NearestAttackablePlayerGoal(this, true));
     this.targetSelector.addGoal(3, new NearestAttackableMobGoal(this, (e) => e.type === 'iron_golem', true));
+    // (Stage 5: ocean) vanilla AbstractSkeleton: baby turtles on land, in sight
+    this.targetSelector.addGoal(3, new NearestAttackableMobGoal(this, babyTurtleOnLand, true));
     this.reassessWeaponGoal();
   }
   /** vanilla AbstractSkeleton.reassessWeaponGoal */

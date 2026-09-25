@@ -16,6 +16,7 @@ import type { Entity } from './entity';
 import { ItemStack } from '../item/item';
 import { BLOCKS, STATE_BLOCK } from '../world/block';
 import { BIOMES } from '../world/gen/biomes';
+import { babyTurtleOnLand } from './turtlePredators';
 
 // ---------------------------------------------------------------------------
 // variants (vanilla WolfVariants, registered in this order)
@@ -111,7 +112,8 @@ export class Wolf extends TamableAnimal {
     // vanilla NearestAttackableTargetGoal<Player>(10, true, false, isAngryAt)
     this.targetSelector.addGoal(4, new NearestAttackableMobGoal(this, (e) => e.type === 'player' && this.isAngryAt(e), true));
     this.targetSelector.addGoal(5, new NonTameRandomTargetGoal(this, (e) => PREY.has(e.type), false));
-    // (vanilla NonTameRandomTargetGoal<Turtle>(BABY_ON_LAND_SELECTOR): baby turtles on land — no turtles yet)
+    // (Stage 5: ocean) vanilla NonTameRandomTargetGoal<Turtle>(BABY_ON_LAND_SELECTOR): baby turtles on land
+    this.targetSelector.addGoal(6, new NonTameRandomTargetGoal(this, babyTurtleOnLand, false));
     this.targetSelector.addGoal(7, new NearestAttackableMobGoal(this, (e) => SKELETONS.has(e.type), false));
   }
 
