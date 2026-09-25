@@ -7,6 +7,8 @@ import { ScrollList } from '../list';
 import type { GuiGraphics } from '../guiGraphics';
 import { OptionsScreen, LanguageScreen, AccessibilityOptionsScreen, DIFFICULTY_NAMES, DIFFICULTY_INFO } from './options';
 import { WorldMeta, listWorlds, saveWorldMeta, deleteWorld } from '../../storage/worldStore';
+import { tidyUpInterruptedImport } from '../../storage/worldTransfer';
+import { makeBackup, importWorldFiles, pickWorldFiles, WorldFileDrop } from './worldFiles';
 
 export const GAME_VERSION = '1.21.8';
 
@@ -260,6 +262,10 @@ export class SelectWorldScreen extends Screen {
   private deleteBtn!: Button;
   private recreateBtn!: Button;
   private searchText = '';
+  /** after an import: the world to select once the list is read again */
+  private selectId: string | null = null;
+  /** world files dropped on the list are imported */
+  private readonly drop = new WorldFileDrop((files) => this.importFiles(files));
   constructor(game: Game, parent: Screen | null) {
     super(game, 'Select World');
     this.parent = parent;
@@ -268,7 +274,10 @@ export class SelectWorldScreen extends Screen {
   init(): void {
     const cx = Math.floor(this.width / 2);
     const prevSel = this.list?.selected ?? null;
-    this.search = this.add(new EditBox(cx - 100, 22, 200, 20, this.searchText));
+    // (vanilla has no Import World: it takes the search row's last column, over Back, and the search box the rest)
+    this.search = this.add(new EditBox(cx - 154, 22, 230, 20, this.searchText));
+    this.add(new Button(cx + 82, 22, 72, 20, 'Import World', () => pickWorldFiles((files) => this.importFiles(files)), 'Drag and drop world files into this window to import them'));
+    this.drop.install();
     this.search.onChange = (v) => {
       this.searchText = v;
       this.refilter();
@@ -288,12 +297,50 @@ export class SelectWorldScreen extends Screen {
   }
 
   private async load(): Promise<void> {
+    await tidyUpInterruptedImport();
     this.all = await listWorlds();
     if (!this.all.length) {
-      this.game.setScreen(new CreateWorldScreen(this.game, this.parent));
+      // (Cancel comes back to the empty list rather than the title, for Import World)
+      this.game.setScreen(new CreateWorldScreen(this.game, this));
       return;
     }
     this.refilter();
+    if (this.selectId) {
+      const i = this.list.entries.findIndex((w) => w.id === this.selectId);
+      if (i >= 0) {
+        this.list.selected = this.list.entries[i];
+        this.list.ensureVisible(i);
+      }
+      this.selectId = null;
+      this.updateButtons();
+    }
+  }
+
+  /** Import World: back here once they're in, with the list read again and the new world selected */
+  private importFiles(files: File[]): void {
+    void importWorldFiles(this.game, files, (imported) => {
+      this.all = null;
+      if (imported) {
+        this.selectId = imported.id;
+        this.searchText = '';
+      }
+      this.game.setScreen(this);
+    });
+  }
+
+  override removed(): void {
+    this.drop.remove();
+  }
+
+  override render(g: GuiGraphics, mx: number, my: number, partial: number): void {
+    super.render(g, mx, my, partial);
+    // (world files dragged over the page: the list lights up to take them)
+    if (this.drop.dragging) {
+      const l = this.list;
+      g.fill(0, l.y, this.width, l.bottom, 0x30ffffff);
+      g.fill(0, l.y, this.width, l.y + 1, 0xffffffff);
+      g.fill(0, l.bottom - 1, this.width, l.bottom, 0xffffffff);
+    }
   }
 
   private refilter(): void {
@@ -347,15 +394,22 @@ export class EditWorldScreen extends Screen {
   }
   init(): void {
     const cx = Math.floor(this.width / 2);
-    const y = Math.floor(this.height / 4) + 24;
+    // vanilla's column, 234 high and centred: a spacer, the name, five buttons 25 apart, a spacer, Save and Cancel
+    const y = Math.floor((this.height - 234) / 2) + 39;
     this.name = this.add(new EditBox(cx - 100, y, 200, 20, this.meta.name));
     this.name.focused = true;
-    const save = this.add(new Button(cx - 100, y + 36, 98, 20, 'Save', () => {
+    // (a browser has no world icon or folders, and no older chunks to optimize: only Make Backup does anything)
+    this.add(new Button(cx - 100, y + 25, 200, 20, 'Reset Icon', () => {})).active = false;
+    this.add(new Button(cx - 100, y + 50, 200, 20, 'Open World Folder', () => {})).active = false;
+    this.add(new Button(cx - 100, y + 75, 200, 20, 'Make Backup', () => void makeBackup(this.game, this.meta, this.parent)));
+    this.add(new Button(cx - 100, y + 100, 200, 20, 'Open Backups Folder', () => {})).active = false;
+    this.add(new Button(cx - 100, y + 125, 200, 20, 'Optimize World', () => {})).active = false;
+    const save = this.add(new Button(cx - 100, y + 175, 98, 20, 'Save', () => {
       this.meta.name = this.name.value.trim() || this.meta.name;
       void saveWorldMeta(this.meta).then(() => this.game.setScreen(this.parent));
     }));
     this.name.onChange = (v) => (save.active = v.trim().length > 0);
-    this.add(new Button(cx + 2, y + 36, 98, 20, 'Cancel', () => this.onClose()));
+    this.add(new Button(cx + 2, y + 175, 98, 20, 'Cancel', () => this.onClose()));
   }
   override render(g: GuiGraphics, mx: number, my: number, partial: number): void {
     super.render(g, mx, my, partial);
