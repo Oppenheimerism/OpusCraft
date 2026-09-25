@@ -12,6 +12,7 @@ import { Mineshafts } from './mineshaft';
 import { Geodes, SUB_AIR, SUB_SOLID, SUB_FLUID } from './geode';
 import { Villages } from './villages';
 import { Temples } from './temples';
+import { WoodlandMansions } from './mansion';
 import { Strongholds, biomeAtY0, addBeards } from './stronghold';
 // (Stage 4: outposts)
 import { PillagerOutposts } from './outposts';
@@ -60,6 +61,8 @@ export class ChunkGenerator {
   readonly villages: Villages;
   /** desert pyramids, jungle temples, swamp huts and igloos (world/gen/temples) */
   readonly temples: Temples;
+  /** woodland mansions (world/gen/mansion) */
+  readonly mansions: WoodlandMansions;
   readonly strongholds: Strongholds;
   /** (Stage 4: outposts) */
   readonly outposts: PillagerOutposts;
@@ -92,7 +95,9 @@ export class ChunkGenerator {
       oceanFloorHeight: (x, z) => this.firstFreeHeight(x, z, true),
       quartBiome: (x, z) => this.quartBiome(x, z),
     });
-    this.decorator.temples = this.temples;
+    // (mansions) woodland mansions, placed after the temples
+    this.mansions = new WoodlandMansions(worldSeed64(seed), { firstFreeHeight: (x, z) => this.firstFreeHeight(x, z), quartBiome: (x, z) => this.quartBiome(x, z) });
+    this.decorator.temples = { place: (ctx) => (this.temples.place(ctx), this.mansions.place(ctx)) };
     this.strongholds = new Strongholds(worldSeed64(seed), biomeAtY0(this.router));
     this.decorator.strongholds = this.strongholds;
   }
