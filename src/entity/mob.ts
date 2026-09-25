@@ -997,6 +997,16 @@ export abstract class Mob extends LivingEntity {
     return true;
   }
 
+  /** vanilla Entity.waterSwimSound: its splashes as it swims (getSwimSound), louder the faster it goes */
+  protected override playSwimSound(): void {
+    const v = Math.min(1, Math.sqrt(this.dx * this.dx * 0.2 + this.dy * this.dy + this.dz * this.dz * 0.2) * 0.35);
+    this.playSound(this.swimSound(), v, 1 + (this.random.nextFloat() - this.random.nextFloat()) * 0.4);
+  }
+  /** vanilla getSwimSound */
+  protected swimSound(): string {
+    return 'entity.generic.swim';
+  }
+
   protected override playStepSound(): void {
     const s = this.stepSound();
     if (s) {

@@ -39,6 +39,7 @@ import { horseSounds } from './gen/horse';
 import { leashSounds } from './gen/leash';
 import { llamaSounds } from './gen/llama';
 import { parrotSounds } from './gen/parrot';
+import { polarBearSounds } from './gen/polarBear';
 import { wanderingTraderSounds } from './gen/wanderingTrader';
 import { illagerSounds } from './gen/illagers';
 // (Stage 5: ocean)
@@ -96,8 +97,11 @@ Object.assign(SOUNDS, horseSounds(SOUNDS));
 // (the lead's knot round a fence)
 Object.assign(SOUNDS, leashSounds());
 Object.assign(SOUNDS, llamaSounds(SOUNDS));
+Object.assign(SOUNDS, polarBearSounds());
 // (vanilla sounds.json: the snow golem's are the snow's breaking, the bow's and the shears')
 for (const [k, v] of Object.entries({ 'entity.snow_golem.hurt': 'block.snow.break', 'entity.snow_golem.death': 'block.snow.break', 'entity.snow_golem.shoot': 'entity.arrow.shoot', 'entity.snow_golem.shear': 'entity.sheep.shear' })) if (SOUNDS[v]) SOUNDS[k] = SOUNDS[v];
+// (vanilla sounds.json: any mob's swimming, and a monster's, is the player's splashing)
+for (const k of ['entity.generic.swim', 'entity.hostile.swim']) SOUNDS[k] = SOUNDS['entity.player.swim'];
 // (the parrot, and the mobs it mimics: theirs pitched up, so it comes after them all)
 Object.assign(SOUNDS, parrotSounds(SOUNDS));
 
@@ -156,6 +160,8 @@ const VOLUMES: Record<string, number> = {
   'entity.generic.drink': 0.5,
   'entity.player.burp': 0.5,
   'entity.player.swim': 0.35,
+  'entity.generic.swim': 0.35,
+  'entity.hostile.swim': 0.35,
   'entity.player.splash': 0.4,
   'entity.player.splash.high_speed': 0.4,
   'weather.rain': 0.2,

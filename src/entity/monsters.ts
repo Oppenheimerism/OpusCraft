@@ -41,6 +41,10 @@ export abstract class Monster extends Mob {
     return 'entity.hostile.splash';
   }
 
+  protected override swimSound(): string {
+    return 'entity.hostile.swim';
+  }
+
   protected override swimHighSpeedSplashSound(): string {
     return 'entity.hostile.splash';
   }

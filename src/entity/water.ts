@@ -144,6 +144,10 @@ class SquidFleeGoal extends Goal {
 
 export class Squid extends WaterAnimal {
   readonly type: string = 'squid';
+  /** vanilla getMovementEmission EVENTS: it swims without a sound */
+  protected override makesStepSounds(): boolean {
+    return false;
+  }
   xBodyRot = 0;
   xBodyRotO = 0;
   zBodyRot = 0;
