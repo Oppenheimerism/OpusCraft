@@ -47,6 +47,7 @@ import { WanderingTrader } from '../entity/wanderingTrader';
 import { SnowGolem } from '../entity/snowGolem';
 import { Parrot } from '../entity/parrot';
 import { PolarBear } from '../entity/polarBear';
+import { Rabbit } from '../entity/rabbit';
 import { shoulderHooks } from '../entity/shoulder';
 import { IronGolem } from '../entity/ironGolem';
 import { ZombieVillager } from '../entity/zombieVillager';
@@ -118,6 +119,7 @@ export const MOB_TYPES: Record<string, (l: Level) => Mob> = {
   snow_golem: (l) => new SnowGolem(l),
   parrot: (l) => new Parrot(l),
   polar_bear: (l) => new PolarBear(l),
+  rabbit: (l) => new Rabbit(l),
   ender_dragon: (l) => new EnderDragon(l),
 };
 
@@ -248,7 +250,7 @@ export function isChunkSaved(e: Entity): boolean {
 const ENTITY_NAMES: Record<string, string> = {
   pig: 'Pig', cow: 'Cow', sheep: 'Sheep', chicken: 'Chicken', zombie: 'Zombie', zombie_villager: 'Zombie Villager', skeleton: 'Skeleton', creeper: 'Creeper', spider: 'Spider',
   villager: 'Villager', iron_golem: 'Iron Golem', cave_spider: 'Cave Spider', enderman: 'Enderman', slime: 'Slime', magma_cube: 'Magma Cube', zombified_piglin: 'Zombified Piglin', ghast: 'Ghast', blaze: 'Blaze', wither_skeleton: 'Wither Skeleton', squid: 'Squid', bat: 'Bat', hoglin: 'Hoglin', zoglin: 'Zoglin', strider: 'Strider', piglin: 'Piglin',
-  witch: 'Witch', husk: 'Husk', stray: 'Stray', drowned: 'Drowned', silverfish: 'Silverfish', wolf: 'Wolf', cat: 'Cat', ocelot: 'Ocelot', horse: 'Horse', donkey: 'Donkey', mule: 'Mule', llama: 'Llama', trader_llama: 'Trader Llama', wandering_trader: 'Wandering Trader', snow_golem: 'Snow Golem', parrot: 'Parrot', polar_bear: 'Polar Bear', llama_spit: 'Llama Spit', fireball: 'Fireball', small_fireball: 'Small Fireball',
+  witch: 'Witch', husk: 'Husk', stray: 'Stray', drowned: 'Drowned', silverfish: 'Silverfish', wolf: 'Wolf', cat: 'Cat', ocelot: 'Ocelot', horse: 'Horse', donkey: 'Donkey', mule: 'Mule', llama: 'Llama', trader_llama: 'Trader Llama', wandering_trader: 'Wandering Trader', snow_golem: 'Snow Golem', parrot: 'Parrot', polar_bear: 'Polar Bear', rabbit: 'Rabbit', llama_spit: 'Llama Spit', fireball: 'Fireball', small_fireball: 'Small Fireball',
   arrow: 'Arrow', tnt: 'Primed TNT', lightning_bolt: 'Lightning Bolt', item: 'Item', experience_orb: 'Experience Orb', falling_block: 'Falling Block', player: 'Player',
   egg: 'Thrown Egg', snowball: 'Snowball', ender_pearl: 'Thrown Ender Pearl', potion: 'Potion', trident: 'Trident',
   minecart: 'Minecart', chest_minecart: 'Minecart with Chest', boat: 'Boat', chest_boat: 'Boat with Chest', end_crystal: 'End Crystal',
@@ -406,23 +408,31 @@ function settingsForLand(name: string): Omit<MobSettings, 'water' | 'ambient'> {
     case 'windswept_gravelly_hills':
     case 'windswept_forest':
       return { creature: [...farmAnimals(), S_('llama', 5, 4, 6)], monster: monsters(), creatureProbability: 0.1 };
-    // vanilla OverworldBiomes.meadowOrCherryGrove: donkeys (pigs in a cherry grove), rabbits (not yet: the same) and sheep
+    // vanilla OverworldBiomes.meadowOrCherryGrove: donkeys (pigs in a cherry grove), rabbits and sheep
     case 'meadow':
     case 'cherry_grove':
       return { creature: [S_(name === 'meadow' ? 'donkey' : 'pig', 1, 1, 2), S_('rabbit', 2, 2, 6), S_('sheep', 2, 2, 4)], monster: monsters(), creatureProbability: 0.1 };
     case 'forest':
-    case 'flower_forest':
     case 'birch_forest':
     case 'old_growth_birch_forest':
     case 'dark_forest':
-    case 'taiga':
-    case 'snowy_taiga':
-    case 'grove':
-    case 'snowy_slopes':
-    case 'old_growth_pine_taiga':
-    case 'old_growth_spruce_taiga':
     case 'swamp':
       return { creature: farmAnimals(), monster: monsters(), creatureProbability: 0.1 };
+    // vanilla OverworldBiomes.forest with isFlowerForest: rabbits
+    case 'flower_forest':
+      return { creature: [...farmAnimals(), S_('rabbit', 4, 2, 3)], monster: monsters(), creatureProbability: 0.1 };
+    // vanilla OverworldBiomes.taiga and oldGrowthTaiga: rabbits, and foxes (not in the game yet: picked, and nothing
+    // comes); the grove (vanilla grove) has more rabbits and fewer foxes, the snowy slopes (vanilla snowySlopes) rabbits
+    // and goats (not in the game yet either)
+    case 'taiga':
+    case 'snowy_taiga':
+    case 'old_growth_pine_taiga':
+    case 'old_growth_spruce_taiga':
+      return { creature: [...farmAnimals(), S_('rabbit', 4, 2, 3), S_('fox', 8, 2, 4)], monster: monsters(), creatureProbability: 0.1 };
+    case 'grove':
+      return { creature: [...farmAnimals(), S_('rabbit', 8, 2, 3), S_('fox', 4, 2, 4)], monster: monsters(), creatureProbability: 0.1 };
+    case 'snowy_slopes':
+      return { creature: [...farmAnimals(), S_('rabbit', 4, 2, 3), S_('goat', 5, 1, 3)], monster: monsters(), creatureProbability: 0.1 };
     // vanilla OverworldBiomes.jungle, sparseJungle and bambooJungle (baseJungleSpawns): parrots in the jungle and the
     // bamboo, and pandas (not in the game yet: picked, and nothing comes)
     case 'jungle':
@@ -431,8 +441,7 @@ function settingsForLand(name: string): Omit<MobSettings, 'water' | 'ambient'> {
       const more = name === 'jungle' ? [S_('parrot', 40, 1, 2), S_('panda', 1, 1, 2)] : name === 'bamboo_jungle' ? [S_('parrot', 40, 1, 2), S_('panda', 80, 1, 2)] : [];
       return { creature: [...farmAnimals(), { type: 'chicken', weight: 10, min: 4, max: 4 }, ...more], monster: monsters(), creatureProbability: 0.1 };
     }
-    // vanilla BiomeDefaultFeatures.snowySpawns: rabbits (not in the game yet: their share of the picks comes to
-    // nothing) and now and then polar bears; fewer skeletons, and strays instead
+    // vanilla BiomeDefaultFeatures.snowySpawns: rabbits, and now and then polar bears; fewer skeletons, and strays instead
     case 'snowy_plains':
     case 'ice_spikes':
       return { creature: [S_('rabbit', 10, 2, 3), S_('polar_bear', 1, 1, 2)], monster: [...monsters(95, 20), S_('stray', 80, 4, 4)], creatureProbability: 0.07 };
@@ -440,13 +449,13 @@ function settingsForLand(name: string): Omit<MobSettings, 'water' | 'ambient'> {
     case 'frozen_ocean':
     case 'deep_frozen_ocean':
       return { creature: [S_('polar_bear', 1, 1, 2)], monster: monsters(), creatureProbability: 0.1 };
-    // (goats and rabbits aren't in the game yet)
+    // (vanilla frozenPeaks and jaggedPeaks: goats alone, and they aren't in the game yet)
     case 'frozen_peaks':
     case 'jagged_peaks':
       return { creature: [], monster: monsters(), creatureProbability: 0.1 };
-    // vanilla BiomeDefaultFeatures.desertSpawns: few zombies, and husks (no rabbits yet)
+    // vanilla BiomeDefaultFeatures.desertSpawns: rabbits; few zombies, and husks
     case 'desert':
-      return { creature: [], monster: [...monsters(19, 100, 1), S_('husk', 80, 4, 4)], creatureProbability: 0.1 };
+      return { creature: [S_('rabbit', 4, 2, 3)], monster: [...monsters(19, 100, 1), S_('husk', 80, 4, 4)], creatureProbability: 0.1 };
     // vanilla BiomeDefaultFeatures.dripstoneCavesSpawns: the usual, and drowned in fours in the caves' pools
     case 'dripstone_caves':
       return { creature: [], monster: [...monsters(), S_('drowned', 95, 4, 4)], creatureProbability: 0.1 };
@@ -716,6 +725,11 @@ export class NaturalSpawner {
         const below = BLOCKS[STATE_BLOCK[lvl.world.getState(x, y - 1, z)]].name;
         const ice = biome === 'frozen_ocean' || biome === 'deep_frozen_ocean';
         return (ice ? below === 'ice' || below === 'packed_ice' || below === 'blue_ice' : below === 'grass_block') && lvl.rawBrightness(x, y, z, 0) > 8;
+      }
+      case 'rabbit': {
+        // vanilla Rabbit.checkRabbitSpawnRules: on #rabbits_spawnable_on (grass, snow, sand) in the light
+        const below = BLOCKS[STATE_BLOCK[lvl.world.getState(x, y - 1, z)]].name;
+        return (below === 'grass_block' || below === 'snow' || below === 'snow_block' || below === 'sand') && lvl.rawBrightness(x, y, z, 0) > 8;
       }
       case 'parrot': {
         // vanilla Parrot.checkParrotSpawnRules: on #parrots_spawnable_on (grass, leaves, logs) in the light

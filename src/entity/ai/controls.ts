@@ -245,7 +245,8 @@ export function rotlerp(from: number, to: number, max: number): number {
 }
 
 export class JumpControl {
-  private jumpFlag = false;
+  /** vanilla jump: a jump asked for this tick */
+  protected jumpFlag = false;
   constructor(readonly mob: Mob) {}
   jump(): void {
     this.jumpFlag = true;
