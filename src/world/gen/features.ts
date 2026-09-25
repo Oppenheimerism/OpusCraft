@@ -10,6 +10,7 @@ import { NormalNoise } from './noise';
 import { UP, NORTH, SOUTH, WEST, EAST, DX, DY, DZ, DIR_NAMES } from '../dir';
 import { largeDripstones, dripstoneDecoration } from './dripstone';
 import { lushCaves } from './lush';
+import { deepDarkFeatures } from './deepDark';
 import { biomeTemperature } from './temperature';
 
 // ---------------------------------------------------------------------------
@@ -256,6 +257,8 @@ export class Decorator {
   temples: { place(ctx: GenContext): void } | null = null;
   /** strongholds, placed in the STRONGHOLDS step */
   strongholds: { place(ctx: GenContext): void } | null = null;
+  /** (the deep dark) ancient cities, placed in the UNDERGROUND_DECORATION step before its features */
+  ancientCities: { place(ctx: GenContext): void } | null = null;
 
   constructor(readonly seed: number, patchNoise: NormalNoise) {
     this.patchNoise = patchNoise;
@@ -304,6 +307,8 @@ export class Decorator {
     if (DECO[centerBiome]?.disks || centerBiome === B.swamp || centerBiome === B.beach || centerBiome === B.plains || centerBiome === B.forest) {
       this.disks(ctx, r);
     }
+    // --- (the deep dark) ancient cities, the UNDERGROUND_DECORATION step's structure
+    this.ancientCities?.place(ctx);
     // --- infested stone, then dripstone clusters and pointed dripstone (vanilla UNDERGROUND_DECORATION step)
     if (INFESTED_ORE.biomes!.includes(centerBiome)) {
       const ri = new Rand(hash2(ctx.cx, ctx.cz, this.seed ^ 0x51f1), 12);
@@ -328,6 +333,8 @@ export class Decorator {
       if (!deco) continue;
       this.vegetation(ctx, r, deco, biome, qx, qz);
     }
+    // --- (the deep dark) its sculk veins and sculk patches, the last of its VEGETAL_DECORATION features
+    deepDarkFeatures(ctx, new Rand(hash2(ctx.cx, ctx.cz, this.seed ^ 0xdd4c), 13));
     ctx.computeHeightmaps();
     this.freeze(ctx);
   }

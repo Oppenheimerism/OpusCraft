@@ -38,6 +38,7 @@ import { templeKind, locateTemple } from './temples';
 import { locateEndCity } from './endCities';
 import { locateMansion } from './mansions';
 import { isRuinedPortal, locateRuinedPortal } from './ruinedPortals';
+import { locateAncientCity } from './ancientCities';
 
 class CommandError extends Error {
   constructor(msg: string, readonly pos = -1) {
@@ -740,6 +741,13 @@ export const COMMANDS: Record<string, CommandDef> = {
       // (Stage 4: the outer End) end cities (game/endCities)
       if (name === 'minecraft:end_city') {
         const t = dim.id === 'the_end' ? locateEndCity(c.game.level.seed, x, z) : null;
+        if (!t) throw new CommandError(`Could not find a structure of type "${name}" nearby`);
+        c.ok(`The nearest ${name} is at §a[${t[0]}, ~, ${t[1]}]§r (${Math.floor(Math.hypot(t[0] - x, t[1] - z))} blocks away)`);
+        return;
+      }
+      // (the deep dark) ancient cities (game/ancientCities)
+      if (name === 'minecraft:ancient_city') {
+        const t = dim.id === 'overworld' ? locateAncientCity(c.game.level.seed, x, z) : null;
         if (!t) throw new CommandError(`Could not find a structure of type "${name}" nearby`);
         c.ok(`The nearest ${name} is at §a[${t[0]}, ~, ${t[1]}]§r (${Math.floor(Math.hypot(t[0] - x, t[1] - z))} blocks away)`);
         return;
