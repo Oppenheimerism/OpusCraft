@@ -66,6 +66,8 @@ import './frogspawn';
 import './archaeology';
 // (desert wells: their loot, the suspicious stew)
 import './desertWells';
+// (trial chambers) copper weathering, waxing and scraping, the copper bulb and the lightning rod
+import { findLightningRod } from './copper';
 
 export interface SoundSink {
   play(name: string, x: number, y: number, z: number, volume?: number, pitch?: number): void;
@@ -389,7 +391,9 @@ export class Level {
   /** vanilla findLightningTargetAround: the top of the column, or something alive under the open sky close by */
   private findLightningTargetAround(x: number, z: number): [number, number, number] {
     let y = this.motionBlockingHeight(x, z);
-    // (no lightning rods yet)
+    // (trial chambers) a lightning rod within 128 blocks draws it
+    const rod = findLightningRod(this, x, y, z);
+    if (rod) return rod;
     const box = new AABB(x - 3, y - 3, z - 3, x + 4, MAX_Y + 4, z + 4);
     const list = this.getEntities(box, (e) => e instanceof LivingEntity && e.isAlive && this.canSeeSky(Math.floor(e.x), Math.floor(e.y), Math.floor(e.z)));
     if (list.length) {

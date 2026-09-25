@@ -2,6 +2,7 @@
 // them): one block of stone cut into one of its shapes. Every vanilla recipe whose blocks this game has.
 
 import { ITEMS, ItemStack } from '../item/item';
+import { TRIAL_CHAMBER_STONECUTTING } from './recipesTrialChambers';
 
 export interface StonecutterRecipe {
   input: string;
@@ -78,6 +79,8 @@ const FAMILIES: [string, [string, number][]][] = [
   ],
   ['deepslate_bricks', [['deepslate_brick_slab', 2], ['deepslate_brick_stairs', 1], ['deepslate_brick_wall', 1], ['deepslate_tiles', 1], ['deepslate_tile_slab', 2], ['deepslate_tile_stairs', 1], ['deepslate_tile_wall', 1]]],
   ['deepslate_tiles', [['deepslate_tile_slab', 2], ['deepslate_tile_stairs', 1], ['deepslate_tile_wall', 1]]],
+  // (trial chambers) the tuff and copper families
+  ...TRIAL_CHAMBER_STONECUTTING,
 ];
 
 /** the stonecutting recipes whose blocks exist here */

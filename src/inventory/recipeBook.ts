@@ -65,13 +65,18 @@ export interface BookRecipe {
 // categories and groups (vanilla RecipeCategory → CraftingBookCategory)
 
 const WOOD = '(oak|spruce|birch|jungle|acacia|dark_oak|mangrove|cherry|pale_oak|bamboo|crimson|warped)';
-const EQUIPMENT = /_(pickaxe|axe|shovel|hoe|sword|helmet|chestplate|leggings|boots)$|^(bow|arrow|shears|flint_and_steel|bucket|fishing_rod|compass|clock|lead|shield|crossbow|spyglass|brush|recovery_compass|carrot_on_a_stick)$/;
+const EQUIPMENT = /_(pickaxe|axe|shovel|hoe|sword|helmet|chestplate|leggings|boots)$|^(bow|arrow|shears|flint_and_steel|bucket|fishing_rod|compass|clock|lead|shield|crossbow|spyglass|brush|recovery_compass|carrot_on_a_stick|mace|wind_charge)$/;
 const REDSTONE = /_(door|trapdoor|fence_gate|pressure_plate|button)$|^(redstone_block|redstone_torch|tnt|lever|piston|sticky_piston|observer|repeater|comparator|dispenser|dropper|hopper|daylight_detector|target|lectern|note_block|tripwire_hook|trapped_chest|lightning_rod|redstone_lamp)$/;
 const BUILDING = new RegExp(
   `_planks$|^${WOOD}_(slab|stairs)$|_wood$|_stained_glass$|_terracotta$|_wool$|_concrete_powder$|^(bricks|stone_bricks|mossy_stone_bricks|mossy_cobblestone|bookshelf|hay_block|coal_block|iron_block|gold_block|diamond_block|emerald_block|lapis_block|copper_block|raw_iron_block|raw_gold_block|raw_copper_block|snow_block|clay|glowstone|sandstone|red_sandstone|packed_mud|mud_bricks|quartz_block|jack_o_lantern|melon)$|^(polished|chiseled|cut|smooth)_|_(slab|stairs)$|_bricks$`,
 );
 
-function craftingCategory(result: string): BookCategory {
+function craftingCategory(result: string, r?: CraftingRecipe): BookCategory {
+  // (trial chambers) vanilla waxRecipes are all RecipeCategory.BUILDING_BLOCKS, as is every age's cut copper,
+  // chiseled copper and grate; the bulbs are REDSTONE
+  if (r?.kind === 'shapeless' && r.ingredients.includes('honeycomb')) return 'crafting_building_blocks';
+  if (/copper_bulb$/.test(result)) return 'crafting_redstone';
+  if (/(cut|chiseled)_copper$|copper_grate$/.test(result)) return 'crafting_building_blocks';
   if (EQUIPMENT.test(result)) return 'crafting_equipment';
   if (REDSTONE.test(result)) return 'crafting_redstone';
   if (/_wall$|_pane$|_carpet$/.test(result)) return 'crafting_misc';
@@ -97,6 +102,8 @@ function craftingGroup(result: string, r: CraftingRecipe): string {
   if (result.endsWith('_dye')) return result;
   if (result === 'stick') return 'sticks';
   if (result === 'bone_meal') return 'bonemeal';
+  // (trial chambers) vanilla copper_ingot and copper_ingot_from_waxed_copper_block
+  if (result === 'copper_ingot') return 'copper_ingot';
   if (result === 'rabbit_stew') return 'rabbit_stew';
   return '';
 }
@@ -137,7 +144,7 @@ for (const r of RECIPES) {
     : r.ingredients.map((g) => expand(g));
   addRecipe(
     {
-      type: 'crafting', category: craftingCategory(r.result), group: craftingGroup(r.result, r), result: r.result, count: r.count,
+      type: 'crafting', category: craftingCategory(r.result, r), group: craftingGroup(r.result, r), result: r.result, count: r.count,
       shaped, width: shaped ? r.pattern[0].length : 0, height: shaped ? r.pattern.length : 0, slots, xp: 0, unlockBy: unlockItems(slots), source: r,
     },
     r.result,

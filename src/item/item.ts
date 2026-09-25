@@ -7,6 +7,8 @@ import type { ItemEntity } from '../entity/itemEntity';
 import { SHULKER_BOXES } from '../world/blocksShulker';
 import { SKULL_TYPES, SKULL_BLOCKS } from '../world/blocksSkulls';
 import type { Fireworks, FireworkExplosion } from './fireworks';
+// (trial chambers)
+import { registerTrialChamberItems } from './itemsTrialChambers';
 
 export interface ToolInfo {
   type: ToolType;
@@ -479,6 +481,9 @@ reg({ id: 'goat_spawn_egg', texture: 'goat_spawn_egg', creativeTab: 'spawn_eggs'
     prev = id;
   }
 }
+// (trial chambers) the tuff and copper families' places, the lightning rod, honeycomb, the heavy core, the trial keys,
+// the mace and wind charges, the new music discs and sherds
+registerTrialChamberItems(reg, ITEMS, ITEM_LIST);
 // sugar cane item places the block
 {
   const sc = ITEMS.get('sugar_cane');

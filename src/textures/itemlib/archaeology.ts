@@ -118,8 +118,11 @@ const SHARDS: Record<string, string[]> = {
   ],
 };
 
-/** (Stage 5: ocean) the ocean ruins' sherds are broken the ways the desert pyramid's are */
-const SHARD_LIKE: Record<string, string> = { angler: 'miner', shelter: 'archer', snort: 'skull', blade: 'prize', explorer: 'miner', mourner: 'skull', plenty: 'prize' };
+/** (Stage 5: ocean) the ocean ruins' sherds are broken the ways the desert pyramid's are ((trial chambers) and theirs) */
+const SHARD_LIKE: Record<string, string> = {
+  angler: 'miner', shelter: 'archer', snort: 'skull', blade: 'prize', explorer: 'miner', mourner: 'skull', plenty: 'prize',
+  flow: 'arms_up', guster: 'archer', scrape: 'brewer',
+};
 
 function sherd(name: string): TexImage {
   const mask = SHARDS[name] ?? SHARDS[SHARD_LIKE[name]];

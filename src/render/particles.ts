@@ -675,6 +675,33 @@ export class ParticleEngine {
         this.addSprite(p);
         break;
       }
+      // (trial chambers) vanilla GlowParticle.WaxOnProvider, WaxOffProvider, ScrapeProvider and ElectricSparkProvider:
+      // the glow sprite in wax's amber, a pale white, the patina's greens or a spark's white, barely drifting from where
+      // it was set off the block's faces (a spark flies faster and is gone in a few ticks)
+      case 'wax_on':
+      case 'wax_off':
+      case 'scrape':
+      case 'electric_spark': {
+        const p = this.base(kind, x, y, z);
+        const spark = kind === 'electric_spark', flat = kind === 'wax_on' || kind === 'wax_off' ? 0.5 : 1;
+        const k = spark ? 0.25 : 0.01;
+        p.dx = xd * k * flat;
+        p.dy = yd * k;
+        p.dz = zd * k * flat;
+        if (kind === 'wax_on') [p.r, p.g, p.b] = [0.91, 0.55, 0.08];
+        else if (kind === 'scrape') [p.r, p.g, p.b] = Math.random() < 0.5 ? [0.29, 0.58, 0.51] : [0.43, 0.77, 0.62];
+        else [p.r, p.g, p.b] = [1, 0.9, 1];
+        p.lifetime = spark ? 2 + Math.floor(Math.random() * 2) : 10 + Math.floor(Math.random() * 30);
+        p.friction = 0.96;
+        p.speedUpWhenBlocked = true;
+        p.size *= 0.75;
+        p.physics = false;
+        p.lightMode = 'flame';
+        p.frames = ['glow'];
+        p.frame = 0;
+        this.addSprite(p);
+        break;
+      }
       // (Stage 5: ocean) vanilla SuspendedTownParticle.DolphinSpeedProvider: a blue speck left in a dolphin's wake
       case 'dolphin': {
         const p = this.base(kind, x, y, z);

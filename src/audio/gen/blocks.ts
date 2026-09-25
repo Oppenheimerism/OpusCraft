@@ -13,7 +13,8 @@ import { bubble, burst, creak, impact, phisem, sweep, thump, ticks, twoBump } fr
 
 // ------------------------------------------------------------------ stone / deepslate
 
-function stoneStep(c: Ctx, deep: number): Float32Array {
+/** (exported for the tuff family's sounds, gen/copperTuff.ts) */
+export function stoneStep(c: Ctx, deep: number): Float32Array {
   const { sr, rng } = c;
   const out = alloc(0.24, sr);
   const f = rng.range(1600, 2400) * deep;
@@ -59,7 +60,7 @@ function stoneStep(c: Ctx, deep: number): Float32Array {
   return out;
 }
 
-function stoneBreak(c: Ctx, deep: number, crumble = 1): Float32Array {
+export function stoneBreak(c: Ctx, deep: number, crumble = 1): Float32Array {
   const { sr, rng } = c;
   const out = alloc(0.55, sr);
   const f = rng.range(1000, 1500) * deep;

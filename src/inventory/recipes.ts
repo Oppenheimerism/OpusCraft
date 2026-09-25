@@ -2,6 +2,7 @@
 // the vanilla data pack for the items this game has.
 
 import { ITEMS, ItemStack } from '../item/item';
+import { registerTrialChamberRecipes } from './recipesTrialChambers';
 
 /** ingredient: item id, '#tag', or list of alternatives */
 type Ing = string | string[];
@@ -415,6 +416,9 @@ shaped('dark_prismarine', 1, ['SSS', 'SIS', 'SSS'], { S: 'prismarine_shard', I: 
 shaped('sea_lantern', 1, ['SCS', 'CCC', 'SCS'], { S: 'prismarine_shard', C: 'prismarine_crystals' });
 // (Stage 5: ocean) vanilla conduit: a heart of the sea in eight nautilus shells
 shaped('conduit', 1, ['###', '#X#', '###'], { '#': 'nautilus_shell', X: 'heart_of_the_sea' });
+
+// (trial chambers) the tuff and copper families, waxing, the lightning rod, the wind charge and the mace
+registerTrialChamberRecipes(shaped, shapeless);
 
 // drop recipes whose items don't exist in this game
 for (let i = RECIPES.length - 1; i >= 0; i--) {

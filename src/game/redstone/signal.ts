@@ -11,8 +11,8 @@ import { behaviorOf } from '../blockBehavior';
 /** vanilla Direction.values() */
 export const DIRECTIONS: readonly Dir[] = [DOWN, UP, NORTH, SOUTH, WEST, EAST];
 
-/** full blocks vanilla keeps from carrying power (isRedstoneConductor never): glass, leaves, ice and the like */
-const NON_CONDUCTOR = /^(glass|tinted_glass|.*_stained_glass|.*_leaves|ice|frosted_ice|glowstone|sea_lantern|redstone_block|observer|piston|sticky_piston|beacon)$/;
+/** full blocks vanilla keeps from carrying power (isRedstoneConductor never): glass, leaves, ice and the like, the copper bulbs */
+const NON_CONDUCTOR = /^(glass|tinted_glass|.*_stained_glass|.*_leaves|ice|frosted_ice|glowstone|sea_lantern|redstone_block|observer|piston|sticky_piston|beacon|.*copper_bulb)$/;
 /** blocks short of full that vanilla lets carry it anyway (isRedstoneConductor always) */
 const ALWAYS_CONDUCTOR = /^(soul_sand|mud)$/;
 

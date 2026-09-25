@@ -2,7 +2,7 @@
 // bars, stained glass, beds, carpets, fire, crops, stems, walls, lanterns,
 // chains. Models mirror the vanilla block model templates.
 
-import { registerBlock, P, Layer, StateView, Box, enumProp, boolProp, intProp } from './block';
+import { registerBlock, P, Layer, StateView, Box, enumProp, boolProp, intProp, type BlockSettings } from './block';
 import type { ModelDef, ModelChoice, ElementDef, FaceDef, Variant } from './models';
 import { box, cubeAll, cross } from './models';
 import type { DirName } from './dir';
@@ -51,7 +51,8 @@ export function doorBox(facing: string, open: boolean, right: boolean): Box {
   }
 }
 
-function registerDoor(name: string, texBase: string, hardness: number, sound: string, tool: 'axe' | 'pickaxe'): void {
+/** a door (vanilla DoorBlock); `extra` settles what differs (the copper doors' blast resistance, weathering) */
+export function registerDoor(name: string, texBase: string, hardness: number, sound: string, tool: 'axe' | 'pickaxe', extra: BlockSettings = {}): void {
   const models: Record<string, ModelDef> = {};
   for (const top of [false, true])
     for (const left of [false, true])
@@ -66,6 +67,7 @@ function registerDoor(name: string, texBase: string, hardness: number, sound: st
       return { model: models[`${s.get('half') === 'upper'}${left}${open}`], y };
     },
     flammable: tool === 'axe',
+    ...extra,
   });
 }
 
@@ -105,7 +107,8 @@ export function trapdoorBox(facing: string, half: string, open: boolean): Box {
   }
 }
 
-function registerTrapdoor(name: string, tex: string, hardness: number, sound: string, tool: 'axe' | 'pickaxe'): void {
+/** a trapdoor (vanilla TrapDoorBlock); `extra` as for registerDoor */
+export function registerTrapdoor(name: string, tex: string, hardness: number, sound: string, tool: 'axe' | 'pickaxe', extra: BlockSettings = {}): void {
   const m = trapdoorModels(tex);
   registerBlock(name, {
     props: [P.facingH, P.halfTB, P.open, P.powered, P.waterlogged], defaults: { half: 'bottom', facing: 'north' },
@@ -118,6 +121,7 @@ function registerTrapdoor(name: string, tex: string, hardness: number, sound: st
       return { model: m.open, y: TRAP_Y[facing] };
     },
     flammable: tool === 'axe',
+    ...extra,
   });
 }
 

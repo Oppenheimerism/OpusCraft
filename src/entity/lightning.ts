@@ -9,6 +9,7 @@ import type { Level } from '../game/level';
 import { AABB } from '../core/aabb';
 import { Rand } from '../core/rng';
 import { canPlaceFire, fireStateAt, placeFire } from '../game/fire';
+import { lightningStruck, lightningStrikeTrigger } from '../game/copper';
 
 export class LightningBolt extends Entity {
   readonly type = 'lightning_bolt';
@@ -45,10 +46,15 @@ export class LightningBolt extends Entity {
       lvl.sound.play('entity.lightning_bolt.impact', this.x, this.y, this.z, 2, 0.5 + r.nextFloat() * 0.2);
       // (server)
       if (lvl.difficulty === 'normal' || lvl.difficulty === 'hard') this.spawnFire(4);
+      // (trial chambers) vanilla powerLightningRod and clearCopperOnLightningStrike
+      lightningStruck(lvl, this);
+      // (deep dark hook) vanilla gameEvent(GameEvent.LIGHTNING_STRIKE) goes here
     }
     this.life--;
     if (this.life < 0) {
       if (this.flashes === 0) {
+        // (trial chambers) vanilla CriteriaTriggers.LIGHTNING_STRIKE
+        lightningStrikeTrigger(lvl, this, this.hitEntities);
         this.remove();
         return;
       }

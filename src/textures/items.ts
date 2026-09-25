@@ -23,6 +23,8 @@ import { ILLAGER_ITEMS } from './itemlib/illagers';
 import { OCEAN_ITEMS } from './itemlib/ocean';
 // (fireworks: the star's grey ball and the overlay its colours tint)
 import { FIREWORK_ITEMS } from './fireworks';
+// (trial chambers: the copper doors, the breeze rod)
+import { TRIAL_CHAMBER_ITEMS } from './itemlib/trialChambers';
 
 export const ITEM_TEXTURES: Record<string, () => TexImage> = {
   ...SPAWN_EGG_TEXTURES,
@@ -42,4 +44,5 @@ export const ITEM_TEXTURES: Record<string, () => TexImage> = {
   ...OCEAN_ITEMS,
   ...ARCHAEOLOGY_ITEMS,
   ...FIREWORK_ITEMS,
+  ...TRIAL_CHAMBER_ITEMS,
 };

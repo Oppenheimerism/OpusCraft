@@ -271,6 +271,8 @@ registerBehavior('redstone_lamp', {
 export function openSound(name: string, open: boolean): string {
   const wood = /^(crimson|warped)_/.test(name) ? 'nether_wood_' : name.startsWith('cherry_') ? 'cherry_wood_' : '';
   const kind = name.startsWith('iron_') ? name
+    // (trial chambers) every copper door and trapdoor, at any age, waxed or not (vanilla BlockSetType.COPPER)
+    : /copper_(door|trapdoor)$/.test(name) ? name.replace(/^.*(copper_(door|trapdoor))$/, '$1')
     : name.endsWith('_door') ? `${wood || 'wooden_'}door`
     : name.endsWith('_trapdoor') ? `${wood || 'wooden_'}trapdoor`
     : `${wood}fence_gate`;

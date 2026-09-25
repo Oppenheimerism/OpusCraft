@@ -209,10 +209,11 @@ export function updateShape(world: World, x: number, y: number, z: number, st: n
     const half = b.get<string>(st, 'half');
     const oy = half === 'lower' ? y + 1 : y - 1;
     const other = world.getState(x, oy, z);
-    if (blk(other) !== b || blk(other).get(other, 'half') === half) return 0;
+    // (any door will do for the other half: a copper door's halves weather one at a time, vanilla 1.20.3's DoorBlock)
+    if (!blk(other).name.endsWith('_door') || blk(other).get(other, 'half') === half) return 0;
     if (half === 'lower' && !sturdy(world.getState(x, y - 1, z), UP)) return 0;
-    // vanilla DoorBlock.updateShape: each half takes the other's state (whichever half was just toggled)
-    return b.with(other, 'half', half);
+    // vanilla DoorBlock.updateShape: each half takes the other's state (whichever half was just toggled or weathered)
+    return blk(other).with(other, 'half', half);
   }
   if (n.endsWith('_bed')) {
     const facing = b.get<string>(st, 'facing');

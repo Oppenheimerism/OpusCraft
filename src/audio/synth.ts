@@ -50,6 +50,8 @@ import { wanderingTraderSounds } from './gen/wanderingTrader';
 import { illagerSounds } from './gen/illagers';
 // (Stage 5: ocean)
 import { oceanSounds } from './gen/ocean';
+// (trial chambers)
+import { copperTuffSounds } from './gen/copperTuff';
 
 export const SAMPLE_RATE = 44100;
 
@@ -110,6 +112,8 @@ Object.assign(SOUNDS, goatSounds());
 Object.assign(SOUNDS, foxSounds());
 // (M9: frogs) the frogs', the tadpoles', frogspawn's and the froglights'
 Object.assign(SOUNDS, frogSounds());
+// (trial chambers) the tuff and copper families', the heavy core's, the copper bulb and doors', scraping and waxing
+Object.assign(SOUNDS, copperTuffSounds());
 // (vanilla sounds.json: the snow golem's are the snow's breaking, the bow's and the shears')
 for (const [k, v] of Object.entries({ 'entity.snow_golem.hurt': 'block.snow.break', 'entity.snow_golem.death': 'block.snow.break', 'entity.snow_golem.shoot': 'entity.arrow.shoot', 'entity.snow_golem.shear': 'entity.sheep.shear' })) if (SOUNDS[v]) SOUNDS[k] = SOUNDS[v];
 // (vanilla sounds.json: any mob's swimming, and a monster's, is the player's splashing)
