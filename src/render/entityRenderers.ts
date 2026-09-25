@@ -33,8 +33,10 @@ import { Strider } from '../entity/strider';
 import { Piglin } from '../entity/piglin';
 import { Villager } from '../entity/villager';
 import { WanderingTrader } from '../entity/wanderingTrader';
+import { SnowGolem } from '../entity/snowGolem';
 import { IronGolem } from '../entity/ironGolem';
 import '../textures/ironGolem';
+import '../textures/snowGolem';
 import '../textures/witch';
 import '../textures/biomeMobs';
 import '../textures/drowned';
@@ -238,6 +240,7 @@ export class EntityRenderDispatcher {
       strider: M.striderModel(),
       villager: M.villagerModel(),
       wandering_trader: M.villagerModel(),
+      snow_golem: M.snowGolemModel(),
       zombie_villager: M.zombieVillagerModel(),
       iron_golem: M.ironGolemModel(),
       witch: M.witchModel(),
@@ -831,6 +834,9 @@ export class EntityRenderDispatcher {
       case 'wandering_trader':
         M.animateVillager(def.root, a.limbSwing, a.limbAmount, a.age, a.headYaw, a.headPitch, false);
         break;
+      case 'snow_golem':
+        M.animateSnowGolem(def.root, a.headYaw, a.headPitch);
+        break;
       case 'witch':
         // (vanilla WitchRenderer.render: setHoldingItem while there's something in its hand)
         M.animateWitch(def.root, a.limbSwing, a.limbAmount, a.age, a.headYaw, a.headPitch, e.id, e.tickCount, !!e.mainHand);
@@ -962,6 +968,18 @@ export class EntityRenderDispatcher {
     if (e.mainHand && (e instanceof Zombie || e instanceof Skeleton || e instanceof Piglin)) {
       b.setOverlay(0, 0, 0, 0);
       this.drawHeldItem(b, def.root, e.mainHand, baby, e.usingItem ? e.useItemTicks + p : -1);
+    }
+    // vanilla SnowGolemHeadLayer: its carved pumpkin, on its head (flashing red with it when it's hurt)
+    if (e instanceof SnowGolem && e.hasPumpkin && !e.isInvisible()) {
+      const pose = this.pose;
+      pose.push();
+      def.root.child('head').translateAndRotate(pose);
+      pose.translate(0, -0.34375, 0);
+      pose.rotY(180);
+      pose.scale(0.625, -0.625, -0.625);
+      pose.translate(-0.5, -0.5, -0.5);
+      this.items.renderBlockState(b, pose, S('carved_pumpkin'));
+      pose.pop();
     }
     // vanilla CrossedArmsItemLayer: what a villager (or a wandering trader) holds up shows in its folded arms
     if ((e instanceof Villager || e instanceof WanderingTrader) && e.mainHand) {
@@ -1662,6 +1680,7 @@ function shadowRadius(e: Entity): number {
     case 'strider':
     case 'villager':
     case 'wandering_trader':
+    case 'snow_golem':
     case 'end_crystal':
     case 'ender_dragon':
       r = 0.5;

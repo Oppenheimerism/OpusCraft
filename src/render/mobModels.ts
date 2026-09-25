@@ -301,6 +301,37 @@ export function ironGolemModel(): MobModelDef {
   return { root, texW: 128, texH: 128 };
 }
 
+/**
+ * vanilla SnowGolemModel.createBodyLayer (64x64): a head, two balls of snow for a body and stick arms, every box
+ * half a pixel in (CubeDeformation(-0.5))
+ */
+export function snowGolemModel(): MobModelDef {
+  const root = new ModelPart();
+  const g = -0.5;
+  root.add('head', part([{ x: -4, y: -8, z: -4, w: 8, h: 8, d: 8, u: 0, v: 0, inflate: g }], [0, 4, 0]));
+  const arm = (): Cube[] => [{ x: -1, y: 0, z: -1, w: 12, h: 2, d: 2, u: 32, v: 0, inflate: g }];
+  root.add('left_arm', part(arm(), [5, 6, 1], [0, 0, 1]));
+  root.add('right_arm', part(arm(), [-5, 6, -1], [0, Math.PI, -1]));
+  root.add('upper_body', part([{ x: -5, y: -10, z: -5, w: 10, h: 10, d: 10, u: 0, v: 16, inflate: g }], [0, 13, 0]));
+  root.add('lower_body', part([{ x: -6, y: -12, z: -6, w: 12, h: 12, d: 12, u: 0, v: 36, inflate: g }], [0, 24, 0]));
+  return { root, texW: 64, texH: 64 };
+}
+
+/** vanilla SnowGolemModel.setupAnim: the head follows its gaze, the upper ball a quarter as far, the arms with it */
+export function animateSnowGolem(root: ModelPart, headYaw: number, headPitch: number): void {
+  const head = root.child('head'), body = root.child('upper_body'), la = root.child('left_arm'), ra = root.child('right_arm');
+  head.yRot = (headYaw * Math.PI) / 180;
+  head.xRot = (headPitch * Math.PI) / 180;
+  body.yRot = ((headYaw * Math.PI) / 180) * 0.25;
+  const f = Math.sin(body.yRot), f1 = Math.cos(body.yRot);
+  la.yRot = body.yRot;
+  ra.yRot = body.yRot + Math.PI;
+  la.x = f1 * 5;
+  la.z = -f * 5;
+  ra.x = -f1 * 5;
+  ra.z = f * 5;
+}
+
 /** vanilla Mth.triangleWave */
 export function triangleWave(f: number, g: number): number {
   return (Math.abs((f % g) - g * 0.5) - g * 0.25) / (g * 0.25);

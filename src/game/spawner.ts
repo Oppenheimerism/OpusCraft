@@ -43,6 +43,7 @@ import { Llama, TraderLlama } from '../entity/llama';
 import { CatSpawner } from './catSpawner';
 import { WanderingTraderSpawner } from './wanderingTraderSpawner';
 import { WanderingTrader } from '../entity/wanderingTrader';
+import { SnowGolem } from '../entity/snowGolem';
 import { IronGolem } from '../entity/ironGolem';
 import { ZombieVillager } from '../entity/zombieVillager';
 import { Zombie, ZombifiedPiglin, Skeleton, WitherSkeleton, Creeper, Spider, CaveSpider, Enderman, Slime, MagmaCube, Monster, validSpawnBlock } from '../entity/monsters';
@@ -107,6 +108,7 @@ export const MOB_TYPES: Record<string, (l: Level) => Mob> = {
   llama: (l) => new Llama(l),
   trader_llama: (l) => new TraderLlama(l),
   wandering_trader: (l) => new WanderingTrader(l),
+  snow_golem: (l) => new SnowGolem(l),
   ender_dragon: (l) => new EnderDragon(l),
 };
 
@@ -218,7 +220,7 @@ export function isChunkSaved(e: Entity): boolean {
 const ENTITY_NAMES: Record<string, string> = {
   pig: 'Pig', cow: 'Cow', sheep: 'Sheep', chicken: 'Chicken', zombie: 'Zombie', zombie_villager: 'Zombie Villager', skeleton: 'Skeleton', creeper: 'Creeper', spider: 'Spider',
   villager: 'Villager', iron_golem: 'Iron Golem', cave_spider: 'Cave Spider', enderman: 'Enderman', slime: 'Slime', magma_cube: 'Magma Cube', zombified_piglin: 'Zombified Piglin', ghast: 'Ghast', blaze: 'Blaze', wither_skeleton: 'Wither Skeleton', squid: 'Squid', bat: 'Bat', hoglin: 'Hoglin', zoglin: 'Zoglin', strider: 'Strider', piglin: 'Piglin',
-  witch: 'Witch', husk: 'Husk', stray: 'Stray', drowned: 'Drowned', silverfish: 'Silverfish', wolf: 'Wolf', cat: 'Cat', ocelot: 'Ocelot', horse: 'Horse', donkey: 'Donkey', mule: 'Mule', llama: 'Llama', trader_llama: 'Trader Llama', wandering_trader: 'Wandering Trader', llama_spit: 'Llama Spit', fireball: 'Fireball', small_fireball: 'Small Fireball',
+  witch: 'Witch', husk: 'Husk', stray: 'Stray', drowned: 'Drowned', silverfish: 'Silverfish', wolf: 'Wolf', cat: 'Cat', ocelot: 'Ocelot', horse: 'Horse', donkey: 'Donkey', mule: 'Mule', llama: 'Llama', trader_llama: 'Trader Llama', wandering_trader: 'Wandering Trader', snow_golem: 'Snow Golem', llama_spit: 'Llama Spit', fireball: 'Fireball', small_fireball: 'Small Fireball',
   arrow: 'Arrow', tnt: 'Primed TNT', lightning_bolt: 'Lightning Bolt', item: 'Item', experience_orb: 'Experience Orb', falling_block: 'Falling Block', player: 'Player',
   egg: 'Thrown Egg', snowball: 'Snowball', ender_pearl: 'Thrown Ender Pearl', potion: 'Potion', trident: 'Trident',
   minecart: 'Minecart', chest_minecart: 'Minecart with Chest', boat: 'Boat', chest_boat: 'Boat with Chest', end_crystal: 'End Crystal',

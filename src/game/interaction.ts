@@ -25,6 +25,7 @@ import { Creeper, bowPower } from '../entity/monsters';
 import { Piglin, GUARDED_BY_PIGLINS } from '../entity/piglin';
 import { Villager } from '../entity/villager';
 import { WanderingTrader } from '../entity/wanderingTrader';
+import { SnowGolem } from '../entity/snowGolem';
 import { IronGolem } from '../entity/ironGolem';
 import { ZombieVillager } from '../entity/zombieVillager';
 import { Arrow } from '../entity/arrow';
@@ -370,6 +371,11 @@ export class Interaction {
       }
       // vanilla WanderingTrader.mobInteract: trade
       if (e instanceof WanderingTrader && e.interact(p, stack)) {
+        p.swing();
+        return 'success';
+      }
+      // vanilla SnowGolem.mobInteract: shears take its pumpkin off
+      if (e instanceof SnowGolem && e.interact(p, stack)) {
         p.swing();
         return 'success';
       }

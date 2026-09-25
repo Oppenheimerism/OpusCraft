@@ -1,18 +1,25 @@
-// Building a golem (vanilla CarvedPumpkinBlock.trySpawnGolem): a carved pumpkin or jack o'lantern set on a T of
-// four iron blocks, with nothing but air where its arms and legs leave gaps, comes to life as an iron golem that
-// will never turn on a player. The blocks crumble away (with their breaking sound and dust) and the golem stands
-// where the T's foot was.
+// Building a golem (vanilla CarvedPumpkinBlock.trySpawnGolem): a carved pumpkin or jack o'lantern set on two snow
+// blocks comes to life as a snow golem; set on a T of four iron blocks, with nothing but air where its arms and legs
+// leave gaps, as an iron golem that will never turn on a player. The blocks crumble away (with their breaking sound
+// and dust) and the golem stands where the bottom block was.
 
 import { BLOCKS, STATE_BLOCK, FLAGS, F_AIR } from '../world/block';
 import type { Level } from './level';
 import { registerBehavior } from './blockBehavior';
 import { BlockPattern, type PatternMatch } from './blockPattern';
 import { IronGolem } from '../entity/ironGolem';
+import { SnowGolem } from '../entity/snowGolem';
+import type { Mob } from '../entity/mob';
 
 const nameOf = (st: number) => BLOCKS[STATE_BLOCK[st]].name;
 /** vanilla CarvedPumpkinBlock.PUMPKINS_PREDICATE */
 const isPumpkin = (st: number) => nameOf(st) === 'carved_pumpkin' || nameOf(st) === 'jack_o_lantern';
 
+/** vanilla getOrCreateSnowGolemFull: "^", "#", "#" */
+const SNOW_GOLEM = new BlockPattern([['^', '#', '#']], {
+  '^': isPumpkin,
+  '#': (st) => nameOf(st) === 'snow_block',
+});
 /** vanilla getOrCreateIronGolemFull: "~^~", "###", "~#~" */
 const IRON_GOLEM = new BlockPattern([['~^~', '###', '~#~']], {
   '^': isPumpkin,
@@ -28,7 +35,7 @@ function destroyEffect(level: Level, x: number, y: number, z: number, st: number
 }
 
 /** vanilla clearPatternBlocks, spawnGolemInWorld and updatePatternBlocks */
-function spawnGolemInWorld(level: Level, m: PatternMatch, golem: IronGolem, at: [number, number, number]): void {
+function spawnGolemInWorld(level: Level, m: PatternMatch, golem: Mob, at: [number, number, number]): void {
   for (let i = 0; i < m.width; i++)
     for (let j = 0; j < m.height; j++) {
       const [x, y, z] = m.at(i, j, 0);
@@ -46,8 +53,14 @@ function spawnGolemInWorld(level: Level, m: PatternMatch, golem: IronGolem, at: 
     }
 }
 
-/** vanilla CarvedPumpkinBlock.trySpawnGolem (snow golems come first there: they're still to come) */
-export function trySpawnGolem(level: Level, x: number, y: number, z: number): IronGolem | null {
+/** vanilla CarvedPumpkinBlock.trySpawnGolem: a snow golem if it makes one, else an iron golem */
+export function trySpawnGolem(level: Level, x: number, y: number, z: number): SnowGolem | IronGolem | null {
+  const sm = SNOW_GOLEM.find(level.world, x, y, z);
+  if (sm) {
+    const g = new SnowGolem(level);
+    spawnGolemInWorld(level, sm, g, sm.at(0, 2, 0));
+    return g;
+  }
   const m = IRON_GOLEM.find(level.world, x, y, z);
   if (!m) return null;
   const g = new IronGolem(level);

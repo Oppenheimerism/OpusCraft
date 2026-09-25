@@ -95,6 +95,8 @@ Object.assign(SOUNDS, horseSounds(SOUNDS));
 // (the lead's knot round a fence)
 Object.assign(SOUNDS, leashSounds());
 Object.assign(SOUNDS, llamaSounds(SOUNDS));
+// (vanilla sounds.json: the snow golem's are the snow's breaking, the bow's and the shears')
+for (const [k, v] of Object.entries({ 'entity.snow_golem.hurt': 'block.snow.break', 'entity.snow_golem.death': 'block.snow.break', 'entity.snow_golem.shoot': 'entity.arrow.shoot', 'entity.snow_golem.shear': 'entity.sheep.shear' })) if (SOUNDS[v]) SOUNDS[k] = SOUNDS[v];
 
 /** Number of in-game (overworld) music tracks. */
 export const MUSIC_TRACK_COUNT: number = MUSIC_TRACKS;
