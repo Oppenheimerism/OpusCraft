@@ -383,8 +383,9 @@ export abstract class LivingEntity extends Entity {
     if (this.isInvisible()) d *= 0.7 * Math.max(0.1, this.armorCoverPercentage());
     // (wearing the looker's own kind of head: world/blocksSkulls)
     if (looker) {
-      const worn = this as { inventory?: { armor: (ItemStack | null)[] }; armorItems?: (ItemStack | null)[] };
-      const head = worn.inventory?.armor[3] ?? worn.armorItems?.[3];
+      // (a player's armour is in its inventory; a villager's or a llama's inventory has none)
+      const worn = this as { inventory?: { armor?: (ItemStack | null)[] }; armorItems?: (ItemStack | null)[] };
+      const head = worn.inventory?.armor?.[3] ?? worn.armorItems?.[3];
       if (head && HEAD_DISGUISES[looker.type] === head.item.id) d *= 0.5;
     }
     return d;

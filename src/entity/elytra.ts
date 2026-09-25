@@ -17,7 +17,8 @@ const DEG = Math.PI / 180;
 const DRAG_H = Math.fround(0.99), DRAG_V = Math.fround(0.98);
 
 interface Wearer {
-  inventory?: { armor: (ItemStack | null)[]; version: number };
+  // (a player's armour is in its inventory; a villager's or a llama's inventory has none)
+  inventory?: { armor?: (ItemStack | null)[]; version: number };
   armorItems?: (ItemStack | null)[];
   gameMode?: string;
 }
@@ -25,7 +26,7 @@ interface Wearer {
 /** what's worn in the chest slot (a player's armour, a mob's) */
 export function chestItem(e: LivingEntity): ItemStack | null {
   const w = e as unknown as Wearer;
-  return w.inventory?.armor[2] ?? w.armorItems?.[2] ?? null;
+  return w.inventory?.armor?.[2] ?? w.armorItems?.[2] ?? null;
 }
 
 /** vanilla ElytraItem.isFlyEnabled: it works until it's down to its last point of durability */
