@@ -25,11 +25,13 @@ function startDrinking(_level: Level, p: Player, stack: ItemStack): 'success' {
  * vanilla PotionItem.finishUsingItem: its effects (instant ones at once), one used up and an empty bottle back (the
  * bottle takes the potion's place, or goes in the inventory, or is lost when that's full), neither in creative
  */
-function finishDrinking(_level: Level, p: Player, stack: ItemStack): void {
+function finishDrinking(level: Level, p: Player, stack: ItemStack): void {
   for (const e of allEffects(contentsOf(stack))) {
     if (e.effect.instant) e.effect.applyInstant(p, p, p, e.amplifier, 1);
     else p.addEffect(e);
   }
+  // (vanilla: DRINK)
+  level.gameEvent('drink', p.x, p.y, p.z, { entity: p });
   if (p.gameMode === 'creative') return;
   stack.count--;
   const inv = p.inventory;

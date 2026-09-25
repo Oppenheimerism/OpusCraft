@@ -42,7 +42,9 @@ function useFishBucket(level: Level, p: Player, stack: ItemStack): 'success' | '
     [x, y, z] = [nx, ny, nz];
     if (y < level.world.dim.minY || y >= level.world.dim.maxY || !emptyContents(level, x, y, z, 'water', sound)) return 'fail';
   }
+  // (vanilla MobBucketItem.checkExtraContent: ENTITY_PLACE; its playEmptySound makes no FLUID_PLACE)
   releaseBucketFish(level, stack, x, y, z);
+  level.gameEvent('entity_place', x + 0.5, y + 0.5, z + 0.5, { entity: p });
   // vanilla ItemUtils.createFilledResult(stack, player, getEmptySuccessItem): the empty bucket in its place
   if (p.gameMode !== 'creative') p.inventory.setSelectedItem(ItemStack.of('bucket'));
   p.swing();

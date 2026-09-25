@@ -103,6 +103,8 @@ export interface BlockSettings {
   tier?: number;
   requiresTool?: boolean;
   light?: number | ((s: StateView) => number);
+  /** vanilla emissiveRendering: drawn at full brightness whatever the light where it is (an active sculk sensor) */
+  emissive?: boolean | ((s: StateView) => boolean);
   /** light opacity; computed from shape when omitted */
   opacity?: number | ((s: StateView) => number);
   layer?: Layer;
@@ -271,6 +273,8 @@ export function stateCount(): number {
 export let STATE_BLOCK: Uint16Array = new Uint16Array(0);
 export let OPACITY: Uint8Array = new Uint8Array(0);
 export let EMISSION: Uint8Array = new Uint8Array(0);
+/** 1 where the state is drawn full bright (BlockSettings.emissive) */
+export let EMISSIVE: Uint8Array = new Uint8Array(0);
 export let LAYER: Uint8Array = new Uint8Array(0);
 export let FLAGS: Uint16Array = new Uint16Array(0);
 /** bitmask per state: bit d set if face d is a full opaque square */
@@ -327,6 +331,7 @@ export function finalizeBlocks(): void {
   STATE_BLOCK = new Uint16Array(n);
   OPACITY = new Uint8Array(n);
   EMISSION = new Uint8Array(n);
+  EMISSIVE = new Uint8Array(n);
   LAYER = new Uint8Array(n);
   FLAGS = new Uint16Array(n);
   FACE_OCC = new Uint8Array(n);
@@ -381,6 +386,7 @@ export function finalizeBlocks(): void {
       }
       OPACITY[st] = op;
       EMISSION[st] = resolve(s.light, view) ?? 0;
+      if (resolve(s.emissive, view)) EMISSIVE[st] = 1;
       LAYER[st] = isAir ? Layer.NONE : s.layer ?? Layer.SOLID;
       FLAGS[st] = flags;
       const ol = resolve(s.outline, view);

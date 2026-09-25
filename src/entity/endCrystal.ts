@@ -127,6 +127,8 @@ registerItemBehavior('end_crystal', {
     const c = new EndCrystal(level, x + 0.5, y, z + 0.5);
     c.showBottom = false;
     level.addEntity(c);
+    // (vanilla EndCrystalItem.useOn: ENTITY_PLACE)
+    level.gameEvent?.('entity_place', x + 0.5, y + 0.5, z + 0.5, { entity: p });
     EndCrystal.onPlaced?.(c);
     if (p.gameMode !== 'creative') p.inventory.consumeSelected(1);
     p.swing();

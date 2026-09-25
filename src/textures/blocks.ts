@@ -37,6 +37,8 @@ import { registerArchaeologyTextures } from './blocklib/archaeology';
 import { registerFossilTextures } from './blocklib/fossils';
 // (M9: frogs)
 import { registerFrogTextures } from './blocklib/frog';
+// (the deep dark)
+import { registerSculkTextures } from './blocklib/sculk';
 
 type Gen = () => TexDef;
 export const BLOCK_TEXTURES: Record<string, Gen> = {};
@@ -355,6 +357,8 @@ registerArchaeologyTextures(T);
 registerFossilTextures(T);
 // (M9: frogs) frogspawn, the ochre and pearlescent froglights
 registerFrogTextures(T);
+// (the deep dark)
+registerSculkTextures(T);
 T['glowstone'] = () => UT.glowstone();
 T['sea_lantern'] = () => UT.seaLantern();
 T['redstone_lamp'] = () => UT.redstoneLamp(false);

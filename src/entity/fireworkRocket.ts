@@ -13,6 +13,7 @@ import { ItemStack, saveStack, loadStack, type SavedStack } from '../item/item';
 import { fireworksOf, type FireworkExplosion } from '../item/fireworks';
 import { clipBlocks, type SegmentHit } from '../game/raycast';
 import { onProjectileHit } from '../game/blockRules';
+import { projectileShot, projectileLandedOn, projectileLandedAt } from '../game/vibrations';
 import { registerItemBehavior } from '../game/itemBehavior';
 import { DX, DY, DZ } from '../world/dir';
 import { viewVector } from './elytra';
@@ -100,7 +101,8 @@ export class FireworkRocket extends Entity {
 
   override tick(): void {
     this.baseTick();
-    // (vanilla Projectile.tick)
+    // (vanilla Projectile.tick: once, the shot as a game event, by whoever set it off)
+    projectileShot(this);
     if (!this.leftOwner) this.leftOwner = this.checkLeftOwner();
     const a = this.attachedTo;
     if (a) {
@@ -143,8 +145,14 @@ export class FireworkRocket extends Entity {
         z1 = bh.pz;
       }
       const e = this.findHitEntity(x0, y0, z0, x1, y1, z1);
-      if (e) this.onHitEntity(e);
-      else if (bh) this.onHitBlock(bh);
+      // (vanilla Projectile.onHit: then PROJECTILE_LAND, where the entity is or at the block)
+      if (e) {
+        this.onHitEntity(e);
+        projectileLandedOn(this, e);
+      } else if (bh) {
+        this.onHitBlock(bh);
+        projectileLandedAt(this, bh.x, bh.y, bh.z);
+      }
     }
     this.updateRotation();
     if (this.life === 0) this.level.sound.play('entity.firework_rocket.launch', this.x, this.y, this.z, 3, 1);
@@ -212,6 +220,7 @@ export class FireworkRocket extends Entity {
       // (vanilla's loop draws its bound afresh each time round: 2 puffs a third of the time, else 3 or 4)
       for (let i = 0; i < Math.floor(this.rnd() * 3) + 2; i++) lvl.particles.spawn?.('poof', this.x, this.y, this.z, gauss(this.rnd) * 0.05, 0.005, gauss(this.rnd) * 0.05);
     } else lvl.particles.fireworks?.(this.x, this.y, this.z, this.dx, this.dy, this.dz, ex);
+    lvl.gameEvent?.('explode', this.x, this.y, this.z, { entity: this.owner });
     this.dealExplosionDamage(ex);
     this.remove();
   }

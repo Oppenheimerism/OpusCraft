@@ -115,7 +115,7 @@ registerBehavior('repeater', {
   neighborChanged(level, x, y, z, st) {
     if (canSurviveOn(level.world.getState(x, y - 1, z))) checkTickOnNeighbor(level, x, y, z, st);
     else {
-      level.destroyBlock(x, y, z, true, null, false);
+      level.destroyBlock(x, y, z, true, null, false, null, false);
       for (const d of [DOWN, UP, NORTH, SOUTH, WEST, EAST]) level.updateNeighborsAt(x + DX[d], y + DY[d], z + DZ[d], STATE_BLOCK[st]);
     }
   },

@@ -49,6 +49,11 @@ export class Silverfish extends Monster {
     return false;
   }
 
+  /** (vanilla MovementEmission.EVENTS: its movement is heard by sculk sensors all the same) */
+  protected override emitsMovementEvents(): boolean {
+    return true;
+  }
+
   /**
    * vanilla Silverfish.hurt: a blow from someone (or magic, #always_triggers_silverfish) makes it wake its friends
    */
@@ -130,7 +135,7 @@ class SilverfishWakeUpFriendsGoal extends Goal {
           const x = bx + j, y = by + i, z = bz + k;
           const st = level.world.getState(x, y, z);
           if (!isInfestedBlock(st)) continue;
-          if (level.gameRules.mobGriefing) level.destroyBlock(x, y, z, true);
+          if (level.gameRules.mobGriefing) level.destroyBlock(x, y, z, true, null, true, null, s);
           else level.setBlock(x, y, z, hostStateByInfested(st));
           if (r.nextBool()) return;
         }

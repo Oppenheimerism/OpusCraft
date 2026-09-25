@@ -65,7 +65,7 @@ import { Monster } from '../entity/monsters';
 import { Piglin, isLovedItem } from '../entity/piglin';
 import type { MinecartChest } from '../entity/minecart';
 import { ChestBoat } from '../entity/boat';
-import { nightVisionScale, blindnessFog, applyNausea } from '../render/effectVisuals';
+import { nightVisionScale, blindnessFog, darknessVisuals, applyNausea } from '../render/effectVisuals';
 import { OVERWORLD, THE_NETHER, THE_END, dimensionById, teleportationScale, type DimensionType } from '../world/dimension';
 import { PortalPoi, portalRectangle, relativePortalPosition, portalExit, createPortal, isPortal, portalAxis, type PortalRect } from './portal';
 import { setVillageMenuHook } from './villageBlocks';
@@ -77,6 +77,8 @@ import { openJobSite } from './jobSites';
 import { endPortalTravel, PortalArrivals } from './endTravel';
 import { EndDragonFight, ARENA_TICKET_LEVEL } from './endDragonFight';
 import { gatewayTravel } from './gatewayTravel';
+// (the deep dark)
+import { setDialViewer } from '../item/compass';
 
 export type { GameOptions } from './options';
 /** vanilla ReceivingLevelScreen.Reason: what the loading screen shows while changing dimension */
@@ -489,6 +491,10 @@ export class Game {
       dust: (x, y, z, r, g, b, s) => particles.dust(x, y, z, r, g, b, s),
       spell: (k, x, y, z, xd, yd, zd, r, g, b, pw) => particles.spell(k, x, y, z, xd, yd, zd, r, g, b, pw),
       fireworks: (x, y, z, xd, yd, zd, ex) => void createFireworks(particles, this.level, x, y, z, xd, yd, zd, ex),
+      vibration: (x, y, z, target, ticks) => particles.sculk.vibration(x, y, z, target, ticks),
+      shriek: (x, y, z, delay) => particles.sculk.shriek(x, y, z, delay),
+      sculkCharge: (x, y, z, xd, yd, zd, roll) => particles.sculk.sculkCharge(x, y, z, xd, yd, zd, roll),
+      dustTransition: (x, y, z, xd, yd, zd, from, to, scale) => particles.sculk.dustTransition(x, y, z, xd, yd, zd, from, to, scale),
     };
     this.spawner = new NaturalSpawner(this.level, hashString(meta.seed));
     this.spawner.traders.load(meta.wanderingTrader);
@@ -535,8 +541,10 @@ export class Game {
         this.player.respawnForced = pd.respawn[3] === 1;
       }
       this.player.seenCredits = !!pd.seenCredits;
+      this.player.lastDeathLocation = pd.lastDeath ? { dim: pd.lastDeath.dim, pos: [...pd.lastDeath.pos] } : null;
       this.player.shoulderLeft = pd.shoulderLeft ?? null;
       this.player.shoulderRight = pd.shoulderRight ?? null;
+      this.player.wardenSpawnTracker.load(pd.wardenSpawnTracker);
       this.spawnSearch = false;
       // vanilla RootVehicle: back in the minecart you left the game in
       const v = pd.vehicle && !pd.dead ? loadEntity(pd.vehicle, this.level) : null;
@@ -602,8 +610,10 @@ export class Game {
       vehicle: p.vehicle ? saveEntity(p.vehicle) : null,
       dimension: this.world.dim.id,
       seenCredits: p.seenCredits || undefined,
+      lastDeath: p.lastDeathLocation ?? undefined,
       shoulderLeft: p.shoulderLeft ?? undefined,
       shoulderRight: p.shoulderRight ?? undefined,
+      wardenSpawnTracker: p.wardenSpawnTracker.save(),
     };
     m.portals = this.portalPoi.save();
     m.arrivals = this.arrivals.save();
@@ -814,7 +824,11 @@ export class Game {
       if (FLAGS[this.world.getState(x, y + 1, z)] & F_OPAQUE || catSittingOn(this.level, x, y, z)) return;
       be.unpackLoot();
       this.setScreen(this.containerScreenFactory(new ChestMenu(p, be)));
-      if (be.openCount++ === 0) this.sound.play('block.chest.open', x + 0.5, y + 0.5, z + 0.5, 0.5, Math.random() * 0.1 + 0.9);
+      if (be.openCount++ === 0) {
+        this.sound.play('block.chest.open', x + 0.5, y + 0.5, z + 0.5, 0.5, Math.random() * 0.1 + 0.9);
+        // (vanilla ContainerOpenersCounter.incrementOpeners: CONTAINER_OPEN)
+        this.level.gameEvent('container_open', x + 0.5, y + 0.5, z + 0.5, { entity: p });
+      }
     } else if (kind === 'barrel') {
       // vanilla BarrelBlock.useWithoutItem: a chest's menu, titled Barrel; the lid opens
       const be = this.world.getBlockEntity(x, y, z);
@@ -855,13 +869,18 @@ export class Game {
     if (!this.containerScreenFactory) return;
     e.unpackLoot();
     this.setScreen(this.containerScreenFactory(new ChestMenu(this.player, e, entityDisplayName(e))));
+    // (vanilla ContainerEntity.interactWithContainerVehicle: CONTAINER_OPEN, where the vehicle is)
+    this.level.gameEvent('container_open', e.x, e.y, e.z, { entity: this.player });
   }
 
   /** chest closed (called by the chest screen) */
   chestClosed(be: ChestBlockEntity): void {
     if (be instanceof BarrelBlockEntity) return be.stopOpen(this.level);
     be.openCount = Math.max(0, be.openCount - 1);
-    if (be.openCount === 0) this.sound.play('block.chest.close', be.x + 0.5, be.y + 0.5, be.z + 0.5, 0.5, Math.random() * 0.1 + 0.9);
+    if (be.openCount !== 0) return;
+    this.sound.play('block.chest.close', be.x + 0.5, be.y + 0.5, be.z + 0.5, 0.5, Math.random() * 0.1 + 0.9);
+    // (vanilla decrementOpeners: CONTAINER_CLOSE)
+    this.level.gameEvent('container_close', be.x + 0.5, be.y + 0.5, be.z + 0.5, { entity: this.player });
   }
 
   private guiEntity: GuiEntityRenderer | null = null;
@@ -956,6 +975,9 @@ export class Game {
         return `${n} was squashed by a falling block`;
       case 'thorns':
         return `${n} was killed while trying to hurt ${kn}`;
+      // (M4: the warden) vanilla death.attack.sonic_boom
+      case 'sonicBoom':
+        return `${n} was obliterated by a sonically-charged shriek`;
       default:
         return `${n} died`;
     }
@@ -1508,6 +1530,8 @@ export class Game {
 
   renderWorld(partial: number, camOverride?: Camera): void {
     const p = this.player;
+    // (the compass and clock needles are read for this player: item/compass.ts)
+    setDialViewer(p, this.worldSpawn ?? [p.spawnX, p.spawnY, p.spawnZ]);
     const ex = p.lerpX(partial), ez = p.lerpZ(partial);
     const eyeH = p.eyeHeightCamO + (p.eyeHeightCam - p.eyeHeightCamO) * partial;
     const ey = p.lerpY(partial) + eyeH;
@@ -1558,6 +1582,7 @@ export class Game {
       gamma: this.opts.gamma,
       nightVision: nightVisionScale(p, partial),
       blindness: blindnessFog(p, Math.max(this.opts.renderDistance * 16, 32)),
+      darkness: darknessVisuals(p, partial, this.opts.darknessEffectScale),
       bob: camOverride ? null : bob,
       underwater: eyeFluid === FLUID_WATER,
       waterFogColor: [((b.waterFog >> 16) & 255) / 255, ((b.waterFog >> 8) & 255) / 255, (b.waterFog & 255) / 255],

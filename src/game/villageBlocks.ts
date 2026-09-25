@@ -20,6 +20,7 @@ import { ItemEntity } from '../entity/itemEntity';
 import type { Player } from '../entity/player';
 import { lookingDirections } from './blockRules';
 import type { Level } from './level';
+import { projectileOwner } from './vibrations';
 // (books' uses, tooltips and copying, loaded with the lectern that holds them)
 import './books';
 
@@ -74,7 +75,7 @@ export function fillHeld(p: Player, filled: ItemStack): void {
 // Bell (vanilla BellBlock)
 
 /** (Stage 4: raids) vanilla BellBlock.attemptToRing, for a villager sounding the alarm (game/raidVillagers.ts): set below */
-export const bellRinger: { ring: (level: Level, x: number, y: number, z: number, dir: Dir | null) => boolean } = { ring: () => false };
+export const bellRinger: { ring: (level: Level, x: number, y: number, z: number, dir: Dir | null, by?: Entity | null) => boolean } = { ring: () => false };
 
 {
   const bell = getBlock('bell');
@@ -106,7 +107,7 @@ export const bellRinger: { ring: (level: Level, x: number, y: number, z: number,
    * from `dir` (its facing when none), rings out (volume 2: heard 32 blocks away), and every living thing within 32
    * blocks remembers hearing it (villagers' HEARD_BELL_TIME: an entity that keeps a `heardBellTime` gets the time)
    */
-  const ring = (level: Level, x: number, y: number, z: number, dir: Dir | null): boolean => {
+  const ring = (level: Level, x: number, y: number, z: number, dir: Dir | null, by: Entity | null = null): boolean => {
     const be = level.world.getBlockEntity(x, y, z);
     if (!(be instanceof BellBlockEntity)) return false;
     const st = level.getState(x, y, z);
@@ -123,6 +124,7 @@ export const bellRinger: { ring: (level: Level, x: number, y: number, z: number,
       if ('heardBellTime' in e) (e as { heardBellTime: number }).heardBellTime = level.gameTime;
     }
     level.sound.play('block.bell.use', cx, cy, cz, 2, 1);
+    level.gameEvent('block_change', cx, cy, cz, { entity: by });
     return true;
   };
   bellRinger.ring = ring;
@@ -163,12 +165,13 @@ export const bellRinger: { ring: (level: Level, x: number, y: number, z: number,
     // vanilla BellBlock.useWithoutItem / onHit: a proper hit rings it; anything else (the frame, the top) passes
     use(level, x, y, z, st, ctx) {
       if (!isProperHit(st, ctx.face, ctx.hy - y)) return false;
-      ring(level, x, y, z, ctx.face as Dir);
+      ring(level, x, y, z, ctx.face as Dir, ctx.player);
       return true;
     },
     // vanilla BellBlock.onProjectileHit: the same rule for arrows, snowballs, eggs and fireballs
-    projectileHit(level, x, y, z, st, hit) {
-      if (isProperHit(st, hit.face, hit.py - y)) ring(level, x, y, z, hit.face as Dir);
+    projectileHit(level, x, y, z, st, hit, projectile) {
+      const owner = projectileOwner(projectile);
+      if (isProperHit(st, hit.face, hit.py - y)) ring(level, x, y, z, hit.face as Dir, owner?.type === 'player' ? owner : null);
     },
     // vanilla BellBlock.neighborChanged: it rings as power comes on
     neighborChanged(level, x, y, z, st) {
@@ -233,25 +236,26 @@ export function composterFillEffects(level: Level, x: number, y: number, z: numb
 }
 
 /** vanilla ComposterBlock.addItem: an empty composter always takes the first; after that it's the item's chance */
-function composterAddItem(level: Level, x: number, y: number, z: number, st: number, chance: number): number {
+function composterAddItem(level: Level, x: number, y: number, z: number, st: number, chance: number, by: Entity | null): number {
   const lvl = composterLevel(st);
   if (!(lvl === 0 && chance > 0) && !(level.random.nextDouble() < chance)) return st;
   const now = composter.with(st, 'level', lvl + 1);
   level.setBlock(x, y, z, now);
+  level.gameEvent('block_change', x + 0.5, y + 0.5, z + 0.5, { entity: by, state: now });
   return now;
 }
 
 /** vanilla ComposterBlock.insertItem: one of `stack` in, if it composts and there's room (the state it leaves) */
-export function composterInsert(level: Level, x: number, y: number, z: number, st: number, stack: ItemStack): number {
+export function composterInsert(level: Level, x: number, y: number, z: number, st: number, stack: ItemStack, by: Entity | null = null): number {
   const chance = COMPOSTABLES[stack.item.id];
   if (composterLevel(st) >= 7 || chance === undefined) return st;
-  const now = composterAddItem(level, x, y, z, st, chance);
+  const now = composterAddItem(level, x, y, z, st, chance, by);
   stack.count--;
   return now;
 }
 
 /** vanilla ComposterBlock.extractProduce: a ready composter pops out bone meal and empties (the state it leaves) */
-export function composterExtract(level: Level, x: number, y: number, z: number, st: number): number {
+export function composterExtract(level: Level, x: number, y: number, z: number, st: number, by: Entity | null = null): number {
   const e = new ItemEntity(level, ItemStack.of('bone_meal'));
   e.moveTo(x + 0.5 + (Math.random() - 0.5) * 0.7, y + 1.01 + (Math.random() - 0.5) * 0.7, z + 0.5 + (Math.random() - 0.5) * 0.7, Math.random() * 360, 0);
   e.dx = Math.random() * 0.2 - 0.1;
@@ -260,6 +264,7 @@ export function composterExtract(level: Level, x: number, y: number, z: number, 
   level.addEntity(e);
   const now = composter.with(st, 'level', 0);
   level.setBlock(x, y, z, now);
+  level.gameEvent('block_change', x + 0.5, y + 0.5, z + 0.5, { entity: by, state: now });
   level.sound.play('block.composter.empty', x + 0.5, y + 0.5, z + 0.5, 1, 1);
   return now;
 }
@@ -271,16 +276,16 @@ registerBehavior('composter', {
     const chance = COMPOSTABLES[stack.item.id];
     if (lvl >= 8 || chance === undefined) return 'pass';
     if (lvl < 7) {
-      const now = composterAddItem(level, x, y, z, st, chance);
+      const now = composterAddItem(level, x, y, z, st, chance, ctx.player);
       composterFillEffects(level, x, y, z, now, now !== st);
       consumeHeld(ctx.player);
     }
     return 'success';
   },
   // vanilla ComposterBlock.useWithoutItem / extractProduce
-  use(level, x, y, z, st) {
+  use(level, x, y, z, st, ctx) {
     if (composterLevel(st) !== 8) return false;
-    composterExtract(level, x, y, z, st);
+    composterExtract(level, x, y, z, st, ctx.player);
     return true;
   },
   // vanilla ComposterBlock.onPlace / addItem: full, it's ready a second later
@@ -335,6 +340,7 @@ registerBehavior('composter', {
     fillHeld(ctx.player, ItemStack.of('bucket'));
     level.setBlock(x, y, z, now);
     at(level, x, y, z, sound);
+    level.gameEvent('fluid_place', x + 0.5, y + 0.5, z + 0.5);
     return 'success';
   };
   /** vanilla CauldronInteraction.fillBucket: the cauldron scooped out into the bucket */
@@ -342,6 +348,7 @@ registerBehavior('composter', {
     fillHeld(ctx.player, ItemStack.of(filled));
     level.setBlock(x, y, z, cauldron.defaultState);
     at(level, x, y, z, sound);
+    level.gameEvent('fluid_pickup', x + 0.5, y + 0.5, z + 0.5);
     return 'success';
   };
   /** vanilla CauldronInteraction.addDefaultInteractions: any cauldron takes a water or lava bucket, whatever was in it */
@@ -353,7 +360,9 @@ registerBehavior('composter', {
   /** vanilla LayeredCauldronBlock.lowerFillLevel */
   const lowerFillLevel = (level: Level, x: number, y: number, z: number, st: number) => {
     const l = levelOf(st) - 1;
-    level.setBlock(x, y, z, l === 0 ? cauldron.defaultState : waterCauldron.with(st, 'level', l));
+    const now = l === 0 ? cauldron.defaultState : waterCauldron.with(st, 'level', l);
+    level.setBlock(x, y, z, now);
+    level.gameEvent('block_change', x + 0.5, y + 0.5, z + 0.5, { state: now });
   };
   /** vanilla AbstractCauldronBlock.isEntityInsideContent: down in whatever's in it (`top` in blocks) */
   const inContent = (e: Entity, y: number, top: number) => e.y < y + top && e.bb.maxY > y + 0.25;
@@ -370,6 +379,7 @@ registerBehavior('composter', {
         fillHeld(ctx.player, ItemStack.of('glass_bottle'));
         level.setBlock(x, y, z, waterCauldron.state({ level: 1 }));
         at(level, x, y, z, 'item.bottle.empty');
+        level.gameEvent('fluid_place', x + 0.5, y + 0.5, z + 0.5);
         return 'success';
       }
       return 'pass';
@@ -388,12 +398,14 @@ registerBehavior('composter', {
         fillHeld(ctx.player, potionStack('potion', 'water'));
         lowerFillLevel(level, x, y, z, st);
         at(level, x, y, z, 'item.bottle.fill');
+        level.gameEvent('fluid_pickup', x + 0.5, y + 0.5, z + 0.5);
         return 'success';
       }
       if (isWaterBottle(stack) && levelOf(st) !== 3) {
         fillHeld(ctx.player, ItemStack.of('glass_bottle'));
         level.setBlock(x, y, z, waterCauldron.with(st, 'level', levelOf(st) + 1));
         at(level, x, y, z, 'item.bottle.empty');
+        level.gameEvent('fluid_place', x + 0.5, y + 0.5, z + 0.5);
         return 'success';
       }
       // vanilla CauldronInteraction.DYED_ITEM: dyed leather comes out undyed, for a level of water
@@ -505,7 +517,9 @@ export function lecternTakeBook(level: Level, be: LecternBlockEntity): ItemStack
   be.container.changed();
   const st = level.getState(be.x, be.y, be.z);
   if (STATE_BLOCK[st] === lectern.id) {
-    level.setBlock(be.x, be.y, be.z, lectern.with(lectern.with(st, 'powered', false), 'has_book', false));
+    const now = lectern.with(lectern.with(st, 'powered', false), 'has_book', false);
+    level.setBlock(be.x, be.y, be.z, now);
+    level.gameEvent('block_change', be.x + 0.5, be.y + 0.5, be.z + 0.5, { state: now });
     level.updateNeighborsAt(be.x, be.y - 1, be.z, lectern.id);
   }
   return s;
@@ -538,7 +552,9 @@ export function lecternAnalogOutput(level: Level, x: number, y: number, z: numbe
         be.setBook(stack.copyWithCount(1));
         consumeHeld(ctx.player);
         // vanilla resetBookState
-        level.setBlock(x, y, z, lectern.with(lectern.with(st, 'powered', false), 'has_book', true));
+        const now = lectern.with(lectern.with(st, 'powered', false), 'has_book', true);
+        level.setBlock(x, y, z, now);
+        level.gameEvent('block_change', x + 0.5, y + 0.5, z + 0.5, { entity: ctx.player, state: now });
         level.updateNeighborsAt(x, y - 1, z, lectern.id);
         level.sound.play('item.book.put', x + 0.5, y + 0.5, z + 0.5, 1, 1);
       }
@@ -583,6 +599,7 @@ export function lecternAnalogOutput(level: Level, x: number, y: number, z: numbe
       const potted = pottedFor(stack);
       if (!potted) return 'pass';
       level.setBlock(x, y, z, potted.defaultState);
+      level.gameEvent('block_change', x + 0.5, y + 0.5, z + 0.5, { entity: ctx.player });
       consumeHeld(ctx.player);
       return 'success';
     },
@@ -601,6 +618,7 @@ export function lecternAnalogOutput(level: Level, x: number, y: number, z: numbe
         const left = p.inventory.add(stack, p.gameMode === 'creative');
         if (left > 0) p.dropItem(stack.copyWithCount(left), false);
         level.setBlock(x, y, z, pot.defaultState);
+        level.gameEvent('block_change', x + 0.5, y + 0.5, z + 0.5, { entity: p });
         return true;
       },
       // vanilla createPotFlowerItemTable: the pot and its plant
@@ -621,10 +639,11 @@ function canLight(st: number): boolean {
   return CAMPFIRES.has(b.name) && !b.get(st, 'waterlogged') && !b.get(st, 'lit');
 }
 
-/** vanilla CampfireBlock.dowse: the smoke of it going out (and what was cooking would fall off) */
-function dowse(level: Level, x: number, y: number, z: number, st: number): void {
+/** vanilla CampfireBlock.dowse: the smoke of it going out (and what was cooking would fall off), a game event */
+function dowse(level: Level, x: number, y: number, z: number, st: number, by: Entity | null): void {
   const signal = !!blk(st).get(st, 'signal_fire');
   for (let i = 0; i < 20; i++) campfireSmoke(level, x, y, z, signal, true);
+  level.gameEvent('block_change', x + 0.5, y + 0.5, z + 0.5, { entity: by });
 }
 
 /** vanilla FlintAndSteelItem / FireChargeItem.useOn: a campfire that is out is lit where it stands; false if it can't be */
@@ -635,14 +654,14 @@ export function lightCampfire(level: Level, x: number, y: number, z: number): bo
   return true;
 }
 
-/** vanilla ShovelItem.useOn: a lit campfire is put out with a hiss; false if there's none to put out */
-export function dowseCampfire(level: Level, x: number, y: number, z: number): boolean {
+/** vanilla ShovelItem.useOn: a lit campfire is put out with a hiss (by `by`); false if there's none to put out */
+export function dowseCampfire(level: Level, x: number, y: number, z: number, by: Entity | null = null): boolean {
   const st = level.getState(x, y, z);
   const b = blk(st);
   if (!CAMPFIRES.has(b.name) || !b.get(st, 'lit')) return false;
   // (vanilla levelEvent 1009)
   level.sound.play('block.fire.extinguish', x + 0.5, y + 0.5, z + 0.5, 0.5, 2.6 + (Math.random() - Math.random()) * 0.8);
-  dowse(level, x, y, z, st);
+  dowse(level, x, y, z, st, by);
   level.setBlock(x, y, z, b.with(st, 'lit', false));
   return true;
 }
@@ -689,7 +708,7 @@ for (const name of CAMPFIRES) {
       if (b.get(st, 'waterlogged')) return false;
       if (b.get(st, 'lit')) {
         level.sound.play('entity.generic.extinguish_fire', x + 0.5, y + 0.5, z + 0.5, 1, 1);
-        dowse(level, x, y, z, st);
+        dowse(level, x, y, z, st, null);
       }
       level.setBlock(x, y, z, b.with(b.with(st, 'waterlogged', true), 'lit', false));
       return true;

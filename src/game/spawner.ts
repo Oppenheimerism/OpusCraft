@@ -37,6 +37,8 @@ import { Goat } from '../entity/goat';
 // (M9: frogs)
 import { Frog } from '../entity/frog';
 import { Tadpole } from '../entity/tadpole';
+// (M4: the deep dark's warden; its module also answers a shrieker's fourth warning)
+import { Warden } from '../entity/warden';
 import { waterSpawnsFor } from './oceanSpawns';
 import { despawnDistance } from '../entity/mob';
 import { Husk, Stray } from '../entity/biomeMonsters';
@@ -78,6 +80,7 @@ import { MIN_Y } from '../world/constants';
 import { AABB } from '../core/aabb';
 import { Rand, hash2 } from '../core/rng';
 import { structureMobsAt, inSwampHut } from './structureSpawns';
+import { markShot } from './vibrations';
 
 // (temples) a cat in a swamp hut is the witch's black cat (vanilla #cats_spawn_as_black), and cats keep coming to one
 catHooks.inSwampHut = inSwampHut;
@@ -190,6 +193,8 @@ function saveOne(e: Entity): SavedEntity | null {
 /** vanilla EntityType.loadEntityRecursive: the entity with its riders on board */
 export function loadEntity(d: SavedEntity, level: Level): Entity | null {
   const e = loadOne(d, level);
+  // (vanilla HasBeenShot: a projectile back from its chunk has told of its shot already)
+  if (e) markShot(e);
   if (e && typeof d.data?.passengers === 'string') {
     for (const pd of JSON.parse(d.data.passengers) as SavedEntity[]) loadEntity(pd, level)?.startRiding(e, true);
   }
@@ -913,5 +918,8 @@ Object.assign(ENTITY_NAMES, { goat: 'Goat' });
 // (M9: frogs)
 Object.assign(MOB_TYPES, { frog: (l: Level) => new Frog(l), tadpole: (l: Level) => new Tadpole(l) });
 Object.assign(ENTITY_NAMES, { frog: 'Frog', tadpole: 'Tadpole' });
+// (M4: the deep dark's warden)
+Object.assign(MOB_TYPES, { warden: (l: Level) => new Warden(l) });
+Object.assign(ENTITY_NAMES, { warden: 'Warden' });
 /** (Stage 5: ocean) vanilla SpawnPlacements IN_WATER: these spawn in water (the squid's and the guardian's are above) */
 const IN_WATER = new Set(['cod', 'salmon', 'pufferfish', 'tropical_fish', 'dolphin', 'glow_squid', 'axolotl']);

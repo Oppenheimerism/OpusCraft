@@ -570,6 +570,7 @@ function setDoorOpen(m: Mob, x: number, y: number, z: number, open: boolean): vo
   m.level.setBlock(x, y, z, b.with(st, 'open', open), 10);
   const wood = /^(crimson|warped)_/.test(b.name) ? 'nether_wood' : b.name.startsWith('cherry_') ? 'cherry_wood' : b.name.startsWith('bamboo_') ? 'bamboo_wood' : 'wooden';
   m.level.sound.play(`block.${wood}_door.${open ? 'open' : 'close'}`, x + 0.5, y + 0.5, z + 0.5, 1, m.random.nextFloat() * 0.1 + 0.9);
+  m.level.gameEvent?.(open ? 'block_open' : 'block_close', x + 0.5, y + 0.5, z + 0.5, { entity: m });
 }
 
 /**

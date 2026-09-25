@@ -251,7 +251,7 @@ registerBehavior('redstone_wire', {
   },
   neighborChanged(level, x, y, z, st) {
     if (canSurviveOn(level.world.getState(x, y - 1, z))) updatePowerStrength(level, x, y, z, st);
-    else level.destroyBlock(x, y, z, true, null, false);
+    else level.destroyBlock(x, y, z, true, null, false, null, false);
   },
   // vanilla useWithoutItem: a cross becomes a dot and a dot a cross (connections permitting)
   use(level, x, y, z, st, ctx) {

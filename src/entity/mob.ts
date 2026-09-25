@@ -28,6 +28,7 @@ import { crossbowUseTick } from '../item/crossbow';
 import { CHARGED_CREEPER_HEADS } from '../world/blocksSkulls';
 import { LeashKnot, getOrCreateKnot } from './leash';
 import type { Player } from './player';
+import { equipEvent } from '../game/vibrations';
 
 /** where a saved lead's other end is: whoever held it (by uuid), or the fence it was tied to */
 export type SavedLeash = { uuid: string } | { x: number; y: number; z: number };
@@ -114,7 +115,9 @@ export interface LootEntry {
   potion?: string;
 }
 
-export type SpawnReason = 'natural' | 'chunk' | 'egg' | 'command' | 'breeding' | 'spawner' | 'jockey' | 'structure' | 'summoned' | 'conversion' | 'reinforcement' | 'bucket' | 'event';
+export type SpawnReason = 'natural' | 'chunk' | 'egg' | 'command' | 'breeding' | 'spawner' | 'jockey' | 'structure' | 'summoned' | 'conversion' | 'reinforcement' | 'bucket' | 'event'
+  // (M4: the warden) vanilla MobSpawnType.TRIGGERED: called up by a shrieker
+  | 'triggered';
 
 /** vanilla Mob.DEFAULT_EQUIPMENT_DROP_CHANCE; 2 (a sure drop, kept as it was) once it's something the mob picked up */
 export const DEFAULT_DROP_CHANCE = 0.085;
@@ -709,11 +712,14 @@ export abstract class Mob extends LivingEntity {
   }
 
   startUsingItem(): void {
+    // (vanilla LivingEntity.startUsingItem / stopUsingItem: beginning and ending are game events)
+    if (!this.usingItem) this.level.gameEvent?.('item_interact_start', this.x, this.y, this.z, { entity: this });
     this.usingItem = true;
     this.useItemTicks = 0;
   }
 
   stopUsingItem(): void {
+    if (this.usingItem) this.level.gameEvent?.('item_interact_finish', this.x, this.y, this.z, { entity: this });
     this.usingItem = false;
     this.useItemTicks = 0;
   }
@@ -741,6 +747,7 @@ export abstract class Mob extends LivingEntity {
    * same stack (enchanting spawn equipment) or the mob hasn't ticked yet (vanilla firstTick: spawning, loading)
    */
   protected onEquipItem(slot: EquipSlot, old: ItemStack | null, cur: ItemStack | null): void {
+    equipEvent(this, old, cur);
     if (!cur || (old && old.sameItem(cur)) || this.tickCount === 0) return;
     if (equipableSlot(cur.item) !== slot) return;
     const snd = equipSound(cur.item);
@@ -1061,6 +1068,8 @@ export abstract class Mob extends LivingEntity {
     this.navigation.stop();
     // vanilla Entity.killedEntity: the killer may take the body (a zombie's villager rises): then nothing drops
     if (attacker && !attacker.killedEntity(this)) return;
+    // (vanilla LivingEntity.die: the death is a game event, before the loot: a sculk catalyst may take the experience)
+    this.level.gameEvent?.('entity_die', this.x, this.y, this.z, { entity: this });
     const byPlayer = this.lastHurtByPlayerTime > 0;
     // the killer's looting (vanilla ATTACKING_ENTITY: the shooter for arrows)
     const looting = attacker instanceof LivingEntity ? entityLevel(attacker, 'looting') : 0;
@@ -1073,7 +1082,7 @@ export abstract class Mob extends LivingEntity {
         c.droppedSkulls = (c.droppedSkulls ?? 0) + 1;
         this.spawnAtLocation(ItemStack.of(head));
       }
-      if (byPlayer) this.level.awardExperience?.(this.x, this.y, this.z, this.experienceReward());
+      if (byPlayer && !this.skipDropExperience) this.level.awardExperience?.(this.x, this.y, this.z, this.experienceReward());
     }
   }
 

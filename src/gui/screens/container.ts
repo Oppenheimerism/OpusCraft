@@ -536,6 +536,11 @@ export class ChestScreen extends AbstractContainerScreen<ChestMenu> {
     super.removed();
     const c = this.menu.chest;
     if (!('containerStillValid' in c)) this.game.chestClosed(c);
+    // (vanilla AbstractMinecartContainer.stopOpen / ChestBoat.stopOpen: CONTAINER_CLOSE, where the vehicle is)
+    else {
+      const e = c as unknown as { x: number; y: number; z: number };
+      this.game.level.gameEvent('container_close', e.x, e.y, e.z, { entity: this.game.player });
+    }
   }
   renderBg(g: GuiGraphics): void {
     const L = this.leftPos, T = this.topPos, rows = this.menu.rows;

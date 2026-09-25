@@ -35,6 +35,8 @@ export interface MobEffect {
   onMobHurt?(e: LivingEntity, amplifier: number, source: string, amount: number): void;
   /** vanilla MobEffect.createParticleOptions: a particle of its own rather than the swirl in its colour */
   readonly particle?: string;
+  /** vanilla MobEffect.getBlendDurationTicks: how long its visuals take to fade in and out (darkness's 22) */
+  readonly blendDuration?: number;
   /**
    * vanilla MobEffect.attributeModifiers, for the potion tooltips' "When Applied:" lines (LivingEntity reads the
    * effects themselves where vanilla reads the attributes): the attribute's name, the amount per level, and whether
@@ -57,10 +59,11 @@ const every = (n: number) => (duration: number, amplifier: number): boolean => {
 
 export const MOB_EFFECTS: Record<string, MobEffect> = {};
 
-function reg(id: string, name: string, category: EffectCategory, color: number, o: Partial<Pick<MobEffect, 'instant' | 'shouldTick' | 'applyTick' | 'onStarted' | 'applyInstant' | 'particle' | 'modifiers'>> = {}): MobEffect {
+function reg(id: string, name: string, category: EffectCategory, color: number, o: Partial<Pick<MobEffect, 'instant' | 'shouldTick' | 'applyTick' | 'onStarted' | 'applyInstant' | 'particle' | 'modifiers' | 'blendDuration'>> = {}): MobEffect {
   const e: MobEffect = {
     id, name, category, color,
     particle: o.particle,
+    blendDuration: o.blendDuration,
     modifiers: o.modifiers,
     instant: !!o.instant,
     // vanilla InstantenousMobEffect ticks while it lasts (one tick when given by a command)
@@ -170,7 +173,8 @@ reg('conduit_power', 'Conduit Power', 'beneficial', 0x1dc2d1);
 reg('dolphins_grace', "Dolphin's Grace", 'beneficial', 0x88a3be);
 reg('bad_omen', 'Bad Omen', 'neutral', 0x0b6138);
 reg('hero_of_the_village', 'Hero of the Village', 'beneficial', 0x44ff44);
-reg('darkness', 'Darkness', 'harmful', 0x292721);
+// (the deep dark) vanilla MobEffects.DARKNESS: its fog and pulsing gloom fade in and out over 22 ticks (render/effectVisuals.ts)
+reg('darkness', 'Darkness', 'harmful', 0x292721, { blendDuration: 22 });
 reg('trial_omen', 'Trial Omen', 'neutral', 0x16a6a6);
 reg('raid_omen', 'Raid Omen', 'neutral', 0xde4058);
 // the 1.21 potions' effects: what they do when their bearer dies or is hurt is in game/potionEffects.ts
@@ -192,6 +196,9 @@ export class MobEffectInstance {
   amplifier: number;
   /** the weaker/longer effect that takes over when this one runs out */
   hiddenEffect: MobEffectInstance | null;
+  /** vanilla MobEffectInstance.BlendState: how far its visuals have faded in (0..1), now and a tick ago */
+  private blend = 0;
+  private blendO = 0;
 
   constructor(
     readonly effect: MobEffect,
@@ -286,7 +293,30 @@ export class MobEffectInstance {
         onHiddenTakeover();
       }
     }
+    this.tickBlend();
     return this.hasRemainingDuration();
+  }
+
+  /** vanilla BlendState.tick: toward 1 while it lasts, toward 0 over its last blend-duration ticks, 1/duration a tick */
+  private tickBlend(): void {
+    this.blendO = this.blend;
+    const n = this.effect.blendDuration ?? 0;
+    if (n === 0) this.blend = 1;
+    else {
+      const target = this.endsWithin(n) ? 0 : 1;
+      if (this.blend !== target) this.blend += Math.max(-1 / n, Math.min(1 / n, target - this.blend));
+    }
+  }
+
+  /** vanilla BlendState.setImmediate (MobEffectInstance.skipBlending): at its level at once (an effect loaded with the world) */
+  skipBlending(): void {
+    const n = this.effect.blendDuration ?? 0;
+    this.blend = this.blendO = n === 0 || !this.endsWithin(n) ? 1 : 0;
+  }
+
+  /** vanilla getBlendFactor */
+  blendFactor(partial: number): number {
+    return this.blendO + (this.blend - this.blendO) * partial;
   }
 
   private hasRemainingDuration(): boolean {

@@ -72,9 +72,12 @@ function searchText(s: ItemStack): string {
 /** vanilla CreativeModeTabs.REDSTONE_BLOCKS, in its order (as far as the game has them) */
 const REDSTONE_ORDER = [
   'redstone', 'redstone_torch', 'redstone_block', 'repeater', 'lever', 'oak_button', 'stone_button', 'oak_pressure_plate', 'stone_pressure_plate', 'light_weighted_pressure_plate',
-  'heavy_weighted_pressure_plate', 'tripwire_hook', 'piston', 'sticky_piston', 'dispenser', 'dropper', 'tnt', 'redstone_lamp',
+  'heavy_weighted_pressure_plate', 'sculk_sensor', 'calibrated_sculk_sensor', 'sculk_shrieker', 'amethyst_block', 'white_wool', 'tripwire_hook', 'piston',
+  'sticky_piston', 'dispenser', 'dropper', 'tnt', 'redstone_lamp',
 ];
-const REDSTONE = new Set(REDSTONE_ORDER);
+/** (the deep dark) listed in the redstone tab as well as their own, as vanilla does: the sensor, the shrieker, and what they react to */
+const REDSTONE_ALSO = new Set(['sculk_sensor', 'sculk_shrieker', 'amethyst_block', 'white_wool']);
+const REDSTONE = new Set(REDSTONE_ORDER.filter((id) => !REDSTONE_ALSO.has(id)));
 const FUNCTIONAL = new Set(['oak_sign', 'painting', 'item_frame', 'red_bed', 'jack_o_lantern', 'carved_pumpkin']);
 const DYE_ORDER = ['white', 'light_gray', 'gray', 'black', 'brown', 'red', 'orange', 'yellow', 'lime', 'green', 'cyan', 'light_blue', 'blue', 'purple', 'magenta', 'pink'];
 /** vanilla CreativeModeTabs.FUNCTIONAL_BLOCKS, in its order (as far as the game has them; the rest follow) */
@@ -143,6 +146,7 @@ function tabs(): Tab[] {
   // (no bare enchanted book: vanilla lists one per enchantment instead)
   const listed = ITEM_LIST.filter((it) => it.id !== 'enchanted_book');
   for (const it of listed) byId.get(tabOf(it))?.items.push(it);
+  for (const it of listed) if (REDSTONE_ALSO.has(it.id)) byId.get('redstone_blocks')!.items.push(it);
   byId.get('redstone_blocks')!.items.sort((a, b) => REDSTONE_ORDER.indexOf(a.id) - REDSTONE_ORDER.indexOf(b.id));
   const rank = (it: Item) => (FUNCTIONAL_ORDER.includes(it.id) ? FUNCTIONAL_ORDER.indexOf(it.id) : FUNCTIONAL_ORDER.length);
   byId.get('functional_blocks')!.items.sort((a, b) => rank(a) - rank(b));

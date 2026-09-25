@@ -203,6 +203,8 @@ function dispenseFrom(level: Level, x: number, y: number, z: number, st: number)
   const i = be.randomSlot(level.random);
   if (i < 0) {
     failClick(src);
+    // (an empty dispenser's click is a game event)
+    level.gameEvent('block_activate', x + 0.5, y + 0.5, z + 0.5, { state: st });
     return;
   }
   const stack = be.container.get(i)!;

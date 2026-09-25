@@ -50,6 +50,10 @@ import { wanderingTraderSounds } from './gen/wanderingTrader';
 import { illagerSounds } from './gen/illagers';
 // (Stage 5: ocean)
 import { oceanSounds } from './gen/ocean';
+// (the deep dark)
+import { sculkSounds } from './gen/sculk';
+import { wardenSounds } from './gen/warden';
+import { DISC_MUSIC_POOLS, renderDiscMusic } from './gen/disc5';
 
 export const SAMPLE_RATE = 44100;
 
@@ -110,6 +114,10 @@ Object.assign(SOUNDS, goatSounds());
 Object.assign(SOUNDS, foxSounds());
 // (M9: frogs) the frogs', the tadpoles', frogspawn's and the froglights'
 Object.assign(SOUNDS, frogSounds());
+// (the deep dark: sculk, its sensors, shrieker and catalyst; candles)
+Object.assign(SOUNDS, sculkSounds());
+// (the warden's voice: its answers to a shrieker's warnings, and (M4) the rest of it)
+Object.assign(SOUNDS, wardenSounds());
 // (vanilla sounds.json: the snow golem's are the snow's breaking, the bow's and the shears')
 for (const [k, v] of Object.entries({ 'entity.snow_golem.hurt': 'block.snow.break', 'entity.snow_golem.death': 'block.snow.break', 'entity.snow_golem.shoot': 'entity.arrow.shoot', 'entity.snow_golem.shear': 'entity.sheep.shear' })) if (SOUNDS[v]) SOUNDS[k] = SOUNDS[v];
 // (vanilla sounds.json: any mob's swimming, and a monster's, is the player's splashing)
@@ -138,13 +146,15 @@ export function generateMenuMusic(sampleRate: number): Float32Array {
 }
 
 /** Situational music pools (vanilla music.nether.<biome>, music.end): event name -> number of tracks in it. */
-export const MUSIC_POOLS: Record<string, number> = Object.fromEntries([...Object.entries(NETHER_MUSIC_POOLS), ...Object.entries(END_MUSIC_POOLS)].map(([k, v]) => [k, v.length]));
+export const MUSIC_POOLS: Record<string, number> = Object.fromEntries([...Object.entries(NETHER_MUSIC_POOLS), ...Object.entries(END_MUSIC_POOLS), ...Object.entries(DISC_MUSIC_POOLS)].map(([k, v]) => [k, v.length]));
 
 /**
  * Render track `index` (0..MUSIC_POOLS[pool]-1) of a situational pool: the Nether's dark ambient
  * pieces, mono, 120–150 s, RMS matched to the overworld tracks, peak <= 0.6; ~2 s in Node.
  */
 export function generatePoolMusic(pool: string, index: number, sampleRate: number): Float32Array {
+  // (the deep dark: music disc 5's song, for the jukebox to play)
+  if (pool in DISC_MUSIC_POOLS) return renderDiscMusic(pool, sampleRate);
   return pool in END_MUSIC_POOLS ? renderEndMusic(pool, index, sampleRate) : renderNetherMusic(pool, index, sampleRate);
 }
 

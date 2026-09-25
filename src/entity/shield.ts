@@ -53,6 +53,8 @@ export function isDamageSourceBlocked(e: LivingEntity, source: string, direct: E
 
 /** vanilla LivingEntity.canDisableShield: an axe in the main hand */
 function canDisableShield(e: LivingEntity): boolean {
+  // (M4: the warden) vanilla Warden.canDisableShield: always
+  if ((e as { canDisableShield?: () => boolean }).canDisableShield?.()) return true;
   const held = equipment(e).find(([slot]) => slot === 'mainhand')?.[1];
   return held?.item.tool?.type === 'axe';
 }

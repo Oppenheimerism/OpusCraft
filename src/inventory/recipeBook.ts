@@ -66,7 +66,7 @@ export interface BookRecipe {
 
 const WOOD = '(oak|spruce|birch|jungle|acacia|dark_oak|mangrove|cherry|pale_oak|bamboo|crimson|warped)';
 const EQUIPMENT = /_(pickaxe|axe|shovel|hoe|sword|helmet|chestplate|leggings|boots)$|^(bow|arrow|shears|flint_and_steel|bucket|fishing_rod|compass|clock|lead|shield|crossbow|spyglass|brush|recovery_compass|carrot_on_a_stick)$/;
-const REDSTONE = /_(door|trapdoor|fence_gate|pressure_plate|button)$|^(redstone_block|redstone_torch|tnt|lever|piston|sticky_piston|observer|repeater|comparator|dispenser|dropper|hopper|daylight_detector|target|lectern|note_block|tripwire_hook|trapped_chest|lightning_rod|redstone_lamp)$/;
+const REDSTONE = /_(door|trapdoor|fence_gate|pressure_plate|button)$|^(redstone_block|redstone_torch|tnt|lever|piston|sticky_piston|observer|repeater|comparator|dispenser|dropper|hopper|daylight_detector|target|lectern|note_block|tripwire_hook|trapped_chest|lightning_rod|redstone_lamp|calibrated_sculk_sensor)$/;
 const BUILDING = new RegExp(
   `_planks$|^${WOOD}_(slab|stairs)$|_wood$|_stained_glass$|_terracotta$|_wool$|_concrete_powder$|^(bricks|stone_bricks|mossy_stone_bricks|mossy_cobblestone|bookshelf|hay_block|coal_block|iron_block|gold_block|diamond_block|emerald_block|lapis_block|copper_block|raw_iron_block|raw_gold_block|raw_copper_block|snow_block|clay|glowstone|sandstone|red_sandstone|packed_mud|mud_bricks|quartz_block|jack_o_lantern|melon)$|^(polished|chiseled|cut|smooth)_|_(slab|stairs)$|_bricks$`,
 );
@@ -94,6 +94,7 @@ function craftingGroup(result: string, r: CraftingRecipe): string {
   if (result.endsWith('_stained_glass')) return 'stained_glass';
   if (result.endsWith('_terracotta')) return 'stained_terracotta';
   if (result.endsWith('_wool') && r.kind === 'shapeless') return 'wool';
+  if (result.endsWith('_candle') && r.kind === 'shapeless') return 'dyed_candle';
   if (result.endsWith('_dye')) return result;
   if (result === 'stick') return 'sticks';
   if (result === 'bone_meal') return 'bonemeal';

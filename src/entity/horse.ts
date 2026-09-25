@@ -20,6 +20,7 @@ import { BLOCKS, STATE_BLOCK, FLAGS, F_WATER, F_LAVA } from '../world/block';
 import { AABB } from '../core/aabb';
 import { floorHeight, blockFree } from './dismount';
 import type { Rand } from '../core/rng';
+import { equipEvent } from '../game/vibrations';
 
 /** vanilla Horse.Variant, in id order */
 export const HORSE_COLORS = ['white', 'creamy', 'chestnut', 'brown', 'black', 'gray', 'dark_brown'] as const;
@@ -324,6 +325,7 @@ export abstract class AbstractHorse extends Animal {
   setArmor(s: ItemStack | null): void {
     const was = this.bodyArmor();
     this.inventory.set(1, s);
+    equipEvent(this, was, s);
     if (s && s !== was) this.playSound('entity.horse.armor', 0.5, 1);
   }
 
@@ -343,6 +345,7 @@ export abstract class AbstractHorse extends Animal {
       // vanilla SaddleItem.interactLivingEntity
       if (stack.item.id === 'saddle' && !this.saddled && this.isSaddleable()) {
         this.equipSaddle(ItemStack.of('saddle'), true);
+        this.level.gameEvent?.('equip', this.x, this.y, this.z, { entity: this });
         if (p.gameMode !== 'creative') p.inventory.consumeSelected(1);
         return true;
       }

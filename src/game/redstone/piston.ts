@@ -46,7 +46,7 @@ const DESTROYED = new RegExp(
     '(soul_)?lantern|glow_lichen|budding_amethyst|(small|medium|large)_amethyst_bud|amethyst_cluster|pointed_dripstone|azalea|flowering_azalea|' +
     'hanging_roots|spore_blossom|cave_vines(_plant)?|big_dripleaf(_stem)?|small_dripleaf|moss_carpet|(crimson|warped)_(fungus|roots)|nether_sprouts|' +
     '(weeping|twisting)_vines(_plant)?|lever|.*_button|.*_pressure_plate|redstone_wire|repeater|comparator|tripwire_hook|tripwire|bell|dragon_egg|turtle_egg|frogspawn|' +
-    'decorated_pot|suspicious_(sand|gravel)|(.*_)?candle|cake|' +
+    'decorated_pot|suspicious_(sand|gravel)|(.*_)?candle|cake|sculk_vein|' +
     // (the outer End's: shulker boxes, the chorus plant and its flower, and the mob heads)
     '(.*_)?shulker_box|chorus_(plant|flower)|(wither_)?skeleton_(wall_)?skull|(player|zombie|creeper|piglin|dragon)_(wall_)?head)$',
 );
@@ -627,6 +627,7 @@ for (const kind of [piston, sticky]) {
         if (!moveBlocks(level, x, y, z, facing, true, isSticky)) return false;
         level.setBlock(x, y, z, out, UPDATE_MOVE_ALL);
         level.sound.play('block.piston.extend', x + 0.5, y + 0.5, z + 0.5, 0.5, r.nextFloat() * 0.25 + 0.6);
+        level.gameEvent('block_activate', x + 0.5, y + 0.5, z + 0.5, { state: out });
         return true;
       }
       const hx = x + DX[facing], hy = y + DY[facing], hz = z + DZ[facing];
@@ -656,6 +657,7 @@ for (const kind of [piston, sticky]) {
         }
       } else removeBlock(level, hx, hy, hz);
       level.sound.play('block.piston.contract', x + 0.5, y + 0.5, z + 0.5, 0.5, r.nextFloat() * 0.15 + 0.6);
+      level.gameEvent('block_deactivate', x + 0.5, y + 0.5, z + 0.5, { state: out });
       return true;
     },
   });

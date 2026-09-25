@@ -383,7 +383,9 @@ class TurtleLayEggGoal extends MoveToBlockGoal {
     else if (t.layEggCounter > this.adjustedTickDelay(200)) {
       const lvl = t.level;
       lvl.sound.play('entity.turtle.lay_egg', Math.floor(t.x) + 0.5, Math.floor(t.y) + 0.5, Math.floor(t.z) + 0.5, 0.3, 0.9 + lvl.random.nextFloat() * 0.2);
-      lvl.setBlock(this.bx, this.by + 1, this.bz, getBlock('turtle_egg').state({ eggs: t.random.nextInt(4) + 1 }));
+      const eggs = getBlock('turtle_egg').state({ eggs: t.random.nextInt(4) + 1 });
+      lvl.setBlock(this.bx, this.by + 1, this.bz, eggs);
+      lvl.gameEvent('block_place', this.bx + 0.5, this.by + 1.5, this.bz + 0.5, { entity: t, state: eggs });
       t.hasEgg = false;
       t.setLayingEgg(false);
       // (vanilla setInLoveTime(600); it's resting from the breeding still, so that's soon undone)

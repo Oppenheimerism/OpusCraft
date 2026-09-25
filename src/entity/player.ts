@@ -14,11 +14,13 @@ import { Arrow } from './arrow';
 import { BLOCKS, STATE_BLOCK } from '../world/block';
 import { wrapDegrees } from '../core/math';
 import { findStandUpPosition } from '../game/sleep';
-import { hurtAndBreak, oxygenBonus } from '../item/enchantHelper';
+import { hurtAndBreak, oxygenBonus, sumLevels } from '../item/enchantHelper';
 import { playerAttack } from '../game/combat';
 import { tryToStartFallFlying } from './elytra';
 import { shoulderHooks } from './shoulder';
 import type { SavedEntity } from './mob';
+// (the deep dark: the warning level shriekers raise)
+import { WardenSpawnTracker } from '../game/wardenSpawnTracker';
 
 export type GameMode = 'survival' | 'creative' | 'adventure' | 'spectator';
 
@@ -78,6 +80,8 @@ export class Player extends LivingEntity {
   eyeHeightCamO = 1.62;
   readonly inventory = new Inventory();
   readonly food = new FoodData();
+  /** vanilla Player.wardenSpawnTracker: how many times sculk shriekers have warned them lately */
+  readonly wardenSpawnTracker = new WardenSpawnTracker();
   xpLevel = 0;
   xpProgress = 0;
   xpTotal = 0;
@@ -113,17 +117,23 @@ export class Player extends LivingEntity {
 
   /** (in the hand in use: see Inventory.activeHand) */
   startUsingItem(stack: ItemStack, duration: number): void {
+    const was = this.isUsingItem();
     this.useItem = stack;
     this.useHand = this.inventory.activeHand;
     this.useDuration = duration;
     this.useItemRemaining = duration;
     this.usingItemTicks = 1;
+    // (vanilla LivingEntity.startUsingItem: ITEM_INTERACT_START)
+    if (!was) this.level.gameEvent?.('item_interact_start', this.x, this.y, this.z, { entity: this });
   }
 
   stopUsingItem(): void {
+    const was = this.isUsingItem();
     this.useItem = null;
     this.useItemRemaining = 0;
     this.usingItemTicks = 0;
+    // (vanilla LivingEntity.stopUsingItem: ITEM_INTERACT_FINISH, a vibration sculk sensors hear)
+    if (was) this.level.gameEvent?.('item_interact_finish', this.x, this.y, this.z, { entity: this });
   }
   spawnX = 0;
   spawnY = 64;
@@ -133,6 +143,8 @@ export class Player extends LivingEntity {
   respawnForced = false;
   /** vanilla ServerPlayer.seenCredits: they've left the End through its exit portal before (the End Poem and credits roll only the first time) */
   seenCredits = false;
+  /** vanilla Player.lastDeathLocation: the dimension and block they last died at (the recovery compass points there) */
+  lastDeathLocation: { dim: string; pos: [number, number, number] } | null = null;
   /** bed head block while asleep (vanilla sleepingPos) */
   sleepingPos: [number, number, number] | null = null;
   /** vanilla sleepCounter: climbs to 100 asleep, then 100..110 fades back after waking */
@@ -466,6 +478,7 @@ export class Player extends LivingEntity {
     if (this.onGround && this.health > 0) f = Math.min(0.1, Math.sqrt(this.dx * this.dx + this.dz * this.dz));
     this.bob += (f - this.bob) * 0.4;
     this.food.tick(this);
+    this.wardenSpawnTracker.tick();
     this.tickAir();
     this.inventory.tick(this);
     if (this.takeXpDelay > 0) this.takeXpDelay--;
@@ -602,8 +615,10 @@ export class Player extends LivingEntity {
     let fwd = (inp.forward ? 1 : 0) - (inp.back ? 1 : 0);
     let left = (inp.left ? 1 : 0) - (inp.right ? 1 : 0);
     if (this.crouching) {
-      fwd *= 0.3;
-      left *= 0.3;
+      // vanilla Attributes.SNEAKING_SPEED: 0.3, and 0.15 more a level of Swift Sneak on the leggings (at most 1)
+      const f = Math.min(1, 0.3 + 0.15 * sumLevels(this, 'swift_sneak'));
+      fwd *= f;
+      left *= f;
     }
     if (this.usingItemTicks > 0) {
       fwd *= 0.2;
@@ -797,9 +812,13 @@ export class Player extends LivingEntity {
 
   override die(source: string, attacker: Entity | null = null): void {
     if (this.dead) return;
-    // (vanilla ServerPlayer.die)
+    // (vanilla ServerPlayer.die: first the game event, a sculk catalyst taking the experience)
+    this.skipDropExperience = false;
+    this.level.gameEvent?.('entity_die', this.x, this.y, this.z, { entity: this });
     this.removeEntitiesOnShoulder();
     super.die(source, attacker);
+    // (vanilla ServerPlayer.die: setLastDeathLocation)
+    this.lastDeathLocation = { dim: this.level.dim.id, pos: [Math.floor(this.x), Math.floor(this.y), Math.floor(this.z)] };
     this.onDeath?.(this, source);
   }
 

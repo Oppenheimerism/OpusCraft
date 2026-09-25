@@ -77,7 +77,7 @@ function ringBell(): BehaviorControl<Villager> {
     const mp = v.mem.meetingPoint;
     if (!mp || v.level.random.nextFloat() <= 0.95) return false;
     const [x, y, z] = V.blockPos(v);
-    if ((mp[0] - x) ** 2 + (mp[1] - y) ** 2 + (mp[2] - z) ** 2 < 9 && BLOCKS[STATE_BLOCK[v.level.world.getState(mp[0], mp[1], mp[2])]].name === 'bell') bellRinger.ring(v.level, mp[0], mp[1], mp[2], null);
+    if ((mp[0] - x) ** 2 + (mp[1] - y) ** 2 + (mp[2] - z) ** 2 < 9 && BLOCKS[STATE_BLOCK[v.level.world.getState(mp[0], mp[1], mp[2])]].name === 'bell') bellRinger.ring(v.level, mp[0], mp[1], mp[2], null, v);
     return true;
   });
 }

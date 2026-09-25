@@ -18,6 +18,7 @@ import { ITEMS, cloneTag } from '../item/item';
 import { ItemEntity } from './itemEntity';
 import { damageBonus, levelOf } from '../item/enchantHelper';
 import { doPostAttackEffects } from '../game/enchantEffects';
+import { projectileShot, projectileLandedOn, projectileLandedAt } from '../game/vibrations';
 
 const RAD = 180 / Math.PI;
 
@@ -118,6 +119,8 @@ export class Arrow extends Entity {
   }
 
   override tick(): void {
+    // (vanilla Projectile.tick: the shot is a game event)
+    projectileShot(this);
     this.tickArrow();
     // vanilla Arrow.tick: a tipped arrow trails its colour (in the ground, a wisp every quarter second); stuck for half
     // a minute its potion is spent, with a last puff, and it's a plain arrow again
@@ -180,11 +183,13 @@ export class Arrow extends Entity {
     if (!ent && blockHit && !noPhysics) {
       onProjectileHit(this.level, blockHit.x, blockHit.y, blockHit.z, blockHit, this);
       this.onHitBlock(blockHit.px, blockHit.py, blockHit.pz, w.getState(blockHit.x, blockHit.y, blockHit.z));
+      projectileLandedAt(this, blockHit.x, blockHit.y, blockHit.z);
     }
     // vanilla tick's hit loop: a piercing arrow goes on to the next entity along this tick's path (the block
     // behind them waits for the next tick)
     while (ent && !this.removed) {
       this.onHitEntity(ent);
+      projectileLandedOn(this, ent);
       if (this.pierceLevel <= 0) break;
       ent = this.findHitEntity(x0, y0, z0, x1, y1, z1);
     }

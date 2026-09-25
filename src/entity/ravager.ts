@@ -105,7 +105,7 @@ export class Ravager extends Raider {
         for (let y = Math.floor(bb.minY); y <= Math.floor(bb.maxY); y++)
           for (let z = Math.floor(bb.minZ); z <= Math.floor(bb.maxZ); z++) {
             const n = BLOCKS[STATE_BLOCK[this.level.world.getState(x, y, z)]].name;
-            if (n.endsWith('_leaves')) broke = this.level.destroyBlock(x, y, z, true) || broke;
+            if (n.endsWith('_leaves')) broke = this.level.destroyBlock(x, y, z, true, null, true, null, this) || broke;
           }
       if (!broke && this.onGround) this.jumpFromGround();
     }

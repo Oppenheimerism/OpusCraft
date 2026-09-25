@@ -43,7 +43,7 @@ export class Lightmap {
    * @param forceBright vanilla forceBrightLightmap (the End): sky light plays no part, and the block light's
    * colour is lifted a quarter of the way toward (0.99, 1.12, 1.0)
    */
-  update(skyDarken: number, flash: boolean, gamma: number, nightVision: number, ambient = 0, forceBright = false): void {
+  update(skyDarken: number, flash: boolean, gamma: number, nightVision: number, ambient = 0, forceBright = false, darkGamma = 0, darkPulse = 0): void {
     const f1 = flash ? 1 : skyDarken * 0.95 + 0.05;
     // skyVec = (f, f, 1) lerp (1,1,1) 0.35
     const sv0 = skyDarken + (1 - skyDarken) * 0.35;
@@ -78,10 +78,17 @@ export class Lightmap {
             b += (b * k - b) * nightVision;
           }
         }
+        // (the darkness effect's pulse takes light away from every colour)
+        if (!forceBright && darkPulse > 0) {
+          r -= darkPulse;
+          g -= darkPulse;
+          b -= darkPulse;
+        }
         r = Math.min(1, Math.max(0, r));
         g = Math.min(1, Math.max(0, g));
         b = Math.min(1, Math.max(0, b));
-        const gm = Math.max(0, gamma);
+        // (and the brightness option counts for less in it)
+        const gm = Math.max(0, gamma - darkGamma);
         r += (notGamma(r) - r) * gm;
         g += (notGamma(g) - g) * gm;
         b += (notGamma(b) - b) * gm;

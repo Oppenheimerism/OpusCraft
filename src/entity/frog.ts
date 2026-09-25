@@ -331,7 +331,9 @@ function tryLaySpawnOnWaterNearLand(): BehaviorControl<Frog> {
     for (const [dx, dz] of HORIZONTAL) {
       const st = w.getState(bx + dx, by - 1, bz + dz);
       if (!topFaceEmpty(st) || !isWaterSource(st) || !(FLAGS[w.getState(bx + dx, by, bz + dz)] & F_AIR)) continue;
-      f.level.setBlock(bx + dx, by, bz + dz, getBlock('frogspawn').defaultState);
+      const spawn = getBlock('frogspawn').defaultState;
+      f.level.setBlock(bx + dx, by, bz + dz, spawn);
+      f.level.gameEvent('block_place', bx + dx + 0.5, by + 0.5, bz + dz + 0.5, { entity: f, state: spawn });
       f.level.sound.play('entity.frog.lay_spawn', f.x, f.y, f.z, 1, 1);
       f.isPregnant = false;
       return true;

@@ -22,6 +22,8 @@ import { PillagerOutposts } from './outposts';
 // (Stage 5: ocean)
 import { OceanMonuments } from './monument';
 import { OceanStructures } from './oceanStructures';
+// (the deep dark)
+import { AncientCities } from './ancientCity';
 import { worldSeed64 } from './jigsaw';
 import { S, getBlock } from '../block';
 import { MIN_Y, MAX_Y, SEA_LEVEL, COLUMN_VOLUME, colIndex, CAVE_BIOME_LEVELS, NO_CAVE_BIOME } from '../constants';
@@ -80,6 +82,8 @@ export class ChunkGenerator {
   readonly monuments: OceanMonuments;
   /** (Stage 5: ocean) shipwrecks, ocean ruins and buried treasure */
   readonly oceanStructures: OceanStructures;
+  /** (the deep dark) ancient cities (world/gen/ancientCity) */
+  readonly ancientCities: AncientCities;
   /** corner columns for terrain height queries, with the noise at their cell corners as it's needed */
   private readonly heightCols = new Map<number, { c: ColumnSample; exactTop: number; corners: (Float32Array | undefined)[] }>();
 
@@ -131,6 +135,9 @@ export class ChunkGenerator {
     this.decorator.mineshafts = { place: (ctx, r) => (mineshafts?.place(ctx, r), this.fossils.place(ctx)) };
     this.strongholds = new Strongholds(worldSeed64(seed), biomeAtY0(this.router));
     this.decorator.strongholds = this.strongholds;
+    // (the deep dark) ancient cities, where the deep dark is at the centre of their start piece
+    this.ancientCities = new AncientCities(worldSeed64(seed), { biome3: (x, y, z) => this.biome3(x, y, z) });
+    this.decorator.ancientCities = this.ancientCities;
   }
 
   /** the biome a structure checks for (vanilla getNoiseBiome at the quart, without the fuzzy zoom) */
@@ -244,6 +251,16 @@ export class ChunkGenerator {
     return this.zoomBiome(x, z, cx, cz, quarts);
   }
 
+  /**
+   * (the deep dark) the biome at a block, the underground ones included, as generate() gives it (vanilla getNoiseBiome
+   * at the block's quart, without the fuzzy zoom)
+   */
+  biome3(x: number, y: number, z: number): number {
+    const c = this.router.column(x & ~3, z & ~3, newColumn());
+    const b = y >= MIN_Y && y < MAX_Y ? pickCaveBiome(c.humidity, c.continents, c.erosion, this.router.depth(y & ~3, c)) : -1;
+    return b >= 0 ? b : pickSurfaceBiome(c.temperature, c.humidity, c.continents, c.erosion, c.ridges);
+  }
+
   /** Sample the surface biome at a block position (used for spawn search / F3). */
   biomeAt(x: number, z: number): number {
     const c = this.router.column(x, z, newColumn());
@@ -311,7 +328,7 @@ export class ChunkGenerator {
       }
     const oreGap = router.n.ore_gap;
     // structures nearby bend the terrain around themselves (vanilla Beardifier, added to the final density)
-    const beard = addBeards(this.outposts.beardFor(cx, cz, this.villages.beardFor(cx, cz)), this.strongholds.buryFor(cx, cz));
+    const beard = addBeards(addBeards(this.outposts.beardFor(cx, cz, this.villages.beardFor(cx, cz)), this.strongholds.buryFor(cx, cz)), this.ancientCities.beardFor(cx, cz));
     const bY0 = beard ? beard.minY : Infinity, bY1 = beard ? beard.maxY : -Infinity;
     const cv = new Float32Array(8 * CHANNELS);
     for (let ck = 0; ck < 4; ck++)

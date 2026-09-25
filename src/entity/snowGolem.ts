@@ -70,7 +70,10 @@ export class SnowGolem extends Mob implements RangedAttacker {
       const x = Math.floor(this.x + (((i % 2) * 2 - 1) * 0.25));
       const y = Math.floor(this.y);
       const z = Math.floor(this.z + ((((i >> 1) % 2) * 2 - 1) * 0.25));
-      if (FLAGS[w.getState(x, y, z)] & F_AIR && canSurvive(w, x, y, z, snow)) this.level.setBlock(x, y, z, snow);
+      if (FLAGS[w.getState(x, y, z)] & F_AIR && canSurvive(w, x, y, z, snow)) {
+        this.level.setBlock(x, y, z, snow);
+        this.level.gameEvent?.('block_place', x + 0.5, y + 0.5, z + 0.5, { entity: this, state: snow });
+      }
     }
   }
 
@@ -107,6 +110,7 @@ export class SnowGolem extends Mob implements RangedAttacker {
   interact(p: Player, stack: ItemStack | null): boolean {
     if (stack?.item.id !== 'shears' || !this.readyForShearing()) return false;
     this.shear();
+    this.level.gameEvent?.('shear', this.x, this.y, this.z, { entity: p });
     if (hurtAndBreak(stack, 1, p.gameMode === 'creative')) {
       p.inventory.setSelectedItem(null);
       this.level.sound.play('entity.item.break', p.x, p.y, p.z, 0.8, 0.8 + Math.random() * 0.4);

@@ -444,6 +444,7 @@ class RaidGardenGoal extends MoveToBlockGoal {
       if (age === 0) lvl.setBlock(x, y, z, 0, 2);
       else {
         lvl.setBlock(x, y, z, b.with(st, 'age', age - 1), 2);
+        lvl.gameEvent('block_change', x + 0.5, y + 0.5, z + 0.5, { entity: r });
         // (vanilla level event 2001: the carrot's bits and its breaking sound)
         lvl.particles.blockBreak(x, y, z, st);
         lvl.sound.play(`block.${b.sound}.break`, x + 0.5, y + 0.5, z + 0.5, 1, 0.8);

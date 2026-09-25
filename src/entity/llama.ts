@@ -22,6 +22,7 @@ import { LeashKnot } from './leash';
 import { clipBlocks } from '../game/raycast';
 import { onProjectileHit } from '../game/blockRules';
 import { isAir, FLAGS, F_WATER } from '../world/block';
+import { projectileShot, projectileLandedOn, projectileLandedAt, equipEvent } from '../game/vibrations';
 
 /** vanilla Llama.Variant, in id order */
 export const LLAMA_VARIANTS = ['creamy', 'white', 'brown', 'gray'] as const;
@@ -116,8 +117,9 @@ export class Llama extends AbstractChestedHorse implements RangedAttacker {
   }
   /** (vanilla containerChanged: the swag sound as a carpet of a new colour goes on) */
   override setArmor(s: ItemStack | null): void {
-    const was = this.swag();
+    const was = this.swag(), old = this.bodyArmor();
     this.inventory.set(1, s);
+    equipEvent(this, old, s);
     const now = this.swag();
     if (now !== null && now !== was) this.playSound('entity.llama.swag', 0.5, 1);
   }
@@ -441,6 +443,8 @@ export class LlamaSpit extends Entity {
   }
 
   override tick(): void {
+    // (vanilla Projectile.tick: the spit is a game event)
+    projectileShot(this);
     this.baseTick();
     if (this.removed) return;
     const o = this.owner;
@@ -462,9 +466,11 @@ export class LlamaSpit extends Entity {
     // vanilla onHitEntity: 1 from its llama (it flies on); onHitBlock: the block has its say, and it's gone
     if (hit) {
       if (o) hit.hurt(1, 'mob', o, this);
+      projectileLandedOn(this, hit);
     } else if (bh) {
       onProjectileHit(this.level, bh.x, bh.y, bh.z, bh, this);
       this.remove();
+      projectileLandedAt(this, bh.x, bh.y, bh.z);
       return;
     }
     // vanilla updateRotation

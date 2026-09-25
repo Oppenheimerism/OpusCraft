@@ -47,6 +47,7 @@ export function seenPercent(level: Level, x: number, y: number, z: number, e: En
 export function explode(level: Level, source: Entity | null, x: number, y: number, z: number, radius: number, fire: boolean, kind: ExplosionKind, damageSource?: string): void {
   const w = level.world;
   const rand = level.random;
+  level.gameEvent('explode', x, y, z, { entity: source });
   const destroys = kind === 'none' ? false : kind === 'mob' ? level.gameRules.mobGriefing : true;
   // 1) blocks: 16x16x16 rays from the surface of a cube
   const toBlow = new Map<string, [number, number, number]>();
@@ -85,6 +86,8 @@ export function explode(level: Level, source: Entity | null, x: number, y: numbe
   const box = new AABB(Math.floor(x - f2 - 1), Math.floor(y - f2 - 1), Math.floor(z - f2 - 1), Math.floor(x + f2 + 1), Math.floor(y + f2 + 1), Math.floor(z + f2 + 1));
   const attacker = (source as { owner?: Entity | null } | null)?.owner ?? source;
   for (const e of level.getEntities(box, undefined, source)) {
+    // (M4: the warden) vanilla Entity.ignoreExplosion: a warden digging or emerging
+    if ((e as { ignoreExplosion?: () => boolean }).ignoreExplosion?.()) continue;
     const dist = Math.sqrt(e.distanceToSqr(x, y, z)) / f2;
     if (dist > 1) continue;
     let dx = e.x - x;
@@ -170,6 +173,8 @@ export function windBurst(level: Level, source: Entity | null, x: number, y: num
   const f2 = radius * 2;
   const box = new AABB(Math.floor(x - f2 - 1), Math.floor(y - f2 - 1), Math.floor(z - f2 - 1), Math.floor(x + f2 + 1), Math.floor(y + f2 + 1), Math.floor(z + f2 + 1));
   for (const e of level.getEntities(box, undefined, source)) {
+    // (M4: the warden) vanilla Entity.ignoreExplosion: a warden digging or emerging
+    if ((e as { ignoreExplosion?: () => boolean }).ignoreExplosion?.()) continue;
     const dist = Math.sqrt(e.distanceToSqr(x, y, z)) / f2;
     if (dist > 1) continue;
     let dx = e.x - x;

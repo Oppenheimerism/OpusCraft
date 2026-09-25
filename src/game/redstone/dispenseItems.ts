@@ -39,12 +39,14 @@ import { canSurvive } from '../blockRules';
 import { performBoneMeal, boneMealParticles } from '../boneMeal';
 import { canPlaceFire, placeFire, fireStateAt } from '../fire';
 import { lightCampfire } from '../villageBlocks';
+import { lightCandle } from '../candles';
 import { isRail, railShape, isAscending } from '../rails';
 import { BlockPattern } from '../blockPattern';
 import { dispenseShulkerBox } from '../shulkerBox';
 import { isShulkerBox } from '../../world/blocksShulker';
 import { isSkullItem } from '../../world/blocksSkulls';
 import type { Level } from '../level';
+import { equipEvent } from '../vibrations';
 
 const blk = (st: number): Block => BLOCKS[STATE_BLOCK[st]];
 
@@ -323,7 +325,7 @@ function minecart(type: string): DispenseBehavior {
 /** vanilla: TNT comes out primed, in the block in front */
 const tnt = behavior((src, stack) => {
   const [x, y, z] = front(src);
-  PrimedTnt.prime(src.level, x, y, z, null);
+  PrimedTnt.prime(src.level, x, y, z, null, 'entity_place');
   stack.count--;
   return left(stack);
 });
@@ -365,17 +367,23 @@ export function emptyContents(level: Level, x: number, y: number, z: number, flu
     for (let i = 0; i < 8; i++) level.particles.spawn?.('large_smoke', x + Math.random(), y + Math.random(), z + Math.random(), 0, 0, 0);
     return true;
   }
+  // (vanilla BucketItem.playEmptySound's FLUID_PLACE; a bucket of fish's own, MobBucketItem's, makes none)
+  const placed = () => {
+    if (emptySound !== 'item.bucket.empty_fish') level.gameEvent('fluid_place', cx, cy, cz);
+  };
   if (holds) {
     if (!behaviorOf(st)?.placeLiquid?.(level, x, y, z, st) && b.propIndex('waterlogged') >= 0 && !b.get(st, 'waterlogged')) {
       level.setBlock(x, y, z, b.with(st, 'waterlogged', true));
       level.scheduleTick(x, y, z, 5);
     }
     level.sound.play(emptySound, cx, cy, cz, 1, 1);
+    placed();
     return true;
   }
   if (!(f & F_AIR) && !(f & (F_WATER | F_LAVA) && b.s.fluid)) level.destroyBlock(x, y, z, true);
   level.setBlock(x, y, z, getBlock(fluid).defaultState);
   level.sound.play(fluid === 'lava' ? 'item.bucket.empty_lava' : emptySound, cx, cy, cz, 1, 1);
+  placed();
   return true;
 }
 
@@ -407,6 +415,7 @@ const emptyBucket = behavior((src, stack) => {
     filled = 'water_bucket';
   }
   if (!filled) return dropOne(src, stack);
+  level.gameEvent('fluid_pickup', x + 0.5, y + 0.5, z + 0.5);
   return withRemainder(src, stack, ItemStack.of(filled));
 });
 
@@ -443,9 +452,12 @@ const flintAndSteel = optional((src, stack) => {
   const [x, y, z] = front(src);
   // (vanilla isPortal: the frame's axis from the dispenser's facing, or either way at random for up and down)
   const facing = f === UP || f === DOWN ? (level.random.nextInt(2) ? 'north' : 'east') : DIR_NAMES[f];
-  if (canPlaceFire(level.world, x, y, z, facing)) placeFire(level, x, y, z, fireStateAt(level.world, x, y, z));
-  else if (lightCampfire(level, x, y, z)) {
-    // (candles and candle cakes, when the game has them)
+  if (canPlaceFire(level.world, x, y, z, facing)) {
+    placeFire(level, x, y, z, fireStateAt(level.world, x, y, z));
+    level.gameEvent('block_place', x + 0.5, y + 0.5, z + 0.5);
+  } else if (lightCampfire(level, x, y, z) || lightCandle(level, x, y, z)) {
+    // (and candle cakes, when the game has them)
+    level.gameEvent('block_change', x + 0.5, y + 0.5, z + 0.5);
   } else if (level.getBlockName(x, y, z) === 'tnt') {
     PrimedTnt.prime(level, x, y, z, null);
     level.setBlock(x, y, z, 0);
@@ -475,6 +487,8 @@ const shears = optional((src, stack) => {
     return stack;
   }
   s.shear();
+  const [x, y, z] = front(src);
+  src.level.gameEvent('shear', x + 0.5, y + 0.5, z + 0.5);
   return wear(stack);
 });
 
@@ -516,6 +530,7 @@ function dispenseArmor(src: DispenseSource, stack: ItemStack): boolean {
     if (slot === 'offhand') e.inventory.offhand = one;
     else if (isArmorSlot(slot)) e.inventory.armor[armorIndex(slot)] = one;
     e.inventory.version++;
+    if (isArmorSlot(slot)) equipEvent(e, null, one);
     const snd = equipSound(one.item);
     if (snd) src.level.sound.play(snd, e.x, e.y, e.z, 1, 1);
   }
@@ -629,6 +644,8 @@ const fishBucket = behavior((src, stack) => {
   const [x, y, z] = front(src);
   if (!emptyContents(src.level, x, y, z, 'water', bucketEmptySound(stack.item.id))) return DEFAULT_DISPENSE(src, stack);
   releaseBucketFish(src.level, stack, x, y, z);
+  // (vanilla MobBucketItem.checkExtraContent)
+  src.level.gameEvent('entity_place', x + 0.5, y + 0.5, z + 0.5);
   return ItemStack.of('bucket');
 });
 Object.assign(BEHAVIORS, { cod_bucket: fishBucket, salmon_bucket: fishBucket, pufferfish_bucket: fishBucket, tropical_fish_bucket: fishBucket, axolotl_bucket: fishBucket });

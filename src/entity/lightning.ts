@@ -45,6 +45,7 @@ export class LightningBolt extends Entity {
       lvl.sound.play('entity.lightning_bolt.impact', this.x, this.y, this.z, 2, 0.5 + r.nextFloat() * 0.2);
       // (server)
       if (lvl.difficulty === 'normal' || lvl.difficulty === 'hard') this.spawnFire(4);
+      lvl.gameEvent?.('lightning_strike', this.x, this.y, this.z, { entity: this });
     }
     this.life--;
     if (this.life < 0) {

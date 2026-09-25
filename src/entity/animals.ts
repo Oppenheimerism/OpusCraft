@@ -577,6 +577,7 @@ export class Pig extends Animal {
     // vanilla SaddleItem.interactLivingEntity
     if (stack?.item.id === 'saddle' && !this.saddled && this.isSaddleable()) {
       this.equipSaddle(true);
+      this.level.gameEvent?.('equip', this.x, this.y, this.z, { entity: this });
       if (p.gameMode !== 'creative') p.inventory.consumeSelected(1);
       return true;
     }
@@ -777,6 +778,7 @@ export class Sheep extends Animal {
   override interact(p: Player, stack: ItemStack | null): boolean {
     if (stack && stack.item.id === 'shears' && !this.sheared && !this.isBaby()) {
       this.shear();
+      this.level.gameEvent?.('shear', this.x, this.y, this.z, { entity: p });
       if (p.gameMode !== 'creative' && stack.item.maxDamage) {
         stack.damage++;
         if (stack.damage >= stack.item.maxDamage) {

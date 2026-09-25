@@ -361,6 +361,8 @@ export abstract class Entity {
     // vanilla Entity.addPassenger: a player takes the front seat unless a player already has it
     if (this.type === 'player' && vehicle.passengers.length && vehicle.passengers[0].type !== 'player') vehicle.passengers.unshift(this);
     else vehicle.passengers.push(this);
+    // (vanilla Entity.addPassenger: the vehicle's game event, by the rider)
+    this.level.gameEvent?.('entity_mount', vehicle.x, vehicle.y, vehicle.z, { entity: this });
     // (M8: goats) vanilla: CriteriaTriggers.START_RIDING_TRIGGER for every player aboard the vehicle (or aboard its riders)
     const aboard = [...vehicle.passengers];
     for (let i = 0; i < aboard.length; i++) {
@@ -392,6 +394,8 @@ export abstract class Entity {
     const i = v.passengers.indexOf(this);
     if (i >= 0) v.passengers.splice(i, 1);
     this.boardingCooldown = 60;
+    // (vanilla Entity.removePassenger: the vehicle's game event, by the rider)
+    this.level.gameEvent?.('entity_dismount', v.x, v.y, v.z, { entity: this });
   }
 
   ejectPassengers(): void {
@@ -585,18 +589,27 @@ export abstract class Entity {
       const onState = this.level.world.getState(onX, onY, onZ);
       const climbing = this.onClimbable();
       const vy = climbing ? ry : 0;
+      // (vanilla MovementEmission: step sounds, and the game events sculk sensors hear)
+      const sounds = this.makesStepSounds(), events = this.emitsMovementEvents();
       this.flyDist += Math.sqrt(rx * rx + ry * ry + rz * rz) * 0.6;
       this.walkDist += Math.sqrt(rx * rx + rz * rz) * 0.6;
       this.moveDist += Math.sqrt(rx * rx + vy * vy + rz * rz) * 0.6;
       // vanilla processFlappingMovement: over air, a flyer's wings beat as it goes
-      if (FLAGS[onState] & F_AIR && !this.inWater && !climbing && this.makesStepSounds() && this.isFlapping()) this.onFlap();
-      else if (this.moveDist > this.nextStep && (onState !== 0 || this.inWater || climbing) && this.makesStepSounds()) {
+      if (FLAGS[onState] & F_AIR && !this.inWater && !climbing && (sounds || events) && this.isFlapping()) {
+        this.onFlap();
+        if (events) this.level.gameEvent?.('flap', this.x, this.y, this.z, { entity: this });
+      } else if (this.moveDist > this.nextStep && (onState !== 0 || this.inWater || climbing) && (sounds || events)) {
         this.nextStep = this.nextStepDistance();
-        if (this.inWater) this.playSwimSound();
-        else if (this.onGround || climbing) {
-          this.playStepSound();
-          const on = BLOCKS[STATE_BLOCK[onState]].name;
-          if ((on === 'amethyst_block' || on === 'budding_amethyst') && this.tickCount >= this.lastCrystalSoundTick + 20) this.playAmethystStepSound();
+        if (this.inWater) {
+          if (sounds) this.playSwimSound();
+          if (events) this.level.gameEvent?.('swim', this.x, this.y, this.z, { entity: this });
+        } else if (this.onGround || climbing || this.isOnRails()) {
+          if (sounds) {
+            this.playStepSound();
+            const on = BLOCKS[STATE_BLOCK[onState]].name;
+            if ((on === 'amethyst_block' || on === 'budding_amethyst') && this.tickCount >= this.lastCrystalSoundTick + 20) this.playAmethystStepSound();
+          }
+          if (events) this.level.gameEvent?.('step', this.x, this.y, this.z, { entity: this, state: this.supportingState(onState) });
         }
       }
     }
@@ -689,6 +702,25 @@ export abstract class Entity {
     return false;
   }
 
+  /** vanilla MovementEmission.emitsEvents: its steps, swimming and wingbeats are game events (whatever makes step sounds, and some that don't) */
+  protected emitsMovementEvents(): boolean {
+    return this.makesStepSounds();
+  }
+
+  /** vanilla Entity.isOnRails: a minecart on its track (its going counts as steps) */
+  protected isOnRails(): boolean {
+    return false;
+  }
+
+  /**
+   * vanilla mainSupportingBlockPos's state: what it stands on, the block its feet are in (a carpet, a slab) if that
+   * isn't air, else the one under (`legacy`, 0.2 below its feet)
+   */
+  protected supportingState(legacy: number): number {
+    const st = this.level.world.getState(Math.floor(this.x), Math.floor(this.y - 1e-5), Math.floor(this.z));
+    return FLAGS[st] & F_AIR ? legacy : st;
+  }
+
   /** vanilla Entity.isFlapping: whether it's due a wingbeat (the parrot's, by how far it's flown) */
   protected isFlapping(): boolean {
     return false;
@@ -749,7 +781,12 @@ export abstract class Entity {
       // (Stage 5: ocean) vanilla Block.fallOn: what it lands on hears it first (a turtle egg underfoot)
       const f = this.fallDistance > 0 ? floorWithHook(this, 'fallOn') : null;
       if (f) behaviorOf(f[3])!.fallOn!(this.level, f[0], f[1], f[2], f[3], this, this.fallDistance);
-      if (this.fallDistance > 0) this.causeFallDamage(this.fallDistance);
+      if (this.fallDistance > 0) {
+        this.causeFallDamage(this.fallDistance);
+        // (vanilla: a landing is a game event, on what it landed on)
+        const on = this.level.world.getState(Math.floor(this.x), Math.floor(this.y - 0.2), Math.floor(this.z));
+        this.level.gameEvent?.('hit_ground', this.x, this.y, this.z, { entity: this, state: this.supportingState(on) });
+      }
       this.fallDistance = 0;
     } else if (dy < 0) {
       this.fallDistance -= dy;
@@ -821,6 +858,7 @@ export abstract class Entity {
       const ox = (Math.random() * 2 - 1) * this.width, oz = (Math.random() * 2 - 1) * this.width;
       ps.spawn?.('splash', this.x + ox, y, this.z + oz, vx, vy, vz);
     }
+    this.level.gameEvent?.('splash', this.x, this.y, this.z, { entity: this });
   }
 
   protected swimSplashSound(): string {
@@ -929,6 +967,7 @@ export abstract class Entity {
   /** vanilla Entity.kill (/kill): gone for good */
   kill(): void {
     this.remove();
+    this.level.gameEvent?.('entity_die', this.x, this.y, this.z, { entity: this });
   }
 
   /** vanilla Entity.onBelowWorld: fallen out of the world, gone (living things take the void's damage instead) */

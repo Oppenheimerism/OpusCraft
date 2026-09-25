@@ -18,7 +18,7 @@ import { ParticleEngine } from './particles';
 import { WeatherRenderer } from './weather';
 import { EntityRenderDispatcher, EntityRenderOptions } from './entityRenderers';
 import { buildParticleAtlas } from './particleAtlas';
-import type { BlindnessFog } from './effectVisuals';
+import type { BlindnessFog, DarknessVisuals } from './effectVisuals';
 import { OVERWORLD, type DimensionType } from '../world/dimension';
 import { EndRenderer } from './endRenderer';
 
@@ -41,6 +41,8 @@ export interface FrameEnv {
   nightVision: number;
   /** blindness fog (effectVisuals.blindnessFog) */
   blindness?: BlindnessFog | null;
+  /** the darkness effect's fog and lightmap (effectVisuals.darknessVisuals) */
+  darkness?: DarknessVisuals | null;
   /** extra (e.g. view bobbing) applied to view matrix */
   bob?: Mat4 | null;
   underwater?: boolean;
@@ -166,24 +168,34 @@ export class Renderer {
       fogStart = blind.end * 0.25;
       fogEnd = blind.end;
       fogShape = 0;
+    } else if (e.darkness) {
+      // vanilla DarknessFogFunction (blindness comes first): the fog closes in to 15 blocks as the effect blends in,
+      // its colour going to black (getModifiedVoidDarkness, squared)
+      const f = rdBlocks + (15 - rdBlocks) * e.darkness.factor;
+      const d = Math.max(0, 1 - e.darkness.factor) ** 2;
+      fog = [fog[0] * d, fog[1] * d, fog[2] * d];
+      fogStart = f * 0.75;
+      fogEnd = f;
+      fogShape = 0;
     }
-    // vanilla FogRenderer.setupColor: night vision brightens the fog (underwater, water vision does)
-    const nv = e.underwater ? 0 : e.nightVision;
+    // vanilla FogRenderer.setupColor: night vision brightens the fog (underwater, water vision does), but not in darkness
+    const nv = e.underwater ? 0 : e.darkness ? 0 : e.nightVision;
     if (nv > 0 && fog[0] !== 0 && fog[1] !== 0 && fog[2] !== 0) {
       const k = Math.min(1 / fog[0], 1 / fog[1], 1 / fog[2]);
       fog = [fog[0] * (1 - nv) + fog[0] * k * nv, fog[1] * (1 - nv) + fog[1] * k * nv, fog[2] * (1 - nv) + fog[2] * k * nv];
     }
     this.lastFog = fog;
     // lightmap
-    this.lightmap.update(env.skyDarken(tod, e.weather), e.weather.flash > 0, e.gamma, e.nightVision, dim.ambientLight, dim.effects.forceBrightLightmap);
+    this.lightmap.update(env.skyDarken(tod, e.weather), e.weather.flash > 0, e.gamma, e.nightVision, dim.ambientLight, dim.effects.forceBrightLightmap, e.darkness?.gamma ?? 0, e.darkness?.pulse ?? 0);
     // clear to fog color
     gl.viewport(0, 0, this.width, this.height);
     gl.clearColor(fog[0], fog[1], fog[2], 1);
     gl.clearDepth(1);
     gl.depthMask(true);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-    // vanilla LevelRenderer.renderSky: no sky in lava or while blind (doesMobEffectBlockSky), none at all in the Nether
-    if (!e.underwater && !e.lava && !blind && dim.effects.sky === 'normal') {
+    // vanilla LevelRenderer.renderSky: no sky in lava or while blind or in darkness (doesMobEffectBlockSky), none at all in the Nether
+    const skyBlocked = !!blind || !!e.darkness;
+    if (!e.underwater && !e.lava && !skyBlocked && dim.effects.sky === 'normal') {
       this.sky.render({
         proj: this.proj,
         viewRot: this.viewRot,
@@ -199,7 +211,7 @@ export class Renderer {
       });
     }
     // (vanilla renderEndSky: under water too, not in lava or while blind)
-    if (!e.lava && !blind && dim.effects.sky === 'end') this.end.renderSky(this.proj, this.viewRot);
+    if (!e.lava && !skyBlocked && dim.effects.sky === 'end') this.end.renderSky(this.proj, this.viewRot);
     const tp = {
       proj: this.proj,
       view: this.view,
@@ -245,7 +257,7 @@ export class Renderer {
       this.particles.spriteRects = this.particleAtlas.rects;
       this.particles.renderSprites(this.batch, cam, e.partial);
     }
-    if (this.cloudsEnabled && !e.underwater && !this.skipClouds && !blind && dim.effects.clouds) {
+    if (this.cloudsEnabled && !e.underwater && !this.skipClouds && !skyBlocked && dim.effects.clouds) {
       const cc = env.cloudColor(tod, e.weather);
       this.clouds.render(this.proj, this.view, cam.x, cam.y, cam.z, e.ticks + e.partial, cc, fog, rdBlocks);
     }

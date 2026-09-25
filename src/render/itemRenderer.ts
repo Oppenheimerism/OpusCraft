@@ -11,6 +11,7 @@ import { BLOCKS, LAYER, Layer } from '../world/block';
 import type { TexImage } from '../textures/tex';
 import { glintTexture, glintOffset, glintUV } from '../textures/glint';
 import { crossbowTexture } from '../item/crossbow';
+import { dialTexture } from '../item/compass';
 import { itemLayers, layerTint } from '../item/itemColors';
 import { TridentRenderer } from './tridentRenderer';
 import { ShieldRenderer, shieldDisplayScaleY } from './shieldRenderer';
@@ -296,6 +297,8 @@ export class ItemRenderer {
     } else {
       // a loaded crossbow's model follows its stack wherever it's drawn (on the ground, in a frame)
       if (texture === undefined && it.id === 'crossbow') texture = crossbowTexture(stack, -1);
+      // (the compass's, recovery compass's and clock's needle frames: item/compass.ts)
+      if (texture === undefined) texture = dialTexture(stack);
       const src = this.flatSource(it, texture);
       if (src) {
         const disp = it.id === 'bow' ? BOW_DISPLAY : it.id === 'crossbow' ? CROSSBOW_DISPLAY : isHandheld(it) ? HANDHELD_DISPLAY : GENERATED_DISPLAY;

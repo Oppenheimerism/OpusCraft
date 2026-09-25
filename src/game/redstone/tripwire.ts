@@ -60,10 +60,20 @@ function notifyNeighbors(level: Level, x: number, y: number, z: number, facing: 
 /** vanilla emitState: the click when it's tripped or let go, else the sound of being strung or unstrung */
 function emitState(level: Level, x: number, y: number, z: number, attached: boolean, on: boolean, wasAttached: boolean, wasOn: boolean): void {
   const s = level.sound, cx = x + 0.5, cy = y + 0.5, cz = z + 0.5;
-  if (on && !wasOn) s.play('block.tripwire.click_on', cx, cy, cz, 0.4, 0.6);
-  else if (!on && wasOn) s.play('block.tripwire.click_off', cx, cy, cz, 0.4, 0.5);
-  else if (attached && !wasAttached) s.play('block.tripwire.attach', cx, cy, cz, 0.4, 0.7);
-  else if (!attached && wasAttached) s.play('block.tripwire.detach', cx, cy, cz, 0.4, 1.2 / (level.random.nextFloat() * 0.2 + 0.9));
+  // (each with its game event, by no one)
+  if (on && !wasOn) {
+    s.play('block.tripwire.click_on', cx, cy, cz, 0.4, 0.6);
+    level.gameEvent('block_activate', cx, cy, cz);
+  } else if (!on && wasOn) {
+    s.play('block.tripwire.click_off', cx, cy, cz, 0.4, 0.5);
+    level.gameEvent('block_deactivate', cx, cy, cz);
+  } else if (attached && !wasAttached) {
+    s.play('block.tripwire.attach', cx, cy, cz, 0.4, 0.7);
+    level.gameEvent('block_attach', cx, cy, cz);
+  } else if (!attached && wasAttached) {
+    s.play('block.tripwire.detach', cx, cy, cz, 0.4, 1.2 / (level.random.nextFloat() * 0.2 + 0.9));
+    level.gameEvent('block_detach', cx, cy, cz);
+  }
 }
 
 /**
@@ -200,8 +210,10 @@ registerBehavior('tripwire', {
     if (!moving && STATE_BLOCK[now] !== STATE_BLOCK[st]) updateSource(level, x, y, z, wire().with(st, 'powered', true));
   },
   // vanilla playerWillDestroy: shears disarm it before it goes (without telling the neighbours)
-  playerWillDestroy(level, x, y, z, st, _player, held) {
-    if (held?.item.id === 'shears') level.setBlock(x, y, z, wire().with(st, 'disarmed', true), 4);
+  playerWillDestroy(level, x, y, z, st, player, held) {
+    if (held?.item.id !== 'shears') return;
+    level.setBlock(x, y, z, wire().with(st, 'disarmed', true), 4);
+    level.gameEvent('shear', x + 0.5, y + 0.5, z + 0.5, { entity: player });
   },
   entityInside(level, x, y, z, st) {
     if (!is(st, 'powered')) checkPressed(level, x, y, z);

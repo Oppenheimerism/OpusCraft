@@ -13,6 +13,7 @@ import type { Rand } from '../core/rng';
 import type { Hand } from '../item/inventory';
 import type { PlaceContext } from './blockRules';
 import type { BlockEntity } from '../world/blockEntity';
+import type { Block } from '../world/block';
 
 /** a right click on the block (vanilla BlockHitResult) */
 export interface UseContext {
@@ -88,6 +89,10 @@ export interface BlockBehavior {
   spawnAfterBreak?(level: Level, x: number, y: number, z: number, state: number, stack: ItemStack | null): void;
   /** vanilla entityInside: `e`'s box overlaps the block */
   entityInside?(level: Level, x: number, y: number, z: number, state: number, e: Entity): void;
+  /** vanilla stepOn: `e`, on the ground, stands on the block holding it up this tick (a sculk sensor or shrieker set off, a turtle egg underfoot) */
+  stepOn?(level: Level, x: number, y: number, z: number, state: number, e: Entity): void;
+  /** vanilla getAnalogOutputSignal: what a comparator reads from the block (those with hasAnalogOutputSignal) */
+  analogOutput?(level: Level, x: number, y: number, z: number, state: number): number;
   /** vanilla animateTick (client ambient effects) */
   animateTick?(level: Level, x: number, y: number, z: number, state: number): void;
   /** vanilla setPlacedBy: a player placed it (after it's in the world) */
@@ -106,8 +111,6 @@ export interface BlockBehavior {
   /** vanilla getSoundType(state).getBreakSound(), where it isn't the block's own (a cracked pot's shatter) */
   breakSound?(state: number): string;
   // (Stage 5: ocean) the turtle egg's
-  /** vanilla stepOn: `e` is on the ground on top of the block (it holds it up) */
-  stepOn?(level: Level, x: number, y: number, z: number, state: number, e: Entity): void;
   /** vanilla fallOn: `e` landed on the block from `dist` up (before the landing's damage) */
   fallOn?(level: Level, x: number, y: number, z: number, state: number, e: Entity, dist: number): void;
   /** vanilla canBeReplaced(BlockPlaceContext): placing `stack` on the block goes into it (a turtle egg more in a clutch) */
