@@ -18,6 +18,9 @@ const MUSIC_TIMING: Record<string, { min: number; max: number; replace: boolean 
   'music.credits': { min: 0, max: 0, replace: true },
 };
 
+/** vanilla Musics.MENU: the title screen's pieces, 20..600 ticks apart, cutting off whatever else is playing */
+const MENU_MUSIC = { pool: 'music.menu', min: 20, max: 600 };
+
 const SR = 44100;
 
 /** a looping sound its owner updates every tick (vanilla AbstractTickableSoundInstance) */
@@ -157,7 +160,10 @@ export class SoundManager {
   private musicGain: GainNode | null = null;
   private musicPlaying = false;
   private nextSongDelay = 100;
-  private menuMusicStarted = false;
+  /** how many title-screen pieces there are, and real time not yet counted in ticks while there's no world */
+  private menuCount = 0;
+  private menuTime = 0;
+  private menuLast = 0;
   private opts: GameOptions | null = null;
   private moodiness = 0;
   private active: { src: AudioBufferSourceNode; gain: GainNode; pan: StereoPannerNode; x: number; y: number; z: number; vol: number; range: number; cat: Category; ui: boolean }[] = [];
@@ -191,6 +197,7 @@ export class SoundManager {
         if (d.type === 'ready') {
           this.variants = d.sounds;
           this.musicCount = d.music;
+          this.menuCount = d.menu ?? 0;
           this.musicPools = d.pools ?? {};
           for (const n of ['ui.button.click', 'block.grass.step', 'block.stone.step', 'block.wood.step', 'block.gravel.step', 'block.sand.step', 'block.grass.break', 'block.stone.break', 'block.wood.break', 'block.gravel.break', 'block.grass.hit', 'block.stone.hit', 'block.wood.hit', 'block.gravel.hit', 'entity.item.pickup', 'block.grass.place', 'block.stone.place', 'block.wood.place']) {
             const v = this.variants[n] ?? 0;
@@ -452,16 +459,18 @@ export class SoundManager {
 
   private async playMusic(index: number, menu = false, pool?: string): Promise<void> {
     if (!this.ctx || !this.master) return;
+    if (menu) pool = MENU_MUSIC.pool;
     this.musicLoading = true;
     this.musicPool = pool ?? null;
     const req = ++this.musicReq;
-    const d = await this.request(menu ? { type: 'menu' } : pool ? { type: 'pool', pool, index } : { type: 'music', index });
+    const d = await this.request(menu ? { type: 'menu', index } : pool ? { type: 'pool', pool, index } : { type: 'music', index });
     if (req !== this.musicReq) return;
     this.musicLoading = false;
     if (!d || !this.ctx) return;
     const b = this.ctx.createBuffer(1, d.length, SR);
     b.copyToChannel(d as Float32Array<ArrayBuffer>, 0);
-    this.stopMusic();
+    // (whatever was playing stops; when the next piece is due stays as it was set)
+    this.stopSource();
     this.musicPool = pool ?? null;
     const src = this.ctx.createBufferSource();
     src.buffer = b;
@@ -476,20 +485,37 @@ export class SoundManager {
       if (this.musicSource === src) {
         this.musicPlaying = false;
         this.musicSource = null;
-        if (menu) this.menuMusicStarted = false;
       }
     };
   }
 
+  /**
+   * vanilla MusicManager.tick with Musics.MENU while there's no world (called every frame, counted out in ticks of
+   * 50 ms): one of the title screen's pieces, whole, then 1 to 30 s of quiet before the next; other music is cut off,
+   * with the menu's coming within half a second
+   */
   menuMusic(opts: GameOptions): void {
     this.opts = opts;
-    if (!this.ctx || this.menuMusicStarted || this.musicLoading) return;
-    if (!this.variants || !Object.keys(this.variants).length) return;
-    this.menuMusicStarted = true;
-    void this.playMusic(0, true);
+    if (!this.ctx || this.menuCount <= 0) return;
+    const now = performance.now();
+    this.menuTime = Math.min(this.menuTime + (this.menuLast ? now - this.menuLast : 0), 1000);
+    this.menuLast = now;
+    for (; this.menuTime >= 50; this.menuTime -= 50) {
+      if ((this.musicPlaying || this.musicLoading) && this.musicPool !== MENU_MUSIC.pool) {
+        this.stopMusic();
+        this.nextSongDelay = Math.floor(Math.random() * (MENU_MUSIC.min / 2 + 1));
+      }
+      this.nextSongDelay = Math.min(this.nextSongDelay, MENU_MUSIC.max);
+      if (!this.musicPlaying && !this.musicLoading && this.nextSongDelay-- <= 0) {
+        // (counted down only while nothing plays: the quiet after this piece)
+        this.nextSongDelay = MENU_MUSIC.min + Math.floor(Math.random() * (MENU_MUSIC.max - MENU_MUSIC.min + 1));
+        void this.playMusic(Math.floor(Math.random() * this.menuCount), true);
+      }
+    }
   }
 
-  stopMusic(): void {
+  /** stop the piece playing, leaving when the next is due as it is */
+  private stopSource(): void {
     if (this.musicSource) {
       try {
         this.musicSource.stop();
@@ -499,7 +525,10 @@ export class SoundManager {
     }
     this.musicSource = null;
     this.musicPlaying = false;
-    this.menuMusicStarted = false;
+  }
+
+  stopMusic(): void {
+    this.stopSource();
     this.nextSongDelay = 100;
     // (a track still on its way is turned away when it comes)
     this.musicReq++;

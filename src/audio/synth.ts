@@ -4,7 +4,7 @@
 
 import { blockSounds } from './gen/blocks';
 import { mobSounds } from './gen/mobs';
-import { MUSIC_TRACKS, MUSIC_TRACK_NAMES, renderMenuMusic, renderMusicTrack } from './gen/music';
+import { MUSIC_TRACKS, MUSIC_TRACK_NAMES, MENU_TRACK_COUNT, renderMenuMusic, renderMusicTrack } from './gen/music';
 import { playerSounds } from './gen/player';
 import { worldSounds } from './gen/world';
 import { minecartSounds } from './gen/minecart';
@@ -132,9 +132,12 @@ export function generateMusicTrack(index: number, sampleRate: number): Float32Ar
   return renderMusicTrack(index, sampleRate);
 }
 
-/** Render the title-screen music (dreamier, with synth arpeggios), mono, ~100 s, peak ~0.6. */
-export function generateMenuMusic(sampleRate: number): Float32Array {
-  return renderMenuMusic(sampleRate);
+/** Number of title-screen pieces (vanilla music.menu). */
+export const MENU_MUSIC_COUNT: number = MENU_TRACK_COUNT;
+
+/** Render title-screen piece `index` (dreamier, with synth arpeggios), mono, 95–125 s, peak ~0.6. */
+export function generateMenuMusic(index: number, sampleRate: number): Float32Array {
+  return renderMenuMusic(index, sampleRate);
 }
 
 /** Situational music pools (vanilla music.nether.<biome>, music.end): event name -> number of tracks in it. */
