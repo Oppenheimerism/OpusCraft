@@ -54,6 +54,9 @@ function categoryOf(name: string): Category {
   if (/^entity\.(pillager|vindicator|evoker|evoker_fangs|vex|ravager|illusioner)\./.test(name)) return 'hostile';
   // (Stage 5: ocean) the guardians are hostile
   if (/^entity\.(guardian|elder_guardian)\./.test(name)) return 'hostile';
+  // (vanilla: a fish scooped up is the player's sound, one poured out SoundSource.NEUTRAL)
+  if (name === 'item.bucket.fill_fish') return 'players';
+  if (name === 'item.bucket.empty_fish') return 'friendly';
   // (Stage 4: raids) the horn is vanilla's SoundSource.NEUTRAL; the bottle and the omens are the drinker's (a player's)
   if (name === 'event.raid.horn') return 'friendly';
   if (name.startsWith('item.ominous_bottle.') || name.startsWith('event.mob_effect.')) return 'players';

@@ -319,9 +319,12 @@ export abstract class LivingEntity extends Entity {
     return Math.max(0, (h >= 0 ? 1 + 0.1 * (h + 1) : 1) * (f >= 0 ? 1 - 0.1 * (f + 1) : 1));
   }
 
-  /** vanilla Player.getDestroySpeed effect part: haste +20% per level, mining fatigue 0.3^level */
+  /**
+   * vanilla Player.getDestroySpeed effect part: haste +20% per level, mining fatigue 0.3^level; (Stage 5: ocean) conduit
+   * power counts as haste (vanilla MobEffectUtil.getDigSpeedAmplification: the higher of the two)
+   */
   digSpeedEffectFactor(): number {
-    const h = this.effectAmp('haste'), f = this.effectAmp('mining_fatigue');
+    const h = Math.max(this.effectAmp('haste'), this.effectAmp('conduit_power')), f = this.effectAmp('mining_fatigue');
     return (h >= 0 ? 1 + (h + 1) * 0.2 : 1) * (f >= 0 ? FATIGUE_DIG[Math.min(f, 3)] : 1);
   }
 
@@ -352,9 +355,9 @@ export abstract class LivingEntity extends Entity {
     return false;
   }
 
-  /** vanilla MobEffectUtil.hasWaterBreathing */
+  /** vanilla MobEffectUtil.hasWaterBreathing ((Stage 5: ocean) conduit power too) */
   hasWaterBreathing(): boolean {
-    return this.activeEffects.has('water_breathing');
+    return this.activeEffects.has('water_breathing') || this.activeEffects.has('conduit_power');
   }
 
   /** vanilla isDiscrete (sneaking) */
@@ -495,9 +498,9 @@ export abstract class LivingEntity extends Entity {
     this.attackAnim = this.swingTime / dur;
   }
 
-  /** vanilla getCurrentSwingDuration: haste swings faster, mining fatigue slower */
+  /** vanilla getCurrentSwingDuration: haste ((Stage 5: ocean) or conduit power) swings faster, mining fatigue slower */
   swingDuration(): number {
-    const h = this.effectAmp('haste'), f = this.effectAmp('mining_fatigue');
+    const h = Math.max(this.effectAmp('haste'), this.effectAmp('conduit_power')), f = this.effectAmp('mining_fatigue');
     if (h >= 0) return Math.max(1, 6 - (1 + h));
     return f >= 0 ? 6 + (1 + f) * 2 : 6;
   }
@@ -681,6 +684,8 @@ export abstract class LivingEntity extends Entity {
         slow += (0.54600006 - slow) * f6;
         f5 += (this.movementSpeed() - f5) * f6;
       }
+      // (Stage 5: ocean) vanilla: Dolphin's Grace keeps the speed you have in the water
+      if (this.hasEffect('dolphins_grace')) slow = 0.96;
       this.moveRelative(f5, sx, sy, sz);
       this.move(this.dx, this.dy, this.dz);
       if (this.horizontalCollision && this.onClimbable()) this.dy = 0.2;

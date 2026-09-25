@@ -72,7 +72,8 @@ export class ChestBlockEntity extends BlockEntity {
     if (!this.lootTable) return;
     const table = this.lootTable;
     this.lootTable = null;
-    fillContainer(this.container, table, this.lootSeed);
+    // (Stage 5: ocean) rolled where the chest is (a treasure map looks round it)
+    fillContainer(this.container, table, this.lootSeed, this);
   }
   protected override saveData(): Record<string, number | string> | undefined {
     return this.lootTable ? { lootTable: this.lootTable, lootSeed: this.lootSeed } : undefined;

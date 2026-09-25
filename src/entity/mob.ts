@@ -31,7 +31,12 @@ import type { Player } from './player';
 /** where a saved lead's other end is: whoever held it (by uuid), or the fence it was tied to */
 export type SavedLeash = { uuid: string } | { x: number; y: number; z: number };
 
-export type MobCategory = 'monster' | 'creature' | 'ambient' | 'water_creature' | 'misc';
+export type MobCategory = 'monster' | 'creature' | 'ambient' | 'water_creature' | 'misc' | 'axolotls' | 'underground_water_creature' | 'water_ambient';
+
+/** (Stage 5: ocean) vanilla MobCategory.getDespawnDistance: 128 blocks, but fish (water_ambient) go at 64 */
+export function despawnDistance(c: MobCategory): number {
+  return c === 'water_ambient' ? 64 : 128;
+}
 
 export interface SavedEntity {
   id: string;
@@ -108,7 +113,7 @@ export interface LootEntry {
   potion?: string;
 }
 
-export type SpawnReason = 'natural' | 'chunk' | 'egg' | 'command' | 'breeding' | 'spawner' | 'jockey' | 'structure' | 'summoned' | 'conversion' | 'reinforcement';
+export type SpawnReason = 'natural' | 'chunk' | 'egg' | 'command' | 'breeding' | 'spawner' | 'jockey' | 'structure' | 'summoned' | 'conversion' | 'reinforcement' | 'bucket';
 
 /** vanilla Mob.DEFAULT_EQUIPMENT_DROP_CHANCE; 2 (a sure drop, kept as it was) once it's something the mob picked up */
 export const DEFAULT_DROP_CHANCE = 0.085;
@@ -610,7 +615,9 @@ export abstract class Mob extends LivingEntity {
     const p = this.level.player;
     if (!p || p.gameMode === 'spectator') return;
     const d0 = p.distanceToSqr(this.x, this.y, this.z);
-    if (d0 > 128 * 128 && this.removeWhenFarAway(d0)) {
+    // (Stage 5: ocean) the category's despawn distance
+    const far = despawnDistance(this.category);
+    if (d0 > far * far && this.removeWhenFarAway(d0)) {
       this.remove();
       return;
     }

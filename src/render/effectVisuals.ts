@@ -6,10 +6,14 @@ import type { LivingEntity } from '../entity/living';
 import type { Player } from '../entity/player';
 import { Mat4, mat4, multiply, scale } from '../core/math';
 
-/** vanilla GameRenderer.getNightVisionScale: full strength, flickering during the last 10 seconds */
+/**
+ * vanilla GameRenderer.getNightVisionScale: full strength, flickering during the last 10 seconds; (Stage 5: ocean)
+ * without night vision, conduit power lights things up as much with the eyes underwater (vanilla LightTexture: the
+ * player's water vision, which here is always all of it)
+ */
 export function nightVisionScale(e: LivingEntity, partial: number): number {
   const inst = e.getEffect('night_vision');
-  if (!inst) return 0;
+  if (!inst) return e.getEffect('conduit_power') && e.isInFluidEye() ? 1 : 0;
   return !inst.endsWithin(200) ? 1 : 0.7 + Math.sin((inst.duration - partial) * Math.PI * 0.2) * 0.3;
 }
 

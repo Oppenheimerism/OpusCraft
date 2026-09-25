@@ -21,8 +21,15 @@ import type { Player } from '../entity/player';
 
 const blk = (st: number): Block => BLOCKS[STATE_BLOCK[st]];
 
-/** vanilla ItemTags.DECORATED_POT_SHERDS, as far as the game has them */
-export const SHERDS = ['archer_pottery_sherd', 'miner_pottery_sherd', 'prize_pottery_sherd', 'skull_pottery_sherd', 'arms_up_pottery_sherd', 'brewer_pottery_sherd'];
+/**
+ * vanilla ItemTags.DECORATED_POT_SHERDS, as far as the game has them (the desert wells' arms up and brewer; (Stage 5:
+ * ocean) the ocean ruins' angler, blade, explorer, mourner, plenty, shelter and snort)
+ */
+export const SHERDS = [
+  'angler_pottery_sherd', 'archer_pottery_sherd', 'arms_up_pottery_sherd', 'blade_pottery_sherd', 'brewer_pottery_sherd', 'explorer_pottery_sherd',
+  'miner_pottery_sherd', 'mourner_pottery_sherd', 'plenty_pottery_sherd', 'prize_pottery_sherd', 'shelter_pottery_sherd', 'skull_pottery_sherd',
+  'snort_pottery_sherd',
+];
 /** vanilla ItemTags.DECORATED_POT_INGREDIENTS: bricks and the sherds */
 const INGREDIENTS = new Set(['brick', ...SHERDS]);
 

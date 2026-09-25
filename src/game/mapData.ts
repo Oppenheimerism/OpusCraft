@@ -12,8 +12,11 @@ import { BANNER_COLORS, bannerColorOf } from '../world/bannerPatterns';
 
 export const MAP_SIZE = 128;
 
-/** vanilla MapDecorationTypes (those the game has): a player, off the map or far off it, and a banner of each colour */
-export type DecorationType = 'player' | 'player_off_map' | 'player_off_limits' | `banner_${(typeof BANNER_COLORS)[number]}`;
+/**
+ * vanilla MapDecorationTypes (those the game has): a player, off the map or far off it, a banner of each colour;
+ * (Stage 5: ocean) and the targets of treasure and explorer maps: a red cross, an ocean monument
+ */
+export type DecorationType = 'player' | 'player_off_map' | 'player_off_limits' | `banner_${(typeof BANNER_COLORS)[number]}` | 'red_x' | 'monument';
 
 /** whether item frames (and the cartography table) show a marker, and whether it counts toward a map's limit */
 export const DECORATION_TYPES = {
@@ -21,7 +24,13 @@ export const DECORATION_TYPES = {
   player_off_map: { showOnItemFrame: false, trackCount: true },
   player_off_limits: { showOnItemFrame: false, trackCount: true },
   ...Object.fromEntries(BANNER_COLORS.map((c) => [`banner_${c}`, { showOnItemFrame: true, trackCount: true }])),
+  // (Stage 5: ocean)
+  red_x: { showOnItemFrame: true, trackCount: false },
+  monument: { showOnItemFrame: true, trackCount: false },
 } as Record<DecorationType, { showOnItemFrame: boolean; trackCount: boolean }>;
+
+/** (Stage 5: ocean) vanilla MapDecorationType.explorationMapElement: what marks a map as a cartographer's explorer map */
+const EXPLORATION_ELEMENTS: ReadonlySet<DecorationType> = new Set(['monument']);
 
 /** vanilla MapDecoration: x and y in half map pixels from the centre (-128..127), rot in sixteenths of a turn */
 export interface MapDecoration {
@@ -122,8 +131,9 @@ export class MapItemSavedData {
     return d;
   }
 
-  /** vanilla isExplorationMap: made by a cartographer to lead somewhere (none are, yet) */
+  /** vanilla isExplorationMap: made by a cartographer to lead somewhere (it shows where: an ocean monument) */
   isExplorationMap(): boolean {
+    for (const d of this.decorations.values()) if (EXPLORATION_ELEMENTS.has(d.type)) return true;
     return false;
   }
 
@@ -149,6 +159,12 @@ export class MapItemSavedData {
         this.removeDecoration(id);
       }
     }
+    // (Stage 5: ocean) the markers the map item itself carries (vanilla MAP_DECORATIONS: an explorer map's target),
+    // put on it the first time it's carried
+    const marks = stack.tag?.mapDecorations;
+    if (marks)
+      for (const [id, m] of Object.entries(marks))
+        if (!this.decorations.has(id) && m.type in DECORATION_TYPES) this.addDecoration(m.type as DecorationType, player.level, id, m.x, m.z, m.rotation, null);
   }
 
   /**
@@ -381,3 +397,8 @@ onWorldMetaSave(async (m) => {
   const s = w && w.meta.id === m.id ? STORAGES.get(w.level) : null;
   if (s) await s.save(m);
 });
+
+/** (Stage 5: ocean) the world being played and its save, for what rolls a treasure map with no level at hand */
+export function currentMapWorld(): MapWorld | null {
+  return worldSource?.() ?? null;
+}

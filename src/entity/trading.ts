@@ -269,7 +269,8 @@ export const VILLAGER_TRADES: Record<string, ItemListing[][]> = {
   ],
   cartographer: [
     [emeraldForItems('paper', 24, 16, 2), itemsForEmeralds('map', 7, 1, 12, 1)],
-    // (the explorer maps wait for monuments, mansions and trial chambers)
+    // (Stage 5: ocean) the ocean explorer map joins these in game/treasureMaps; the woodland and trial explorer maps
+    // wait for mansions and trial chambers
     [emeraldForItems('glass_pane', 11, 16, 10)],
     [emeraldForItems('compass', 1, 12, 20)],
     [itemsForEmeralds('item_frame', 7, 1, 12, 15), ...each(DYES, (c) => itemsForEmeralds(`${c}_banner`, 3, 1, 12, 15))],

@@ -29,6 +29,8 @@ import { AbstractHorse, AbstractChestedHorse } from '../../entity/horse';
 import { createBoat, boatItemInfo } from '../../entity/boat';
 import { createMinecart } from '../../entity/minecart';
 import { createMob } from '../spawner';
+// (Stage 5: ocean)
+import { releaseBucketFish } from '../../entity/fish';
 import { behaviorOf } from '../blockBehavior';
 import { canSurvive } from '../blockRules';
 import { performBoneMeal, boneMealParticles } from '../boneMeal';
@@ -326,9 +328,9 @@ const WATER_PLANTS = new Set(['seagrass', 'tall_seagrass', 'kelp', 'kelp_plant']
 /**
  * vanilla BucketItem.emptyContents (no player): into a block that holds water (waterlogging it), or in place of
  * air, a replaceable or non-solid block (broken first, with its drops) or other fluid; water boils away in the Nether.
- * False if it can't go there.
+ * False if it can't go there. (Stage 5: ocean: `emptySound` is a bucket of fish's own, vanilla MobBucketItem.playEmptySound)
  */
-function emptyContents(level: Level, x: number, y: number, z: number, fluid: 'water' | 'lava'): boolean {
+export function emptyContents(level: Level, x: number, y: number, z: number, fluid: 'water' | 'lava', emptySound = 'item.bucket.empty'): boolean {
   const st = level.getState(x, y, z);
   const b = blk(st);
   const f = FLAGS[st];
@@ -347,12 +349,12 @@ function emptyContents(level: Level, x: number, y: number, z: number, fluid: 'wa
       level.setBlock(x, y, z, b.with(st, 'waterlogged', true));
       level.scheduleTick(x, y, z, 5);
     }
-    level.sound.play('item.bucket.empty', cx, cy, cz, 1, 1);
+    level.sound.play(emptySound, cx, cy, cz, 1, 1);
     return true;
   }
   if (!(f & F_AIR) && !(f & (F_WATER | F_LAVA) && b.s.fluid)) level.destroyBlock(x, y, z, true);
   level.setBlock(x, y, z, getBlock(fluid).defaultState);
-  level.sound.play(fluid === 'lava' ? 'item.bucket.empty_lava' : 'item.bucket.empty', cx, cy, cz, 1, 1);
+  level.sound.play(fluid === 'lava' ? 'item.bucket.empty_lava' : emptySound, cx, cy, cz, 1, 1);
   return true;
 }
 
@@ -574,3 +576,13 @@ export function dispenseBehaviorFor(stack: ItemStack): DispenseBehavior {
   if (stack.item.armor || id === 'shield') return armor;
   return DEFAULT_DISPENSE;
 }
+
+// (Stage 5: ocean) vanilla: a bucket of fish empties its water in front, lets the fish go in it (MobBucketItem
+// checkExtraContent) and leaves an empty bucket; where the water can't go, it's thrown out
+const fishBucket = behavior((src, stack) => {
+  const [x, y, z] = front(src);
+  if (!emptyContents(src.level, x, y, z, 'water', 'item.bucket.empty_fish')) return DEFAULT_DISPENSE(src, stack);
+  releaseBucketFish(src.level, stack, x, y, z);
+  return ItemStack.of('bucket');
+});
+Object.assign(BEHAVIORS, { cod_bucket: fishBucket, salmon_bucket: fishBucket, pufferfish_bucket: fishBucket, tropical_fish_bucket: fishBucket });

@@ -36,6 +36,8 @@ import { playerAttack } from './combat';
 import { canPlaceFire, fireStateAt, placeFire } from './fire';
 import { Minecart, MinecartChest, createMinecart } from '../entity/minecart';
 import { Boat, ChestBoat, boatItemInfo, useBoatItem } from '../entity/boat';
+// (Stage 5: ocean)
+import { WaterAnimal } from '../entity/water';
 import { isRail, railShape, isAscending } from './rails';
 import { MobEffectInstance, MOB_EFFECTS } from '../entity/effects';
 import { levelOf, miningEfficiency, submergedMiningSpeed, hurtAndBreak, hasBinding } from '../item/enchantHelper';
@@ -404,6 +406,11 @@ export class Interaction {
           p.swing();
           return 'success';
         }
+      }
+      // (Stage 5: ocean) vanilla mobInteract of the sea's creatures: a water bucket scoops up a fish, a fish feeds a dolphin
+      if (e instanceof WaterAnimal && e.interact(p, stack)) {
+        p.swing();
+        return 'success';
       }
     }
     const h = this.hit;
