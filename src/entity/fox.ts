@@ -417,6 +417,7 @@ export class Fox extends Animal {
       if (fx && r.nextFloat() < chance) this.addEffect(new MobEffectInstance(fx, ticks, amp));
     }
     s.count--;
+    this.level.gameEvent('eat', this.x, this.y, this.z, { entity: this });
     if (s.item.id === 'chorus_fruit') chorusTeleport(this.level, this);
   }
 
@@ -1109,7 +1110,9 @@ class FoxEatBerriesGoal extends MoveToBlockGoal {
     const lvl = this.fox.level, x = this.bx, y = this.by, z = this.bz;
     ItemEntity.drop(lvl, x, y, z, ItemStack.of('glow_berries'));
     lvl.sound.play('block.cave_vines.pick_berries', x + 0.5, y + 0.5, z + 0.5, 1, 0.8 + lvl.random.nextFloat() * 0.4);
-    lvl.setBlock(x, y, z, BLOCKS[STATE_BLOCK[st]].with(st, 'berries', false), 2);
+    const now = BLOCKS[STATE_BLOCK[st]].with(st, 'berries', false);
+    lvl.setBlock(x, y, z, now, 2);
+    lvl.gameEvent('block_change', x + 0.5, y + 0.5, z + 0.5, { entity: this.fox, state: now });
   }
   /** vanilla pickSweetBerries: one or two berries, three from a full bush; the bush back to age 1 */
   private pickSweetBerries(st: number): void {
@@ -1123,6 +1126,7 @@ class FoxEatBerriesGoal extends MoveToBlockGoal {
     if (j > 0) ItemEntity.drop(lvl, this.bx, this.by, this.bz, ItemStack.of('sweet_berries', j));
     f.playSound('block.sweet_berry_bush.pick_berries', 1, 1);
     lvl.setBlock(this.bx, this.by, this.bz, b.with(st, 'age', 1), 2);
+    lvl.gameEvent('block_change', this.bx + 0.5, this.by + 0.5, this.bz + 0.5, { entity: f });
   }
   override canUse(): boolean {
     return !this.fox.isSleeping() && super.canUse();

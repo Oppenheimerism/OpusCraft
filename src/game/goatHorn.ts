@@ -47,6 +47,7 @@ registerItemBehavior('goat_horn', {
     if (p.cooldowns.get('goat_horn')) return 'pass';
     p.startUsingItem(stack, GOAT_HORN_USE_DURATION);
     level.sound.play(`item.goat_horn.sound.${i}`, p.x, p.y, p.z, RANGE / 16, 1);
+    level.gameEvent('instrument_play', p.x, p.y, p.z, { entity: p });
     p.cooldowns.set('goat_horn', GOAT_HORN_USE_DURATION);
     return 'success';
   },

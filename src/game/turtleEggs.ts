@@ -51,6 +51,8 @@ export function decreaseEggs(level: Level, x: number, y: number, z: number, st: 
   if (n <= 1) level.destroyBlock(x, y, z, false);
   else {
     level.setBlock(x, y, z, EGG.with(st, 'eggs', n - 1), 2);
+    // (the broken egg is a game event, of the clutch as it was, by no one)
+    level.gameEvent('block_destroy', x + 0.5, y + 0.5, z + 0.5, { state: st });
     destroyEffect(level, x, y, z, st);
   }
 }
@@ -74,10 +76,12 @@ function randomTick(level: Level, x: number, y: number, z: number, st: number): 
   if (hatch < 2) {
     level.sound.play('entity.turtle.egg_crack', x + 0.5, y + 0.5, z + 0.5, 0.7, 0.9 + r.nextFloat() * 0.2);
     level.setBlock(x, y, z, EGG.with(st, 'hatch', hatch + 1), 2);
+    level.gameEvent('block_change', x + 0.5, y + 0.5, z + 0.5, { state: st });
     return;
   }
   level.sound.play('entity.turtle.egg_hatch', x + 0.5, y + 0.5, z + 0.5, 0.7, 0.9 + r.nextFloat() * 0.2);
   level.setBlock(x, y, z, 0);
+  level.gameEvent('block_destroy', x + 0.5, y + 0.5, z + 0.5, { state: st });
   for (let j = 0; j < eggsOf(st); j++) {
     destroyEffect(level, x, y, z, st);
     const t = new Turtle(level);

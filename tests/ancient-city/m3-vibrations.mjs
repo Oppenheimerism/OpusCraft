@@ -13,6 +13,8 @@ const { m, close } = await load([
   '/src/game/sculkSensor.ts', '/src/game/sculkShrieker.ts', '/src/game/sculkCatalyst.ts', '/src/game/vibrations.ts', '/src/game/gameEvents.ts',
   '/src/game/wardenSpawnTracker.ts', '/src/entity/player.ts', '/src/game/interaction.ts', '/src/entity/monsters.ts', '/src/entity/animals.ts',
   '/src/entity/effects.ts', '/src/game/redstone/signal.ts', '/src/entity/arrow.ts', '/src/entity/tnt.ts',
+  '/src/game/turtleEggs.ts', '/src/entity/turtle.ts', '/src/entity/fox.ts', '/src/entity/rabbit.ts', '/src/game/goatHorn.ts',
+  '/src/entity/fireworkRocket.ts', '/src/entity/frog.ts',
 ]);
 
 const G = 64;
@@ -801,6 +803,142 @@ function useAt(inter, p, s, tx, ty, tz) {
   const shot = events.find((e) => e.event === 'projectile_shoot' && e.entity === p);
   check('events: an arrow flying: projectile_shoot by the one who shot it, once', !!shot && events.filter((e) => e.event === 'projectile_shoot' && e.entity === p).length === 1);
   check('events: an arrow landing: projectile_land at the middle of the block it stuck in, with that block', !!landed && landed.x % 1 === 0.5 && landed.y === G - 0.5 && landed.z % 1 === -0.5 && blockName(m, landed.state) === 'stone', JSON.stringify(landed && { x: landed.x, y: landed.y, z: landed.z }));
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Main's creatures and things make theirs too: turtle eggs, foxes, rabbits, goat horns, firework rockets
+
+/** the goal of `mob` that is a `name` */
+const goalOf = (mob, name) => mob.goalSelector.goals.find((w) => w.goal.constructor.name === name)?.goal ?? null;
+
+{
+  const { level, events } = scene();
+  let n = events.length;
+  const since = () => events.slice(n, (n = events.length));
+  // turtle eggs on sand: one of a clutch broken, cracking, hatching
+  level.setBlock(3, G - 1, 0, m.S('sand'));
+  const EGG = m.getBlock('turtle_egg');
+  let st = EGG.state({ eggs: 3 });
+  level.setBlock(3, G, 0, st);
+  since();
+  m.decreaseEggs(level, 3, G, 0, st);
+  let ev = since();
+  check('turtle eggs: one of a clutch broken: block_destroy of the clutch as it was, by no one', ev.some((e) => e.event === 'block_destroy' && e.entity === null && e.state === st && e.x === 3.5 && e.y === G + 0.5) && prop(m, level, 3, G, 0, 'eggs') === 2);
+  level.dayTime = 21600;
+  st = level.getState(3, G, 0);
+  m.behaviorOf(st).randomTick(level, 3, G, 0, st);
+  ev = since();
+  check('turtle eggs: cracking, in the hour before dawn: block_change, of the eggs as they were', ev.some((e) => e.event === 'block_change' && e.state === st) && prop(m, level, 3, G, 0, 'hatch') === 1);
+  level.setBlock(3, G, 0, EGG.state({ eggs: 2, hatch: 2 }));
+  st = level.getState(3, G, 0);
+  since();
+  m.behaviorOf(st).randomTick(level, 3, G, 0, st);
+  ev = since();
+  check('turtle eggs: hatching: block_destroy of the eggs, and the babies come out', ev.some((e) => e.event === 'block_destroy' && e.state === st) && level.getState(3, G, 0) === 0 && level.entities.filter((e) => e.type === 'turtle').length === 2);
+  // a fox eating a chorus fruit: eat, then teleport from where it was
+  const fox = new m.Fox(level);
+  fox.moveTo(-4.5, G, 0.5, 0, 0);
+  level.addEntity(fox);
+  level.tick();
+  since();
+  fox.eatHeld(stackOf(m, 'chorus_fruit'));
+  ev = since().filter((e) => e.entity === fox);
+  check('foxes: eating a chorus fruit: eat, then teleport where it stood', ev.map((e) => e.event).join() === 'eat,teleport' && ev[1].x === -4.5 && ev[1].z === 0.5, ev.map((e) => e.event).join());
+  // picking berries off a bush and a cave vine
+  level.gameRules.mobGriefing = true;
+  const berries = goalOf(fox, 'FoxEatBerriesGoal');
+  level.setBlock(6, G, 6, m.getBlock('sweet_berry_bush').state({ age: 3 }));
+  Object.assign(berries, { bx: 6, by: G, bz: 6 });
+  fox.setItemSlot('mainhand', null);
+  since();
+  berries.onReachedTarget();
+  ev = since();
+  check('foxes: picking a sweet berry bush: block_change by the fox (and its mouth full: unequip)', prop(m, level, 6, G, 6, 'age') === 1 && ev.some((e) => e.event === 'block_change' && e.entity === fox && e.x === 6.5) && ev.some((e) => e.event === 'unequip' && e.entity === fox));
+  level.setBlock(6, G + 3, 6, m.S('stone'));
+  level.setBlock(6, G + 2, 6, m.getBlock('cave_vines').state({ berries: true }));
+  Object.assign(berries, { bx: 6, by: G + 2, bz: 6 });
+  berries.onReachedTarget();
+  ev = since();
+  check('foxes: picking glow berries off a cave vine: block_change by the fox, with the vine now bare', ev.some((e) => e.event === 'block_change' && e.entity === fox && e.state === level.getState(6, G + 2, 6)) && prop(m, level, 6, G + 2, 6, 'berries') === false);
+  // a rabbit nibbling a carrot back a stage (the last bite takes it without a sound a sensor hears, as in vanilla)
+  const rabbit = new m.Rabbit(level);
+  level.setBlock(-6, G - 1, -6, m.S('farmland'));
+  level.setBlock(-6, G, -6, m.getBlock('carrots').state({ age: 1 }));
+  level.addEntity(rabbit);
+  level.tick();
+  rabbit.moveTo(-5.5, G - 0.0625, -5.5, 0, 0);
+  const raid = goalOf(rabbit, 'RaidGardenGoal');
+  Object.assign(raid, { bx: -6, by: G - 1, bz: -6, canRaid: true });
+  since();
+  raid.tick();
+  ev = since();
+  check('rabbits: a bite of a carrot: block_change by the rabbit', prop(m, level, -6, G, -6, 'age') === 0 && ev.some((e) => e.event === 'block_change' && e.entity === rabbit));
+  Object.assign(raid, { canRaid: true });
+  raid.tick();
+  ev = since();
+  check('rabbits: the last bite: the carrot gone, no game event (vanilla\'s destroyBlock finds air)', level.getState(-6, G, -6) === 0 && !ev.some((e) => e.event.startsWith('block_')));
+}
+
+{
+  // a frog laying its spawn on the water beside it: block_place by the frog
+  const { level, events } = scene();
+  for (let x = -3; x <= 3; x++) for (let z = -3; z <= 3; z++) level.setBlock(x, G - 1, z, m.S('grass_block'));
+  level.setBlock(1, G - 1, 0, m.S('water'));
+  const f = new m.Frog(level);
+  f.moveTo(0.5, G, 0.5, 0, 0);
+  level.addEntity(f);
+  level.tick();
+  f.isPregnant = true;
+  f.walkTarget = { t: { pos: [0, G, 2] }, speed: 1, closeEnough: 0 };
+  let laid = null;
+  for (let i = 0; i < 40 && !laid; i++) {
+    level.tick();
+    laid = events.find((e) => e.event === 'block_place' && e.entity === f) ?? null;
+  }
+  check('frogs: laying spawn on the water: block_place by the frog, of the frogspawn, where it went', !!laid && laid.x === 1.5 && laid.y === G + 0.5 && laid.z === 0.5 && blockName(m, laid.state) === 'frogspawn' && blockName(m, level.getState(1, G, 0)) === 'frogspawn');
+}
+
+{
+  const { level, events } = scene();
+  let n = events.length;
+  const since = () => events.slice(n, (n = events.length));
+  const p = addPlayer(level, 0.5, G, 0.5);
+  const inter = new m.Interaction(level, p);
+  level.tick();
+  // a goat horn blown: instrument_play (and the item being used)
+  p.inventory.main[0] = m.goatHornStack(m.GOAT_HORN_INSTRUMENTS[0]);
+  p.inventory.selected = 0;
+  p.pitch = -90;
+  inter.pick(p.x, p.y + p.eyeHeight, p.z, p.yaw, p.pitch);
+  inter.rightClickDelay = 0;
+  since();
+  inter.use(true, true);
+  const ev = since().filter((e) => e.entity === p).map((e) => e.event);
+  check('goat horn: blowing one: item_interact_start and instrument_play, by the player', ev.includes('instrument_play') && ev.includes('item_interact_start'), ev.join());
+  p.stopUsingItem?.();
+  // a firework rocket: shot by who set it off, then bursting (a plain one, no stars: its puffs)
+  const rocket = new m.FireworkRocket(level, 4.5, G, 4.5, stackOf(m, 'firework_rocket'), p);
+  level.addEntity(rocket);
+  since();
+  level.tick();
+  let shot = since().filter((e) => e.entity === p && e.event === 'projectile_shoot');
+  check('fireworks: a rocket going up: projectile_shoot by the player who set it off, where it started', shot.length === 1 && shot[0].x === 4.5 && shot[0].y === G && shot[0].z === 4.5);
+  let boom = null;
+  for (let i = 0; i < 80 && !boom; i++) {
+    level.tick();
+    boom = events.find((e) => e.event === 'explode' && e.entity === p) ?? null;
+  }
+  check('fireworks: it bursts: explode, by the player, where it is', !!boom && rocket.removed && Math.abs(boom.y - rocket.y) < 1e-9 && events.filter((e) => e.event === 'projectile_shoot' && e.entity === p).length === 1);
+  // one under a ceiling lands on it
+  level.setBlock(-4, G + 3, -4, m.S('stone'));
+  const low = new m.FireworkRocket(level, -3.5, G, -3.5, stackOf(m, 'firework_rocket'), p);
+  level.addEntity(low);
+  let landed = null;
+  for (let i = 0; i < 40 && !landed; i++) {
+    level.tick();
+    landed = events.find((e) => e.event === 'projectile_land' && e.entity === low) ?? null;
+  }
+  check('fireworks: a rocket hitting the ceiling: projectile_land at the block, with the block', !!landed && landed.x === -3.5 && landed.y === G + 3.5 && landed.z === -3.5 && blockName(m, landed.state) === 'stone', JSON.stringify(landed && [landed.x, landed.y, landed.z]));
 }
 
 await exitWithStatus(close);
