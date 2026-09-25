@@ -17,6 +17,12 @@ const RAD = Math.PI / 180;
  */
 export function playerAttack(level: Level, p: Player, target: Entity, damageHeld: (n: number) => void, spin?: { damage: number; weapon: ItemStack | null }): void {
   if (p.gameMode === 'spectator') return;
+  // vanilla Entity.skipAttackInteraction: an item frame takes the blow its own way (what it holds knocked out, or the
+  // frame brought down) and the attack goes no further
+  if ((target as { skipAttackInteraction?: (p: Player) => boolean }).skipAttackInteraction?.(p)) {
+    p.resetAttackStrength();
+    return;
+  }
   const held = spin ? spin.weapon : p.inventory.selectedItem;
   // ATTACK_DAMAGE attribute: the weapon's damage with strength / weakness
   let f = spin ? spin.damage : p.effectAttackDamage(held ? held.item.attackDamage : 1);

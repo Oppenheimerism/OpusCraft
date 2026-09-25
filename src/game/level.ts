@@ -818,7 +818,9 @@ export class Level {
         }
       }
       if (!canSurvive(this.world, nx, ny, nz, ns)) {
-        if (isDripstoneFacing(ns, 'down')) this.fallStalactite(nx, ny, nz);
+        const delay = behaviorOf(ns)?.breakDelay;
+        if (delay) this.scheduleBlockTick(nx, ny, nz, STATE_BLOCK[ns], delay);
+        else if (isDripstoneFacing(ns, 'down')) this.fallStalactite(nx, ny, nz);
         else this.destroyBlock(nx, ny, nz, true, null, true);
       }
     }

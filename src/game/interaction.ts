@@ -43,7 +43,7 @@ import { WaterAnimal } from '../entity/water';
 import { isRail, railShape, isAscending } from './rails';
 import { MobEffectInstance, MOB_EFFECTS } from '../entity/effects';
 import { levelOf, miningEfficiency, submergedMiningSpeed, hurtAndBreak, hasBinding } from '../item/enchantHelper';
-import { armorIndex, equipSound } from '../item/equipment';
+import { armorIndex, equipSound, equipableSlot } from '../item/equipment';
 import type { Hand } from '../item/inventory';
 import { isCharged, performShooting, shootingPower, PLAYER_INACCURACY, playerProjectile, useDuration, crossbowUseTick, releaseUsing as releaseCrossbow } from '../item/crossbow';
 
@@ -419,6 +419,12 @@ export class Interaction {
           return 'success';
         }
       }
+      // (an entity with its own vanilla interact: an item frame takes the item held out to it, or turns what it holds)
+      const own = (e as { playerInteract?: (p: Player, stack: ItemStack | null) => boolean }).playerInteract;
+      if (own && own.call(e, p, stack)) {
+        p.swing();
+        return 'success';
+      }
       // (Stage 5: ocean) vanilla mobInteract of the sea's creatures: a water bucket scoops up a fish, a fish feeds a dolphin
       if (e instanceof WaterAnimal && e.interact(p, stack)) {
         p.swing();
@@ -561,7 +567,8 @@ export class Interaction {
         const bb = new AABB(x + c[0], y + c[1], z + c[2], x + c[3], y + c[4], z + c[5]);
         if (bb.intersects(p.bb)) return false;
         for (const e of this.level.entities) {
-          if (e !== p && !(e instanceof ItemEntity) && !e.removed && bb.intersects(e.bb)) return false;
+          // (vanilla Entity.blocksBuilding: an item frame doesn't stand in the way)
+          if (e !== p && !(e instanceof ItemEntity) && !e.removed && (e as { blocksBuilding?: boolean }).blocksBuilding !== false && bb.intersects(e.bb)) return false;
         }
       }
     }
@@ -858,7 +865,7 @@ export class Interaction {
       return true;
     }
     // vanilla ArmorItem.use → Equipable.swapWithEquipmentSlot
-    if (it.armor) return this.swapWithEquipmentSlot(stack);
+    if (it.armor || it.id === 'elytra') return this.swapWithEquipmentSlot(stack);
     // vanilla TridentItem.use: not when one more use would break it; with riptide only in water or rain
     if (it.id === 'trident') {
       if (stack.damage >= it.maxDamage - 1) return false;
@@ -922,7 +929,7 @@ export class Interaction {
   private swapWithEquipmentSlot(stack: ItemStack): boolean {
     const p = this.player;
     const inv = p.inventory;
-    const i = armorIndex(stack.item.armor!.slot);
+    const i = armorIndex(equipableSlot(stack.item)!);
     const cur = inv.armor[i];
     const creative = p.gameMode === 'creative';
     if (cur && ((hasBinding(cur) && !creative) || (cur.count === stack.count && cur.sameItem(stack)))) return false;

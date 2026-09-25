@@ -9,6 +9,7 @@ import { type Ctx, sound } from './registry';
 import { burst, impact, sweep, thump } from './texture';
 import { reverbHalf } from './world';
 import { dragonSounds } from './dragon';
+import { outerEndSounds } from './outerEnd';
 
 /** half-rate render -> full rate, the images above ~10 kHz filtered off */
 function up2(x: Float32Array, sr: number): Float32Array {
@@ -188,5 +189,6 @@ export function endSounds(): Record<string, SoundGen> {
     'entity.ender_eye.launch': sound('entity.ender_eye.launch', 2, eyeLaunch, { fadeOut: 0.15 }),
     'entity.ender_eye.death': sound('entity.ender_eye.death', 2, eyeDeath, { fadeOut: 0.15 }),
     ...dragonSounds(),
+    ...outerEndSounds(),
   };
 }

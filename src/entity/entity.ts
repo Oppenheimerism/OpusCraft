@@ -3,6 +3,7 @@
 import { AABB, collideWithBoxes } from '../core/aabb';
 import { COLLISION, FLAGS, F_WATER, F_LAVA, BLOCKS, STATE_BLOCK, F_CLIMBABLE, type Box } from '../world/block';
 import type { World } from '../world/world';
+import { DYNAMIC_SHAPE, dynamicCollision } from '../world/dynamicShapes';
 import { fluidType, fluidHeight, fluidFlow, FLUID_WATER, FLUID_LAVA, FLUID_NONE } from '../world/fluids';
 import type { Level } from '../game/level';
 import { setDripleafTilt } from '../game/blockRules';
@@ -462,7 +463,8 @@ export abstract class Entity {
             if (b.intersects(box)) out.push(b);
             continue;
           }
-          const boxes = COLLISION[st] ?? DYNAMIC_COLLISION[STATE_BLOCK[st]]?.(world, x, y, z, st);
+          // (a shulker box's shape grows with its lid: world/dynamicShapes)
+          const boxes = DYNAMIC_SHAPE[st] ? dynamicCollision(world, x, y, z, st) : COLLISION[st] ?? DYNAMIC_COLLISION[STATE_BLOCK[st]]?.(world, x, y, z, st);
           if (!boxes) continue;
           for (const c of boxes) {
             const b = new AABB(x + c[0], y + c[1], z + c[2], x + c[3], y + c[4], z + c[5]);

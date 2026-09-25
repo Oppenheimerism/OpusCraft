@@ -16,6 +16,7 @@ import { wrapDegrees } from '../core/math';
 import { findStandUpPosition } from '../game/sleep';
 import { hurtAndBreak, oxygenBonus } from '../item/enchantHelper';
 import { playerAttack } from '../game/combat';
+import { tryToStartFallFlying } from './elytra';
 
 export type GameMode = 'survival' | 'creative' | 'adventure' | 'spectator';
 
@@ -161,9 +162,12 @@ export class Player extends LivingEntity {
 
   override get eyeHeight(): number {
     if (this.sleepingPos) return 0.2;
-    if (this.spinPose) return 0.4;
+    if (this.spinPose || this.glidePose) return 0.4;
     return this.crouching ? 1.27 : 1.62;
   }
+
+  /** (Stage 4: the outer End) vanilla Pose.FALL_FLYING: 0.6 tall (eyes at 0.4) while gliding on an elytra */
+  glidePose = false;
 
   /** vanilla Pose.SPIN_ATTACK: curled up 0.6 tall (eyes at 0.4) while a riptide spin lasts */
   spinPose = false;
@@ -433,6 +437,28 @@ export class Player extends LivingEntity {
       }
     }
     if (this.flying) this.fallDistance = 0;
+    this.updateGlidePose();
+  }
+
+  /**
+   * (Stage 4: the outer End) vanilla Player.updatePlayerPose, at the end of the tick, for the glide: 0.6 tall while
+   * gliding, from the tick it starts; after it, standing if there's room, else crouching. (A riptide spin's pose is
+   * the same size and takes over while it lasts; if it ends mid-glide, the glide's comes back.)
+   */
+  private updateGlidePose(): void {
+    if (this.spinPose) return;
+    if (this.fallFlying) {
+      if (this.glidePose && this.height === 0.6) return;
+      this.glidePose = true;
+      this.crouching = false;
+      this.setSize(0.6, 0.6);
+    } else if (this.glidePose) {
+      this.glidePose = false;
+      const tall = this.bb.clone();
+      tall.maxY = tall.minY + 1.8;
+      this.crouching = this.collisionBoxes(tall.inflate(-1e-4, 0, -1e-4)).length > 0;
+      this.setSize(0.6, this.crouching ? 1.5 : 1.8);
+    }
   }
 
   /** vanilla Player.turtleHelmetTick: out of the water, a turtle shell keeps 10 s of breath in hand (no swirls, just the icon) */
@@ -507,8 +533,8 @@ export class Player extends LivingEntity {
       }
     }
     // crouching pose (vanilla: shift while on ground / not flying)
-    const wantCrouch = inp.sneak && !this.flying && !this.inWater && !this.spinPose;
-    if (!this.spinPose && wantCrouch !== this.crouching) {
+    const wantCrouch = inp.sneak && !this.flying && !this.inWater && !this.spinPose && !this.glidePose;
+    if (!this.spinPose && !this.glidePose && wantCrouch !== this.crouching) {
       if (wantCrouch) {
         this.crouching = true;
         this.setSize(0.6, 1.5);
@@ -548,13 +574,18 @@ export class Player extends LivingEntity {
     this.rideJump(inp.jump);
     // flying toggle: double-tap jump (not on a mount)
     if (this.jumpTriggerTime > 0) this.jumpTriggerTime--;
+    let toggled = false;
     if (inp.jump && !this.wasJump && this.mayFly && !this.vehicle) {
       if (this.jumpTriggerTime === 0) this.jumpTriggerTime = 7;
       else if (this.gameMode !== 'spectator') {
         this.flying = !this.flying;
         this.jumpTriggerTime = 0;
+        toggled = true;
       }
     }
+    // (Stage 4: the outer End) vanilla LocalPlayer.aiStep: a fresh jump in mid-air spreads a worn elytra (not while
+    // flying, riding or on a ladder)
+    if (inp.jump && !this.wasJump && !toggled && !this.flying && !this.vehicle && !this.onClimbable()) tryToStartFallFlying(this);
     this.wasJump = inp.jump;
     if (this.flying) {
       let v = 0;
@@ -607,6 +638,8 @@ export class Player extends LivingEntity {
       super.travel(sx, sy, sz);
       this.dy = d0 * 0.6;
       this.fallDistance = 0;
+      // (vanilla: flying folds the elytra)
+      this.fallFlying = false;
     } else super.travel(sx, sy, sz);
   }
 

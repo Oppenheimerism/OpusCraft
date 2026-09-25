@@ -68,6 +68,8 @@ import { nightVisionScale, blindnessFog, applyNausea } from '../render/effectVis
 import { OVERWORLD, THE_NETHER, THE_END, dimensionById, teleportationScale, type DimensionType } from '../world/dimension';
 import { PortalPoi, portalRectangle, relativePortalPosition, portalExit, createPortal, isPortal, portalAxis, type PortalRect } from './portal';
 import { setVillageMenuHook } from './villageBlocks';
+import { setShulkerBoxMenuHook } from './shulkerBox';
+import { tickOuterEndProgress } from './outerEndProgress';
 import { setGenerateLootListener } from './archaeology';
 import { setPotCraftedListener } from './decoratedPot';
 import { openJobSite } from './jobSites';
@@ -421,6 +423,7 @@ export class Game {
     this.interaction = new Interaction(this.level, this.player);
     this.interaction.onOpenContainer = (kind, x, y, z) => this.openContainer(kind, x, y, z);
     setVillageMenuHook((kind, x, y, z) => this.openContainer(kind, x, y, z));
+    setShulkerBoxMenuHook((menu) => this.containerScreenFactory && this.setScreen(this.containerScreenFactory(menu)));
     // (the archaeology advancements: a suspicious block's loot rolled for the player, a pot made of four sherds)
     setGenerateLootListener((p, table) => {
       if (p === this.player) this.advancements.trigger('container_loot', { lootTable: table });
@@ -878,6 +881,8 @@ export class Game {
     const kn = k ? entityDisplayName(k) : '';
     switch (source) {
       case 'mob':
+      // (vanilla mob_projectile's message is mob's: a shulker's bullet)
+      case 'mobProjectile':
         return `${n} was slain by ${kn}`;
       case 'player':
         return `${n} was slain by ${kn}`;
@@ -893,6 +898,9 @@ export class Game {
         return k === victim || !k ? `${n} blew up` : `${n} was blown up by ${kn}`;
       case 'fall':
         return `${n} fell from a high place`;
+      // (Stage 4: the outer End) an elytra into a wall
+      case 'flyIntoWall':
+        return `${n} experienced kinetic energy`;
       case 'drown':
         return `${n} drowned`;
       case 'starve':
@@ -1765,6 +1773,8 @@ export class Game {
       if (this.world.dim.id === 'the_nether' && this.level.fortresses().pieceAt(Math.floor(p.x), Math.floor(p.y), Math.floor(p.z))) this.advancements.trigger('structure', { structures: ['fortress'] });
       if (this.world.dim.id === 'overworld' && this.level.strongholds().pieceAt(Math.floor(p.x), Math.floor(p.y), Math.floor(p.z))) this.advancements.trigger('structure', { structures: ['stronghold'] });
     }
+    // (Stage 4: the outer End) Great View From Up Here
+    tickOuterEndProgress(this.level, p, this.advancements);
     // vanilla trackEnteredOrExitedLavaOnVehicle: how far a mount has carried the player across lava (ride_entity_in_lava)
     const v = p.vehicle;
     if (v?.inLava) {

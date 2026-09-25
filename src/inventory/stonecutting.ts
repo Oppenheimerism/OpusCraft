@@ -41,6 +41,7 @@ const FAMILIES: [string, [string, number][]][] = [
   ['smooth_quartz', [['smooth_quartz_slab', 2], ['smooth_quartz_stairs', 1]]],
   ['end_stone_bricks', [['end_stone_brick_slab', 2], ['end_stone_brick_stairs', 1], ['end_stone_brick_wall', 1]]],
   ['end_stone', [['end_stone_bricks', 1], ['end_stone_brick_slab', 2], ['end_stone_brick_stairs', 1], ['end_stone_brick_wall', 1]]],
+  ['purpur_block', [['purpur_slab', 2], ['purpur_stairs', 1], ['purpur_pillar', 1]]],
   ['smooth_stone', [['smooth_stone_slab', 2]]],
   [
     'blackstone',

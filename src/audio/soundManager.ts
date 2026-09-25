@@ -4,6 +4,7 @@ import type { GameOptions } from '../game/options';
 import type { Player } from '../entity/player';
 import type { Game } from '../game/game';
 import { MinecartSounds } from './minecartSounds';
+import { ElytraSounds } from './elytraSounds';
 import { BiomeAmbience } from './biomeAmbience';
 
 /**
@@ -45,6 +46,12 @@ function categoryOf(name: string): Category {
   if (name === 'block.portal.trigger' || name === 'block.portal.travel') return 'ambient';
   // vanilla global level event 1038 plays the end portal's opening as SoundSource.HOSTILE
   if (name === 'block.end_portal.spawn') return 'hostile';
+  // vanilla ChorusFruitItem plays its teleport as SoundSource.PLAYERS
+  if (name === 'item.chorus_fruit.teleport') return 'players';
+  // vanilla Shulker and ShulkerBullet.getSoundSource: HOSTILE
+  if (name.startsWith('entity.shulker')) return 'hostile';
+  // vanilla ElytraOnPlayerSoundInstance: SoundSource.PLAYERS
+  if (name === 'item.elytra.flying') return 'players';
   // vanilla CrossbowItem: the loading sounds are SoundSource.PLAYERS (the rest the shooter's source)
   if (name.startsWith('item.crossbow.')) return 'players';
   // (the shield's thud and crack are its holder's: a player's)
@@ -64,6 +71,8 @@ function categoryOf(name: string): Category {
   if (name.startsWith('weather.') || name.startsWith('entity.lightning')) return 'weather';
   if (name.startsWith('ambient.')) return 'ambient';
   if (/entity\.(zombie|skeleton|creeper|spider|enderman|slime|witch|drowned|husk|stray|phantom|ender_dragon|dragon_fireball|silverfish)/.test(name)) return 'hostile';
+  // (vanilla ItemFrame.getSoundSource is the default NEUTRAL: "Friendly Creatures", not the dropped item's)
+  if (name.startsWith('entity.item_frame')) return 'friendly';
   if (name.startsWith('entity.player') || name.startsWith('entity.generic') || name.startsWith('entity.item') || name.startsWith('entity.experience') || name.startsWith('entity.arrow')) return 'players';
   if (name.startsWith('entity.')) return 'friendly';
   if (name.startsWith('ui.')) return 'master';
@@ -97,6 +106,10 @@ const ALIASES: [RegExp, string][] = [
   [/^entity\.ender_dragon\.shoot$/, 'entity.ghast.shoot'],
   [/^entity\.ender_dragon\.ambient$/, 'entity.ender_dragon.growl'],
   [/^entity\.generic\.death$/, 'entity.player.hurt'],
+  // vanilla sounds.json: chorus fruit teleports with the enderman's portal samples
+  [/^item\.chorus_fruit\.teleport$/, 'entity.enderman.teleport'],
+  // and a shulker teleports with them too
+  [/^entity\.shulker\.teleport$/, 'entity.enderman.teleport'],
   // vanilla sounds.json: a shield breaking (or knocked down) is the item-break sample, random/break
   [/^item\.shield\.break$/, 'entity.item.break'],
   // vanilla sounds.json: some villagers at work make their workstation's own sound
@@ -142,6 +155,7 @@ export class SoundManager {
   private musicReq = 0;
   private readonly loops: LoopSound[] = [];
   private readonly minecarts = new MinecartSounds(this);
+  private readonly elytra = new ElytraSounds(this);
   readonly biomeAmbience = new BiomeAmbience(this);
 
   constructor() {
@@ -383,6 +397,7 @@ export class SoundManager {
     if (!this.ctx) return;
     const p = game.player;
     this.minecarts.tick(game.level, p);
+    this.elytra.tick(game.level, p);
     // biome loops, additions and (where the biome has its own) mood (vanilla BiomeAmbientSoundsHandler)
     const biomeMood = this.biomeAmbience.tick(game);
     // game music (vanilla MusicManager: 12000..24000 tick gaps); a biome with its own music (the

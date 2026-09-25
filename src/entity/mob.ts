@@ -25,6 +25,7 @@ import { currentDifficultyAt } from '../game/difficulty';
 import type { DifficultyInstance } from '../game/difficulty';
 import { doPostAttackEffects } from '../game/enchantEffects';
 import { crossbowUseTick } from '../item/crossbow';
+import { CHARGED_CREEPER_HEADS } from '../world/blocksSkulls';
 import { LeashKnot, getOrCreateKnot } from './leash';
 import type { Player } from './player';
 
@@ -1037,6 +1038,12 @@ export abstract class Mob extends LivingEntity {
     if (this.level.gameRules.doMobLoot) {
       this.dropLoot(byPlayer, looting);
       this.dropCustomDeathLoot(attacker, byPlayer, looting);
+      // (vanilla dropCustomDeathLoot: a charged creeper's blast knocks one head off, world/blocksSkulls)
+      const head = CHARGED_CREEPER_HEADS[this.type], c = attacker as (Entity & { powered?: boolean; droppedSkulls?: number }) | null;
+      if (head && c?.type === 'creeper' && c.powered && (c.droppedSkulls ?? 0) < 1) {
+        c.droppedSkulls = (c.droppedSkulls ?? 0) + 1;
+        this.spawnAtLocation(ItemStack.of(head));
+      }
       if (byPlayer) this.level.awardExperience?.(this.x, this.y, this.z, this.experienceReward());
     }
   }
