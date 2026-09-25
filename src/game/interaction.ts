@@ -19,6 +19,8 @@ import { FLUID_WATER } from '../world/fluids';
 import type { Entity } from '../entity/entity';
 import { LivingEntity } from '../entity/living';
 import { Animal } from '../entity/animals';
+import { Mob } from '../entity/mob';
+import { LeashKnot, bindPlayerMobs, isFence } from '../entity/leash';
 import { Creeper, bowPower } from '../entity/monsters';
 import { Piglin, GUARDED_BY_PIGLINS } from '../entity/piglin';
 import { Villager } from '../entity/villager';
@@ -317,12 +319,24 @@ export class Interaction {
     // entity interaction (vanilla Player.interactOn → Mob.mobInteract)
     const e = this.entityHit;
     if (e && p.gameMode !== 'spectator') {
+      // vanilla Mob.interact: its lead let go or tied on, or a name tag's name, before anything the mob does itself
+      if (e instanceof Mob && e.interactLeashOrName(p, stack)) {
+        p.swing();
+        return 'success';
+      }
+      // vanilla LeashFenceKnotEntity.interact
+      if (e instanceof LeashKnot) {
+        e.interact(p);
+        p.swing();
+        return 'success';
+      }
       if (stack && stack.item.id.endsWith('_spawn_egg') && (e instanceof Animal || e instanceof Villager) && e.type === stack.item.id.slice(0, -10)) {
         // spawn egg on a matching animal spawns a baby (vanilla SpawnEggItem.spawnOffspringFromSpawnEgg), before the
         // animal's own use of the click (vanilla Mob.checkAndHandleImportantInteractions)
         const baby = e instanceof Villager ? e.breedOffspring(e) : e.makeBaby(e);
         baby.setAge(-24000);
         baby.moveTo(e.x, e.y, e.z, 0, 0);
+        if (stack.tag?.customName !== undefined) baby.setCustomName(stack.tag.customName);
         this.level.addEntity(baby);
         if (p.gameMode !== 'creative') p.inventory.consumeSelected(1);
         p.swing();
@@ -399,6 +413,11 @@ export class Interaction {
     // blocks with a menu (vanilla Block.useWithoutItem: only on the main hand's turn)
     if (main && h && !secondary && p.gameMode !== 'spectator') {
       const name = BLOCKS[STATE_BLOCK[this.level.getState(h.x, h.y, h.z)]].name;
+      // vanilla FenceBlock.useWithoutItem: the animals on the player's leads are tied to it
+      if (isFence(name) && bindPlayerMobs(this.level, p, h.x, h.y, h.z)) {
+        p.swing();
+        return 'success';
+      }
       if ((name === 'crafting_table' || name === 'furnace' || name === 'chest' || name === 'enchanting_table' || name === 'grindstone' || name.endsWith('anvil') || name === 'barrel' || name === 'smoker' || name === 'blast_furnace') && this.onOpenContainer) {
         this.onOpenContainer(name, h.x, h.y, h.z);
         // vanilla ChestBlock / BarrelBlock.useWithoutItem: piglins who see a chest or barrel opened take it badly
@@ -439,6 +458,8 @@ export class Interaction {
         mob.moveTo(x + 0.5, y + (up ? 0 : 0), z + 0.5, Math.random() * 360, 0);
         mob.bodyYaw = mob.headYaw = mob.yaw;
         mob.finalizeSpawn('egg');
+        // (vanilla EntityType.appendCustomNameConfig: an egg named on an anvil names what hatches)
+        if (stack.tag?.customName !== undefined) mob.setCustomName(stack.tag.customName);
         this.level.addEntity(mob);
         if (p.gameMode !== 'creative') p.inventory.consumeSelected(1);
         p.swing();
@@ -758,6 +779,7 @@ export class Interaction {
       mob.moveTo(h.x + 0.5, h.y, h.z + 0.5, Math.random() * 360, 0);
       mob.bodyYaw = mob.headYaw = mob.yaw;
       mob.finalizeSpawn('egg');
+      if (stack.tag?.customName !== undefined) mob.setCustomName(stack.tag.customName);
       this.level.addEntity(mob);
       if (p.gameMode !== 'creative') p.inventory.consumeSelected(1);
       p.swing();

@@ -439,8 +439,9 @@ class CatRelaxOnOwnerGoal extends Goal {
   /** vanilla giveMorningGift: it pops up somewhere near, and the present lands in front of it */
   private giveMorningGift(): void {
     const c = this.cat, r = c.random;
-    // (a leashed cat's goes by the knot — no leads yet)
-    const bx = Math.floor(c.x), by = Math.floor(c.y), bz = Math.floor(c.z);
+    // (a leashed cat's is by whatever holds its lead)
+    const at = c.leashHolder ?? c;
+    const bx = Math.floor(at.x), by = Math.floor(at.y), bz = Math.floor(at.z);
     randomTeleport(c, bx + r.nextInt(11) - 5, by + r.nextInt(5) - 2, bz + r.nextInt(11) - 5);
     const it = ITEMS.get(rollGift(r));
     if (!it) return;

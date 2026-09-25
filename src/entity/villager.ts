@@ -1632,6 +1632,10 @@ export const lightningConversion: { witch: ((v: Villager) => Mob | null) | null 
 export class Villager extends AgeableMob {
   readonly type = 'villager';
   readonly category: MobCategory = 'misc';
+  /** vanilla AbstractVillager.canBeLeashed: never on a lead */
+  override canBeLeashed(): boolean {
+    return false;
+  }
   protected readonly adultWidth = 0.6;
   protected readonly adultHeight = 1.95;
 

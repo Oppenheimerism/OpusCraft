@@ -42,6 +42,7 @@ import { AbstractMinecart, createMinecart, MINECART_TYPES } from '../entity/mine
 import { Bat } from '../entity/bat';
 import { Boat, createBoat, BOAT_TYPES } from '../entity/boat';
 import { EndCrystal } from '../entity/endCrystal';
+import { LeashKnot } from '../entity/leash';
 import { EnderDragon } from '../entity/enderDragon';
 import { moonPhase } from '../render/environment';
 import { tickInhabitedTime } from './difficulty';
@@ -132,7 +133,7 @@ function saveWithPassengers(e: Entity): SavedEntity | null {
 
 function saveOne(e: Entity): SavedEntity | null {
   if (e instanceof Mob) return e.health > 0 && !e.removed ? e.save() : null;
-  if (e instanceof AbstractMinecart || e instanceof Boat || e instanceof EndCrystal) return e.removed ? null : e.save();
+  if (e instanceof AbstractMinecart || e instanceof Boat || e instanceof EndCrystal || e instanceof LeashKnot) return e.removed ? null : e.save();
   // (vanilla: arrows and tridents are kept with their chunk, stuck where they landed)
   if (e instanceof Arrow) return e.removed ? null : e.save();
   if (e instanceof ItemEntity && !e.removed) {
@@ -178,6 +179,7 @@ function loadOne(d: SavedEntity, level: Level): Entity | null {
     c.load(d);
     return c;
   }
+  if (d.id === 'leash_knot') return LeashKnot.load(level, d);
   const cart = createMinecart(d.id, level);
   if (cart) {
     cart.load(d);
@@ -196,7 +198,7 @@ function loadOne(d: SavedEntity, level: Level): Entity | null {
 /** entities that belong to chunk storage (whatever carries the player is saved with the player: vanilla RootVehicle) */
 export function isChunkSaved(e: Entity): boolean {
   if (e.passengers.some((p) => p.type === 'player')) return false;
-  return e instanceof AbstractMinecart || e instanceof Boat || e instanceof Mob || e instanceof ItemEntity || e instanceof EndCrystal || e instanceof Arrow;
+  return e instanceof AbstractMinecart || e instanceof Boat || e instanceof Mob || e instanceof ItemEntity || e instanceof EndCrystal || e instanceof Arrow || e instanceof LeashKnot;
 }
 
 const ENTITY_NAMES: Record<string, string> = {
@@ -206,7 +208,7 @@ const ENTITY_NAMES: Record<string, string> = {
   arrow: 'Arrow', tnt: 'Primed TNT', lightning_bolt: 'Lightning Bolt', item: 'Item', experience_orb: 'Experience Orb', falling_block: 'Falling Block', player: 'Player',
   egg: 'Thrown Egg', snowball: 'Snowball', ender_pearl: 'Thrown Ender Pearl', potion: 'Potion', trident: 'Trident',
   minecart: 'Minecart', chest_minecart: 'Minecart with Chest', boat: 'Boat', chest_boat: 'Boat with Chest', end_crystal: 'End Crystal',
-  ender_dragon: 'Ender Dragon', dragon_fireball: 'Dragon Fireball', area_effect_cloud: 'Area Effect Cloud',
+  ender_dragon: 'Ender Dragon', dragon_fireball: 'Dragon Fireball', area_effect_cloud: 'Area Effect Cloud', leash_knot: 'Leash Knot',
 };
 
 // (Stage 4: illagers)
@@ -214,8 +216,9 @@ Object.assign(ENTITY_NAMES, { pillager: 'Pillager', vindicator: 'Vindicator', ev
 // (Stage 5: ocean)
 Object.assign(ENTITY_NAMES, { guardian: 'Guardian', elder_guardian: 'Elder Guardian' });
 
-/** vanilla entity type display names (death messages, commands) */
+/** vanilla Entity.getDisplayName (death messages, commands, screens): its custom name, else its kind's */
 export function entityDisplayName(e: Entity | string): string {
+  if (typeof e !== 'string' && e.customName !== null) return e.customName;
   if (e instanceof Boat) return e.displayName();
   // vanilla Villager.getTypeName: a villager with a job goes by it
   if (e instanceof Villager && e.profession !== 'none') return e.profession[0].toUpperCase() + e.profession.slice(1);

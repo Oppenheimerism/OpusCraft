@@ -25,6 +25,11 @@ import { currentDifficultyAt } from '../game/difficulty';
 import type { DifficultyInstance } from '../game/difficulty';
 import { doPostAttackEffects } from '../game/enchantEffects';
 import { crossbowUseTick } from '../item/crossbow';
+import { LeashKnot, getOrCreateKnot } from './leash';
+import type { Player } from './player';
+
+/** where a saved lead's other end is: whoever held it (by uuid), or the fence it was tied to */
+export type SavedLeash = { uuid: string } | { x: number; y: number; z: number };
 
 export type MobCategory = 'monster' | 'creature' | 'ambient' | 'water_creature' | 'misc';
 
@@ -57,6 +62,11 @@ export interface SavedEntity {
   data?: Record<string, number | string | boolean>;
   /** vanilla active_effects */
   effects?: SavedEffect[];
+  /** vanilla CustomName and CustomNameVisible */
+  name?: string;
+  nameVisible?: boolean;
+  /** vanilla leash: the other end of its lead */
+  leash?: SavedLeash;
 }
 
 /** per-tick cached line-of-sight checks (vanilla Sensing) */
@@ -159,6 +169,13 @@ export abstract class Mob extends LivingEntity {
   useItemTicks = 0;
   private malusOverrides: Map<PathType, number> | null = null;
   private goalsReady = false;
+  /** vanilla Leashable.LeashData.leashHolder: what holds its lead (a player, a fence's knot, a wandering trader) */
+  leashHolder: Entity | null = null;
+  /** vanilla LeashData.delayedLeashInfo: a loaded lead's other end, found again once it's about */
+  private delayedLeash: SavedLeash | null = null;
+  /** vanilla Mob.restrictCenter / restrictRadius (-1: none): a lead keeps it near the holder, a guardian near home */
+  restrictCenter: [number, number, number] = [0, 0, 0];
+  restrictRadius = -1;
 
   constructor(level: Level) {
     super(level);
@@ -334,7 +351,172 @@ export abstract class Mob extends LivingEntity {
     this.checkDespawn();
     if (this.removed) return;
     super.tick();
+    if (!this.removed) this.tickLeash();
     if (this.tickCount % 5 === 0) this.updateControlFlags();
+  }
+
+  // --- restriction (vanilla Mob.restrictTo, hasRestriction, isWithinRestriction, clearRestriction) ---
+
+  restrictTo(x: number, y: number, z: number, r: number): void {
+    this.restrictCenter = [x, y, z];
+    this.restrictRadius = r;
+  }
+  hasRestriction(): boolean {
+    return this.restrictRadius !== -1;
+  }
+  isWithinRestriction(x = Math.floor(this.x), y = Math.floor(this.y), z = Math.floor(this.z)): boolean {
+    if (this.restrictRadius === -1) return true;
+    const [cx, cy, cz] = this.restrictCenter;
+    return (cx - x) ** 2 + (cy - y) ** 2 + (cz - z) ** 2 < this.restrictRadius * this.restrictRadius;
+  }
+  clearRestriction(): void {
+    this.restrictRadius = -1;
+  }
+
+  // --- leads (vanilla Leashable, as Mob and PathfinderMob have it) ---
+
+  /** vanilla Mob.canBeLeashed: anything but a monster (vanilla Enemy) */
+  canBeLeashed(): boolean {
+    return this.category !== 'monster';
+  }
+
+  isLeashed(): boolean {
+    return this.leashHolder !== null;
+  }
+
+  /** vanilla Leashable.canHaveALeashAttachedToIt */
+  canHaveALeashAttachedToIt(): boolean {
+    return this.canBeLeashed() && !this.isLeashed();
+  }
+
+  /** vanilla Leashable.setLeashedTo: `holder` has its lead now (and off whatever it was riding it comes) */
+  setLeashedTo(holder: Entity): void {
+    // (the holder's uuid made now, so the saved lead finds it again)
+    void holder.uuid;
+    this.leashHolder = holder;
+    this.delayedLeash = null;
+    if (this.vehicle) this.stopRiding();
+  }
+
+  /** vanilla Mob.dropLeash: the lead comes off (onto the ground when `dropItem`), and it may go where it likes again */
+  dropLeash(dropItem: boolean): void {
+    if (!this.leashHolder) return;
+    this.leashHolder = null;
+    this.delayedLeash = null;
+    if (dropItem) this.spawnAtLocation(ItemStack.of('lead'));
+    this.clearRestriction();
+  }
+
+  /** vanilla Entity.getLeashOffset: where a lead ties on, from its feet and turned with its body (eye high, a bit forward) */
+  leashOffset(): [number, number, number] {
+    return [0, this.eyeHeight, this.width * 0.4];
+  }
+
+  /**
+   * vanilla Leashable.tickLeash: a loaded lead finds its holder; either end gone, it drops. Past ten blocks it snaps,
+   * past six it tugs, and nearer it walks after the holder
+   */
+  protected tickLeash(): void {
+    if (this.delayedLeash) this.restoreLeash();
+    if (!this.leashHolder) return;
+    if (!this.isAlive || !isAliveEntity(this.leashHolder)) this.dropLeash(true);
+    const h = this.leashHolder as Entity | null;
+    if (!h || h.level !== this.level) return;
+    const f = Math.sqrt(this.distanceToSqr(h.x, h.y, h.z));
+    if (!this.handleLeashAtDistance(h, f)) return;
+    if (f > 10) this.leashTooFarBehaviour();
+    else if (f > 6) {
+      this.elasticRangeLeashBehaviour(h, f);
+      // vanilla checkSlowFallDistance: tugged along, it doesn't count the drop
+      if (this.dy > -0.5 && this.fallDistance > 1) this.fallDistance = 1;
+    } else this.closeRangeLeashBehaviour(h);
+  }
+
+  /** vanilla restoreLeashFromSave: its holder by uuid (the fence's knot, made again if need be); still missing after 5 seconds, the lead drops */
+  private restoreLeash(): void {
+    const d = this.delayedLeash!;
+    if ('uuid' in d) {
+      const p = this.level.player;
+      const e = p && p.uuid === d.uuid ? p : this.level.entities.find((x) => !x.removed && x.hasUuid && x.uuid === d.uuid);
+      if (e) {
+        this.setLeashedTo(e);
+        return;
+      }
+    } else {
+      this.setLeashedTo(getOrCreateKnot(this.level, d.x, d.y, d.z));
+      return;
+    }
+    if (this.tickCount > 100) {
+      this.spawnAtLocation(ItemStack.of('lead'));
+      this.delayedLeash = null;
+    }
+  }
+
+  /** vanilla PathfinderMob.handleLeashAtDistance: it keeps within five blocks of where the holder stands (false: no more this tick) */
+  handleLeashAtDistance(h: Entity, _distance: number): boolean {
+    this.restrictTo(Math.floor(h.x), Math.floor(h.y), Math.floor(h.z), 5);
+    return true;
+  }
+
+  /** vanilla PathfinderMob.leashTooFarBehaviour: the lead snaps */
+  protected leashTooFarBehaviour(): void {
+    this.dropLeash(true);
+    this.goalSelector.disabledFlags |= Flag.MOVE;
+  }
+
+  /** vanilla Leashable.legacyElasticRangeLeashBehaviour: pulled toward the holder, the harder the more straight along an axis */
+  protected elasticRangeLeashBehaviour(h: Entity, f: number): void {
+    const d0 = (h.x - this.x) / f, d1 = (h.y - this.y) / f, d2 = (h.z - this.z) / f;
+    this.dx += Math.sign(d0) * d0 * d0 * 0.4;
+    this.dy += Math.sign(d1) * d1 * d1 * 0.4;
+    this.dz += Math.sign(d2) * d2 * d2 * 0.4;
+  }
+
+  /** vanilla PathfinderMob.closeRangeLeashBehaviour: it walks to within two blocks of the holder */
+  protected closeRangeLeashBehaviour(h: Entity): void {
+    if (!this.shouldStayCloseToLeashHolder()) return;
+    this.goalSelector.disabledFlags &= ~Flag.MOVE;
+    let vx = h.x - this.x, vy = h.y - this.y, vz = h.z - this.z;
+    const len = Math.sqrt(vx * vx + vy * vy + vz * vz);
+    const s = len < 1e-4 ? 0 : Math.max(len - 2, 0) / len;
+    vx *= s;
+    vy *= s;
+    vz *= s;
+    this.navigation.moveTo(this.x + vx, this.y + vy, this.z + vz, this.followLeashSpeed());
+  }
+
+  protected shouldStayCloseToLeashHolder(): boolean {
+    return true;
+  }
+
+  protected followLeashSpeed(): number {
+    return 1;
+  }
+
+  /**
+   * vanilla Mob.interact before the mob's own mobInteract: the player holding its lead lets go of it (the lead drops,
+   * but in creative); a lead ties it to the player (checkAndHandleImportantInteractions); a named name tag names it,
+   * for good (vanilla NameTagItem.interactLivingEntity: it won't despawn either). True when that took the click
+   */
+  interactLeashOrName(p: Player, stack: ItemStack | null): boolean {
+    if (!this.isAlive) return false;
+    if (this.leashHolder === p) {
+      this.dropLeash(p.gameMode !== 'creative');
+      return true;
+    }
+    if (stack?.item.id === 'lead' && this.canHaveALeashAttachedToIt()) {
+      this.setLeashedTo(p);
+      if (p.gameMode !== 'creative') p.inventory.consumeSelected(1);
+      return true;
+    }
+    const name = stack?.item.id === 'name_tag' ? stack.tag?.customName : undefined;
+    if (name !== undefined) {
+      this.setCustomName(name);
+      this.persistenceRequired = true;
+      if (p.gameMode !== 'creative') p.inventory.consumeSelected(1);
+      return true;
+    }
+    return false;
   }
 
   override baseTick(): void {
@@ -959,7 +1141,18 @@ export abstract class Mob extends LivingEntity {
       loot: this.canPickUpLoot,
       data: this.saveData(),
       effects: this.activeEffects.size ? this.saveEffects() : undefined,
+      name: this.customName ?? undefined,
+      nameVisible: this.customNameVisible || undefined,
+      leash: this.saveLeash(),
     };
+  }
+
+  /** vanilla Leashable.writeLeashData: the fence's block for a knot, else the holder's uuid (or what's still being looked for) */
+  private saveLeash(): SavedLeash | undefined {
+    const h = this.leashHolder;
+    if (h instanceof LeashKnot) return { x: h.bx, y: h.by, z: h.bz };
+    if (h) return { uuid: h.uuid };
+    return this.delayedLeash ?? undefined;
   }
 
   load(d: SavedEntity): void {
@@ -984,6 +1177,9 @@ export abstract class Mob extends LivingEntity {
     }
     // (vanilla reads CanPickUpLoot only when it's there: older saves keep the mob's own default)
     if (typeof d.loot === 'boolean') this.canPickUpLoot = d.loot;
+    if (typeof d.name === 'string') this.setCustomName(d.name);
+    this.customNameVisible = d.nameVisible === true;
+    if (d.leash && typeof d.leash === 'object') this.delayedLeash = d.leash;
     if (d.data) this.loadData(d.data);
   }
 
@@ -991,6 +1187,11 @@ export abstract class Mob extends LivingEntity {
     return undefined;
   }
   protected loadData(_d: Record<string, number | string | boolean>): void {}
+}
+
+/** vanilla Entity.isAlive: not removed, and a living thing not dead */
+function isAliveEntity(e: Entity): boolean {
+  return !e.removed && (!(e instanceof LivingEntity) || e.isAlive);
 }
 
 function rotlerpSimple(from: number, to: number, max: number): number {

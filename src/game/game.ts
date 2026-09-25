@@ -1522,6 +1522,8 @@ export class Game {
     const b = BIOMES[biome];
     const w = this.world;
     this.renderer.hand.netherLighting = w.dim.effects.constantAmbientLight;
+    // (vanilla Player.getMainArm: which hand holds its leads)
+    p.mainArm = this.opts.mainHand;
     this.renderer.render(cam, {
       dayTime: this.level.dayTime,
       ticks: this.ticks,
@@ -1539,7 +1541,10 @@ export class Game {
       worldFog: this.hud.bossOverlay.shouldCreateWorldFog(),
       biomeColors: blendBiomeColors(cam.x, cam.y, cam.z, (qx, qy, qz) => BIOMES[w.getBiome3(qx * 4 + 2, qy * 4 + 2, qz * 4 + 2)] ?? b),
       level: this.level,
-      entityOptions: { shadows: this.opts.entityShadows, drawPlayer: this.thirdPerson > 0 && !camOverride, distanceScale: this.opts.entityDistanceScaling, skinParts: this.skinParts(), mainArm: this.opts.mainHand },
+      entityOptions: {
+        shadows: this.opts.entityShadows, drawPlayer: this.thirdPerson > 0 && !camOverride, distanceScale: this.opts.entityDistanceScaling, skinParts: this.skinParts(), mainArm: this.opts.mainHand,
+        crosshairEntity: this.interaction.entityHit, renderNames: !this.hideGui,
+      },
     });
     if (camOverride) return;
     // (vanilla LevelRenderer: the cracks others are making in blocks within 32, forgotten after 400 ticks unchanged)

@@ -49,6 +49,8 @@ export class Player extends LivingEntity {
   invulnerable = false;
   flySpeed = 0.05;
   crouching = false;
+  /** vanilla Player.getMainArm (options: Main Hand) */
+  mainArm: 'left' | 'right' = 'right';
   input: PlayerInput = { forward: false, back: false, left: false, right: false, jump: false, sneak: false, sprint: false };
   private sprintTriggerTime = 0;
   private jumpTriggerTime = 0;
@@ -281,6 +283,26 @@ export class Player extends LivingEntity {
 
   override isShiftKeyDown(): boolean {
     return this.input.sneak;
+  }
+
+  /**
+   * vanilla Player.getRopeHoldPosition: a lead hangs from the main hand, at the side 0.8 below the top of it (0.2
+   * lower crouching); swimming or spinning in a riptide, from ahead of it along the look
+   */
+  override ropeHoldPosition(p: number): [number, number, number] {
+    const d0 = 0.22 * (this.mainArm === 'right' ? -1 : 1);
+    // (vanilla lerps the pitch the other way round, over half the partial tick)
+    const f = ((this.pitch + (this.pitchO - this.pitch) * p * 0.5) * Math.PI) / 180;
+    const f1 = ((this.bodyYawO + (this.bodyYaw - this.bodyYawO) * p) * Math.PI) / 180;
+    let v: [number, number, number];
+    if (this.isAutoSpinAttack()) {
+      const [lx, , lz] = this.lookVector();
+      const h1 = this.dx * this.dx + this.dz * this.dz, h2 = lx * lx + lz * lz;
+      const f2 = h1 > 0 && h2 > 0 ? Math.sign(this.dx * lz - this.dz * lx) * Math.acos(Math.max(-1, Math.min(1, (this.dx * lx + this.dz * lz) / Math.sqrt(h1 * h2)))) : 0;
+      v = yRot(xRot(zRot([d0, -0.11, 0.85], -f2), -f), -f1);
+    } else if (this.isVisuallySwimming()) v = yRot(xRot([d0, 0.2, -0.15], -f), -f1);
+    else v = yRot([d0, this.bb.maxY - this.bb.minY - 1, this.crouching ? -0.2 : 0.07], -f1);
+    return [this.lerpX(p) + v[0], this.lerpY(p) + v[1], this.lerpZ(p) + v[2]];
   }
 
   /** vanilla ServerPlayer.updateInvisibilityStatus: a spectator is invisible, effects or not */
@@ -797,4 +819,19 @@ export class Player extends LivingEntity {
     }
     return f;
   }
+}
+
+type Vec = [number, number, number];
+/** vanilla Vec3.xRot / yRot / zRot */
+function xRot(v: Vec, a: number): Vec {
+  const c = Math.cos(a), s = Math.sin(a);
+  return [v[0], v[1] * c + v[2] * s, v[2] * c - v[1] * s];
+}
+function yRot(v: Vec, a: number): Vec {
+  const c = Math.cos(a), s = Math.sin(a);
+  return [v[0] * c + v[2] * s, v[1], v[2] * c - v[0] * s];
+}
+function zRot(v: Vec, a: number): Vec {
+  const c = Math.cos(a), s = Math.sin(a);
+  return [v[0] * c + v[1] * s, v[1] * c - v[0] * s, v[2]];
 }

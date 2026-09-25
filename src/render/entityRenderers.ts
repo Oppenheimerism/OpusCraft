@@ -69,6 +69,9 @@ import { RaiderRenderers, RAIDER_SHADOW_RADII } from './illagerRenderers';
 // (Stage 5: ocean)
 import { OceanRenderers, OCEAN_SHADOW_RADII } from './oceanRenderers';
 import { HorseRenderers, HORSE_SHADOW_RADII } from './horseRenderer';
+import { LeashKnot } from '../entity/leash';
+import { renderKnot, renderLeash } from './leashRenderer';
+import { NameTagRenderer } from './nameTagRenderer';
 import { Guardian } from '../entity/guardian';
 import { EvokerFangs } from '../entity/evoker';
 import type { Bat } from '../entity/bat';
@@ -97,6 +100,10 @@ export interface EntityRenderOptions {
   skinParts?: SkinParts;
   /** the player's main arm (options: Main Hand) */
   mainArm?: 'left' | 'right';
+  /** what the crosshair is on (vanilla crosshairPickEntity: a named mob shows its name then) */
+  crosshairEntity?: Entity | null;
+  /** names over mobs are drawn (vanilla Minecraft.renderNames: not with the GUI hidden) */
+  renderNames?: boolean;
 }
 
 /** options: Skin Customization (vanilla PlayerModelPart; the cape aside) */
@@ -166,6 +173,11 @@ export class EntityRenderDispatcher {
   private readonly ocean: OceanRenderers;
   /** (Stage 6: tameable animals) horses, donkeys and mules, their markings and armour */
   private readonly horses: HorseRenderers;
+  /** names over mobs, drawn once every entity is down */
+  private readonly nameTags: NameTagRenderer;
+  /** this frame's options: names shown at all (not with the GUI hidden), and what the crosshair is on */
+  private renderNames = true;
+  private crosshair: Entity | null = null;
 
   constructor(private readonly gl: GL, private readonly items: ItemRenderer, private readonly skin: WebGLTexture) {
     this.armor = new ArmorLayer(gl);
@@ -189,6 +201,7 @@ export class EntityRenderDispatcher {
     this.ocean = new OceanRenderers(gl, this.raiders.kit);
     // (Stage 6: tameable animals) and again
     this.horses = new HorseRenderers(this.raiders.kit);
+    this.nameTags = new NameTagRenderer(gl);
     this.models = {
       pig: M.pigModel(),
       pig_saddle: M.pigModel(0.5),
@@ -305,6 +318,8 @@ export class EntityRenderDispatcher {
     this.shadows.length = 0;
     this.mainArm = opts.mainArm ?? 'right';
     this.skinParts = opts.skinParts ?? ALL_SKIN_PARTS;
+    this.renderNames = opts.renderNames ?? true;
+    this.crosshair = opts.crosshairEntity ?? null;
     let drawn = 0;
     for (const e of level.entities) {
       if (e.removed) continue;
@@ -328,9 +343,11 @@ export class EntityRenderDispatcher {
       const beam = e instanceof EndCrystal && e.beamTarget !== null;
       // (Stage 5: ocean) vanilla GuardianRenderer.shouldRender: so is a guardian with its laser on
       const laser = e instanceof Guardian && e.activeAttackTarget() !== null;
-      if (d2 >= maxD * maxD && !beam && !laser) continue;
+      // (vanilla MobRenderer.shouldRender: out of sight or too far, a mob is still drawn while what holds its lead is in view)
+      const lead = e instanceof Mob && e.leashHolder !== null && leashHolderInView(e.leashHolder, cam, frustum);
+      if (d2 >= maxD * maxD && !beam && !laser && !lead) continue;
       const hw = (bb.maxX - bb.minX) / 2 + 0.5, h = bb.maxY - bb.minY + 0.5;
-      if (!beam && !laser && !(e instanceof EnderDragon) && !frustum.testBox(dx - hw, dy - 0.5, dz - hw, dx + hw, dy + h, dz + hw)) continue;
+      if (!beam && !laser && !lead && !(e instanceof EnderDragon) && !frustum.testBox(dx - hw, dy - 0.5, dz - hw, dx + hw, dy + h, dz + hw)) continue;
       this.renderEntity(b, level, e, x, y, z, dx, dy, dz, partial, cam);
       drawn++;
       if (opts.shadows && !(e instanceof LivingEntity && e.isInvisible())) {
@@ -363,6 +380,7 @@ export class EntityRenderDispatcher {
     if (this.shadows.length) this.renderShadows(b, level, cam);
     // (Stage 5: ocean) the elder guardian's ghostly face, over everything
     this.ocean.renderAppearance(b, level, cam, partial);
+    this.nameTags.flush(b, this.pose, cam.yaw, cam.pitch);
   }
 
   /** vanilla ItemPickupParticle: `e` (a copy, for a dropped item) flies to `target` over the next three ticks */
@@ -466,8 +484,34 @@ export class EntityRenderDispatcher {
     else if (e instanceof Boat) this.renderBoat(b, e, dx, dy, dz, p);
     else if (e instanceof EndCrystal) this.endCrystals.render(b, this.pose, e, dx, dy, dz, p);
     else if (e instanceof EvokerFangs) this.raiders.renderFangs(b, e, dx, dy, dz, p); // (Stage 4: illagers)
+    else if (e instanceof LeashKnot) {
+      const t = this.tex('lead_knot');
+      if (t) renderKnot(b, this.pose, this.state(t), dx, dy, dz);
+    }
+    if (e instanceof Mob) {
+      if (e.leashHolder) {
+        this.whiteTex ??= createTexture(this.gl, 1, 1, new Uint8Array([255, 255, 255, 255]));
+        renderLeash(b, { texture: this.whiteTex, cutoff: -1, blend: false, cull: false, lit: false, useLightmap: true }, e, e.leashHolder, cam.x, cam.y, cam.z, p, (lx, ly, lz) => level.world.getLight(lx, ly, lz));
+      }
+      // (vanilla EntityRenderer.render → renderNameTag, the light the mob's in)
+      if (this.showsName(e, dx * dx + dy * dy + dz * dz)) {
+        this.setLight(b, level, e, x, y, z);
+        this.nameTags.add(e.customName!, dx, dy + e.height + 0.5, dz, b.lightB, b.lightS);
+      }
+    }
     // (at the renderer's offset: a crouching player's flames sink with it)
     if (e.isOnFire() && !(e instanceof ItemEntity) && !(e instanceof ExperienceOrb)) this.renderFlame(b, e, dx, dy + renderOffsetY(e), dz, cam.yaw, level.gameTime);
+  }
+
+  /**
+   * vanilla LivingEntityRenderer.shouldShowName and MobRenderer.shouldShowName: a named mob within 64 blocks, not
+   * invisible and not carrying anyone, while it's looked at (always, with its name set visible); never with the GUI
+   * hidden
+   */
+  private showsName(e: Mob, d2: number): boolean {
+    if (!this.renderNames || e.customName === null || d2 >= 64 * 64) return false;
+    if (e.isInvisible() || e.passengers.length > 0) return false;
+    return e.customNameVisible || e === this.crosshair;
   }
 
   /**
@@ -527,6 +571,10 @@ export class EntityRenderDispatcher {
       // (vanilla: whirling in a riptide, laid along the look and spun about it)
       pose.rotX(-90 - e.pitch);
       pose.rotY((e.tickCount + p) * -75);
+    } else if (!bed && isUpsideDown(e)) {
+      // (vanilla isEntityUpsideDown: named Dinnerbone or Grumm, it's upside down)
+      pose.translate(0, e.height + 0.1, 0);
+      pose.rotZ(180);
     }
     // vanilla CatRenderer.setupRotations: lying down, it rolls onto its side (a touch further over by a sleeper)
     if (e instanceof Cat) {
@@ -828,7 +876,7 @@ export class EntityRenderDispatcher {
       const fur = this.models.sheep_fur, ft = this.tex('sheep_fur');
       if (fur && ft) {
         copyPose(def.root, fur.root);
-        const [r, g, bl] = sheepFurColor(e.color);
+        const [r, g, bl] = e.customName === 'jeb_' ? jebColor(e, p) : sheepFurColor(e.color);
         b.begin(this.state(ft));
         this.drawModel(b, fur, baby, r, g, bl);
       }
@@ -1649,4 +1697,23 @@ function copyPose(from: ModelPart, to: ModelPart): void {
     t.yRot = c.yRot;
     t.zRot = c.zRot;
   }
+}
+
+/** vanilla MobRenderer.shouldRender's other half: the lead's holder (its culling box) is in view */
+function leashHolderInView(h: Entity, cam: Camera, frustum: Frustum): boolean {
+  const bb = h.bb;
+  return frustum.testBox(bb.minX - cam.x, bb.minY - cam.y, bb.minZ - cam.z, bb.maxX - cam.x, bb.maxY - cam.y, bb.maxZ - cam.z);
+}
+
+/** vanilla LivingEntityRenderer.isEntityUpsideDown: a mob named Dinnerbone or Grumm */
+function isUpsideDown(e: LivingEntity): boolean {
+  return e.type !== 'player' && (e.customName === 'Dinnerbone' || e.customName === 'Grumm');
+}
+
+/** vanilla SheepFurLayer for a sheep named jeb_: its wool runs through the sixteen colours, a second and a quarter each */
+function jebColor(e: Sheep, p: number): [number, number, number] {
+  const i = Math.floor(e.tickCount / 25) + e.id;
+  const a = sheepFurColor(i % 16), c = sheepFurColor((i + 1) % 16);
+  const f = ((e.tickCount % 25) + p) / 25;
+  return [a[0] + (c[0] - a[0]) * f, a[1] + (c[1] - a[1]) * f, a[2] + (c[2] - a[2]) * f];
 }

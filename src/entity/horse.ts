@@ -234,6 +234,11 @@ export abstract class AbstractHorse extends Animal {
   setEating(v: boolean): void {
     this.eating = v;
   }
+  /** vanilla AbstractHorse.handleLeashAtDistance: tugged along, it stops grazing */
+  override handleLeashAtDistance(h: Entity, distance: number): boolean {
+    if (distance > 6 && this.eating) this.setEating(false);
+    return super.handleLeashAtDistance(h, distance);
+  }
   /** vanilla openMouth */
   private openMouth(): void {
     this.mouthCounter = 1;

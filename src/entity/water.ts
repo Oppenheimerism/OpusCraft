@@ -12,6 +12,11 @@ import { SEA_LEVEL } from '../world/constants';
 export abstract class WaterAnimal extends Mob {
   readonly category: MobCategory = 'water_creature';
 
+  /** vanilla WaterAnimal.canBeLeashed: squid and fish won't go on a lead */
+  override canBeLeashed(): boolean {
+    return false;
+  }
+
   override canBreatheUnderwater(): boolean {
     return true;
   }

@@ -42,9 +42,6 @@ export class Guardian extends Monster {
   spikesAnimation = 0;
   spikesAnimationO = 0;
   private touchedGround = false;
-  /** vanilla Mob.restrictCenter / restrictRadius (-1: none) */
-  restrictCenter: Pos = [0, 0, 0];
-  restrictRadius = -1;
   private strollGoal: GuardianStrollGoal | null = null;
 
   constructor(level: Level) {
@@ -117,20 +114,6 @@ export class Guardian extends Monster {
   }
   spikesAnimationAt(p: number): number {
     return this.spikesAnimationO + (this.spikesAnimation - this.spikesAnimationO) * p;
-  }
-
-  // --- restriction (vanilla Mob.restrictTo, hasRestriction, isWithinRestriction) ---
-  restrictTo(x: number, y: number, z: number, r: number): void {
-    this.restrictCenter = [x, y, z];
-    this.restrictRadius = r;
-  }
-  hasRestriction(): boolean {
-    return this.restrictRadius !== -1;
-  }
-  isWithinRestriction(x = Math.floor(this.x), y = Math.floor(this.y), z = Math.floor(this.z)): boolean {
-    if (this.restrictRadius === -1) return true;
-    const [cx, cy, cz] = this.restrictCenter;
-    return (cx - x) ** 2 + (cy - y) ** 2 + (cz - z) ** 2 < this.restrictRadius * this.restrictRadius;
   }
 
   override ambientSoundInterval(): number {
