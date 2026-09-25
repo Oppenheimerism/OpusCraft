@@ -53,11 +53,15 @@ export function playerAttack(level: Level, p: Player, target: Entity, damageHeld
   }
   const healthBefore = target instanceof LivingEntity ? target.health : 0;
   // (trial chambers) vanilla Item.getDamageSource (a mace's smash) and the weapon's breach on the target's armour
-  const ok = withBreach(held, () => target.hurt(f + f1, smashDamageSource(p, held) ?? 'player', p));
+  const source = smashDamageSource(p, held) ?? 'player';
+  const ok = withBreach(held, () => target.hurt(f + f1, source, p));
   if (!ok) {
     level.sound.play('entity.player.attack.nodamage', p.x, p.y, p.z, 1, 1);
     return;
   }
+  // (trial chambers) vanilla PlayerHurtEntityTrigger (from the target's hurt): the blow's damage as dealt, its kind,
+  // what was in hand (Over-Overkill)
+  if (target instanceof LivingEntity) level.onPlayerTrigger?.(p, 'player_hurt_entity', { hurtEntity: { dealt: f + f1, source, weapon: held?.item.id ?? null } });
   // vanilla getKnockback: the knockback enchantment, +1 for a sprinting hit
   const kb = levelOf(held, 'knockback') + (sprintKnock ? 1 : 0);
   if (kb > 0) {

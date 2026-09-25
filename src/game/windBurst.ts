@@ -193,11 +193,19 @@ export function impulseOf(p: Player): Impulse {
 }
 
 /**
+ * (M5) vanilla CriteriaTriggers.FALL_AFTER_EXPLOSION: the player's advancements hear how far above where the burst
+ * threw them they began to fall (DistancePredicate.vertical), and what went off (Who Needs Rockets?)
+ */
+export function fallAfterExplosionTrigger(p: Player, start: [number, number, number], now: [number, number, number], cause: Entity | null): void {
+  p.level.onPlayerTrigger?.(p, 'fall_after_explosion', { fallAfterExplosion: { rise: Math.abs(now[1] - start[1]), cause: cause?.type ?? null } });
+}
+
+/**
  * whoever listens for a player starting to fall after a burst threw them up (vanilla FallAfterExplosionTrigger: where
  * it went off, where they are, and what it was)
  */
 export const impulseHooks: { fallAfterExplosion: ((p: Player, start: [number, number, number], now: [number, number, number], cause: Entity | null) => void) | null } = {
-  fallAfterExplosion: null,
+  fallAfterExplosion: fallAfterExplosionTrigger,
 };
 
 /** vanilla Player.setIgnoreFallDamageFromCurrentImpulse: two seconds' grace while it's on */

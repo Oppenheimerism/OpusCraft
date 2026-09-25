@@ -9,8 +9,8 @@ Branch: `claude/kind-mccarthy-eu2t01` (from main at ac9d889).
 | M1 tuff, copper, lightning rod, items | done | 307e1f4 (the blocks, items, recipes and advancements), e6fd0e4 (the three discs' songs) |
 | M2 trial spawner and vault | done | 1df4069 |
 | M3 trial chambers and `/locate` | done | f5b4e0d |
-| M4 breeze, wind charges, bogged, mace | done | the commit that adds this line ("The breeze, wind charges, the bogged and the mace. …") |
-| M5 crafter and advancements | not started | |
+| M4 breeze, wind charges, bogged, mace | done | fa07a44 |
+| M5 crafter and advancements | done | the commit that adds this line ("The crafter, and five more advancements. …") |
 
 ## 2. Shared files changed, and hooks
 
@@ -145,7 +145,70 @@ All small and additive; each new line is marked `(trial chambers)`.
 - New besides: `src/entity/breeze.ts`, `src/entity/bogged.ts`, `src/entity/windCharge.ts`, `src/game/windCharges.ts`,
   `src/textures/breeze.ts` and `src/textures/bogged.ts`.
 
+### M5
+
+- `src/game/redstone/dispenser.ts`: `InsertTarget` is exported. A new `CONTAINER_TARGETS` list lets other files add
+  block entities that droppers put things into, and `containerAt` asks it before looking for a container entity. The
+  crafter adds itself to it.
+- `src/inventory/menus.ts`: `armorDye` and `tippedArrow` are exported, so the crafter makes the same special recipes
+  as a crafting table.
+- `src/game/advancements.ts`: four new criteria (`player_killed_entity`, `fall_after_explosion`, `player_hurt_entity`
+  and `crafter_recipe_crafted`), with their payload fields and matching. Five advancements that were impossible now
+  use them, or the existing `structure` criterion.
+- `src/game/game.ts`: `tickProgress` calls the new `tickTrialChamberProgress`, after the outer End's.
+- `src/game/combat.ts`: after a blow lands on a living target, a `player_hurt_entity` trigger with the damage, its
+  source and the weapon in hand. The damage source is now kept in a variable for it.
+- `src/gui/screens/index.ts` installs the crafter's screen. `src/gui/screens/creative.ts` puts the crafter after the
+  dropper in the redstone tab.
+- `src/inventory/recipeBook.ts`: the crafter's recipe goes under redstone.
+- `src/render/particles.ts`: `white_smoke` shares the smoke's case, with vanilla's fixed colour.
+- `src/audio/synth.ts`: `crafterSounds()` joins M4's line.
+- My own earlier files: the recipe in `src/inventory/recipesTrialChambers.ts`, the block in
+  `src/world/blocksTrialChambers.ts`, its textures in `src/textures/blocklib/trialChambers.ts`, the game module in
+  `src/game/trialChambers.ts`, Blowback's trigger in `src/entity/windCharge.ts`, and Who Needs Rockets?'s in
+  `src/game/windBurst.ts` (the hook M4 left for it).
+- New besides: `src/world/blocksCrafter.ts` (the block and its models), `src/game/crafter.ts` (its block entity,
+  redstone, crafting and output), `src/inventory/crafterMenu.ts`, `src/gui/screens/crafter.ts`,
+  `src/textures/crafterGui.ts`, `src/textures/blocklib/crafter.ts`, `src/audio/gen/crafter.ts` and
+  `src/game/trialChamberProgress.ts`.
+- `blockBehavior.ts`, `player.ts` and `living.ts` are unchanged in M5.
+
 ## 3. Open points, deviations, uncertain values, hooks
+
+### M5
+
+- **From memory.** These values are my best recollection of vanilla 1.21, not checked against its code:
+  - which texture each face shows in each of the four models (`crafter`, `_triggered`, `_crafting` and
+    `_crafting_triggered`);
+  - the sound variant counts: 3 for the craft, 2 for the fail;
+  - the crafter's place in the creative tabs: the redstone tab after the dropper, and no other tab;
+  - Who Needs Rockets? checking 7 blocks, though its description says 8;
+  - the experience vanilla gives for the two challenges: 40 for Blowback and 50 for Over-Overkill.
+- **No experience rewards.** The game's advancements give none, so these don't either.
+- **The textures are my own.** They are drawn from the lead's advancement icon for the crafter (`iconblocks.ts`), so
+  the block matches its icon. The unpowered redstone is dark. A crafter only crafts while powered, so its crafting
+  faces keep the redstone lit and add an amber glow.
+- **The screen.** The slots, the redstone indicator and the result are at vanilla's positions. The panel and the arrow
+  are my own drawing.
+- **No hoppers or comparators.** The game has neither. Droppers fill a crafter as vanilla's hoppers do: one item at a
+  time into the emptiest slot that is on. The comparator reading is ready as `crafterAnalogOutput` in
+  `src/game/crafter.ts`.
+- **Recipe unlocking.** The game unlocks a recipe when the player gets any of its ingredients, so iron or a crafting
+  table unlocks the crafter. Vanilla waits for a dropper.
+- **Remainders.** No recipe in the game uses a bucket, a honey bottle or dragon's breath, so the remainders a crafter
+  would give back never come up. Book cloning leaves the original book, and the tests use that.
+- **Only when something comes out.** As in vanilla, the craft sound, the smoke and Crafters Crafting Crafters happen
+  only when an item comes out of the front. A crafter filling a container in front of it is silent.
+- **Advancements:**
+  - Minecraft: Trial(s) Edition checks every 20 ticks whether the player stands inside one of the trial chambers'
+    pieces, as vanilla's location trigger does. Spectators count, as in vanilla.
+  - A wind charge alone lifts a standing player about 6.1 blocks here. Who Needs Rockets? needs a jump as well, with
+    the charge thrown down on the jump's first tick (8.3 blocks). A tick later gives 5.9.
+  - Over-Overkill counts a blow only when it lands. The damage checked is the blow's before armour, as vanilla's
+    `dealtDamage` is.
+  - Blowback is detected where a wind charge hits: the victim dies of the charge's point and the kill goes to a player.
+- **Templates.** No trial chambers piece places a crafter, so the jigsaw's rotation needs no `orientation` rule.
+- **Deep dark hooks.** None needed. As far as I recall, vanilla's crafter emits no game events of its own.
 
 ### M4
 
@@ -157,7 +220,7 @@ All small and additive; each new line is marked `(trial chambers)`.
   - its long jump aiming at the target's centre;
   - what its "shoot when stuck" behaviour requires;
   - the sign of its head's bob;
-  - Who Needs Rockets?'s 7 blocks (for M5).
+  - Who Needs Rockets?'s 7 blocks (see M5).
 - **Its animations are my own.** The breeze's shoot, slide, slide-back and jump are written afresh. Its inhale has no
   animation.
 - **Wind charges:**
@@ -180,8 +243,8 @@ All small and additive; each new line is marked `(trial chambers)`.
   - Wind Burst goes off at the wielder's feet with no source. As in 1.21.0, the fall back from the height it gives
     isn't forgiven unless another smash follows.
   - It is held with the handheld tool transforms; vanilla's `handheld_mace` may differ slightly.
-  - Over-Overkill and Who Needs Rockets? get their criteria in M5. The fall-after-explosion hook is already there
-    (`impulseHooks` in `windBurst.ts`).
+  - Over-Overkill and Who Needs Rockets? got their criteria in M5, Who Needs Rockets? through the
+    fall-after-explosion hook (`impulseHooks` in `windBurst.ts`).
 - **Audio check.** The breeze's whistles, whirls, inhale and charge swell in on purpose, so `scripts/audio-check.mjs`
   flags them as "late onset" (40 ms or more). 124 of the game's existing sounds carry the same flag. No other flags.
 - **Deep dark hooks.** None added in M4. Vanilla's game events here would be `EXPLODE` (bursts), `PROJECTILE_SHOOT`,
@@ -289,6 +352,9 @@ on a failure.
 | `m4c-bogged.mjs` | 16 health, a bow, its sounds and spawn egg; a shot every 70 ticks on hard and 90 on normal, poison for 100 ticks; burning in the sun; shearing by hand (two mushrooms from its head, the snip, a point of wear, only once, creative, saved) and by dispenser; its loot (a poison arrow about half the time on a player's kill, never more than one, bones and arrows); swamp and mangrove swamp spawns, none on the plains, no natural breezes; a trial spawner's poison skeletons | all pass (24) |
 | `m4d-mace.mjs` | the damage at 9 heights against vanilla's formula, density, gliding, the damage source; the smash: the stop, the impulse, the three sounds, the 750 dust specks, the push and who is spared, the wear, creative; the landing spray and no fall damage; breach and its clamp; wind burst I to III and its conditions; mining wear, creative; enchantability, repair, the enchantments it takes and the table's | all pass (43) |
 | `m4e-assets.mjs` | the breeze's, wind charge's and bogged's textures (the wind tiling, the mirrored mushroom cards, the moss, the bones), the spawn eggs; the breeze, wind charge and bogged models; all 23 new sounds rendered clean, and every sound name the new code plays; the dust pillar particle; the gust | all pass (24) |
+| `m5a-crafter.mjs` | the block: 48 states, strength, drops, map colour and sounds; its recipe, book category and creative place; placing it (11 looks); redstone: powered when placed, the 4-tick delay, the 6-tick glow, once per pulse, a one-tick pulse, the glow ending with the power, no quasi-connectivity; recipes: a 2x2 anywhere, whole results, one of each item used, mirrored, shapeless, remainders, tipped arrows, fireworks, nothing to make, empty; where the item comes out, its smoke and clunk; into a chest, a full chest and another crafter; droppers filling it evenly, skipping switched-off and full slots; switching slots, the comparator count, saving; the menu and the screen's clicks; pistons; breaking; Crafters Crafting Crafters near, far, spectating and into a chest | all pass (65) |
+| `m5b-advancements.mjs` | the tree, frames and icons; Minecraft: Trial(s) Edition in the end room of seed 12345's trial chambers, every 20 ticks, not outside or in the Nether; Blowback for a breeze killed by a breeze's charge struck back, not by a player's own charge or for a zombie; Who Needs Rockets? for a jump and a wind charge, and for a charge thrown down as the jump starts (8.3 blocks), not a charge alone, one thrown a tick late or a breeze's; Over-Overkill at 105 and at 135 with Density V, not 90 or a sword; the breeze and the bogged in Monster Hunter and Monsters Hunted | all pass (29) |
+| `m5c-assets.mjs` | the 14 textures: sizes, the icon's top, front and side, west mirroring east, the redstone dim unpowered and lit powered, amber while crafting; all 48 states' models: the right textures facing the right ways, each picture upright; the item drawn as the block; the screen's sprites; both sounds rendered clean; the white smoke's colour and motion | all pass (36) |
 
 Also run: `npm run typecheck` (clean); `tests/temples/*` and `tests/mansion/*` (all pass); `scripts/audio-check.mjs` (no
 warnings for the new sounds, except once a "slow" flag on the ominous spawner's boom at 24 ms against a 20 ms limit on
@@ -306,6 +372,19 @@ alone it passes. In the browser, screenshots showed:
 - the mace in both views, and its dust pillar;
 - a wind charge in flight;
 - the breeze and bogged spawners below, woken in survival.
+
+The console showed no errors.
+
+For M5, every test above passes, as do `tests/temples/*` and `tests/mansion/*`; this time the ruined-portals timing
+check passed with two suites running. `npm run typecheck` is clean, and `node scripts/audio-check.mjs crafter` gives no
+warnings. In the browser, at seed 12345 in creative, screenshots showed:
+- four crafters idle, powered, crafting and facing up (the last placed by
+  `/setblock ~ ~ ~-3 minecraft:crafter[orientation=up_north]`), and its item as a small crafter in the hotbar;
+- its screen with two slots switched off and the tooltip over an empty one; clicking a slot switched it off and on;
+- a lever flicked beside it: it glowed amber and puffed white smoke, and a crafting table flew out;
+- its screen while powered, the redstone lit and one plank fewer in each slot;
+- a crafter crafting a crafter, with the toast and chat line for Crafters Crafting Crafters;
+- the redstone tab: sticky piston, dispenser, dropper, crafter, TNT.
 
 The console showed no errors.
 
@@ -374,7 +453,7 @@ Start at `http://localhost:5173/?seed=12345` in creative.
 - **Breeze spawner**:
   `/setblock ~3 ~ ~ minecraft:trial_spawner{normal_config:"minecraft:trial_chamber/breeze/normal",ominous_config:"minecraft:trial_chamber/breeze/ominous"}`
   in a dark room, then survival. It brings out 2 breezes, one at a time.
-- **Wind charges**: `/give @s minecraft:wind_charge 64`. Look straight down and throw one: it lifts you about 7
+- **Wind charges**: `/give @s minecraft:wind_charge 64`. Look straight down and throw one: it lifts you about 6
   blocks, and you land unhurt. Throw one at an oak door, trapdoor, fence gate, lever, button or bell to set it off;
   iron doors don't move. Or place `/setblock ~2 ~ ~ minecraft:dispenser[facing=east]`, put charges in and power it.
 - **Bogged**: at night or somewhere dark, `/summon minecraft:bogged ~ ~ ~5`. It is mossy grey-green bones with red and
@@ -394,3 +473,29 @@ Start at `http://localhost:5173/?seed=12345` in creative.
   poison arrows.
   - The pit at 0, 224 (`/tp @s 7 -37 208 180 10`) now brings bogged down in the pit too.
   - A breeze spawner stands at 8, -35, 244.
+
+**M5: the crafter and the advancements.**
+
+- **Crafter**: it's in the redstone tab after the dropper. Placed, its mouth faces you. Look steeply down or up to
+  place it facing up or down. `/setblock ~ ~ ~-3 minecraft:crafter[orientation=up_north]` places one facing up.
+- **Its screen**: right-click it. Clicking an empty grid slot with nothing in hand switches it off: it's crossed out,
+  clicks lower, and takes nothing. Click it again, or press a hotbar number over it, to switch it back on. Hovering an
+  empty slot that's on says "Click to disable slot". Four oak planks in a 2x2 show a crafting table on the right.
+- **Crafting**: place a lever beside it and flick it on. Four ticks later it glows amber, clunks, puffs white smoke out
+  of its mouth and throws out a crafting table, using one of each item. It crafts once for each flick on. With nothing
+  it can make, it gives a dull click.
+- **Filling it**: a dropper facing into it puts in one item at a time, into the emptiest slot that's on. A chest in
+  front of a crafter catches what it makes, silently. Pistons can't move it, and breaking it drops its contents.
+- **Crafters Crafting Crafters**: fill a crafter with iron ingots round a crafting table, with redstone, a dropper and
+  redstone along the bottom row. Power it while you're within 8 blocks.
+- **Minecraft: Trial(s) Edition**: `/gamemode spectator`, then `/tp @s -474 -33 -311`, the end room of the trial
+  chambers at -480, -304. It's awarded within a second.
+- **Who Needs Rockets?**: `/give @s minecraft:wind_charge 16` and `/gamemode survival`. Look straight down and press
+  jump and use together: the burst lifts you about 8 blocks. Thrown a tick late, or without a jump, it lifts you about
+  6, not enough.
+- **Over-Overkill**: `/give @s minecraft:mace`, `/summon minecraft:zombie ~ ~ ~2` two or three times,
+  `/effect give @s minecraft:resistance 99999 4` and `/gamemode survival`. Then `/tp @s ~ ~50 ~` and hit a zombie as
+  you land. It takes a fall of about 47 blocks, or 20 with `/enchant @s minecraft:density 5`.
+- **Blowback**: `/summon minecraft:breeze ~ ~ ~6` and `/gamemode survival`, with the resistance above. Wear it down:
+  `/effect give @e[type=minecraft:breeze] minecraft:instant_damage 1 1` twice leaves it 6 health, and a stone sword
+  hit leaves 1. Then face it and strike its next wind charge as it reaches you: it flies back the way you look.

@@ -11,6 +11,7 @@
 import { Entity } from './entity';
 import { LivingEntity } from './living';
 import type { Level } from '../game/level';
+import type { Player } from './player';
 import { raycast } from '../game/raycast';
 import { onProjectileHit } from '../game/blockRules';
 import { doPostAttackEffects } from '../game/enchantEffects';
@@ -157,7 +158,12 @@ export abstract class AbstractWindCharge extends Entity {
   protected onHitEntity(e: Entity): void {
     const owner = this.owner instanceof LivingEntity ? this.owner : null;
     if (owner && e instanceof LivingEntity) owner.lastHurtMob = e;
-    if (e.hurt(1, 'windCharge', owner ?? this, this) && e instanceof LivingEntity) doPostAttackEffects(e, owner, null, false);
+    const hit = e.hurt(1, 'windCharge', owner ?? this, this);
+    if (hit && e instanceof LivingEntity) doPostAttackEffects(e, owner, null, false);
+    // (M5) vanilla KilledTrigger for the player the kill goes to (LivingEntity.getKillCredit), with the charge as the
+    // killing blow's direct entity: Blowback, for a breeze killed by its own kind's charge turned back
+    if (hit && e instanceof LivingEntity && !e.isAlive && e.lastHurtByPlayer)
+      this.level.onPlayerTrigger?.(e.lastHurtByPlayer as Player, 'player_killed_entity', { killedWith: { victim: e.type, direct: this.type } });
     this.explode(this.x, this.y, this.z);
   }
 

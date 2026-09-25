@@ -71,6 +71,8 @@ import { PortalPoi, portalRectangle, relativePortalPosition, portalExit, createP
 import { setVillageMenuHook } from './villageBlocks';
 import { setShulkerBoxMenuHook } from './shulkerBox';
 import { tickOuterEndProgress } from './outerEndProgress';
+// (trial chambers)
+import { tickTrialChamberProgress } from './trialChamberProgress';
 import { setGenerateLootListener } from './archaeology';
 import { setPotCraftedListener } from './decoratedPot';
 import { openJobSite } from './jobSites';
@@ -1800,6 +1802,8 @@ export class Game {
     }
     // (Stage 4: the outer End) Great View From Up Here
     tickOuterEndProgress(this.level, p, this.advancements);
+    // (trial chambers) Minecraft: Trial(s) Edition
+    tickTrialChamberProgress(this.level, p, this.advancements);
     // vanilla trackEnteredOrExitedLavaOnVehicle: how far a mount has carried the player across lava (ride_entity_in_lava)
     const v = p.vehicle;
     if (v?.inLava) {

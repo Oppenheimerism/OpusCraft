@@ -391,7 +391,10 @@ export class ParticleEngine {
         break;
       }
       case 'smoke':
-      case 'large_smoke': {
+      case 'large_smoke':
+      // (trial chambers) vanilla WhiteSmokeParticle (the crafter's puff, level event 2010): the smoke, but always its
+      // own pale grey (0xbab1c2)
+      case 'white_smoke': {
         const mul = kind === 'large_smoke' ? 2.5 : 1;
         const p = this.base(kind, x, y, z);
         this.withSpeed(p, 0, 0, 0);
@@ -403,6 +406,7 @@ export class ParticleEngine {
         p.dz = p.dz * 0.1 + zd;
         const c = Math.random() * 0.3;
         p.r = p.g = p.b = c;
+        if (kind === 'white_smoke') [p.r, p.g, p.b] = [0.7294118, 0.69411767, 0.7607843];
         p.size *= 0.75 * mul;
         p.lifetime = Math.max(1, Math.floor((8 / (Math.random() * 0.8 + 0.2)) * mul));
         p.grow = true;

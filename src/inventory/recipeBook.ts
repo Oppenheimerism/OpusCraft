@@ -76,6 +76,8 @@ function craftingCategory(result: string, r?: CraftingRecipe): BookCategory {
   // chiseled copper and grate; the bulbs are REDSTONE
   if (r?.kind === 'shapeless' && r.ingredients.includes('honeycomb')) return 'crafting_building_blocks';
   if (/copper_bulb$/.test(result)) return 'crafting_redstone';
+  // (trial chambers) and the crafter
+  if (result === 'crafter') return 'crafting_redstone';
   if (/(cut|chiseled)_copper$|copper_grate$/.test(result)) return 'crafting_building_blocks';
   if (EQUIPMENT.test(result)) return 'crafting_equipment';
   if (REDSTONE.test(result)) return 'crafting_redstone';

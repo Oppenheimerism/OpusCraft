@@ -102,8 +102,9 @@ interface CraftingLike {
 /**
  * vanilla ArmorDyeRecipe (a special recipe: no recipe book entry): one piece of leather armour and any dyes, anywhere
  * in the grid and nothing else, make the piece in the colours mixed (DyedItemColor.applyDyes)
+ * ((trial chambers) exported for the crafter)
  */
-function armorDye(grid: readonly (ItemStack | null)[]): ItemStack | null {
+export function armorDye(grid: readonly (ItemStack | null)[]): ItemStack | null {
   let piece: ItemStack | null = null;
   const dyes: string[] = [];
   for (const s of grid) {
@@ -122,9 +123,9 @@ function armorDye(grid: readonly (ItemStack | null)[]): ItemStack | null {
 
 /**
  * vanilla TippedArrowRecipe (special: no recipe book entry): a lingering potion in the middle of a full 3×3 grid of
- * arrows makes 8 arrows tipped with it
+ * arrows makes 8 arrows tipped with it ((trial chambers) exported for the crafter)
  */
-function tippedArrow(grid: readonly (ItemStack | null)[], w: number): ItemStack | null {
+export function tippedArrow(grid: readonly (ItemStack | null)[], w: number): ItemStack | null {
   if (w !== 3) return null;
   for (let i = 0; i < 9; i++) {
     const s = grid[i];

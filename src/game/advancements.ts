@@ -89,6 +89,23 @@ export type Criterion =
    * many blocks on fire, went with one of that kind standing by unharmed
    */
   | { t: 'lightning_strike'; maxDistance: number; maxBlocksSetOnFire: number; bystander: string }
+  /**
+   * (trial chambers) vanilla player_killed_entity where the killing blow's direct entity is asked about: a mob of this
+   * kind, killed by the player with this kind of projectile (Blowback)
+   */
+  | { t: 'player_killed_entity'; victim: string; direct: string }
+  /**
+   * (trial chambers) vanilla fall_after_explosion: the player began to fall at least this far above where a burst of
+   * this kind of thing threw them from (DistancePredicate.vertical)
+   */
+  | { t: 'fall_after_explosion'; minRise: number; cause: string }
+  /**
+   * (trial chambers) vanilla player_hurt_entity: a blow from the player of at least this much damage (as dealt, before
+   * the target's armour), of this kind, with this in their hand
+   */
+  | { t: 'player_hurt_entity'; minDealt: number; source: string; weapon: string }
+  /** (trial chambers) vanilla crafter_recipe_crafted: a crafter near the player crafted this recipe */
+  | { t: 'crafter_recipe_crafted'; recipe: string }
   | { t: 'impossible' };
 
 export interface AdvancementDef {
@@ -263,7 +280,7 @@ const A: AdvancementDef[] = [
   { id: 'adventure/salvage_sherd', parent: 'adventure/root', title: 'Respecting the Remnants', description: 'Brush a Suspicious block to obtain a Pottery Sherd', icon: 'brush', frame: 'task', criteria: each(ARCHAEOLOGY_TABLES, (n) => ({ t: 'container_loot', table: `archaeology/${n}` })), requirements: [ARCHAEOLOGY_TABLES] },
   { id: 'adventure/avoid_vibration', parent: 'adventure/root', title: 'Sneak 100', description: 'Sneak near a Sculk Sensor or Warden to prevent it from detecting you', icon: 'sculk_sensor', frame: 'task', criteria: one(never) },
   { id: 'adventure/sleep_in_bed', parent: 'adventure/root', title: 'Sweet Dreams', description: 'Sleep in a Bed to change your respawn point', icon: 'red_bed', frame: 'task', criteria: one({ t: 'slept' }) },
-  { id: 'adventure/minecraft_trials_edition', parent: 'adventure/root', title: 'Minecraft: Trial(s) Edition', description: 'Step foot in a Trial Chamber', icon: 'chiseled_tuff', frame: 'task', criteria: one(never) },
+  { id: 'adventure/minecraft_trials_edition', parent: 'adventure/root', title: 'Minecraft: Trial(s) Edition', description: 'Step foot in a Trial Chamber', icon: 'chiseled_tuff', frame: 'task', criteria: { minecraft_trials_edition: { t: 'structure', structure: 'trial_chambers' } } },
   { id: 'adventure/hero_of_the_village', parent: 'adventure/voluntary_exile', title: 'Hero of the Village', description: 'Successfully defend a village from a raid', icon: 'white_banner', frame: 'challenge', criteria: one({ t: 'raid_won' }) },
   { id: 'adventure/throw_trident', parent: 'adventure/kill_a_mob', title: 'A Throwaway Joke', description: 'Throw a Trident at something.\nNote: Throwing away your only weapon is not a good idea.', icon: 'trident', frame: 'task', criteria: one({ t: 'throw_trident' }) },
   { id: 'adventure/shoot_arrow', parent: 'adventure/kill_a_mob', title: 'Take Aim', description: 'Shoot something with an Arrow', icon: 'bow', frame: 'task', criteria: one({ t: 'shoot_arrow' }) },
@@ -280,11 +297,11 @@ const A: AdvancementDef[] = [
   { id: 'adventure/play_jukebox_in_meadows', parent: 'adventure/sleep_in_bed', title: 'Sound of Music', description: 'Make the Meadows come alive with the sound of music from a Jukebox', icon: 'jukebox', frame: 'task', criteria: one(never) },
   { id: 'adventure/walk_on_powder_snow_with_leather_boots', parent: 'adventure/sleep_in_bed', title: 'Light as a Rabbit', description: 'Walk on Powder Snow... without sinking in it', icon: 'leather_boots', frame: 'task', criteria: one(never) },
   { id: 'adventure/under_lock_and_key', parent: 'adventure/minecraft_trials_edition', title: 'Under Lock and Key', description: 'Unlock a Vault with a Trial Key', icon: 'trial_key', frame: 'task', criteria: { under_lock_and_key: { t: 'item_used_on_block', items: ['trial_key'], blocks: ['vault'], state: { ominous: false } } } },
-  { id: 'adventure/blowback', parent: 'adventure/minecraft_trials_edition', title: 'Blowback', description: 'Kill a Breeze with a deflected Breeze-shot Wind Charge', icon: 'wind_charge', frame: 'challenge', criteria: one(never) },
-  { id: 'adventure/who_needs_rockets', parent: 'adventure/minecraft_trials_edition', title: 'Who Needs Rockets?', description: 'Use a Wind Charge to launch yourself upward 8 blocks', icon: 'wind_charge', frame: 'task', criteria: one(never) },
-  { id: 'adventure/crafters_crafting_crafters', parent: 'adventure/minecraft_trials_edition', title: 'Crafters Crafting Crafters', description: 'Be near a Crafter when it crafts a Crafter', icon: 'crafter', frame: 'task', criteria: one(never) },
+  { id: 'adventure/blowback', parent: 'adventure/minecraft_trials_edition', title: 'Blowback', description: 'Kill a Breeze with a deflected Breeze-shot Wind Charge', icon: 'wind_charge', frame: 'challenge', criteria: { blowback: { t: 'player_killed_entity', victim: 'breeze', direct: 'breeze_wind_charge' } } },
+  { id: 'adventure/who_needs_rockets', parent: 'adventure/minecraft_trials_edition', title: 'Who Needs Rockets?', description: 'Use a Wind Charge to launch yourself upward 8 blocks', icon: 'wind_charge', frame: 'task', criteria: { who_needs_rockets: { t: 'fall_after_explosion', minRise: 7, cause: 'wind_charge' } } },
+  { id: 'adventure/crafters_crafting_crafters', parent: 'adventure/minecraft_trials_edition', title: 'Crafters Crafting Crafters', description: 'Be near a Crafter when it crafts a Crafter', icon: 'crafter', frame: 'task', criteria: { crafter_crafted_crafter: { t: 'crafter_recipe_crafted', recipe: 'crafter' } } },
   { id: 'adventure/lighten_up', parent: 'adventure/minecraft_trials_edition', title: 'Lighten Up', description: 'Scrape a Copper Bulb with an Axe to make it brighter', icon: 'oxidized_copper_bulb', frame: 'task', criteria: { lighten_up: { t: 'item_used_on_block', items: AXES, blocks: ['oxidized_copper_bulb', 'weathered_copper_bulb', 'exposed_copper_bulb', 'waxed_oxidized_copper_bulb', 'waxed_weathered_copper_bulb', 'waxed_exposed_copper_bulb'] } } },
-  { id: 'adventure/overoverkill', parent: 'adventure/minecraft_trials_edition', title: 'Over-Overkill', description: 'Deal 50 hearts of damage in a single hit using the Mace', icon: 'mace', frame: 'challenge', criteria: one(never) },
+  { id: 'adventure/overoverkill', parent: 'adventure/minecraft_trials_edition', title: 'Over-Overkill', description: 'Deal 50 hearts of damage in a single hit using the Mace', icon: 'mace', frame: 'challenge', criteria: { overoverkill: { t: 'player_hurt_entity', minDealt: 100, source: 'maceSmash', weapon: 'mace' } } },
   { id: 'adventure/revaulting', parent: 'adventure/under_lock_and_key', title: 'Revaulting', description: 'Unlock an Ominous Vault with an Ominous Trial Key', icon: 'ominous_trial_key', frame: 'goal', criteria: { revaulting: { t: 'item_used_on_block', items: ['ominous_trial_key'], blocks: ['vault'], state: { ominous: true } } } },
   { id: 'adventure/spyglass_at_ghast', parent: 'adventure/spyglass_at_parrot', title: 'Is It a Balloon?', description: 'Look at a Ghast through a Spyglass', icon: 'spyglass', frame: 'task', criteria: one(never) },
   { id: 'adventure/very_very_frightening', parent: 'adventure/throw_trident', title: 'Very Very Frightening', description: 'Strike a Villager with lightning', icon: 'trident', frame: 'task', criteria: one({ t: 'channeled_lightning', victims: ['villager'] }) },
@@ -541,6 +558,17 @@ export interface TriggerPayload {
    * whatever stood by it unharmed (lightning_strike)
    */
   lightning?: { distance: number; blocksSetOnFire: number; bystanders: string[] };
+  /** (trial chambers) a mob the player killed and the projectile that did it (player_killed_entity) */
+  killedWith?: { victim: string; direct: string };
+  /**
+   * (trial chambers) how far above where a burst threw them the player began to fall, and the kind of thing that went
+   * off (fall_after_explosion)
+   */
+  fallAfterExplosion?: { rise: number; cause: string | null };
+  /** (trial chambers) a blow from the player: its damage as dealt, its kind and what was in their hand (player_hurt_entity) */
+  hurtEntity?: { dealt: number; source: string; weapon: string | null };
+  /** (trial chambers) the recipe a crafter near the player crafted (crafter_recipe_crafted) */
+  crafterCrafted?: { recipe: string };
 }
 
 export class PlayerAdvancements {
@@ -737,6 +765,14 @@ function matches(c: Criterion, p: TriggerPayload): boolean {
       return !!p.usedOnBlock && c.items.includes(p.usedOnBlock.item) && c.blocks.includes(p.usedOnBlock.block) && (!c.state || Object.entries(c.state).every(([k, v]) => p.usedOnBlock!.props?.[k] === v));
     case 'lightning_strike':
       return !!p.lightning && p.lightning.distance <= c.maxDistance && p.lightning.blocksSetOnFire <= c.maxBlocksSetOnFire && p.lightning.bystanders.includes(c.bystander);
+    case 'player_killed_entity':
+      return !!p.killedWith && p.killedWith.victim === c.victim && p.killedWith.direct === c.direct;
+    case 'fall_after_explosion':
+      return !!p.fallAfterExplosion && p.fallAfterExplosion.rise >= c.minRise && p.fallAfterExplosion.cause === c.cause;
+    case 'player_hurt_entity':
+      return !!p.hurtEntity && p.hurtEntity.dealt >= c.minDealt && p.hurtEntity.source === c.source && p.hurtEntity.weapon === c.weapon;
+    case 'crafter_recipe_crafted':
+      return !!p.crafterCrafted && p.crafterCrafted.recipe === c.recipe;
     default:
       return false;
   }

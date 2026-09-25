@@ -1,12 +1,13 @@
 // The trial chambers' own blocks (1.21): the heavy core (vanilla HeavyCoreBlock), what an ominous vault can give,
 // which with a breeze rod makes a mace; the trial spawner (vanilla TrialSpawnerBlock: its state and whether it's
 // ominous, what it does is game/trialSpawner.ts) and the vault (vanilla VaultBlock: which way it faces, its state and
-// whether it's ominous; game/vault.ts).
+// whether it's ominous; game/vault.ts); and (M5) the crafter (blocksCrafter.ts).
 
 import { registerBlock, P, Layer, enumProp, boolProp, type Box } from './block';
 import type { DirName } from './dir';
 import type { FaceDef, ModelDef } from './models';
 import { MAP_COLORS, MapColor } from './mapColors';
+import { registerCrafterBlock } from './blocksCrafter';
 
 const px = (v: number) => v / 16;
 const bx = (x0: number, y0: number, z0: number, x1: number, y1: number, z1: number): Box => [px(x0), px(y0), px(z0), px(x1), px(y1), px(z1)];
@@ -76,6 +77,9 @@ function vaultModel(state: VaultStateName, ominous: boolean): ModelDef {
 const FACING_Y: Record<string, number> = { north: 0, east: 90, south: 180, west: 270 };
 
 export function registerTrialChamberBlocks(): void {
+  // (M5) the crafter
+  registerCrafterBlock();
+
   // vanilla Blocks.HEAVY_CORE: strength 10, blast resistance 1200, SoundType.HEAVY_CORE, metal on maps, pushed by
   // pistons (PushReaction.NORMAL), waterloggable; drops itself to any tool (a pickaxe mines it faster)
   const core = heavyCoreModel();

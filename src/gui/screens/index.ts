@@ -15,6 +15,8 @@ import { MerchantScreen } from './merchant';
 import { WinScreen } from './winScreen';
 import { installJobSiteScreens } from './jobSites';
 import { installDispenserScreen } from './dispenser';
+// (trial chambers)
+import { installCrafterScreen } from './crafter';
 import { installHorseScreen } from './horse';
 
 export function installScreens(game: Game): void {
@@ -46,5 +48,7 @@ export function installScreens(game: Game): void {
   };
   installJobSiteScreens(game);
   installDispenserScreen(game);
+  // (trial chambers)
+  installCrafterScreen(game);
   installHorseScreen(game);
 }

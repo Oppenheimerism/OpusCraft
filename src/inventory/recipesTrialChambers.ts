@@ -52,6 +52,8 @@ export function registerTrialChamberRecipes(shaped: ShapedFn, shapeless: Shapele
   // vanilla Items.WIND_CHARGE (four from a breeze rod) and Items.MACE (the heavy core on a breeze rod)
   shapeless('wind_charge', 4, 'breeze_rod');
   shaped('mace', 1, ['#', 'I'], { '#': 'heavy_core', I: 'breeze_rod' });
+  // vanilla Blocks.CRAFTER (RecipeCategory.REDSTONE): an iron case round a crafting table, a dropper and two redstone
+  shaped('crafter', 1, ['###', '#C#', 'RDR'], { '#': 'iron_ingot', C: 'crafting_table', R: 'redstone', D: 'dropper' });
 }
 
 /** vanilla stonecutterResultFromBase for the tuff and copper families: [input, [result, count][]] */

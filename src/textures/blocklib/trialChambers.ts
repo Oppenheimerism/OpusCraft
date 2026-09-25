@@ -8,6 +8,7 @@
 
 import { TexImage, type TexDef, img, setPx } from '../tex';
 import { rng, fbm, quantize, noise } from './core';
+import { registerCrafterTextures } from './crafter';
 
 type Gen = () => TexImage;
 
@@ -216,6 +217,8 @@ function vaultBottom(look: Look, seed: string): TexImage {
 
 export function registerTrialChamberTextures(T: Record<string, () => TexDef>): void {
   T['heavy_core'] = heavyCore;
+  // the crafter's (M5), drawn from its advancement icon's
+  registerCrafterTextures(T);
   // the trial spawner: vanilla block/trial_spawner_bottom, _side_inactive, _side_active, _top_inactive, _top_active and
   // _top_ejecting_reward, and the ominous ones of all but the bottom
   T['trial_spawner_bottom'] = trialSpawnerBottom;
