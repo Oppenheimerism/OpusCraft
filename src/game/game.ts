@@ -77,7 +77,7 @@ import { openJobSite } from './jobSites';
 import { endPortalTravel, PortalArrivals } from './endTravel';
 import { EndDragonFight, ARENA_TICKET_LEVEL } from './endDragonFight';
 import { gatewayTravel } from './gatewayTravel';
-import { respawnArrival, worldSpawnOf } from './respawnLogic';
+import { respawnArrival, worldSpawnOf, InitialSpawn, WAIT } from './respawnLogic';
 
 export type { GameOptions } from './options';
 /** vanilla ReceivingLevelScreen.Reason: what the loading screen shows while changing dimension */
@@ -139,7 +139,8 @@ export class Game {
   frameTimeMs = 0;
   mouseX = 0;
   mouseY = 0;
-  private spawnSearch = false;
+  /** a new world's spawn, being looked for (vanilla MinecraftServer.setInitialSpawn) */
+  private spawnSearch: InitialSpawn | null = null;
   private blockImages = new Map<string, TexImage>();
   private savedKeys = new Set<string>();
   private autosaveTimer = 0;
@@ -538,7 +539,7 @@ export class Game {
       this.player.seenCredits = !!pd.seenCredits;
       this.player.shoulderLeft = pd.shoulderLeft ?? null;
       this.player.shoulderRight = pd.shoulderRight ?? null;
-      this.spawnSearch = false;
+      this.spawnSearch = null;
       // vanilla RootVehicle: back in the minecart you left the game in
       const v = pd.vehicle && !pd.dead ? loadEntity(pd.vehicle, this.level) : null;
       if (v) {
@@ -555,8 +556,9 @@ export class Game {
         this.arrival = respawnArrival();
       }
     } else {
-      this.player.moveTo(0.5, 120, 0.5, 0, 0);
-      this.spawnSearch = true;
+      // (waiting where the climate says the spawn is, while the chunks round there load)
+      this.spawnSearch = new InitialSpawn(meta.seed);
+      this.player.moveTo(this.spawnSearch.cx * 16 + 8, 120, this.spawnSearch.cz * 16 + 8, 0, 0);
     }
     this.spawned = false;
     this.inWorld = true;
@@ -1179,30 +1181,16 @@ export class Game {
     else if (to.id !== 'the_nether') this.enteredNetherAt = null;
   }
 
+  /** vanilla MinecraftServer.setInitialSpawn, as the chunks it looks in come in (game/respawnLogic InitialSpawn) */
   private findSpawn(): boolean {
-    const w = this.world;
-    const R = 3;
-    for (let dz = -R; dz <= R; dz++)
-      for (let dx = -R; dx <= R; dx++) if (!w.getChunk(dx, dz)) return false;
-    let best: [number, number, number] | null = null;
-    let bestD = Infinity;
-    for (let z = -R * 16; z < R * 16; z++)
-      for (let x = -R * 16; x < R * 16; x++) {
-        const d = x * x + z * z;
-        if (d >= bestD) continue;
-        const h = w.heightAt(x, z);
-        const top = w.getState(x, h - 1, z);
-        const name = BLOCKS[STATE_BLOCK[top]].name;
-        if (name !== 'grass_block' && name !== 'sand' && name !== 'snow' && name !== 'podzol' && name !== 'snow_block') continue;
-        if (FLAGS[w.getState(x, h, z)] & (F_WATER | F_LAVA)) continue;
-        best = [x, h, z];
-        bestD = d;
-      }
-    if (!best) best = [0, w.heightAt(0, 0), 0];
-    this.player.moveTo(best[0] + 0.5, best[1], best[2] + 0.5, 0, 0);
-    this.player.spawnX = best[0];
-    this.player.spawnY = best[1];
-    this.player.spawnZ = best[2];
+    const s = this.spawnSearch!;
+    const pos = s.next(this.level);
+    // (the chunk it has come to, kept loaded however far out it is)
+    this.chunks.setTicket('spawn', pos === WAIT ? [s.need[0], s.need[1], 1] : null);
+    if (pos === WAIT) return false;
+    this.worldSpawn = pos;
+    [this.player.spawnX, this.player.spawnY, this.player.spawnZ] = pos;
+    this.player.moveTo(pos[0] + 0.5, pos[1], pos[2] + 0.5, 0, 0);
     // vanilla ServerPlayer's constructor: a new player starts somewhere free near the world spawn
     this.arrival = respawnArrival();
     return true;
@@ -1310,7 +1298,7 @@ export class Game {
       this.atlas.tick();
       // (the world spawn is looked for in the Overworld only)
       if (this.spawnSearch && this.world.dim === OVERWORLD) {
-        if (this.findSpawn()) this.spawnSearch = false;
+        if (this.findSpawn()) this.spawnSearch = null;
         else return;
       }
       if (this.chunks.isReady(this.player.x, this.player.z, 2)) {

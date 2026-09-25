@@ -1,7 +1,9 @@
 // Where a player comes (back) into the Overworld: vanilla PlayerRespawnLogic (over the first block with a full top
 // at or under a column's motion-blocking height, never where the surface is water) and ServerPlayer.adjustSpawnLocation
 // (the first such spot within the spawnRadius gamerule of the world spawn that a standing player fits in, clear of
-// blocks and fluids, else straight up from the spawn until they fit and back down while there's room below).
+// blocks and fluids, else straight up from the spawn until they fit and back down while there's room below); and where
+// a new world's spawn is (vanilla MinecraftServer.setInitialSpawn: the first chunk with such a spot in a spiral round
+// the one the climate points to).
 //
 // Nothing is decided until every column it looks at is in a loaded chunk whose neighbours are loaded too (so what
 // generation put across chunk borders, a neighbour's tree or house, is there): till then the answer is WAIT, and the
@@ -12,10 +14,11 @@ import type { Entity } from '../entity/entity';
 import type { Game } from './game';
 import type { World } from '../world/world';
 import { BLOCKS, STATE_BLOCK, FLAGS, F_AIR, F_WATER, F_LAVA, F_FULL_COLLISION, COLLISION } from '../world/block';
-import { MIN_Y, MAX_Y } from '../world/constants';
+import { MIN_Y, MAX_Y, SEA_LEVEL } from '../world/constants';
 import { isSolidBlock } from '../world/gen/patches';
 import { AABB } from '../core/aabb';
 import { findRespawn, MSG } from './sleep';
+import { SpawnFinder } from '../world/gen/spawnFinder';
 
 export type Pos = [number, number, number];
 
@@ -98,6 +101,54 @@ export function spawnPosInChunk(level: Level, cx: number, cz: number): Pos | nul
       if (p) return p;
     }
   return null;
+}
+
+/**
+ * vanilla MinecraftServer.setInitialSpawn: from the chunk the climate points to (world/gen/spawnFinder), round an
+ * 11 x 11 spiral of chunks for the first with a respawn spot (spawnPosInChunk); failing that, the first chunk's middle
+ * just over sea level (vanilla getSpawnHeight). Looked for as the chunks come in: next() is WAIT, with `need` the
+ * chunk it has come to, while that one or a neighbour of it isn't loaded.
+ */
+export class InitialSpawn {
+  /** the chunk the climate points to */
+  readonly cx: number;
+  readonly cz: number;
+  readonly need: [number, number] = [0, 0];
+  private i = 0;
+  private dx = 0;
+  private dz = 0;
+  private stepX = 0;
+  private stepZ = -1;
+
+  constructor(seed: string) {
+    const [x, z] = new SpawnFinder(seed).find();
+    this.cx = x >> 4;
+    this.cz = z >> 4;
+  }
+
+  next(level: Level): Pos | typeof WAIT {
+    for (; this.i < 11 * 11; this.i++) {
+      if (this.dx >= -5 && this.dx <= 5 && this.dz >= -5 && this.dz <= 5) {
+        const cx = this.cx + this.dx, cz = this.cz + this.dz;
+        if (!areaComplete(level.world, cx * 16, cz * 16, cx * 16 + 15, cz * 16 + 15)) {
+          this.need[0] = cx;
+          this.need[1] = cz;
+          return WAIT;
+        }
+        const p = spawnPosInChunk(level, cx, cz);
+        if (p) return p;
+      }
+      // (turning at the corners)
+      if (this.dx === this.dz || (this.dx < 0 && this.dx === -this.dz) || (this.dx > 0 && this.dx === 1 - this.dz)) {
+        const t = this.stepX;
+        this.stepX = -this.stepZ;
+        this.stepZ = t;
+      }
+      this.dx += this.stepX;
+      this.dz += this.stepZ;
+    }
+    return [this.cx * 16 + 8, SEA_LEVEL + 1, this.cz * 16 + 8];
+  }
 }
 
 /** every chunk under the blocks (x0, z0)..(x1, z1) is loaded, and so is each one's every neighbour */
