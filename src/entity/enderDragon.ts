@@ -327,7 +327,7 @@ export class EnderDragon extends Mob {
   }
 
   /** vanilla isFlapping: the wings just came down past the bottom of their beat */
-  isFlapping(): boolean {
+  override isFlapping(): boolean {
     const f = mthCos(this.flapTime * Math.PI * 2), f1 = mthCos(this.oFlapTime * Math.PI * 2);
     return f1 <= -0.3 && f >= -0.3;
   }

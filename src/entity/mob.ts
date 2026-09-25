@@ -281,6 +281,9 @@ export abstract class Mob extends LivingEntity {
     this.baseMoveSpeed = v;
   }
 
+  /** vanilla FLYING_SPEED attribute (0.4 unless set): how fast a FlyingMoveControl flies it */
+  flyingSpeedAttr = 0.4;
+
   headRotSpeed(): number {
     return 10;
   }

@@ -73,6 +73,7 @@ import { RaiderRenderers, RAIDER_SHADOW_RADII } from './illagerRenderers';
 import { OceanRenderers, OCEAN_SHADOW_RADII } from './oceanRenderers';
 import { HorseRenderers, HORSE_SHADOW_RADII } from './horseRenderer';
 import { LlamaRenderers, LLAMA_SHADOW_RADII, renderSpit } from './llamaRenderer';
+import { ParrotRenderers, PARROT_SHADOW_RADII } from './parrotRenderer';
 import { LlamaSpit } from '../entity/llama';
 import { LeashKnot } from '../entity/leash';
 import { renderKnot, renderLeash } from './leashRenderer';
@@ -195,6 +196,8 @@ export class EntityRenderDispatcher {
   private readonly horses: HorseRenderers;
   /** (Stage 6: tameable animals) llamas and their decor */
   private readonly llamas: LlamaRenderers;
+  /** parrots, and the ones on a player's shoulders */
+  private readonly parrots: ParrotRenderers;
   /** names over mobs, drawn once every entity is down */
   private readonly nameTags: NameTagRenderer;
   /** this frame's options: names shown at all (not with the GUI hidden), and what the crosshair is on */
@@ -228,6 +231,7 @@ export class EntityRenderDispatcher {
     // (Stage 6: tameable animals) and again
     this.horses = new HorseRenderers(this.raiders.kit);
     this.llamas = new LlamaRenderers(this.raiders.kit);
+    this.parrots = new ParrotRenderers(this.raiders.kit);
     this.nameTags = new NameTagRenderer(gl);
     this.models = {
       pig: M.pigModel(),
@@ -714,6 +718,7 @@ export class EntityRenderDispatcher {
     // (Stage 6: tameable animals; a llama before the horses it's kin to)
     if (this.llamas.render(b, e, dx, dy, dz, p)) return;
     if (this.horses.render(b, e, dx, dy, dz, p)) return;
+    if (this.parrots.render(b, e, dx, dy, dz, p)) return;
     const type = e.type;
     const def = this.models[type];
     // (vanilla GhastRenderer.getTextureLocation: its face while charging a shot)
@@ -1289,6 +1294,9 @@ export class EntityRenderDispatcher {
       if (head && !head.item.armor) renderHeadItem(b, this.pose, this.items, m, head, false, 1, 1, 1, w.walkAnimPos - w.walkAnimSpeed * (1 - p));
       // vanilla ElytraLayer
       this.elytra.render(b, this.pose, e, e.inventory.armor[2], false, crouch);
+      // vanilla ParrotOnShoulderLayer: the left shoulder's, then the right's
+      if (e.shoulderLeft) this.parrots.renderOnShoulder(b, this.pose, e.shoulderLeft, true, crouch, a, e.tickCount);
+      if (e.shoulderRight) this.parrots.renderOnShoulder(b, this.pose, e.shoulderRight, false, crouch, a, e.tickCount);
       // vanilla SpinAttackEffectLayer
       if (e.isAutoSpinAttack()) this.items.trident.renderSpin(b, this.pose, a.age);
     }
@@ -1699,7 +1707,7 @@ function shadowRadius(e: Entity): number {
   // (Stage 5: ocean)
   if (OCEAN_SHADOW_RADII[e.type] !== undefined) return OCEAN_SHADOW_RADII[e.type];
   // (Stage 6: tameable animals; a foal's is half)
-  let r = HORSE_SHADOW_RADII[e.type] ?? LLAMA_SHADOW_RADII[e.type] ?? 0;
+  let r = HORSE_SHADOW_RADII[e.type] ?? LLAMA_SHADOW_RADII[e.type] ?? PARROT_SHADOW_RADII[e.type] ?? 0;
   switch (e.type) {
     case 'pig':
     case 'cow':

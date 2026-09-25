@@ -38,6 +38,7 @@ import { catSounds } from './gen/cat';
 import { horseSounds } from './gen/horse';
 import { leashSounds } from './gen/leash';
 import { llamaSounds } from './gen/llama';
+import { parrotSounds } from './gen/parrot';
 import { wanderingTraderSounds } from './gen/wanderingTrader';
 import { illagerSounds } from './gen/illagers';
 // (Stage 5: ocean)
@@ -97,6 +98,8 @@ Object.assign(SOUNDS, leashSounds());
 Object.assign(SOUNDS, llamaSounds(SOUNDS));
 // (vanilla sounds.json: the snow golem's are the snow's breaking, the bow's and the shears')
 for (const [k, v] of Object.entries({ 'entity.snow_golem.hurt': 'block.snow.break', 'entity.snow_golem.death': 'block.snow.break', 'entity.snow_golem.shoot': 'entity.arrow.shoot', 'entity.snow_golem.shear': 'entity.sheep.shear' })) if (SOUNDS[v]) SOUNDS[k] = SOUNDS[v];
+// (the parrot, and the mobs it mimics: theirs pitched up, so it comes after them all)
+Object.assign(SOUNDS, parrotSounds(SOUNDS));
 
 /** Number of in-game (overworld) music tracks. */
 export const MUSIC_TRACK_COUNT: number = MUSIC_TRACKS;

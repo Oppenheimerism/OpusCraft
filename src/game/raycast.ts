@@ -3,7 +3,7 @@
 import { OUTLINE, COLLISION, FLAGS, F_AIR, F_WATER, F_LAVA } from '../world/block';
 import type { World } from '../world/world';
 import { AABB } from '../core/aabb';
-import { fluidHeight, fluidType } from '../world/fluids';
+import { fluidHeight, fluidType, FLUID_NONE } from '../world/fluids';
 
 export interface BlockHit {
   x: number;
@@ -92,9 +92,10 @@ export interface SegmentHit {
 
 /**
  * Clip the segment (x0,y0,z0)→(x1,y1,z1) against block collision shapes
- * (vanilla Level.clip with ClipContext.Block.COLLIDER, Fluid.NONE).
+ * (vanilla Level.clip with ClipContext.Block.COLLIDER, Fluid.NONE; with `fluids`, Fluid.ANY: a cell of water or
+ * lava stops it where it enters)
  */
-export function clipBlocks(world: World, x0: number, y0: number, z0: number, x1: number, y1: number, z1: number): SegmentHit | null {
+export function clipBlocks(world: World, x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, fluids = false): SegmentHit | null {
   const dx = x1 - x0, dy = y1 - y0, dz = z1 - z0;
   const len = Math.sqrt(dx * dx + dy * dy + dz * dz);
   if (len < 1e-9) return null;
@@ -105,8 +106,10 @@ export function clipBlocks(world: World, x0: number, y0: number, z0: number, x1:
   let tMX = dx !== 0 ? (dx > 0 ? x + 1 - x0 : x0 - x) * tDX : Infinity;
   let tMY = dy !== 0 ? (dy > 0 ? y + 1 - y0 : y0 - y) * tDY : Infinity;
   let tMZ = dz !== 0 ? (dz > 0 ? z + 1 - z0 : z0 - z) * tDZ : Infinity;
+  let tIn = 0;
   for (let i = 0; i < 1024; i++) {
     const st = world.getState(x, y, z);
+    if (fluids && fluidType(st) !== FLUID_NONE) return { x, y, z, face: 0, t: tIn, px: x0 + dx * tIn, py: y0 + dy * tIn, pz: z0 + dz * tIn };
     const boxes = COLLISION[st];
     if (boxes && boxes.length) {
       let best: SegmentHit | null = null;
@@ -122,19 +125,23 @@ export function clipBlocks(world: World, x0: number, y0: number, z0: number, x1:
       if (tMX < tMZ) {
         if (tMX > 1) return null;
         x += stepX;
+        tIn = tMX;
         tMX += tDX;
       } else {
         if (tMZ > 1) return null;
         z += stepZ;
+        tIn = tMZ;
         tMZ += tDZ;
       }
     } else if (tMY < tMZ) {
       if (tMY > 1) return null;
       y += stepY;
+      tIn = tMY;
       tMY += tDY;
     } else {
       if (tMZ > 1) return null;
       z += stepZ;
+      tIn = tMZ;
       tMZ += tDZ;
     }
   }

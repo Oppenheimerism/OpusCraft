@@ -55,6 +55,9 @@ export interface WorldMeta {
     dimension?: string;
     /** vanilla seenCredits: they've left the End through its exit portal once (the credits roll only the first time) */
     seenCredits?: boolean;
+    /** vanilla ShoulderEntityLeft / ShoulderEntityRight: the parrots riding on its shoulders */
+    shoulderLeft?: SavedEntity | null;
+    shoulderRight?: SavedEntity | null;
   } | null;
   /** nether portal blocks per dimension (vanilla POI records), as x, y, z triples */
   portals?: Record<string, number[]>;

@@ -529,6 +529,8 @@ export class Game {
         this.player.respawnForced = pd.respawn[3] === 1;
       }
       this.player.seenCredits = !!pd.seenCredits;
+      this.player.shoulderLeft = pd.shoulderLeft ?? null;
+      this.player.shoulderRight = pd.shoulderRight ?? null;
       this.spawnSearch = false;
       // vanilla RootVehicle: back in the minecart you left the game in
       const v = pd.vehicle && !pd.dead ? loadEntity(pd.vehicle, this.level) : null;
@@ -594,6 +596,8 @@ export class Game {
       vehicle: p.vehicle ? saveEntity(p.vehicle) : null,
       dimension: this.world.dim.id,
       seenCredits: p.seenCredits || undefined,
+      shoulderLeft: p.shoulderLeft ?? undefined,
+      shoulderRight: p.shoulderRight ?? undefined,
     };
     m.portals = this.portalPoi.save();
     m.arrivals = this.arrivals.save();
