@@ -1206,6 +1206,29 @@ export abstract class Mob extends LivingEntity {
     return undefined;
   }
   protected loadData(_d: Record<string, number | string | boolean>): void {}
+
+  /**
+   * /summon's entity data (vanilla readAdditionalSaveData): whichever of the mob's own saved values it's given (the
+   * names matched whatever their case: vanilla's Color is our color), each read as the kind it keeps (1b for true, a
+   * "minecraft:" name as the plain name), over what it has
+   */
+  readSummonData(given: Record<string, number | string | boolean>): void {
+    const own = this.saveData();
+    if (!own) return;
+    const names = new Map(Object.keys(given).map((k) => [k.toLowerCase(), k]));
+    const d = { ...own };
+    let any = false;
+    for (const [k, was] of Object.entries(own)) {
+      const g = names.get(k.toLowerCase());
+      if (g === undefined) continue;
+      const v = given[g];
+      if (typeof was === 'boolean') d[k] = typeof v === 'number' ? v !== 0 : v === true || v === 'true';
+      else if (typeof was === 'number') d[k] = typeof v === 'boolean' ? +v : Number(v);
+      else d[k] = String(v).replace(/^minecraft:/, '');
+      any = true;
+    }
+    if (any) this.loadData(d);
+  }
 }
 
 /** vanilla Entity.isAlive: not removed, and a living thing not dead */
