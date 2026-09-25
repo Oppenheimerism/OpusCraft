@@ -10,7 +10,7 @@ Branch: `claude/beautiful-darwin-4duqdn` (from main at f08dd21).
 | (merge) | main merged in (horses, donkeys and mules; leads and name tags): no conflicts | 2ff0fcd Merge remote-tracking branch 'origin/main' |
 | M2 ruined portals | done: the seven kinds and all their setups (on the ground, half buried, sea bed, underground, in a mountain, the Nether), all 13 templates, vanilla's processors (crying obsidian, gold taken, lava cooled, magma, aged and mossy bricks, blackstone), the netherrack spread and drips, vines and jungle leaves, waterlogging, the loot chest, `/locate` for all seven; a repaired frame lights | 40883fc Ruined portals: broken nether portals scattered through the Overworld and the Nether, … |
 | (merge) | main merged in: already up to date | |
-| M3 desert wells and fossils | not started | |
+| M3 desert wells and fossils | done: the bone block (its textures, sounds, drops, placed along an axis, nine bone meal to one and back); desert wells in about one desert chunk in a thousand, vanilla's shape, with two suspicious sand holding archaeology/desert_well (the new arms up and brewer sherds, brick, emerald, stick, suspicious stew); suspicious stew, which gives the effect it holds when eaten; fossils (vanilla's fossil_upper and fossil_lower) buried under deserts, swamps and mangrove swamps: eight skulls and spines turned four ways, some bones rotted away, coal ore in the upper ones and deepslate diamond ore in the deep ones | M3COMMIT |
 
 ## 2. Shared files changed (all additive)
 
@@ -35,6 +35,26 @@ Branch: `claude/beautiful-darwin-4duqdn` (from main at f08dd21).
   branch at the end of `/locate`'s chain (the seven `ruined_portal*` ids, which `STRUCTURES` already had).
 - M2, `src/world/gen/templePiece.ts`: `positionSeed` (vanilla `Mth.getSeed`) exported, for the portals' processors.
 - M2 loot: `chests/ruined_portal` is registered from `src/game/ruinedPortals.ts`.
+- M3, `src/world/gen/generator.ts`: imports `DesertWells`, `Fossils`/`fossilTerrain`; `readonly desertWells` and
+  `readonly fossils` fields; the villages hook places the wells after the ruined portals (the SURFACE_STRUCTURES step's
+  features come after its structures), and the mineshafts hook is wrapped the same way so the fossils go in after the
+  mineshafts and before the monster rooms (the UNDERGROUND_STRUCTURES step); a new method `columnBiome(x, z)`, the
+  biome `generate()` gives a column (`zoomBiome` over the four quarts round it), for features that look outside
+  their chunk.
+- M3, `src/world/blocks.ts` and `src/textures/blocks.ts`: an import and one call each (`registerFossilBlocks()`,
+  `registerFossilTextures(T)`) at the end of the lists. The bone block's sounds (`bone_block`) and map colour were
+  already there.
+- M3, `src/item/item.ts`: the suspicious stew in the food list (6, 0.6, always edible, the bowl back); the arms up and
+  brewer sherds added to the sherds' loop; the bone block moved to the natural blocks tab; `stewEffects` on
+  `ItemTag` (vanilla `minecraft:suspicious_stew_effects`), cloned and compared with the rest.
+- M3, `src/game/loot.ts`: `stewEffects` on a loot entry and `setStewEffect` (vanilla `SetStewEffectFunction`), applied
+  in `rollLoot` after the enchanting. `src/game/archaeology.ts`: its seeded roll applies it too.
+- M3, `src/game/decoratedPot.ts` (`SHERDS`), `src/textures/decoratedPot.ts` (two motifs) and
+  `src/textures/itemlib/archaeology.ts` (two sprites): the arms up and brewer sherds on pots.
+- M3, `src/inventory/recipes.ts`: `['bone_block', 'bone_meal']` in the storage blocks (nine to one and back).
+- M3, `src/game/level.ts`: `import './desertWells'` next to `import './archaeology'`.
+- M3 loot: `archaeology/desert_well` is registered from `src/game/desertWells.ts`, with the suspicious stew's use.
+- M3, `src/world/gen/mansionBuilder.ts`: its header comment mentions the fossils using the builder too.
 
 New files: `src/world/gen/mansion.ts` (placement, MansionGrid, MansionPiecePlacer, the pieces, afterPlace),
 `src/world/gen/mansionBuilder.ts` (the template builder, shared with the portals), `src/world/gen/mansionTemplates.ts`
@@ -42,7 +62,11 @@ New files: `src/world/gen/mansion.ts` (placement, MansionGrid, MansionPiecePlace
 `src/game/mansions.ts` (main-thread locator, loot table), `tests/mansion/m1-mansion.mjs`; for M2
 `src/world/gen/ruinedPortal.ts` (placement, the processors, the per-chunk placing), `src/world/gen/ruinedPortalTemplates.ts`
 (the 13 templates), `src/game/ruinedPortals.ts` (main-thread locator for both dimensions, loot table),
-`tests/mansion/m2-ruined-portals.mjs`.
+`tests/mansion/m2-ruined-portals.mjs`; for M3 `src/world/blocksFossils.ts` (the bone block),
+`src/textures/blocklib/fossils.ts` (its textures), `src/world/gen/desertWell.ts` (placement and the well),
+`src/world/gen/fossil.ts` (placement, the processors, laying chunk by chunk), `src/world/gen/fossilTemplates.ts`
+(the eight templates), `src/game/desertWells.ts` (the desert well's loot table, eating suspicious stew),
+`tests/mansion/m3-desert-wells-fossils.mjs`.
 
 ## 3. Open points
 
@@ -183,6 +207,60 @@ New files: `src/world/gen/mansion.ts` (placement, MansionGrid, MansionPiecePlace
   apple, gold block 1 each). Unsure: whether 1.21's table has a second pool (a lodestone, which the game hasn't got):
   left out.
 
+### M3 desert wells and fossils
+
+- **Fossil templates.** Vanilla's `fossil/*.nbt` can't be used, so the eight (spine_1-4 and skull_1-4, in vanilla's
+  order, each drawn 1 in 8) are authored in code with the mansions' builder, after vanilla's style: bone blocks laid
+  along each bone (their axis following it) and nothing else, so the rock round and inside them stays as it is.
+  spine_1 a long backbone arched over its rib cage (13 × 5 × 7), spine_2 a shorter one whose tail droops (9 × 4 × 5),
+  spine_3 bent along its length with four pairs of ribs (11 × 3 × 7), spine_4 a rib cage lying flattened (7 × 2 × 9);
+  skull_1 a big skull with its jaw (5 × 5 × 7), skull_2 a broad one with horns (7 × 6 × 5), skull_3 all snout
+  (3 × 3 × 9), skull_4 a small one (4 × 4 × 5). The shapes and sizes are mine. Vanilla's coal overlays
+  (`fossil/*_coal`) are templates of their own; here the overlay is each bone template's shape, so the ore only goes
+  where a bone could be (as I remember vanilla's, not verified).
+- **Laying by chunk.** Vanilla lays a whole fossil from the chunk it's drawn in (clipped to that chunk ± 16). Here
+  every chunk works out the fossils of the chunks round it and lays its own part. The placement (rarity, spot, height,
+  biome), the turn, the template and the depth are drawn in vanilla's order, from a per-chunk hashed random (not
+  vanilla's decoration seed); which bones rot away (BlockRotProcessor 0.9) and which places take ore (0.1) go by a hash
+  of each block's position, salted per fossil, instead of vanilla's one stream.
+- **The ground they read.** The depth goes under the lowest OCEAN_FLOOR_WG height over the box and the empty corners
+  are read from the noise terrain (its air, and the aquifers' water and lava), the same from every chunk; vanilla reads
+  the world as it is by then, so a carver's cave through a corner counts there and not here. A fossil can come out
+  laid partly into a carved cave, as vanilla's can when no more than four corners are open.
+- **Biomes.** Desert, swamp and mangrove swamp (vanilla addFossilDecoration). The biome is read at the height drawn,
+  as vanilla's BiomeFilter does: a cave biome from the same climate as the chunks' own, else the column's biome as
+  `generate()` gives it (`columnBiome`). So no lower ones under a desert where the deep dark or a lush or dripstone cave
+  is at their height.
+- **"On the surface and buried".** Taken as vanilla's two placements; Java's fossils are never on the surface itself:
+  the upper ones (fossil_upper, the height drawn from y 0 to the top of the world) lie 15-24 blocks under the lowest
+  ground over them, or deeper where the height drawn was under the ground, and the deep ones (fossil_lower, drawn from
+  the bottom to y -8) as far under that, most at y -54 (the floor ten above the bottom), with deepslate diamond ore.
+  They're found where a cave, ravine or cliff cuts into them. Kept as vanilla.
+- **Not here:** nether fossils (soul sand valleys; vanilla's `nether_fossil` structure with its own templates); the
+  suspicious stew crafted from a flower (each flower's effect), from a brown mooshroom, its creative tab variants and
+  its effect in the tooltip (vanilla shows it in creative only).
+- **Desert wells.** In the SURFACE_STRUCTURES step after the ruined portals. The ground is the noise terrain's
+  (vanilla's MOTION_BLOCKING before the features: the same but where a lake or a carver has been); its top is taken as
+  sand wherever the noise terrain is solid (the desert's surface) rather than read block by block. The two suspicious
+  sand are drawn from vanilla's list (middle, east, south, west, north) after the rest, and their block entities get
+  `archaeology/desert_well` seeded with their position (`BlockPos.asLong`), as vanilla's placeSusSand does. A well
+  reaching into the next chunk is built there from the same working out.
+- **Sherds.** arms_up and brewer get pot patterns and sprites of my own after vanilla's (a figure with its arms
+  raised; a stoppered flask with bubbles in it).
+- **No `/locate`.** Wells and fossils are features, which vanilla's `/locate` doesn't find either; the checklist gives
+  coordinates.
+- **Numbers used as vanilla's:** desert well 1 in 1000 desert chunks (RarityFilter), a spot in the chunk, the
+  MOTION_BLOCKING height, the desert only, no column of its 5 × 5 hollow two deep; the shape; archaeology/desert_well
+  (one roll: arms up sherd 2, brewer sherd 2, brick, emerald, stick and suspicious stew 1 each; the stew one of night
+  vision 7-10 s, jump boost 7-10, weakness 6-8, blindness 5-7, poison 10-20, saturation 7-10, whole seconds, saturation
+  in ticks as an instant effect). Suspicious stew 6 food, 0.6 saturation, always edible, one to a stack, the bowl back.
+  Fossils 1 in 64 chunks each for the upper and the lower, heights 0-319 and -64 to -8, turned any way, templates 1 in
+  8, the box centred on the spot, 15 + (0-9) under the lowest ground and no lower than y -54, no more than 4 of its 8
+  corners in air, water or lava; bones kept 90%, then ore in 10% of their places, coal ore (deepslate diamond ore in
+  the lower ones), nothing over `#features_cannot_replace`. Bone block strength 2, pickaxe only, drops itself, set on
+  an axis as a log is, nine bone meal each way. Unsure: the stew's durations (1.21's list as I remember it) and the
+  desert well table's weights.
+
 ## 4. Tests
 
 Run with `node tests/mansion/<file>.mjs` (Node 22, after `npm ci`).
@@ -219,6 +297,23 @@ Run with `node tests/mansion/<file>.mjs` (Node 22, after `npm ci`).
   portal; the river, desert and Nether ones where the checklist says); `/locate` for the kinds in both dimensions (and
   none in the wrong one); the cost (working out a region's portal ≈ 1.5 ms, its chunks ≈ the same ms with and without
   it, the per-chunk lookup ≈ 10 µs).
+- `tests/mansion/m3-desert-wells-fossils.mjs`: **64 passed, 0 failed** (about 14 s). The bone block (a pillar on
+  three axes, strength and tool, drops, its sounds rendered, both textures, the model turned for x and z, placed
+  against each face along that face's axis, the bone meal recipes both ways, its tab and map colour); the two sherds
+  (items, sprites, pot patterns, #decorated_pot_sherds); the suspicious stew (food, stack, bowl, sprite; eaten through
+  the game's own use of an item it gives the effect it holds and the bowl back, and in creative isn't used up); the
+  desert well table (entries, weights and order; seeded rolls checked against java.util.Random worked independently,
+  the stew's effect and seconds included); wells with made-up terrains (about one desert chunk in a thousand, on the
+  top sand, the suspicious sand in all five places, none outside deserts, on water or over a two-deep hollow, the whole
+  shape built chunk by chunk for wells on chunk corners, just the two block entities with the table and the position
+  seed); the fossil templates (bone blocks only, all one piece, spines long and skulls small); fossils with made-up
+  terrains (one chunk in 64 for each placement, every template and turn, centred, the upper ones' depths, the lower
+  ones' with diamonds down to y -54, swamps and mangrove swamps too, none in plains or forests, none under a desert
+  where the deep dark is at their height, the corners rule); laying them chunk by chunk (every bone in the template's
+  place, turned with the fossil, 81% bones, 10% ore, 9% rock; coal or diamond ore; a chest, spawner or bedrock stays;
+  one across a chunk border the same from each side); seed 12345 (the well at 3333, 66, 3961 generated whole, its
+  brushed sand giving an item of the table; the swamp fossils generated with 15 or more blocks of rock over them); the
+  cost (working out a chunk's fossils and well ≈ 4 µs; desert chunks ≈ the same ms with and without them).
 - The temples suites (`tests/temples/*.mjs`) all still pass, before and after the merge, and `npm run typecheck`
   is clean.
 - Also looked at in the browser (headless Chromium, seed 12345): the front from the forest (second storey windows,
@@ -265,3 +360,26 @@ Ruined portals (from spawn, 0 0):
 - Check: frames with gaps and crying obsidian; netherrack and magma round each (none under a cold one's lava, which is
   netherrack), drips of it below; gold blocks (some taken); chests open with ruined portal loot (obsidian, flint,
   flint and steel, fire charges, golden things); `/locate structure ruined_portal_nether` in the Overworld finds none.
+
+Desert wells and fossils (no `/locate` for them, as in vanilla: go by the coordinates):
+
+- **A desert well:** about 5200 blocks from spawn, in the desert at 3333 66 3961 (the middle of its water).
+  `/tp @s 3336.5 70 3956.5 31 38` looks at it: a 5 × 5 of sandstone in the sand, a cross of water, a low wall with a
+  slab in the middle of each side, four pillars and a slab roof with sandstone in its middle. Its suspicious sand is
+  at 3332 65 3961 (under the west arm of the water) and 3333 64 3961 (two under the middle). `/give @s brush`, bucket
+  the water out and brush them from above (dig the sand over the lower one): each gives one of an arms up or brewer
+  sherd, a brick, an emerald, a stick or a suspicious stew. Eat the stew: its effect (night vision, jump boost,
+  weakness, blindness, poison or saturation) for its few seconds, and the bowl back.
+- **Fossils by the well:** a spine_4 (a flattened rib cage) 20 blocks under the sand at x 3324-3330, y 45-46,
+  z 3936-3944, and a skull_2 (horned) beside it at x 3334-3340, y 45-50, z 3940-3944.
+  `/fill 3322 47 3934 3332 67 3946 air` digs a pit down to the spine's top, and `/tp @s 3327.5 60 3934.5 0 60`
+  (flying) looks down on it: the backbone and ribs, a few gone to stone, coal ore beside them. A lower spine_2, with
+  diamonds, lies 30 blocks west at x 3291-3295, y -54 to -51, z 3931-3939.
+- **Fossils under the swamp north-west of spawn** (around -1140, -650): upper ones, a spine_3 at x -1151 to -1141,
+  y 44-46, z -564 to -558; a skull_1 at x -1149 to -1143, y 39-43, z -672 to -668; a spine_1 at x -1135 to -1129,
+  y 39-43, z -706 to -694. Lower ones with diamonds, all at y -54 up: skull_1s at -1116 -54 -636 (7 × 5 from there),
+  -1134 -54 -668 (5 × 7) and -1149 -54 -740 (5 × 7); a spine_3 at -1109 -54 -712 (11 × 7).
+- Check: bone blocks set along their bones (the ends' texture where a bone points at you), some of the bones gone to
+  rock, coal ore (diamond ore in deepslate for the deep ones) in some of their places; mining a bone block with a
+  pickaxe drops it, by hand nothing; nine bone meal craft one and it crafts back; a decorated pot made with the new
+  sherds shows their patterns.

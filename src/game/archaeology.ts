@@ -15,7 +15,7 @@ import { hurtAndBreak } from '../item/enchantHelper';
 import { DX, DY, DZ, UP, NORTH, SOUTH, WEST, EAST, type Dir } from '../world/dir';
 import { MAP_COLORS, mapColorOf } from '../world/mapColors';
 import { LegacyRandom } from '../world/gen/legacyRandom';
-import { LOOT_TABLES } from './loot';
+import { LOOT_TABLES, setStewEffect } from './loot';
 import { registerBehavior } from './blockBehavior';
 import { registerItemBehavior } from './itemBehavior';
 import { clipBlocks, type SegmentHit } from './raycast';
@@ -66,7 +66,10 @@ export function rollSeededLoot(table: string, seed: bigint): ItemStack[] {
       let k = pool.entries.length === 1 ? 0 : nextInt(total);
       const entry = pool.entries.length === 1 ? pool.entries[0] : pool.entries.find((x) => (k -= x.weight) < 0)!;
       const it = ITEMS.get(entry.item);
-      if (it) out.push(new ItemStack(it, entry.count ? between(entry.count[0], entry.count[1]) : 1));
+      if (!it) continue;
+      const stack = new ItemStack(it, entry.count ? between(entry.count[0], entry.count[1]) : 1);
+      if (entry.stewEffects) setStewEffect(stack, entry.stewEffects, nextInt);
+      out.push(stack);
     }
   }
   return out;

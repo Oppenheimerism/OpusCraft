@@ -1,7 +1,7 @@
-// The woodland mansion's templates (and the ruined portals') are authored in code (vanilla ships them as .nbt files,
-// which can't be used): a builder fills a box block by block, box by box or a layer at a time from rows of characters,
-// and marks the data markers vanilla's templates have (chests, mobs). What a template doesn't set is left as the
-// world has it (vanilla structure void); air it sets clears the space.
+// The woodland mansion's templates (and the ruined portals' and the fossils') are authored in code (vanilla ships them
+// as .nbt files, which can't be used): a builder fills a box block by block, box by box or a layer at a time from
+// rows of characters, and marks the data markers vanilla's templates have (chests, mobs). What a template doesn't set
+// is left as the world has it (vanilla structure void); air it sets clears the space.
 
 import { parseState } from './jigsaw';
 
