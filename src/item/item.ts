@@ -378,6 +378,16 @@ for (const m of ['elder_guardian', 'guardian']) reg({ id: `${m}_spawn_egg`, text
   reg({ id: 'glow_ink_sac', texture: 'glow_ink_sac' });
   after('glow_ink_sac', 'ink_sac');
   for (const m of ['cod', 'dolphin', 'glow_squid', 'pufferfish', 'salmon', 'tropical_fish']) reg({ id: `${m}_spawn_egg`, texture: `${m}_spawn_egg`, creativeTab: 'spawn_eggs' });
+  // (Stage 5: ocean, M5) vanilla Items.HEART_OF_THE_SEA (uncommon, buried treasure's), listed after the nautilus shell;
+  // the ocean ruins' pottery sherds, among the desert pyramid's in name order; the conduit (rare)
+  reg({ id: 'heart_of_the_sea', texture: 'heart_of_the_sea', rarity: 'uncommon' });
+  after('heart_of_the_sea', 'nautilus_shell');
+  for (const [s, prev] of [['angler', null], ['blade', 'archer'], ['explorer', 'blade'], ['mourner', 'miner'], ['plenty', 'mourner'], ['shelter', 'prize'], ['snort', 'skull']] as [string, string | null][]) {
+    reg({ id: `${s}_pottery_sherd`, texture: `${s}_pottery_sherd` });
+    if (prev) after(`${s}_pottery_sherd`, `${prev}_pottery_sherd`);
+    else after(`${s}_pottery_sherd`, ITEM_LIST[ITEM_LIST.findIndex((x) => x.id === 'archer_pottery_sherd') - 1].id);
+  }
+  if (ITEMS.has('conduit')) ITEMS.get('conduit')!.rarity = 'rare';
 }
 // sugar cane item places the block
 {
@@ -508,6 +518,10 @@ export interface ItemTag {
   potDecorations?: string[];
   /** (Stage 5: ocean) minecraft:bucket_entity_data: what a bucket of fish keeps of it (Health, BucketVariantTag) */
   bucketEntity?: Record<string, number | boolean>;
+  /** (Stage 5: ocean) minecraft:map_decorations: the markers an explorer map carries, by id (its target, "+") */
+  mapDecorations?: Record<string, { type: string; x: number; z: number; rotation: number }>;
+  /** (Stage 5: ocean) minecraft:map_color: the tint of the markings on an explorer map's sprite */
+  mapColor?: number;
 }
 
 /** vanilla PotionContents: the potion (a registry id; none for an uncraftable one), a custom colour, custom effects */
@@ -577,6 +591,8 @@ export function cloneTag(t: ItemTag | null): ItemTag | null {
   if (t.potDecorations) o.potDecorations = [...t.potDecorations];
   // (Stage 5: ocean)
   if (t.bucketEntity) o.bucketEntity = { ...t.bucketEntity };
+  if (t.mapDecorations) o.mapDecorations = Object.fromEntries(Object.entries(t.mapDecorations).map(([k, v]) => [k, { ...v }]));
+  if (t.mapColor !== undefined) o.mapColor = t.mapColor;
   return o;
 }
 
@@ -593,7 +609,7 @@ export function sameTag(a: ItemTag | null | undefined, b: ItemTag | null | undef
     a?.mapId === b?.mapId && a?.mapPostProcessing === b?.mapPostProcessing && sameData(a?.trim, b?.trim) && sameData(a?.pages, b?.pages) && sameData(a?.book, b?.book) &&
     sameData(a?.potDecorations, b?.potDecorations) &&
     // (Stage 5: ocean)
-    sameData(a?.bucketEntity, b?.bucketEntity)
+    sameData(a?.bucketEntity, b?.bucketEntity) && sameData(a?.mapDecorations, b?.mapDecorations) && a?.mapColor === b?.mapColor
   );
 }
 

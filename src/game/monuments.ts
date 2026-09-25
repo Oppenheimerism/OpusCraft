@@ -12,7 +12,8 @@ const MONUMENT_SPAWNS = [{ type: 'guardian', weight: 1, min: 2, max: 4 }];
 
 let rt: { seed: string; monuments: OceanMonuments } | null = null;
 
-function monuments(level: Level): OceanMonuments {
+/** the monuments of the level's world, where they are (treasure maps look for them too) */
+export function monuments(level: Level): OceanMonuments {
   if (!rt || rt.seed !== level.seed) rt = { seed: level.seed, monuments: monumentLocator(level.seed) };
   return rt.monuments;
 }

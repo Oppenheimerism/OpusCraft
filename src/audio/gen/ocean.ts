@@ -2,7 +2,7 @@
 // down in the Nether hissing dry; the guardians' eerie squeals (muffled and ringing in the water, thin and dry on
 // land), their hurt squeaks and dying wails, a stranded one's wet flops, the laser's buzz rising as it charges, and
 // the elder guardian's curse: a ghostly chorus rising into a howl. The fish's, the dolphin's and the glow squid's are
-// in fish.ts.
+// in fish.ts, and the conduit's in conduit.ts.
 
 import type { SoundGen } from '../synth';
 import { addOsc, alloc, envBump, envPts, layer, onePoleLP } from './dsp';
@@ -10,6 +10,7 @@ import { type Ctx, sound } from './registry';
 import { bubble, impact, sweep } from './texture';
 import { reverbHalf } from './world';
 import { fishSounds } from './fish';
+import { conduitSounds } from './conduit';
 
 /** vanilla block.sponge.absorb: a gulping slurp — water rushing in, bubbles popping as it goes */
 function spongeAbsorb(c: Ctx): Float32Array {
@@ -182,5 +183,7 @@ export function oceanSounds(): Record<string, SoundGen> {
   }
   // the fish, the dolphins, the glow squid and the buckets of fish (audio/gen/fish.ts)
   Object.assign(s, fishSounds());
+  // the conduit's (audio/gen/conduit.ts)
+  Object.assign(s, conduitSounds());
   return s;
 }

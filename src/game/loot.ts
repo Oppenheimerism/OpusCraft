@@ -3,7 +3,7 @@
 
 import { Rand } from '../core/rng';
 import { ItemStack, ITEMS } from '../item/item';
-import { RANDOM_LOOT_ENCHANTMENTS } from '../item/enchantments';
+import { RANDOM_LOOT_ENCHANTMENTS, canEnchant } from '../item/enchantments';
 import { selectEnchantment } from '../item/enchantHelper';
 import type { SimpleContainer } from '../inventory/container';
 
@@ -16,6 +16,18 @@ interface LootEntry {
   enchant?: boolean;
   /** enchant_with_levels from #on_random_loot: enchanted as a table would at this level */
   levels?: number;
+  /**
+   * (Stage 5: ocean) what else is done to what was rolled (vanilla's other loot functions: exploration_map and
+   * set_name, set_potion), given where the loot is being rolled
+   */
+  apply?: (stack: ItemStack, r: Rand, origin: LootOrigin | null) => ItemStack;
+}
+
+/** (Stage 5: ocean) where loot is rolled (vanilla LootContextParams.ORIGIN: a chest's position) */
+export interface LootOrigin {
+  x: number;
+  y: number;
+  z: number;
 }
 
 interface LootPool {
@@ -271,9 +283,14 @@ export const LOOT_TABLES: Record<string, LootPool[]> = {
 /** vanilla Mth.nextInt(random, lo, hi) */
 const between = (r: Rand, lo: number, hi: number) => (lo >= hi ? lo : lo + r.nextInt(hi - lo + 1));
 
-/** vanilla EnchantRandomlyFunction on a book */
+/**
+ * vanilla EnchantRandomlyFunction: a book takes any of them; (Stage 5: ocean) anything else only one it can have
+ * (only_compatible), and stays as it is when there's none
+ */
 function enchantRandomly(stack: ItemStack, r: Rand): ItemStack {
-  const ench = RANDOM_LOOT_ENCHANTMENTS[r.nextInt(RANDOM_LOOT_ENCHANTMENTS.length)];
+  const options = stack.item.id === 'book' ? RANDOM_LOOT_ENCHANTMENTS : RANDOM_LOOT_ENCHANTMENTS.filter((x) => canEnchant(x, stack.item));
+  if (!options.length) return stack;
+  const ench = options[r.nextInt(options.length)];
   const level = between(r, 1, ench.maxLevel);
   if (stack.item.id === 'book') return new ItemStack(ITEMS.get('enchanted_book')!, stack.count, 0, { stored: { [ench.id]: level } });
   return new ItemStack(stack.item, stack.count, stack.damage, { ...stack.tag, enchantments: { ...stack.tag?.enchantments, [ench.id]: level } });
@@ -287,8 +304,8 @@ function enchantWithLevels(stack: ItemStack, levels: number, r: Rand): ItemStack
   return new ItemStack(stack.item, stack.count, stack.damage, { ...stack.tag, enchantments: { ...stack.tag?.enchantments, ...m } });
 }
 
-/** vanilla LootTable.getRandomItems (stacks over the max size are split) */
-export function rollLoot(table: string, r: Rand): ItemStack[] {
+/** vanilla LootTable.getRandomItems (stacks over the max size are split); (Stage 5: ocean) `origin`: where it's rolled */
+export function rollLoot(table: string, r: Rand, origin: LootOrigin | null = null): ItemStack[] {
   const out: ItemStack[] = [];
   for (const pool of LOOT_TABLES[table] ?? []) {
     const rolls = typeof pool.rolls === 'number' ? pool.rolls : between(r, pool.rolls[0], pool.rolls[1]);
@@ -301,6 +318,7 @@ export function rollLoot(table: string, r: Rand): ItemStack[] {
       let stack = new ItemStack(it, entry.count ? between(r, entry.count[0], entry.count[1]) : 1);
       if (entry.enchant) stack = enchantRandomly(stack, r);
       if (entry.levels) stack = enchantWithLevels(stack, entry.levels, r);
+      if (entry.apply) stack = entry.apply(stack, r, origin);
       while (stack.count > stack.maxStack) out.push(stack.split(stack.maxStack));
       out.push(stack);
     }
@@ -317,9 +335,9 @@ function shuffle<T>(a: T[], r: Rand): void {
 }
 
 /** vanilla LootTable.fill: split stacks while there are spare slots, then scatter over random empty slots */
-export function fillContainer(c: SimpleContainer, table: string, seed: number): void {
+export function fillContainer(c: SimpleContainer, table: string, seed: number, origin: LootOrigin | null = null): void {
   const r = new Rand(seed, 0x100f);
-  const items = rollLoot(table, r);
+  const items = rollLoot(table, r, origin);
   const slots: number[] = [];
   for (let i = 0; i < c.size; i++) if (!c.items[i]) slots.push(i);
   shuffle(slots, r);

@@ -1520,15 +1520,18 @@ export class OceanMonuments {
     return null;
   }
 
-  /** vanilla ChunkGenerator.getNearestGeneratedStructure for /locate (the first in the nearest ring): the start chunk's corner */
-  nearest(x: number, z: number, radius = 100): [number, number] | null {
+  /**
+   * vanilla ChunkGenerator.getNearestGeneratedStructure for /locate (the first in the nearest ring): the start chunk's
+   * corner; `skip`: starts to pass over (an explorer map's, already referenced)
+   */
+  nearest(x: number, z: number, radius = 100, skip?: (s: MonumentStub) => boolean): [number, number] | null {
     const rx0 = floorDiv(x >> 4, SPACING), rz0 = floorDiv(z >> 4, SPACING);
     for (let ring = 0; ring <= radius; ring++)
       for (let i = -ring; i <= ring; i++)
         for (let j = -ring; j <= ring; j++) {
           if (i !== -ring && i !== ring && j !== -ring && j !== ring) continue;
           const s = this.stub(rx0 + i, rz0 + j);
-          if (s) return [s.cx * 16, s.cz * 16];
+          if (s && !skip?.(s)) return [s.cx * 16, s.cz * 16];
         }
     return null;
   }

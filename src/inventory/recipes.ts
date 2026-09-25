@@ -396,6 +396,8 @@ shaped('prismarine', 1, ['SS', 'SS'], { S: 'prismarine_shard' });
 shaped('prismarine_bricks', 1, ['SSS', 'SSS', 'SSS'], { S: 'prismarine_shard' });
 shaped('dark_prismarine', 1, ['SSS', 'SIS', 'SSS'], { S: 'prismarine_shard', I: 'black_dye' });
 shaped('sea_lantern', 1, ['SCS', 'CCC', 'SCS'], { S: 'prismarine_shard', C: 'prismarine_crystals' });
+// (Stage 5: ocean) vanilla conduit: a heart of the sea in eight nautilus shells
+shaped('conduit', 1, ['###', '#X#', '###'], { '#': 'nautilus_shell', X: 'heart_of_the_sea' });
 
 // drop recipes whose items don't exist in this game
 for (let i = RECIPES.length - 1; i >= 0; i--) {

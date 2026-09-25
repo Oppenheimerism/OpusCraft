@@ -606,6 +606,27 @@ export class ParticleEngine {
         this.addSprite(p);
         break;
       }
+      // (Stage 5: ocean) vanilla EnchantmentTableParticle.NautilusProvider: a conduit's spark, starting out at
+      // (x, y, z) + speed and homing in on (x, y, z) as an enchanting table's rune does, in the nautilus sprite
+      case 'nautilus': {
+        const p = this.base(kind, x + xd, y + yd, z + zd);
+        p.enchant = { x, y, z };
+        p.dx = xd;
+        p.dy = yd;
+        p.dz = zd;
+        p.size = 0.1 * (Math.random() * 0.5 + 0.2);
+        const f = Math.random() * 0.6 + 0.4;
+        p.r = 0.9 * f;
+        p.g = 0.9 * f;
+        p.b = f;
+        p.physics = false;
+        p.lifetime = Math.floor(Math.random() * 10) + 30;
+        p.frames = ['nautilus'];
+        p.frame = 0;
+        p.lightMode = 'enchant';
+        this.addSprite(p);
+        break;
+      }
       case 'item_slime':
       case 'item_cobweb':
       case 'item_splash_potion':

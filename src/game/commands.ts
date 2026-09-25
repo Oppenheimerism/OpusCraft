@@ -31,6 +31,7 @@ import type { VillageKind } from '../world/gen/villages';
 import { locateOutpost } from './outposts';
 // (Stage 5: ocean)
 import { locateMonument } from './monuments';
+import { locateOceanStructure } from './treasureMaps';
 // (temples)
 import { templeKind, locateTemple } from './temples';
 
@@ -712,10 +713,12 @@ export const COMMANDS: Record<string, CommandDef> = {
               ? c.game.level.villages().nearest(village, x, z)
               : name === 'minecraft:pillager_outpost' && dim.id === 'overworld'
                 ? locateOutpost(c.game.level, x, z)
-                : // (Stage 5: ocean)
+                : // (Stage 5: ocean) the monuments; the shipwrecks, ocean ruins and buried treasure (game/treasureMaps)
                   name === 'minecraft:monument' && dim.id === 'overworld'
                   ? locateMonument(c.game.level, x, z)
-                  : null;
+                  : dim.id === 'overworld'
+                    ? locateOceanStructure(c.game.level, name, x, z)
+                    : null;
       if (!found) throw new CommandError(`Could not find a structure of type "${name}" nearby`);
       c.ok(`The nearest ${name} is at §a[${found[0]}, ~, ${found[1]}]§r (${Math.floor(Math.hypot(found[0] - x, found[1] - z))} blocks away)`);
     },

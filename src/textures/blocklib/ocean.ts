@@ -1,7 +1,7 @@
 // The ocean's block textures (Stage 5: ocean; vanilla block/prismarine.png, prismarine_bricks.png,
-// dark_prismarine.png, wet_sponge.png): prismarine's mottled cyan-green, its hue drifting between green and blue
-// (animated, 15 seconds a frame, blended like vanilla's); the bricks in staggered rows; the dark prismarine's four
-// bevelled panels; and the wet sponge, darker and soggier than the dry one.
+// dark_prismarine.png, wet_sponge.png, conduit.png): prismarine's mottled cyan-green, its hue drifting between green
+// and blue (animated, 15 seconds a frame, blended like vanilla's); the bricks in staggered rows; the dark prismarine's
+// four bevelled panels; the wet sponge, darker and soggier than the dry one; and the conduit's heart in its shell.
 
 import { TexImage, TexDef, setPx, getPx, mixC, anim } from '../tex';
 import { N, rng, fbm, quantize, paint } from './core';
@@ -92,9 +92,33 @@ function wetSponge(): TexImage {
   return t;
 }
 
+/**
+ * vanilla block/conduit.png (its item's and its breaking specks'; the conduit itself is drawn by its renderer): the
+ * heart of the sea in its cage of nautilus shell, seen side on
+ */
+function conduit(): TexImage {
+  const t: TexImage = { w: N, h: N, data: new Uint8ClampedArray(N * N * 4) };
+  const HEART = [0x061634, 0x103c7a, 0x18549a, 0x2470bc, 0x3a92d8, 0x7ac4f0];
+  for (let j = 0; j < 10; j++)
+    for (let i = 0; i < 10; i++) {
+      const ring = Math.min(i, j, 9 - i, 9 - j);
+      let c: number;
+      if (ring === 0) c = (i + j) % 3 === 0 ? 0xb07a5a : 0x6a4a3a;
+      else if (ring === 1) c = (i * 2 + j) % 4 === 0 ? 0xb07a5a : (i + j) % 2 ? 0xf0e0d0 : 0xfaf0e6;
+      else {
+        const d = Math.hypot(i - 4.5, j - 4.5);
+        const k = Math.round(4 - d * 1.1 + (i + j < 9 ? 0.6 : -0.3));
+        c = d > 3.1 ? HEART[0] : HEART[Math.max(1, Math.min(5, k))];
+      }
+      setPx(t, 3 + i, 3 + j, c);
+    }
+  return t;
+}
+
 export function registerOceanTextures(T: Reg): void {
   T['prismarine'] = prismarine;
   T['prismarine_bricks'] = prismarineBricks;
   T['dark_prismarine'] = darkPrismarine;
   T['wet_sponge'] = wetSponge;
+  T['conduit'] = conduit;
 }

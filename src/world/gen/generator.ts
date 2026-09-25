@@ -17,6 +17,7 @@ import { Strongholds, biomeAtY0, addBeards } from './stronghold';
 import { PillagerOutposts } from './outposts';
 // (Stage 5: ocean)
 import { OceanMonuments } from './monument';
+import { OceanStructures } from './oceanStructures';
 import { worldSeed64 } from './jigsaw';
 import { S, getBlock } from '../block';
 import { MIN_Y, MAX_Y, SEA_LEVEL, COLUMN_VOLUME, colIndex, CAVE_BIOME_LEVELS, NO_CAVE_BIOME } from '../constants';
@@ -65,6 +66,8 @@ export class ChunkGenerator {
   readonly outposts: PillagerOutposts;
   /** (Stage 5: ocean) */
   readonly monuments: OceanMonuments;
+  /** (Stage 5: ocean) shipwrecks, ocean ruins and buried treasure */
+  readonly oceanStructures: OceanStructures;
   /** corner columns for terrain height queries, with the noise at their cell corners as it's needed */
   private readonly heightCols = new Map<number, { c: ColumnSample; exactTop: number; corners: (Float32Array | undefined)[] }>();
 
@@ -95,6 +98,15 @@ export class ChunkGenerator {
     this.decorator.temples = this.temples;
     this.strongholds = new Strongholds(worldSeed64(seed), biomeAtY0(this.router));
     this.decorator.strongholds = this.strongholds;
+    // (Stage 5: ocean) shipwrecks and ocean ruins after the temples (vanilla SURFACE_STRUCTURES), buried treasure after
+    // the mineshafts (UNDERGROUND_STRUCTURES)
+    this.oceanStructures = new OceanStructures(worldSeed64(seed), (x, z) => this.quartBiome(x, z), {
+      firstFreeHeight: (x, z) => this.firstFreeHeight(x, z),
+      oceanFloorHeight: (x, z) => this.firstFreeHeight(x, z, true),
+    });
+    this.decorator.temples = { place: (ctx) => (this.temples.place(ctx), this.oceanStructures.place(ctx)) };
+    const mineshafts = this.decorator.mineshafts;
+    this.decorator.mineshafts = { place: (ctx, r) => (mineshafts?.place(ctx, r), this.oceanStructures.placeUnderground(ctx)) };
   }
 
   /** the biome a structure checks for (vanilla getNoiseBiome at the quart, without the fuzzy zoom) */

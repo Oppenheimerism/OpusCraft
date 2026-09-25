@@ -101,7 +101,7 @@ function paintIcon(t: TexImage, ox: number, type: DecorationType): void {
   for (let y = 0; y < 8; y++)
     for (let x = 0; x < 8; x++) {
       const ch = rows[y][x];
-      const c = ch === 'W' ? 0xffffff : ch === '#' ? 0x2a2a2a : ch === 'P' ? 0x7a5a32 : ch === 'C' ? cloth : ch === 'c' ? mixC(cloth, 0x000000, 0.25) : -1;
+      const c = ch === 'W' ? 0xffffff : ch === '#' ? 0x2a2a2a : ch === 'P' ? 0x7a5a32 : ch === 'C' ? cloth : ch === 'c' ? mixC(cloth, 0x000000, 0.25) : (ICON_INK[ch] ?? -1);
       if (c >= 0) plot(t, ox + x, y, c);
     }
 }
@@ -125,3 +125,31 @@ export function decorationIcon(type: DecorationType): TexImage {
   paintIcon(t, 0, type);
   return t;
 }
+
+// (Stage 5: ocean) the treasure map's red cross (vanilla map/decorations/red_x) and the explorer map's ocean monument
+// (ocean_monument): original art
+const ICON_INK: Record<string, number> = { R: 0xc0281c, r: 0x6a0f0a, T: 0x4d9a8a, t: 0x9fe0d0, D: 0x1d3a36 };
+// prettier-ignore
+Object.assign(ICONS, {
+  red_x: [
+    'r......r',
+    'rR....Rr',
+    '.rR..Rr.',
+    '..rRRr..',
+    '..rRRr..',
+    '.rR..Rr.',
+    'rR....Rr',
+    'r......r',
+  ],
+  monument: [
+    '...DD...',
+    '..DttD..',
+    '.DTttTD.',
+    'DTTTTTTD',
+    'DTtTTtTD',
+    'DTTTTTTD',
+    'DTDTTDTD',
+    'DDDDDDDD',
+  ],
+});
+DECORATION_LIST.push('red_x', 'monument');

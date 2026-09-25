@@ -2,8 +2,8 @@
 // with GuardianModel — the eye rolling toward whoever the guardian is looking at, the tail swishing faster as it
 // swims, the spikes drawn in while it swims and pushed out while it idles — the laser from its eye to its target,
 // and the elder guardian's ghostly face (vanilla MobAppearanceParticle) looming up before a player it curses; the
-// fish, the dolphin and the glow squid are ./fishRenderers'. The steps every living renderer shares are the
-// dispatcher's, lent through LivingKit.
+// fish, the dolphin and the glow squid are ./fishRenderers', the conduit ./conduitRenderer's. The steps every living
+// renderer shares are the dispatcher's, lent through LivingKit.
 
 import type { EntityBatch } from './entityRenderer';
 import type { GL } from './gl';
@@ -20,6 +20,7 @@ import { elderAppearance } from '../game/ocean';
 import { MOB_TEXTURES } from '../textures/mobs';
 import '../textures/guardian';
 import { FishRenderers, FISH_SHADOW_RADII } from './fishRenderers';
+import { ConduitRenderer } from './conduitRenderer';
 
 const PI = Math.PI;
 const RAD = PI / 180;
@@ -120,9 +121,11 @@ export class OceanRenderers {
   private readonly ghost = guardianModel();
   private beamTex: WebGLTexture | null = null;
   private readonly fish: FishRenderers;
+  private readonly conduits: ConduitRenderer;
 
   constructor(private readonly gl: GL, private readonly kit: LivingKit) {
     this.fish = new FishRenderers(kit);
+    this.conduits = new ConduitRenderer(kit);
   }
 
   /** draws `e` if it's one of these renderers' mobs (false: not ours) */
@@ -211,6 +214,8 @@ export class OceanRenderers {
    * the camera from above, fixed to the view, fading in and out, lit by its own light; the model as it was made
    */
   renderAppearance(b: EntityBatch, level: Level, cam: Camera, partial: number): void {
+    // (first the conduits, which are drawn here, after the entities, like the other block entities: ./conduitRenderer)
+    this.conduits.render(b, level, cam, partial);
     const ap = elderAppearance;
     if (ap.level !== level || ap.start < 0) return;
     const age = level.gameTime - ap.start;

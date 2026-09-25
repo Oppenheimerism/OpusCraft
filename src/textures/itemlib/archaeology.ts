@@ -82,8 +82,11 @@ const SHARDS: Record<string, string[]> = {
   ],
 };
 
+/** (Stage 5: ocean) the ocean ruins' sherds are broken the ways the desert pyramid's are */
+const SHARD_LIKE: Record<string, string> = { angler: 'miner', shelter: 'archer', snort: 'skull', blade: 'prize', explorer: 'miner', mourner: 'skull', plenty: 'prize' };
+
 function sherd(name: string): TexImage {
-  const mask = SHARDS[name];
+  const mask = SHARDS[name] ?? SHARDS[SHARD_LIKE[name]];
   const t = autoShade(mask, POT_CLAY.slice(2, 7), POT_CLAY[0], { seed: `${name}_pottery_sherd`, noise: 0.18, edge: 1.2 });
   // (the motif as far as the fragment goes)
   const ink = img();
