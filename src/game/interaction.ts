@@ -244,6 +244,8 @@ export class Interaction {
     behaviorOf(st)?.playerWillDestroy?.(this.level, x, y, z, st, p, held);
     const silk = levelOf(held, 'silk_touch') > 0;
     this.level.destroyBlock(x, y, z, survival, held?.item ?? null, true, held);
+    // (Stage 5: ocean) vanilla Block.playerDestroy, for a block with more to do (a turtle egg breaks one egg at a time)
+    if (survival) behaviorOf(st)?.playerDestroy?.(this.level, x, y, z, st, p, held);
     if (survival && this.level.gameRules.doTileDrops) {
       const xp = blockExperience(st, held?.item ?? null, this.level.random, silk);
       if (xp > 0) this.level.awardExperience(x + 0.5, y + 0.5, z + 0.5, xp);
@@ -504,7 +506,9 @@ export class Interaction {
     const clickedBlock = BLOCKS[STATE_BLOCK[clicked]];
     const replaceClicked =
       (FLAGS[clicked] & F_REPLACEABLE && clickedBlock !== block && !(clickedBlock.name === 'water' && block.name !== 'water')) ||
-      (clickedBlock === block && block.name === 'glow_lichen' && hasVacantFace(clicked));
+      (clickedBlock === block && block.name === 'glow_lichen' && hasVacantFace(clicked)) ||
+      // (Stage 5: ocean) vanilla canBeReplaced: a block the held one goes into (a turtle egg more in a clutch)
+      !!behaviorOf(clicked)?.canBeReplaced?.(clicked, stack, p.isShiftKeyDown());
     // slab merging into a double slab
     if (clickedBlock === block && block.name.endsWith('_slab')) {
       const type = block.get(clicked, 'type');
@@ -525,7 +529,7 @@ export class Interaction {
     if (y < world.dim.minY || y >= world.dim.maxY) return false;
     const target = world.getState(x, y, z);
     const targetBlock = BLOCKS[STATE_BLOCK[target]];
-    if (!(canReplace(target, block) || (targetBlock.name === 'water' && block.name !== 'water'))) {
+    if (!(canReplace(target, block) || (targetBlock.name === 'water' && block.name !== 'water') || behaviorOf(target)?.canBeReplaced?.(target, stack, p.isShiftKeyDown()))) {
       // slab into slab at adjacent position
       if (targetBlock === block && block.name.endsWith('_slab') && block.get(target, 'type') !== 'double') {
         return this.commitPlace(x, y, z, block.with(target, 'type', 'double'), stack, block.sound);

@@ -245,7 +245,7 @@ export class PanicGoal extends Goal {
     this.pz = p[2] + 0.5;
     return true;
   }
-  private lookForWater(r: number): Pos | null {
+  protected lookForWater(r: number): Pos | null {
     const m = this.mob;
     const bx = Math.floor(m.x), by = Math.floor(m.y), bz = Math.floor(m.z);
     let best: Pos | null = null, bd = Infinity;

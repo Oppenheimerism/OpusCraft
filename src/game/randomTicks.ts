@@ -8,6 +8,7 @@ import { canSurvive } from './blockRules';
 import { lavaRandomTick } from './fire';
 import { ZombifiedPiglin } from '../entity/monsters';
 import { DX, DY, DZ, DIR_NAMES } from '../world/dir';
+import { behaviorOf } from './blockBehavior';
 
 const SAPLING_TREE: Record<string, TreeKind> = {
   oak_sapling: 'oak', spruce_sapling: 'spruce', birch_sapling: 'birch', jungle_sapling: 'jungle',
@@ -55,6 +56,12 @@ export class RandomTicker {
 
   private randomTick(x: number, y: number, z: number, st: number): void {
     const lvl = this.level;
+    // (Stage 5: ocean) a block with a random tick of its own (vanilla randomTick: a turtle egg's)
+    const own = behaviorOf(st)?.randomTick;
+    if (own) {
+      own(lvl, x, y, z, st);
+      return;
+    }
     const b = BLOCKS[STATE_BLOCK[st]];
     const n = b.name;
     if (n === 'lava') {
