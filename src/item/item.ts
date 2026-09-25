@@ -398,6 +398,7 @@ reg({ id: 'snow_golem_spawn_egg', texture: 'snow_golem_spawn_egg', creativeTab: 
 reg({ id: 'parrot_spawn_egg', texture: 'parrot_spawn_egg', creativeTab: 'spawn_eggs' });
 reg({ id: 'polar_bear_spawn_egg', texture: 'polar_bear_spawn_egg', creativeTab: 'spawn_eggs' });
 reg({ id: 'rabbit_spawn_egg', texture: 'rabbit_spawn_egg', creativeTab: 'spawn_eggs' });
+reg({ id: 'fox_spawn_egg', texture: 'fox_spawn_egg', creativeTab: 'spawn_eggs' });
 reg({ id: 'ominous_bottle', creativeTab: 'food', texture: 'ominous_bottle', rarity: 'uncommon' });
 // (Stage 5: ocean) vanilla Items.PRISMARINE_SHARD / PRISMARINE_CRYSTALS (guardians', sea lanterns'); the wet sponge sits by the sponge
 for (const id of ['prismarine_shard', 'prismarine_crystals']) reg({ id, texture: id });
