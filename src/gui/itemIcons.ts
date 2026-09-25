@@ -2,7 +2,7 @@
 // vanilla GUI transform (rot 30/225, scale 0.625); flat items are sprites.
 
 import type { Renderer } from '../render/renderer';
-import { PoseStack } from '../render/entityRenderer';
+import { PoseStack, type EntityBatch } from '../render/entityRenderer';
 import { ITEM_LIST, ITEMS, Item, ItemStack } from '../item/item';
 import { ortho, mat4 } from '../core/math';
 import { getItemModels, bakeChoice } from '../render/mesher';
@@ -15,6 +15,20 @@ import { glintTexture, glintOffset, GLINT_SIZE } from '../textures/glint';
 import { itemLayers, layerTint } from '../item/itemColors';
 
 const FACE_SHADE = [0.5, 1.0, 0.6, 0.8, 0.8, 0.8]; // down, up, north(right), south, west, east(left)
+
+/**
+ * an item whose icon is drawn by a model of its own rather than its block's (vanilla BlockEntityWithoutLevelRenderer's
+ * items: mob heads): given the pose at the icon's middle, 16 units across it, y up, it draws the item and flushes;
+ * false if it isn't one of its items
+ */
+export type IconModelHook = (it: Item, batch: EntityBatch, pose: PoseStack) => boolean;
+const iconModelHooks = new Map<string, IconModelHook>();
+
+/** the hook `key` draws the icons of the items it knows (a new one for the same key replaces it; null takes it away) */
+export function setIconModelHook(key: string, f: IconModelHook | null): void {
+  if (f) iconModelHooks.set(key, f);
+  else iconModelHooks.delete(key);
+}
 
 export class ItemIcons implements IconSource {
   private canvas: HTMLCanvasElement | null = null;
@@ -131,6 +145,7 @@ export class ItemIcons implements IconSource {
       batch.proj = proj;
       pose.reset();
       pose.scale(16, 16, 16);
+      for (const hook of iconModelHooks.values()) if (hook(it, batch, pose)) return;
       pose.rotX(30);
       pose.rotY(225);
       pose.scale(0.625, 0.625, 0.625);

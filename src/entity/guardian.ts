@@ -16,7 +16,7 @@ import { Goal, Flag } from './ai/goal';
 import { MoveControl, MoveOp, rotlerp } from './ai/controls';
 import { WaterBoundPathNavigation, type PathNavigation } from './ai/navigation';
 import { PathType } from './ai/pathfinder';
-import { RandomStrollGoal, LookAtPlayerGoal, RandomLookAroundGoal, NearestAttackableMobGoal, defaultRandomPosTowards } from './ai/goals';
+import { RandomStrollGoal, LookAtPlayerGoal, RandomLookAroundGoal, NearestAttackableMobGoal, MoveTowardsRestrictionGoal } from './ai/goals';
 import { MOB_EFFECTS, MobEffectInstance } from './effects';
 import { FLAGS, F_WATER, F_OPAQUE, F_COLLIDE } from '../world/block';
 import { MIN_Y, SEA_LEVEL } from '../world/constants';
@@ -449,30 +449,6 @@ class GuardianStrollGoal extends RandomStrollGoal {
       }
     }
     return best;
-  }
-}
-
-/** vanilla MoveTowardsRestrictionGoal: outside its bounds, back toward the middle */
-class MoveTowardsRestrictionGoal extends Goal {
-  private w: Pos = [0, 0, 0];
-  constructor(readonly g: Guardian, readonly speed: number) {
-    super();
-    this.flags = Flag.MOVE;
-  }
-  canUse(): boolean {
-    const g = this.g;
-    if (g.isWithinRestriction()) return false;
-    const [cx, , cz] = g.restrictCenter;
-    const p = defaultRandomPosTowards(g, 16, 7, cx + 0.5, cz + 0.5, Math.PI / 2);
-    if (!p) return false;
-    this.w = p;
-    return true;
-  }
-  override canContinueToUse(): boolean {
-    return !this.g.navigation.isDone();
-  }
-  override start(): void {
-    this.g.navigation.moveTo(this.w[0], this.w[1], this.w[2], this.speed);
   }
 }
 

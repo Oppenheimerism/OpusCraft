@@ -12,8 +12,10 @@
 // density at the chunk's middle.
 //
 // Decoration (vanilla EndBiomes): small end islands in their biome (RAW_GENERATION),
-// the obsidian spikes on the main island (SURFACE_STRUCTURES, endSpikes.ts). The
-// decoration randomness is this game's own (seeded per chunk), not vanilla's.
+// the end cities (SURFACE_STRUCTURES, endCity.ts) and the obsidian spikes on the main
+// island (endSpikes.ts), chorus plants in the highlands (VEGETAL_DECORATION,
+// chorusPlant.ts). The decoration randomness is this game's own (seeded per chunk),
+// not vanilla's.
 
 import { BlendedNoise, type SeedSource } from './noise';
 import { LegacyRandom, SimplexNoise, seedLong } from './legacyRandom';
@@ -21,6 +23,8 @@ import { squeeze } from './router';
 import { GenContext } from './context';
 import { B } from './biomes';
 import { placeEndPlatform, placeEndSpikes } from './endFeatures';
+import { generateChorusPlant } from './chorusPlant';
+import { EndCities } from './endCity';
 import { S } from '../block';
 import { COLUMN_VOLUME, colIndex } from '../constants';
 import { Rand, hash2, hash32 } from '../../core/rng';
@@ -105,6 +109,8 @@ export class EndGenerator {
   private readonly chunkBiomes = new Map<number, number>();
   private readonly cornerCache = new Map<number, number>();
   private readonly END_STONE = S('end_stone');
+  /** (Stage 4: the outer End) the end cities (world/gen/endCity) */
+  readonly endCities: EndCities;
 
   constructor(seed: string | number | bigint) {
     this.seed = seedLong(seed);
@@ -116,6 +122,7 @@ export class EndGenerator {
     const r = new LegacyRandom(this.seed).asNoiseRandom();
     const legacy = { rand: () => r } as unknown as SeedSource;
     this.base3d = new BlendedNoise(legacy, 0.25, 0.25, 80, 160, 4);
+    this.endCities = new EndCities(this.seed, { biomeOfChunk: (cx, cz) => this.biomeOfChunk(cx, cz), firstOccupiedHeight: (x, z) => this.firstOccupiedHeight(x, z) });
   }
 
   // -------------------------------------------------------------------------
@@ -183,6 +190,12 @@ export class EndGenerator {
     return squeeze(0.64 * lerp(tz, lerp(tx, v00, v10), lerp(tx, v01, v11))) > 0;
   }
 
+  /** vanilla getFirstOccupiedHeight(WORLD_SURFACE_WG) on the noise terrain: the top end stone's y, -1 where there's none */
+  firstOccupiedHeight(x: number, z: number): number {
+    for (let y = NOISE_H - 1; y >= 0; y--) if (this.solidAt(x, y, z)) return y;
+    return -1;
+  }
+
   generate(cx: number, cz: number): GenOutput {
     const x0 = cx * 16, z0 = cz * 16;
     const biomes = new Uint8Array(256);
@@ -243,10 +256,22 @@ export class EndGenerator {
         }
       }
     }
-    // SURFACE_STRUCTURES — vanilla the_end: END_SPIKE (the pillars whose middles are in this chunk), then END_PLATFORM
+    // SURFACE_STRUCTURES — the end cities (vanilla places a step's structures before its features); then vanilla
+    // the_end: END_SPIKE (the pillars whose middles are in this chunk), then END_PLATFORM
+    this.endCities.place(ctx);
     if (ctx.biomes[0] === B.the_end || this.biomeOfChunk(ctx.cx, ctx.cz) === B.the_end) {
       placeEndSpikes(ctx, this.seed, rand(4));
       placeEndPlatform(ctx);
+    }
+    // VEGETAL_DECORATION — vanilla end_highlands: CHORUS_PLANT, 0..4 tries, each somewhere in the chunk on its
+    // motion-blocking surface, a plant growing there if that's the highlands and it's on end stone
+    {
+      const r = rand(7);
+      const n = r.nextInt(5);
+      for (let i = 0; i < n; i++) {
+        const x = ctx.x0 + r.nextInt(16), z = ctx.z0 + r.nextInt(16);
+        if (this.biomeAt(x, z) === B.end_highlands) generateChorusPlant(ctx, r, x, ctx.heightMotion(x, z), z, 8);
+      }
     }
   }
 

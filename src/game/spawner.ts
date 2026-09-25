@@ -41,6 +41,9 @@ import { Ocelot } from '../entity/ocelot';
 import { Horse, Donkey, Mule } from '../entity/horse';
 import { Llama, TraderLlama } from '../entity/llama';
 import { CatSpawner } from './catSpawner';
+import { WanderingTraderSpawner } from './wanderingTraderSpawner';
+import { WanderingTrader } from '../entity/wanderingTrader';
+import { SnowGolem } from '../entity/snowGolem';
 import { IronGolem } from '../entity/ironGolem';
 import { ZombieVillager } from '../entity/zombieVillager';
 import { Zombie, ZombifiedPiglin, Skeleton, WitherSkeleton, Creeper, Spider, CaveSpider, Enderman, Slime, MagmaCube, Monster, validSpawnBlock } from '../entity/monsters';
@@ -51,6 +54,8 @@ import { Boat, createBoat, BOAT_TYPES } from '../entity/boat';
 import { EndCrystal } from '../entity/endCrystal';
 import { LeashKnot } from '../entity/leash';
 import { EnderDragon } from '../entity/enderDragon';
+import { Shulker } from '../entity/shulker';
+import { ItemFrame } from '../entity/itemFrame';
 import { moonPhase } from '../render/environment';
 import { tickInhabitedTime } from './difficulty';
 import { BIOMES } from '../world/gen/biomes';
@@ -104,6 +109,8 @@ export const MOB_TYPES: Record<string, (l: Level) => Mob> = {
   mule: (l) => new Mule(l),
   llama: (l) => new Llama(l),
   trader_llama: (l) => new TraderLlama(l),
+  wandering_trader: (l) => new WanderingTrader(l),
+  snow_golem: (l) => new SnowGolem(l),
   ender_dragon: (l) => new EnderDragon(l),
 };
 
@@ -126,6 +133,9 @@ export function createMob(type: string, level: Level): Mob | null {
   return f ? f(level) : null;
 }
 
+// (Stage 4: the outer End) the shulker
+MOB_TYPES.shulker = (l) => new Shulker(l);
+
 /** serialize an entity for chunk storage (mobs, dropped items, minecarts); riders go inside their vehicle's record */
 export function saveEntity(e: Entity): SavedEntity | null {
   return e.vehicle ? null : saveWithPassengers(e);
@@ -143,6 +153,8 @@ function saveWithPassengers(e: Entity): SavedEntity | null {
 function saveOne(e: Entity): SavedEntity | null {
   if (e instanceof Mob) return e.health > 0 && !e.removed ? e.save() : null;
   if (e instanceof AbstractMinecart || e instanceof Boat || e instanceof EndCrystal || e instanceof LeashKnot) return e.removed ? null : e.save();
+  // (vanilla: item frames are kept with their chunk, and what they hold)
+  if (e instanceof ItemFrame) return e.removed ? null : e.save();
   // (vanilla: arrows and tridents are kept with their chunk, stuck where they landed)
   if (e instanceof Arrow) return e.removed ? null : e.save();
   if (e instanceof ItemEntity && !e.removed) {
@@ -188,6 +200,11 @@ function loadOne(d: SavedEntity, level: Level): Entity | null {
     c.load(d);
     return c;
   }
+  if (d.id === 'item_frame' || d.id === 'glow_item_frame') {
+    const f = new ItemFrame(level, d.id);
+    f.load(d);
+    return f;
+  }
   if (d.id === 'leash_knot') return LeashKnot.load(level, d);
   const cart = createMinecart(d.id, level);
   if (cart) {
@@ -209,13 +226,14 @@ function loadOne(d: SavedEntity, level: Level): Entity | null {
 /** entities that belong to chunk storage (whatever carries the player is saved with the player: vanilla RootVehicle) */
 export function isChunkSaved(e: Entity): boolean {
   if (e.passengers.some((p) => p.type === 'player')) return false;
+  if (e instanceof ItemFrame) return true;
   return e instanceof AbstractMinecart || e instanceof Boat || e instanceof Mob || e instanceof ItemEntity || e instanceof EndCrystal || e instanceof Arrow || e instanceof LeashKnot;
 }
 
 const ENTITY_NAMES: Record<string, string> = {
   pig: 'Pig', cow: 'Cow', sheep: 'Sheep', chicken: 'Chicken', zombie: 'Zombie', zombie_villager: 'Zombie Villager', skeleton: 'Skeleton', creeper: 'Creeper', spider: 'Spider',
   villager: 'Villager', iron_golem: 'Iron Golem', cave_spider: 'Cave Spider', enderman: 'Enderman', slime: 'Slime', magma_cube: 'Magma Cube', zombified_piglin: 'Zombified Piglin', ghast: 'Ghast', blaze: 'Blaze', wither_skeleton: 'Wither Skeleton', squid: 'Squid', bat: 'Bat', hoglin: 'Hoglin', zoglin: 'Zoglin', strider: 'Strider', piglin: 'Piglin',
-  witch: 'Witch', husk: 'Husk', stray: 'Stray', drowned: 'Drowned', silverfish: 'Silverfish', wolf: 'Wolf', cat: 'Cat', ocelot: 'Ocelot', horse: 'Horse', donkey: 'Donkey', mule: 'Mule', llama: 'Llama', trader_llama: 'Trader Llama', llama_spit: 'Llama Spit', fireball: 'Fireball', small_fireball: 'Small Fireball',
+  witch: 'Witch', husk: 'Husk', stray: 'Stray', drowned: 'Drowned', silverfish: 'Silverfish', wolf: 'Wolf', cat: 'Cat', ocelot: 'Ocelot', horse: 'Horse', donkey: 'Donkey', mule: 'Mule', llama: 'Llama', trader_llama: 'Trader Llama', wandering_trader: 'Wandering Trader', snow_golem: 'Snow Golem', llama_spit: 'Llama Spit', fireball: 'Fireball', small_fireball: 'Small Fireball',
   arrow: 'Arrow', tnt: 'Primed TNT', lightning_bolt: 'Lightning Bolt', item: 'Item', experience_orb: 'Experience Orb', falling_block: 'Falling Block', player: 'Player',
   egg: 'Thrown Egg', snowball: 'Snowball', ender_pearl: 'Thrown Ender Pearl', potion: 'Potion', trident: 'Trident',
   minecart: 'Minecart', chest_minecart: 'Minecart with Chest', boat: 'Boat', chest_boat: 'Boat with Chest', end_crystal: 'End Crystal',
@@ -237,9 +255,12 @@ export function entityDisplayName(e: Entity | string): string {
   return ENTITY_NAMES[t] ?? t;
 }
 
+// (Stage 4: the outer End)
+Object.assign(ENTITY_NAMES, { shulker: 'Shulker', shulker_bullet: 'Shulker Bullet', item_frame: 'Item Frame', glow_item_frame: 'Glow Item Frame' });
+
 /** entity type ids accepted by /summon */
 export function summonableTypes(): string[] {
-  return [...Object.keys(MOB_TYPES), 'tnt', 'experience_orb', 'arrow', 'trident', 'lightning_bolt', ...MINECART_TYPES, ...BOAT_TYPES, 'end_crystal'];
+  return [...Object.keys(MOB_TYPES), 'tnt', 'experience_orb', 'arrow', 'trident', 'lightning_bolt', ...MINECART_TYPES, ...BOAT_TYPES, 'end_crystal', 'item_frame', 'glow_item_frame'];
 }
 
 /** vanilla MobCategory caps (per 289 spawnable chunks) */
@@ -440,6 +461,8 @@ export class NaturalSpawner {
   readonly patrols = new PatrolSpawner();
   /** vanilla CatSpawner */
   readonly cats = new CatSpawner();
+  /** vanilla WanderingTraderSpawner (its wait and chance are saved with the world: game.ts) */
+  readonly traders = new WanderingTraderSpawner();
 
   constructor(readonly level: Level, readonly worldSeed: number) {}
 
@@ -468,6 +491,7 @@ export class NaturalSpawner {
     // (Stage 4: patrols) vanilla ServerLevel.tickCustomSpawners
     this.patrols.tick(lvl, spawnEnemies);
     this.cats.tick(lvl);
+    this.traders.tick(lvl);
     const pcx = Math.floor(p.x) >> 4, pcz = Math.floor(p.z) >> 4;
     const r = Math.min(8, lvl.simulationDistance);
     const chunks: [number, number][] = [];

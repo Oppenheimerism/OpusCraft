@@ -458,6 +458,30 @@ export class AvoidEntityGoal extends Goal {
   }
 }
 
+/** vanilla MoveTowardsRestrictionGoal: outside its bounds, back toward the middle */
+export class MoveTowardsRestrictionGoal extends Goal {
+  private w: Pos = [0, 0, 0];
+  constructor(readonly mob: Mob, readonly speed: number) {
+    super();
+    this.flags = Flag.MOVE;
+  }
+  canUse(): boolean {
+    const m = this.mob;
+    if (m.isWithinRestriction()) return false;
+    const [cx, , cz] = m.restrictCenter;
+    const p = defaultRandomPosTowards(m, 16, 7, cx + 0.5, cz + 0.5, Math.PI / 2);
+    if (!p) return false;
+    this.w = p;
+    return true;
+  }
+  override canContinueToUse(): boolean {
+    return !this.mob.navigation.isDone();
+  }
+  override start(): void {
+    this.mob.navigation.moveTo(this.w[0], this.w[1], this.w[2], this.speed);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // looking
 

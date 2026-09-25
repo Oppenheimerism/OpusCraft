@@ -200,10 +200,23 @@ function drawAgeable(b: EntityBatch, pose: PoseStack, def: MobModelDef, baby: bo
 }
 
 /**
- * vanilla CustomHeadLayer for a head item that isn't armour: its head display on the head (translateToHead: centred
- * on it, turned round, 0.625 of a block), a baby's shrunk to 0.7 and lowered; `sx`, `sz`: the layer's own scale
+ * vanilla CustomHeadLayer's skull branch: a mob head worn on the head posed at `pose` (`walk`: the wearer's walk
+ * animation position, which works a dragon's jaw; `villager`: a villager's or zombie villager's taller head). True if
+ * `stack` is a head and was drawn (render/skullRenderer.ts)
  */
-export function renderHeadItem(b: EntityBatch, pose: PoseStack, items: ItemRenderer, parent: ModelPart, stack: ItemStack, baby: boolean, sx = 1, sy = 1, sz = 1): void {
+export type WornHeadRenderer = (b: EntityBatch, pose: PoseStack, stack: ItemStack, walk: number, villager: boolean) => boolean;
+let wornHead: WornHeadRenderer | null = null;
+
+export function setWornHeadRenderer(f: WornHeadRenderer | null): void {
+  wornHead = f;
+}
+
+/**
+ * vanilla CustomHeadLayer for a head item that isn't armour: its head display on the head (translateToHead: centred
+ * on it, turned round, 0.625 of a block), a baby's shrunk to 0.7 and lowered; `sx`, `sz`: the layer's own scale. A mob
+ * head is its model instead, a size up on the head (`walk`, `villager`: WornHeadRenderer's)
+ */
+export function renderHeadItem(b: EntityBatch, pose: PoseStack, items: ItemRenderer, parent: ModelPart, stack: ItemStack, baby: boolean, sx = 1, sy = 1, sz = 1, walk = 0, villager = false): void {
   pose.push();
   pose.scale(sx, sy, sz);
   if (baby) {
@@ -213,6 +226,10 @@ export function renderHeadItem(b: EntityBatch, pose: PoseStack, items: ItemRende
   }
   parent.translateAndRotate(pose);
   parent.child('head').translateAndRotate(pose);
+  if (wornHead?.(b, pose, stack, walk, villager)) {
+    pose.pop();
+    return;
+  }
   pose.translate(0, -0.25, 0);
   pose.rotY(180);
   pose.scale(0.625, -0.625, -0.625);

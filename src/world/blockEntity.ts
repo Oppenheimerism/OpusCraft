@@ -94,7 +94,7 @@ const FACING_NORMAL: Record<string, [number, number, number]> = { down: [0, -1, 
  * inside (ContainerOpenersCounter: the first to look opens it, the last to leave shuts it)
  */
 export class BarrelBlockEntity extends ChestBlockEntity {
-  override readonly id = 'barrel';
+  override readonly id: string = 'barrel';
   /** vanilla startOpen */
   startOpen(level: Level): void {
     if (!this.removed && this.openCount++ === 0) this.setOpen(level, true);
@@ -629,6 +629,15 @@ export class EndGatewayBlockEntity extends BlockEntity {
   }
 }
 
+/** makes the block entity of a block registered elsewhere (null: not one of its blocks), by block name or saved id */
+type BlockEntityFactory = (name: string, x: number, y: number, z: number) => BlockEntity | null;
+const FACTORIES: BlockEntityFactory[] = [];
+
+/** block entities whose classes live in their own modules (vanilla BlockEntityType registrations: the shulker box's) */
+export function registerBlockEntity(f: BlockEntityFactory): void {
+  FACTORIES.push(f);
+}
+
 /** block entities kept with their blocks elsewhere (the redstone components': dispensers and droppers, moving pistons) */
 const BLOCK_ENTITY_TYPES = new Map<string, (x: number, y: number, z: number) => BlockEntity>();
 
@@ -640,6 +649,10 @@ export function registerBlockEntityType(name: string, make: (x: number, y: numbe
 export function createBlockEntity(name: string, x: number, y: number, z: number): BlockEntity | null {
   const make = BLOCK_ENTITY_TYPES.get(name);
   if (make) return make(x, y, z);
+  for (const f of FACTORIES) {
+    const be = f(name, x, y, z);
+    if (be) return be;
+  }
   if (name === 'chest') return new ChestBlockEntity(x, y, z);
   if (name === 'enchanting_table') return new EnchantingTableBlockEntity(x, y, z);
   if (name === 'furnace' || name === 'smoker' || name === 'blast_furnace') return new FurnaceBlockEntity(x, y, z, name);

@@ -55,6 +55,13 @@ export interface BlockBehavior {
   neighborChanged?(level: Level, x: number, y: number, z: number, state: number, source: number, fx: number, fy: number, fz: number, moving: boolean): void;
   /** vanilla tick: a scheduled block tick */
   tick?(level: Level, x: number, y: number, z: number, state: number): void;
+  /** vanilla randomTick: one of the random ticks a chunk's blocks get (for a block registered with randomTicks) */
+  randomTick?(level: Level, x: number, y: number, z: number, state: number): void;
+  /**
+   * vanilla updateShape scheduling the block's own tick when it can no longer stay (chorus plants): it breaks that many
+   * ticks later, in its tick, rather than at once
+   */
+  breakDelay?: number;
   /** vanilla isSignalSource */
   isSignalSource?(state: number): boolean;
   /** vanilla getSignal: the (weak) power toward whoever asks; `dir` points from the asker to this block */
@@ -86,7 +93,10 @@ export interface BlockBehavior {
   animateTick?(level: Level, x: number, y: number, z: number, state: number): void;
   /** vanilla setPlacedBy: a player placed it (after it's in the world) */
   setPlacedBy?(level: Level, x: number, y: number, z: number, state: number, placer: Player): void;
-  /** vanilla playerWillDestroy: `player` is about to break it, holding `held` */
+  /**
+   * vanilla playerWillDestroy: `player` is about to break it (in any game mode), holding `held`, before it goes (a
+   * shulker box broken in creative drops itself with what's in it)
+   */
   playerWillDestroy?(level: Level, x: number, y: number, z: number, state: number, player: Player, held: ItemStack | null): void;
   /** vanilla triggerEvent: a block event queued for it (Level.blockEvent) comes up; true if it did something */
   triggerEvent?(level: Level, x: number, y: number, z: number, state: number, id: number, param: number): boolean;

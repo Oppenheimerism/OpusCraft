@@ -11,6 +11,8 @@ import { ENCHANTMENTS, TABLE_ENCHANTMENTS } from '../item/enchantments';
 import { DYES } from '../world/blocksExtra';
 import { POTIONS, isBrewablePotion, potionStack } from '../item/potions';
 import type { Rand } from '../core/rng';
+import type { Mob } from './mob';
+import type { Player } from './player';
 
 /** one side of a trade's price (vanilla ItemCost): an item and how many */
 export interface ItemCost {
@@ -130,8 +132,8 @@ function matches(s: ItemStack | null, id: string): boolean {
 /** what a villager needs to make an offer from a listing */
 export interface Trader {
   random: Rand;
-  /** vanilla VillagerType of the trader (the fisherman's boat) */
-  villagerType: string;
+  /** vanilla VillagerType of the trader (the fisherman's boat; a wandering trader has none) */
+  villagerType?: string;
 }
 
 /** vanilla VillagerTrades.ItemListing: an offer, or null when it can't make one */
@@ -215,7 +217,7 @@ function dyedArmorForEmeralds(id: string, value: number, maxUses = 12, xp = 1): 
 /** vanilla EmeraldsForVillagerTypeItem: the fisherman's boat, of his village's wood */
 function emeraldsForVillagerTypeItem(cost: number, maxUses: number, xp: number, byType: Record<string, string>): ItemListing {
   return (t) => {
-    const id = byType[t.villagerType];
+    const id = t.villagerType ? byType[t.villagerType] : undefined;
     return id && has(id) ? new MerchantOffer({ id, count: cost }, null, ItemStack.of('emerald', 1), maxUses, xp, 0.05) : null;
   };
 }
@@ -329,6 +331,55 @@ export const VILLAGER_TRADES: Record<string, ItemListing[][]> = {
     [itemsForEmeralds('quartz_pillar', 1, 1, 12, 30), itemsForEmeralds('quartz_block', 1, 1, 12, 30)],
   ],
 };
+
+/**
+ * vanilla VillagerTrades.WANDERING_TRADER_TRADES (without the trade rebalance experiment): the wandering trader's
+ * five picks from the first list (plants, flowers, dyes, coral, sand and the like) and one from the second, rarer one
+ */
+export const WANDERING_TRADER_TRADES: readonly [ItemListing[], ItemListing[]] = [
+  [
+    itemsForEmeralds('sea_pickle', 2, 1, 5, 1), itemsForEmeralds('slime_ball', 4, 1, 5, 1), itemsForEmeralds('glowstone', 2, 1, 5, 1), itemsForEmeralds('nautilus_shell', 5, 1, 5, 1),
+    itemsForEmeralds('fern', 1, 1, 12, 1), itemsForEmeralds('sugar_cane', 1, 1, 8, 1), itemsForEmeralds('pumpkin', 1, 1, 4, 1), itemsForEmeralds('kelp', 3, 1, 12, 1), itemsForEmeralds('cactus', 3, 1, 8, 1),
+    itemsForEmeralds('dandelion', 1, 1, 12, 1), itemsForEmeralds('poppy', 1, 1, 12, 1), itemsForEmeralds('blue_orchid', 1, 1, 8, 1), itemsForEmeralds('allium', 1, 1, 12, 1), itemsForEmeralds('azure_bluet', 1, 1, 12, 1),
+    itemsForEmeralds('red_tulip', 1, 1, 12, 1), itemsForEmeralds('orange_tulip', 1, 1, 12, 1), itemsForEmeralds('white_tulip', 1, 1, 12, 1), itemsForEmeralds('pink_tulip', 1, 1, 12, 1),
+    itemsForEmeralds('oxeye_daisy', 1, 1, 12, 1), itemsForEmeralds('cornflower', 1, 1, 12, 1), itemsForEmeralds('lily_of_the_valley', 1, 1, 7, 1),
+    ...each(['wheat_seeds', 'beetroot_seeds', 'pumpkin_seeds', 'melon_seeds'], (id) => itemsForEmeralds(id, 1, 1, 12, 1)),
+    ...each(['acacia', 'birch', 'dark_oak', 'jungle', 'oak', 'spruce', 'cherry'], (w) => itemsForEmeralds(`${w}_sapling`, 5, 1, 8, 1)),
+    itemsForEmeralds('mangrove_propagule', 5, 1, 8, 1),
+    ...each(['red', 'white', 'blue', 'pink', 'black', 'green', 'light_gray', 'magenta', 'yellow', 'gray', 'purple', 'light_blue', 'lime', 'orange', 'brown', 'cyan'], (c) => itemsForEmeralds(`${c}_dye`, 1, 3, 12, 1)),
+    ...each(['brain', 'bubble', 'fire', 'horn', 'tube'], (c) => itemsForEmeralds(`${c}_coral_block`, 3, 1, 8, 1)),
+    itemsForEmeralds('vine', 1, 1, 12, 1), itemsForEmeralds('brown_mushroom', 1, 1, 12, 1), itemsForEmeralds('red_mushroom', 1, 1, 12, 1), itemsForEmeralds('lily_pad', 1, 2, 5, 1),
+    itemsForEmeralds('small_dripleaf', 1, 2, 5, 1), itemsForEmeralds('sand', 1, 8, 8, 1), itemsForEmeralds('red_sand', 1, 4, 6, 1), itemsForEmeralds('pointed_dripstone', 1, 2, 5, 1),
+    itemsForEmeralds('rooted_dirt', 1, 2, 5, 1), itemsForEmeralds('moss_block', 1, 2, 5, 1),
+  ],
+  [
+    itemsForEmeralds('tropical_fish_bucket', 5, 1, 4, 1), itemsForEmeralds('pufferfish_bucket', 5, 1, 4, 1), itemsForEmeralds('packed_ice', 3, 1, 6, 1),
+    itemsForEmeralds('blue_ice', 6, 1, 6, 1), itemsForEmeralds('gunpowder', 1, 1, 8, 1), itemsForEmeralds('podzol', 3, 3, 6, 1),
+  ],
+];
+
+/**
+ * vanilla Merchant: what the trading menu needs of whoever it trades with, a villager or a wandering trader (a
+ * mob, so the menu can tell it's still there and near)
+ */
+export interface Merchant extends Mob {
+  tradingPlayer: Player | null;
+  /** vanilla VillagerData level: 1 (novice) to 5 (master); a wandering trader's is 1 */
+  merchantLevel: number;
+  /** vanilla getVillagerXp */
+  xp: number;
+  /** vanilla getOffers: made the first time they're asked for */
+  getOffers(): MerchantOffer[];
+  /** vanilla notifyTrade: an offer was taken */
+  notifyTrade(o: MerchantOffer): void;
+  /** vanilla notifyTradeUpdated: a yes or a no as the payment slots fill */
+  notifyTradeUpdated(s: ItemStack | null): void;
+  /** vanilla showProgressBar: its level and experience bar in the menu (not a wandering trader's) */
+  showProgressBar(): boolean;
+  /** vanilla canRestock: an offer out of stock comes back (a wandering trader's never do) */
+  canRestock(): boolean;
+  stopTrading(): void;
+}
 
 /**
  * vanilla AbstractVillager.addOffersFromItemListings: up to `n` offers from different listings, drawn at random
