@@ -18,6 +18,8 @@ import { ITEMS, cloneTag } from '../item/item';
 import { ItemEntity } from './itemEntity';
 import { damageBonus, levelOf } from '../item/enchantHelper';
 import { doPostAttackEffects } from '../game/enchantEffects';
+// (trial chambers)
+import { deflectedBy } from './projectileDeflection';
 
 const RAD = 180 / Math.PI;
 
@@ -184,6 +186,8 @@ export class Arrow extends Entity {
     // vanilla tick's hit loop: a piercing arrow goes on to the next entity along this tick's path (the block
     // behind them waits for the next tick)
     while (ent && !this.removed) {
+      // (trial chambers) a breeze turns it back instead, and it flies on the other way (vanilla hitTargetOrDeflectSelf)
+      if (deflectedBy(this, ent)) break;
       this.onHitEntity(ent);
       if (this.pierceLevel <= 0) break;
       ent = this.findHitEntity(x0, y0, z0, x1, y1, z1);

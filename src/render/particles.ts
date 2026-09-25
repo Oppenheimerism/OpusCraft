@@ -225,6 +225,22 @@ export class ParticleEngine {
     this.add(p);
   }
 
+  /**
+   * (trial chambers) vanilla TerrainParticle.DustPillarProvider: a speck of the block, its speed set outright (straight
+   * up at about `yd`, barely drifting) and living a second or two
+   */
+  dustPillar(x: number, y: number, z: number, yd: number, state: number, bx: number, by: number, bz: number): void {
+    if (FLAGS[state] & F_AIR) return;
+    const p = this.terrain(x, y, z, 0, 0, 0, state, bx, by, bz);
+    if (!p) return;
+    const g = () => Math.sqrt(-2 * Math.log(1 - Math.random())) * Math.cos(2 * Math.PI * Math.random());
+    p.dx = g() / 30;
+    p.dy = yd + g() / 2;
+    p.dz = g() / 30;
+    p.lifetime = 20 + Math.floor(Math.random() * 20);
+    this.add(p);
+  }
+
   /** vanilla ParticleEngine.crack: one particle on the hit face */
   blockHit(x: number, y: number, z: number, state: number, face: number): void {
     if (FLAGS[state] & F_AIR) return;

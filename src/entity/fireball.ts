@@ -12,6 +12,8 @@ import { ItemStack, ITEMS } from '../item/item';
 import { explode } from '../game/explosion';
 import { clipBlocks } from '../game/raycast';
 import { onProjectileHit } from '../game/blockRules';
+// (trial chambers)
+import { deflectedBy } from './projectileDeflection';
 import { fireStateAt, placeFire } from '../game/fire';
 import { FLAGS, F_AIR } from '../world/block';
 import { DX, DY, DZ } from '../world/dir';
@@ -71,7 +73,9 @@ export abstract class Fireball extends Entity {
         hit = e;
       }
     }
-    if (hit || bh) {
+    // (trial chambers) a breeze turns it back instead (vanilla hitTargetOrDeflectSelf): nothing's hit, and on it flies
+    const deflected = hit !== null && deflectedBy(this, hit);
+    if ((hit || bh) && !deflected) {
       if (hit) this.hitEntity(hit);
       else if (bh) {
         // (vanilla Projectile.onHitBlock: the block hears of it first)

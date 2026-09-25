@@ -485,6 +485,8 @@ export class Game {
       emitAround: (k, e, life) => particles.emitAround(k, e, life),
       fallingDust: (x, y, z, c) => particles.fallingDust(x, y, z, c),
       blockParticle: (x, y, z, xd, yd, zd, st, bx, by, bz) => particles.blockParticle(x, y, z, xd, yd, zd, st, bx, by, bz),
+      // (trial chambers)
+      dustPillar: (x, y, z, yd, st, bx, by, bz) => particles.dustPillar(x, y, z, yd, st, bx, by, bz),
       entityEffect: (x, y, z, c, a) => particles.entityEffect(x, y, z, c, a),
       dust: (x, y, z, r, g, b, s) => particles.dust(x, y, z, r, g, b, s),
       spell: (k, x, y, z, xd, yd, zd, r, g, b, pw) => particles.spell(k, x, y, z, xd, yd, zd, r, g, b, pw),
@@ -895,9 +897,14 @@ export class Game {
       case 'mobAttackNoAggro':
       // (vanilla mob_projectile's message is mob's: a shulker's bullet)
       case 'mobProjectile':
+      // (trial chambers) and wind_charge's: whoever sent it, else the charge itself
+      case 'windCharge':
         return `${n} was slain by ${kn}`;
       case 'player':
         return `${n} was slain by ${kn}`;
+      // (trial chambers) vanilla death.attack.mace_smash
+      case 'maceSmash':
+        return `${n} was smashed by ${kn}`;
       case 'arrow':
         return k && k !== victim && k.type !== 'arrow' ? `${n} was shot by ${kn}` : `${n} was shot by Arrow`;
       case 'trident':

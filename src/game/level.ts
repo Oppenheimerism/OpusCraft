@@ -89,6 +89,8 @@ export interface ParticleSink {
   fallingDust?(x: number, y: number, z: number, color: number): void;
   /** vanilla BLOCK particle (TerrainParticle with a starting speed) for the block at bx, by, bz */
   blockParticle?(x: number, y: number, z: number, xd: number, yd: number, zd: number, state: number, bx: number, by: number, bz: number): void;
+  /** (trial chambers) vanilla DUST_PILLAR (TerrainParticle.DustPillarProvider): a speck of the block at bx, by, bz shot up at about `yd` (a mace's smash) */
+  dustPillar?(x: number, y: number, z: number, yd: number, state: number, bx: number, by: number, bz: number): void;
   /** vanilla ENTITY_EFFECT (SpellParticle) swirl in an effect colour; alpha 38/255 for ambient effects */
   entityEffect?(x: number, y: number, z: number, color: number, alpha: number): void;
   /** vanilla DUST (DustParticle): a coloured speck, as powered redstone gives off */

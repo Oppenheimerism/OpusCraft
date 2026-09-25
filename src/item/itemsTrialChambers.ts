@@ -66,6 +66,8 @@ export function registerTrialChamberItems(reg: Reg, items: Map<string, Item>, li
   after('mace', 'trident');
   reg({ id: 'wind_charge', texture: 'wind_charge', creativeTab: 'combat' });
   before('wind_charge', 'bow');
+  // (M4) vanilla Items.BREEZE_SPAWN_EGG and BOGGED_SPAWN_EGG (the spawn eggs tab sorts itself by name)
+  for (const m of ['breeze', 'bogged']) reg({ id: `${m}_spawn_egg`, texture: `${m}_spawn_egg`, creativeTab: 'spawn_eggs' });
   // vanilla JukeboxSongs CREATOR_MUSIC_BOX, CREATOR and PRECIPICE, where CreativeModeTabs.TOOLS_AND_UTILITIES has
   // them: 13, cat, blocks, chirp, far, mall, mellohi, stal, strad, ward, 11, Creator (Music Box), wait, Creator,
   // Precipice, otherside, relic, 5, pigstep (each after the last of those before it that the game has)

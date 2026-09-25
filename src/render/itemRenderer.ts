@@ -90,7 +90,8 @@ const TRIDENT_THROWING_DISPLAY: Record<DisplayContext, Transform> = {
 };
 // flat-in-world block items (plants, torch...) use item/generated with the block texture
 function isHandheld(it: Item): boolean {
-  return !!it.tool || it.id === 'stick' || it.id === 'bone' || it.id === 'blaze_rod' || it.id === 'fishing_rod' || it.id === 'brush';
+  // (trial chambers) and the mace (vanilla item/handheld_mace, handheld's) and the breeze rod
+  return !!it.tool || it.id === 'stick' || it.id === 'bone' || it.id === 'blaze_rod' || it.id === 'fishing_rod' || it.id === 'brush' || it.id === 'mace' || it.id === 'breeze_rod';
 }
 
 /** vanilla default item tint colors for block items */

@@ -33,6 +33,12 @@ const LAVA_FLOOR = 0.5;
  */
 export const DYNAMIC_COLLISION: ((world: World, x: number, y: number, z: number, st: number) => Box[] | null)[] = [];
 
+/**
+ * (trial chambers) a player's current impulse (vanilla Player.currentImpulseImpactPos and the rest; game/windBurst.ts
+ * sets these): what a landing's fall counts as, and what's kept of it from each move to the next
+ */
+export const FALL_HOOKS: { landing: ((e: Entity, dist: number) => number) | null; moved: ((e: Entity, onGround: boolean) => void) | null } = { landing: null, moved: null };
+
 /** a lava source (vanilla LiquidBlock LEVEL 0), the one kind of lava that bears a strider */
 function isLavaSource(st: number): boolean {
   const b = BLOCKS[STATE_BLOCK[st]];
@@ -749,12 +755,15 @@ export abstract class Entity {
       // (Stage 5: ocean) vanilla Block.fallOn: what it lands on hears it first (a turtle egg underfoot)
       const f = this.fallDistance > 0 ? floorWithHook(this, 'fallOn') : null;
       if (f) behaviorOf(f[3])!.fallOn!(this.level, f[0], f[1], f[2], f[3], this, this.fallDistance);
-      if (this.fallDistance > 0) this.causeFallDamage(this.fallDistance);
+      // (trial chambers) a player a wind charge threw up is hurt only for the fall below where it burst
+      if (this.fallDistance > 0) this.causeFallDamage(FALL_HOOKS.landing ? FALL_HOOKS.landing(this, this.fallDistance) : this.fallDistance);
       this.fallDistance = 0;
     } else if (dy < 0) {
       this.fallDistance -= dy;
     }
     if (this.inWater) this.fallDistance = 0;
+    // (trial chambers)
+    FALL_HOOKS.moved?.(this, onGround);
   }
 
   /** vanilla Entity.causeFallDamage: a vehicle hands the landing on to its riders */

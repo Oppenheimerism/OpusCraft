@@ -8,8 +8,8 @@ Branch: `claude/kind-mccarthy-eu2t01` (from main at ac9d889).
 |---|---|---|
 | M1 tuff, copper, lightning rod, items | done | 307e1f4 (the blocks, items, recipes and advancements), e6fd0e4 (the three discs' songs) |
 | M2 trial spawner and vault | done | 1df4069 |
-| M3 trial chambers and `/locate` | done | the commit that adds this line ("Trial chambers: …") |
-| M4 breeze, wind charges, bogged, mace | not started | |
+| M3 trial chambers and `/locate` | done | f5b4e0d |
+| M4 breeze, wind charges, bogged, mace | done | the commit that adds this line ("The breeze, wind charges, the bogged and the mace. …") |
 | M5 crafter and advancements | not started | |
 
 ## 2. Shared files changed, and hooks
@@ -103,7 +103,89 @@ All small and additive; each new line is marked `(trial chambers)`.
 - New besides: `src/world/gen/trialChamberPieces.ts` (the template grid, the pool element with the processors) and
   `src/world/gen/trialChamberTemplates.ts` (every piece and pool).
 
+### M4
+
+- `src/entity/entity.ts`: `FALL_HOOKS` (`landing`, `moved`), called from `checkFallDamage`. They say how much of a
+  landing's fall counts and keep a player's current impulse from move to move (vanilla `Player.currentImpulseImpactPos`
+  and the rest). New `src/game/windBurst.ts` sets them.
+- `src/entity/living.ts` (the lead's file; one hook): `ARMOR_EFFECTIVENESS.modify`, applied in `damageAfterArmor`
+  (vanilla `modifyArmorEffectiveness`, for the mace's Breach). New `src/game/mace.ts` sets it round the blow. Nothing
+  else in the file changed.
+- `src/entity/arrow.ts`, `throwable.ts`, `fireball.ts`, `fireworkRocket.ts`: before striking an entity they ask
+  `deflectedBy` (new `src/entity/projectileDeflection.ts`), so a breeze turns them back.
+- `src/entity/ai/brainBehaviors.ts`: `moveToTargetSink(o)` takes vanilla's `min` and `max` run times and a subclass's
+  own `start` and `stop` (the breeze's slide). Called with no argument, it is as before.
+- `src/entity/monsters.ts`: `Skeleton.reassessWeaponGoal` asks `hardAttackInterval()` (20) and `attackInterval()` (40);
+  the bogged overrides both.
+- `src/game/spawner.ts`: the breeze and the bogged in `MOB_TYPES` and `ENTITY_NAMES`, with the two wind charges'
+  names. Swamps and mangrove swamps list the bogged (weight 50, in fours) and skeletons down from 100 to 70.
+- `src/game/combat.ts`: the mace's smash bonus (after the attack-strength scaling, before the critical hit), its damage
+  source, Breach round `target.hurt`, `maceHurtEnemy` after the blow, `maceWindBurst` after the post-attack effects,
+  its point of wear, and the fall spent.
+- `src/game/interaction.ts`: shears on a bogged, as on a snow golem. The mace breaks no blocks in creative and takes
+  two points of wear a block.
+- `src/game/redstone/dispenseItems.ts`: the wind charge's dispense behaviour; dispensed shears shear a bogged.
+- `src/game/trialChambers.ts`: imports `./windCharges` (new: using a wind charge, and the ominous item spawner's).
+- `src/game/potionEffects.ts`: the Wind Charged effect's burst goes through `windBurstAt`, as vanilla's does: 3 to 5
+  across, setting blocks off. The older `windBurst` in `src/game/explosion.ts` is no longer called; I left it in place.
+- `src/game/level.ts`: an optional `dustPillar` particle; `src/render/particles.ts` makes it and `src/game/game.ts`
+  wires it. `game.ts` also has the death messages for `windCharge` and `maceSmash`.
+- `src/item/enchantments.ts`: the mace in `ENCHANTABLE.weapon`, `fire_aspect`, `mace` and `durability` (their
+  comments already named it). `src/item/enchantHelper.ts`: enchantability 15 for the mace, and `windCharge` damage
+  counts as a projectile's. `src/inventory/enchantMenus.ts`: breeze rods repair the mace.
+- `src/render/entityRenderers.ts`: a `BreezeRenderers` field (new `src/render/breezeRenderer.ts`): the breeze in
+  `renderMob`, wind charges in `renderEntity` with four times the render distance, the breeze's shadow. The bogged:
+  its models (new `src/render/boggedModel.ts`), armour, the skeleton's animation with its mushrooms hidden once
+  sheared, its moss through the stray's clothing layer (now by type), and its shadow.
+- `src/render/itemRenderer.ts`: the mace and the breeze rod are held like tools.
+- `src/audio/synth.ts`: `Object.assign(SOUNDS, trialCombatSounds())` (new `src/audio/gen/trialCombat.ts`). It reuses
+  the skeleton's sounds from `gen/mobs.ts`, which were already exported.
+- M1's own files: the two spawn eggs in `src/item/itemsTrialChambers.ts` and their sprites in
+  `src/textures/itemlib/trialChambers.ts`.
+- New besides: `src/entity/breeze.ts`, `src/entity/bogged.ts`, `src/entity/windCharge.ts`, `src/game/windCharges.ts`,
+  `src/textures/breeze.ts` and `src/textures/bogged.ts`.
+
 ## 3. Open points, deviations, uncertain values, hooks
+
+### M4
+
+- **From memory.** These values are my best recollection of vanilla 1.21, not checked against its code:
+  - the bogged's swamp weights (50, in fours, skeletons down to 70) and its moss layer's 0.2 inflation;
+  - the sound variant counts;
+  - the `mace_smash` damage type and its message, "was smashed by";
+  - the breeze sensing players within 16 blocks in its line of sight;
+  - its long jump aiming at the target's centre;
+  - what its "shoot when stuck" behaviour requires;
+  - the sign of its head's bob;
+  - Who Needs Rockets?'s 7 blocks (for M5).
+- **Its animations are my own.** The breeze's shoot, slide, slide-back and jump are written afresh. Its inhale has no
+  animation.
+- **Wind charges:**
+  - Gust particles appear all at once; vanilla's emitters spread them over 4 to 8 ticks.
+  - Wind charges aren't saved with their chunk, like the game's fireballs.
+  - A charge strikes anything within 0.3 of its path.
+  - There are no candles for a burst to put out.
+  - TNT and creepers don't set a player's current impulse. Vanilla's do, though only a wind charge's forgives the fall.
+- **A breeze's aim.** Its spread is vanilla's `5 - difficulty × 4`, which comes out wider on hard (-7) than on easy (1).
+  I kept that.
+- **What a breeze turns back.** Arrows, tridents, snowballs, eggs, ender pearls, potions, bottles o' enchanting,
+  fireballs and firework rockets. Llama spit and shulker bullets still go their own way.
+- **A breeze's long jump.** One that runs out of time leaves the breeze without friction, as vanilla's does.
+  `living.ts` still uses 0.4 as the depth for jumping in fluids; only the breeze's own swim behaviour uses its eye
+  height.
+- **Shearing a bogged ignores `doMobLoot`.** I believe 1.21.0 did too.
+- **The mace:**
+  - A mob holding one neither smashes nor breaches. Vanilla mobs don't smash either, but a mob's blow would carry
+    Breach.
+  - Wind Burst goes off at the wielder's feet with no source. As in 1.21.0, the fall back from the height it gives
+    isn't forgiven unless another smash follows.
+  - It is held with the handheld tool transforms; vanilla's `handheld_mace` may differ slightly.
+  - Over-Overkill and Who Needs Rockets? get their criteria in M5. The fall-after-explosion hook is already there
+    (`impulseHooks` in `windBurst.ts`).
+- **Audio check.** The breeze's whistles, whirls, inhale and charge swell in on purpose, so `scripts/audio-check.mjs`
+  flags them as "late onset" (40 ms or more). 124 of the game's existing sounds carry the same flag. No other flags.
+- **Deep dark hooks.** None added in M4. Vanilla's game events here would be `EXPLODE` (bursts), `PROJECTILE_SHOOT`,
+  `SHEAR`, `HIT_GROUND` and `ENTITY_ACTION`; they go where the sounds are played.
 
 ### M3
 
@@ -129,8 +211,8 @@ All small and additive; each new line is marked `(trial chambers)`.
 - **Loot.** The tables' weights, counts and damage follow vanilla 1.21 as best I know them. Items the game lacks roll
   nothing: bamboo planks, bamboo hanging signs, scaffolding and cake.
 - **Not there yet.** There are no candles (the game has none), so the decor is pots, flower pots with dead bushes,
-  and barrels. The dispensers aren't wired to anything. The breeze spawners show a placeholder until M4 brings the
-  breeze. The "poison skeleton" spawners name the bogged, which also comes in M4.
+  and barrels. The dispensers aren't wired to anything. The breeze spawners showed a placeholder until M4 brought the
+  breeze. The "poison skeleton" spawners name the bogged, which also came in M4.
 - **Cost.** Chunks round a trial chambers take about 10% longer: 40.7 ms against 37.0, the best of five runs each.
   Most of it is the encapsulation's per-block sum, which is cached per column. Laying one out takes about 15 ms, once
   per structure.
@@ -202,6 +284,11 @@ on a failure.
 | `m2c-assets.mjs` | every texture of all 44 states (the ominous ones bluer, the lit ones brighter); the item icons and creative positions; both sound groups and every sound played, rendered clean; each new particle's lifetime, colour and motion, and its sprites on the sheet; the honey bottle (drunk when full, 40 ticks, food, poison cured, the bottle back, its own slurp, creative, A Balanced Diet); `/setblock` data for vaults and trial spawners; the cage renderers | all pass (54) |
 | `m3a-structure.mjs` | the start chunk against an independent java.util.Random with the salt; the start heights (all 21, the first draw); no deep dark, the biome at the start's height; the end room and its floor; the aliases against vanilla's positional random (300 starts), ranged and slow ranged together; 12 layouts: no overlaps, within 116 blocks and the padding, every spawner the structure's mob, every chamber furnished, 4 or more chambers, most doors leading somewhere; every piece walked from every way in to every way out, vault and chest; four whole structures walked from the end room to every vault, chest, barrel, dispenser and pot; the time to lay one out and to look for one | all pass (24) |
 | `m3b-generation.mjs` | real chunks at seed 12345's nearest: the end room, its entrance chests and their loot, the spawners' configs, the vaults normal and ominous and their facing, the pots, the ground round it solid, being in one; every loot table and spawner config the pieces name, what each table gives, the supply rolls, the dispenser's arrows, worn and enchanted tools; a pot's loot through saving, looking in and breaking, and its odds; every copper bulb against vanilla's positional random; nothing over a spawner, chest or bedrock; no waterlogging; the encapsulation against vanilla's formula at 900 points; `/locate` in the Overworld and the Nether; the cost per chunk | all pass (29) |
+| `m4a-wind-charges.mjs` | throwing (from the eye at 1.5, one used, 10 ticks' cooldown, none used in creative), flying dead straight; the burst at a wall and on a pig (a point of damage, the push, nothing 6 blocks off); an oak door opened by a thrown charge and every kind of block set off or left alone (iron ones), a bell only by a direct hit or a breeze-sized burst, a breeze's burst only with `mobGriefing`; thrown up by one's own charge and down unhurt, the fall start told once, a breeze's charge's fall hurting; dispensers, ominous trial spawners, a blow turning a charge (not in its first 5 ticks), the top of the world; the Wind Charged effect's burst | all pass (44) |
+| `m4b-breeze.mjs` | 30 health, its size and eyes, 10 experience, the spawn egg, the trial spawner config; idle strolling, whistling and whirling, leaving a creative player be; a fight: taking the player on, inhaling before every shot, charges from its snout with its burst sound, its poses, leaping; up close, sliding away then shooting; a player gone creative let go; an arrow and a snowball turned back once each, a player's charge hurting it and another breeze's not; no fall damage; its loot with and without looting and a player; a trial spawner bringing out a breeze | all pass (33) |
+| `m4c-bogged.mjs` | 16 health, a bow, its sounds and spawn egg; a shot every 70 ticks on hard and 90 on normal, poison for 100 ticks; burning in the sun; shearing by hand (two mushrooms from its head, the snip, a point of wear, only once, creative, saved) and by dispenser; its loot (a poison arrow about half the time on a player's kill, never more than one, bones and arrows); swamp and mangrove swamp spawns, none on the plains, no natural breezes; a trial spawner's poison skeletons | all pass (24) |
+| `m4d-mace.mjs` | the damage at 9 heights against vanilla's formula, density, gliding, the damage source; the smash: the stop, the impulse, the three sounds, the 750 dust specks, the push and who is spared, the wear, creative; the landing spray and no fall damage; breach and its clamp; wind burst I to III and its conditions; mining wear, creative; enchantability, repair, the enchantments it takes and the table's | all pass (43) |
+| `m4e-assets.mjs` | the breeze's, wind charge's and bogged's textures (the wind tiling, the mirrored mushroom cards, the moss, the bones), the spawn eggs; the breeze, wind charge and bogged models; all 23 new sounds rendered clean, and every sound name the new code plays; the dust pillar particle; the gust | all pass (24) |
 
 Also run: `npm run typecheck` (clean); `tests/temples/*` and `tests/mansion/*` (all pass); `scripts/audio-check.mjs` (no
 warnings for the new sounds, except once a "slow" flag on the ominous spawner's boom at 24 ms against a 20 ms limit on
@@ -210,6 +297,17 @@ its first, cold render; 15 ms when run again).
 For M3 the jigsaw engine changed under the villages and outposts too. Their layouts on made-up terrain (40,383 pieces
 over five village kinds and the outposts, 64 regions each) hash the same before and after. The pieces were also
 checked in the browser: screenshots of the end room and five chambers looked right, with no errors in the console.
+
+For M4, every test above passes again, as do `tests/temples/*` and `tests/mansion/*`. One timing check in
+`tests/mansion/m2-ruined-portals.mjs` failed once while two suites ran side by side (54 ms a chunk against 41); run
+alone it passes. In the browser, screenshots showed:
+- a breeze close up and in a fight;
+- two bogged, one sheared;
+- the mace in both views, and its dust pillar;
+- a wind charge in flight;
+- the breeze and bogged spawners below, woken in survival.
+
+The console showed no errors.
 
 ## 5. Browser checklist
 
@@ -263,5 +361,36 @@ Start at `http://localhost:5173/?seed=12345` in creative.
 - **By the vaults**: `/tp @s -463 -33 -279 0 10` in the same hall faces its two vaults on their copper dais.
   `/give @s minecraft:trial_key 2` and use one on each.
 - **An ominous vault in place**: in the trial chambers at 0, 224, `/tp @s 7 -37 208 180 10` stands on the walkway of the
-  pit (chamber_4) facing its vault and its ominous vault. Its spawners (spiders and silverfish; the "poison skeleton"
-  ones wait for M4's bogged) are down in the pit.
+  pit (chamber_4) facing its vault and its ominous vault. Its spawners (spiders, silverfish and, since M4, the bogged)
+  are down in the pit.
+
+**M4: the breeze, wind charges, the bogged and the mace.** Mobs attack survival players only. To watch in safety, use
+`/effect give @s minecraft:resistance 99999 4` and `/effect give @s minecraft:night_vision 99999 0`.
+
+- **Breeze**: `/summon minecraft:breeze ~ ~ ~5` in creative. It drifts about whistling, its rods spinning round its
+  head, its wind swirling. In `/gamemode survival` it breathes in and fires wind charges that burst on you and throw you
+  about. It leaps high behind you, and slides away when you're within 4 blocks. Arrows shot at it bounce back. Killed,
+  it drops 1 or 2 breeze rods.
+- **Breeze spawner**:
+  `/setblock ~3 ~ ~ minecraft:trial_spawner{normal_config:"minecraft:trial_chamber/breeze/normal",ominous_config:"minecraft:trial_chamber/breeze/ominous"}`
+  in a dark room, then survival. It brings out 2 breezes, one at a time.
+- **Wind charges**: `/give @s minecraft:wind_charge 64`. Look straight down and throw one: it lifts you about 7
+  blocks, and you land unhurt. Throw one at an oak door, trapdoor, fence gate, lever, button or bell to set it off;
+  iron doors don't move. Or place `/setblock ~2 ~ ~ minecraft:dispenser[facing=east]`, put charges in and power it.
+- **Bogged**: at night or somewhere dark, `/summon minecraft:bogged ~ ~ ~5`. It is mossy grey-green bones with red and
+  brown mushrooms on its head. In survival its arrows poison you for 5 seconds, and it shoots less often than a
+  skeleton. Use `/give @s minecraft:shears` on it: two mushrooms fall and its head is bare. Swamps and mangrove
+  swamps bring it in fours at night.
+- **Mace**: `/give @s minecraft:mace`, then `/summon minecraft:zombie ~ ~ ~2` two or three times, and go into survival:
+  1. `/tp @s ~ ~10 ~` over the zombies and hit one as you fall onto it. There's a crash and a pillar of dust. The
+     others are thrown away, you stop dead, and you land without fall damage.
+  2. `/enchant @s minecraft:wind_burst 3` and smash again: a gust throws you back up for the next blow.
+  3. `/enchant @s minecraft:density 5` hits harder. Breach instead cuts through armoured mobs.
+  4. A mace is mended with breeze rods at an anvil.
+- **Breezes in a trial chambers**: `/gamemode spectator`, then `/tp @s -493 -33 -310 270 10`. This stands by a breeze
+  spawner in the chamber beside the end room at -480, -304. Switch to survival and it wakes.
+- **Bogged in a trial chambers**: `/gamemode spectator`, then `/tp @s 0 -31 240 0 5`. This stands on the upper
+  walkway of chamber_8 in the trial chambers at 0, 224, by its bogged spawners. In survival they come out shooting
+  poison arrows.
+  - The pit at 0, 224 (`/tp @s 7 -37 208 180 10`) now brings bogged down in the pit too.
+  - A breeze spawner stands at 8, -35, 244.

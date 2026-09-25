@@ -1,15 +1,21 @@
 // (trial chambers) Item sprites for the 1.21 items that don't have one yet: the copper doors at each age (vanilla
 // item/<age>copper_door, the waxed doors sharing them), the breeze rod (vanilla item/breeze_rod), and what the vaults
 // give that the game didn't have: the honey bottle (vanilla item/honey_bottle) and the bolt and flow armour trims'
-// smithing templates (vanilla item/bolt_armor_trim_smithing_template and flow_...). Original pixel art.
+// smithing templates (vanilla item/bolt_armor_trim_smithing_template and flow_...); and (M4) the breeze's and the
+// bogged's spawn eggs. Original pixel art.
 
 import { TexImage, plot } from '../tex';
 import { Gen, spr, outline4 } from './common';
 import { blank, liquidBottle } from './misc';
 import { tablet } from './smithing';
+import { spawnEgg } from '../mobs';
 
 export const TRIAL_CHAMBER_ITEMS: Record<string, Gen> = {};
 const X = TRIAL_CHAMBER_ITEMS;
+
+// (M4) the breeze's and the bogged's spawn eggs, in their vanilla colours (SpawnEggItem's base and spots)
+X.breeze_spawn_egg = () => spawnEgg(0xaf94df, 0x9166df);
+X.bogged_spawn_egg = () => spawnEgg(0x8a9c72, 0x314d1b);
 
 // a copper door: two tall windows over a ribbed panel, the handle on the right; 'g' the odd fleck of the other colour
 // (patina on the exposed door, bare copper on the weathered)

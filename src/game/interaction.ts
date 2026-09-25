@@ -26,6 +26,8 @@ import { Piglin, GUARDED_BY_PIGLINS } from '../entity/piglin';
 import { Villager } from '../entity/villager';
 import { WanderingTrader } from '../entity/wanderingTrader';
 import { SnowGolem } from '../entity/snowGolem';
+// (trial chambers)
+import { Bogged } from '../entity/bogged';
 import { IronGolem } from '../entity/ironGolem';
 import { ZombieVillager } from '../entity/zombieVillager';
 import { Arrow } from '../entity/arrow';
@@ -239,8 +241,8 @@ export class Interaction {
     const b = BLOCKS[STATE_BLOCK[st]];
     if (b.hardness < 0 && p.gameMode !== 'creative') return;
     const held = p.inventory.selectedItem;
-    // swords and tridents can't break blocks in creative (vanilla canAttackBlock)
-    if (p.gameMode === 'creative' && (held?.item.tool?.type === 'sword' || held?.item.id === 'trident')) return;
+    // swords and tridents can't break blocks in creative (vanilla canAttackBlock) ((trial chambers) nor the mace)
+    if (p.gameMode === 'creative' && (held?.item.tool?.type === 'sword' || held?.item.id === 'trident' || held?.item.id === 'mace')) return;
     const survival = p.gameMode === 'survival' || p.gameMode === 'adventure';
     // vanilla Block.playerWillDestroy: breaking what piglins guard angers every one about, seen or not
     if (GUARDED_BY_PIGLINS.has(b.name)) Piglin.angerNearbyPiglins(p, false);
@@ -263,8 +265,9 @@ export class Interaction {
     }
     if (survival) {
       p.food.addExhaustion(0.005);
-      // (vanilla Tool.damagePerBlock: 2 for a sword or trident, 1 for the rest)
-      if (held && (held.item.tool || held.item.id === 'trident') && b.hardness > 0) this.damageHeld(held.item.tool?.type === 'sword' || held.item.id === 'trident' ? 2 : 1);
+      // (vanilla Tool.damagePerBlock: 2 for a sword or trident ((trial chambers) or the mace), 1 for the rest)
+      const mace = held?.item.id === 'mace';
+      if (held && (held.item.tool || held.item.id === 'trident' || mace) && b.hardness > 0) this.damageHeld(held.item.tool?.type === 'sword' || held.item.id === 'trident' || mace ? 2 : 1);
       else if (held && held.item.tool && held.item.tool.type !== 'sword' && b.hardness === 0) {
         /* no durability loss on instant blocks */
       }
@@ -388,6 +391,11 @@ export class Interaction {
       }
       // vanilla SnowGolem.mobInteract: shears take its pumpkin off
       if (e instanceof SnowGolem && e.interact(p, stack)) {
+        p.swing();
+        return 'success';
+      }
+      // (trial chambers) vanilla Bogged.mobInteract: shears take its mushrooms off
+      if (e instanceof Bogged && e.interact(p, stack)) {
         p.swing();
         return 'success';
       }

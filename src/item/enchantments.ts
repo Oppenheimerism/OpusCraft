@@ -47,20 +47,21 @@ export const ENCHANTABLE = {
   sword: TOOL('sword'),
   /** swords and axes */
   sharp_weapon: TOOL('sword', 'axe'),
-  /** sharp weapons and maces */
-  weapon: TOOL('sword', 'axe'),
-  /** swords and maces */
-  fire_aspect: TOOL('sword'),
+  /** sharp weapons and maces ((trial chambers) the mace) */
+  weapon: (it: Item) => TOOL('sword', 'axe')(it) || it.id === 'mace',
+  /** swords and maces ((trial chambers) the mace) */
+  fire_aspect: (it: Item) => TOOL('sword')(it) || it.id === 'mace',
   /** axes, pickaxes, shovels, hoes and shears */
   mining: TOOL('pickaxe', 'axe', 'shovel', 'hoe', 'shears'),
   mining_loot: TOOL('pickaxe', 'axe', 'shovel', 'hoe'),
   bow: (it: Item) => it.id === 'bow',
   crossbow: (it: Item) => it.id === 'crossbow',
   trident: (it: Item) => it.id === 'trident',
-  mace: (_it: Item) => false,
+  // (trial chambers)
+  mace: (it: Item) => it.id === 'mace',
   fishing: (it: Item) => it.id === 'fishing_rod',
   /** everything that takes damage */
-  durability: (it: Item) => !!it.armor || !!it.tool || it.id === 'bow' || it.id === 'crossbow' || it.id === 'trident' || it.id === 'flint_and_steel' || it.id === 'fishing_rod' || it.id === 'shield' || it.id === 'elytra',
+  durability: (it: Item) => !!it.armor || !!it.tool || it.id === 'bow' || it.id === 'crossbow' || it.id === 'trident' || it.id === 'flint_and_steel' || it.id === 'fishing_rod' || it.id === 'shield' || it.id === 'elytra' || it.id === 'mace' /* (trial chambers) */,
   vanishing: (it: Item) => ENCHANTABLE.durability(it) || it.id === 'compass' || it.id === 'recovery_compass' || it.id === 'carved_pumpkin' || isSkullItem(it.id),
 };
 const E = ENCHANTABLE;

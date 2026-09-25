@@ -16,6 +16,8 @@ import { onProjectileHit } from '../game/blockRules';
 import { registerItemBehavior } from '../game/itemBehavior';
 import { DX, DY, DZ } from '../world/dir';
 import { viewVector } from './elytra';
+// (trial chambers)
+import { deflectedBy } from './projectileDeflection';
 import type { Player } from './player';
 import type { SavedEntity } from './mob';
 
@@ -143,8 +145,10 @@ export class FireworkRocket extends Entity {
         z1 = bh.pz;
       }
       const e = this.findHitEntity(x0, y0, z0, x1, y1, z1);
-      if (e) this.onHitEntity(e);
-      else if (bh) this.onHitBlock(bh);
+      // (trial chambers) a breeze turns it back instead (vanilla hitTargetOrDeflectSelf)
+      if (e) {
+        if (!deflectedBy(this, e)) this.onHitEntity(e);
+      } else if (bh) this.onHitBlock(bh);
     }
     this.updateRotation();
     if (this.life === 0) this.level.sound.play('entity.firework_rocket.launch', this.x, this.y, this.z, 3, 1);

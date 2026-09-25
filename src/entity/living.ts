@@ -28,11 +28,18 @@ export const FIRE_SOURCES = new Set(['onFire', 'inFire', 'campfire', 'lava', 'ho
 /** vanilla Player.getDestroySpeed: mining fatigue multiplier per amplifier (capped at IV) */
 const FATIGUE_DIG = [0.3, 0.09, 0.0027, 8.1e-4];
 
+/**
+ * (trial chambers) vanilla EnchantmentHelper.modifyArmorEffectiveness: what the weapon of the blow being struck does to
+ * the armour's effectiveness (a mace's breach; game/mace.ts sets it round the blow)
+ */
+export const ARMOR_EFFECTIVENESS: { modify: (f: number) => number } = { modify: (f) => f };
+
 /** vanilla CombatRules.getDamageAfterAbsorb */
 export function damageAfterArmor(damage: number, armor: number, toughness: number): number {
   const f = 2 + toughness / 4;
   const f1 = Math.max(armor * 0.2, Math.min(20, armor - damage / f));
-  return damage * (1 - f1 / 25);
+  // (trial chambers) the weapon's breach, clamped to 0..1
+  return damage * (1 - Math.max(0, Math.min(1, ARMOR_EFFECTIVENESS.modify(f1 / 25))));
 }
 
 export abstract class LivingEntity extends Entity {
