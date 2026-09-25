@@ -57,6 +57,7 @@ import { Bat } from '../entity/bat';
 import { Boat, createBoat, BOAT_TYPES } from '../entity/boat';
 import { EndCrystal } from '../entity/endCrystal';
 import { LeashKnot } from '../entity/leash';
+import { FireworkRocket } from '../entity/fireworkRocket';
 import { EnderDragon } from '../entity/enderDragon';
 import { Shulker } from '../entity/shulker';
 import { ItemFrame } from '../entity/itemFrame';
@@ -164,8 +165,8 @@ function saveOne(e: Entity): SavedEntity | null {
   if (e instanceof AbstractMinecart || e instanceof Boat || e instanceof EndCrystal || e instanceof LeashKnot) return e.removed ? null : e.save();
   // (vanilla: item frames are kept with their chunk, and what they hold)
   if (e instanceof ItemFrame) return e.removed ? null : e.save();
-  // (vanilla: arrows and tridents are kept with their chunk, stuck where they landed)
-  if (e instanceof Arrow) return e.removed ? null : e.save();
+  // (vanilla: arrows and tridents are kept with their chunk, stuck where they landed; so is a rocket in flight)
+  if (e instanceof Arrow || e instanceof FireworkRocket) return e.removed ? null : e.save();
   if (e instanceof ItemEntity && !e.removed) {
     const s = e.stack;
     return {
@@ -215,6 +216,11 @@ function loadOne(d: SavedEntity, level: Level): Entity | null {
     return f;
   }
   if (d.id === 'leash_knot') return LeashKnot.load(level, d);
+  if (d.id === 'firework_rocket') {
+    const r = new FireworkRocket(level);
+    r.load(d);
+    return r;
+  }
   const cart = createMinecart(d.id, level);
   if (cart) {
     cart.load(d);
@@ -236,7 +242,7 @@ function loadOne(d: SavedEntity, level: Level): Entity | null {
 export function isChunkSaved(e: Entity): boolean {
   if (e.passengers.some((p) => p.type === 'player')) return false;
   if (e instanceof ItemFrame) return true;
-  return e instanceof AbstractMinecart || e instanceof Boat || e instanceof Mob || e instanceof ItemEntity || e instanceof EndCrystal || e instanceof Arrow || e instanceof LeashKnot;
+  return e instanceof AbstractMinecart || e instanceof Boat || e instanceof Mob || e instanceof ItemEntity || e instanceof EndCrystal || e instanceof Arrow || e instanceof LeashKnot || e instanceof FireworkRocket;
 }
 
 const ENTITY_NAMES: Record<string, string> = {
@@ -265,7 +271,7 @@ export function entityDisplayName(e: Entity | string): string {
 }
 
 // (Stage 4: the outer End)
-Object.assign(ENTITY_NAMES, { shulker: 'Shulker', shulker_bullet: 'Shulker Bullet', item_frame: 'Item Frame', glow_item_frame: 'Glow Item Frame' });
+Object.assign(ENTITY_NAMES, { shulker: 'Shulker', shulker_bullet: 'Shulker Bullet', item_frame: 'Item Frame', glow_item_frame: 'Glow Item Frame', firework_rocket: 'Firework Rocket' });
 
 /** entity type ids accepted by /summon */
 export function summonableTypes(): string[] {

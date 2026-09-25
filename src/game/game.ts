@@ -24,6 +24,7 @@ import { MIN_Y, MAX_Y } from '../world/constants';
 import { Overlay } from '../render/overlay';
 import { isAnim, TexImage } from '../textures/tex';
 import { ParticleEngine } from '../render/particles';
+import { createFireworks } from '../render/fireworkParticles';
 import { GuiGraphics, SpriteSheet, BitmapFont, autoGuiScale } from '../gui/guiGraphics';
 import { ItemIcons } from '../gui/itemIcons';
 import { Hud } from '../gui/hud';
@@ -487,6 +488,7 @@ export class Game {
       entityEffect: (x, y, z, c, a) => particles.entityEffect(x, y, z, c, a),
       dust: (x, y, z, r, g, b, s) => particles.dust(x, y, z, r, g, b, s),
       spell: (k, x, y, z, xd, yd, zd, r, g, b, pw) => particles.spell(k, x, y, z, xd, yd, zd, r, g, b, pw),
+      fireworks: (x, y, z, xd, yd, zd, ex) => void createFireworks(particles, this.level, x, y, z, xd, yd, zd, ex),
     };
     this.spawner = new NaturalSpawner(this.level, hashString(meta.seed));
     this.spawner.traders.load(meta.wanderingTrader);
@@ -909,6 +911,9 @@ export class Game {
       // (Stage 4: the outer End) an elytra into a wall
       case 'flyIntoWall':
         return `${n} experienced kinetic energy`;
+      // (fireworks: vanilla death.attack.fireworks, the rocket being the direct cause)
+      case 'fireworks':
+        return `${n} went off with a bang`;
       case 'drown':
         return `${n} drowned`;
       case 'starve':

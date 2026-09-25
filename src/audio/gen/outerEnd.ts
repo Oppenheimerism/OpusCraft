@@ -14,6 +14,7 @@ import { voice, vowelGlide } from './voice';
 import { reverbHalf } from './world';
 import { frameSounds } from './frames';
 import { elytraSounds } from './elytra';
+import { fireworkSounds } from './fireworks';
 
 /**
  * A flower growing: a soft wet pop as it swells, a hollow rising "bloop" with a woody knock under it, and a faint
@@ -403,5 +404,7 @@ export function outerEndSounds(): Record<string, SoundGen> {
     ...frameSounds(),
     // (the elytra: the end ship's treasure)
     ...elytraSounds(),
+    // (and the rockets that boost it)
+    ...fireworkSounds(),
   };
 }

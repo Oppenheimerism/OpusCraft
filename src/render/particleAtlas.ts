@@ -9,6 +9,7 @@ import { isAnim } from '../textures/tex';
 import { sgaParticleTextures } from '../textures/sga';
 import { campfireSmokeTextures } from '../textures/campfireSmoke';
 import { glitterTextures } from '../textures/blocklib/outerEnd';
+import { fireworkParticleTextures } from '../textures/fireworks';
 import type { SpriteRectUV } from './particles';
 
 export function buildParticleAtlas(gl: GL): { texture: WebGLTexture; rects: Record<string, SpriteRectUV> } {
@@ -19,6 +20,8 @@ export function buildParticleAtlas(gl: GL): { texture: WebGLTexture; rects: Reco
   Object.assign(src, campfireSmokeTextures());
   // end rod motes and firework sparks (vanilla particle/glitter_0..7)
   Object.assign(src, glitterTextures());
+  // a firework's flash (vanilla particle/flash)
+  Object.assign(src, fireworkParticleTextures());
   // item crumb particles (vanilla ItemParticleOption)
   if (ITEM_TEXTURES['slime_ball']) src['item_slime_ball'] = ITEM_TEXTURES['slime_ball'];
   if (ITEM_TEXTURES['egg']) src['item_egg'] = ITEM_TEXTURES['egg'];

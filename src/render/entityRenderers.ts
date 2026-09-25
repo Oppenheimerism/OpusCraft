@@ -97,6 +97,8 @@ import { ItemFrame } from '../entity/itemFrame';
 import { ItemFrameRenderer } from './itemFrameRenderer';
 import { SkullRenderer } from './skullRenderer';
 import { ElytraLayer } from './elytraLayer';
+import { FireworkRocket } from '../entity/fireworkRocket';
+import { renderFireworkRocket } from './fireworkRenderer';
 import { viewVector } from '../entity/elytra';
 import { PistonRenderer } from './pistonRenderer';
 import { ArchaeologyRenderers } from './archaeologyRenderers';
@@ -378,6 +380,8 @@ export class EntityRenderDispatcher {
       else if (e instanceof ShulkerBullet) size = 2;
       // (vanilla ItemFrame.shouldRenderAtSqrDistance: as though 16 blocks across)
       else if (e instanceof ItemFrame) size = 16;
+      // (vanilla FireworkRocketEntity.shouldRenderAtSqrDistance: within 64 blocks)
+      else if (e instanceof FireworkRocket) size = 1;
       const maxD = size * 64 * opts.distanceScale;
       // (vanilla EndCrystalRenderer.shouldRender: a crystal with a beam is always drawn; the dragon is never culled)
       const beam = e instanceof EndCrystal && e.beamTarget !== null;
@@ -522,6 +526,7 @@ export class EntityRenderDispatcher {
     else if (e instanceof PrimedTnt) this.renderTnt(b, e, dx, dy, dz, p);
     else if (e instanceof FallingBlockEntity) this.renderFalling(b, e, dx, dy, dz);
     else if (e instanceof ThrownItem) this.renderThrown(b, e, dx, dy, dz, cam);
+    else if (e instanceof FireworkRocket) renderFireworkRocket(b, this.pose, this.items, e, dx, dy, dz, cam);
     else if (e instanceof EyeOfEnder) this.renderEyeOfEnder(b, e, dx, dy, dz, cam);
     else if (e instanceof DragonFireball) this.dragons.renderFireball(b, this.pose, dx, dy, dz, cam);
     else if (e instanceof Fireball) this.renderFireball(b, e, dx, dy, dz, cam);

@@ -6,6 +6,7 @@ import type { SavedEffect } from '../entity/effects';
 import type { ItemEntity } from '../entity/itemEntity';
 import { SHULKER_BOXES } from '../world/blocksShulker';
 import { SKULL_TYPES, SKULL_BLOCKS } from '../world/blocksSkulls';
+import type { Fireworks, FireworkExplosion } from './fireworks';
 
 export interface ToolInfo {
   type: ToolType;
@@ -345,6 +346,11 @@ reg({ id: 'shulker_spawn_egg', texture: 'shulker_spawn_egg', creativeTab: 'spawn
 reg({ id: 'glow_item_frame', texture: 'glow_item_frame', creativeTab: 'functional' });
 // the elytra (vanilla ElytraItem: 432 uses, epic; worn in the chest slot, entity/elytra.ts; its wings render/elytraLayer.ts)
 reg({ id: 'elytra', texture: 'elytra', maxStack: 1, creativeTab: 'tools', maxDamage: 432, rarity: 'epic' });
+// firework rockets (listed after the elytra, one of each flight duration) and firework stars (after the book): their data,
+// tooltips and recipes are item/fireworks.ts, the rocket in flight entity/fireworkRocket.ts
+reg({ id: 'firework_rocket', texture: 'firework_rocket', creativeTab: 'tools' });
+reg({ id: 'firework_star', texture: 'firework_star' });
+ITEM_LIST.splice(ITEM_LIST.findIndex((x) => x.id === 'book') + 1, 0, ITEM_LIST.pop()!);
 // mob heads (vanilla StandingAndWallBlockItem: uncommon, the dragon's epic), worn on the head (item/equipment.ts); drawn
 // by their model, render/skullRenderer.ts
 for (const t of SKULL_TYPES) Object.assign(ITEMS.get(SKULL_BLOCKS[t][0])!, { rarity: t === 'dragon' ? 'epic' : 'uncommon', creativeTab: 'functional' });
@@ -564,6 +570,10 @@ export interface ItemTag {
   mapDecorations?: Record<string, { type: string; x: number; z: number; rotation: number }>;
   /** (Stage 5: ocean) minecraft:map_color: the tint of the markings on an explorer map's sprite */
   mapColor?: number;
+  /** minecraft:fireworks: a rocket's flight duration and stars (none: the rocket's default, a flight of 1; item/fireworks.ts) */
+  fireworks?: Fireworks;
+  /** minecraft:firework_explosion: a firework star's */
+  fireworkExplosion?: FireworkExplosion;
 }
 
 /** one filled slot of minecraft:container (vanilla ItemContainerContents.Slot) */
@@ -646,7 +656,15 @@ export function cloneTag(t: ItemTag | null): ItemTag | null {
   if (t.bucketEntity) o.bucketEntity = { ...t.bucketEntity };
   if (t.mapDecorations) o.mapDecorations = Object.fromEntries(Object.entries(t.mapDecorations).map(([k, v]) => [k, { ...v }]));
   if (t.mapColor !== undefined) o.mapColor = t.mapColor;
+  // (fireworks)
+  if (t.fireworks) o.fireworks = { flightDuration: t.fireworks.flightDuration, explosions: t.fireworks.explosions.map(cloneExplosionData) };
+  if (t.fireworkExplosion) o.fireworkExplosion = cloneExplosionData(t.fireworkExplosion);
   return o;
+}
+
+/** a firework explosion's copy, its fields in their order (compared as JSON) */
+function cloneExplosionData(e: FireworkExplosion): FireworkExplosion {
+  return { shape: e.shape, colors: [...e.colors], fadeColors: [...e.fadeColors], hasTrail: e.hasTrail, hasTwinkle: e.hasTwinkle };
 }
 
 /** the newer components compared as data (JSON) */
@@ -663,7 +681,9 @@ export function sameTag(a: ItemTag | null | undefined, b: ItemTag | null | undef
     sameData(a?.potDecorations, b?.potDecorations) && sameData(a?.stewEffects, b?.stewEffects) &&
     sameData(a?.container?.length ? a.container : null, b?.container?.length ? b.container : null) &&
     // (Stage 5: ocean)
-    sameData(a?.bucketEntity, b?.bucketEntity) && sameData(a?.mapDecorations, b?.mapDecorations) && a?.mapColor === b?.mapColor
+    sameData(a?.bucketEntity, b?.bucketEntity) && sameData(a?.mapDecorations, b?.mapDecorations) && a?.mapColor === b?.mapColor &&
+    // (fireworks)
+    sameData(a?.fireworks, b?.fireworks) && sameData(a?.fireworkExplosion, b?.fireworkExplosion)
   );
 }
 
