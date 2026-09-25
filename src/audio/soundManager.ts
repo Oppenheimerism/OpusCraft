@@ -68,6 +68,8 @@ function categoryOf(name: string): Category {
   // (vanilla: a fish scooped up is the player's sound, one poured out SoundSource.NEUTRAL)
   if (name === 'item.bucket.fill_fish' || name === 'item.bucket.fill_axolotl') return 'players';
   if (name === 'item.bucket.empty_fish' || name === 'item.bucket.empty_axolotl') return 'friendly';
+  // (M8: goats) vanilla Goat.mobInteract plays the milking at the player (SoundSource.PLAYERS)
+  if (name === 'entity.goat.milk' || name === 'entity.goat.screaming.milk') return 'players';
   // (Stage 4: raids) the horn is vanilla's SoundSource.NEUTRAL; the bottle and the omens are the drinker's (a player's)
   if (name === 'event.raid.horn') return 'friendly';
   if (name.startsWith('item.ominous_bottle.') || name.startsWith('event.mob_effect.')) return 'players';

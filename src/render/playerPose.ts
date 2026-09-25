@@ -26,6 +26,8 @@ export function playerArms(e: Player, mainArm: Arm): HumanoidArms {
       if (s.item.id === 'crossbow') return 'crossbow_charge';
       if (s.item.id === 'trident') return 'throw_spear';
       if (s.item.id === 'brush') return 'brush';
+      // (M8: goats) vanilla UseAnim.TOOT_HORN
+      if (s.item.id === 'goat_horn') return 'toot_horn';
     } else if (!e.swinging && s.item.id === 'crossbow' && isCharged(s)) return 'crossbow_hold';
     return 'item';
   };

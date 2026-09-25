@@ -442,6 +442,16 @@ for (const m of ['elder_guardian', 'guardian']) reg({ id: `${m}_spawn_egg`, text
   after('axolotl_bucket', 'pufferfish_bucket');
   reg({ id: 'axolotl_spawn_egg', texture: 'axolotl_spawn_egg', creativeTab: 'spawn_eggs' });
 }
+// (M8: goats) the goat horn (vanilla InstrumentItem: one to a stack; its calls and use in game/goatHorn.ts), in the
+// tools just before the music discs (vanilla CreativeModeTabs: after the boats and minecarts), and the goat's egg
+reg({ id: 'goat_horn', texture: 'goat_horn', maxStack: 1, creativeTab: 'tools' });
+{
+  const i = ITEM_LIST.findIndex((x) => x.id === 'goat_horn');
+  const h = i >= 0 ? ITEM_LIST.splice(i, 1)[0] : null;
+  const j = ITEM_LIST.findIndex((x) => x.id === 'music_disc_13');
+  if (h) ITEM_LIST.splice(j >= 0 ? j : ITEM_LIST.length, 0, h);
+}
+reg({ id: 'goat_spawn_egg', texture: 'goat_spawn_egg', creativeTab: 'spawn_eggs' });
 // sugar cane item places the block
 {
   const sc = ITEMS.get('sugar_cane');
@@ -583,6 +593,8 @@ export interface ItemTag {
   fireworks?: Fireworks;
   /** minecraft:firework_explosion: a firework star's */
   fireworkExplosion?: FireworkExplosion;
+  /** (M8: goats) minecraft:instrument: a goat horn's call (game/goatHorn.ts) */
+  instrument?: string;
 }
 
 /** one filled slot of minecraft:container (vanilla ItemContainerContents.Slot) */
@@ -668,6 +680,8 @@ export function cloneTag(t: ItemTag | null): ItemTag | null {
   // (fireworks)
   if (t.fireworks) o.fireworks = { flightDuration: t.fireworks.flightDuration, explosions: t.fireworks.explosions.map(cloneExplosionData) };
   if (t.fireworkExplosion) o.fireworkExplosion = cloneExplosionData(t.fireworkExplosion);
+  // (M8: goats)
+  if (t.instrument !== undefined) o.instrument = t.instrument;
   return o;
 }
 
@@ -692,7 +706,9 @@ export function sameTag(a: ItemTag | null | undefined, b: ItemTag | null | undef
     // (Stage 5: ocean)
     sameData(a?.bucketEntity, b?.bucketEntity) && sameData(a?.mapDecorations, b?.mapDecorations) && a?.mapColor === b?.mapColor &&
     // (fireworks)
-    sameData(a?.fireworks, b?.fireworks) && sameData(a?.fireworkExplosion, b?.fireworkExplosion)
+    sameData(a?.fireworks, b?.fireworks) && sameData(a?.fireworkExplosion, b?.fireworkExplosion) &&
+    // (M8: goats)
+    a?.instrument === b?.instrument
   );
 }
 

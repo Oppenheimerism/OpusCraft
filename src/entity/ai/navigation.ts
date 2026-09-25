@@ -78,16 +78,20 @@ export class PathNavigation {
     return this.createPath(e.x, e.y, e.z, accuracy);
   }
 
-  /** vanilla PathNavigation.createPath(Set<BlockPos>, accuracy): to the block itself, not the ground by it */
-  createPathToBlock(x: number, y: number, z: number, accuracy: number): Path | null {
-    return this.createPathRaw(x, y, z, accuracy);
+  /**
+   * vanilla PathNavigation.createPath(Set<BlockPos>, accuracy): to the block itself, not the ground by it; (M8: goats)
+   * `maxRange`: no further out than that from where it stands (vanilla createPath(pos, regionOffset, accuracy)'s
+   * follow range: a long-jumping goat's walk)
+   */
+  createPathToBlock(x: number, y: number, z: number, accuracy: number, maxRange?: number): Path | null {
+    return this.createPathRaw(x, y, z, accuracy, maxRange);
   }
 
-  protected createPathRaw(x: number, y: number, z: number, accuracy: number): Path | null {
+  protected createPathRaw(x: number, y: number, z: number, accuracy: number, maxRange?: number): Path | null {
     if (this.mob.y < MIN_Y || !this.canUpdatePath()) return null;
     if (this.path && !this.path.isDone() && this.targetPos && this.targetPos[0] === x && this.targetPos[1] === y && this.targetPos[2] === z) return this.path;
     const range = this.mob.followRange;
-    const path = findPath(this.pathEvaluator(), this.mob.level.world, this.mob, { x, y, z }, range, accuracy, Math.floor(range * 16 * this.maxVisitedMultiplier));
+    const path = findPath(this.pathEvaluator(), this.mob.level.world, this.mob, { x, y, z }, maxRange ?? range, accuracy, Math.floor(range * 16 * this.maxVisitedMultiplier));
     if (path) {
       this.targetPos = [x, y, z];
       this.reachRange = accuracy;
@@ -255,6 +259,14 @@ export class PathNavigation {
   isStableDestination(x: number, y: number, z: number): boolean {
     const st = this.mob.level.world.getState(x, y - 1, z);
     return (FLAGS[st] & F_OPAQUE) !== 0;
+  }
+
+  /** (M8: goats) vanilla WalkNodeEvaluator.getPathTypeStatic: the path type of the one block (a ramming goat's run-up) */
+  staticTypeAt(x: number, y: number, z: number): PathType {
+    this.evaluator.prepare(this.mob.level.world, this.mob);
+    const t = this.evaluator.staticType(x, y, z);
+    this.evaluator.done();
+    return t;
   }
 
   /** the mob's path type at a block (MoveControl.isWalkable) */

@@ -32,6 +32,8 @@ import { Dolphin } from '../entity/dolphin';
 import { GlowSquid } from '../entity/glowSquid';
 import { Turtle } from '../entity/turtle';
 import { Axolotl } from '../entity/axolotl';
+// (M8: goats)
+import { Goat } from '../entity/goat';
 import { waterSpawnsFor } from './oceanSpawns';
 import { despawnDistance } from '../entity/mob';
 import { Husk, Stray } from '../entity/biomeMonsters';
@@ -423,8 +425,8 @@ function settingsForLand(name: string): Omit<MobSettings, 'water' | 'ambient'> {
     case 'flower_forest':
       return { creature: [...farmAnimals(), S_('rabbit', 4, 2, 3)], monster: monsters(), creatureProbability: 0.1 };
     // vanilla OverworldBiomes.taiga and oldGrowthTaiga: rabbits, and foxes (not in the game yet: picked, and nothing
-    // comes); the grove (vanilla grove) has more rabbits and fewer foxes, the snowy slopes (vanilla snowySlopes) rabbits
-    // and goats (not in the game yet either)
+    // comes); the grove (vanilla grove) has more rabbits and fewer foxes; the snowy slopes (vanilla snowySlopes) only
+    // rabbits and goats
     case 'taiga':
     case 'snowy_taiga':
     case 'old_growth_pine_taiga':
@@ -433,7 +435,7 @@ function settingsForLand(name: string): Omit<MobSettings, 'water' | 'ambient'> {
     case 'grove':
       return { creature: [...farmAnimals(), S_('rabbit', 8, 2, 3), S_('fox', 4, 2, 4)], monster: monsters(), creatureProbability: 0.1 };
     case 'snowy_slopes':
-      return { creature: [...farmAnimals(), S_('rabbit', 4, 2, 3), S_('goat', 5, 1, 3)], monster: monsters(), creatureProbability: 0.1 };
+      return { creature: [S_('rabbit', 4, 2, 3), S_('goat', 5, 1, 3)], monster: monsters(), creatureProbability: 0.1 };
     // vanilla OverworldBiomes.jungle, sparseJungle and bambooJungle (baseJungleSpawns): parrots in the jungle and the
     // bamboo, and pandas (not in the game yet: picked, and nothing comes)
     case 'jungle':
@@ -450,10 +452,10 @@ function settingsForLand(name: string): Omit<MobSettings, 'water' | 'ambient'> {
     case 'frozen_ocean':
     case 'deep_frozen_ocean':
       return { creature: [S_('polar_bear', 1, 1, 2)], monster: monsters(), creatureProbability: 0.1 };
-    // (vanilla frozenPeaks and jaggedPeaks: goats alone, and they aren't in the game yet)
+    // (M8: goats) vanilla OverworldBiomes.frozenPeaks and jaggedPeaks: goats, in ones to threes
     case 'frozen_peaks':
     case 'jagged_peaks':
-      return { creature: [], monster: monsters(), creatureProbability: 0.1 };
+      return { creature: [S_('goat', 5, 1, 3)], monster: monsters(), creatureProbability: 0.1 };
     // vanilla BiomeDefaultFeatures.desertSpawns: rabbits; few zombies, and husks
     case 'desert':
       return { creature: [S_('rabbit', 4, 2, 3)], monster: [...monsters(19, 100, 1), S_('husk', 80, 4, 4)], creatureProbability: 0.1 };
@@ -769,6 +771,9 @@ export class NaturalSpawner {
       // (Stage 5: ocean) vanilla Axolotl.checkAxolotlSpawnRules: over clay
       case 'axolotl':
         return Axolotl.checkAxolotlSpawnRules(lvl, x, y, z);
+      // (M8: goats) vanilla Goat.checkGoatSpawnRules: on #goats_spawnable_on, in the light
+      case 'goat':
+        return Goat.checkGoatSpawnRules(lvl, x, y, z);
       case 'hoglin':
         // vanilla Hoglin.checkHoglinSpawnRules: any light, just not on a nether wart block
         return BLOCKS[STATE_BLOCK[lvl.world.getState(x, y - 1, z)]].name !== 'nether_wart_block';
@@ -886,5 +891,8 @@ Object.assign(ENTITY_NAMES, { turtle: 'Turtle' });
 // (Stage 5: ocean) the axolotl
 Object.assign(MOB_TYPES, { axolotl: (l: Level) => new Axolotl(l) });
 Object.assign(ENTITY_NAMES, { axolotl: 'Axolotl' });
+// (M8: goats)
+Object.assign(MOB_TYPES, { goat: (l: Level) => new Goat(l) });
+Object.assign(ENTITY_NAMES, { goat: 'Goat' });
 /** (Stage 5: ocean) vanilla SpawnPlacements IN_WATER: these spawn in water (the squid's and the guardian's are above) */
 const IN_WATER = new Set(['cod', 'salmon', 'pufferfish', 'tropical_fish', 'dolphin', 'glow_squid', 'axolotl']);

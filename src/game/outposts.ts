@@ -9,6 +9,7 @@
 
 import type { Level } from './level';
 import { LOOT_TABLES } from './loot';
+import { REGULAR_GOAT_HORNS, withRandomInstrument } from './goatHorn';
 import { outpostLocator, type PillagerOutposts } from '../world/gen/outposts';
 
 /** vanilla loot_table/chests/pillager_outpost ('' is its empty entry; items the game doesn't have yet roll nothing) */
@@ -23,7 +24,8 @@ LOOT_TABLES['chests/pillager_outpost'] = [
       { item: 'tripwire_hook', weight: 3 }, { item: 'iron_ingot', weight: 3, count: [1, 3] }, { item: 'book', weight: 1, enchant: true },
     ],
   },
-  { rolls: [0, 1], entries: [{ item: 'goat_horn', weight: 1 }] },
+  // (M8: goats) vanilla set_instrument #regular_goat_horns
+  { rolls: [0, 1], entries: [{ item: 'goat_horn', weight: 1, apply: (s, r) => withRandomInstrument(s, REGULAR_GOAT_HORNS, r) }] },
   { rolls: 1, entries: [{ item: '', weight: 3 }, { item: 'sentry_armor_trim_smithing_template', weight: 1, count: [2, 2] }] },
 ];
 

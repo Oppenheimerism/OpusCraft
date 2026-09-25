@@ -172,6 +172,17 @@ export class Brain<E extends Owner, A extends string> {
     this.setActive(!req || req(e) ? a : this.defaultActivity);
   }
 
+  /** (M8: goats) vanilla setActiveActivityToFirstValid: the first of these whose memories are there (else as it was) */
+  setActiveActivityToFirstValid(list: A[], e: E): void {
+    for (const a of list) {
+      const req = this.requirements.get(a);
+      if (!req || req(e)) {
+        this.setActive(a);
+        return;
+      }
+    }
+  }
+
   private setActive(a: A): void {
     if (this.active.has(a)) return;
     this.active = new Set(this.core);
