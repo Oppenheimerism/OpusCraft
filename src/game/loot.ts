@@ -14,8 +14,8 @@ interface LootEntry {
   count?: [number, number];
   /** enchant_randomly from #on_random_loot (books become enchanted books) */
   enchant?: boolean;
-  /** enchant_with_levels from #on_random_loot: enchanted as a table would at this level */
-  levels?: number;
+  /** enchant_with_levels from #on_random_loot: enchanted as a table would at this level (or one rolled from a range) */
+  levels?: number | [number, number];
 }
 
 interface LootPool {
@@ -25,7 +25,7 @@ interface LootPool {
 
 const e = (item: string, weight: number, count?: [number, number], enchant?: boolean): LootEntry => ({ item, weight, count, enchant });
 /** an entry with enchant_with_levels */
-const lv = (item: string, weight: number, levels: number): LootEntry => ({ item, weight, levels });
+const lv = (item: string, weight: number, levels: number | [number, number]): LootEntry => ({ item, weight, levels });
 
 export const LOOT_TABLES: Record<string, LootPool[]> = {
   'chests/simple_dungeon': [
@@ -108,6 +108,18 @@ export const LOOT_TABLES: Record<string, LootPool[]> = {
     { rolls: 1, entries: [e('', 2), e('wild_armor_trim_smithing_template', 1, [2, 2])] },
   ],
   'chests/jungle_temple_dispenser': [{ rolls: [1, 2], entries: [e('arrow', 30, [2, 7])] }],
+  // (Stage 4: the outer End) end cities: their houses', fat towers' and ships' chests
+  'chests/end_city_treasure': [
+    {
+      rolls: [2, 6],
+      entries: [
+        e('diamond', 5, [2, 7]), e('iron_ingot', 10, [4, 8]), e('gold_ingot', 15, [2, 7]), e('emerald', 2, [2, 6]), e('beetroot_seeds', 5, [1, 10]),
+        e('saddle', 3), e('iron_horse_armor', 1), e('golden_horse_armor', 1), e('diamond_horse_armor', 1),
+        ...['diamond', 'iron'].flatMap((m) => ['sword', 'boots', 'chestplate', 'leggings', 'helmet', 'pickaxe', 'shovel'].map((t) => lv(`${m}_${t}`, 3, [20, 39]))),
+      ],
+    },
+    { rolls: 1, entries: [e('', 14), e('spire_armor_trim_smithing_template', 1)] },
+  ],
   // archaeology: what a suspicious block gives when brushed (one roll, seeded by its position: game/archaeology.ts)
   'archaeology/desert_pyramid': [
     {
@@ -280,9 +292,10 @@ function enchantRandomly(stack: ItemStack, r: Rand): ItemStack {
 }
 
 /** vanilla EnchantWithLevelsFunction (EnchantmentHelper.enchantItem): a book becomes an enchanted book */
-function enchantWithLevels(stack: ItemStack, levels: number, r: Rand): ItemStack {
+function enchantWithLevels(stack: ItemStack, levels: number | [number, number], r: Rand): ItemStack {
+  const n = typeof levels === 'number' ? levels : between(r, levels[0], levels[1]);
   const m: Record<string, number> = {};
-  for (const x of selectEnchantment(r, stack, levels, RANDOM_LOOT_ENCHANTMENTS)) m[x.def.id] = x.level;
+  for (const x of selectEnchantment(r, stack, n, RANDOM_LOOT_ENCHANTMENTS)) m[x.def.id] = x.level;
   if (stack.item.id === 'book') return new ItemStack(ITEMS.get('enchanted_book')!, stack.count, 0, { stored: m });
   return new ItemStack(stack.item, stack.count, stack.damage, { ...stack.tag, enchantments: { ...stack.tag?.enchantments, ...m } });
 }
