@@ -152,6 +152,11 @@ export class Dolphin extends WaterAnimal {
     return 0.3;
   }
 
+  /** vanilla Dolphin.canBeLeashed: unlike the other water animals, a dolphin takes a lead */
+  override canBeLeashed(): boolean {
+    return true;
+  }
+
   protected override createNavigation(): PathNavigation {
     return new WaterBoundPathNavigation(this);
   }

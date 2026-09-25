@@ -23,8 +23,9 @@ import { ThrownExperienceBottle } from '../../entity/thrownExperienceBottle';
 import { ThrownTrident } from '../../entity/thrownTrident';
 import { SmallFireball } from '../../entity/fireball';
 import { PrimedTnt } from '../../entity/tnt';
-import { Pig, Sheep } from '../../entity/animals';
+import { Pig, Sheep, DYE_COLORS } from '../../entity/animals';
 import { Strider } from '../../entity/strider';
+import { AbstractHorse, AbstractChestedHorse } from '../../entity/horse';
 import { createBoat, boatItemInfo } from '../../entity/boat';
 import { createMinecart } from '../../entity/minecart';
 import { createMob } from '../spawner';
@@ -518,11 +519,31 @@ const carvedPumpkin = optional((src, stack) => {
   return left(stack);
 });
 
-/** vanilla: a saddle on a pig or strider in front that can take one, else thrown out */
+/** vanilla: a saddle on a pig, strider or horse in front that can take one, else thrown out */
 const saddle = behavior((src, stack) => {
-  const e = src.level.getEntities(cell(front(src)), (o) => (o instanceof Pig || o instanceof Strider) && o.isAlive && !o.saddled && o.isSaddleable())[0] as Pig | Strider | undefined;
+  const e = src.level.getEntities(cell(front(src)), (o) => (o instanceof Pig || o instanceof Strider || o instanceof AbstractHorse) && o.isAlive && !o.saddled && o.isSaddleable())[0] as Pig | Strider | AbstractHorse | undefined;
   if (!e) return dropOne(src, stack);
-  e.equipSaddle(true);
+  if (e instanceof AbstractHorse) e.equipSaddle(stack.split(1), true);
+  else {
+    e.equipSaddle(true);
+    stack.count--;
+  }
+  return left(stack);
+});
+
+/** vanilla AnimalArmorItem's (ArmorItem.dispenseArmor): onto a tame horse (a carpet: llama) in front wearing none, else thrown out */
+const horseArmor = behavior((src, stack) => {
+  const h = src.level.getEntities(cell(front(src)), (o) => o instanceof AbstractHorse && o.isAlive && o.tamed && o.isArmor(stack) && !o.bodyArmor())[0] as AbstractHorse | undefined;
+  if (!h) return dropOne(src, stack);
+  h.setArmor(stack.split(1));
+  return left(stack);
+});
+
+/** vanilla Blocks.CHEST's: strapped onto a tame donkey or mule in front without one, else thrown out */
+const chestOnDonkey = behavior((src, stack) => {
+  const h = src.level.getEntities(cell(front(src)), (o) => o instanceof AbstractChestedHorse && o.isAlive && o.tamed && !o.hasChest)[0] as AbstractChestedHorse | undefined;
+  if (!h) return dropOne(src, stack);
+  h.hasChest = true;
   stack.count--;
   return left(stack);
 });
@@ -538,7 +559,11 @@ const BEHAVIORS: Record<string, DispenseBehavior> = {
   glass_bottle: glassBottle, potion: waterBottle,
   flint_and_steel: flintAndSteel, bone_meal: boneMeal, shears,
   carved_pumpkin: carvedPumpkin, saddle,
+  // (Stage 6: tameable animals)
+  leather_horse_armor: horseArmor, iron_horse_armor: horseArmor, golden_horse_armor: horseArmor, diamond_horse_armor: horseArmor, chest: chestOnDonkey,
 };
+// (vanilla: the wool carpets go on a tame llama as a horse's armour does on a horse)
+for (const c of DYE_COLORS) BEHAVIORS[`${c}_carpet`] = horseArmor;
 
 /** vanilla getDispenseMethod: the item's own behaviour, else thrown out */
 export function dispenseBehaviorFor(stack: ItemStack): DispenseBehavior {

@@ -60,6 +60,8 @@ import { Raids } from './raids';
 import './ocean';
 // (temples)
 import './archaeology';
+// (desert wells: their loot, the suspicious stew)
+import './desertWells';
 
 export interface SoundSink {
   play(name: string, x: number, y: number, z: number, volume?: number, pitch?: number): void;
@@ -414,7 +416,7 @@ export class Level {
   /** animals bred (the child, and who fed them) */
   onBred: ((child: Entity, cause: Entity | null) => void) | null = null;
   /** a player tamed an animal (vanilla CriteriaTriggers.TAME_ANIMAL) */
-  onTamed: ((animal: TamableAnimal, by: Entity) => void) | null = null;
+  onTamed: ((animal: Entity & { variantId(): string | undefined }, by: Entity) => void) | null = null;
   /** a tame animal died; its owner is told how (vanilla TamableAnimal.die) */
   onTamedDeath: ((animal: TamableAnimal, source: string) => void) | null = null;
   /** an arrow the player shot hurt something (vanilla "Take Aim") */

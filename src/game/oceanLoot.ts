@@ -2,7 +2,7 @@
 // buried_treasure.json and archaeology/ocean_ruin_*.json): the wrecks' supplies, treasure and maps, the ruins' chests
 // (one in eleven of their last rolls a buried treasure map, see treasureMaps.ts), the buried treasure with its heart
 // of the sea, and what the ruins' suspicious sand and gravel hold. ('' is an empty entry; items the game doesn't have
-// yet, like bamboo, suspicious stew, sniffer eggs and the coast armour trim, roll nothing.)
+// yet, like bamboo, sniffer eggs and the coast armour trim, roll nothing.)
 
 import { LOOT_TABLES } from './loot';
 import { buriedTreasureMap } from './treasureMaps';
@@ -22,12 +22,19 @@ LOOT_TABLES['chests/shipwreck_map'] = [
   coastTrim(5),
 ];
 
+/** vanilla set_stew_effect in shipwreck_supply: a suspicious stew of one of these, for so many seconds */
+const SUPPLY_STEW: LootEntry = {
+  item: 'suspicious_stew',
+  weight: 10,
+  stewEffects: [['night_vision', 3, 7], ['jump_boost', 3, 7], ['weakness', 6, 10], ['blindness', 5, 8], ['poison', 10, 20], ['saturation', 7, 7]],
+};
+
 LOOT_TABLES['chests/shipwreck_supply'] = [
   {
     rolls: [3, 10],
     entries: [
       e('paper', 8, [1, 12]), e('potato', 7, [2, 6]), e('moss_block', 7, [1, 4]), e('poisonous_potato', 7, [2, 6]), e('carrot', 7, [4, 8]),
-      e('wheat', 7, [8, 21]), e('suspicious_stew', 10), e('coal', 6, [2, 8]), e('rotten_flesh', 5, [5, 24]), e('pumpkin', 2, [1, 3]),
+      e('wheat', 7, [8, 21]), SUPPLY_STEW, e('coal', 6, [2, 8]), e('rotten_flesh', 5, [5, 24]), e('pumpkin', 2, [1, 3]),
       e('bamboo', 2, [1, 3]), e('gunpowder', 3, [1, 5]), e('tnt', 1, [1, 2]), e('leather_helmet', 3, undefined, true),
       e('leather_chestplate', 3, undefined, true), e('leather_leggings', 3, undefined, true), e('leather_boots', 3, undefined, true),
     ],

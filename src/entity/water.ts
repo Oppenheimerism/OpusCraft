@@ -21,6 +21,11 @@ export abstract class WaterAnimal extends Mob {
     this.setPathfindingMalus(PathType.WATER, 0);
   }
 
+  /** vanilla WaterAnimal.canBeLeashed: squid and fish won't go on a lead */
+  override canBeLeashed(): boolean {
+    return false;
+  }
+
   override canBreatheUnderwater(): boolean {
     return true;
   }

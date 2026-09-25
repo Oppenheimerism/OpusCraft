@@ -18,8 +18,8 @@ function R(name: string): Rand {
 const tone = (k: number) => POT_CLAY[Math.max(0, Math.min(POT_CLAY.length - 1, k))];
 
 /**
- * the desert pyramid's four sherds' motifs (10x10, 'D' the line, 'd' a dark fill, 'l' a light one), each the pottery
- * pattern of the sherd of that name: a bow drawn on its arrow, a pickaxe, a cut gem, a skull
+ * the sherds' motifs (10x10, 'D' the line, 'd' a dark fill, 'l' a light one), each the pottery pattern of the sherd
+ * of that name: the desert pyramid's bow drawn on its arrow, pickaxe, cut gem and skull, and the desert well's two
  */
 export const MOTIFS: Record<string, string[]> = {
   archer: [
@@ -68,6 +68,31 @@ export const MOTIFS: Record<string, string[]> = {
     '.DllllllD.',
     '..DlDDlD..',
     '...DDDD...',
+    '..........',
+  ],
+  // (the desert well's two: a figure with its arms raised, a stoppered flask with bubbles in it)
+  arms_up: [
+    'D.......D.',
+    'D..DDD..D.',
+    '.D.DlD.D..',
+    '..DDDDD...',
+    '....D.....',
+    '...DDD....',
+    '....D.....',
+    '...D.D....',
+    '..D...D...',
+    '..........',
+  ],
+  brewer: [
+    '...DDDD...',
+    '....DD....',
+    '....DD....',
+    '...DllD...',
+    '..DllllD..',
+    '.DddddddD.',
+    '.DddlddlD.',
+    '.DdddlddD.',
+    '..DDDDDD..',
     '..........',
   ],
   // (Stage 5: ocean) the ocean ruins' sherds: from the warm ones a fish hook, a tree, a sniffer's snout; from the cold

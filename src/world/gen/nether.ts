@@ -14,6 +14,8 @@ import { Rand, hash2, hash3, hashFloat, hash32 } from '../../core/rng';
 import { clampedMap } from '../../core/math';
 import { computeChunkLight } from '../lightlocal';
 import { NetherFortresses } from './fortress';
+import { RuinedPortals, netherPortalTerrain } from './ruinedPortal';
+import { worldSeed64 } from './jigsaw';
 import type { GenOutput } from './generator';
 import { placeOre, sampleHeight, type OreSpec } from './features';
 import {
@@ -71,6 +73,8 @@ export class NetherGenerator {
   private readonly stateSelector: NormalNoise;
   /** the world's fortresses (vanilla nether_complexes structure set) */
   readonly fortresses: NetherFortresses;
+  /** the world's ruined portals (vanilla ruined_portals structure set) */
+  readonly ruinedPortals: RuinedPortals;
 
   constructor(seed: string | number | bigint) {
     this.seeds = SeedSource.fromWorldSeed(typeof seed === 'string' ? seed : BigInt(seed)).sub('minecraft:the_nether');
@@ -89,6 +93,7 @@ export class NetherGenerator {
     this.netherWart = new NormalNoise(s.sub('minecraft:nether_wart'), { firstOctave: -3, amplitudes: [1, 0, 0, 0.9] });
     this.stateSelector = new NormalNoise(s.sub('minecraft:nether_state_selector'), { firstOctave: -4, amplitudes: [1] });
     this.fortresses = new NetherFortresses(this.seedHash, (x, z) => BIOMES[this.biomeAt(x, z)].name);
+    this.ruinedPortals = new RuinedPortals(worldSeed64(seed), netherPortalTerrain(this));
   }
 
   // -------------------------------------------------------------------------
@@ -322,7 +327,9 @@ export class NetherGenerator {
     };
     // LOCAL_MODIFICATIONS
     step([SV], (r) => this.count(ctx, r, 10, 0, TOP, [SV], feature(F_PILLAR)));
-    // SURFACE_STRUCTURES (deltas are let into the floor block under the layer's empty block)
+    // SURFACE_STRUCTURES: the step's structures (ruined portals) go in before its features
+    this.ruinedPortals.place(ctx);
+    // (deltas are let into the floor block under the layer's empty block)
     step([BD], (r) => this.everyLayer(ctx, r, 40, [BD], (r2, x, y, z) => feature(F_DELTA)(r2, x, y - 1, z)));
     step([BD], (r) => this.everyLayer(ctx, r, 4, [BD], feature(F_SMALL_COLUMNS)));
     step([BD], (r) => this.everyLayer(ctx, r, 2, [BD], feature(F_LARGE_COLUMNS)));

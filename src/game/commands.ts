@@ -34,6 +34,8 @@ import { locateMonument } from './monuments';
 import { locateOceanStructure } from './treasureMaps';
 // (temples)
 import { templeKind, locateTemple } from './temples';
+import { locateMansion } from './mansions';
+import { isRuinedPortal, locateRuinedPortal } from './ruinedPortals';
 
 class CommandError extends Error {
   constructor(msg: string, readonly pos = -1) {
@@ -403,8 +405,31 @@ function mobData(m: Mob, nbt: string): void {
   const flag = (k: string) => new RegExp(`\\b${k}\\s*:\\s*(1b|true)`).test(nbt);
   if (/\bCanPickUpLoot\s*:/.test(nbt)) m.canPickUpLoot = flag('CanPickUpLoot');
   if (flag('PersistenceRequired')) m.persistenceRequired = true;
-  // (Stage 4: illagers) vanilla Vindicator's Johnny flag, or the name Johnny (its setCustomName; names aren't kept yet)
-  if (flag('Johnny') || /\bCustomName\s*:[^,}]*\bJohnny\b/.test(nbt)) (m as { setCustomName?: (n: string) => void }).setCustomName?.('Johnny');
+  // vanilla Entity.load: CustomName and CustomNameVisible
+  const name = customNameIn(nbt);
+  if (name !== null) m.setCustomName(name);
+  if (flag('CustomNameVisible')) m.customNameVisible = true;
+  // (Stage 4: illagers) vanilla Vindicator's Johnny flag
+  if (flag('Johnny') && 'johnny' in m) (m as { johnny: boolean }).johnny = true;
+}
+
+/**
+ * vanilla CustomName: a text component as JSON in a quoted string ('"Bob"' or '{"text":"Bob"}'; a bare name is taken
+ * as it is); null when there's none
+ */
+function customNameIn(nbt: string): string | null {
+  const m = /\bCustomName\s*:\s*('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*")/.exec(nbt);
+  if (!m) return null;
+  const q = m[1][0];
+  const raw = m[1].slice(1, -1).replace(new RegExp(`\\\\([\\\\${q}])`, 'g'), '$1');
+  try {
+    const j: unknown = JSON.parse(raw);
+    if (typeof j === 'string') return j;
+    if (j && typeof j === 'object' && typeof (j as { text?: unknown }).text === 'string') return (j as { text: string }).text;
+  } catch {
+    // (not JSON: the name as written)
+  }
+  return raw;
 }
 
 const coordSuggest = (i: number) => ['~', '~ ~', '~ ~ ~'].slice(0, 3 - (i % 3));
@@ -713,12 +738,19 @@ export const COMMANDS: Record<string, CommandDef> = {
               ? c.game.level.villages().nearest(village, x, z)
               : name === 'minecraft:pillager_outpost' && dim.id === 'overworld'
                 ? locateOutpost(c.game.level, x, z)
-                : // (Stage 5: ocean) the monuments; the shipwrecks, ocean ruins and buried treasure (game/treasureMaps)
+                : // (Stage 5: ocean) the monuments
                   name === 'minecraft:monument' && dim.id === 'overworld'
                   ? locateMonument(c.game.level, x, z)
-                  : dim.id === 'overworld'
-                    ? locateOceanStructure(c.game.level, name, x, z)
-                    : null;
+                  : // (mansions)
+                    name === 'minecraft:mansion' && dim.id === 'overworld'
+                    ? locateMansion(c.game.level.seed, x, z)
+                    : // (ruined portals: the six kinds in the Overworld, the nether one in the Nether)
+                      isRuinedPortal(name)
+                      ? locateRuinedPortal(c.game.level.seed, dim.id, name, x, z)
+                      : // (Stage 5: ocean) the shipwrecks, ocean ruins and buried treasure (game/treasureMaps)
+                        dim.id === 'overworld'
+                        ? locateOceanStructure(c.game.level, name, x, z)
+                        : null;
       if (!found) throw new CommandError(`Could not find a structure of type "${name}" nearby`);
       c.ok(`The nearest ${name} is at §a[${found[0]}, ~, ${found[1]}]§r (${Math.floor(Math.hypot(found[0] - x, found[1] - z))} blocks away)`);
     },

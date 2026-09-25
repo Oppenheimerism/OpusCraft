@@ -259,6 +259,8 @@ const FOOD: [string, number, number, Partial<FoodInfo>?][] = [
   ['sweet_berries', 2, 0.1], ['rotten_flesh', 4, 0.1], ['spider_eye', 2, 0.8], ['mushroom_stew', 6, 0.6, { remainder: 'bowl' }],
   ['beetroot', 1, 0.6], ['beetroot_soup', 6, 0.6, { remainder: 'bowl' }], ['golden_carrot', 6, 1.2], ['poisonous_potato', 2, 0.3],
   ['pumpkin_pie', 8, 0.3], ['glow_berries', 2, 0.1], ['pufferfish', 1, 0.1],
+  // (vanilla Foods.SUSPICIOUS_STEW; what else it gives is the stack's, game/desertWells.ts)
+  ['suspicious_stew', 6, 0.6, { remainder: 'bowl', alwaysEat: true }],
 ];
 for (const [id, n, s, extra] of FOOD) {
   reg({ id, texture: id, creativeTab: 'food', maxStack: extra?.remainder ? 1 : 64, food: { nutrition: n, saturation: s, ...(extra ?? {}) } });
@@ -298,13 +300,15 @@ for (const [id, stack, fuel] of MISC) {
       reg({ id: `${w}_chest_boat`, name: `${prettyName(w)} Boat with Chest`, texture: `${w}_chest_boat`, maxStack: 1, creativeTab: 'tools' });
     }
 }
-// vanilla pottery sherds: what the desert pyramid's suspicious sand holds (archaeology/desert_pyramid), for the sides
-// of a decorated pot
-for (const s of ['archer', 'miner', 'prize', 'skull']) reg({ id: `${s}_pottery_sherd`, texture: `${s}_pottery_sherd` });
+// vanilla pottery sherds: what the desert pyramid's suspicious sand holds (archaeology/desert_pyramid), and the desert
+// well's (archaeology/desert_well), for the sides of a decorated pot
+for (const s of ['archer', 'miner', 'prize', 'skull', 'arms_up', 'brewer']) reg({ id: `${s}_pottery_sherd`, texture: `${s}_pottery_sherd` });
 // (the decorated pot is drawn by its block entity's renderer, render/archaeologyRenderers.ts: its sprite, the pot at the GUI's
 // angle, stands in only where nothing but the item's id is drawn)
 ITEMS.get('decorated_pot')!.texture = 'decorated_pot';
 for (const id of ['suspicious_sand', 'suspicious_gravel', 'decorated_pot']) ITEMS.get(id)!.creativeTab = 'functional';
+// (fossils) vanilla lists the bone block with the natural blocks
+ITEMS.get('bone_block')!.creativeTab = 'natural';
 Object.assign(ITEMS.get('experience_bottle')!, { rarity: 'uncommon', glint: true });
 // vanilla Items.NAUTILUS_SHELL: uncommon
 ITEMS.get('nautilus_shell')!.rarity = 'uncommon';
@@ -333,7 +337,7 @@ reg({
 for (const [id, rarity] of [['flower', 'common'], ['creeper', 'uncommon'], ['skull', 'uncommon'], ['mojang', 'epic'], ['globe', 'common'], ['piglin', 'uncommon'], ['flow', 'rare'], ['guster', 'rare']] as [string, Rarity][]) {
   reg({ id: `${id}_banner_pattern`, name: 'Banner Pattern', texture: 'banner_pattern', maxStack: 1, rarity });
 }
-for (const m of ['iron', 'golden', 'diamond']) reg({ id: `${m}_horse_armor`, texture: `${m}_horse_armor`, maxStack: 1, creativeTab: 'combat' });
+for (const m of ['leather', 'iron', 'golden', 'diamond']) reg({ id: `${m}_horse_armor`, texture: `${m}_horse_armor`, maxStack: 1, creativeTab: 'combat' });
 // vanilla 1.21 jukebox songs: disc name + "C418 - title" description
 for (const [id, desc, rarity] of [['music_disc_13', 'C418 - 13', 'uncommon'], ['music_disc_cat', 'C418 - cat', 'uncommon'], ['music_disc_otherside', 'Lena Raine - otherside', 'rare']] as [string, string, Rarity][]) {
   reg({ id, name: 'Music Disc', texture: id, maxStack: 1, creativeTab: 'tools', rarity, lore: [desc] });
@@ -353,6 +357,8 @@ for (const m of ['bat', 'blaze', 'cat', 'cave_spider', 'chicken', 'cow', 'creepe
 // (Stage 4: illagers) the raiders' eggs and the ominous bottle (vanilla OminousBottleItem: uncommon; drinking it for
 // bad omen comes with raids); the creative tab sorts the eggs by name
 for (const m of ['evoker', 'pillager', 'ravager', 'vex', 'vindicator']) reg({ id: `${m}_spawn_egg`, texture: `${m}_spawn_egg`, creativeTab: 'spawn_eggs' });
+// (Stage 6: tameable animals)
+for (const m of ['donkey', 'horse', 'llama', 'mule', 'trader_llama']) reg({ id: `${m}_spawn_egg`, texture: `${m}_spawn_egg`, creativeTab: 'spawn_eggs' });
 reg({ id: 'ominous_bottle', creativeTab: 'food', texture: 'ominous_bottle', rarity: 'uncommon' });
 // (Stage 5: ocean) vanilla Items.PRISMARINE_SHARD / PRISMARINE_CRYSTALS (guardians', sea lanterns'); the wet sponge sits by the sponge
 for (const id of ['prismarine_shard', 'prismarine_crystals']) reg({ id, texture: id });
@@ -379,14 +385,15 @@ for (const m of ['elder_guardian', 'guardian']) reg({ id: `${m}_spawn_egg`, text
   after('glow_ink_sac', 'ink_sac');
   for (const m of ['cod', 'dolphin', 'glow_squid', 'pufferfish', 'salmon', 'tropical_fish']) reg({ id: `${m}_spawn_egg`, texture: `${m}_spawn_egg`, creativeTab: 'spawn_eggs' });
   // (Stage 5: ocean, M5) vanilla Items.HEART_OF_THE_SEA (uncommon, buried treasure's), listed after the nautilus shell;
-  // the ocean ruins' pottery sherds, among the desert pyramid's in name order; the conduit (rare)
+  // the ocean ruins' pottery sherds, and then all the sherds in name order where the first of them was (as vanilla's
+  // creative tab lists them); the conduit (rare)
   reg({ id: 'heart_of_the_sea', texture: 'heart_of_the_sea', rarity: 'uncommon' });
   after('heart_of_the_sea', 'nautilus_shell');
-  for (const [s, prev] of [['angler', null], ['blade', 'archer'], ['explorer', 'blade'], ['mourner', 'miner'], ['plenty', 'mourner'], ['shelter', 'prize'], ['snort', 'skull']] as [string, string | null][]) {
-    reg({ id: `${s}_pottery_sherd`, texture: `${s}_pottery_sherd` });
-    if (prev) after(`${s}_pottery_sherd`, `${prev}_pottery_sherd`);
-    else after(`${s}_pottery_sherd`, ITEM_LIST[ITEM_LIST.findIndex((x) => x.id === 'archer_pottery_sherd') - 1].id);
-  }
+  for (const s of ['angler', 'blade', 'explorer', 'mourner', 'plenty', 'shelter', 'snort']) reg({ id: `${s}_pottery_sherd`, texture: `${s}_pottery_sherd` });
+  const sherds = ITEM_LIST.filter((x) => x.id.endsWith('_pottery_sherd')).sort((a, b) => (a.id < b.id ? -1 : 1));
+  const first = ITEM_LIST.findIndex((x) => x.id.endsWith('_pottery_sherd'));
+  for (const it of sherds) ITEM_LIST.splice(ITEM_LIST.indexOf(it), 1);
+  ITEM_LIST.splice(first, 0, ...sherds);
   if (ITEMS.has('conduit')) ITEMS.get('conduit')!.rarity = 'rare';
 }
 // sugar cane item places the block
@@ -516,6 +523,8 @@ export interface ItemTag {
   book?: WrittenBook;
   /** minecraft:pot_decorations: a decorated pot's sides, back, left, right and front ('brick' for a plain one) */
   potDecorations?: string[];
+  /** minecraft:suspicious_stew_effects: what a suspicious stew gives when eaten (duration in ticks) */
+  stewEffects?: { id: string; duration: number }[];
   /** (Stage 5: ocean) minecraft:bucket_entity_data: what a bucket of fish keeps of it (Health, BucketVariantTag) */
   bucketEntity?: Record<string, number | boolean>;
   /** (Stage 5: ocean) minecraft:map_decorations: the markers an explorer map carries, by id (its target, "+") */
@@ -589,6 +598,7 @@ export function cloneTag(t: ItemTag | null): ItemTag | null {
   if (t.pages) o.pages = [...t.pages];
   if (t.book) o.book = { ...t.book, pages: [...t.book.pages] };
   if (t.potDecorations) o.potDecorations = [...t.potDecorations];
+  if (t.stewEffects) o.stewEffects = t.stewEffects.map((e) => ({ ...e }));
   // (Stage 5: ocean)
   if (t.bucketEntity) o.bucketEntity = { ...t.bucketEntity };
   if (t.mapDecorations) o.mapDecorations = Object.fromEntries(Object.entries(t.mapDecorations).map(([k, v]) => [k, { ...v }]));
@@ -607,7 +617,7 @@ export function sameTag(a: ItemTag | null | undefined, b: ItemTag | null | undef
     a?.itemName === b?.itemName && a?.rarity === b?.rarity && !a?.hideAdditional === !b?.hideAdditional && sameData(a?.patterns?.length ? a.patterns : null, b?.patterns?.length ? b.patterns : null) && a?.baseColor === b?.baseColor &&
     a?.ominousAmplifier === b?.ominousAmplifier &&
     a?.mapId === b?.mapId && a?.mapPostProcessing === b?.mapPostProcessing && sameData(a?.trim, b?.trim) && sameData(a?.pages, b?.pages) && sameData(a?.book, b?.book) &&
-    sameData(a?.potDecorations, b?.potDecorations) &&
+    sameData(a?.potDecorations, b?.potDecorations) && sameData(a?.stewEffects, b?.stewEffects) &&
     // (Stage 5: ocean)
     sameData(a?.bucketEntity, b?.bucketEntity) && sameData(a?.mapDecorations, b?.mapDecorations) && a?.mapColor === b?.mapColor
   );

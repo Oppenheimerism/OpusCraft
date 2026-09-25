@@ -152,6 +152,8 @@ for (const [m, x] of ARMOR_MATS) {
   shaped(`${m}_leggings`, 1, ['XXX', 'X X', 'X X'], { X: x });
   shaped(`${m}_boots`, 1, ['X X', 'X X'], { X: x });
 }
+// (vanilla leather_horse_armor)
+shaped('leather_horse_armor', 1, ['X X', 'XXX', 'X X'], { X: 'leather' });
 shaped('bow', 1, [' #X', '# X', ' #X'], { '#': 'stick', X: 'string' });
 shaped('shield', 1, ['WoW', 'WWW', ' W '], { W: '#planks', o: 'iron_ingot' });
 shaped('crossbow', 1, ['#&#', '~$~', ' # '], { '#': 'stick', '&': 'iron_ingot', '~': 'string', $: 'tripwire_hook' });
@@ -229,6 +231,7 @@ const STORAGE: [string, string][] = [
   ['raw_gold_block', 'raw_gold'],
   ['raw_copper_block', 'raw_copper'],
   ['hay_block', 'wheat'],
+  ['bone_block', 'bone_meal'],
 ];
 for (const [block, item] of STORAGE) {
   shaped(block, 1, ['###', '###', '###'], { '#': item });

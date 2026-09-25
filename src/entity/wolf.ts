@@ -8,7 +8,8 @@ import type { Level } from '../game/level';
 import type { LootEntry, SpawnGroup, SpawnReason } from './mob';
 import { Mob } from './mob';
 import { Goal, Flag } from './ai/goal';
-import { FloatGoal, LeapAtTargetGoal, MeleeAttackGoal, WaterAvoidingRandomStrollGoal, LookAtPlayerGoal, RandomLookAroundGoal, HurtByTargetGoal, NearestAttackableMobGoal } from './ai/goals';
+import { AvoidEntityGoal, FloatGoal, LeapAtTargetGoal, MeleeAttackGoal, WaterAvoidingRandomStrollGoal, LookAtPlayerGoal, RandomLookAroundGoal, HurtByTargetGoal, NearestAttackableMobGoal } from './ai/goals';
+import { Llama } from './llama';
 import { LivingEntity } from './living';
 import type { Player } from './player';
 import type { Entity } from './entity';
@@ -95,7 +96,7 @@ export class Wolf extends TamableAnimal {
     this.goalSelector.addGoal(1, new FloatGoal(this));
     this.goalSelector.addGoal(1, new TamableAnimalPanicGoal(this, 1.5));
     this.goalSelector.addGoal(2, new SitWhenOrderedToGoal(this));
-    // (vanilla WolfAvoidEntityGoal: a wild wolf shies away from a strong llama — no llamas yet)
+    this.goalSelector.addGoal(3, new WolfAvoidLlamaGoal(this));
     this.goalSelector.addGoal(4, new LeapAtTargetGoal(this, 0.4));
     this.goalSelector.addGoal(5, new MeleeAttackGoal(this, 1.0, true));
     this.goalSelector.addGoal(6, new FollowOwnerGoal(this, 1.0, 10, 2));
@@ -468,5 +469,26 @@ class TamableHurtByTargetGoal extends HurtByTargetGoal {
   protected override alertOther(o: Mob, target: LivingEntity): void {
     if (!(o instanceof TamableAnimal) || o.ownerUUID !== this.tamable.ownerUUID || o.isAlliedTo(target)) return;
     super.alertOther(o, target);
+  }
+}
+
+/**
+ * vanilla WolfAvoidEntityGoal<Llama>(24, 1.5, 1.5): a wild wolf backs off from a llama within 24, the more surely the
+ * stronger the llama, and forgets what it was hunting
+ */
+class WolfAvoidLlamaGoal extends AvoidEntityGoal {
+  constructor(readonly wolf: Wolf) {
+    super(wolf, (e) => e instanceof Llama, 24, 1.5, 1.5);
+  }
+  override canUse(): boolean {
+    return super.canUse() && this.toAvoid instanceof Llama ? !this.wolf.isTame() && this.toAvoid.strength >= this.wolf.random.nextInt(5) : false;
+  }
+  override start(): void {
+    this.wolf.setTarget(null);
+    super.start();
+  }
+  override tick(): void {
+    this.wolf.setTarget(null);
+    super.tick();
   }
 }

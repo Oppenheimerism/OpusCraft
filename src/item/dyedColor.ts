@@ -6,9 +6,9 @@ import { DYE } from '../textures/dyes';
 /** vanilla DyedItemColor.LEATHER_COLOR (-6265536): undyed leather */
 export const DEFAULT_LEATHER_COLOR = 0xa06540;
 
-/** vanilla #dyeable (leather armour; leather horse armour and wolf armour aren't in the game) */
+/** vanilla #dyeable (leather armour and leather horse armour; wolf armour isn't in the game) */
 export function isDyeable(it: Item): boolean {
-  return it.id === 'leather_helmet' || it.id === 'leather_chestplate' || it.id === 'leather_leggings' || it.id === 'leather_boots';
+  return it.id === 'leather_helmet' || it.id === 'leather_chestplate' || it.id === 'leather_leggings' || it.id === 'leather_boots' || it.id === 'leather_horse_armor';
 }
 
 /** vanilla DyeItem: one of the sixteen dyes, by its colour name */

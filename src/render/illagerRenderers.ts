@@ -42,6 +42,8 @@ export interface LivingKit {
   setupLiving(e: LivingEntity, dx: number, dy: number, dz: number, p: number, flip?: number, scale?: (pose: PoseStack) => void): LivingAnim;
   overlay(b: EntityBatch, e: LivingEntity, white?: number): void;
   drawBody(b: EntityBatch, e: LivingEntity, def: MobModelDef, tex: WebGLTexture, baby: boolean, extra?: Partial<DrawState>): void;
+  /** vanilla AgeableListModel.renderToBuffer, tinted: a layer's pass over the model (after `state` has begun one) */
+  drawModel(b: EntityBatch, def: MobModelDef, baby: boolean, r?: number, g?: number, bl?: number, a?: number): void;
   state(tex: WebGLTexture, extra?: Partial<DrawState>): DrawState;
   attackAnim(e: LivingEntity, p: number): number;
 }

@@ -2,6 +2,7 @@
 
 import type { GuiGraphics } from './guiGraphics';
 import { LivingEntity } from '../entity/living';
+import type { RideableJumping } from '../entity/player';
 import type { Game } from '../game/game';
 import { debugLines } from '../render/overlay';
 import { FLUID_WATER } from '../world/fluids';
@@ -110,10 +111,13 @@ export class Hud {
     }
     if (off) slot(off, offLeft ? cx - 91 - 26 : cx + 91 + 10, H - 16 - 3);
     const survival = p.gameMode === 'survival' || p.gameMode === 'adventure';
-    if (survival) {
-      this.renderXp(g, game, cx);
-      this.renderHealthFood(g, game, cx, H);
-    }
+    // vanilla Gui.renderHotbarAndDecorations: on a mount that leaps, its jump bar in place of the experience bar (in
+    // creative too); the mount's hearts whether or not the player's show
+    const mount = p.jumpableVehicle();
+    if (mount) this.renderJumpMeter(g, game, cx, mount);
+    else if (survival) this.renderXp(g, game, cx);
+    if (survival) this.renderHealthFood(g, game, cx, H);
+    else this.renderVehicleHealth(g, game, cx + 91, H - 39);
     // selected item name
     if (this.toolHighlightTimer > 0 && p.inventory.selectedItem) {
       // vanilla Gui.renderSelectedItemName: coloured by rarity, italic when renamed
@@ -187,6 +191,15 @@ export class Hud {
     }
   }
 
+  /** vanilla Gui.renderJumpMeter: the charge of the leap, filling as jump is held */
+  private renderJumpMeter(g: GuiGraphics, game: Game, cx: number, mount: RideableJumping): void {
+    const x = cx - 91, y = g.height - 32 + 3;
+    g.sprite('jump_bar_background', x, y, 182, 5);
+    const k = Math.floor(game.player.jumpRidingScale * 183);
+    if (mount.jumpCooldown() > 0) g.sprite('jump_bar_cooldown', x, y, 182, 5);
+    else if (k > 0) g.sprite('jump_bar_progress', x, y, k, 5, 0, 0, k, 5);
+  }
+
   private renderXp(g: GuiGraphics, game: Game, cx: number): void {
     const p = game.player;
     const x = cx - 91, y = g.height - 32 + 3;
@@ -199,6 +212,30 @@ export class Hud {
       for (const [ox, oy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) g.text(s, tx + ox, ty + oy, 0x000000, false);
       g.text(s, tx, ty, 0x80ff20, false);
     }
+  }
+
+  /**
+   * vanilla Gui.renderVehicleHealth: riding something alive, its hearts (up to 30) in rows of ten from the right edge
+   * `rx`, stacking upwards from `y`, where the food bar would be; how many
+   */
+  private renderVehicleHealth(g: GuiGraphics, game: Game, rx: number, y: number): number {
+    const p = game.player;
+    const mount = p.vehicle instanceof LivingEntity ? p.vehicle : null;
+    // (vanilla getVehicleMaxHearts)
+    const mountHearts = mount ? Math.min(30, Math.floor((mount.maxHealth + 0.5) / 2)) : 0;
+    if (!mount || mountHearts === 0) return 0;
+    const mh = Math.ceil(mount.health);
+    for (let left = mountHearts, j1 = 0, vy = y; left > 0; j1 += 20, vy -= 10) {
+      const k = Math.min(left, 10);
+      left -= k;
+      for (let l1 = 0; l1 < k; l1++) {
+        const hx = rx - l1 * 8 - 9;
+        g.sprite('heart_vehicle_container', hx, vy, 9, 9);
+        if (l1 * 2 + 1 + j1 < mh) g.sprite('heart_vehicle_full', hx, vy, 9, 9);
+        if (l1 * 2 + 1 + j1 === mh) g.sprite('heart_vehicle_half', hx, vy, 9, 9);
+      }
+    }
+    return mountHearts;
   }
 
   private renderHealthFood(g: GuiGraphics, game: Game, cx: number, H: number): void {
@@ -261,23 +298,8 @@ export class Hud {
       if (blink && i2 < this.displayHealth) g.sprite(heart(type, i2 + 1 === this.displayHealth, true), hx, hy, 9, 9);
       if (i2 < health) g.sprite(heart(type, i2 + 1 === health, false), hx, hy, 9, 9);
     }
-    // vanilla Gui.getVehicleMaxHearts: riding something alive, its hearts take the food bar's place (up to 30)
-    const mount = p.vehicle instanceof LivingEntity ? p.vehicle : null;
-    const mountHearts = mount ? Math.min(30, Math.floor((mount.maxHealth + 0.5) / 2)) : 0;
-    if (mount && mountHearts > 0) {
-      // vanilla Gui.renderVehicleHealth: rows of ten from the right, stacking upwards
-      const mh = Math.ceil(mount.health);
-      for (let left = mountHearts, j1 = 0, vy = y; left > 0; j1 += 20, vy -= 10) {
-        const k = Math.min(left, 10);
-        left -= k;
-        for (let l1 = 0; l1 < k; l1++) {
-          const hx = rx - l1 * 8 - 9;
-          g.sprite('heart_vehicle_container', hx, vy, 9, 9);
-          if (l1 * 2 + 1 + j1 < mh) g.sprite('heart_vehicle_full', hx, vy, 9, 9);
-          if (l1 * 2 + 1 + j1 === mh) g.sprite('heart_vehicle_half', hx, vy, 9, 9);
-        }
-      }
-    } else {
+    const mountHearts = this.renderVehicleHealth(g, game, rx, y);
+    if (mountHearts === 0) {
       // food (vanilla Gui.renderFood: green shanks while hungry)
       const food = p.food.level;
       const hunger = p.hasEffect('hunger') ? '_hunger' : '';

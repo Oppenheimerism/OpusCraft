@@ -327,6 +327,10 @@ class HoglinMakeLoveGoal extends BreedGoal {
 export class Hoglin extends Animal {
   readonly type = 'hoglin';
   override readonly category: MobCategory = 'monster';
+  /** vanilla Hoglin.canBeLeashed: a monster that goes on a lead all the same */
+  override canBeLeashed(): boolean {
+    return true;
+  }
   protected adultWidth = 1.3964844;
   protected adultHeight = 1.4;
   protected override readonly brainAsGoals = true;
@@ -652,6 +656,10 @@ export class Hoglin extends Animal {
 
 export class Zoglin extends Monster {
   readonly type = 'zoglin';
+  /** vanilla Zoglin.canBeLeashed */
+  override canBeLeashed(): boolean {
+    return true;
+  }
   protected override readonly brainAsGoals = true;
   baby = false;
   attackAnimationRemainingTicks = 0;
