@@ -329,6 +329,10 @@ export class Game {
     };
     inp.onLockChange = (locked) => {
       if (!locked && this.inWorld && this.spawned && !this.screen) this.openPause();
+      // (the browser keeps the Escape that lets the mouse go to itself: over a screen that holds on to the mouse,
+      // like the credits, letting go of it with the page still in front is that Escape)
+      const s = this.screen;
+      if (!locked && s && (s as { keepsMouse?: boolean }).keepsMouse && s.shouldCloseOnEsc() && document.hasFocus()) s.onClose();
     };
     // the browser refused to grab the mouse (no recent click): show the pause menu so a click on
     // "Back to Game" can grab it
