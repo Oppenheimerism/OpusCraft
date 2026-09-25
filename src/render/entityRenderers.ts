@@ -75,6 +75,7 @@ import { HorseRenderers, HORSE_SHADOW_RADII } from './horseRenderer';
 import { LlamaRenderers, LLAMA_SHADOW_RADII, renderSpit } from './llamaRenderer';
 import { ParrotRenderers, PARROT_SHADOW_RADII } from './parrotRenderer';
 import { PolarBearRenderers, POLAR_BEAR_SHADOW_RADII } from './polarBearRenderer';
+import { RabbitRenderers, RABBIT_SHADOW_RADII } from './rabbitRenderer';
 import { LlamaSpit } from '../entity/llama';
 import { LeashKnot } from '../entity/leash';
 import { renderKnot, renderLeash } from './leashRenderer';
@@ -202,6 +203,7 @@ export class EntityRenderDispatcher {
   /** parrots, and the ones on a player's shoulders */
   private readonly parrots: ParrotRenderers;
   private readonly polarBears: PolarBearRenderers;
+  private readonly rabbits: RabbitRenderers;
   /** names over mobs, drawn once every entity is down */
   private readonly nameTags: NameTagRenderer;
   /** this frame's options: names shown at all (not with the GUI hidden), and what the crosshair is on */
@@ -237,6 +239,7 @@ export class EntityRenderDispatcher {
     this.llamas = new LlamaRenderers(this.raiders.kit);
     this.parrots = new ParrotRenderers(this.raiders.kit);
     this.polarBears = new PolarBearRenderers(this.raiders.kit);
+    this.rabbits = new RabbitRenderers(this.raiders.kit);
     this.nameTags = new NameTagRenderer(gl);
     this.models = {
       pig: M.pigModel(),
@@ -688,11 +691,12 @@ export class EntityRenderDispatcher {
     return { texture: tex, cutoff: 0.1, blend: false, cull: false, lit: true, useLightmap: true, ...extra };
   }
 
-  /** vanilla AgeableListModel.renderToBuffer */
+  /** vanilla AgeableListModel.renderToBuffer (or a model's own, in groups) */
   private drawModel(b: EntityBatch, def: MobModelDef, baby: boolean, r = 1, g = 1, bl = 1, a = 1): void {
     const pose = this.pose;
-    if (baby && def.babyGroups) {
-      for (const grp of def.babyGroups) {
+    const groups = baby ? def.babyGroups : def.groups;
+    if (groups) {
+      for (const grp of groups) {
         pose.push();
         pose.scale(grp.scale[0], grp.scale[1], grp.scale[2]);
         pose.translate(grp.translate[0], grp.translate[1], grp.translate[2]);
@@ -728,6 +732,7 @@ export class EntityRenderDispatcher {
     if (this.horses.render(b, e, dx, dy, dz, p)) return;
     if (this.parrots.render(b, e, dx, dy, dz, p)) return;
     if (this.polarBears.render(b, e, dx, dy, dz, p)) return;
+    if (this.rabbits.render(b, e, dx, dy, dz, p)) return;
     const type = e.type;
     const def = this.models[type];
     // (vanilla GhastRenderer.getTextureLocation: its face while charging a shot)
@@ -1716,7 +1721,7 @@ function shadowRadius(e: Entity): number {
   // (Stage 5: ocean)
   if (OCEAN_SHADOW_RADII[e.type] !== undefined) return OCEAN_SHADOW_RADII[e.type] * (e instanceof Mob && e.isBaby() ? 0.5 : 1);
   // (Stage 6: tameable animals; a foal's is half)
-  let r = HORSE_SHADOW_RADII[e.type] ?? LLAMA_SHADOW_RADII[e.type] ?? PARROT_SHADOW_RADII[e.type] ?? POLAR_BEAR_SHADOW_RADII[e.type] ?? 0;
+  let r = HORSE_SHADOW_RADII[e.type] ?? LLAMA_SHADOW_RADII[e.type] ?? PARROT_SHADOW_RADII[e.type] ?? POLAR_BEAR_SHADOW_RADII[e.type] ?? RABBIT_SHADOW_RADII[e.type] ?? 0;
   switch (e.type) {
     case 'pig':
     case 'cow':
