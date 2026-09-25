@@ -778,6 +778,11 @@ export abstract class Mob extends LivingEntity {
     return this.canHoldItem(s);
   }
 
+  /** vanilla Mob.canTakeItem: something can be put on it in that slot (a dispenser's armour): it's free, and it picks things up */
+  canTakeItem(slot: EquipSlot): boolean {
+    return !this.getItemBySlot(slot) && this.canPickUpLoot;
+  }
+
   /** vanilla Mob.canHoldItem */
   canHoldItem(_s: ItemStack): boolean {
     return true;

@@ -720,24 +720,9 @@ export class ParticleEngine {
       case 'item_splash_potion':
       case 'item_snowball':
       case 'item_ender_eye':
-      case 'item_egg': {
-        // vanilla BreakingItemParticle: a random quarter of the item sprite
-        const p = this.base(kind, x, y, z);
-        this.withSpeed(p, 0, 0, 0);
-        p.dx = p.dx * 0.1 + xd;
-        p.dy = p.dy * 0.1 + yd;
-        p.dz = p.dz * 0.1 + zd;
-        // (vanilla SlimeProvider / CobwebProvider make theirs without a speed)
-        if (kind === 'item_slime' || kind === 'item_cobweb') this.withSpeed(p, 0, 0, 0);
-        p.gravity = 1;
-        p.size /= 2;
-        p.frames = [kind === 'item_slime' ? 'item_slime_ball' : kind];
-        p.frame = 0;
-        const uo = Math.random() * 3, vo = Math.random() * 3;
-        p.sub = [uo / 4, vo / 4, (uo + 1) / 4, (vo + 1) / 4];
-        this.addSprite(p);
+      case 'item_egg':
+        this.breakingItem(kind, x, y, z, xd, yd, zd);
         break;
-      }
       case 'infested': {
         // vanilla SpellParticle.Provider: the infested effect's mites, rising like an effect's swirl
         const p = this.base(kind, x, y, z);
@@ -977,8 +962,28 @@ export class ParticleEngine {
         break;
       }
       default:
+        // (foxes) the crumbs of any other item (whatever food a fox eats)
+        if (kind.startsWith('item_')) this.breakingItem(kind, x, y, z, xd, yd, zd);
         break;
     }
+  }
+
+  /** vanilla BreakingItemParticle: a random quarter of the item sprite, falling */
+  private breakingItem(kind: string, x: number, y: number, z: number, xd: number, yd: number, zd: number): void {
+    const p = this.base(kind, x, y, z);
+    this.withSpeed(p, 0, 0, 0);
+    p.dx = p.dx * 0.1 + xd;
+    p.dy = p.dy * 0.1 + yd;
+    p.dz = p.dz * 0.1 + zd;
+    // (vanilla SlimeProvider / CobwebProvider make theirs without a speed)
+    if (kind === 'item_slime' || kind === 'item_cobweb') this.withSpeed(p, 0, 0, 0);
+    p.gravity = 1;
+    p.size /= 2;
+    p.frames = [kind === 'item_slime' ? 'item_slime_ball' : kind];
+    p.frame = 0;
+    const uo = Math.random() * 3, vo = Math.random() * 3;
+    p.sub = [uo / 4, vo / 4, (uo + 1) / 4, (vo + 1) / 4];
+    this.addSprite(p);
   }
 
   /**

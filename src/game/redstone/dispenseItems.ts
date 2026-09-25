@@ -497,9 +497,9 @@ function itemInSlot(e: LivingEntity, slot: EquipSlot): ItemStack | null {
   return null;
 }
 
-/** vanilla LivingEntity.canTakeItem: a player with that slot free, a mob that picks things up with it free */
+/** vanilla LivingEntity.canTakeItem: a player with that slot free, a mob as it says (one that picks things up, with it free) */
 function canTakeItem(e: LivingEntity, slot: EquipSlot): boolean {
-  if (e instanceof Mob) return !itemInSlot(e, slot) && e.canPickUpLoot;
+  if (e instanceof Mob) return e.canTakeItem(slot);
   if (e instanceof Player) return slot !== 'mainhand' && !itemInSlot(e, slot);
   return false;
 }

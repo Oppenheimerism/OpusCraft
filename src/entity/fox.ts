@@ -5,7 +5,9 @@
 // fox would rather fish), fish, and baby turtles caught out of the water: it stalks its prey, crouches low with its
 // head cocked, and pounces high onto it, and one that lands in snow can end up with its nose stuck in it. It picks
 // ripe sweet berries and glow berries, and is bred with them; its young trust whoever fed their parents, and a fox
-// goes for whatever hurts someone it trusts, growling.
+// goes for whatever hurts someone it trusts, growling. It carries things in its mouth: whatever it finds lying about
+// (food over anything else, spitting that out), and one in five turns up with something already; food it eats after
+// a while, crumbs and all, and a chorus fruit sends it off somewhere else. Killed, it drops what it had.
 
 import { Animal, BreedGoal, FollowParentGoal } from './animals';
 import type { Level } from '../game/level';
@@ -14,7 +16,11 @@ import type { Entity } from './entity';
 import { LivingEntity } from './living';
 import type { Player } from './player';
 import { ItemStack } from '../item/item';
+import type { EquipSlot } from '../item/enchantHelper';
 import { ItemEntity } from './itemEntity';
+import { MOB_EFFECTS, MobEffectInstance } from './effects';
+import type { DifficultyInstance } from '../game/difficulty';
+import { chorusTeleport } from '../game/chorus';
 import { Monster } from './monsters';
 import { TamableAnimal } from './tamable';
 import { Goal, Flag, reducedTickDelay } from './ai/goal';
@@ -92,6 +98,8 @@ export class Fox extends Animal {
     this.moveControl = new FoxMoveControl(this);
     this.setPathfindingMalus(PathType.DANGER_OTHER, 0);
     this.setPathfindingMalus(PathType.DAMAGE_OTHER, 0);
+    // (vanilla setCanPickUpLoot: it takes things into its mouth)
+    this.canPickUpLoot = true;
   }
 
   /** vanilla EntityType.FOX's eye height, 0.4 (a cub's, BABY_DIMENSIONS, 0.2975) */
@@ -171,7 +179,8 @@ export class Fox extends Animal {
 
   /**
    * vanilla finalizeSpawn (FoxGroupData, an AgeableMobGroupData that makes no babies of itself): the type where the
-   * group is, shared by all of it, the third and fourth of a group cubs; its hunting set up
+   * group is, shared by all of it, the third and fourth of a group cubs; its hunting set up, and maybe something in
+   * its mouth
    */
   override finalizeSpawn(reason: SpawnReason, group?: SpawnGroup): void {
     const g = group ?? {};
@@ -188,6 +197,7 @@ export class Fox extends Animal {
     this.setVariant(t);
     if (cub) this.setAge(-24000);
     this.setTargetGoals();
+    this.populateDefaultEquipmentSlots(this.spawnDifficulty());
     super.finalizeSpawn(reason, g);
   }
 
@@ -325,6 +335,118 @@ export class Fox extends Animal {
     return this.trusted.includes(u);
   }
 
+  // --- its mouth (vanilla MAINHAND) ---------------------------------------------------------------------------
+
+  /**
+   * vanilla populateDefaultEquipmentSlots: one in five turns up with something in its mouth: an emerald (5%), an egg
+   * (15%), a rabbit's foot or hide (20%), wheat, leather or a feather (20% each)
+   */
+  protected override populateDefaultEquipmentSlots(_d: DifficultyInstance): void {
+    const r = this.random;
+    if (r.nextFloat() >= 0.2) return;
+    const f = r.nextFloat();
+    const id = f < 0.05 ? 'emerald' : f < 0.2 ? 'egg' : f < 0.4 ? (r.nextBool() ? 'rabbit_foot' : 'rabbit_hide') : f < 0.6 ? 'wheat' : f < 0.8 ? 'leather' : 'feather';
+    this.setItemSlot('mainhand', ItemStack.of(id));
+  }
+
+  /** vanilla canTakeItem: nothing's put on it but into its empty mouth (a dispenser's armour isn't) */
+  override canTakeItem(slot: EquipSlot): boolean {
+    return slot === 'mainhand' && super.canTakeItem(slot);
+  }
+
+  /** vanilla canHoldItem: anything, into an empty mouth; food over something that isn't, once it's had that a tick */
+  override canHoldItem(s: ItemStack): boolean {
+    const cur = this.mainHand;
+    return !cur || (this.ticksSinceEaten > 0 && !!s.item.food && !cur.item.food);
+  }
+
+  /**
+   * vanilla pickUpItem: one of the stack into its mouth (the rest is left lying), spitting out what it had; what it
+   * took it keeps and drops for sure, and its meal clock starts over
+   */
+  protected override pickUpItem(it: ItemEntity): void {
+    const s = it.stack;
+    if (!this.canHoldItem(s)) return;
+    // (vanilla take: the client still has the whole stack when it's told, and sees that go in)
+    this.take(it, 0);
+    if (s.count > 1) this.dropItemStack(s.split(s.count - 1));
+    this.spitOutItem(this.mainHand);
+    this.onItemPickup(it);
+    this.setItemSlot('mainhand', s.split(1));
+    this.setGuaranteedDrop('mainhand');
+    it.remove();
+    this.ticksSinceEaten = 0;
+  }
+
+  /** vanilla spitOutItem: out ahead of it, a block up, not to be taken up again for two seconds */
+  private spitOutItem(s: ItemStack | null): void {
+    if (!s) return;
+    const [lx, , lz] = this.lookVector();
+    const e = looseItem(this, this.x + lx, this.y + 1, this.z + lz, s);
+    e.pickupDelay = 40;
+    e.thrower = this;
+    this.playSound('entity.fox.spit', 1, 1);
+    this.level.addEntity(e);
+  }
+
+  /** vanilla dropItemStack: left lying where it stands, to be picked up at once */
+  private dropItemStack(s: ItemStack): void {
+    this.level.addEntity(looseItem(this, this.x, this.y, this.z, s));
+  }
+
+  /** vanilla canEat: food, with nothing to go for, on the ground and awake */
+  private canEat(s: ItemStack): boolean {
+    return !!s.item.food && this.target === null && this.onGround && !this.isSleeping();
+  }
+
+  /**
+   * vanilla ItemStack.finishUsingItem, a fox eating: a suspicious stew's effects first (SuspiciousStewItem); then
+   * LivingEntity.eat: its munch, the food's effects rolled, one eaten (a stew's bowl isn't kept: that's a player's);
+   * then a chorus fruit sends it off (ChorusFruitItem)
+   */
+  private eatHeld(s: ItemStack): void {
+    const r = this.random;
+    if (s.item.id === 'suspicious_stew')
+      for (const e of s.tag?.stewEffects ?? []) {
+        const fx = MOB_EFFECTS[e.id];
+        if (fx) this.addEffect(new MobEffectInstance(fx, e.duration, 0));
+      }
+    this.playSound('entity.fox.eat', 1, 1 + (r.nextFloat() - r.nextFloat()) * 0.4);
+    for (const [id, ticks, amp, chance] of s.item.food?.effects ?? []) {
+      const fx = MOB_EFFECTS[id];
+      if (fx && r.nextFloat() < chance) this.addEffect(new MobEffectInstance(fx, ticks, amp));
+    }
+    s.count--;
+    if (s.item.id === 'chorus_fruit') chorusTeleport(this.level, this);
+  }
+
+  /**
+   * vanilla handleEntityEvent 45: eight crumbs of what it's eating, from half a block ahead of it, tossed up and on
+   * the way it's looking
+   */
+  private crumbs(s: ItemStack): void {
+    const r = this.random, [lx, , lz] = this.lookVector();
+    const xr = (-this.pitch * Math.PI) / 180, yr = (-this.yaw * Math.PI) / 180;
+    for (let i = 0; i < 8; i++) {
+      // (vanilla Vec3.xRot, then yRot)
+      const x0 = (r.nextFloat() - 0.5) * 0.1, y0 = Math.random() * 0.1 + 0.1;
+      const y1 = y0 * Math.cos(xr), z1 = -y0 * Math.sin(xr);
+      const x2 = x0 * Math.cos(yr) + z1 * Math.sin(yr), z2 = z1 * Math.cos(yr) - x0 * Math.sin(yr);
+      this.level.particles.spawn?.(`item_${s.item.id}`, this.x + lx / 2, this.y, this.z + lz / 2, x2, y1 + 0.05, z2);
+    }
+  }
+
+  /** vanilla dropAllDeathLoot: what it has in its mouth falls first, whatever the loot rule says */
+  override die(source: string, attacker: Entity | null = null): void {
+    if (this.dead) return;
+    const held = this.mainHand;
+    if (held) {
+      this.spawnAtLocation(held);
+      this.setItemSlot('mainhand', null);
+    }
+    super.die(source, attacker);
+  }
+
   // --- ticking ------------------------------------------------------------------------------------------------
 
   /**
@@ -353,12 +475,25 @@ export class Fox extends Animal {
   }
 
   /**
-   * vanilla aiStep: with nothing (alive) to go for it's done crouching and cocking its head; asleep it lies still;
-   * defending someone it growls now and then
+   * vanilla aiStep: food in its mouth it eats once it's had nothing for 600 ticks, munching at it over the last 40;
+   * with nothing (alive) to go for it's done crouching and cocking its head; asleep it lies still; defending someone
+   * it growls now and then
    */
   override aiStep(): void {
     if (this.isAlive) {
       this.ticksSinceEaten++;
+      const held = this.mainHand;
+      if (held && this.canEat(held)) {
+        if (this.ticksSinceEaten > 600) {
+          this.eatHeld(held);
+          // (vanilla keeps what finishing it leaves, and the empty stack of a last one, which is nothing)
+          if (held.count <= 0) this.setItemSlot('mainhand', null);
+          this.ticksSinceEaten = 0;
+        } else if (this.ticksSinceEaten > 560 && this.random.nextFloat() < 0.1) {
+          this.playSound('entity.fox.eat', 1, 1);
+          this.crumbs(held);
+        }
+      }
       const t = this.target;
       if (!t || !t.isAlive) {
         this.setIsCrouching(false);
@@ -463,6 +598,17 @@ function isPathClear(f: Fox, t: LivingEntity): boolean {
     }
   }
   return true;
+}
+
+/** vanilla new ItemEntity(level, x, y, z, stack): a little toss, any way up (not yet in the world) */
+function looseItem(f: Fox, x: number, y: number, z: number, s: ItemStack): ItemEntity {
+  const e = new ItemEntity(f.level, s);
+  e.moveTo(x, y, z, f.random.nextFloat() * 360, 0);
+  e.dx = f.random.nextDouble() * 0.2 - 0.1;
+  e.dy = 0.2;
+  e.dz = f.random.nextDouble() * 0.2 - 0.1;
+  e.pickupDelay = 0;
+  return e;
 }
 
 /** vanilla FoxBehaviorGoal.hasShelter: the sky hidden over its head, and somewhere it doesn't mind being */
