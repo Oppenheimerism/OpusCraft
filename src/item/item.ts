@@ -432,6 +432,10 @@ for (const m of ['elder_guardian', 'guardian']) reg({ id: `${m}_spawn_egg`, text
   // (M6) the turtle's egg; the turtle egg drawn flat (vanilla item/turtle_egg), with the natural blocks
   reg({ id: 'turtle_spawn_egg', texture: 'turtle_spawn_egg', creativeTab: 'spawn_eggs' });
   if (ITEMS.has('turtle_egg')) Object.assign(ITEMS.get('turtle_egg')!, { texture: 'turtle_egg', creativeTab: 'natural' });
+  // (M7) the axolotl's bucket, after the fish's, and its egg
+  reg({ id: 'axolotl_bucket', name: 'Bucket of Axolotl', texture: 'axolotl_bucket', maxStack: 1, creativeTab: 'tools' });
+  after('axolotl_bucket', 'pufferfish_bucket');
+  reg({ id: 'axolotl_spawn_egg', texture: 'axolotl_spawn_egg', creativeTab: 'spawn_eggs' });
 }
 // sugar cane item places the block
 {

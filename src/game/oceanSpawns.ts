@@ -1,7 +1,7 @@
 // The overworld's water spawn lists (Stage 5: ocean; vanilla OverworldBiomes and BiomeDefaultFeatures.oceanSpawns,
 // warmOceanSpawns and caveSpawns): what each biome spawns in the water — squid and dolphins as water creatures, the
 // fish (cod, salmon, pufferfish, tropical fish) as water ambient, the glow squid of the dark water underground, and
-// the lush caves' axolotls (not in the game yet: their list stays empty).
+// the lush caves' axolotls.
 
 import type { SpawnEntry } from './structureSpawns';
 
@@ -63,9 +63,10 @@ export function waterSpawnsFor(name: string): WaterSpawns {
       out.water_ambient.push(E('tropical_fish', 25, 8, 8));
       break;
     // vanilla lushCaves: tropical fish in its pools (at any height: TropicalFish.checkTropicalFishSpawnRules), and
-    // axolotls (10, in fours to sixes) once there are any
+    // axolotls (10, in fours to sixes: Axolotl.checkAxolotlSpawnRules keeps them over clay)
     case 'lush_caves':
       out.water_ambient.push(E('tropical_fish', 25, 8, 8));
+      out.axolotls.push(E('axolotl', 10, 4, 6));
       break;
   }
   return out;

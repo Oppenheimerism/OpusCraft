@@ -58,7 +58,7 @@ export type Criterion =
   /** vanilla BrewedPotionTrigger: took something with a potion in it out of a brewing stand */
   | { t: 'brewed_potion' }
   /** vanilla EffectsChangedTrigger with a MobEffectsPredicate: all of these effects on the player at once */
-  | { t: 'effects_changed'; effects: string[] }
+  | { t: 'effects_changed'; effects: string[]; source?: string }
   /** vanilla enter_block: stepped into that block (an end gateway) */
   | { t: 'enter_block'; block: string }
   /** vanilla entity_hurt_player: a projectile's damage, blocked by a shield */
@@ -296,10 +296,10 @@ const A: AdvancementDef[] = [
   { id: 'husbandry/obtain_netherite_hoe', parent: 'husbandry/plant_seed', title: 'Serious Dedication', description: 'Use a Netherite Ingot to upgrade a Hoe, and then reevaluate your life choices', icon: 'netherite_hoe', frame: 'challenge', criteria: { netherite_hoe: inv('netherite_hoe') } },
   { id: 'husbandry/wax_off', parent: 'husbandry/wax_on', title: 'Wax Off', description: 'Scrape Wax off of a Copper block!', icon: 'stone_axe', frame: 'task', criteria: one(never) },
   { id: 'husbandry/repair_wolf_armor', parent: 'husbandry/remove_wolf_armor', title: 'Good as New', description: 'Repair a damaged Wolf Armor using Armadillo Scutes', icon: 'wolf_armor', frame: 'task', criteria: one(never) },
-  { id: 'husbandry/axolotl_in_a_bucket', parent: 'husbandry/tactical_fishing', title: 'The Cutest Predator', description: 'Catch an Axolotl in a Bucket', icon: 'axolotl_bucket', frame: 'task', criteria: one(never) },
+  { id: 'husbandry/axolotl_in_a_bucket', parent: 'husbandry/tactical_fishing', title: 'The Cutest Predator', description: 'Catch an Axolotl in a Bucket', icon: 'axolotl_bucket', frame: 'task', criteria: one({ t: 'filled_bucket', items: ['axolotl_bucket'] }) },
   { id: 'husbandry/froglights', parent: 'husbandry/leash_all_frog_variants', title: 'With Our Powers Combined!', description: 'Have all Froglights in your inventory', icon: 'verdant_froglight', frame: 'challenge', criteria: one(never) },
   { id: 'husbandry/plant_any_sniffer_seed', parent: 'husbandry/feed_snifflet', title: 'Planting the Past', description: 'Plant any Sniffer seed', icon: 'pitcher_pod', frame: 'task', criteria: one(never) },
-  { id: 'husbandry/kill_axolotl_target', parent: 'husbandry/axolotl_in_a_bucket', title: 'The Healing Power of Friendship!', description: 'Team up with an axolotl and win a fight', icon: 'tropical_fish_bucket', frame: 'goal', criteria: one(never) },
+  { id: 'husbandry/kill_axolotl_target', parent: 'husbandry/axolotl_in_a_bucket', title: 'The Healing Power of Friendship!', description: 'Team up with an axolotl and win a fight', icon: 'tropical_fish_bucket', frame: 'goal', criteria: one({ t: 'effects_changed', effects: [], source: 'axolotl' }) },
 ];
 
 export const ADVANCEMENTS = new Map<string, AdvancementDef>(A.map((a) => [a.id, a]));
@@ -495,6 +495,8 @@ export interface TriggerPayload {
   potion?: string;
   /** the effects the player has now (effects_changed) */
   effects?: Set<string>;
+  /** (Stage 5: ocean) the kind of what gave the player an effect just now (effects_changed's source) */
+  effectSource?: string;
   /** the block the player stepped into (enter_block) */
   enteredBlock?: string;
   /** the loot table rolled for the player (container_loot) */
@@ -638,7 +640,7 @@ function matches(c: Criterion, p: TriggerPayload): boolean {
     case 'brewed_potion':
       return p.potion !== undefined;
     case 'effects_changed':
-      return !!p.effects && c.effects.every((e) => p.effects!.has(e));
+      return !!p.effects && c.effects.every((e) => p.effects!.has(e)) && (!c.source || p.effectSource === c.source);
     case 'enter_block':
       return p.enteredBlock === c.block;
     case 'container_loot':

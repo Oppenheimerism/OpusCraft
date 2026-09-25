@@ -75,6 +75,8 @@ export abstract class LivingEntity extends Entity {
   /** vanilla lastDamageSource and lastDamageStamp: what last hurt it, and when */
   lastDamageSource: string | null = null;
   lastDamageStamp = -1000;
+  /** (Stage 5: ocean) vanilla lastDamageSource.getEntity: who dealt it (an axolotl's friend, if a player) */
+  lastDamageEntity: Entity | null = null;
   /** vanilla getLastDamageSource: forgotten after 40 ticks */
   recentDamageSource(): string | null {
     return this.level.gameTime - this.lastDamageStamp > 40 ? null : this.lastDamageSource;
@@ -202,6 +204,10 @@ export abstract class LivingEntity extends Entity {
     return false;
   }
 
+  /** (Stage 5: ocean) vanilla canBeSeenAsEnemy: something to attack at all (not an axolotl playing dead) */
+  canBeSeenAsEnemy(): boolean {
+    return true;
+  }
   /** vanilla isAffectedByPotions: splashes and clouds pass over the dead (and spectators) */
   isAffectedByPotions(): boolean {
     return this.health > 0 && !this.dead;
@@ -909,6 +915,7 @@ export abstract class LivingEntity extends Entity {
     }
     this.lastDamageSource = source;
     this.lastDamageStamp = this.level.gameTime;
+    this.lastDamageEntity = attacker ?? null;
     if (attacker instanceof LivingEntity && attacker !== this) {
       this.setLastHurtByMob(attacker);
       if (attacker.type === 'player') {
