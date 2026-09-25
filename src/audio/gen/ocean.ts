@@ -12,6 +12,7 @@ import { reverbHalf } from './world';
 import { fishSounds } from './fish';
 import { conduitSounds } from './conduit';
 import { turtleSounds } from './turtle';
+import { axolotlSounds } from './axolotl';
 
 /** vanilla block.sponge.absorb: a gulping slurp — water rushing in, bubbles popping as it goes */
 function spongeAbsorb(c: Ctx): Float32Array {
@@ -188,5 +189,6 @@ export function oceanSounds(): Record<string, SoundGen> {
   Object.assign(s, conduitSounds());
   // (M6) the turtle's and its eggs' (audio/gen/turtle.ts)
   Object.assign(s, turtleSounds());
+  Object.assign(s, axolotlSounds());
   return s;
 }

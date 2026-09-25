@@ -3,7 +3,7 @@
 // swims, the spikes drawn in while it swims and pushed out while it idles — the laser from its eye to its target,
 // and the elder guardian's ghostly face (vanilla MobAppearanceParticle) looming up before a player it curses; the
 // fish, the dolphin and the glow squid are ./fishRenderers', the conduit ./conduitRenderer's, the turtle
-// ./turtleRenderer's. The steps every living renderer shares are the dispatcher's, lent through LivingKit.
+// ./turtleRenderer's, the axolotl ./axolotlRenderer's. The steps every living renderer shares are the dispatcher's, lent through LivingKit.
 
 import type { EntityBatch } from './entityRenderer';
 import type { GL } from './gl';
@@ -23,15 +23,17 @@ import { FishRenderers, FISH_SHADOW_RADII } from './fishRenderers';
 import { ConduitRenderer } from './conduitRenderer';
 import { TurtleRenderer } from './turtleRenderer';
 import { Turtle } from '../entity/turtle';
+import { AxolotlRenderer } from './axolotlRenderer';
+import { Axolotl } from '../entity/axolotl';
 
 const PI = Math.PI;
 const RAD = PI / 180;
 
 /**
- * vanilla shadow radii (GuardianRenderer 0.5, ElderGuardianRenderer 1.2, TurtleRenderer 0.7 — a baby's half; the
- * fish's, the dolphin's and the glow squid's)
+ * vanilla shadow radii (GuardianRenderer 0.5, ElderGuardianRenderer 1.2, TurtleRenderer 0.7, AxolotlRenderer 0.5 — a
+ * baby's half; the fish's, the dolphin's and the glow squid's)
  */
-export const OCEAN_SHADOW_RADII: Record<string, number> = { guardian: 0.5, elder_guardian: 1.2, turtle: 0.7, ...FISH_SHADOW_RADII };
+export const OCEAN_SHADOW_RADII: Record<string, number> = { guardian: 0.5, elder_guardian: 1.2, turtle: 0.7, axolotl: 0.5, ...FISH_SHADOW_RADII };
 
 function part(cubes: Cube[], pivot: [number, number, number] = [0, 0, 0], rot: [number, number, number] = [0, 0, 0]): ModelPart {
   return new ModelPart(cubes, pivot, rot);
@@ -128,17 +130,23 @@ export class OceanRenderers {
   private readonly fish: FishRenderers;
   private readonly conduits: ConduitRenderer;
   private readonly turtles: TurtleRenderer;
+  private readonly axolotls: AxolotlRenderer;
 
   constructor(private readonly gl: GL, private readonly kit: LivingKit) {
     this.fish = new FishRenderers(kit);
     this.conduits = new ConduitRenderer(kit);
     this.turtles = new TurtleRenderer(kit);
+    this.axolotls = new AxolotlRenderer(kit);
   }
 
   /** draws `e` if it's one of these renderers' mobs (false: not ours) */
   render(b: EntityBatch, e: Mob, dx: number, dy: number, dz: number, p: number): boolean {
     if (e instanceof Turtle) {
       this.turtles.render(b, e, dx, dy, dz, p);
+      return true;
+    }
+    if (e instanceof Axolotl) {
+      this.axolotls.render(b, e, dx, dy, dz, p);
       return true;
     }
     if (!(e instanceof Guardian)) return this.fish.render(b, e, dx, dy, dz, p);

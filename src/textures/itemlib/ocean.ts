@@ -18,6 +18,7 @@ const EGGS: [string, number, number][] = [
   ['salmon', 0xa00f10, 0x0e8474],
   ['tropical_fish', 0xef6915, 0xfff9ef],
   ['turtle', 0xe7e7e7, 0x00afaf],
+  ['axolotl', 0xfbc1e3, 0xa62d74],
 ];
 for (const [m, base, spot] of EGGS) I[`${m}_spawn_egg`] = () => spawnEgg(base, spot);
 

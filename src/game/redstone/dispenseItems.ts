@@ -31,7 +31,7 @@ import { createBoat, boatItemInfo } from '../../entity/boat';
 import { createMinecart } from '../../entity/minecart';
 import { createMob } from '../spawner';
 // (Stage 5: ocean)
-import { releaseBucketFish } from '../../entity/fish';
+import { bucketEmptySound, releaseBucketFish } from '../../entity/fish';
 import { behaviorOf } from '../blockBehavior';
 import { canSurvive } from '../blockRules';
 import { performBoneMeal, boneMealParticles } from '../boneMeal';
@@ -610,8 +610,8 @@ export function dispenseBehaviorFor(stack: ItemStack): DispenseBehavior {
 // checkExtraContent) and leaves an empty bucket; where the water can't go, it's thrown out
 const fishBucket = behavior((src, stack) => {
   const [x, y, z] = front(src);
-  if (!emptyContents(src.level, x, y, z, 'water', 'item.bucket.empty_fish')) return DEFAULT_DISPENSE(src, stack);
+  if (!emptyContents(src.level, x, y, z, 'water', bucketEmptySound(stack.item.id))) return DEFAULT_DISPENSE(src, stack);
   releaseBucketFish(src.level, stack, x, y, z);
   return ItemStack.of('bucket');
 });
-Object.assign(BEHAVIORS, { cod_bucket: fishBucket, salmon_bucket: fishBucket, pufferfish_bucket: fishBucket, tropical_fish_bucket: fishBucket });
+Object.assign(BEHAVIORS, { cod_bucket: fishBucket, salmon_bucket: fishBucket, pufferfish_bucket: fishBucket, tropical_fish_bucket: fishBucket, axolotl_bucket: fishBucket });

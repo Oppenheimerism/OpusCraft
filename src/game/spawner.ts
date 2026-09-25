@@ -31,6 +31,7 @@ import { Cod, Salmon, Pufferfish, TropicalFish } from '../entity/fish';
 import { Dolphin } from '../entity/dolphin';
 import { GlowSquid } from '../entity/glowSquid';
 import { Turtle } from '../entity/turtle';
+import { Axolotl } from '../entity/axolotl';
 import { waterSpawnsFor } from './oceanSpawns';
 import { despawnDistance } from '../entity/mob';
 import { Husk, Stray } from '../entity/biomeMonsters';
@@ -745,6 +746,9 @@ export class NaturalSpawner {
       // (Stage 5: ocean) vanilla Turtle.checkTurtleSpawnRules: on sand, low on the beach, in the light
       case 'turtle':
         return Turtle.checkTurtleSpawnRules(lvl, x, y, z);
+      // (Stage 5: ocean) vanilla Axolotl.checkAxolotlSpawnRules: over clay
+      case 'axolotl':
+        return Axolotl.checkAxolotlSpawnRules(lvl, x, y, z);
       case 'hoglin':
         // vanilla Hoglin.checkHoglinSpawnRules: any light, just not on a nether wart block
         return BLOCKS[STATE_BLOCK[lvl.world.getState(x, y - 1, z)]].name !== 'nether_wart_block';
@@ -859,5 +863,8 @@ Object.assign(ENTITY_NAMES, { cod: 'Cod', salmon: 'Salmon', pufferfish: 'Pufferf
 // (Stage 5: ocean) the turtle
 Object.assign(MOB_TYPES, { turtle: (l: Level) => new Turtle(l) });
 Object.assign(ENTITY_NAMES, { turtle: 'Turtle' });
+// (Stage 5: ocean) the axolotl
+Object.assign(MOB_TYPES, { axolotl: (l: Level) => new Axolotl(l) });
+Object.assign(ENTITY_NAMES, { axolotl: 'Axolotl' });
 /** (Stage 5: ocean) vanilla SpawnPlacements IN_WATER: these spawn in water (the squid's and the guardian's are above) */
-const IN_WATER = new Set(['cod', 'salmon', 'pufferfish', 'tropical_fish', 'dolphin', 'glow_squid']);
+const IN_WATER = new Set(['cod', 'salmon', 'pufferfish', 'tropical_fish', 'dolphin', 'glow_squid', 'axolotl']);

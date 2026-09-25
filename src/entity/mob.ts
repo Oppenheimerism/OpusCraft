@@ -133,6 +133,8 @@ export interface SpawnGroup {
   horseColor?: string;
   /** vanilla Llama.LlamaGroupData: the coat the herd shares */
   llamaVariant?: string;
+  /** (Stage 5: ocean) vanilla Axolotl.AxolotlGroupData: the two colours the group's axolotls come in */
+  axolotlVariants?: number[];
 }
 
 export abstract class Mob extends LivingEntity {
@@ -634,6 +636,8 @@ export abstract class Mob extends LivingEntity {
   /** can this mob attack `e` (vanilla canAttack + TargetingConditions basics) */
   canAttack(e: LivingEntity | null): boolean {
     if (!e || !e.isAlive || e === this) return false;
+    // (Stage 5: ocean) vanilla LivingEntity.canAttack: only what can be seen as an enemy
+    if (!e.canBeSeenAsEnemy()) return false;
     if (e.type === 'player') {
       const gm = (e as unknown as { gameMode: string }).gameMode;
       if (gm === 'creative' || gm === 'spectator') return false;

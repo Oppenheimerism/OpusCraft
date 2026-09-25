@@ -9,7 +9,7 @@ import { registerHoverText } from '../item/hoverText';
 import { emptyContents } from './redstone/dispenseItems';
 import { behaviorOf } from './blockBehavior';
 import { raycast } from './raycast';
-import { BUCKET_FISH, releaseBucketFish, unpackTropical, COMMON_TROPICAL, COMMON_TROPICAL_NAMES, TROPICAL_PATTERNS } from '../entity/fish';
+import { BUCKET_FISH, bucketEmptySound, releaseBucketFish, unpackTropical, COMMON_TROPICAL, COMMON_TROPICAL_NAMES, TROPICAL_PATTERNS } from '../entity/fish';
 import { DYE_COLORS } from '../entity/animals';
 import { BLOCKS, STATE_BLOCK } from '../world/block';
 import { DX, DY, DZ } from '../world/dir';
@@ -37,9 +37,10 @@ function useFishBucket(level: Level, p: Player, stack: ItemStack): 'success' | '
   const nx = h.x + DX[h.face], ny = h.y + DY[h.face], nz = h.z + DZ[h.face];
   let [x, y, z] = holdsWater(level.getState(h.x, h.y, h.z)) ? [h.x, h.y, h.z] : [nx, ny, nz];
   if (y < level.world.dim.minY || y >= level.world.dim.maxY) return 'fail';
-  if (!emptyContents(level, x, y, z, 'water', 'item.bucket.empty_fish')) {
+  const sound = bucketEmptySound(stack.item.id);
+  if (!emptyContents(level, x, y, z, 'water', sound)) {
     [x, y, z] = [nx, ny, nz];
-    if (y < level.world.dim.minY || y >= level.world.dim.maxY || !emptyContents(level, x, y, z, 'water', 'item.bucket.empty_fish')) return 'fail';
+    if (y < level.world.dim.minY || y >= level.world.dim.maxY || !emptyContents(level, x, y, z, 'water', sound)) return 'fail';
   }
   releaseBucketFish(level, stack, x, y, z);
   // vanilla ItemUtils.createFilledResult(stack, player, getEmptySuccessItem): the empty bucket in its place
@@ -48,7 +49,8 @@ function useFishBucket(level: Level, p: Player, stack: ItemStack): 'success' | '
   return 'success';
 }
 
-for (const id of Object.keys(BUCKET_FISH)) registerItemBehavior(id, { use: useFishBucket });
+// (M7: and the bucket of axolotl, whose axolotl entity/axolotl.ts adds to BUCKET_FISH)
+for (const id of [...Object.keys(BUCKET_FISH), 'axolotl_bucket']) registerItemBehavior(id, { use: useFishBucket });
 
 /**
  * vanilla MobBucketItem.appendHoverText: a bucket of tropical fish names the kind it holds, grey and slanted: one of
