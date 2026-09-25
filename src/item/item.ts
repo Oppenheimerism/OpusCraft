@@ -359,6 +359,26 @@ for (const id of ['prismarine_shard', 'prismarine_crystals']) reg({ id, texture:
 ITEMS.get('wet_sponge')!.creativeTab = 'functional';
 // (Stage 5: ocean) the guardians' eggs
 for (const m of ['elder_guardian', 'guardian']) reg({ id: `${m}_spawn_egg`, texture: `${m}_spawn_egg`, creativeTab: 'spawn_eggs' });
+// (Stage 5: ocean) the tropical fish (vanilla Foods.TROPICAL_FISH), the buckets of fish (vanilla MobBucketItem: one to a
+// stack; game/fishBuckets.ts pours them out), the glow squid's ink sac and the new eggs, each put where vanilla's
+// creative tabs list it
+{
+  const after = (id: string, prev: string): void => {
+    const it = ITEM_LIST.splice(ITEM_LIST.findIndex((x) => x.id === id), 1)[0];
+    ITEM_LIST.splice(ITEM_LIST.findIndex((x) => x.id === prev) + 1, 0, it);
+  };
+  reg({ id: 'tropical_fish', texture: 'tropical_fish', creativeTab: 'food', food: { nutrition: 1, saturation: 0.1 } });
+  after('tropical_fish', 'cooked_salmon');
+  let prev = 'water_bucket';
+  for (const [f, n] of [['cod', 'Cod'], ['salmon', 'Salmon'], ['tropical_fish', 'Tropical Fish'], ['pufferfish', 'Pufferfish']]) {
+    reg({ id: `${f}_bucket`, name: `Bucket of ${n}`, texture: `${f}_bucket`, maxStack: 1, creativeTab: 'tools' });
+    after(`${f}_bucket`, prev);
+    prev = `${f}_bucket`;
+  }
+  reg({ id: 'glow_ink_sac', texture: 'glow_ink_sac' });
+  after('glow_ink_sac', 'ink_sac');
+  for (const m of ['cod', 'dolphin', 'glow_squid', 'pufferfish', 'salmon', 'tropical_fish']) reg({ id: `${m}_spawn_egg`, texture: `${m}_spawn_egg`, creativeTab: 'spawn_eggs' });
+}
 // sugar cane item places the block
 {
   const sc = ITEMS.get('sugar_cane');
@@ -486,6 +506,8 @@ export interface ItemTag {
   book?: WrittenBook;
   /** minecraft:pot_decorations: a decorated pot's sides, back, left, right and front ('brick' for a plain one) */
   potDecorations?: string[];
+  /** (Stage 5: ocean) minecraft:bucket_entity_data: what a bucket of fish keeps of it (Health, BucketVariantTag) */
+  bucketEntity?: Record<string, number | boolean>;
 }
 
 /** vanilla PotionContents: the potion (a registry id; none for an uncraftable one), a custom colour, custom effects */
@@ -553,6 +575,8 @@ export function cloneTag(t: ItemTag | null): ItemTag | null {
   if (t.pages) o.pages = [...t.pages];
   if (t.book) o.book = { ...t.book, pages: [...t.book.pages] };
   if (t.potDecorations) o.potDecorations = [...t.potDecorations];
+  // (Stage 5: ocean)
+  if (t.bucketEntity) o.bucketEntity = { ...t.bucketEntity };
   return o;
 }
 
@@ -567,7 +591,9 @@ export function sameTag(a: ItemTag | null | undefined, b: ItemTag | null | undef
     a?.itemName === b?.itemName && a?.rarity === b?.rarity && !a?.hideAdditional === !b?.hideAdditional && sameData(a?.patterns?.length ? a.patterns : null, b?.patterns?.length ? b.patterns : null) && a?.baseColor === b?.baseColor &&
     a?.ominousAmplifier === b?.ominousAmplifier &&
     a?.mapId === b?.mapId && a?.mapPostProcessing === b?.mapPostProcessing && sameData(a?.trim, b?.trim) && sameData(a?.pages, b?.pages) && sameData(a?.book, b?.book) &&
-    sameData(a?.potDecorations, b?.potDecorations)
+    sameData(a?.potDecorations, b?.potDecorations) &&
+    // (Stage 5: ocean)
+    sameData(a?.bucketEntity, b?.bucketEntity)
   );
 }
 

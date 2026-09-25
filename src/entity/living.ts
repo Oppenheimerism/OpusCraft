@@ -681,6 +681,8 @@ export abstract class LivingEntity extends Entity {
         slow += (0.54600006 - slow) * f6;
         f5 += (this.movementSpeed() - f5) * f6;
       }
+      // (Stage 5: ocean) vanilla: Dolphin's Grace keeps the speed you have in the water
+      if (this.hasEffect('dolphins_grace')) slow = 0.96;
       this.moveRelative(f5, sx, sy, sz);
       this.move(this.dx, this.dy, this.dz);
       if (this.horizontalCollision && this.onClimbable()) this.dy = 0.2;

@@ -1506,6 +1506,14 @@ export class OceanMonuments {
     }
   }
 
+  /**
+   * (Stage 5: ocean) the monuments whose box may hold (x, z), for their spawn overrides (vanilla getAllStructuresAt):
+   * the start's box is the building's, and the building is its one piece (its rooms are inside it)
+   */
+  startsAt(x: number, z: number): { bounds: BoundingBox; pieces: { box: BoundingBox }[] }[] {
+    return this.near(x >> 4, z >> 4).map((b) => ({ bounds: b.box, pieces: [b] }));
+  }
+
   /** vanilla StructureManager.getStructureAt (the structure's box: the building's) */
   structureAt(x: number, y: number, z: number): BoundingBox | null {
     for (const b of this.near(x >> 4, z >> 4)) if (b.box.isInside(x, y, z)) return b.box;

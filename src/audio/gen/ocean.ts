@@ -1,13 +1,15 @@
 // The ocean's sounds (Stage 5: ocean), synthesized: a sponge soaking up the water round it, and a wet sponge set
 // down in the Nether hissing dry; the guardians' eerie squeals (muffled and ringing in the water, thin and dry on
 // land), their hurt squeaks and dying wails, a stranded one's wet flops, the laser's buzz rising as it charges, and
-// the elder guardian's curse: a ghostly chorus rising into a howl.
+// the elder guardian's curse: a ghostly chorus rising into a howl. The fish's, the dolphin's and the glow squid's are
+// in fish.ts.
 
 import type { SoundGen } from '../synth';
 import { addOsc, alloc, envBump, envPts, layer, onePoleLP } from './dsp';
 import { type Ctx, sound } from './registry';
 import { bubble, impact, sweep } from './texture';
 import { reverbHalf } from './world';
+import { fishSounds } from './fish';
 
 /** vanilla block.sponge.absorb: a gulping slurp — water rushing in, bubbles popping as it goes */
 function spongeAbsorb(c: Ctx): Float32Array {
@@ -178,5 +180,7 @@ export function oceanSounds(): Record<string, SoundGen> {
     s[n + 'death_land'] = sound(n + 'death_land', 1, guardianDeath(th, true));
     s[n + 'flop'] = sound(n + 'flop', 4, guardianFlop(th));
   }
+  // the fish, the dolphins, the glow squid and the buckets of fish (audio/gen/fish.ts)
+  Object.assign(s, fishSounds());
   return s;
 }

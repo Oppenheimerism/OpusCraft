@@ -8,21 +8,37 @@ import { reducedTickDelay } from './ai/goal';
 import type { Entity } from './entity';
 import { FLAGS, F_WATER, BLOCKS, STATE_BLOCK } from '../world/block';
 import { SEA_LEVEL } from '../world/constants';
+import { PathType } from './ai/pathfinder';
 import type { Player } from './player';
 import type { ItemStack } from '../item/item';
 
 export abstract class WaterAnimal extends Mob {
   readonly category: MobCategory = 'water_creature';
 
+  constructor(level: Level) {
+    super(level);
+    // (Stage 5: ocean) vanilla WaterAnimal: the water costs it nothing to path through
+    this.setPathfindingMalus(PathType.WATER, 0);
+  }
+
   override canBreatheUnderwater(): boolean {
     return true;
   }
 
+  /**
+   * vanilla WaterAnimal.baseTick: its breath goes by what it had before the living entity's breathing ran (Stage 5:
+   * ocean: that gave a stranded squid back 4 air a tick, so it never choked)
+   */
   override baseTick(): void {
+    const air = this.air;
     super.baseTick();
-    // vanilla WaterAnimal.handleAirSupply
+    this.handleAirSupply(air);
+  }
+
+  /** vanilla WaterAnimal.handleAirSupply: out of the water it chokes, hurt from 20 ticks past empty; in it, always full */
+  protected handleAirSupply(air: number): void {
     if (this.isAlive && !this.inWater) {
-      this.air--;
+      this.air = air - 1;
       if (this.air === -20) {
         this.air = 0;
         this.hurt(2, 'drown');
