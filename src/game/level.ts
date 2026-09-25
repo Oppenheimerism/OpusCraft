@@ -8,6 +8,7 @@ import { World } from '../world/world';
 import type { Entity } from '../entity/entity';
 import type { Player } from '../entity/player';
 import type { Villager } from '../entity/villager';
+import type { Merchant } from '../entity/trading';
 import { LivingEntity } from '../entity/living';
 import { Rand } from '../core/rng';
 import { BLOCKS, STATE_BLOCK, FLAGS, F_AIR, F_WATERLOGGED, S } from '../world/block';
@@ -429,8 +430,8 @@ export class Level {
   onTake: ((e: Entity, taker: LivingEntity, amount: number) => void) | null = null;
   /** a mob picked up an item a player had thrown (vanilla thrown_item_picked_up_by_entity) */
   onThrownItemPickedUp: ((stack: ItemStack, by: Entity) => void) | null = null;
-  /** a villager opened its trading screen for a player (vanilla Merchant.openTradingScreen) */
-  onOpenMerchant: ((v: Villager, p: Player) => void) | null = null;
+  /** a villager or a wandering trader opened its trading screen for a player (vanilla Merchant.openTradingScreen) */
+  onOpenMerchant: ((v: Merchant, p: Player) => void) | null = null;
   /** a crossbow arrow the player shot killed something: all it has killed so far (vanilla killed_by_crossbow) */
   onPlayerCrossbowKill: ((killed: Entity[]) => void) | null = null;
   /** an entity's time in a portal came up (the portal block it was in, and which kind) */

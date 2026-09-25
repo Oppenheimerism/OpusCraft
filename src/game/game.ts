@@ -48,7 +48,7 @@ import type { SkinParts } from '../render/entityRenderers';
 import { InventoryMenu, CraftingMenu, FurnaceMenu, ChestMenu, BrewingStandMenu } from '../inventory/menus';
 import { EnchantmentMenu, AnvilMenu, GrindstoneMenu } from '../inventory/enchantMenus';
 import { MerchantMenu } from '../inventory/merchantMenu';
-import type { Villager } from '../entity/villager';
+import type { Merchant } from '../entity/trading';
 import { hasVanishing } from '../item/enchantHelper';
 import { ChestBlockEntity, FurnaceBlockEntity, BarrelBlockEntity, BrewingStandBlockEntity } from '../world/blockEntity';
 import { catSittingOn } from '../entity/cat';
@@ -485,6 +485,7 @@ export class Game {
       spell: (k, x, y, z, xd, yd, zd, r, g, b, pw) => particles.spell(k, x, y, z, xd, yd, zd, r, g, b, pw),
     };
     this.spawner = new NaturalSpawner(this.level, hashString(meta.seed));
+    this.spawner.traders.load(meta.wanderingTrader);
     this.ambient = new AmbientTicker(this.level);
     this.renderer.weather.tempAt = (biome, x, y, z) => {
       const b = BIOMES[biome];
@@ -599,6 +600,7 @@ export class Game {
     if (this.level.dragonFight) m.dragonFight = this.level.dragonFight.save();
     // (Stage 4: raids)
     m.raids = this.level.raids.save();
+    if (this.spawner) m.wanderingTrader = this.spawner.traders.save();
     const list = [];
     for (const c of this.world.chunks.values()) {
       if (!c.modified) continue;
@@ -828,7 +830,7 @@ export class Game {
   }
 
   /** a villager started trading with the player (vanilla Merchant.openTradingScreen) */
-  openMerchant(v: Villager, p: Player): void {
+  openMerchant(v: Merchant, p: Player): void {
     if (p !== this.player || !this.containerScreenFactory) {
       v.stopTrading();
       return;

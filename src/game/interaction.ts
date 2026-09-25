@@ -24,6 +24,7 @@ import { LeashKnot, bindPlayerMobs, isFence } from '../entity/leash';
 import { Creeper, bowPower } from '../entity/monsters';
 import { Piglin, GUARDED_BY_PIGLINS } from '../entity/piglin';
 import { Villager } from '../entity/villager';
+import { WanderingTrader } from '../entity/wanderingTrader';
 import { IronGolem } from '../entity/ironGolem';
 import { ZombieVillager } from '../entity/zombieVillager';
 import { Arrow } from '../entity/arrow';
@@ -364,6 +365,11 @@ export class Interaction {
       }
       // vanilla Villager.mobInteract: trade, or a shake of the head
       if (e instanceof Villager && e.interact(p, stack, main)) {
+        p.swing();
+        return 'success';
+      }
+      // vanilla WanderingTrader.mobInteract: trade
+      if (e instanceof WanderingTrader && e.interact(p, stack)) {
         p.swing();
         return 'success';
       }

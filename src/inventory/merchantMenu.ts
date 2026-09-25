@@ -4,8 +4,7 @@
 import { ContainerMenu, Slot, PlayerContainer, isEmpty, type Container } from './container';
 import type { ItemStack } from '../item/item';
 import type { Player } from '../entity/player';
-import type { MerchantOffer, ItemCost } from '../entity/trading';
-import type { Villager } from '../entity/villager';
+import type { MerchantOffer, ItemCost, Merchant } from '../entity/trading';
 
 /** vanilla MerchantOffers.getRecipeFor: the chosen offer if they pay for it (an index of 0 means none was chosen), else the first they do */
 function recipeFor(offers: MerchantOffer[], a: ItemStack | null, b: ItemStack | null, index: number): MerchantOffer | null {
@@ -26,7 +25,7 @@ export class MerchantContainer implements Container {
   /** the villager experience the offer in the result slot would give */
   futureXp = 0;
 
-  constructor(readonly merchant: Villager) {}
+  constructor(readonly merchant: Merchant) {}
 
   get(i: number): ItemStack | null {
     return this.items[i];
@@ -117,7 +116,7 @@ export class MerchantMenu extends ContainerMenu {
   /** a trade was made (the "What a Deal!" advancements) */
   onTraded: ((o: MerchantOffer) => void) | null = null;
 
-  constructor(player: Player, readonly trader: Villager) {
+  constructor(player: Player, readonly trader: Merchant) {
     super(player);
     this.trade = new MerchantContainer(trader);
     this.addSlot(new Slot(this.trade, 0, 136, 37));
@@ -144,7 +143,7 @@ export class MerchantMenu extends ContainerMenu {
 
   /** vanilla Merchant.showProgressBar / canRestock (a wandering trader has neither) */
   showProgressBar(): boolean {
-    return true;
+    return this.trader.showProgressBar();
   }
 
   canRestock(): boolean {

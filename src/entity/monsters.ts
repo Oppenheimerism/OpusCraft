@@ -179,8 +179,8 @@ export class Zombie extends Monster {
     this.goalSelector.addGoal(7, new WaterAvoidingRandomStrollGoal(this, 1.0));
     this.targetSelector.addGoal(1, new HurtByTargetGoal(this).setAlertOthers('zombified_piglin'));
     this.targetSelector.addGoal(2, new NearestAttackablePlayerGoal(this, true));
-    // (villagers even through walls; iron golems in sight)
-    this.targetSelector.addGoal(3, new NearestAttackableMobGoal(this, (e) => e.type === 'villager', false));
+    // (villagers and wandering traders (vanilla AbstractVillager) even through walls; iron golems in sight)
+    this.targetSelector.addGoal(3, new NearestAttackableMobGoal(this, (e) => e.type === 'villager' || e.type === 'wandering_trader', false));
     this.targetSelector.addGoal(3, new NearestAttackableMobGoal(this, (e) => e.type === 'iron_golem', true));
   }
   /** vanilla supportsBreakDoorGoal */
