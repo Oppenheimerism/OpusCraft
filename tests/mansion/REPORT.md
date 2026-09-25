@@ -8,7 +8,8 @@ Branch: `claude/beautiful-darwin-4duqdn` (from main at f08dd21).
 |---|---|---|
 | M1 woodland mansions | done: placement, the grid and every piece vanilla lays out, all 51 room templates, the markers (loot chests, evokers, vindicators; the allays' cells stand empty), the foundation, `/locate structure mansion` | 020ed44 Woodland mansions: great dark oak houses deep in dark forests, … |
 | (merge) | main merged in (horses, donkeys and mules; leads and name tags): no conflicts | 2ff0fcd Merge remote-tracking branch 'origin/main' |
-| M2 ruined portals | done: the seven kinds and all their setups (on the ground, half buried, sea bed, underground, in a mountain, the Nether), all 13 templates, vanilla's processors (crying obsidian, gold taken, lava cooled, magma, aged and mossy bricks, blackstone), the netherrack spread and drips, vines and jungle leaves, waterlogging, the loot chest, `/locate` for all seven; a repaired frame lights | M2COMMIT |
+| M2 ruined portals | done: the seven kinds and all their setups (on the ground, half buried, sea bed, underground, in a mountain, the Nether), all 13 templates, vanilla's processors (crying obsidian, gold taken, lava cooled, magma, aged and mossy bricks, blackstone), the netherrack spread and drips, vines and jungle leaves, waterlogging, the loot chest, `/locate` for all seven; a repaired frame lights | 40883fc Ruined portals: broken nether portals scattered through the Overworld and the Nether, … |
+| (merge) | main merged in: already up to date | |
 | M3 desert wells and fossils | not started | |
 
 ## 2. Shared files changed (all additive)
