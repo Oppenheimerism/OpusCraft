@@ -401,3 +401,30 @@ export async function loadWorldData<T>(worldId: string, name: string): Promise<T
   const r = await tx<{ key: string; data: T }>('chunks', 'readonly', (s) => s.get(worldDataKey(worldId, name)));
   return r?.data;
 }
+
+// ---------------------------------------------------------------------------
+// A world's records just as they're kept, for copying the world whole (storage/worldTransfer.ts: Make Backup and
+// Import World). Its meta is in 'worlds' under its id; the rest is under <world>/ keys.
+
+export type WorldRecordStore = 'chunks' | 'entities';
+
+function worldRange(worldId: string, after: string | null): IDBKeyRange {
+  return after === null ? IDBKeyRange.bound(worldId + '/', worldId + '/￿') : IDBKeyRange.bound(after, worldId + '/￿', true);
+}
+
+export async function countWorldRecords(worldId: string, store: WorldRecordStore): Promise<number> {
+  return (await tx<number>(store, 'readonly', (s) => s.count(worldRange(worldId, null)))) ?? 0;
+}
+
+/** up to `count` of the world's records in key order, from after the key `after` (null: from the first) */
+export async function readWorldRecords(worldId: string, store: WorldRecordStore, after: string | null, count: number): Promise<{ key: string }[]> {
+  return (await tx<{ key: string }[]>(store, 'readonly', (s) => s.getAll(worldRange(worldId, after), count))) ?? [];
+}
+
+/** records written as they are (a meta put in 'worlds' this way skips the meta-save hooks) */
+export async function putRecords(store: WorldRecordStore | 'worlds', list: object[]): Promise<void> {
+  if (!list.length) return;
+  await tx(store, 'readwrite', (s) => {
+    for (const r of list) s.put(r);
+  });
+}

@@ -82,6 +82,7 @@ import { gatewayTravel } from './gatewayTravel';
 // (the deep dark)
 import { setDialViewer } from '../item/compass';
 import { respawnArrival, worldSpawnOf, InitialSpawn, WAIT } from './respawnLogic';
+import { SaveQueue, watchPageLeave, unwatchPageLeave } from './saveOnLeave';
 
 export type { GameOptions } from './options';
 /** vanilla ReceivingLevelScreen.Reason: what the loading screen shows while changing dimension */
@@ -148,6 +149,8 @@ export class Game {
   private blockImages = new Map<string, TexImage>();
   private savedKeys = new Set<string>();
   private autosaveTimer = 0;
+  /** saves never overlap: one asked for while another is being written runs once that one's done */
+  private readonly saves = new SaveQueue(() => this.writeWorld());
   titleScreenFactory: (() => Screen) | null = null;
   pauseScreenFactory: (() => Screen) | null = null;
   deathScreenFactory: (() => Screen) | null = null;
@@ -383,6 +386,8 @@ export class Game {
     // vanilla WorldOpenFlows: a message at once while the save is read and the workers start, then LevelLoadingScreen
     if (!this.inWorld && this.messageScreenFactory) this.setScreen(this.messageScreenFactory(meta.player ? 'Reading world data...' : 'Preparing for world creation...'));
     this.meta = meta;
+    // (the browser asked to keep the saves; the world saved as its page goes away, game/saveOnLeave.ts)
+    watchPageLeave(this);
     const workers = Math.max(2, Math.min(6, (navigator.hardwareConcurrency || 4) - 2));
     this.pool?.terminate();
     this.pool = new WorkerPool(workers, meta.seed, this.atlas.sprites);
@@ -598,7 +603,16 @@ export class Game {
     return deserializeChunk(s);
   }
 
-  async saveWorld(): Promise<void> {
+  /** a save is being written (the page going away doesn't start another meanwhile) */
+  get isSaving(): boolean {
+    return this.saves.running;
+  }
+
+  saveWorld(): Promise<void> {
+    return this.saves.run();
+  }
+
+  private async writeWorld(): Promise<void> {
     if (!this.meta || !this.inWorld || this.meta.transient) return;
     const m = this.meta;
     const p = this.player;
@@ -776,6 +790,7 @@ export class Game {
     this.toasts.clear();
     this.level.entities.length = 0;
     this.inWorld = false;
+    unwatchPageLeave();
     this.spawned = false;
     this.pool?.terminate();
     this.pool = null;
