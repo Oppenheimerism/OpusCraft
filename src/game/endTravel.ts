@@ -25,7 +25,7 @@ import { BLOCKS, STATE_BLOCK, FLAGS, F_COLLIDE, F_WATER, F_LAVA, F_WATERLOGGED, 
 import { END_SPAWN_POINT, endPlatformBlocks } from '../world/gen/endFeatures';
 import { ITEMS } from '../item/item';
 import { saveEntity } from './spawner';
-import { findRespawn, MSG } from './sleep';
+import { respawnArrival, worldSpawnOf } from './respawnLogic';
 
 /** vanilla Block.UPDATE_ALL */
 const UPDATE_ALL = 3;
@@ -105,24 +105,19 @@ function showEndCredits(g: Game): void {
 
 /**
  * home from the End: vanilla ServerPlayer.findRespawnPositionAndUseSpawnBlock(false, DO_NOTHING) — the bed (facing
- * it) if it's still there and clear, else the world spawn; no sound. `ready`: not until it says so (the credits).
- * `respawn`: after the credits, as vanilla PlayerList.respawn(player, true) — a new player keeping everything but
- * its fire and its breath, and a bed that's gone forgotten
+ * it) if it's still there and clear, else somewhere free near the world spawn (game/respawnLogic); no sound. `ready`:
+ * not until it says so (the credits). `respawn`: after the credits, as vanilla PlayerList.respawn(player, true) — a
+ * new player keeping everything but its fire and its breath, and a bed that's gone forgotten
  */
 function goHome(g: Game, from: DimensionType, ready: (() => boolean) | null, respawn: boolean): void {
   const p = g.player;
-  const [bx, by, bz] = p.respawnPos ?? [p.spawnX, p.spawnY, p.spawnZ];
+  const [bx, by, bz] = p.respawnPos ?? worldSpawnOf(g);
+  // (vanilla DimensionTransition.missingRespawnBlock: told so; through the portal the bed stays theirs)
+  const place = respawnArrival(respawn);
   const arrive = (g2: Game): boolean => {
     if (ready && !ready()) return false;
     const pl = g2.player;
-    const at = findRespawn(g2.level, pl);
-    if (at) g2.teleport(at.x, at.y, at.z, at.yaw, 0);
-    else {
-      // (vanilla DimensionTransition.missingRespawnBlock: told so; through the portal the bed stays theirs)
-      if (pl.respawnPos) g2.chat(MSG.noRespawnBlock);
-      if (respawn) pl.respawnPos = null;
-      g2.teleport(pl.spawnX + 0.5, pl.spawnY, pl.spawnZ + 0.5, 0, 0);
-    }
+    if (!place(g2)) return false;
     if (respawn) {
       pl.remainingFireTicks = 0;
       pl.air = 300;

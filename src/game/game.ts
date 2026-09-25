@@ -53,7 +53,7 @@ import type { Merchant } from '../entity/trading';
 import { hasVanishing } from '../item/enchantHelper';
 import { ChestBlockEntity, FurnaceBlockEntity, BarrelBlockEntity, BrewingStandBlockEntity } from '../world/blockEntity';
 import { catSittingOn } from '../entity/cat';
-import { useBed, findRespawn, BED_YROT, MSG, SleepHost } from './sleep';
+import { useBed, BED_YROT, SleepHost } from './sleep';
 import { AmbientTicker } from './animateTick';
 import { ToastComponent, AdvancementToast, RecipeToast } from '../gui/toasts';
 import { PlayerAdvancements, announcement, AdvancementDef } from './advancements';
@@ -77,6 +77,7 @@ import { openJobSite } from './jobSites';
 import { endPortalTravel, PortalArrivals } from './endTravel';
 import { EndDragonFight, ARENA_TICKET_LEVEL } from './endDragonFight';
 import { gatewayTravel } from './gatewayTravel';
+import { respawnArrival, worldSpawnOf } from './respawnLogic';
 
 export type { GameOptions } from './options';
 /** vanilla ReceivingLevelScreen.Reason: what the loading screen shows while changing dimension */
@@ -545,11 +546,13 @@ export class Game {
         this.player.startRiding(v, true);
       }
       if (pd.dead || pd.health <= 0) {
-        // died before quitting: come back respawned at spawn
+        // died before quitting: come back respawned, at the bed or near the world spawn once the chunks there are in
         this.player.health = this.player.maxHealth;
         this.player.food.level = 20;
         this.player.food.saturation = 5;
-        this.player.moveTo(pd.spawn[0] + 0.5, pd.spawn[1], pd.spawn[2] + 0.5, 0, 0);
+        const [x, y, z] = this.player.respawnPos ?? worldSpawnOf(this);
+        this.player.moveTo(x + 0.5, y, z + 0.5, 0, 0);
+        this.arrival = respawnArrival();
       }
     } else {
       this.player.moveTo(0.5, 120, 0.5, 0, 0);
@@ -1022,28 +1025,26 @@ export class Game {
     p.portal = null;
     p.portalCooldown = 0;
     p.spinningEffectIntensity = p.oSpinningEffectIntensity = 0;
-    // vanilla PlayerList.respawn: at the bed (facing it) if it's still there and clear
-    const place = (g: Game): boolean => {
-      const at = findRespawn(g.level, p);
-      if (at) g.teleport(at.x, at.y, at.z, at.yaw, 0);
-      else {
-        if (p.respawnPos) {
-          p.respawnPos = null;
-          g.chat(MSG.noRespawnBlock);
-        }
-        g.teleport(p.spawnX + 0.5, p.spawnY, p.spawnZ + 0.5, 0, 0);
-      }
-      return true;
-    };
+    // vanilla PlayerList.respawn: at the bed (facing it) if it's still there and clear, else somewhere free near the
+    // world spawn (game/respawnLogic), decided once the chunks there are in
+    const place = respawnArrival();
     if (!this.level.entities.includes(p)) this.level.addEntity(p);
+    const [x, y, z] = p.respawnPos ?? worldSpawnOf(this);
     if (this.world.dim !== OVERWORLD) {
       // the bed (and the world spawn) are in the Overworld: go back there, then find the spot
-      const [x, y, z] = p.respawnPos ?? [p.spawnX, p.spawnY, p.spawnZ];
       this.changeDimension(OVERWORLD, x + 0.5, y, z + 0.5, place, false);
       return;
     }
-    place(this);
     this.setScreen(null);
+    if (!this.chunks.isReady(x + 0.5, z + 0.5, 2)) p.moveTo(x + 0.5, y, z + 0.5, 0, 0);
+    else if (place(this)) return;
+    // ("Loading terrain..." till they are, the player held still there)
+    p.dx = p.dy = p.dz = 0;
+    this.chunks.setCenter(p.x, p.z);
+    this.arrival = place;
+    this.spawned = false;
+    this.receivingPortal = null;
+    this.setScreen(this.receivingScreenFactory ? this.receivingScreenFactory('other') : null);
   }
 
   /** hardcore "Spectate World": revive where the player died */
@@ -1202,6 +1203,8 @@ export class Game {
     this.player.spawnX = best[0];
     this.player.spawnY = best[1];
     this.player.spawnZ = best[2];
+    // vanilla ServerPlayer's constructor: a new player starts somewhere free near the world spawn
+    this.arrival = respawnArrival();
     return true;
   }
 
