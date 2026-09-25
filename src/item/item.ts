@@ -423,6 +423,9 @@ for (const m of ['elder_guardian', 'guardian']) reg({ id: `${m}_spawn_egg`, text
   for (const it of sherds) ITEM_LIST.splice(ITEM_LIST.indexOf(it), 1);
   ITEM_LIST.splice(first, 0, ...sherds);
   if (ITEMS.has('conduit')) ITEMS.get('conduit')!.rarity = 'rare';
+  // (M6) the turtle's egg; the turtle egg drawn flat (vanilla item/turtle_egg), with the natural blocks
+  reg({ id: 'turtle_spawn_egg', texture: 'turtle_spawn_egg', creativeTab: 'spawn_eggs' });
+  if (ITEMS.has('turtle_egg')) Object.assign(ITEMS.get('turtle_egg')!, { texture: 'turtle_egg', creativeTab: 'natural' });
 }
 // sugar cane item places the block
 {

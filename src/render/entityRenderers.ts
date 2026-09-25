@@ -1709,7 +1709,7 @@ function shadowRadius(e: Entity): number {
   // (Stage 4: illagers)
   if (RAIDER_SHADOW_RADII[e.type] !== undefined) return RAIDER_SHADOW_RADII[e.type];
   // (Stage 5: ocean)
-  if (OCEAN_SHADOW_RADII[e.type] !== undefined) return OCEAN_SHADOW_RADII[e.type];
+  if (OCEAN_SHADOW_RADII[e.type] !== undefined) return OCEAN_SHADOW_RADII[e.type] * (e instanceof Mob && e.isBaby() ? 0.5 : 1);
   // (Stage 6: tameable animals; a foal's is half)
   let r = HORSE_SHADOW_RADII[e.type] ?? LLAMA_SHADOW_RADII[e.type] ?? PARROT_SHADOW_RADII[e.type] ?? POLAR_BEAR_SHADOW_RADII[e.type] ?? 0;
   switch (e.type) {

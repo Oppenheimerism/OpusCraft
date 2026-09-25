@@ -144,10 +144,9 @@ export abstract class AbstractFish extends WaterAnimal {
     return null;
   }
 
-  /** vanilla getSwimSound: entity.fish.swim, as loud as it's fast (Entity.vibrationAndSoundEffectsFromBlock) */
-  protected override playSwimSound(): void {
-    const v = Math.min(1, Math.sqrt(this.dx * this.dx * 0.2 + this.dy * this.dy + this.dz * this.dz * 0.2) * 0.35);
-    this.playSound('entity.fish.swim', v, 1 + (this.random.nextFloat() - this.random.nextFloat()) * 0.4);
+  /** vanilla getSwimSound: entity.fish.swim (Mob.playSwimSound: as loud as it's fast) */
+  protected override swimSound(): string {
+    return 'entity.fish.swim';
   }
 
   /** vanilla playStepSound: none */
