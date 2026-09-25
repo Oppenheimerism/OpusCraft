@@ -37,7 +37,7 @@ import { Boat, ChestBoat, boatItemInfo, useBoatItem } from '../entity/boat';
 import { isRail, railShape, isAscending } from './rails';
 import { MobEffectInstance, MOB_EFFECTS } from '../entity/effects';
 import { levelOf, miningEfficiency, submergedMiningSpeed, hurtAndBreak, hasBinding } from '../item/enchantHelper';
-import { armorIndex, equipSound } from '../item/equipment';
+import { armorIndex, equipSound, equipableSlot } from '../item/equipment';
 import type { Hand } from '../item/inventory';
 import { isCharged, performShooting, shootingPower, PLAYER_INACCURACY, playerProjectile, useDuration, crossbowUseTick, releaseUsing as releaseCrossbow } from '../item/crossbow';
 
@@ -824,7 +824,7 @@ export class Interaction {
       return true;
     }
     // vanilla ArmorItem.use → Equipable.swapWithEquipmentSlot
-    if (it.armor) return this.swapWithEquipmentSlot(stack);
+    if (it.armor || it.id === 'elytra') return this.swapWithEquipmentSlot(stack);
     // vanilla TridentItem.use: not when one more use would break it; with riptide only in water or rain
     if (it.id === 'trident') {
       if (stack.damage >= it.maxDamage - 1) return false;
@@ -888,7 +888,7 @@ export class Interaction {
   private swapWithEquipmentSlot(stack: ItemStack): boolean {
     const p = this.player;
     const inv = p.inventory;
-    const i = armorIndex(stack.item.armor!.slot);
+    const i = armorIndex(equipableSlot(stack.item)!);
     const cur = inv.armor[i];
     const creative = p.gameMode === 'creative';
     if (cur && ((hasBinding(cur) && !creative) || (cur.count === stack.count && cur.sameItem(stack)))) return false;

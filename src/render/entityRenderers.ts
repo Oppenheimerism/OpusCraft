@@ -85,6 +85,8 @@ import { ShulkerBullet } from '../entity/shulkerBullet';
 import { ItemFrame } from '../entity/itemFrame';
 import { ItemFrameRenderer } from './itemFrameRenderer';
 import { SkullRenderer } from './skullRenderer';
+import { ElytraLayer } from './elytraLayer';
+import { viewVector } from '../entity/elytra';
 import { PistonRenderer } from './pistonRenderer';
 import { ArchaeologyRenderers } from './archaeologyRenderers';
 import { createMob } from '../game/spawner';
@@ -170,6 +172,8 @@ export class EntityRenderDispatcher {
   private readonly frames: ItemFrameRenderer;
   /** mob heads: placed, held, worn and in the inventory */
   private readonly skulls: SkullRenderer;
+  /** worn elytra (and the broken one's torn look as an item) */
+  private readonly elytra: ElytraLayer;
   /** (Stage 4: illagers) the pillager, vindicator, evoker, vex, ravager and the evoker's fangs */
   private readonly raiders: RaiderRenderers;
   /** (Stage 5: ocean) the guardians, their lasers, the elder's ghostly face */
@@ -181,6 +185,7 @@ export class EntityRenderDispatcher {
     this.shulkers = new ShulkerRenderers(gl);
     this.frames = new ItemFrameRenderer(gl, items);
     this.skulls = new SkullRenderer(gl);
+    this.elytra = new ElytraLayer(gl, items);
     this.archaeology = new ArchaeologyRenderers(gl);
     this.endCrystals = new EndCrystalRenderer(gl);
     this.dragons = new EnderDragonRenderer(gl, this.endCrystals.beam);
@@ -533,6 +538,19 @@ export class EntityRenderDispatcher {
       // (vanilla: whirling in a riptide, laid along the look and spun about it)
       pose.rotX(-90 - e.pitch);
       pose.rotY((e.tickCount + p) * -75);
+    }
+    // vanilla PlayerRenderer.setupRotations: gliding, a player tips over to lie along the look over the glide's first
+    // ten ticks, then rolls toward the way it's actually going (the angle from the look to its motion, sideways)
+    if (e.type === 'player' && e.fallFlying) {
+      const h = e.fallFlyTicks + p;
+      if (!e.isAutoSpinAttack()) pose.rotX(Math.min(1, (h * h) / 100) * (-90 - pitch));
+      const [lx, , lz] = viewVector(pitch, rotLerp(p, e.yawO, e.yaw));
+      const d = e.dx * e.dx + e.dz * e.dz, l = lx * lx + lz * lz;
+      if (d > 0 && l > 0) {
+        const j = (e.dx * lx + e.dz * lz) / Math.sqrt(d * l);
+        const k = e.dx * lz - e.dz * lx;
+        pose.rotY((Math.sign(k) * Math.acos(Math.max(-1, Math.min(1, j))) * 180) / Math.PI);
+      }
     }
     // vanilla CatRenderer.setupRotations: lying down, it rolls onto its side (a touch further over by a sleeper)
     if (e instanceof Cat) {
@@ -939,6 +957,8 @@ export class EntityRenderDispatcher {
       // (a mob head's jaw works with the walk: the vehicle's when riding one)
       const w = e.vehicle instanceof LivingEntity ? e.vehicle : e;
       if (head && !head.item.armor) renderHeadItem(b, this.pose, this.items, def.root, head, baby, s, 1, s, w.walkAnimPos - w.walkAnimSpeed * (1 - p), type === 'zombie_villager');
+      // vanilla HumanoidMobRenderer's ElytraLayer
+      this.elytra.render(b, this.pose, e, e.armorItems[2], baby, false);
     }
   }
 
@@ -1132,7 +1152,11 @@ export class EntityRenderDispatcher {
     m.child('left_arm').child('left_sleeve').visible = sp.leftSleeve;
     m.child('right_leg').child('right_pants').visible = sp.rightPants;
     m.child('left_leg').child('left_pants').visible = sp.leftPants;
-    animateHumanoid(m, a.limbSwing, a.limbAmount, a.age, a.headYaw, a.headPitch, attackAnim(e, p), crouch, !!e.vehicle, playerArms(e, this.mainArm));
+    // vanilla HumanoidModel.setupAnim: well into a glide the head bends back to look ahead and the limbs barely swing
+    // (the swing divided by (speed² / 0.2)³)
+    const gliding = e.fallFlyTicks > 4;
+    const still = gliding ? Math.max(1, ((e.dx * e.dx + e.dy * e.dy + e.dz * e.dz) / 0.2) ** 3) : 1;
+    animateHumanoid(m, a.limbSwing, a.limbAmount / still, a.age, a.headYaw, gliding ? -45 : a.headPitch, attackAnim(e, p), crouch, !!e.vehicle, playerArms(e, this.mainArm));
     this.overlay(b, e);
     // vanilla: an invisible player's body isn't drawn (a spectator's is, faintly, to the spectator: themselves), the
     // armour and held items still are; a spectator has no layers at all
@@ -1153,6 +1177,8 @@ export class EntityRenderDispatcher {
       const head = e.inventory.armor[3];
       const w = e.vehicle instanceof LivingEntity ? e.vehicle : e;
       if (head && !head.item.armor) renderHeadItem(b, this.pose, this.items, m, head, false, 1, 1, 1, w.walkAnimPos - w.walkAnimSpeed * (1 - p));
+      // vanilla ElytraLayer
+      this.elytra.render(b, this.pose, e, e.inventory.armor[2], false, crouch);
       // vanilla SpinAttackEffectLayer
       if (e.isAutoSpinAttack()) this.items.trident.renderSpin(b, this.pose, a.age);
     }

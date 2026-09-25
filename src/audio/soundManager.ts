@@ -4,6 +4,7 @@ import type { GameOptions } from '../game/options';
 import type { Player } from '../entity/player';
 import type { Game } from '../game/game';
 import { MinecartSounds } from './minecartSounds';
+import { ElytraSounds } from './elytraSounds';
 import { BiomeAmbience } from './biomeAmbience';
 
 /**
@@ -49,6 +50,8 @@ function categoryOf(name: string): Category {
   if (name === 'item.chorus_fruit.teleport') return 'players';
   // vanilla Shulker and ShulkerBullet.getSoundSource: HOSTILE
   if (name.startsWith('entity.shulker')) return 'hostile';
+  // vanilla ElytraOnPlayerSoundInstance: SoundSource.PLAYERS
+  if (name === 'item.elytra.flying') return 'players';
   // vanilla CrossbowItem: the loading sounds are SoundSource.PLAYERS (the rest the shooter's source)
   if (name.startsWith('item.crossbow.')) return 'players';
   // (the shield's thud and crack are its holder's: a player's)
@@ -149,6 +152,7 @@ export class SoundManager {
   private musicReq = 0;
   private readonly loops: LoopSound[] = [];
   private readonly minecarts = new MinecartSounds(this);
+  private readonly elytra = new ElytraSounds(this);
   readonly biomeAmbience = new BiomeAmbience(this);
 
   constructor() {
@@ -390,6 +394,7 @@ export class SoundManager {
     if (!this.ctx) return;
     const p = game.player;
     this.minecarts.tick(game.level, p);
+    this.elytra.tick(game.level, p);
     // biome loops, additions and (where the biome has its own) mood (vanilla BiomeAmbientSoundsHandler)
     const biomeMood = this.biomeAmbience.tick(game);
     // game music (vanilla MusicManager: 12000..24000 tick gaps); a biome with its own music (the

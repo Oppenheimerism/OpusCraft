@@ -43,7 +43,7 @@ export const ENCHANTABLE = {
   chest_armor: ARMOR('chest'),
   head_armor: ARMOR('head'),
   /** armour pieces, elytra, skulls and carved pumpkins */
-  equippable: (it: Item) => !!it.armor || it.id === 'carved_pumpkin' || isSkullItem(it.id),
+  equippable: (it: Item) => !!it.armor || it.id === 'carved_pumpkin' || isSkullItem(it.id) || it.id === 'elytra',
   sword: TOOL('sword'),
   /** swords and axes */
   sharp_weapon: TOOL('sword', 'axe'),
@@ -60,7 +60,7 @@ export const ENCHANTABLE = {
   mace: (_it: Item) => false,
   fishing: (it: Item) => it.id === 'fishing_rod',
   /** everything that takes damage */
-  durability: (it: Item) => !!it.armor || !!it.tool || it.id === 'bow' || it.id === 'crossbow' || it.id === 'trident' || it.id === 'flint_and_steel' || it.id === 'fishing_rod' || it.id === 'shield',
+  durability: (it: Item) => !!it.armor || !!it.tool || it.id === 'bow' || it.id === 'crossbow' || it.id === 'trident' || it.id === 'flint_and_steel' || it.id === 'fishing_rod' || it.id === 'shield' || it.id === 'elytra',
   vanishing: (it: Item) => ENCHANTABLE.durability(it) || it.id === 'compass' || it.id === 'recovery_compass' || it.id === 'carved_pumpkin' || isSkullItem(it.id),
 };
 const E = ENCHANTABLE;

@@ -466,6 +466,7 @@ function slotFor(it: Item): EquipSlot | null {
   if (it.id === 'shield') return 'offhand';
   if (it.id === 'carved_pumpkin') return 'head';
   if (isSkullItem(it.id)) return 'head';
+  if (it.id === 'elytra') return 'chest';
   return null;
 }
 
@@ -568,6 +569,6 @@ export function dispenseBehaviorFor(stack: ItemStack): DispenseBehavior {
   if (isSkullItem(id)) return skull;
   const b = boatItemInfo(id);
   if (b) return (BEHAVIORS[id] = boat(b.variant, b.chest));
-  if (stack.item.armor || id === 'shield') return armor;
+  if (stack.item.armor || id === 'shield' || id === 'elytra') return armor;
   return DEFAULT_DISPENSE;
 }

@@ -14,6 +14,7 @@ import type { ItemStack } from '../item/item';
 // (Stage 4: shields)
 import { shieldTakesHit, shieldBlocked } from './shield';
 import { checkTotemDeathProtection } from './totem';
+import { travelFallFlying, updateFallFlying } from './elytra';
 
 /** damage sources that ignore armor (vanilla #bypasses_armor) */
 const BYPASSES_ARMOR = new Set(['onFire', 'inWall', 'drown', 'starve', 'fall', 'stalagmite', 'void', 'genericKill', 'magic', 'indirectMagic', 'wither', 'generic', 'cramming', 'flyIntoWall']);
@@ -93,6 +94,10 @@ export abstract class LivingEntity extends Entity {
   killer: Entity | null = null;
   /** vanilla autoSpinAttackTicks: ticks left of a riptide spin */
   autoSpinAttackTicks = 0;
+  /** (Stage 4: the outer End) vanilla shared flag 7: gliding on an elytra (entity/elytra.ts) */
+  fallFlying = false;
+  /** vanilla fallFlyTicks: how long it's been gliding */
+  fallFlyTicks = 0;
   /** vanilla autoSpinAttackDmg: what the spin hits for */
   autoSpinAttackDmg = 0;
   /** vanilla autoSpinAttackItemStack: the trident it spins with */
@@ -482,6 +487,8 @@ export abstract class LivingEntity extends Entity {
     super.tick();
     this.updateSwimAmount();
     this.aiStep();
+    // (Stage 4: the outer End) vanilla LivingEntity.tick: how long it's been gliding
+    this.fallFlyTicks = this.fallFlying ? this.fallFlyTicks + 1 : 0;
     this.updateBodyRotation();
     this.updateWalkAnimation();
     if (this.hurtTime > 0) this.hurtTime--;
@@ -550,6 +557,7 @@ export abstract class LivingEntity extends Entity {
     } else this.noJumpDelay = 0;
     this.xxa *= 0.98;
     this.zza *= 0.98;
+    updateFallFlying(this);
     // vanilla: slow falling and levitation keep resetting the fall
     if (this.hasEffect('slow_falling') || this.hasEffect('levitation')) this.fallDistance = 0;
     // vanilla: a player steering this mount drives it (travelRidden); anything else travels on its own
@@ -712,6 +720,9 @@ export abstract class LivingEntity extends Entity {
       }
       if (g !== 0) this.dy += -g / 4;
       if (this.horizontalCollision && this.isFree(this.bb.move(this.dx, this.dy + 0.6 - this.y + y0, this.dz))) this.dy = 0.3;
+    } else if (this.fallFlying) {
+      // (Stage 4: the outer End) gliding on an elytra (entity/elytra.ts)
+      travelFallFlying(this, g);
     } else {
       const friction = this.blockFriction();
       const f3 = this.onGround ? friction * 0.91 : 0.91;

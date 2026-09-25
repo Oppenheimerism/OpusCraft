@@ -13,6 +13,7 @@ import { burst, bubble, creak, impact, phisem, sweep, thump } from './texture';
 import { voice, vowelGlide } from './voice';
 import { reverbHalf } from './world';
 import { frameSounds } from './frames';
+import { elytraSounds } from './elytra';
 
 /**
  * A flower growing: a soft wet pop as it swells, a hollow rising "bloop" with a woody knock under it, and a faint
@@ -400,5 +401,7 @@ export function outerEndSounds(): Record<string, SoundGen> {
     'entity.shulker_bullet.hurt': sound('entity.shulker_bullet.hurt', 4, bulletBreak, { fadeOut: 0.08 }),
     // (item frames: the end ship hangs its elytra in one)
     ...frameSounds(),
+    // (the elytra: the end ship's treasure)
+    ...elytraSounds(),
   };
 }

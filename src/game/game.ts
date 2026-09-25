@@ -894,6 +894,9 @@ export class Game {
         return k === victim || !k ? `${n} blew up` : `${n} was blown up by ${kn}`;
       case 'fall':
         return `${n} fell from a high place`;
+      // (Stage 4: the outer End) an elytra into a wall
+      case 'flyIntoWall':
+        return `${n} experienced kinetic energy`;
       case 'drown':
         return `${n} drowned`;
       case 'starve':
