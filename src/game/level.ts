@@ -520,7 +520,8 @@ export class Level {
     for (let i = 0; i < this.entities.length; i++) {
       const e = this.entities[i];
       if (e.removed || e.vehicle || this.inTransit.has(e)) continue;
-      if (e !== this.player && !this.isEntityTicking(e.x, e.z)) continue;
+      // (vanilla LocalPlayer.tick: the player stays put while the chunk they're in hasn't come, after a /tp far off)
+      if (e === this.player ? !this.world.isLoaded(Math.floor(e.x), Math.floor(e.z)) : !this.isEntityTicking(e.x, e.z)) continue;
       e.tick();
       if (!e.removed) this.onEntityTick?.(e);
       if (e.passengers.length) this.tickPassengers(e);

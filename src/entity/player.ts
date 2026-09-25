@@ -281,6 +281,16 @@ export class Player extends LivingEntity {
     return this.sprinting ? 0.025999999 : 0.02;
   }
 
+  /** vanilla Player.isAffectedByFluids: flying, water and lava don't slow you (you fly through them as through air) */
+  override isAffectedByFluids(): boolean {
+    return !this.flying;
+  }
+
+  /** vanilla Player.isPushedByFluid: nor do their currents carry you */
+  override isPushedByFluid(): boolean {
+    return !this.flying;
+  }
+
   protected override makesStepSounds(): boolean {
     return !this.flying;
   }

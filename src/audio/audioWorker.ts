@@ -6,7 +6,8 @@ type SynthModule = {
   SOUNDS: Record<string, { variants: number; generate(v: number, sr: number): Float32Array }>;
   MUSIC_TRACK_COUNT: number;
   generateMusicTrack(i: number, sr: number): Float32Array;
-  generateMenuMusic(sr: number): Float32Array;
+  MENU_MUSIC_COUNT: number;
+  generateMenuMusic(i: number, sr: number): Float32Array;
   MUSIC_POOLS: Record<string, number>;
   generatePoolMusic(pool: string, i: number, sr: number): Float32Array;
 };
@@ -14,7 +15,7 @@ type SynthModule = {
 let synth: SynthModule | null = null;
 const loading = import('./synth').then((m) => {
   synth = m as unknown as SynthModule;
-  ctx.postMessage({ type: 'ready', sounds: Object.fromEntries(Object.entries(synth.SOUNDS).map(([k, v]) => [k, v.variants])), music: synth.MUSIC_TRACK_COUNT, pools: synth.MUSIC_POOLS });
+  ctx.postMessage({ type: 'ready', sounds: Object.fromEntries(Object.entries(synth.SOUNDS).map(([k, v]) => [k, v.variants])), music: synth.MUSIC_TRACK_COUNT, menu: synth.MENU_MUSIC_COUNT, pools: synth.MUSIC_POOLS });
 });
 
 ctx.onmessage = async (e: MessageEvent) => {
@@ -28,7 +29,7 @@ ctx.onmessage = async (e: MessageEvent) => {
     } else if (m.type === 'music' && synth) {
       data = synth.generateMusicTrack(m.index ?? 0, m.sr);
     } else if (m.type === 'menu' && synth) {
-      data = synth.generateMenuMusic(m.sr);
+      data = synth.generateMenuMusic(m.index ?? 0, m.sr);
     } else if (m.type === 'pool' && synth) {
       data = synth.generatePoolMusic(m.pool ?? '', m.index ?? 0, m.sr);
     }

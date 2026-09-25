@@ -967,7 +967,11 @@ const TRACKS: TrackDef[] = [
   },
 ];
 
-const MENU: TrackDef = {
+/**
+ * the title screen's pieces (vanilla music.menu has several, one picked each time): dreamier than the game's, with
+ * synth arpeggios and pads under the piano
+ */
+const MENU_TRACKS: TrackDef[] = [{
   // dreamy, a little more motion: synth arpeggios, pads and a piano line
   name: 'Drift',
   seed: 0xd21f7,
@@ -1018,7 +1022,169 @@ const MENU: TrackDef = {
   endChord: '1add9',
   endHold: 7,
   mix: { pad: 0.36, pluck: 0.5, bass: 0.26, bell: 0.26 },
-};
+}, {
+  // bright and open: lydian, the arpeggio turning over a rising line
+  name: 'Glass Harbor',
+  seed: 0x6a55b0,
+  tonic: 72, // C5
+  mode: 'lydian',
+  bpm: 76,
+  beats: 4,
+  lhLow: 36,
+  tone: 0.5,
+  verb: { t60: 3.6, wet: 1.0 },
+  pad: { attack: 2.2, release: 3.2, cutoff: 1700 },
+  sections: [
+    { bars: 4, chords: '1maj9 2add9 1maj9 2add9', lh: 'none', vel: 0.34, pad: 1, arp: 0.9 },
+    {
+      bars: 8,
+      chords: '1maj9 2add9 3m7 1maj7/5 6m7 2add9 5sus4 5',
+      lh: 'sparse',
+      vel: 0.38,
+      pad: 1,
+      arp: 0.9,
+      bass: 0.6,
+      mel: '3:h. 2:q | 1:q 2:q 3:q 5:q | 6:w | 5:h r:h | 3:h. 2:q | 1:q 7,:q 1:q 2:q | 3:w | 2:w',
+    },
+    {
+      bars: 8,
+      chords: '6m9 5add9 1maj7/3 2add9 6m7 3m7 2add9 2add9',
+      lh: 'sparse',
+      vel: 0.37,
+      pad: 1,
+      arp: 1,
+      bass: 0.6,
+      bells: 0.5,
+      mel: "6:q 5:q 3:h | 2:h. 1:q | 3:q 5:q 6:q 1':q | 7:w | 6:h 5:q 3:q | 5:h. 6:q | 5:q 3:q 2:q 1:q | 2:w",
+    },
+    {
+      bars: 8,
+      chords: '1maj9 2add9 3m7 1maj7/5 6m7 2add9 5sus4 5',
+      lh: 'sparse',
+      vel: 0.4,
+      pad: 1,
+      arp: 0.9,
+      bass: 0.6,
+      mel: '3:h. 2:q | 1:q 2:q 3:q 5:q | 6:w | 5:h r:h | 3:h. 2:q | 1:q 7,:q 1:q 2:q | 3:w | 2:w',
+      vary: ['orn', 'double'],
+    },
+    { bars: 4, chords: '1maj9 2add9 1maj9 1maj9', lh: 'sparse', vel: 0.31, pad: 1, arp: 0.6 },
+  ],
+  endChord: '1maj9',
+  endHold: 7,
+  mix: { pad: 0.34, pluck: 0.46, bass: 0.24, bell: 0.28 },
+}, {
+  // a slow dorian waltz, rocking arpeggios under a lantern-lit tune
+  name: 'Paper Lanterns',
+  seed: 0x3c0f2d,
+  tonic: 74, // D5
+  mode: 'dorian',
+  bpm: 66,
+  beats: 3,
+  lhLow: 38,
+  tone: 0.44,
+  verb: { t60: 3.8, wet: 1.0 },
+  pad: { attack: 2.0, release: 3.0, cutoff: 1300 },
+  sections: [
+    { bars: 4, chords: '1m9 4add9 1m9 4add9', lh: 'arp6', vel: 0.32, pad: 0.8, arp: 0.5 },
+    {
+      bars: 8,
+      chords: '1m9 4add9 3maj7 7add9 1m9 4add9 5m7 5m7',
+      lh: 'arp6',
+      vel: 0.37,
+      pad: 0.9,
+      arp: 0.6,
+      mel: '5:h 4:q | 3:h. | 2:q 3:q 4:q | 5:h. | 5:h 6:q | 7:h 6:q | 5:q 4:q 2:q | 1:h.',
+    },
+    {
+      bars: 8,
+      chords: '3maj7 7add9 4add9 1m7 3maj7 7add9 5m7 4add9',
+      lh: 'arp6',
+      vel: 0.36,
+      pad: 1,
+      arp: 0.7,
+      bass: 0.5,
+      mel: '3:h 2:q | 1:h. | 7,:q 6,:q 5,:q | 6,:h. | 3:h 2:q | 1:h 7,:q | 6,:q 5,:q 4,:q | 5,:h.',
+    },
+    {
+      bars: 8,
+      chords: '1m9 4add9 3maj7 7add9 1m9 4add9 5m7 5m7',
+      lh: 'arp6',
+      vel: 0.4,
+      pad: 0.9,
+      arp: 0.6,
+      bells: 0.4,
+      mel: '5:h 4:q | 3:h. | 2:q 3:q 4:q | 5:h. | 5:h 6:q | 7:h 6:q | 5:q 4:q 2:q | 1:h.',
+      vary: ['thirds'],
+    },
+    {
+      bars: 8,
+      chords: '3maj7 7add9 4add9 1m7 3maj7 7add9 5m7 4add9',
+      lh: 'arp6',
+      vel: 0.35,
+      pad: 1,
+      arp: 0.7,
+      bass: 0.5,
+      mel: '3:h 2:q | 1:h. | 7,:q 6,:q 5,:q | 6,:h. | 3:h 2:q | 1:h 7,:q | 6,:q 5,:q 4,:q | 5,:h.',
+      vary: ['sparse'],
+    },
+    { bars: 4, chords: '1m9 4add9 1m9 1m9', lh: 'arp6', vel: 0.3, pad: 0.8, arp: 0.4 },
+  ],
+  endChord: '1m9',
+  endHold: 7.5,
+  mix: { pad: 0.32, pluck: 0.4, bass: 0.22, bell: 0.24 },
+}, {
+  // low and rolling, in A minor: bass and bells round a patient, climbing line
+  name: 'Low Tide',
+  seed: 0x71de5a,
+  tonic: 69, // A4
+  mode: 'aeolian',
+  bpm: 72,
+  beats: 4,
+  lhLow: 36,
+  tone: 0.42,
+  verb: { t60: 3.5, wet: 1.0 },
+  pad: { attack: 1.6, release: 2.6, cutoff: 1400 },
+  sections: [
+    { bars: 4, chords: '6maj7 7add9 1m9 1m9', lh: 'none', vel: 0.33, pad: 1, arp: 0.8 },
+    {
+      bars: 8,
+      chords: '1m9 6maj7 3maj7 7add9 1m9 6maj7 4m9 5m7',
+      lh: 'sparse',
+      vel: 0.37,
+      pad: 1,
+      arp: 0.8,
+      bass: 0.7,
+      mel: 'r:q 1:q 3:q 5:q | 6:h 5:h | 3:h. r:q | r:w | r:q 1:q 3:q 5:q | 7:h 6:q 5:q | 4:w | 3:w',
+    },
+    {
+      bars: 8,
+      chords: '4m9 5m7 6maj7 3maj7 4m9 5m7 6maj7 7add9',
+      lh: 'sparse',
+      vel: 0.38,
+      pad: 1,
+      arp: 1,
+      bass: 0.7,
+      bells: 0.6,
+      mel: "6:h 5:q 4:q | 5:w | 3:q 4:q 5:q 6:q | 7:w | 1':h 7:q 6:q | 5:h. 3:q | 4:q 5:q 6:q 5:q | 5:w",
+    },
+    {
+      bars: 8,
+      chords: '1m9 6maj7 3maj7 7add9 1m9 6maj7 4m9 5m7',
+      lh: 'sparse',
+      vel: 0.4,
+      pad: 1,
+      arp: 0.9,
+      bass: 0.7,
+      mel: 'r:q 1:q 3:q 5:q | 6:h 5:h | 3:h. r:q | r:w | r:q 1:q 3:q 5:q | 7:h 6:q 5:q | 4:w | 3:w',
+      vary: ['orn', 'octave'],
+    },
+    { bars: 4, chords: '6maj7 7add9 1m9 1m9', lh: 'sparse', vel: 0.31, pad: 1, arp: 0.6 },
+  ],
+  endChord: '1m9',
+  endHold: 8,
+  mix: { pad: 0.36, pluck: 0.48, bass: 0.28, bell: 0.26 },
+}];
 
 export const MUSIC_TRACKS = TRACKS.length;
 export const MUSIC_TRACK_NAMES = TRACKS.map((t) => t.name);
@@ -1028,13 +1194,17 @@ export function renderMusicTrack(index: number, sr: number): Float32Array {
   return renderTrack(TRACKS[i], sr);
 }
 
-export function renderMenuMusic(sr: number): Float32Array {
-  return renderTrack(MENU, sr);
+export const MENU_TRACK_COUNT = MENU_TRACKS.length;
+export const MENU_TRACK_NAMES = MENU_TRACKS.map((t) => t.name);
+
+export function renderMenuMusic(index: number, sr: number): Float32Array {
+  const i = ((Math.floor(index) % MENU_TRACKS.length) + MENU_TRACKS.length) % MENU_TRACKS.length;
+  return renderTrack(MENU_TRACKS[i], sr);
 }
 
 /** Dev helper: count melody bars whose written durations don't fill the bar. */
 export function checkScores(): { name: string; misaligned: number; seconds: number }[] {
-  return [...TRACKS, MENU].map((d) => {
+  return [...TRACKS, ...MENU_TRACKS].map((d) => {
     const sc = buildScore(d, new Rng(d.seed));
     return { name: d.name, misaligned: sc.misaligned, seconds: (sc.endBeat * 60) / d.bpm };
   });
