@@ -4,6 +4,7 @@ import { DEFAULT_GAME_RULES, GameRules } from './gameRules';
 import { FurnaceBlockEntity, SpawnerBlockEntity } from '../world/blockEntity';
 import { tickSpawner } from './baseSpawner';
 import type { ItemStack } from '../item/item';
+import type { FireworkExplosion } from '../item/fireworks';
 import { World } from '../world/world';
 import type { Entity } from '../entity/entity';
 import type { Player } from '../entity/player';
@@ -88,6 +89,8 @@ export interface ParticleSink {
   dust?(x: number, y: number, z: number, r: number, g: number, b: number, scale: number): void;
   /** vanilla EFFECT / INSTANT_EFFECT (SpellParticle) in a colour, flung out by `power` (a splash potion's burst) */
   spell?(kind: 'effect' | 'instant_effect' | 'witch', x: number, y: number, z: number, xd: number, yd: number, zd: number, r: number, g: number, b: number, power?: number): void;
+  /** (fireworks) vanilla ClientLevel.createFireworks for a rocket with stars: their burst (render/fireworkParticles.ts) */
+  fireworks?(x: number, y: number, z: number, xd: number, yd: number, zd: number, explosions: readonly FireworkExplosion[]): void;
 }
 
 /** vanilla Block.UPDATE_NEIGHBORS: setBlock tells the six neighbours (neighborChanged) */

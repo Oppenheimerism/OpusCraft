@@ -21,6 +21,8 @@ import { SPAWN_EGG_TEXTURES } from './mobs';
 import { ILLAGER_ITEMS } from './itemlib/illagers';
 // (Stage 5: ocean)
 import { OCEAN_ITEMS } from './itemlib/ocean';
+// (fireworks: the star's grey ball and the overlay its colours tint)
+import { FIREWORK_ITEMS } from './fireworks';
 
 export const ITEM_TEXTURES: Record<string, () => TexImage> = {
   ...SPAWN_EGG_TEXTURES,
@@ -39,4 +41,5 @@ export const ITEM_TEXTURES: Record<string, () => TexImage> = {
   ...ILLAGER_ITEMS,
   ...OCEAN_ITEMS,
   ...ARCHAEOLOGY_ITEMS,
+  ...FIREWORK_ITEMS,
 };

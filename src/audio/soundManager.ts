@@ -52,6 +52,8 @@ function categoryOf(name: string): Category {
   if (name.startsWith('entity.shulker')) return 'hostile';
   // vanilla ElytraOnPlayerSoundInstance: SoundSource.PLAYERS
   if (name === 'item.elytra.flying') return 'players';
+  // vanilla: a rocket's launch and its burst are SoundSource.AMBIENT (a dispenser's shot NEUTRAL)
+  if (name.startsWith('entity.firework_rocket.') && name !== 'entity.firework_rocket.shoot') return 'ambient';
   // vanilla CrossbowItem: the loading sounds are SoundSource.PLAYERS (the rest the shooter's source)
   if (name.startsWith('item.crossbow.')) return 'players';
   // (the shield's thud and crack are its holder's: a player's)
@@ -112,6 +114,8 @@ const ALIASES: [RegExp, string][] = [
   [/^entity\.shulker\.teleport$/, 'entity.enderman.teleport'],
   // vanilla sounds.json: a shield breaking (or knocked down) is the item-break sample, random/break
   [/^item\.shield\.break$/, 'entity.item.break'],
+  // vanilla sounds.json: a dispenser shoots a rocket with the bow's twang, random/bow
+  [/^entity\.firework_rocket\.shoot$/, 'entity.arrow.shoot'],
   // vanilla sounds.json: some villagers at work make their workstation's own sound
   [/^entity\.villager\.work_weaponsmith$/, 'block.grindstone.use'],
   [/^entity\.villager\.work_armorer$/, 'block.blast_furnace.fire_crackle'],

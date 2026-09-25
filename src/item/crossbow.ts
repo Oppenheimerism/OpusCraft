@@ -23,12 +23,13 @@
 // (EntityRenderDispatcher.drawHeldItem) the stack picks its pulling / loaded texture by itself.
 // Vanilla quirk kept for whoever ports CrossbowAttack.stop: it clears the charge of getUseItem() after
 // stopUsingItem(), i.e. of nothing, so a mob that gives up keeps its crossbow loaded.
-// No firework rockets yet: only arrows are loaded, but a charged 'firework_rocket' is already told apart
-// where vanilla does (1.6 speed, 3 durability, the crossbow_firework texture).
+// A firework rocket (a player's, from either hand) loads as an arrow does and flies off at 1.6, wearing the crossbow by
+// three; it goes off on whatever it hits (entity/fireworkRocket.ts).
 
 import { ItemStack, ITEMS, cloneTag, type ChargedProjectile } from './item';
 import { levelOf, hurtAndBreak } from './enchantHelper';
 import { Arrow } from '../entity/arrow';
+import { FireworkRocket } from '../entity/fireworkRocket';
 import type { Level } from '../game/level';
 import type { Entity } from '../entity/entity';
 import type { LivingEntity } from '../entity/living';
@@ -189,13 +190,17 @@ function isArrow(s: ItemStack): boolean {
 }
 
 /**
- * vanilla Player.getProjectile for a crossbow: an arrow (or firework) held in the offhand, else the first
- * arrow in the inventory, else, with infinite materials (creative), a new arrow; null: nothing to load
+ * vanilla Player.getProjectile for a crossbow: an arrow or firework held in the offhand, else in the main hand
+ * (ProjectileWeaponItem.getHeldProjectile), else the first arrow in the inventory, else, with infinite materials
+ * (creative), a new arrow; null: nothing to load
  */
 export function playerProjectile(p: Player): ItemStack | null {
   const inv = p.inventory;
+  const held = (s: ItemStack | null): s is ItemStack => !!s && (isArrow(s) || s.item.id === 'firework_rocket');
   const off = inv.offhand;
-  if (off && (isArrow(off) || off.item.id === 'firework_rocket')) return off;
+  if (held(off)) return off;
+  const main = inv.inHand('main');
+  if (held(main)) return main;
   const i = inv.findSlot(isArrow);
   if (i >= 0) return inv.main[i];
   return p.gameMode === 'creative' ? ItemStack.of('arrow') : null;
@@ -243,9 +248,9 @@ export function performShooting(level: Level, shooter: LivingEntity, stack: Item
   for (let i = 0; i < n; i++) {
     const angle = f2 + f3 * Math.floor((i + 1) / 2) * f1;
     f3 = -f3;
-    const arrow = createArrow(level, shooter, stack, list[i], !!player);
-    shootProjectile(level, shooter, arrow, i, velocity, inaccuracy, angle, target);
-    level.addEntity(arrow);
+    const shot = list[i].id === 'firework_rocket' ? createFirework(level, shooter, list[i]) : createArrow(level, shooter, stack, list[i], !!player);
+    shootProjectile(level, shooter, shot, i, velocity, inaccuracy, angle, target);
+    level.addEntity(shot);
     // vanilla getDurabilityUse: 3 for a firework rocket, 1 for an arrow
     if (hurtAndBreak(stack, list[i].id === 'firework_rocket' ? 3 : 1, infinite)) {
       breakWeapon(level, shooter, stack);
@@ -274,6 +279,15 @@ function createArrow(level: Level, shooter: LivingEntity, weapon: ItemStack, p: 
   return a;
 }
 
+/**
+ * vanilla CrossbowItem.createProjectile for a firework: the rocket (its stars and all) from 0.15 below the shooter's
+ * eyes, shot at an angle
+ */
+function createFirework(level: Level, shooter: LivingEntity, p: ChargedProjectile): FireworkRocket {
+  const ammo = new ItemStack(ITEMS.get('firework_rocket')!, 1, 0, cloneTag(p.tag ?? null));
+  return FireworkRocket.shot(level, ammo, shooter.x, shooter.y + shooter.eyeHeight - 0.15, shooter.z, shooter);
+}
+
 type V3 = [number, number, number];
 
 /** vanilla Entity.calculateViewVector (degrees) */
@@ -290,7 +304,7 @@ function viewVector(xRot: number, yRot: number): V3 {
  * Otherwise the shooter's view turned about its up vector (a quaternion from the axis and angle). The
  * shooter's own motion isn't added (unlike a bow's shootFromRotation). Each shot plays item.crossbow.shoot.
  */
-function shootProjectile(level: Level, shooter: LivingEntity, a: Arrow, index: number, velocity: number, inaccuracy: number, angle: number, target: LivingEntity | null): void {
+function shootProjectile(level: Level, shooter: LivingEntity, a: Arrow | FireworkRocket, index: number, velocity: number, inaccuracy: number, angle: number, target: LivingEntity | null): void {
   let v: V3;
   if (target) {
     const d0 = target.x - shooter.x, d1 = target.z - shooter.z;

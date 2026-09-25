@@ -199,6 +199,8 @@ shaped('lead', 2, ['~~ ', '~O ', '  ~'], { '~': 'string', O: 'slime_ball' });
 shaped('magma_block', 1, ['##', '##'], { '#': 'magma_cream' });
 shapeless('blaze_powder', 2, 'blaze_rod');
 shapeless('fire_charge', 3, 'gunpowder', 'blaze_powder', ['coal', 'charcoal']);
+// vanilla firework_rocket_simple: three rockets of flight 1 (the item's default); the rest are special recipes (item/fireworks.ts)
+shapeless('firework_rocket', 3, 'paper', 'gunpowder');
 shapeless('magma_cream', 1, 'blaze_powder', 'slime_ball');
 shapeless('ender_eye', 1, 'ender_pearl', 'blaze_powder');
 shaped('end_crystal', 1, ['GGG', 'GEG', 'GTG'], { G: 'glass', E: 'ender_eye', T: 'ghast_tear' });
