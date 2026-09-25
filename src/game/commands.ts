@@ -22,6 +22,7 @@ import { Creeper } from '../entity/monsters';
 import { createMinecart, MINECART_TYPES } from '../entity/minecart';
 import { createBoat, BOAT_TYPES, BOAT_WOODS } from '../entity/boat';
 import { EndCrystal } from '../entity/endCrystal';
+import { ItemFrame } from '../entity/itemFrame';
 import { MOB_EFFECTS, MobEffect, MobEffectInstance, mobEffect } from '../entity/effects';
 import { ENCHANTMENTS, areCompatible, canEnchant, enchantmentLine } from '../item/enchantments';
 import { craftingEnchants, setCraftingEnchants, weaponOf } from '../item/enchantHelper';
@@ -34,6 +35,7 @@ import { locateMonument } from './monuments';
 import { locateOceanStructure } from './treasureMaps';
 // (temples)
 import { templeKind, locateTemple } from './temples';
+import { locateEndCity } from './endCities';
 import { locateMansion } from './mansions';
 import { isRuinedPortal, locateRuinedPortal } from './ruinedPortals';
 
@@ -385,11 +387,72 @@ function snbtStack(e: string): ItemStack | null {
   return s;
 }
 
+/** the plain values at the top of an SNBT compound: numbers (their b/s/L/f/d dropped), strings, true and false */
+export function snbtScalars(nbt: string): Record<string, number | string | boolean> {
+  const out: Record<string, number | string | boolean> = {};
+  const s = nbt.trim(), n = s.length;
+  if (s[0] !== '{') return out;
+  let i = 1;
+  const ws = () => {
+    while (i < n && /\s/.test(s[i])) i++;
+  };
+  const quoted = () => {
+    const q = s[i++];
+    let v = '';
+    while (i < n && s[i] !== q) {
+      if (s[i] === '\\') i++;
+      v += s[i++];
+    }
+    i++;
+    return v;
+  };
+  while (i < n) {
+    ws();
+    if (s[i] === '}') break;
+    let key = '';
+    if (s[i] === '"' || s[i] === "'") key = quoted();
+    else while (i < n && /[\w.+-]/.test(s[i])) key += s[i++];
+    ws();
+    if (s[i] !== ':') break;
+    i++;
+    ws();
+    if (s[i] === '"' || s[i] === "'") out[key] = quoted();
+    else if (s[i] === '{' || s[i] === '[') {
+      // (a compound or a list: passed over)
+      let depth = 0, q = '';
+      for (; i < n; i++) {
+        const ch = s[i];
+        if (q) {
+          if (ch === '\\') i++;
+          else if (ch === q) q = '';
+        } else if (ch === '"' || ch === "'") q = ch;
+        else if (ch === '{' || ch === '[') depth++;
+        else if ((ch === '}' || ch === ']') && --depth === 0) {
+          i++;
+          break;
+        }
+      }
+    } else {
+      let v = '';
+      while (i < n && !/[,}\s]/.test(s[i])) v += s[i++];
+      const num = /^([-+]?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?)[bslfd]?$/i.exec(v);
+      out[key] = num ? Number(num[1]) : v === 'true' ? true : v === 'false' ? false : v;
+    }
+    ws();
+    if (s[i] === ',') i++;
+  }
+  return out;
+}
+
 /**
  * vanilla Mob.readAdditionalSaveData for /summon's entity data: ArmorItems (feet to head) and HandItems (main, off),
  * ArmorDropChances / HandDropChances, CanPickUpLoot, PersistenceRequired
  */
 function mobData(m: Mob, nbt: string): void {
+  // (a mob's own saved values: a parrot's or a horse's Variant, a sheep's Color, a baby's Age)
+  m.readSummonData(snbtScalars(nbt));
+  // (a mob's own entity data, as a shulker's AttachFace, Peek and Color)
+  (m as { readEntityData?: (nbt: string) => void }).readEntityData?.(nbt);
   const slots = { ArmorItems: ['feet', 'legs', 'chest', 'head'], HandItems: ['mainhand', 'offhand'] } as const;
   for (const [key, names] of Object.entries(slots)) {
     const list = snbtEntries(nbt, key);
@@ -681,6 +744,11 @@ export const COMMANDS: Record<string, CommandDef> = {
         const cr = new EndCrystal(lvl, x, y, z);
         if (c.args[4] && /ShowBottom:\s*(0b|false)/.test(c.line.slice(c.args[4].pos))) cr.showBottom = false;
         e = cr;
+      } else if (type === 'item_frame' || type === 'glow_item_frame') {
+        // (vanilla: it hangs in the block summoned in, facing south unless its entity data says; {Facing:1b} on a floor)
+        const f = new ItemFrame(lvl, type, Math.floor(x), Math.floor(y), Math.floor(z));
+        if (c.args[4]) f.readEntityData(c.line.slice(c.args[4].pos));
+        e = f;
       } else if (BOAT_TYPES.includes(type)) {
         // the wood is entity data in 1.21: /summon boat ~ ~ ~ {Type:"spruce"}
         const wood = c.args[4] ? /Type:\s*"?([a-z_]+)"?/.exec(c.line.slice(c.args[4].pos))?.[1] : undefined;
@@ -724,6 +792,13 @@ export const COMMANDS: Record<string, CommandDef> = {
       const temple = templeKind(name);
       if (temple) {
         const t = dim.id === 'overworld' ? locateTemple(c.game.level.seed, temple, x, z) : null;
+        if (!t) throw new CommandError(`Could not find a structure of type "${name}" nearby`);
+        c.ok(`The nearest ${name} is at §a[${t[0]}, ~, ${t[1]}]§r (${Math.floor(Math.hypot(t[0] - x, t[1] - z))} blocks away)`);
+        return;
+      }
+      // (Stage 4: the outer End) end cities (game/endCities)
+      if (name === 'minecraft:end_city') {
+        const t = dim.id === 'the_end' ? locateEndCity(c.game.level.seed, x, z) : null;
         if (!t) throw new CommandError(`Could not find a structure of type "${name}" nearby`);
         c.ok(`The nearest ${name} is at §a[${t[0]}, ~, ${t[1]}]§r (${Math.floor(Math.hypot(t[0] - x, t[1] - z))} blocks away)`);
         return;

@@ -42,6 +42,12 @@ import { Ocelot } from '../entity/ocelot';
 import { Horse, Donkey, Mule } from '../entity/horse';
 import { Llama, TraderLlama } from '../entity/llama';
 import { CatSpawner } from './catSpawner';
+import { WanderingTraderSpawner } from './wanderingTraderSpawner';
+import { WanderingTrader } from '../entity/wanderingTrader';
+import { SnowGolem } from '../entity/snowGolem';
+import { Parrot } from '../entity/parrot';
+import { PolarBear } from '../entity/polarBear';
+import { shoulderHooks } from '../entity/shoulder';
 import { IronGolem } from '../entity/ironGolem';
 import { ZombieVillager } from '../entity/zombieVillager';
 import { Zombie, ZombifiedPiglin, Skeleton, WitherSkeleton, Creeper, Spider, CaveSpider, Enderman, Slime, MagmaCube, Monster, validSpawnBlock } from '../entity/monsters';
@@ -52,10 +58,12 @@ import { Boat, createBoat, BOAT_TYPES } from '../entity/boat';
 import { EndCrystal } from '../entity/endCrystal';
 import { LeashKnot } from '../entity/leash';
 import { EnderDragon } from '../entity/enderDragon';
+import { Shulker } from '../entity/shulker';
+import { ItemFrame } from '../entity/itemFrame';
 import { moonPhase } from '../render/environment';
 import { tickInhabitedTime } from './difficulty';
 import { BIOMES } from '../world/gen/biomes';
-import { BLOCKS, STATE_BLOCK, FLAGS, F_AIR, F_OPAQUE, F_FULL_COLLISION, F_WATER, F_LAVA, COLLISION } from '../world/block';
+import { BLOCKS, STATE_BLOCK, FLAGS, F_AIR, F_OPAQUE, F_FULL_COLLISION, F_WATER, F_LAVA, F_LEAVES, COLLISION } from '../world/block';
 import { fluidType, FLUID_LAVA } from '../world/fluids';
 import { MIN_Y } from '../world/constants';
 import { AABB } from '../core/aabb';
@@ -105,6 +113,10 @@ export const MOB_TYPES: Record<string, (l: Level) => Mob> = {
   mule: (l) => new Mule(l),
   llama: (l) => new Llama(l),
   trader_llama: (l) => new TraderLlama(l),
+  wandering_trader: (l) => new WanderingTrader(l),
+  snow_golem: (l) => new SnowGolem(l),
+  parrot: (l) => new Parrot(l),
+  polar_bear: (l) => new PolarBear(l),
   ender_dragon: (l) => new EnderDragon(l),
 };
 
@@ -127,6 +139,12 @@ export function createMob(type: string, level: Level): Mob | null {
   return f ? f(level) : null;
 }
 
+// (Stage 4: the outer End) the shulker
+MOB_TYPES.shulker = (l) => new Shulker(l);
+
+// (a parrot coming down off a player's shoulder)
+shoulderHooks.load = (d, level) => loadEntity(d, level);
+
 /** serialize an entity for chunk storage (mobs, dropped items, minecarts); riders go inside their vehicle's record */
 export function saveEntity(e: Entity): SavedEntity | null {
   return e.vehicle ? null : saveWithPassengers(e);
@@ -144,6 +162,8 @@ function saveWithPassengers(e: Entity): SavedEntity | null {
 function saveOne(e: Entity): SavedEntity | null {
   if (e instanceof Mob) return e.health > 0 && !e.removed ? e.save() : null;
   if (e instanceof AbstractMinecart || e instanceof Boat || e instanceof EndCrystal || e instanceof LeashKnot) return e.removed ? null : e.save();
+  // (vanilla: item frames are kept with their chunk, and what they hold)
+  if (e instanceof ItemFrame) return e.removed ? null : e.save();
   // (vanilla: arrows and tridents are kept with their chunk, stuck where they landed)
   if (e instanceof Arrow) return e.removed ? null : e.save();
   if (e instanceof ItemEntity && !e.removed) {
@@ -189,6 +209,11 @@ function loadOne(d: SavedEntity, level: Level): Entity | null {
     c.load(d);
     return c;
   }
+  if (d.id === 'item_frame' || d.id === 'glow_item_frame') {
+    const f = new ItemFrame(level, d.id);
+    f.load(d);
+    return f;
+  }
   if (d.id === 'leash_knot') return LeashKnot.load(level, d);
   const cart = createMinecart(d.id, level);
   if (cart) {
@@ -210,13 +235,14 @@ function loadOne(d: SavedEntity, level: Level): Entity | null {
 /** entities that belong to chunk storage (whatever carries the player is saved with the player: vanilla RootVehicle) */
 export function isChunkSaved(e: Entity): boolean {
   if (e.passengers.some((p) => p.type === 'player')) return false;
+  if (e instanceof ItemFrame) return true;
   return e instanceof AbstractMinecart || e instanceof Boat || e instanceof Mob || e instanceof ItemEntity || e instanceof EndCrystal || e instanceof Arrow || e instanceof LeashKnot;
 }
 
 const ENTITY_NAMES: Record<string, string> = {
   pig: 'Pig', cow: 'Cow', sheep: 'Sheep', chicken: 'Chicken', zombie: 'Zombie', zombie_villager: 'Zombie Villager', skeleton: 'Skeleton', creeper: 'Creeper', spider: 'Spider',
   villager: 'Villager', iron_golem: 'Iron Golem', cave_spider: 'Cave Spider', enderman: 'Enderman', slime: 'Slime', magma_cube: 'Magma Cube', zombified_piglin: 'Zombified Piglin', ghast: 'Ghast', blaze: 'Blaze', wither_skeleton: 'Wither Skeleton', squid: 'Squid', bat: 'Bat', hoglin: 'Hoglin', zoglin: 'Zoglin', strider: 'Strider', piglin: 'Piglin',
-  witch: 'Witch', husk: 'Husk', stray: 'Stray', drowned: 'Drowned', silverfish: 'Silverfish', wolf: 'Wolf', cat: 'Cat', ocelot: 'Ocelot', horse: 'Horse', donkey: 'Donkey', mule: 'Mule', llama: 'Llama', trader_llama: 'Trader Llama', llama_spit: 'Llama Spit', fireball: 'Fireball', small_fireball: 'Small Fireball',
+  witch: 'Witch', husk: 'Husk', stray: 'Stray', drowned: 'Drowned', silverfish: 'Silverfish', wolf: 'Wolf', cat: 'Cat', ocelot: 'Ocelot', horse: 'Horse', donkey: 'Donkey', mule: 'Mule', llama: 'Llama', trader_llama: 'Trader Llama', wandering_trader: 'Wandering Trader', snow_golem: 'Snow Golem', parrot: 'Parrot', polar_bear: 'Polar Bear', llama_spit: 'Llama Spit', fireball: 'Fireball', small_fireball: 'Small Fireball',
   arrow: 'Arrow', tnt: 'Primed TNT', lightning_bolt: 'Lightning Bolt', item: 'Item', experience_orb: 'Experience Orb', falling_block: 'Falling Block', player: 'Player',
   egg: 'Thrown Egg', snowball: 'Snowball', ender_pearl: 'Thrown Ender Pearl', potion: 'Potion', trident: 'Trident',
   minecart: 'Minecart', chest_minecart: 'Minecart with Chest', boat: 'Boat', chest_boat: 'Boat with Chest', end_crystal: 'End Crystal',
@@ -238,9 +264,12 @@ export function entityDisplayName(e: Entity | string): string {
   return ENTITY_NAMES[t] ?? t;
 }
 
+// (Stage 4: the outer End)
+Object.assign(ENTITY_NAMES, { shulker: 'Shulker', shulker_bullet: 'Shulker Bullet', item_frame: 'Item Frame', glow_item_frame: 'Glow Item Frame' });
+
 /** entity type ids accepted by /summon */
 export function summonableTypes(): string[] {
-  return [...Object.keys(MOB_TYPES), 'tnt', 'experience_orb', 'arrow', 'trident', 'lightning_bolt', ...MINECART_TYPES, ...BOAT_TYPES, 'end_crystal'];
+  return [...Object.keys(MOB_TYPES), 'tnt', 'experience_orb', 'arrow', 'trident', 'lightning_bolt', ...MINECART_TYPES, ...BOAT_TYPES, 'end_crystal', 'item_frame', 'glow_item_frame'];
 }
 
 /** vanilla MobCategory caps (per 289 spawnable chunks) */
@@ -388,14 +417,23 @@ function settingsForLand(name: string): Omit<MobSettings, 'water' | 'ambient'> {
     case 'old_growth_spruce_taiga':
     case 'swamp':
       return { creature: farmAnimals(), monster: monsters(), creatureProbability: 0.1 };
+    // vanilla OverworldBiomes.jungle, sparseJungle and bambooJungle (baseJungleSpawns): parrots in the jungle and the
+    // bamboo, and pandas (not in the game yet: picked, and nothing comes)
     case 'jungle':
     case 'sparse_jungle':
-    case 'bamboo_jungle':
-      return { creature: [...farmAnimals(), { type: 'chicken', weight: 10, min: 4, max: 4 }], monster: monsters(), creatureProbability: 0.1 };
-    // vanilla BiomeDefaultFeatures.snowySpawns: fewer skeletons, and strays instead (no rabbits or polar bears yet)
+    case 'bamboo_jungle': {
+      const more = name === 'jungle' ? [S_('parrot', 40, 1, 2), S_('panda', 1, 1, 2)] : name === 'bamboo_jungle' ? [S_('parrot', 40, 1, 2), S_('panda', 80, 1, 2)] : [];
+      return { creature: [...farmAnimals(), { type: 'chicken', weight: 10, min: 4, max: 4 }, ...more], monster: monsters(), creatureProbability: 0.1 };
+    }
+    // vanilla BiomeDefaultFeatures.snowySpawns: rabbits (not in the game yet: their share of the picks comes to
+    // nothing) and now and then polar bears; fewer skeletons, and strays instead
     case 'snowy_plains':
     case 'ice_spikes':
-      return { creature: [], monster: [...monsters(95, 20), S_('stray', 80, 4, 4)], creatureProbability: 0.07 };
+      return { creature: [S_('rabbit', 10, 2, 3), S_('polar_bear', 1, 1, 2)], monster: [...monsters(95, 20), S_('stray', 80, 4, 4)], creatureProbability: 0.07 };
+    // vanilla OverworldBiomes.frozenOcean: polar bears out on the ice
+    case 'frozen_ocean':
+    case 'deep_frozen_ocean':
+      return { creature: [S_('polar_bear', 1, 1, 2)], monster: monsters(), creatureProbability: 0.1 };
     // (goats and rabbits aren't in the game yet)
     case 'frozen_peaks':
     case 'jagged_peaks':
@@ -415,7 +453,7 @@ function settingsForLand(name: string): Omit<MobSettings, 'water' | 'ambient'> {
 }
 
 const SETTINGS = new Map<number, MobSettings>();
-function biomeSettings(id: number): MobSettings {
+export function biomeSettings(id: number): MobSettings {
   let s = SETTINGS.get(id);
   if (!s) {
     s = settingsFor(BIOMES[id]?.name ?? 'plains');
@@ -444,6 +482,8 @@ export class NaturalSpawner {
   readonly patrols = new PatrolSpawner();
   /** vanilla CatSpawner */
   readonly cats = new CatSpawner();
+  /** vanilla WanderingTraderSpawner (its wait and chance are saved with the world: game.ts) */
+  readonly traders = new WanderingTraderSpawner();
 
   constructor(readonly level: Level, readonly worldSeed: number) {}
 
@@ -472,6 +512,7 @@ export class NaturalSpawner {
     // (Stage 4: patrols) vanilla ServerLevel.tickCustomSpawners
     this.patrols.tick(lvl, spawnEnemies);
     this.cats.tick(lvl);
+    this.traders.tick(lvl);
     const pcx = Math.floor(p.x) >> 4, pcz = Math.floor(p.z) >> 4;
     const r = Math.min(8, lvl.simulationDistance);
     const chunks: [number, number][] = [];
@@ -578,9 +619,9 @@ export class NaturalSpawner {
   }
 
   /** vanilla SpawnPlacements ON_GROUND: valid floor, two empty blocks */
-  private isSpawnPositionOk(x: number, y: number, z: number, fireImmune = false): boolean {
+  private isSpawnPositionOk(x: number, y: number, z: number, fireImmune = false, type = ''): boolean {
     const w = this.level.world;
-    return validSpawnBlock(this.level, x, y - 1, z, fireImmune) && isValidEmptySpawnBlock(w.getState(x, y, z)) && isValidEmptySpawnBlock(w.getState(x, y + 1, z));
+    return validSpawnBlock(this.level, x, y - 1, z, fireImmune, type) && isValidEmptySpawnBlock(w.getState(x, y, z)) && isValidEmptySpawnBlock(w.getState(x, y + 1, z));
   }
 
   /** vanilla SpawnPlacements: where each kind may appear (in water, in lava, else on the ground) */
@@ -591,7 +632,7 @@ export class NaturalSpawner {
     if (type === 'guardian') return isInWaterPositionOk(this.level, x, y, z);
     if (IN_WATER.has(type)) return this.isInWaterPositionOk(x, y, z);
     if (type === 'strider') return fluidType(this.level.world.getState(x, y, z)) === FLUID_LAVA;
-    return this.isSpawnPositionOk(x, y, z, FIRE_IMMUNE.has(type));
+    return this.isSpawnPositionOk(x, y, z, FIRE_IMMUNE.has(type), type);
   }
 
   /** vanilla SpawnPlacementTypes.IN_WATER */
@@ -662,6 +703,20 @@ export class NaturalSpawner {
       case 'ocelot':
         // vanilla Ocelot.checkOcelotSpawnRules: one try in three fails
         return this.rand.nextInt(3) !== 0;
+      case 'polar_bear': {
+        // vanilla PolarBear.checkPolarBearSpawnRules: on the frozen oceans, on ice (#polar_bears_spawnable_on_alternate)
+        // in the light; elsewhere as any animal
+        const biome = BIOMES[lvl.world.getBiome3(x, y, z)]?.name ?? '';
+        const below = BLOCKS[STATE_BLOCK[lvl.world.getState(x, y - 1, z)]].name;
+        const ice = biome === 'frozen_ocean' || biome === 'deep_frozen_ocean';
+        return (ice ? below === 'ice' || below === 'packed_ice' || below === 'blue_ice' : below === 'grass_block') && lvl.rawBrightness(x, y, z, 0) > 8;
+      }
+      case 'parrot': {
+        // vanilla Parrot.checkParrotSpawnRules: on #parrots_spawnable_on (grass, leaves, logs) in the light
+        const below = lvl.world.getState(x, y - 1, z), n = BLOCKS[STATE_BLOCK[below]].name;
+        const on = n === 'grass_block' || (FLAGS[below] & F_LEAVES) !== 0 || n.endsWith('_log') || n.endsWith('_wood') || n.endsWith('_stem') || n.endsWith('_hyphae');
+        return on && lvl.rawBrightness(x, y, z, 0) > 8;
+      }
       case 'ghast':
         return Ghast.checkGhastSpawn(lvl, x, y, z, () => this.rand.nextFloat());
       case 'blaze':

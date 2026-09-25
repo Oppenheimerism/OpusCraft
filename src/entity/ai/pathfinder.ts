@@ -1,5 +1,6 @@
 // A* pathfinding over the block grid: vanilla PathFinder + WalkNodeEvaluator
-// (path types, maluses, step-up/jump/fall rules, diagonal checks), and SwimNodeEvaluator for what swims.
+// (path types, maluses, step-up/jump/fall rules, diagonal checks), SwimNodeEvaluator for what swims and
+// FlyNodeEvaluator for what flies.
 
 import { BLOCKS, STATE_BLOCK, FLAGS, F_AIR, F_WATER, F_LAVA, F_LEAVES, COLLISION } from '../../world/block';
 import { MIN_Y, SEA_LEVEL } from '../../world/constants';
@@ -27,6 +28,8 @@ export const enum PathType {
   DOOR_WOOD_CLOSED,
   DOOR_IRON_CLOSED,
   LEAVES,
+  /** a cocoa pod (a parrot won't go near one) */
+  COCOA,
   DAMAGE_CAUTIOUS,
   DANGER_TRAPDOOR,
   COUNT,
@@ -50,6 +53,7 @@ DEFAULT_MALUS[PathType.DOOR_OPEN] = 0;
 DEFAULT_MALUS[PathType.DOOR_WOOD_CLOSED] = -1;
 DEFAULT_MALUS[PathType.DOOR_IRON_CLOSED] = -1;
 DEFAULT_MALUS[PathType.LEAVES] = -1;
+DEFAULT_MALUS[PathType.COCOA] = 0;
 DEFAULT_MALUS[PathType.DAMAGE_CAUTIOUS] = 0;
 DEFAULT_MALUS[PathType.DANGER_TRAPDOOR] = 0;
 
@@ -68,6 +72,8 @@ export interface PathMob {
   maxFallDistance(): number;
   /** walks on this fluid (FLUID_*) as on a floor (the strider on lava) */
   canStandOnFluid(fluid: number): boolean;
+  /** (a flyer's start, when the cell it's in won't do: FlyNodeEvaluator) */
+  random: { nextInt(n: number): number };
 }
 
 export class Node {
@@ -225,7 +231,7 @@ export class WalkNodeEvaluator implements NodeEvaluator {
   protected world!: World;
   private nodes = new Map<number, Node>();
   private rawCache = new Map<number, PathType>();
-  private staticCache = new Map<number, PathType>();
+  protected staticCache = new Map<number, PathType>();
   private mobCache = new Map<number, PathType>();
   canFloat = false;
   /** vanilla canOpenDoors: closed wooden doors are a way through (villagers) */
@@ -307,7 +313,7 @@ export class WalkNodeEvaluator implements NodeEvaluator {
     return t;
   }
 
-  private checkNeighbours(x: number, y: number, z: number, t: PathType): PathType {
+  protected checkNeighbours(x: number, y: number, z: number, t: PathType): PathType {
     for (let i = -1; i <= 1; i++)
       for (let j = -1; j <= 1; j++)
         for (let k = -1; k <= 1; k++) {
@@ -423,7 +429,7 @@ export class WalkNodeEvaluator implements NodeEvaluator {
     return n;
   }
 
-  private canStartAt(x: number, y: number, z: number): boolean {
+  protected canStartAt(x: number, y: number, z: number): boolean {
     const t = this.mobType(x, y, z);
     return t !== PathType.OPEN && this.mob.malus(t) >= 0;
   }
@@ -718,6 +724,126 @@ export class AmphibiousNodeEvaluator extends WalkNodeEvaluator {
 }
 
 /**
+ * vanilla FlyNodeEvaluator's 26 ways out of a cell, in its order: the six faces, then the twelve edges (each only
+ * when both faces beside it are open), then the eight corners (only when the three faces and three edges round
+ * them are); each is [dx, dy, dz, ...the ways (1-based) that must be open]
+ */
+const FLY_WAYS: number[][] = [
+  [0, 0, 1], [-1, 0, 0], [1, 0, 0], [0, 0, -1], [0, 1, 0], [0, -1, 0],
+  [0, 1, 1, 1, 5], [-1, 1, 0, 2, 5], [1, 1, 0, 3, 5], [0, 1, -1, 4, 5],
+  [0, -1, 1, 1, 6], [-1, -1, 0, 2, 6], [1, -1, 0, 3, 6], [0, -1, -1, 4, 6],
+  [1, 0, -1, 4, 3], [1, 0, 1, 1, 3], [-1, 0, -1, 4, 2], [-1, 0, 1, 1, 2],
+  [1, 1, -1, 15, 4, 3, 5, 10, 9], [1, 1, 1, 16, 1, 3, 5, 7, 9], [-1, 1, -1, 17, 4, 2, 5, 10, 8], [-1, 1, 1, 18, 1, 2, 5, 7, 8],
+  [1, -1, -1, 15, 4, 3, 6, 14, 13], [1, -1, 1, 16, 1, 3, 6, 11, 13], [-1, -1, -1, 17, 4, 2, 6, 14, 12], [-1, -1, 1, 18, 1, 2, 6, 11, 12],
+];
+
+/**
+ * vanilla FlyNodeEvaluator: a way through the air, up and down as well as across and over every diagonal whose sides
+ * are open. A cell just over something to stand on is WALKABLE, a point dearer each time it's reached; open air is
+ * OPEN; fire, lava, cactus and cocoa below count against it as they would underfoot.
+ */
+export class FlyNodeEvaluator extends WalkNodeEvaluator {
+  /** vanilla PathfindingContext.mobPosition: the block it's in as the search begins */
+  private mobPos: [number, number, number] = [0, 0, 0];
+  private readonly got: (Node | null)[] = new Array(27).fill(null);
+
+  override prepare(world: World, mob: PathMob): void {
+    super.prepare(world, mob);
+    this.mobPos = [Math.floor(mob.x), Math.floor(mob.y), Math.floor(mob.z)];
+  }
+
+  /** vanilla getStart: half a block up from its feet (from the top of the water, floating), else one of the cells round it */
+  override getStart(): Node | null {
+    const m = this.mob, bx = Math.floor(m.x), bz = Math.floor(m.z);
+    let y: number;
+    if (this.canFloat && m.inWater) {
+      y = Math.floor(m.y);
+      while (BLOCKS[STATE_BLOCK[this.world.getState(bx, y, bz)]].name === 'water') y++;
+    } else y = Math.floor(m.y + 0.5);
+    if (!this.canStartAt(bx, y, bz)) {
+      const bb = m.bb;
+      const w = bb.maxX - bb.minX, h = bb.maxY - bb.minY, d = bb.maxZ - bb.minZ;
+      if ((w + h + d) / 3 >= 1) {
+        const cy = Math.floor(m.y);
+        for (const [cx, cz] of [[bb.minX, bb.minZ], [bb.minX, bb.maxZ], [bb.maxX, bb.minZ], [bb.maxX, bb.maxZ]]) {
+          if (this.canStartAt(Math.floor(cx), cy, Math.floor(cz))) return this.startNode(Math.floor(cx), cy, Math.floor(cz));
+        }
+      } else {
+        // (vanilla BlockPos.randomBetweenClosed: ten cells of its box, grown to 1.1 each way, drawn one at a time)
+        const gx = Math.max(0, 1.100000023841858 - w), gy = Math.max(0, 1.100000023841858 - h), gz = Math.max(0, 1.100000023841858 - d);
+        const x0 = Math.floor(bb.minX - gx), y0 = Math.floor(bb.minY - gy), z0 = Math.floor(bb.minZ - gz);
+        const nx = Math.floor(bb.maxX + gx) - x0 + 1, ny = Math.floor(bb.maxY + gy) - y0 + 1, nz = Math.floor(bb.maxZ + gz) - z0 + 1;
+        for (let i = 0; i < 10; i++) {
+          const cx = x0 + m.random.nextInt(nx), cy = y0 + m.random.nextInt(ny), cz = z0 + m.random.nextInt(nz);
+          if (this.canStartAt(cx, cy, cz)) return this.startNode(cx, cy, cz);
+        }
+      }
+    }
+    return this.startNode(bx, y, bz);
+  }
+
+  /** vanilla canStartAt: anywhere it doesn't mind being */
+  protected override canStartAt(x: number, y: number, z: number): boolean {
+    return this.mob.malus(this.mobType(x, y, z)) >= 0;
+  }
+
+  /** vanilla getNeighbors: every one of the 26 is looked at (each look can make a WALKABLE cell dearer) */
+  override neighbors(out: Node[], node: Node): number {
+    let count = 0;
+    const got = this.got;
+    for (let i = 0; i < FLY_WAYS.length; i++) {
+      const w = FLY_WAYS[i];
+      const n = this.flyAccepted(node.x + w[0], node.y + w[1], node.z + w[2]);
+      got[i + 1] = n;
+      if (!n || n.closed) continue;
+      let ok = true;
+      for (let k = 3; k < w.length && ok; k++) {
+        const s = got[w[k]];
+        ok = s !== null && s.costMalus >= 0;
+      }
+      if (ok) out[count++] = n;
+    }
+    return count;
+  }
+
+  /** vanilla findAcceptedNode */
+  private flyAccepted(x: number, y: number, z: number): Node | null {
+    const t = this.mobType(x, y, z);
+    const f = this.mob.malus(t);
+    if (f < 0) return null;
+    const n = this.getNode(x, y, z);
+    n.type = t;
+    n.costMalus = Math.max(n.costMalus, f);
+    if (t === PathType.WALKABLE) n.costMalus++;
+    return n;
+  }
+
+  /**
+   * vanilla FlyNodeEvaluator.getPathType: an open cell takes on the danger of what's under it (fire or lava, cactus,
+   * cocoa, a fence but for its own), is WALKABLE over anything else not open or water, and minds the blocks round it
+   */
+  override staticType(x: number, y: number, z: number): PathType {
+    const k = key(x, y, z);
+    const c = this.staticCache.get(k);
+    if (c !== undefined) return c;
+    let t = this.rawType(x, y, z);
+    if (t === PathType.OPEN && y >= MIN_Y + 1) {
+      const below = this.rawType(x, y - 1, z);
+      if (below === PathType.DAMAGE_FIRE || below === PathType.LAVA) t = PathType.DAMAGE_FIRE;
+      else if (below === PathType.DAMAGE_OTHER) t = PathType.DAMAGE_OTHER;
+      else if (below === PathType.COCOA) t = PathType.COCOA;
+      else if (below === PathType.FENCE) {
+        const [mx, my, mz] = this.mobPos;
+        if (x !== mx || y - 1 !== my || z !== mz) t = PathType.FENCE;
+      } else t = below !== PathType.WALKABLE && below !== PathType.OPEN && below !== PathType.WATER ? PathType.WALKABLE : PathType.OPEN;
+    }
+    if (t === PathType.WALKABLE || t === PathType.OPEN) t = this.checkNeighbours(x, y, z, t);
+    this.staticCache.set(k, t);
+    return t;
+  }
+}
+
+/**
  * vanilla WalkNodeEvaluator.isBurningBlock: fire, lava, magma blocks, lit
  * campfires of either kind and lava cauldrons
  */
@@ -742,6 +868,7 @@ export function rawPathType(world: World, x: number, y: number, z: number): Path
   if (name === 'fire') return PathType.DAMAGE_FIRE;
   if (name.endsWith('_bed')) return PathType.BLOCKED;
   if (name === 'cactus' || name === 'sweet_berry_bush') return PathType.DAMAGE_OTHER;
+  if (name === 'cocoa') return PathType.COCOA;
   if (name === 'wither_rose' || name === 'pointed_dripstone') return PathType.DAMAGE_CAUTIOUS;
   if (f & F_LAVA) return PathType.LAVA;
   if (isBurningBlock(st)) return PathType.DAMAGE_FIRE;

@@ -123,3 +123,42 @@ END_ITEMS['dragon_head'] = (): TexImage => {
     }
   return t;
 };
+
+/**
+ * the elytra (vanilla elytra and broken_elytra): the folded wings seen from behind, joined at the shoulders and
+ * narrowing down to their tips at the lower corners, pale grey-violet membrane over darker ribs. Broken (down to its
+ * last point of durability): torn, the tips ragged and holes through both wings.
+ */
+function elytraIcon(broken: boolean): TexImage {
+  const t = img(16, 16);
+  // the left wing's columns (from, to) on rows 1 to 14; the right wing mirrors it
+  const rows: [number, number][] = [[3, 7], [2, 7], [2, 7], [1, 7], [1, 7], [1, 6], [1, 6], [1, 5], [1, 5], [1, 4], [1, 4], [1, 3], [1, 2], [1, 1]];
+  const inside = new Set<number>();
+  const at = (x: number, y: number) => y * 16 + x;
+  rows.forEach(([a, b], i) => {
+    for (let x = a; x <= b; x++) {
+      inside.add(at(x, i + 1));
+      inside.add(at(15 - x, i + 1));
+    }
+  });
+  if (broken)
+    for (const [x, y] of [[1, 14], [1, 13], [2, 12], [14, 14], [14, 13], [13, 12], [1, 10], [14, 9], [3, 6], [4, 6], [4, 7], [12, 8], [11, 9], [12, 9], [6, 3], [9, 4]])
+      inside.delete(at(x, y));
+  const has = (x: number, y: number) => x >= 0 && x < 16 && inside.has(at(x, y));
+  const OUTLINE = 0x34323e, LIGHT = 0xd6d4e0, MID = 0xb2b0c0, RIB = 0x8a8898, SHADE = 0x9c9aac;
+  for (let y = 0; y < 16; y++)
+    for (let x = 0; x < 16; x++) {
+      if (!has(x, y)) continue;
+      // (where the two wings meet down the middle, and round their edges, a dark line)
+      if (!has(x - 1, y) || !has(x + 1, y) || !has(x, y - 1) || !has(x, y + 1) || x === 7 || x === 8) {
+        plot(t, x, y, OUTLINE);
+        continue;
+      }
+      // the ribs fan down and out from the shoulders; the wing lighter toward its outer edge, shaded near the middle
+      const out = x < 8 ? 7 - x : x - 8;
+      plot(t, x, y, (out + y) % 4 === 0 ? RIB : y <= 3 || out >= 5 ? LIGHT : out <= 1 ? SHADE : MID);
+    }
+  return t;
+}
+END_ITEMS['elytra'] = () => elytraIcon(false);
+END_ITEMS['broken_elytra'] = () => elytraIcon(true);

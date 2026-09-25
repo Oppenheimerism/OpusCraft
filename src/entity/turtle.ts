@@ -251,10 +251,14 @@ export class Turtle extends Animal {
   override stepSound(): string {
     return this.isBaby() ? 'entity.turtle.shamble_baby' : 'entity.turtle.shamble';
   }
-  /** vanilla Entity.playSwimSound with Turtle's: entity.turtle.swim, half as loud again */
+  /** vanilla getSwimSound */
+  protected override swimSound(): string {
+    return 'entity.turtle.swim';
+  }
+  /** vanilla Turtle.playSwimSound: half as loud again as anything else's */
   protected override playSwimSound(): void {
     const v = Math.min(1, Math.sqrt(this.dx * this.dx * 0.2 + this.dy * this.dy + this.dz * this.dz * 0.2) * 0.35);
-    this.playSound('entity.turtle.swim', v * 1.5, 1 + (this.random.nextFloat() - this.random.nextFloat()) * 0.4);
+    this.playSound(this.swimSound(), v * 1.5, 1 + (this.random.nextFloat() - this.random.nextFloat()) * 0.4);
   }
   /** vanilla nextStep: a step (or stroke) sounds every little way */
   protected override nextStepDistance(): number {

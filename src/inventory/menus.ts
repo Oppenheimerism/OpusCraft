@@ -8,7 +8,7 @@ import { findRecipe, craftingRemainder, cookingResult, fuelTime, CraftingRecipe 
 import type { BrewingStandBlockEntity, ChestBlockEntity, FurnaceBlockEntity } from '../world/blockEntity';
 import { contentsOf, isBrewingIngredient } from '../item/potions';
 import { hasBinding } from '../item/enchantHelper';
-import { equipSound, equipmentSlotForItem } from '../item/equipment';
+import { equipSound, equipmentSlotForItem, equipableSlot } from '../item/equipment';
 import { applyDyes, dyeColorName, isDyeable } from '../item/dyedColor';
 import { customRecipeFor, type CustomRecipe } from './customRecipes';
 import { craftedBy } from '../game/itemBehavior';
@@ -32,7 +32,8 @@ export class ArmorSlot extends Slot {
     return 1;
   }
   override mayPlace(s: ItemStack): boolean {
-    return !!s.item.armor && ARMOR_SLOT_OF[s.item.armor.slot] === this.armorIndex;
+    const slot = equipableSlot(s.item);
+    return !!slot && ARMOR_SLOT_OF[slot] === this.armorIndex;
   }
   override noItemIcon(): string {
     return ARMOR_ICONS[this.armorIndex];
@@ -183,7 +184,8 @@ export class InventoryMenu extends CraftingMenuBase {
     const s = slot.item;
     if (!s) return null;
     const before = s.copy();
-    const armor = s.item.armor ? ARMOR_SLOT_OF[s.item.armor.slot] : -1;
+    const eq = equipableSlot(s.item);
+    const armor = eq ? ARMOR_SLOT_OF[eq] : -1;
     if (index === 0) {
       craftedBy(p, s);
       if (!this.moveItemStackTo(s, 9, 45, true)) return null;

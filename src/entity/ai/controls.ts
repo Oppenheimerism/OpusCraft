@@ -191,6 +191,43 @@ export class MoveControl {
   }
 }
 
+/**
+ * vanilla FlyingMoveControl: to a wanted point it turns (90° a tick), pitches its nose toward it (`maxTurn` a tick)
+ * and flies at its flying speed, rising or sinking as it needs, gravity off while it goes; with nothing wanted it
+ * stops, and unless it `hoversInPlace` gravity takes it again
+ */
+export class FlyingMoveControl extends MoveControl {
+  constructor(mob: Mob, readonly maxTurn: number, readonly hoversInPlace: boolean) {
+    super(mob);
+  }
+
+  override tick(): void {
+    const m = this.mob;
+    if (this.operation === MoveOp.MOVE_TO) {
+      this.operation = MoveOp.WAIT;
+      m.noGravityFlag = true;
+      const d0 = this.wantedX - m.x, d1 = this.wantedY - m.y, d2 = this.wantedZ - m.z;
+      if (d0 * d0 + d1 * d1 + d2 * d2 < 2.5000003e-7) {
+        m.yya = 0;
+        m.zza = 0;
+        return;
+      }
+      m.yaw = rotlerp(m.yaw, Math.atan2(d2, d0) * RAD - 90, 90);
+      const f1 = this.speedModifier * (m.onGround ? m.moveSpeedAttr : m.flyingSpeedAttr);
+      m.setSpeed(f1);
+      const d4 = Math.sqrt(d0 * d0 + d2 * d2);
+      if (Math.abs(d1) > 1e-5 || Math.abs(d4) > 1e-5) {
+        m.pitch = rotlerp(m.pitch, -(Math.atan2(d1, d4) * RAD), this.maxTurn);
+        m.yya = d1 > 0 ? f1 : -f1;
+      }
+    } else {
+      if (!this.hoversInPlace) m.noGravityFlag = false;
+      m.yya = 0;
+      m.zza = 0;
+    }
+  }
+}
+
 function isDoorOrFence(st: number): boolean {
   void st;
   return false;

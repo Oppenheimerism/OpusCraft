@@ -3,6 +3,7 @@
 
 import type { Item } from './item';
 import type { EquipSlot } from './enchantHelper';
+import { isSkullItem } from '../world/blocksSkulls';
 
 export type ArmorSlot = 'feet' | 'legs' | 'chest' | 'head';
 /** vanilla EquipmentSlot armour indices: the player's inventory.armor and a mob's armorItems use the same order */
@@ -38,11 +39,14 @@ const EQUIP_SOUND: Record<string, string> = {
 
 /**
  * vanilla Equipable.get(stack): armour goes on its own slot, and a carved pumpkin (a jack o'lantern is one too:
- * vanilla CarvedPumpkinBlock) on the head; everything else is null
+ * vanilla CarvedPumpkinBlock) and a mob head (vanilla AbstractSkullBlock) on the head; everything else is null
  */
 export function equipableSlot(it: Item): ArmorSlot | null {
   if (it.armor) return it.armor.slot;
   if (it.id === 'carved_pumpkin' || it.id === 'jack_o_lantern') return 'head';
+  if (isSkullItem(it.id)) return 'head';
+  // (vanilla ElytraItem is Equipable: the chest)
+  if (it.id === 'elytra') return 'chest';
   return null;
 }
 
@@ -55,6 +59,7 @@ export function equipmentSlotForItem(it: Item): EquipSlot {
 /** vanilla Equipable.getEquipSound: the material's, the generic one for the rest (a carved pumpkin) */
 export function equipSound(it: Item): string | null {
   if (!equipableSlot(it)) return null;
+  if (it.id === 'elytra') return 'item.armor.equip_elytra';
   const m = armorMaterial(it);
   return (m && EQUIP_SOUND[m]) || 'item.armor.equip_generic';
 }

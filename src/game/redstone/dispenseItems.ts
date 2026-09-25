@@ -24,6 +24,7 @@ import { ThrownTrident } from '../../entity/thrownTrident';
 import { SmallFireball } from '../../entity/fireball';
 import { PrimedTnt } from '../../entity/tnt';
 import { Pig, Sheep, DYE_COLORS } from '../../entity/animals';
+import { SnowGolem } from '../../entity/snowGolem';
 import { Strider } from '../../entity/strider';
 import { AbstractHorse, AbstractChestedHorse } from '../../entity/horse';
 import { createBoat, boatItemInfo } from '../../entity/boat';
@@ -38,6 +39,9 @@ import { canPlaceFire, placeFire, fireStateAt } from '../fire';
 import { lightCampfire } from '../villageBlocks';
 import { isRail, railShape, isAscending } from '../rails';
 import { BlockPattern } from '../blockPattern';
+import { dispenseShulkerBox } from '../shulkerBox';
+import { isShulkerBox } from '../../world/blocksShulker';
+import { isSkullItem } from '../../world/blocksSkulls';
 import type { Level } from '../level';
 
 const blk = (st: number): Block => BLOCKS[STATE_BLOCK[st]];
@@ -446,9 +450,9 @@ const boneMeal = optional((src, stack) => {
   return left(stack);
 });
 
-/** vanilla ShearsDispenseItemBehavior: a sheep in front that can be shorn is (beehives, when the game has them) */
+/** vanilla ShearsDispenseItemBehavior: a sheep or snow golem in front that can be shorn is (beehives, when the game has them) */
 const shears = optional((src, stack) => {
-  const s = src.level.getEntities(cell(front(src)), (e) => e instanceof Sheep && e.isAlive && !e.sheared && !e.isBaby())[0] as Sheep | undefined;
+  const s = src.level.getEntities(cell(front(src)), (e) => (e instanceof Sheep && e.isAlive && !e.sheared && !e.isBaby()) || (e instanceof SnowGolem && e.readyForShearing()))[0] as Sheep | SnowGolem | undefined;
   if (!s) {
     src.success = false;
     return stack;
@@ -465,6 +469,8 @@ function slotFor(it: Item): EquipSlot | null {
   if (it.armor) return it.armor.slot;
   if (it.id === 'shield') return 'offhand';
   if (it.id === 'carved_pumpkin') return 'head';
+  if (isSkullItem(it.id)) return 'head';
+  if (it.id === 'elytra') return 'chest';
   return null;
 }
 
@@ -502,6 +508,11 @@ function dispenseArmor(src: DispenseSource, stack: ItemStack): boolean {
 /** vanilla ArmorItem.DISPENSE_ITEM_BEHAVIOR: put on, else thrown out */
 const armor = behavior((src, stack) => (dispenseArmor(src, stack) ? left(stack) : dropOne(src, stack)));
 
+/** vanilla CarvedPumpkinBlock.getOrCreateSnowGolemBase: two snow blocks */
+const SNOW_GOLEM_BASE = new BlockPattern([[' ', '#', '#']], {
+  '#': (st) => blk(st).name === 'snow_block',
+});
+
 /** vanilla CarvedPumpkinBlock.getOrCreateIronGolemBase: the T of iron with air where the arms and legs leave gaps */
 const IRON_GOLEM_BASE = new BlockPattern([['~ ~', '###', '~#~']], {
   '#': (st) => blk(st).name === 'iron_block',
@@ -512,7 +523,7 @@ const IRON_GOLEM_BASE = new BlockPattern([['~ ~', '###', '~#~']], {
 const carvedPumpkin = optional((src, stack) => {
   const level = src.level;
   const [x, y, z] = front(src);
-  if (FLAGS[level.getState(x, y, z)] & F_AIR && IRON_GOLEM_BASE.find(level.world, x, y, z)) {
+  if (FLAGS[level.getState(x, y, z)] & F_AIR && (SNOW_GOLEM_BASE.find(level.world, x, y, z) || IRON_GOLEM_BASE.find(level.world, x, y, z))) {
     level.setBlock(x, y, z, getBlock('carved_pumpkin').defaultState);
     stack.count--;
   } else src.success = dispenseArmor(src, stack);
@@ -548,6 +559,22 @@ const chestOnDonkey = behavior((src, stack) => {
   return left(stack);
 });
 
+/**
+ * vanilla ShulkerBoxDispenseItemBehavior: the box set down in front as a player would place it (game/shulkerBox.ts),
+ * and one fewer; the failed click if it couldn't go there
+ */
+const shulkerBox = optional((src, stack) => {
+  src.success = dispenseShulkerBox(src.level, src.x, src.y, src.z, src.facing, stack);
+  if (src.success) stack.count--;
+  return left(stack);
+});
+
+/** vanilla DispenseItemBehavior's mob heads: one goes on the head of whoever stands in front, else the failed click */
+const skull = optional((src, stack) => {
+  src.success = dispenseArmor(src, stack);
+  return left(stack);
+});
+
 // ---------------------------------------------------------------------------
 // The registry (vanilla DispenserBlock.DISPENSER_REGISTRY)
 
@@ -571,9 +598,11 @@ export function dispenseBehaviorFor(stack: ItemStack): DispenseBehavior {
   const own = BEHAVIORS[id];
   if (own) return own;
   if (id.endsWith('_spawn_egg')) return spawnEgg;
+  if (isShulkerBox(id)) return shulkerBox;
+  if (isSkullItem(id)) return skull;
   const b = boatItemInfo(id);
   if (b) return (BEHAVIORS[id] = boat(b.variant, b.chest));
-  if (stack.item.armor || id === 'shield') return armor;
+  if (stack.item.armor || id === 'shield' || id === 'elytra') return armor;
   return DEFAULT_DISPENSE;
 }
 

@@ -203,6 +203,8 @@ const REPAIR_BY_ARMOR: Record<string, (id: string) => boolean> = {
 export function isValidRepairItem(it: Item, material: ItemStack): boolean {
   // vanilla ShieldItem.isValidRepairItem: #planks
   if (it.id === 'shield') return PLANKS.test(material.item.id);
+  // vanilla ElytraItem.isValidRepairItem: phantom membrane
+  if (it.id === 'elytra') return material.item.id === 'phantom_membrane';
   const mat = it.id.split('_')[0];
   if (it.tool && it.tool.type !== 'shears') return REPAIR_BY_TIER[mat]?.(material.item.id) ?? false;
   if (it.armor) return REPAIR_BY_ARMOR[mat]?.(material.item.id) ?? false;

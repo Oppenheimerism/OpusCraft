@@ -32,8 +32,11 @@ import { Hoglin, Zoglin } from '../entity/hoglin';
 import { Strider } from '../entity/strider';
 import { Piglin } from '../entity/piglin';
 import { Villager } from '../entity/villager';
+import { WanderingTrader } from '../entity/wanderingTrader';
+import { SnowGolem } from '../entity/snowGolem';
 import { IronGolem } from '../entity/ironGolem';
 import '../textures/ironGolem';
+import '../textures/snowGolem';
 import '../textures/witch';
 import '../textures/biomeMobs';
 import '../textures/drowned';
@@ -70,6 +73,8 @@ import { RaiderRenderers, RAIDER_SHADOW_RADII } from './illagerRenderers';
 import { OceanRenderers, OCEAN_SHADOW_RADII } from './oceanRenderers';
 import { HorseRenderers, HORSE_SHADOW_RADII } from './horseRenderer';
 import { LlamaRenderers, LLAMA_SHADOW_RADII, renderSpit } from './llamaRenderer';
+import { ParrotRenderers, PARROT_SHADOW_RADII } from './parrotRenderer';
+import { PolarBearRenderers, POLAR_BEAR_SHADOW_RADII } from './polarBearRenderer';
 import { LlamaSpit } from '../entity/llama';
 import { LeashKnot } from '../entity/leash';
 import { renderKnot, renderLeash } from './leashRenderer';
@@ -85,6 +90,14 @@ import { crossbowTexture, crossbowChargeProgress, isCharged } from '../item/cros
 import { SpawnerBlockEntity, EnchantingTableBlockEntity } from '../world/blockEntity';
 import { bookModel, bookTexture, renderTableBook } from './bookRenderer';
 import { VillageBlockRenderers } from './villageRenderers';
+import { ShulkerRenderers } from './shulkerRenderer';
+import { Shulker } from '../entity/shulker';
+import { ShulkerBullet } from '../entity/shulkerBullet';
+import { ItemFrame } from '../entity/itemFrame';
+import { ItemFrameRenderer } from './itemFrameRenderer';
+import { SkullRenderer } from './skullRenderer';
+import { ElytraLayer } from './elytraLayer';
+import { viewVector } from '../entity/elytra';
 import { PistonRenderer } from './pistonRenderer';
 import { ArchaeologyRenderers } from './archaeologyRenderers';
 import { createMob } from '../game/spawner';
@@ -169,6 +182,13 @@ export class EntityRenderDispatcher {
   private readonly archaeology: ArchaeologyRenderers;
   private readonly endCrystals: EndCrystalRenderer;
   private readonly dragons: EnderDragonRenderer;
+  /** shulker boxes (and the shulkers themselves) */
+  private readonly shulkers: ShulkerRenderers;
+  private readonly frames: ItemFrameRenderer;
+  /** mob heads: placed, held, worn and in the inventory */
+  private readonly skulls: SkullRenderer;
+  /** worn elytra (and the broken one's torn look as an item) */
+  private readonly elytra: ElytraLayer;
   /** (Stage 4: illagers) the pillager, vindicator, evoker, vex, ravager and the evoker's fangs */
   private readonly raiders: RaiderRenderers;
   /** (Stage 5: ocean) the guardians, their lasers, the elder's ghostly face */
@@ -177,6 +197,9 @@ export class EntityRenderDispatcher {
   private readonly horses: HorseRenderers;
   /** (Stage 6: tameable animals) llamas and their decor */
   private readonly llamas: LlamaRenderers;
+  /** parrots, and the ones on a player's shoulders */
+  private readonly parrots: ParrotRenderers;
+  private readonly polarBears: PolarBearRenderers;
   /** names over mobs, drawn once every entity is down */
   private readonly nameTags: NameTagRenderer;
   /** this frame's options: names shown at all (not with the GUI hidden), and what the crosshair is on */
@@ -186,6 +209,10 @@ export class EntityRenderDispatcher {
   constructor(private readonly gl: GL, private readonly items: ItemRenderer, private readonly skin: WebGLTexture) {
     this.armor = new ArmorLayer(gl);
     this.village = new VillageBlockRenderers(gl);
+    this.shulkers = new ShulkerRenderers(gl);
+    this.frames = new ItemFrameRenderer(gl, items);
+    this.skulls = new SkullRenderer(gl);
+    this.elytra = new ElytraLayer(gl, items);
     this.archaeology = new ArchaeologyRenderers(gl);
     this.endCrystals = new EndCrystalRenderer(gl);
     this.dragons = new EnderDragonRenderer(gl, this.endCrystals.beam);
@@ -206,6 +233,8 @@ export class EntityRenderDispatcher {
     // (Stage 6: tameable animals) and again
     this.horses = new HorseRenderers(this.raiders.kit);
     this.llamas = new LlamaRenderers(this.raiders.kit);
+    this.parrots = new ParrotRenderers(this.raiders.kit);
+    this.polarBears = new PolarBearRenderers(this.raiders.kit);
     this.nameTags = new NameTagRenderer(gl);
     this.models = {
       pig: M.pigModel(),
@@ -236,6 +265,8 @@ export class EntityRenderDispatcher {
       zoglin: M.hoglinModel(),
       strider: M.striderModel(),
       villager: M.villagerModel(),
+      wandering_trader: M.villagerModel(),
+      snow_golem: M.snowGolemModel(),
       zombie_villager: M.zombieVillagerModel(),
       iron_golem: M.ironGolemModel(),
       witch: M.witchModel(),
@@ -343,6 +374,10 @@ export class EntityRenderDispatcher {
       if (e instanceof Arrow) size *= 10;
       // (vanilla AbstractHurtingProjectile.shouldRenderAtSqrDistance: fireballs are seen from four times as far)
       else if (e instanceof Fireball) size *= 4;
+      // (vanilla ShulkerBullet.shouldRenderAtSqrDistance: within 128 blocks)
+      else if (e instanceof ShulkerBullet) size = 2;
+      // (vanilla ItemFrame.shouldRenderAtSqrDistance: as though 16 blocks across)
+      else if (e instanceof ItemFrame) size = 16;
       const maxD = size * 64 * opts.distanceScale;
       // (vanilla EndCrystalRenderer.shouldRender: a crystal with a beam is always drawn; the dragon is never culled)
       const beam = e instanceof EndCrystal && e.beamTarget !== null;
@@ -378,6 +413,8 @@ export class EntityRenderDispatcher {
     this.renderSpawners(b, level, cam, partial, frustum);
     this.renderEnchantingBooks(b, level, cam, partial, frustum);
     this.village.render(b, level, cam, partial, frustum);
+    this.shulkers.renderBlockEntities(b, level, cam, partial, frustum);
+    this.skulls.renderBlockEntities(b, level, cam, partial, frustum);
     this.pistons.render(b, this.items, level, cam, partial, frustum);
     this.archaeology.render(b, this.items, level, cam, partial, frustum);
     b.setOverlay(0, 0, 0, 0);
@@ -474,6 +511,9 @@ export class EntityRenderDispatcher {
     this.setLight(b, level, e, x, y, z);
     if (e instanceof ItemEntity) this.renderItemEntity(b, e, dx, dy, dz, p);
     else if (e instanceof EnderDragon) this.dragons.render(b, this.pose, e, dx, dy, dz, p);
+    else if (e instanceof Shulker) this.shulkers.renderShulker(b, e, dx, dy, dz, p);
+    else if (e instanceof ShulkerBullet) this.shulkers.renderBullet(b, e, dx, dy, dz, p);
+    else if (e instanceof ItemFrame) this.frames.render(b, e, dx, dy, dz);
     else if (e instanceof Mob) this.renderMob(b, e, dx, dy, dz, p);
     else if (e instanceof LivingEntity && e.type === 'player') this.renderPlayer(b, e as Player, dx, dy, dz, p);
     else if (e instanceof ThrownTrident) this.items.trident.renderThrown(b, this.pose, e, dx, dy, dz, p, rotLerp(p, e.yawO, e.yaw));
@@ -585,6 +625,19 @@ export class EntityRenderDispatcher {
       pose.translate(0, e.height + 0.1, 0);
       pose.rotZ(180);
     }
+    // vanilla PlayerRenderer.setupRotations: gliding, a player tips over to lie along the look over the glide's first
+    // ten ticks, then rolls toward the way it's actually going (the angle from the look to its motion, sideways)
+    if (e.type === 'player' && e.fallFlying) {
+      const h = e.fallFlyTicks + p;
+      if (!e.isAutoSpinAttack()) pose.rotX(Math.min(1, (h * h) / 100) * (-90 - pitch));
+      const [lx, , lz] = viewVector(pitch, rotLerp(p, e.yawO, e.yaw));
+      const d = e.dx * e.dx + e.dz * e.dz, l = lx * lx + lz * lz;
+      if (d > 0 && l > 0) {
+        const j = (e.dx * lx + e.dz * lz) / Math.sqrt(d * l);
+        const k = e.dx * lz - e.dz * lx;
+        pose.rotY((Math.sign(k) * Math.acos(Math.max(-1, Math.min(1, j))) * 180) / Math.PI);
+      }
+    }
     // vanilla CatRenderer.setupRotations: lying down, it rolls onto its side (a touch further over by a sleeper)
     if (e instanceof Cat) {
       const j = e.lieDown(p);
@@ -668,6 +721,8 @@ export class EntityRenderDispatcher {
     // (Stage 6: tameable animals; a llama before the horses it's kin to)
     if (this.llamas.render(b, e, dx, dy, dz, p)) return;
     if (this.horses.render(b, e, dx, dy, dz, p)) return;
+    if (this.parrots.render(b, e, dx, dy, dz, p)) return;
+    if (this.polarBears.render(b, e, dx, dy, dz, p)) return;
     const type = e.type;
     const def = this.models[type];
     // (vanilla GhastRenderer.getTextureLocation: its face while charging a shot)
@@ -730,6 +785,8 @@ export class EntityRenderDispatcher {
       const f = baby ? 0.46875 : 0.9375;
       scale = (pose) => pose.scale(f, f, f);
     }
+    // vanilla WanderingTraderRenderer.scale: 15/16
+    if (type === 'wandering_trader') scale = (pose) => pose.scale(0.9375, 0.9375, 0.9375);
     // vanilla IronGolemRenderer.setupRotations: it rocks from side to side as it walks
     if (e instanceof IronGolem && e.walkAnimSpeed >= 0.01) {
       const j = e.walkAnimPos - e.walkAnimSpeed * (1 - p) + 6;
@@ -823,6 +880,12 @@ export class EntityRenderDispatcher {
         break;
       case 'villager':
         M.animateVillager(def.root, a.limbSwing, a.limbAmount, a.age, a.headYaw, a.headPitch, (e as Villager).unhappyCounter > 0);
+        break;
+      case 'wandering_trader':
+        M.animateVillager(def.root, a.limbSwing, a.limbAmount, a.age, a.headYaw, a.headPitch, false);
+        break;
+      case 'snow_golem':
+        M.animateSnowGolem(def.root, a.headYaw, a.headPitch);
         break;
       case 'witch':
         // (vanilla WitchRenderer.render: setHoldingItem while there's something in its hand)
@@ -956,8 +1019,20 @@ export class EntityRenderDispatcher {
       b.setOverlay(0, 0, 0, 0);
       this.drawHeldItem(b, def.root, e.mainHand, baby, e.usingItem ? e.useItemTicks + p : -1);
     }
-    // vanilla CrossedArmsItemLayer: what a villager holds up shows in its folded arms
-    if (e instanceof Villager && e.mainHand) {
+    // vanilla SnowGolemHeadLayer: its carved pumpkin, on its head (flashing red with it when it's hurt)
+    if (e instanceof SnowGolem && e.hasPumpkin && !e.isInvisible()) {
+      const pose = this.pose;
+      pose.push();
+      def.root.child('head').translateAndRotate(pose);
+      pose.translate(0, -0.34375, 0);
+      pose.rotY(180);
+      pose.scale(0.625, -0.625, -0.625);
+      pose.translate(-0.5, -0.5, -0.5);
+      this.items.renderBlockState(b, pose, S('carved_pumpkin'));
+      pose.pop();
+    }
+    // vanilla CrossedArmsItemLayer: what a villager (or a wandering trader) holds up shows in its folded arms
+    if ((e instanceof Villager || e instanceof WanderingTrader) && e.mainHand) {
       b.setOverlay(0, 0, 0, 0);
       const pose = this.pose;
       pose.push();
@@ -998,7 +1073,11 @@ export class EntityRenderDispatcher {
       this.armor.render(b, this.pose, def.root, e.armorItems, baby, armorSet);
       const head = e.armorItems[3];
       const s = armorSet === 'piglin' ? PIGLIN_HEAD_ITEM_SCALE : 1;
-      if (head && !head.item.armor) renderHeadItem(b, this.pose, this.items, def.root, head, baby, s, 1, s);
+      // (a mob head's jaw works with the walk: the vehicle's when riding one)
+      const w = e.vehicle instanceof LivingEntity ? e.vehicle : e;
+      if (head && !head.item.armor) renderHeadItem(b, this.pose, this.items, def.root, head, baby, s, 1, s, w.walkAnimPos - w.walkAnimSpeed * (1 - p), type === 'zombie_villager');
+      // vanilla HumanoidMobRenderer's ElytraLayer
+      this.elytra.render(b, this.pose, e, e.armorItems[2], baby, false);
     }
   }
 
@@ -1192,7 +1271,11 @@ export class EntityRenderDispatcher {
     m.child('left_arm').child('left_sleeve').visible = sp.leftSleeve;
     m.child('right_leg').child('right_pants').visible = sp.rightPants;
     m.child('left_leg').child('left_pants').visible = sp.leftPants;
-    animateHumanoid(m, a.limbSwing, a.limbAmount, a.age, a.headYaw, a.headPitch, attackAnim(e, p), crouch, !!e.vehicle, playerArms(e, this.mainArm));
+    // vanilla HumanoidModel.setupAnim: well into a glide the head bends back to look ahead and the limbs barely swing
+    // (the swing divided by (speed² / 0.2)³)
+    const gliding = e.fallFlyTicks > 4;
+    const still = gliding ? Math.max(1, ((e.dx * e.dx + e.dy * e.dy + e.dz * e.dz) / 0.2) ** 3) : 1;
+    animateHumanoid(m, a.limbSwing, a.limbAmount / still, a.age, a.headYaw, gliding ? -45 : a.headPitch, attackAnim(e, p), crouch, !!e.vehicle, playerArms(e, this.mainArm));
     this.overlay(b, e);
     // vanilla: an invisible player's body isn't drawn (a spectator's is, faintly, to the spectator: themselves), the
     // armour and held items still are; a spectator has no layers at all
@@ -1209,6 +1292,15 @@ export class EntityRenderDispatcher {
     if (!spectator) {
       this.armor.render(b, this.pose, m, e.inventory.armor, false);
       drawPlayerHeldItems(b, this.items, this.pose, m, e, this.mainArm);
+      // vanilla CustomHeadLayer: what's worn on the head that isn't a helmet (a mob head, a carved pumpkin)
+      const head = e.inventory.armor[3];
+      const w = e.vehicle instanceof LivingEntity ? e.vehicle : e;
+      if (head && !head.item.armor) renderHeadItem(b, this.pose, this.items, m, head, false, 1, 1, 1, w.walkAnimPos - w.walkAnimSpeed * (1 - p));
+      // vanilla ElytraLayer
+      this.elytra.render(b, this.pose, e, e.inventory.armor[2], false, crouch);
+      // vanilla ParrotOnShoulderLayer: the left shoulder's, then the right's
+      if (e.shoulderLeft) this.parrots.renderOnShoulder(b, this.pose, e.shoulderLeft, true, crouch, a, e.tickCount);
+      if (e.shoulderRight) this.parrots.renderOnShoulder(b, this.pose, e.shoulderRight, false, crouch, a, e.tickCount);
       // vanilla SpinAttackEffectLayer
       if (e.isAutoSpinAttack()) this.items.trident.renderSpin(b, this.pose, a.age);
     }
@@ -1619,7 +1711,7 @@ function shadowRadius(e: Entity): number {
   // (Stage 5: ocean)
   if (OCEAN_SHADOW_RADII[e.type] !== undefined) return OCEAN_SHADOW_RADII[e.type] * (e instanceof Mob && e.isBaby() ? 0.5 : 1);
   // (Stage 6: tameable animals; a foal's is half)
-  let r = HORSE_SHADOW_RADII[e.type] ?? LLAMA_SHADOW_RADII[e.type] ?? 0;
+  let r = HORSE_SHADOW_RADII[e.type] ?? LLAMA_SHADOW_RADII[e.type] ?? PARROT_SHADOW_RADII[e.type] ?? POLAR_BEAR_SHADOW_RADII[e.type] ?? 0;
   switch (e.type) {
     case 'pig':
     case 'cow':
@@ -1654,6 +1746,8 @@ function shadowRadius(e: Entity): number {
     case 'wolf':
     case 'strider':
     case 'villager':
+    case 'wandering_trader':
+    case 'snow_golem':
     case 'end_crystal':
     case 'ender_dragon':
       r = 0.5;

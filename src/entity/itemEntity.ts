@@ -90,7 +90,10 @@ export class ItemEntity extends Entity {
     if (this.removed) return false;
     if (this.stack.item.id === 'nether_star' && (source === 'explosion' || source === 'playerExplosion')) return false;
     this.health = Math.floor(this.health - amount);
-    if (this.health <= 0) this.remove();
+    if (this.health <= 0) {
+      this.stack.item.onDestroyed?.(this);
+      this.remove();
+    }
     return true;
   }
 

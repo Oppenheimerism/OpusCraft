@@ -1,9 +1,9 @@
 // Common mob goals (vanilla net.minecraft.world.entity.ai.goal) and random
-// position helpers (DefaultRandomPos / LandRandomPos).
+// position helpers (DefaultRandomPos / LandRandomPos, and HoverRandomPos / AirAndWaterRandomPos for flyers).
 
 import { Goal, Flag, reducedTickDelay } from './goal';
 import type { Mob } from '../mob';
-import type { Path } from './pathfinder';
+import { PathType, type Path } from './pathfinder';
 import { LivingEntity } from '../living';
 import { BLOCKS, STATE_BLOCK, FLAGS, F_WATER, F_COLLIDE, F_OPAQUE } from '../../world/block';
 import { MIN_Y, MAX_Y } from '../../world/constants';
@@ -15,6 +15,9 @@ import { AABB } from '../../core/aabb';
 // random positions
 
 type Pos = [number, number, number];
+
+/** a mob (anything with goals), told apart without importing Mob here */
+const isMob = (e: unknown): boolean => e instanceof LivingEntity && 'goalSelector' in e;
 
 function randomDirection(m: Mob, h: number, v: number): Pos {
   const r = m.random;
@@ -116,13 +119,13 @@ export function defaultRandomPosAway(m: Mob, radius: number, yRange: number, ax:
  * vanilla RandomPos.generateRandomDirectionWithinRadians: an offset within `maxAngle` of the direction (dx, dz), out
  * to √2 × radius (and dropped when it lands outside the radius square)
  */
-function randomDirectionWithinRadians(m: Mob, radius: number, yRange: number, dx: number, dz: number, maxAngle: number): Pos | null {
+function randomDirectionWithinRadians(m: Mob, radius: number, yRange: number, dx: number, dz: number, maxAngle: number, yOff = 0): Pos | null {
   const r = m.random;
   const a = Math.atan2(dz, dx) - Math.PI / 2 + (2 * r.nextFloat() - 1) * maxAngle;
   const d = Math.sqrt(r.nextDouble()) * Math.SQRT2 * radius;
   const x = -d * Math.sin(a), z = d * Math.cos(a);
   if (Math.abs(x) > radius || Math.abs(z) > radius) return null;
-  return [Math.floor(x), r.nextInt(2 * yRange + 1) - yRange, Math.floor(z)];
+  return [Math.floor(x), r.nextInt(2 * yRange + 1) - yRange + yOff, Math.floor(z)];
 }
 
 /** vanilla DefaultRandomPos.getPosTowards: somewhere up to `radius` off in the direction of a point */
@@ -190,6 +193,65 @@ export function landRandomPos(m: Mob, radius: number, yRange: number, score?: (p
     if (isWater(m, p[0], y, p[2]) || hasMalus(m, p[0], y, p[2])) return null;
     return [p[0], y, p[2]];
   }, score ?? ((p) => m.walkTargetValue(p[0], p[1], p[2])));
+}
+
+/**
+ * vanilla RandomPos.moveUpToAboveSolid: from inside something solid, up out of it and then `above` blocks more (or
+ * as far as there's room)
+ */
+function moveUpToAboveSolid(m: Mob, p: Pos, above: number): Pos {
+  const [x, , z] = p;
+  if (!isSolid(m, x, p[1], z)) return p;
+  let y = p[1] + 1;
+  while (y < MAX_Y && isSolid(m, x, y, z)) y++;
+  const top = y;
+  while (y < MAX_Y && y - top < above) {
+    y++;
+    if (isSolid(m, x, y, z)) {
+      y--;
+      break;
+    }
+  }
+  return [x, y, z];
+}
+
+/** vanilla RandomPos.moveUpOutOfSolid */
+function moveUpOutOfSolid(m: Mob, p: Pos): Pos {
+  const [x, , z] = p;
+  if (!isSolid(m, x, p[1], z)) return p;
+  let y = p[1] + 1;
+  while (y < MAX_Y && isSolid(m, x, y, z)) y++;
+  return [x, y, z];
+}
+
+/**
+ * vanilla HoverRandomPos.getPos: somewhere ahead (within `maxAngle` of (dx, dz)) over something it could land on,
+ * `minUp` to `maxUp` blocks above it, not in water nor anywhere it minds
+ */
+export function hoverRandomPos(m: Mob, radius: number, yRange: number, dx: number, dz: number, maxAngle: number, maxUp: number, minUp: number): Pos | null {
+  const restricted = mobRestricted(m, radius);
+  return bestOf(m, () => {
+    const d = randomDirectionWithinRadians(m, radius, yRange, dx, dz, maxAngle);
+    if (!d) return null;
+    // (vanilla LandRandomPos.generateRandomPosTowardDirection)
+    const p = towardDirection(m, d, radius);
+    if (outsideLimits(p) || isRestricted(restricted, m, p) || !m.navigation.isStableDestination(p[0], p[1], p[2])) return null;
+    const q = moveUpToAboveSolid(m, p, m.random.nextInt(maxUp - minUp + 1) + minUp);
+    return !isWater(m, q[0], q[1], q[2]) && !hasMalus(m, q[0], q[1], q[2]) ? q : null;
+  });
+}
+
+/** vanilla AirAndWaterRandomPos.getPos: anywhere ahead, `yOff` lower, up out of anything solid it lands in */
+export function airAndWaterRandomPos(m: Mob, radius: number, yRange: number, yOff: number, dx: number, dz: number, maxAngle: number): Pos | null {
+  const restricted = mobRestricted(m, radius);
+  return bestOf(m, () => {
+    const d = randomDirectionWithinRadians(m, radius, yRange, dx, dz, maxAngle, yOff);
+    if (!d) return null;
+    const p = towardDirection(m, d, radius);
+    if (outsideLimits(p) || isRestricted(restricted, m, p)) return null;
+    const q = moveUpOutOfSolid(m, p);
+    return hasMalus(m, q[0], q[1], q[2]) ? null : q;
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -317,6 +379,76 @@ export class WaterAvoidingRandomStrollGoal extends RandomStrollGoal {
     const m = this.mob;
     if (m.inWater) return landRandomPos(m, 15, 7) ?? super.getPosition();
     return m.random.nextFloat() >= this.probability ? landRandomPos(m, 10, 7) : super.getPosition();
+  }
+}
+
+/**
+ * vanilla WaterAvoidingRandomFlyingGoal: now and then off to somewhere ahead, hovering a block or three over
+ * something to land on, or failing that anywhere in the air ahead
+ */
+export class WaterAvoidingRandomFlyingGoal extends WaterAvoidingRandomStrollGoal {
+  protected override getPosition(): Pos | null {
+    const m = this.mob;
+    // (vanilla getViewVector(0): the way it faced last tick)
+    const y = (m.yawO * Math.PI) / 180, p = (m.pitchO * Math.PI) / 180;
+    const vx = -Math.sin(y) * Math.cos(p), vz = Math.cos(y) * Math.cos(p);
+    return hoverRandomPos(m, 8, 7, vx, vz, 1.5707963705062866, 3, 1) ?? airAndWaterRandomPos(m, 8, 4, -2, vx, vz, 1.5707963705062866);
+  }
+}
+
+/**
+ * vanilla FollowMobGoal: keeps company with any other kind of mob in sight within `areaSize`, flying up to it but no
+ * nearer than `stopDistance`, and backing off when it's right on top of it (or the other is looking its way)
+ */
+export class FollowMobGoal extends Goal {
+  private following: Mob | null = null;
+  private timeToRecalcPath = 0;
+  private oldWaterCost = 0;
+  constructor(readonly mob: Mob, readonly speed: number, readonly stopDistance: number, readonly areaSize: number) {
+    super();
+    this.flags = Flag.MOVE | Flag.LOOK;
+  }
+  canUse(): boolean {
+    const m = this.mob;
+    const list = m.level.getEntities(m.bb.inflate(this.areaSize, this.areaSize, this.areaSize), (e) => e !== m && isMob(e) && e.constructor !== m.constructor);
+    for (const e of list) {
+      if (!(e as Mob).isInvisible()) {
+        this.following = e as Mob;
+        return true;
+      }
+    }
+    return false;
+  }
+  override canContinueToUse(): boolean {
+    const f = this.following;
+    return !!f && !this.mob.navigation.isDone() && this.mob.distanceToSqr(f.x, f.y, f.z) > this.stopDistance * this.stopDistance;
+  }
+  override start(): void {
+    this.timeToRecalcPath = 0;
+    this.oldWaterCost = this.mob.malus(PathType.WATER);
+    this.mob.setPathfindingMalus(PathType.WATER, 0);
+  }
+  override stop(): void {
+    this.following = null;
+    this.mob.navigation.stop();
+    this.mob.setPathfindingMalus(PathType.WATER, this.oldWaterCost);
+  }
+  override tick(): void {
+    const m = this.mob, f = this.following;
+    if (!f || m.leashHolder) return;
+    m.lookControl.setLookAtEntity(f, 10, m.maxHeadXRot());
+    if (--this.timeToRecalcPath > 0) return;
+    this.timeToRecalcPath = this.adjustedTickDelay(10);
+    const d0 = m.x - f.x, d1 = m.y - f.y, d2 = m.z - f.z;
+    const d3 = d0 * d0 + d1 * d1 + d2 * d2;
+    if (d3 > this.stopDistance * this.stopDistance) m.navigation.moveToEntity(f, this.speed);
+    else {
+      m.navigation.stop();
+      const lc = f.lookControl;
+      if (d3 <= this.stopDistance || (lc.wantedX === m.x && lc.wantedY === m.y && lc.wantedZ === m.z)) {
+        m.navigation.moveTo(m.x - (f.x - m.x), m.y, m.z - (f.z - m.z), this.speed);
+      }
+    }
   }
 }
 
@@ -455,6 +587,30 @@ export class AvoidEntityGoal extends Goal {
   override tick(): void {
     const t = this.toAvoid;
     if (t) this.mob.navigation.speedModifier = this.mob.distanceToSqr(t.x, t.y, t.z) < 49 ? this.sprintSpeed : this.walkSpeed;
+  }
+}
+
+/** vanilla MoveTowardsRestrictionGoal: outside its bounds, back toward the middle */
+export class MoveTowardsRestrictionGoal extends Goal {
+  private w: Pos = [0, 0, 0];
+  constructor(readonly mob: Mob, readonly speed: number) {
+    super();
+    this.flags = Flag.MOVE;
+  }
+  canUse(): boolean {
+    const m = this.mob;
+    if (m.isWithinRestriction()) return false;
+    const [cx, , cz] = m.restrictCenter;
+    const p = defaultRandomPosTowards(m, 16, 7, cx + 0.5, cz + 0.5, Math.PI / 2);
+    if (!p) return false;
+    this.w = p;
+    return true;
+  }
+  override canContinueToUse(): boolean {
+    return !this.mob.navigation.isDone();
+  }
+  override start(): void {
+    this.mob.navigation.moveTo(this.w[0], this.w[1], this.w[2], this.speed);
   }
 }
 

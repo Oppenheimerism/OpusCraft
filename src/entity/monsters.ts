@@ -17,7 +17,7 @@ import type { Player } from './player';
 import type { Entity } from './entity';
 import { MobEffectInstance, MOB_EFFECTS } from './effects';
 import { ItemStack, ITEMS } from '../item/item';
-import { BLOCKS, STATE_BLOCK, FLAGS, F_OPAQUE, F_FULL_COLLISION, F_AIR, F_COLLIDE, F_WATER } from '../world/block';
+import { BLOCKS, STATE_BLOCK, FLAGS, F_OPAQUE, F_FULL_COLLISION, F_AIR, F_COLLIDE, F_WATER, F_LEAVES } from '../world/block';
 import { Arrow } from './arrow';
 import { explode } from '../game/explosion';
 import { clipBlocks } from '../game/raycast';
@@ -41,6 +41,10 @@ export const infection: { convert: ((zombie: Zombie, victim: LivingEntity) => bo
 export abstract class Monster extends Mob {
   protected override swimSplashSound(): string {
     return 'entity.hostile.splash';
+  }
+
+  protected override swimSound(): string {
+    return 'entity.hostile.swim';
   }
 
   protected override swimHighSpeedSplashSound(): string {
@@ -98,11 +102,12 @@ export abstract class Monster extends Mob {
 
 /**
  * vanilla BlockState.isValidSpawn for ordinary monsters: sturdy top face, not glass/leaves/ice/bedrock (magma blocks
- * only for the fireproof, MagmaBlock.isValidSpawn)
+ * only for the fireproof, MagmaBlock.isValidSpawn; leaves only for ocelots and parrots, Blocks.ocelotOrParrot)
  */
-export function validSpawnBlock(level: Level, x: number, y: number, z: number, fireImmune = false): boolean {
+export function validSpawnBlock(level: Level, x: number, y: number, z: number, fireImmune = false, type = ''): boolean {
   const st = level.world.getState(x, y, z);
   const f = FLAGS[st];
+  if (f & F_LEAVES) return type === 'ocelot' || type === 'parrot';
   if (!(f & F_OPAQUE) || !(f & F_FULL_COLLISION)) return false;
   const n = BLOCKS[STATE_BLOCK[st]].name;
   if (n === 'bedrock' || n === 'barrier' || n.endsWith('ice') || (n === 'magma_block' && !fireImmune) || n.endsWith('glass')) return false;
@@ -185,8 +190,8 @@ export class Zombie extends Monster {
     this.goalSelector.addGoal(7, new WaterAvoidingRandomStrollGoal(this, 1.0));
     this.targetSelector.addGoal(1, new HurtByTargetGoal(this).setAlertOthers('zombified_piglin'));
     this.targetSelector.addGoal(2, new NearestAttackablePlayerGoal(this, true));
-    // (villagers even through walls; iron golems in sight)
-    this.targetSelector.addGoal(3, new NearestAttackableMobGoal(this, (e) => e.type === 'villager', false));
+    // (villagers and wandering traders (vanilla AbstractVillager) even through walls; iron golems in sight)
+    this.targetSelector.addGoal(3, new NearestAttackableMobGoal(this, (e) => e.type === 'villager' || e.type === 'wandering_trader', false));
     this.targetSelector.addGoal(3, new NearestAttackableMobGoal(this, (e) => e.type === 'iron_golem', true));
   }
   /** vanilla supportsBreakDoorGoal */

@@ -1,11 +1,12 @@
 // Path following (vanilla PathNavigation / GroundPathNavigation): waypoint
-// advancing, corner cutting, stuck detection, sun avoidance. And WaterBoundPathNavigation, for swimming.
+// advancing, corner cutting, stuck detection, sun avoidance. And WaterBoundPathNavigation, for swimming, and
+// FlyingPathNavigation, for flying.
 
-import { raycast } from '../../game/raycast';
-import { findPath, Path, PathType, WalkNodeEvaluator, SwimNodeEvaluator, AmphibiousNodeEvaluator, type NodeEvaluator } from './pathfinder';
+import { clipBlocks, raycast } from '../../game/raycast';
+import { findPath, Path, PathType, WalkNodeEvaluator, SwimNodeEvaluator, AmphibiousNodeEvaluator, FlyNodeEvaluator, type NodeEvaluator } from './pathfinder';
 import type { Mob } from '../mob';
 import type { Entity } from '../entity';
-import { FLAGS, F_AIR, F_COLLIDE, F_OPAQUE, F_FULL_COLLISION } from '../../world/block';
+import { FLAGS, F_AIR, F_COLLIDE, F_OPAQUE, F_FULL_COLLISION, COLLISION } from '../../world/block';
 import { MIN_Y, MAX_Y } from '../../world/constants';
 
 export class PathNavigation {
@@ -14,7 +15,7 @@ export class PathNavigation {
   readonly evaluator = new WalkNodeEvaluator();
   avoidSun = false;
   isStuck = false;
-  private tickCount = 0;
+  protected tickCount = 0;
   private lastStuckCheck = 0;
   private lastStuck: [number, number, number] = [0, 0, 0];
   private timeoutNode: string | null = null;
@@ -176,7 +177,7 @@ export class PathNavigation {
     return this.evaluator.floorLevelAt(w, bx, by, bz);
   }
 
-  private followThePath(): void {
+  protected followThePath(): void {
     const p = this.path!;
     const m = this.mob;
     const pos = this.tempMobPos();
@@ -368,5 +369,78 @@ export class AmphibiousPathNavigation extends PathNavigation {
   override set canFloat(_v: boolean) {}
   override get canFloat(): boolean {
     return false;
+  }
+}
+
+/** vanilla BlockState.entityCanStandOn: its collision shape covers the whole of its top face */
+function topFaceFull(st: number): boolean {
+  const boxes = COLLISION[st];
+  return !!boxes && boxes.some((b) => b[0] <= 0 && b[2] <= 0 && b[3] >= 1 && b[5] >= 1 && b[4] >= 1);
+}
+
+/**
+ * vanilla FlyingPathNavigation: paths through the air (FlyNodeEvaluator) to the block itself, followed from its feet,
+ * the nodes aimed at as they are; while it rides something it only counts off the nodes it passes through. Where it
+ * can, it makes straight for the next node but one (nothing solid and no water on the line).
+ */
+export class FlyingPathNavigation extends PathNavigation {
+  private readonly fly = new FlyNodeEvaluator();
+
+  constructor(mob: Mob) {
+    super(mob);
+    this.fly.canPassDoors = true;
+  }
+
+  protected override pathEvaluator(): NodeEvaluator {
+    return this.fly;
+  }
+  override set canFloat(v: boolean) {
+    this.evaluator.canFloat = v;
+    this.fly.canFloat = v;
+  }
+  override get canFloat(): boolean {
+    return this.fly.canFloat;
+  }
+  override set canOpenDoors(v: boolean) {
+    this.evaluator.canOpenDoors = v;
+    this.fly.canOpenDoors = v;
+  }
+  override get canOpenDoors(): boolean {
+    return this.fly.canOpenDoors;
+  }
+  /** vanilla canUpdatePath: floating in a liquid, or not riding anything */
+  protected override canUpdatePath(): boolean {
+    return (this.canFloat && (this.mob.inWater || this.mob.inLava)) || !this.mob.vehicle;
+  }
+  /** vanilla PathNavigation.createPath(BlockPos): to the block itself (no looking for ground) */
+  override createPath(x: number, y: number, z: number, accuracy: number): Path | null {
+    return this.createPathRaw(Math.floor(x), Math.floor(y), Math.floor(z), accuracy);
+  }
+  override createPathToEntity(e: Entity, accuracy: number): Path | null {
+    return this.createPath(e.x, e.y, e.z, accuracy);
+  }
+  override tick(): void {
+    this.tickCount++;
+    if (this.isDone()) return;
+    if (this.canUpdatePath()) this.followThePath();
+    else if (this.path && !this.path.isDone()) {
+      const [nx, ny, nz] = this.path.entityPosAt(this.mob.width, this.path.nextNodeIndex);
+      if (Math.floor(this.mob.x) === Math.floor(nx) && Math.floor(this.mob.y) === Math.floor(ny) && Math.floor(this.mob.z) === Math.floor(nz)) this.path.advance();
+    }
+    if (!this.isDone()) {
+      const [x, y, z] = this.path!.entityPosAt(this.mob.width, this.path!.nextNodeIndex);
+      this.mob.moveControl.setWantedPosition(x, y, z, this.speedModifier);
+    }
+  }
+  /** vanilla isStableDestination: a block it could stand on */
+  override isStableDestination(x: number, y: number, z: number): boolean {
+    return topFaceFull(this.mob.level.world.getState(x, y, z));
+  }
+  /**
+   * vanilla isClearForMovementBetween(mob, from, to, true): nothing solid, and no water or lava, on the line from its
+   * feet to the point raised half its height
+   */
+  protected override canMoveDirectly(from: [number, number, number], to: [number, number, number]): boolean {
+    return !clipBlocks(this.mob.level.world, from[0], from[1], from[2], to[0], to[1] + this.mob.height * 0.5, to[2], true);
   }
 }

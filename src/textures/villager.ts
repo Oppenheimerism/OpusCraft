@@ -5,7 +5,7 @@
 // in the style of vanilla 1.21.
 
 import { TexImage, img, cloneImg, plot, clear, mixC, mulC, Rand } from './tex';
-import { boxFaces, noiseBox, noiseFace, paintFace, drawFace, fleck, pick, SIDES, type Box, type Face, type FaceName, type Pal } from './mobs';
+import { MOB_TEXTURES, boxFaces, noiseBox, noiseFace, paintFace, drawFace, fleck, pick, SIDES, type Box, type Face, type FaceName, type Pal } from './mobs';
 import type { VillagerType, Profession } from '../entity/villager';
 
 // ---------------------------------------------------------------------------
@@ -561,6 +561,50 @@ function dress(t: TexImage, type: VillagerType, prof: Profession, level: number,
 export function villagerTexture(type: VillagerType, prof: Profession, level: number, baby: boolean): TexImage {
   return dress(cloneImg(base()), type, prof, level, baby);
 }
+
+// ---------------------------------------------------------------------------
+// the wandering trader (vanilla textures/entity/wandering_trader.png, on the villager's layout): the villager's face
+// in a deep blue hood, the edge round his face trimmed in gold, a blue robe with a pale blue shawl over the
+// shoulders, a leather belt with a gold buckle, gold at the hem and the cuffs
+
+MOB_TEXTURES['wandering_trader'] = () => {
+  const t = cloneImg(base());
+  const r = new Rand(0x7a0de5);
+  const BLUE: Pal = [0x2e4775, 0x355183, 0x3d5b8f, 0x456296, 0x4e6ba0];
+  const BLUE_W: Pal = [1, 3, 6, 3, 1];
+  const SHAWL: Pal = [0x6f8cbf, 0x7b98ca, 0x86a6db];
+  const GOLD: Pal = [0xcf8a24, 0xdc992c, 0xeaa430, 0xf1b64c];
+  const LEATHER: Pal = [0x4a3020, 0x553826, 0x5f402b];
+  robe(t, r, BLUE, BLUE_W);
+  // the shawl, over the shoulders and the tops of the sleeves
+  band(t, JACKET, r, SHAWL, 0, 3);
+  noiseFace(t, JACKET.top, r, SHAWL, { cell: 1 });
+  for (const k of SIDES) noiseFace(t, faceRows(ARM[k], 0, 2), r, SHAWL, { cell: 1 });
+  noiseFace(t, ARM.top, r, SHAWL, { cell: 1 });
+  keepCollar(t);
+  // the belt and its buckle, the gold hem and cuffs
+  ring(t, JACKET, 10, () => pick(r, LEATHER));
+  plot(t, JACKET.front[0] + 3, JACKET.front[1] + 10, GOLD[3]);
+  plot(t, JACKET.front[0] + 4, JACKET.front[1] + 10, GOLD[1]);
+  ring(t, JACKET, 19, () => pick(r, GOLD));
+  cuffs(t, r, GOLD);
+  // (the legs under the robe: dark blue down to the shoes)
+  for (const k of SIDES) noiseFace(t, faceRows(LEG[k], 0, 8), r, [0x26324a, 0x2c3953, 0x33405c]);
+  // the hood: all over the head but the face, the edge round it gold; open underneath at the front
+  noiseBox(t, HAT, r, BLUE, { w: BLUE_W, cell: 1 });
+  paintFace(t, HAT.top, (x, y, c) => mulC(c, 1.05));
+  for (const k of ['right', 'left', 'back'] as FaceName[]) paintFace(t, HAT[k], (x, y, c, w, h) => (y >= h - 2 ? mulC(c, 0.9) : undefined));
+  const [fx, fy] = HAT.front;
+  for (let y = 3; y < 10; y++) for (let x = 1; x < 7; x++) clear(t, fx + x, fy + y);
+  for (let x = 1; x < 7; x++) plot(t, fx + x, fy + 2, pick(r, GOLD));
+  for (let y = 2; y < 10; y++) {
+    plot(t, fx, fy + y, pick(r, GOLD));
+    plot(t, fx + 7, fy + y, pick(r, GOLD));
+  }
+  const [bx, by, bw] = HAT.bottom;
+  for (let y = 0; y < 4; y++) for (let x = 0; x < bw; x++) clear(t, bx + x, by + y);
+  return t;
+};
 
 // ---------------------------------------------------------------------------
 // the zombie villager (vanilla zombie_villager/zombie_villager.png and its layers): the villager gone green and

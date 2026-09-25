@@ -48,7 +48,7 @@ import type { SkinParts } from '../render/entityRenderers';
 import { InventoryMenu, CraftingMenu, FurnaceMenu, ChestMenu, BrewingStandMenu } from '../inventory/menus';
 import { EnchantmentMenu, AnvilMenu, GrindstoneMenu } from '../inventory/enchantMenus';
 import { MerchantMenu } from '../inventory/merchantMenu';
-import type { Villager } from '../entity/villager';
+import type { Merchant } from '../entity/trading';
 import { hasVanishing } from '../item/enchantHelper';
 import { ChestBlockEntity, FurnaceBlockEntity, BarrelBlockEntity, BrewingStandBlockEntity } from '../world/blockEntity';
 import { catSittingOn } from '../entity/cat';
@@ -68,6 +68,8 @@ import { nightVisionScale, blindnessFog, applyNausea } from '../render/effectVis
 import { OVERWORLD, THE_NETHER, THE_END, dimensionById, teleportationScale, type DimensionType } from '../world/dimension';
 import { PortalPoi, portalRectangle, relativePortalPosition, portalExit, createPortal, isPortal, portalAxis, type PortalRect } from './portal';
 import { setVillageMenuHook } from './villageBlocks';
+import { setShulkerBoxMenuHook } from './shulkerBox';
+import { tickOuterEndProgress } from './outerEndProgress';
 import { setGenerateLootListener } from './archaeology';
 import { setPotCraftedListener } from './decoratedPot';
 import { openJobSite } from './jobSites';
@@ -327,6 +329,10 @@ export class Game {
     };
     inp.onLockChange = (locked) => {
       if (!locked && this.inWorld && this.spawned && !this.screen) this.openPause();
+      // (the browser keeps the Escape that lets the mouse go to itself: over a screen that holds on to the mouse,
+      // like the credits, letting go of it with the page still in front is that Escape)
+      const s = this.screen;
+      if (!locked && s && (s as { keepsMouse?: boolean }).keepsMouse && s.shouldCloseOnEsc() && document.hasFocus()) s.onClose();
     };
     // the browser refused to grab the mouse (no recent click): show the pause menu so a click on
     // "Back to Game" can grab it
@@ -421,6 +427,7 @@ export class Game {
     this.interaction = new Interaction(this.level, this.player);
     this.interaction.onOpenContainer = (kind, x, y, z) => this.openContainer(kind, x, y, z);
     setVillageMenuHook((kind, x, y, z) => this.openContainer(kind, x, y, z));
+    setShulkerBoxMenuHook((menu) => this.containerScreenFactory && this.setScreen(this.containerScreenFactory(menu)));
     // (the archaeology advancements: a suspicious block's loot rolled for the player, a pot made of four sherds)
     setGenerateLootListener((p, table) => {
       if (p === this.player) this.advancements.trigger('container_loot', { lootTable: table });
@@ -482,6 +489,7 @@ export class Game {
       spell: (k, x, y, z, xd, yd, zd, r, g, b, pw) => particles.spell(k, x, y, z, xd, yd, zd, r, g, b, pw),
     };
     this.spawner = new NaturalSpawner(this.level, hashString(meta.seed));
+    this.spawner.traders.load(meta.wanderingTrader);
     this.ambient = new AmbientTicker(this.level);
     this.renderer.weather.tempAt = (biome, x, y, z) => {
       const b = BIOMES[biome];
@@ -525,6 +533,8 @@ export class Game {
         this.player.respawnForced = pd.respawn[3] === 1;
       }
       this.player.seenCredits = !!pd.seenCredits;
+      this.player.shoulderLeft = pd.shoulderLeft ?? null;
+      this.player.shoulderRight = pd.shoulderRight ?? null;
       this.spawnSearch = false;
       // vanilla RootVehicle: back in the minecart you left the game in
       const v = pd.vehicle && !pd.dead ? loadEntity(pd.vehicle, this.level) : null;
@@ -590,12 +600,15 @@ export class Game {
       vehicle: p.vehicle ? saveEntity(p.vehicle) : null,
       dimension: this.world.dim.id,
       seenCredits: p.seenCredits || undefined,
+      shoulderLeft: p.shoulderLeft ?? undefined,
+      shoulderRight: p.shoulderRight ?? undefined,
     };
     m.portals = this.portalPoi.save();
     m.arrivals = this.arrivals.save();
     if (this.level.dragonFight) m.dragonFight = this.level.dragonFight.save();
     // (Stage 4: raids)
     m.raids = this.level.raids.save();
+    if (this.spawner) m.wanderingTrader = this.spawner.traders.save();
     const list = [];
     for (const c of this.world.chunks.values()) {
       if (!c.modified) continue;
@@ -825,7 +838,7 @@ export class Game {
   }
 
   /** a villager started trading with the player (vanilla Merchant.openTradingScreen) */
-  openMerchant(v: Villager, p: Player): void {
+  openMerchant(v: Merchant, p: Player): void {
     if (p !== this.player || !this.containerScreenFactory) {
       v.stopTrading();
       return;
@@ -876,6 +889,8 @@ export class Game {
     const kn = k ? entityDisplayName(k) : '';
     switch (source) {
       case 'mob':
+      // (vanilla mob_projectile's message is mob's: a shulker's bullet)
+      case 'mobProjectile':
         return `${n} was slain by ${kn}`;
       case 'player':
         return `${n} was slain by ${kn}`;
@@ -891,6 +906,9 @@ export class Game {
         return k === victim || !k ? `${n} blew up` : `${n} was blown up by ${kn}`;
       case 'fall':
         return `${n} fell from a high place`;
+      // (Stage 4: the outer End) an elytra into a wall
+      case 'flyIntoWall':
+        return `${n} experienced kinetic energy`;
       case 'drown':
         return `${n} drowned`;
       case 'starve':
@@ -1763,6 +1781,8 @@ export class Game {
       if (this.world.dim.id === 'the_nether' && this.level.fortresses().pieceAt(Math.floor(p.x), Math.floor(p.y), Math.floor(p.z))) this.advancements.trigger('structure', { structures: ['fortress'] });
       if (this.world.dim.id === 'overworld' && this.level.strongholds().pieceAt(Math.floor(p.x), Math.floor(p.y), Math.floor(p.z))) this.advancements.trigger('structure', { structures: ['stronghold'] });
     }
+    // (Stage 4: the outer End) Great View From Up Here
+    tickOuterEndProgress(this.level, p, this.advancements);
     // vanilla trackEnteredOrExitedLavaOnVehicle: how far a mount has carried the player across lava (ride_entity_in_lava)
     const v = p.vehicle;
     if (v?.inLava) {

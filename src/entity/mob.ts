@@ -25,6 +25,7 @@ import { currentDifficultyAt } from '../game/difficulty';
 import type { DifficultyInstance } from '../game/difficulty';
 import { doPostAttackEffects } from '../game/enchantEffects';
 import { crossbowUseTick } from '../item/crossbow';
+import { CHARGED_CREEPER_HEADS } from '../world/blocksSkulls';
 import { LeashKnot, getOrCreateKnot } from './leash';
 import type { Player } from './player';
 
@@ -113,7 +114,7 @@ export interface LootEntry {
   potion?: string;
 }
 
-export type SpawnReason = 'natural' | 'chunk' | 'egg' | 'command' | 'breeding' | 'spawner' | 'jockey' | 'structure' | 'summoned' | 'conversion' | 'reinforcement' | 'bucket';
+export type SpawnReason = 'natural' | 'chunk' | 'egg' | 'command' | 'breeding' | 'spawner' | 'jockey' | 'structure' | 'summoned' | 'conversion' | 'reinforcement' | 'bucket' | 'event';
 
 /** vanilla Mob.DEFAULT_EQUIPMENT_DROP_CHANCE; 2 (a sure drop, kept as it was) once it's something the mob picked up */
 export const DEFAULT_DROP_CHANCE = 0.085;
@@ -279,6 +280,9 @@ export abstract class Mob extends LivingEntity {
   set moveSpeedAttr(v: number) {
     this.baseMoveSpeed = v;
   }
+
+  /** vanilla FLYING_SPEED attribute (0.4 unless set): how fast a FlyingMoveControl flies it */
+  flyingSpeedAttr = 0.4;
 
   headRotSpeed(): number {
     return 10;
@@ -993,6 +997,16 @@ export abstract class Mob extends LivingEntity {
     return true;
   }
 
+  /** vanilla Entity.waterSwimSound: its splashes as it swims (getSwimSound), louder the faster it goes */
+  protected override playSwimSound(): void {
+    const v = Math.min(1, Math.sqrt(this.dx * this.dx * 0.2 + this.dy * this.dy + this.dz * this.dz * 0.2) * 0.35);
+    this.playSound(this.swimSound(), v, 1 + (this.random.nextFloat() - this.random.nextFloat()) * 0.4);
+  }
+  /** vanilla getSwimSound */
+  protected swimSound(): string {
+    return 'entity.generic.swim';
+  }
+
   protected override playStepSound(): void {
     const s = this.stepSound();
     if (s) {
@@ -1037,6 +1051,12 @@ export abstract class Mob extends LivingEntity {
     if (this.level.gameRules.doMobLoot) {
       this.dropLoot(byPlayer, looting);
       this.dropCustomDeathLoot(attacker, byPlayer, looting);
+      // (vanilla dropCustomDeathLoot: a charged creeper's blast knocks one head off, world/blocksSkulls)
+      const head = CHARGED_CREEPER_HEADS[this.type], c = attacker as (Entity & { powered?: boolean; droppedSkulls?: number }) | null;
+      if (head && c?.type === 'creeper' && c.powered && (c.droppedSkulls ?? 0) < 1) {
+        c.droppedSkulls = (c.droppedSkulls ?? 0) + 1;
+        this.spawnAtLocation(ItemStack.of(head));
+      }
       if (byPlayer) this.level.awardExperience?.(this.x, this.y, this.z, this.experienceReward());
     }
   }
@@ -1196,6 +1216,29 @@ export abstract class Mob extends LivingEntity {
     return undefined;
   }
   protected loadData(_d: Record<string, number | string | boolean>): void {}
+
+  /**
+   * /summon's entity data (vanilla readAdditionalSaveData): whichever of the mob's own saved values it's given (the
+   * names matched whatever their case: vanilla's Color is our color), each read as the kind it keeps (1b for true, a
+   * "minecraft:" name as the plain name), over what it has
+   */
+  readSummonData(given: Record<string, number | string | boolean>): void {
+    const own = this.saveData();
+    if (!own) return;
+    const names = new Map(Object.keys(given).map((k) => [k.toLowerCase(), k]));
+    const d = { ...own };
+    let any = false;
+    for (const [k, was] of Object.entries(own)) {
+      const g = names.get(k.toLowerCase());
+      if (g === undefined) continue;
+      const v = given[g];
+      if (typeof was === 'boolean') d[k] = typeof v === 'number' ? v !== 0 : v === true || v === 'true';
+      else if (typeof was === 'number') d[k] = typeof v === 'boolean' ? +v : Number(v);
+      else d[k] = String(v).replace(/^minecraft:/, '');
+      any = true;
+    }
+    if (any) this.loadData(d);
+  }
 }
 
 /** vanilla Entity.isAlive: not removed, and a living thing not dead */
