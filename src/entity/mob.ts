@@ -137,6 +137,8 @@ export interface SpawnGroup {
   axolotlVariants?: number[];
   /** vanilla Rabbit.RabbitGroupData: the coat the group shares */
   rabbitVariant?: number;
+  /** vanilla Fox.FoxGroupData: the type (red or snow) the group shares */
+  foxType?: number;
 }
 
 export abstract class Mob extends LivingEntity {
@@ -1132,6 +1134,9 @@ export abstract class Mob extends LivingEntity {
 
   /** random per-spawn setup (sheep color, baby zombies...); `group` is shared by one spawn pack */
   finalizeSpawn(_reason: SpawnReason, _group?: SpawnGroup): void {}
+
+  /** vanilla Mob.onOffspringSpawnedFromEgg: a young one a player just made with a spawn egg used on this mob */
+  onOffspringSpawnedFromEgg(_p: Player, _child: Mob): void {}
 
   /** the DifficultyInstance vanilla hands finalizeSpawn: Level.getCurrentDifficultyAt(the mob's block) */
   protected spawnDifficulty(): DifficultyInstance {

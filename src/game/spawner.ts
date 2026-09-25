@@ -49,6 +49,7 @@ import { SnowGolem } from '../entity/snowGolem';
 import { Parrot } from '../entity/parrot';
 import { PolarBear } from '../entity/polarBear';
 import { Rabbit } from '../entity/rabbit';
+import { Fox, FOXES_SPAWNABLE_ON } from '../entity/fox';
 import { shoulderHooks } from '../entity/shoulder';
 import { IronGolem } from '../entity/ironGolem';
 import { ZombieVillager } from '../entity/zombieVillager';
@@ -121,6 +122,7 @@ export const MOB_TYPES: Record<string, (l: Level) => Mob> = {
   parrot: (l) => new Parrot(l),
   polar_bear: (l) => new PolarBear(l),
   rabbit: (l) => new Rabbit(l),
+  fox: (l) => new Fox(l),
   ender_dragon: (l) => new EnderDragon(l),
 };
 
@@ -251,7 +253,7 @@ export function isChunkSaved(e: Entity): boolean {
 const ENTITY_NAMES: Record<string, string> = {
   pig: 'Pig', cow: 'Cow', sheep: 'Sheep', chicken: 'Chicken', zombie: 'Zombie', zombie_villager: 'Zombie Villager', skeleton: 'Skeleton', creeper: 'Creeper', spider: 'Spider',
   villager: 'Villager', iron_golem: 'Iron Golem', cave_spider: 'Cave Spider', enderman: 'Enderman', slime: 'Slime', magma_cube: 'Magma Cube', zombified_piglin: 'Zombified Piglin', ghast: 'Ghast', blaze: 'Blaze', wither_skeleton: 'Wither Skeleton', squid: 'Squid', bat: 'Bat', hoglin: 'Hoglin', zoglin: 'Zoglin', strider: 'Strider', piglin: 'Piglin',
-  witch: 'Witch', husk: 'Husk', stray: 'Stray', drowned: 'Drowned', silverfish: 'Silverfish', wolf: 'Wolf', cat: 'Cat', ocelot: 'Ocelot', horse: 'Horse', donkey: 'Donkey', mule: 'Mule', llama: 'Llama', trader_llama: 'Trader Llama', wandering_trader: 'Wandering Trader', snow_golem: 'Snow Golem', parrot: 'Parrot', polar_bear: 'Polar Bear', rabbit: 'Rabbit', llama_spit: 'Llama Spit', fireball: 'Fireball', small_fireball: 'Small Fireball',
+  witch: 'Witch', husk: 'Husk', stray: 'Stray', drowned: 'Drowned', silverfish: 'Silverfish', wolf: 'Wolf', cat: 'Cat', ocelot: 'Ocelot', horse: 'Horse', donkey: 'Donkey', mule: 'Mule', llama: 'Llama', trader_llama: 'Trader Llama', wandering_trader: 'Wandering Trader', snow_golem: 'Snow Golem', parrot: 'Parrot', polar_bear: 'Polar Bear', rabbit: 'Rabbit', fox: 'Fox', llama_spit: 'Llama Spit', fireball: 'Fireball', small_fireball: 'Small Fireball',
   arrow: 'Arrow', tnt: 'Primed TNT', lightning_bolt: 'Lightning Bolt', item: 'Item', experience_orb: 'Experience Orb', falling_block: 'Falling Block', player: 'Player',
   egg: 'Thrown Egg', snowball: 'Snowball', ender_pearl: 'Thrown Ender Pearl', potion: 'Potion', trident: 'Trident',
   minecart: 'Minecart', chest_minecart: 'Minecart with Chest', boat: 'Boat', chest_boat: 'Boat with Chest', end_crystal: 'End Crystal',
@@ -422,9 +424,9 @@ function settingsForLand(name: string): Omit<MobSettings, 'water' | 'ambient'> {
     // vanilla OverworldBiomes.forest with isFlowerForest: rabbits
     case 'flower_forest':
       return { creature: [...farmAnimals(), S_('rabbit', 4, 2, 3)], monster: monsters(), creatureProbability: 0.1 };
-    // vanilla OverworldBiomes.taiga and oldGrowthTaiga: rabbits, and foxes (not in the game yet: picked, and nothing
-    // comes); the grove (vanilla grove) has more rabbits and fewer foxes, the snowy slopes (vanilla snowySlopes) rabbits
-    // and goats (not in the game yet either)
+    // vanilla OverworldBiomes.taiga and oldGrowthTaiga: rabbits, and foxes in twos to fours; the grove (vanilla grove)
+    // has more rabbits and fewer foxes, the snowy slopes (vanilla snowySlopes) rabbits and goats (not in the game yet:
+    // picked, and nothing comes)
     case 'taiga':
     case 'snowy_taiga':
     case 'old_growth_pine_taiga':
@@ -731,6 +733,11 @@ export class NaturalSpawner {
         // vanilla Rabbit.checkRabbitSpawnRules: on #rabbits_spawnable_on (grass, snow, sand) in the light
         const below = BLOCKS[STATE_BLOCK[lvl.world.getState(x, y - 1, z)]].name;
         return (below === 'grass_block' || below === 'snow' || below === 'snow_block' || below === 'sand') && lvl.rawBrightness(x, y, z, 0) > 8;
+      }
+      case 'fox': {
+        // vanilla Fox.checkFoxSpawnRules: on #foxes_spawnable_on (grass, snow, podzol, coarse dirt) in the light
+        const below = BLOCKS[STATE_BLOCK[lvl.world.getState(x, y - 1, z)]].name;
+        return FOXES_SPAWNABLE_ON.has(below) && lvl.rawBrightness(x, y, z, 0) > 8;
       }
       case 'parrot': {
         // vanilla Parrot.checkParrotSpawnRules: on #parrots_spawnable_on (grass, leaves, logs) in the light
