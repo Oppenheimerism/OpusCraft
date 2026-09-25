@@ -37,6 +37,7 @@ import { isRail, railShape, isAscending } from '../rails';
 import { BlockPattern } from '../blockPattern';
 import { dispenseShulkerBox } from '../shulkerBox';
 import { isShulkerBox } from '../../world/blocksShulker';
+import { isSkullItem } from '../../world/blocksSkulls';
 import type { Level } from '../level';
 
 const blk = (st: number): Block => BLOCKS[STATE_BLOCK[st]];
@@ -464,6 +465,7 @@ function slotFor(it: Item): EquipSlot | null {
   if (it.armor) return it.armor.slot;
   if (it.id === 'shield') return 'offhand';
   if (it.id === 'carved_pumpkin') return 'head';
+  if (isSkullItem(it.id)) return 'head';
   return null;
 }
 
@@ -537,6 +539,12 @@ const shulkerBox = optional((src, stack) => {
   return left(stack);
 });
 
+/** vanilla DispenseItemBehavior's mob heads: one goes on the head of whoever stands in front, else the failed click */
+const skull = optional((src, stack) => {
+  src.success = dispenseArmor(src, stack);
+  return left(stack);
+});
+
 // ---------------------------------------------------------------------------
 // The registry (vanilla DispenserBlock.DISPENSER_REGISTRY)
 
@@ -557,6 +565,7 @@ export function dispenseBehaviorFor(stack: ItemStack): DispenseBehavior {
   if (own) return own;
   if (id.endsWith('_spawn_egg')) return spawnEgg;
   if (isShulkerBox(id)) return shulkerBox;
+  if (isSkullItem(id)) return skull;
   const b = boatItemInfo(id);
   if (b) return (BEHAVIORS[id] = boat(b.variant, b.chest));
   if (stack.item.armor || id === 'shield') return armor;

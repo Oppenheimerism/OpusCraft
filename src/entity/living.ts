@@ -9,6 +9,7 @@ import { clipBlocks } from '../game/raycast';
 import { MobEffectInstance, SavedEffect, saveEffect, loadEffect } from './effects';
 import { burningTimeFactor, damageAfterProtection, damageProtection, waterMovementEfficiency } from '../item/enchantHelper';
 import { AABB } from '../core/aabb';
+import { HEAD_DISGUISES } from '../world/blocksSkulls';
 import type { ItemStack } from '../item/item';
 // (Stage 4: shields)
 import { shieldTakesHit, shieldBlocked } from './shield';
@@ -368,10 +369,16 @@ export abstract class LivingEntity extends Entity {
   }
 
   /** vanilla getVisibilityPercent: how far away mobs notice this entity */
-  visibilityPercent(_looker: Entity | null): number {
+  visibilityPercent(looker: Entity | null): number {
     let d = 1;
     if (this.isDiscrete()) d *= 0.8;
     if (this.isInvisible()) d *= 0.7 * Math.max(0.1, this.armorCoverPercentage());
+    // (wearing the looker's own kind of head: world/blocksSkulls)
+    if (looker) {
+      const worn = this as { inventory?: { armor: (ItemStack | null)[] }; armorItems?: (ItemStack | null)[] };
+      const head = worn.inventory?.armor[3] ?? worn.armorItems?.[3];
+      if (head && HEAD_DISGUISES[looker.type] === head.item.id) d *= 0.5;
+    }
     return d;
   }
 

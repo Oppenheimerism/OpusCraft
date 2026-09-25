@@ -84,6 +84,7 @@ import { Shulker } from '../entity/shulker';
 import { ShulkerBullet } from '../entity/shulkerBullet';
 import { ItemFrame } from '../entity/itemFrame';
 import { ItemFrameRenderer } from './itemFrameRenderer';
+import { SkullRenderer } from './skullRenderer';
 import { PistonRenderer } from './pistonRenderer';
 import { ArchaeologyRenderers } from './archaeologyRenderers';
 import { createMob } from '../game/spawner';
@@ -167,6 +168,8 @@ export class EntityRenderDispatcher {
   /** shulker boxes (and the shulkers themselves) */
   private readonly shulkers: ShulkerRenderers;
   private readonly frames: ItemFrameRenderer;
+  /** mob heads: placed, held, worn and in the inventory */
+  private readonly skulls: SkullRenderer;
   /** (Stage 4: illagers) the pillager, vindicator, evoker, vex, ravager and the evoker's fangs */
   private readonly raiders: RaiderRenderers;
   /** (Stage 5: ocean) the guardians, their lasers, the elder's ghostly face */
@@ -177,6 +180,7 @@ export class EntityRenderDispatcher {
     this.village = new VillageBlockRenderers(gl);
     this.shulkers = new ShulkerRenderers(gl);
     this.frames = new ItemFrameRenderer(gl, items);
+    this.skulls = new SkullRenderer(gl);
     this.archaeology = new ArchaeologyRenderers(gl);
     this.endCrystals = new EndCrystalRenderer(gl);
     this.dragons = new EnderDragonRenderer(gl, this.endCrystals.beam);
@@ -365,6 +369,7 @@ export class EntityRenderDispatcher {
     this.renderEnchantingBooks(b, level, cam, partial, frustum);
     this.village.render(b, level, cam, partial, frustum);
     this.shulkers.renderBlockEntities(b, level, cam, partial, frustum);
+    this.skulls.renderBlockEntities(b, level, cam, partial, frustum);
     this.pistons.render(b, this.items, level, cam, partial, frustum);
     this.archaeology.render(b, this.items, level, cam, partial, frustum);
     b.setOverlay(0, 0, 0, 0);
@@ -931,7 +936,9 @@ export class EntityRenderDispatcher {
       this.armor.render(b, this.pose, def.root, e.armorItems, baby, armorSet);
       const head = e.armorItems[3];
       const s = armorSet === 'piglin' ? PIGLIN_HEAD_ITEM_SCALE : 1;
-      if (head && !head.item.armor) renderHeadItem(b, this.pose, this.items, def.root, head, baby, s, 1, s);
+      // (a mob head's jaw works with the walk: the vehicle's when riding one)
+      const w = e.vehicle instanceof LivingEntity ? e.vehicle : e;
+      if (head && !head.item.armor) renderHeadItem(b, this.pose, this.items, def.root, head, baby, s, 1, s, w.walkAnimPos - w.walkAnimSpeed * (1 - p), type === 'zombie_villager');
     }
   }
 
@@ -1142,6 +1149,10 @@ export class EntityRenderDispatcher {
     if (!spectator) {
       this.armor.render(b, this.pose, m, e.inventory.armor, false);
       drawPlayerHeldItems(b, this.items, this.pose, m, e, this.mainArm);
+      // vanilla CustomHeadLayer: what's worn on the head that isn't a helmet (a mob head, a carved pumpkin)
+      const head = e.inventory.armor[3];
+      const w = e.vehicle instanceof LivingEntity ? e.vehicle : e;
+      if (head && !head.item.armor) renderHeadItem(b, this.pose, this.items, m, head, false, 1, 1, 1, w.walkAnimPos - w.walkAnimSpeed * (1 - p));
       // vanilla SpinAttackEffectLayer
       if (e.isAutoSpinAttack()) this.items.trident.renderSpin(b, this.pose, a.age);
     }

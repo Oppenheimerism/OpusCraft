@@ -20,6 +20,7 @@ import { raycast } from './raycast';
 import './endBlocks';
 import './gatewayTravel';
 import './chorus';
+import './skulls';
 
 /** vanilla Block.UPDATE_CLIENTS (the frame and the portal blocks are set without telling the neighbours) */
 const UPDATE_CLIENTS = 2;

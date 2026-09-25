@@ -5,6 +5,7 @@ import { WOODS } from '../world/blocksExtra';
 import type { SavedEffect } from '../entity/effects';
 import type { ItemEntity } from '../entity/itemEntity';
 import { SHULKER_BOXES } from '../world/blocksShulker';
+import { SKULL_TYPES, SKULL_BLOCKS } from '../world/blocksSkulls';
 
 export interface ToolInfo {
   type: ToolType;
@@ -338,6 +339,9 @@ reg({ id: 'shulker_shell', texture: 'shulker_shell', creativeTab: 'ingredients' 
 reg({ id: 'shulker_spawn_egg', texture: 'shulker_spawn_egg', creativeTab: 'spawn_eggs' });
 // the glow item frame (vanilla Items.GLOW_ITEM_FRAME; its entity is entity/itemFrame.ts, as the item frame's)
 reg({ id: 'glow_item_frame', texture: 'glow_item_frame', creativeTab: 'functional' });
+// mob heads (vanilla StandingAndWallBlockItem: uncommon, the dragon's epic), worn on the head (item/equipment.ts); drawn
+// by their model, render/skullRenderer.ts
+for (const t of SKULL_TYPES) Object.assign(ITEMS.get(SKULL_BLOCKS[t][0])!, { rarity: t === 'dragon' ? 'epic' : 'uncommon', creativeTab: 'functional' });
 for (const [id] of SHULKER_BOXES) Object.assign(ITEMS.get(id)!, { maxStack: 1, creativeTab: 'colored' });
 Object.assign(ITEMS.get('dragon_egg')!, { rarity: 'epic', creativeTab: 'functional' });
 reg({ id: 'enchanted_book', texture: 'enchanted_book', maxStack: 1, rarity: 'uncommon', glint: true });
