@@ -403,8 +403,31 @@ function mobData(m: Mob, nbt: string): void {
   const flag = (k: string) => new RegExp(`\\b${k}\\s*:\\s*(1b|true)`).test(nbt);
   if (/\bCanPickUpLoot\s*:/.test(nbt)) m.canPickUpLoot = flag('CanPickUpLoot');
   if (flag('PersistenceRequired')) m.persistenceRequired = true;
-  // (Stage 4: illagers) vanilla Vindicator's Johnny flag, or the name Johnny (its setCustomName; names aren't kept yet)
-  if (flag('Johnny') || /\bCustomName\s*:[^,}]*\bJohnny\b/.test(nbt)) (m as { setCustomName?: (n: string) => void }).setCustomName?.('Johnny');
+  // vanilla Entity.load: CustomName and CustomNameVisible
+  const name = customNameIn(nbt);
+  if (name !== null) m.setCustomName(name);
+  if (flag('CustomNameVisible')) m.customNameVisible = true;
+  // (Stage 4: illagers) vanilla Vindicator's Johnny flag
+  if (flag('Johnny') && 'johnny' in m) (m as { johnny: boolean }).johnny = true;
+}
+
+/**
+ * vanilla CustomName: a text component as JSON in a quoted string ('"Bob"' or '{"text":"Bob"}'; a bare name is taken
+ * as it is); null when there's none
+ */
+function customNameIn(nbt: string): string | null {
+  const m = /\bCustomName\s*:\s*('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*")/.exec(nbt);
+  if (!m) return null;
+  const q = m[1][0];
+  const raw = m[1].slice(1, -1).replace(new RegExp(`\\\\([\\\\${q}])`, 'g'), '$1');
+  try {
+    const j: unknown = JSON.parse(raw);
+    if (typeof j === 'string') return j;
+    if (j && typeof j === 'object' && typeof (j as { text?: unknown }).text === 'string') return (j as { text: string }).text;
+  } catch {
+    // (not JSON: the name as written)
+  }
+  return raw;
 }
 
 const coordSuggest = (i: number) => ['~', '~ ~', '~ ~ ~'].slice(0, 3 - (i % 3));

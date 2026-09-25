@@ -32,6 +32,7 @@ import { Silverfish } from '../entity/silverfish';
 import { Wolf, wolfSpawnRulesOk } from '../entity/wolf';
 import { Cat, catHooks } from '../entity/cat';
 import { Ocelot } from '../entity/ocelot';
+import { Horse, Donkey, Mule } from '../entity/horse';
 import { CatSpawner } from './catSpawner';
 import { IronGolem } from '../entity/ironGolem';
 import { ZombieVillager } from '../entity/zombieVillager';
@@ -41,6 +42,7 @@ import { AbstractMinecart, createMinecart, MINECART_TYPES } from '../entity/mine
 import { Bat } from '../entity/bat';
 import { Boat, createBoat, BOAT_TYPES } from '../entity/boat';
 import { EndCrystal } from '../entity/endCrystal';
+import { LeashKnot } from '../entity/leash';
 import { EnderDragon } from '../entity/enderDragon';
 import { moonPhase } from '../render/environment';
 import { tickInhabitedTime } from './difficulty';
@@ -90,6 +92,9 @@ export const MOB_TYPES: Record<string, (l: Level) => Mob> = {
   wolf: (l) => new Wolf(l),
   cat: (l) => new Cat(l),
   ocelot: (l) => new Ocelot(l),
+  horse: (l) => new Horse(l),
+  donkey: (l) => new Donkey(l),
+  mule: (l) => new Mule(l),
   ender_dragon: (l) => new EnderDragon(l),
 };
 
@@ -128,7 +133,7 @@ function saveWithPassengers(e: Entity): SavedEntity | null {
 
 function saveOne(e: Entity): SavedEntity | null {
   if (e instanceof Mob) return e.health > 0 && !e.removed ? e.save() : null;
-  if (e instanceof AbstractMinecart || e instanceof Boat || e instanceof EndCrystal) return e.removed ? null : e.save();
+  if (e instanceof AbstractMinecart || e instanceof Boat || e instanceof EndCrystal || e instanceof LeashKnot) return e.removed ? null : e.save();
   // (vanilla: arrows and tridents are kept with their chunk, stuck where they landed)
   if (e instanceof Arrow) return e.removed ? null : e.save();
   if (e instanceof ItemEntity && !e.removed) {
@@ -174,6 +179,7 @@ function loadOne(d: SavedEntity, level: Level): Entity | null {
     c.load(d);
     return c;
   }
+  if (d.id === 'leash_knot') return LeashKnot.load(level, d);
   const cart = createMinecart(d.id, level);
   if (cart) {
     cart.load(d);
@@ -194,17 +200,17 @@ function loadOne(d: SavedEntity, level: Level): Entity | null {
 /** entities that belong to chunk storage (whatever carries the player is saved with the player: vanilla RootVehicle) */
 export function isChunkSaved(e: Entity): boolean {
   if (e.passengers.some((p) => p.type === 'player')) return false;
-  return e instanceof AbstractMinecart || e instanceof Boat || e instanceof Mob || e instanceof ItemEntity || e instanceof EndCrystal || e instanceof Arrow;
+  return e instanceof AbstractMinecart || e instanceof Boat || e instanceof Mob || e instanceof ItemEntity || e instanceof EndCrystal || e instanceof Arrow || e instanceof LeashKnot;
 }
 
 const ENTITY_NAMES: Record<string, string> = {
   pig: 'Pig', cow: 'Cow', sheep: 'Sheep', chicken: 'Chicken', zombie: 'Zombie', zombie_villager: 'Zombie Villager', skeleton: 'Skeleton', creeper: 'Creeper', spider: 'Spider',
   villager: 'Villager', iron_golem: 'Iron Golem', cave_spider: 'Cave Spider', enderman: 'Enderman', slime: 'Slime', magma_cube: 'Magma Cube', zombified_piglin: 'Zombified Piglin', ghast: 'Ghast', blaze: 'Blaze', wither_skeleton: 'Wither Skeleton', squid: 'Squid', bat: 'Bat', hoglin: 'Hoglin', zoglin: 'Zoglin', strider: 'Strider', piglin: 'Piglin',
-  witch: 'Witch', husk: 'Husk', stray: 'Stray', drowned: 'Drowned', silverfish: 'Silverfish', wolf: 'Wolf', cat: 'Cat', ocelot: 'Ocelot', fireball: 'Fireball', small_fireball: 'Small Fireball',
+  witch: 'Witch', husk: 'Husk', stray: 'Stray', drowned: 'Drowned', silverfish: 'Silverfish', wolf: 'Wolf', cat: 'Cat', ocelot: 'Ocelot', horse: 'Horse', donkey: 'Donkey', mule: 'Mule', fireball: 'Fireball', small_fireball: 'Small Fireball',
   arrow: 'Arrow', tnt: 'Primed TNT', lightning_bolt: 'Lightning Bolt', item: 'Item', experience_orb: 'Experience Orb', falling_block: 'Falling Block', player: 'Player',
   egg: 'Thrown Egg', snowball: 'Snowball', ender_pearl: 'Thrown Ender Pearl', potion: 'Potion', trident: 'Trident',
   minecart: 'Minecart', chest_minecart: 'Minecart with Chest', boat: 'Boat', chest_boat: 'Boat with Chest', end_crystal: 'End Crystal',
-  ender_dragon: 'Ender Dragon', dragon_fireball: 'Dragon Fireball', area_effect_cloud: 'Area Effect Cloud',
+  ender_dragon: 'Ender Dragon', dragon_fireball: 'Dragon Fireball', area_effect_cloud: 'Area Effect Cloud', leash_knot: 'Leash Knot',
 };
 
 // (Stage 4: illagers)
@@ -212,8 +218,9 @@ Object.assign(ENTITY_NAMES, { pillager: 'Pillager', vindicator: 'Vindicator', ev
 // (Stage 5: ocean)
 Object.assign(ENTITY_NAMES, { guardian: 'Guardian', elder_guardian: 'Elder Guardian' });
 
-/** vanilla entity type display names (death messages, commands) */
+/** vanilla Entity.getDisplayName (death messages, commands, screens): its custom name, else its kind's */
 export function entityDisplayName(e: Entity | string): string {
+  if (typeof e !== 'string' && e.customName !== null) return e.customName;
   if (e instanceof Boat) return e.displayName();
   // vanilla Villager.getTypeName: a villager with a job goes by it
   if (e instanceof Villager && e.profession !== 'none') return e.profession[0].toUpperCase() + e.profession.slice(1);
@@ -338,8 +345,19 @@ function settingsForLand(name: string): Omit<MobSettings, 'water' | 'ambient'> {
     case 'mushroom_fields':
     case 'deep_dark':
       return { creature: [], monster: [], creatureProbability: 0.1 };
+    // vanilla BiomeDefaultFeatures.plainsSpawns: herds of horses, and a few donkeys
     case 'plains':
     case 'sunflower_plains':
+      return { creature: [...farmAnimals(), S_('horse', 5, 2, 6), S_('donkey', 1, 1, 3)], monster: monsters(), creatureProbability: 0.1 };
+    // vanilla OverworldBiomes.savanna: a few horses and donkeys (and armadillos, not in the game yet: picked, and nothing comes)
+    case 'savanna':
+    case 'savanna_plateau':
+    case 'windswept_savanna':
+      return { creature: [...farmAnimals(), S_('horse', 1, 2, 6), S_('donkey', 1, 1, 1), S_('armadillo', 10, 2, 3)], monster: monsters(), creatureProbability: 0.1 };
+    // vanilla OverworldBiomes.meadowOrCherryGrove: donkeys (pigs in a cherry grove), rabbits (not yet: the same) and sheep
+    case 'meadow':
+    case 'cherry_grove':
+      return { creature: [S_(name === 'meadow' ? 'donkey' : 'pig', 1, 1, 2), S_('rabbit', 2, 2, 6), S_('sheep', 2, 2, 4)], monster: monsters(), creatureProbability: 0.1 };
     case 'forest':
     case 'flower_forest':
     case 'birch_forest':
@@ -355,11 +373,6 @@ function settingsForLand(name: string): Omit<MobSettings, 'water' | 'ambient'> {
     case 'windswept_gravelly_hills':
     case 'windswept_forest':
     case 'swamp':
-    case 'savanna':
-    case 'savanna_plateau':
-    case 'windswept_savanna':
-    case 'meadow':
-    case 'cherry_grove':
       return { creature: farmAnimals(), monster: monsters(), creatureProbability: 0.1 };
     case 'jungle':
     case 'sparse_jungle':
@@ -650,7 +663,10 @@ export class NaturalSpawner {
       case 'pig':
       case 'cow':
       case 'sheep':
-      case 'chicken': {
+      case 'chicken':
+      case 'horse':
+      case 'donkey':
+      case 'mule': {
         const below = BLOCKS[STATE_BLOCK[lvl.world.getState(x, y - 1, z)]].name;
         return below === 'grass_block' && lvl.rawBrightness(x, y, z, 0) > 8;
       }

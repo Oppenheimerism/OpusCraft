@@ -32,6 +32,14 @@ export interface PlayerInput {
   sprint: boolean;
 }
 
+/** vanilla PlayerRideableJumping: a mount the player makes leap with a charged jump */
+export interface RideableJumping {
+  canJump(): boolean;
+  onPlayerJump(power: number): void;
+  handleStartJump(power: number): void;
+  jumpCooldown(): number;
+}
+
 export class Player extends LivingEntity {
   readonly type = 'player';
   gameMode: GameMode = 'survival';
@@ -41,11 +49,16 @@ export class Player extends LivingEntity {
   invulnerable = false;
   flySpeed = 0.05;
   crouching = false;
+  /** vanilla Player.getMainArm (options: Main Hand) */
+  mainArm: 'left' | 'right' = 'right';
   input: PlayerInput = { forward: false, back: false, left: false, right: false, jump: false, sneak: false, sprint: false };
   private sprintTriggerTime = 0;
   private jumpTriggerTime = 0;
   private wasForward = false;
   private wasJump = false;
+  /** vanilla LocalPlayer jumpRidingTicks and jumpRidingScale: how long jump's been held on a mount that leaps, and the charge */
+  jumpRidingTicks = 0;
+  jumpRidingScale = 0;
   /** view bobbing */
   bob = 0;
   bobO = 0;
@@ -270,6 +283,26 @@ export class Player extends LivingEntity {
 
   override isShiftKeyDown(): boolean {
     return this.input.sneak;
+  }
+
+  /**
+   * vanilla Player.getRopeHoldPosition: a lead hangs from the main hand, at the side 0.8 below the top of it (0.2
+   * lower crouching); swimming or spinning in a riptide, from ahead of it along the look
+   */
+  override ropeHoldPosition(p: number): [number, number, number] {
+    const d0 = 0.22 * (this.mainArm === 'right' ? -1 : 1);
+    // (vanilla lerps the pitch the other way round, over half the partial tick)
+    const f = ((this.pitch + (this.pitchO - this.pitch) * p * 0.5) * Math.PI) / 180;
+    const f1 = ((this.bodyYawO + (this.bodyYaw - this.bodyYawO) * p) * Math.PI) / 180;
+    let v: [number, number, number];
+    if (this.isAutoSpinAttack()) {
+      const [lx, , lz] = this.lookVector();
+      const h1 = this.dx * this.dx + this.dz * this.dz, h2 = lx * lx + lz * lz;
+      const f2 = h1 > 0 && h2 > 0 ? Math.sign(this.dx * lz - this.dz * lx) * Math.acos(Math.max(-1, Math.min(1, (this.dx * lx + this.dz * lz) / Math.sqrt(h1 * h2)))) : 0;
+      v = yRot(xRot(zRot([d0, -0.11, 0.85], -f2), -f), -f1);
+    } else if (this.isVisuallySwimming()) v = yRot(xRot([d0, 0.2, -0.15], -f), -f1);
+    else v = yRot([d0, this.bb.maxY - this.bb.minY - 1, this.crouching ? -0.2 : 0.07], -f1);
+    return [this.lerpX(p) + v[0], this.lerpY(p) + v[1], this.lerpZ(p) + v[2]];
   }
 
   /** vanilla ServerPlayer.updateInvisibilityStatus: a spectator is invisible, effects or not */
@@ -512,9 +545,10 @@ export class Player extends LivingEntity {
     }
     if (this.sprinting && (fwd < 0.8 || (this.horizontalCollision && !this.flying) || !canSprint || this.crouching && !this.flying)) this.sprinting = false;
     this.wasForward = forwardDown;
-    // flying toggle: double-tap jump
+    this.rideJump(inp.jump);
+    // flying toggle: double-tap jump (not on a mount)
     if (this.jumpTriggerTime > 0) this.jumpTriggerTime--;
-    if (inp.jump && !this.wasJump && this.mayFly) {
+    if (inp.jump && !this.wasJump && this.mayFly && !this.vehicle) {
       if (this.jumpTriggerTime === 0) this.jumpTriggerTime = 7;
       else if (this.gameMode !== 'spectator') {
         this.flying = !this.flying;
@@ -532,6 +566,39 @@ export class Player extends LivingEntity {
     this.xxa = left;
     this.zza = fwd;
     this.jumping = inp.jump && !this.flying;
+  }
+
+  /** vanilla jumpableVehicle: the mount you're steering, if it leaps (a saddled horse) */
+  jumpableVehicle(): RideableJumping | null {
+    const v = this.vehicle as (Entity & Partial<RideableJumping>) | null;
+    return v && v.controllingPassenger() === this && v.onPlayerJump && v.canJump?.() ? (v as unknown as RideableJumping) : null;
+  }
+
+  /**
+   * vanilla LocalPlayer.aiStep's riding jump: on a mount that leaps, holding jump charges it (a tenth a tick, up to
+   * 0.9, then easing back to 0.8 the longer it's held) and letting go leaps with the charge; after that, a
+   * half-second pause before the next
+   */
+  private rideJump(jump: boolean): void {
+    const mount = this.jumpableVehicle();
+    if (!mount || mount.jumpCooldown() !== 0) {
+      this.jumpRidingScale = 0;
+      return;
+    }
+    if (this.jumpRidingTicks < 0 && ++this.jumpRidingTicks === 0) this.jumpRidingScale = 0;
+    if (this.wasJump && !jump) {
+      this.jumpRidingTicks = -10;
+      const power = Math.floor(this.jumpRidingScale * 100);
+      mount.onPlayerJump(power);
+      // (vanilla sendRidingJump: and the server starts the leap)
+      if (power > 0) mount.handleStartJump(power);
+    } else if (!this.wasJump && jump) {
+      this.jumpRidingTicks = 0;
+      this.jumpRidingScale = 0;
+    } else if (this.wasJump) {
+      this.jumpRidingTicks++;
+      this.jumpRidingScale = this.jumpRidingTicks < 10 ? this.jumpRidingTicks * 0.1 : 0.8 + (2 / (this.jumpRidingTicks - 9)) * 0.1;
+    }
   }
 
   override travel(sx: number, sy: number, sz: number): void {
@@ -752,4 +819,19 @@ export class Player extends LivingEntity {
     }
     return f;
   }
+}
+
+type Vec = [number, number, number];
+/** vanilla Vec3.xRot / yRot / zRot */
+function xRot(v: Vec, a: number): Vec {
+  const c = Math.cos(a), s = Math.sin(a);
+  return [v[0], v[1] * c + v[2] * s, v[2] * c - v[1] * s];
+}
+function yRot(v: Vec, a: number): Vec {
+  const c = Math.cos(a), s = Math.sin(a);
+  return [v[0] * c + v[2] * s, v[1], v[2] * c - v[0] * s];
+}
+function zRot(v: Vec, a: number): Vec {
+  const c = Math.cos(a), s = Math.sin(a);
+  return [v[0] * c + v[1] * s, v[1] * c - v[0] * s, v[2]];
 }
