@@ -18,7 +18,7 @@ const OPP: Record<Dir4, Dir4> = { north: 'south', south: 'north', east: 'west', 
 const CW: Record<Dir4, Dir4> = { north: 'east', east: 'south', south: 'west', west: 'north' };
 
 /** vanilla Mth.getSeed: a position's seed */
-function positionSeed(x: number, y: number, z: number): bigint {
+export function positionSeed(x: number, y: number, z: number): bigint {
   let l = BigInt(Math.imul(x, 3129871)) ^ (BigInt(z) * 116129781n) ^ BigInt(y);
   l = BigInt.asIntN(64, l);
   l = BigInt.asIntN(64, l * l * 42317861n + l * 11n);

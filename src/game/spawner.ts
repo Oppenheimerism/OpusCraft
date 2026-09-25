@@ -207,6 +207,8 @@ function loadOne(d: SavedEntity, level: Level): Entity | null {
   }
   const m = createMob(d.id, level);
   if (m) m.load(d);
+  // a structure's mob, placed by the chunk's generator: equipped as it would be spawning there (vanilla finalizeSpawn STRUCTURE)
+  if (m && d.data?.finalize === 'structure') m.finalizeSpawn('structure');
   return m;
 }
 

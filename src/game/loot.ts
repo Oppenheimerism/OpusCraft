@@ -5,6 +5,7 @@ import { Rand } from '../core/rng';
 import { ItemStack, ITEMS } from '../item/item';
 import { RANDOM_LOOT_ENCHANTMENTS } from '../item/enchantments';
 import { selectEnchantment } from '../item/enchantHelper';
+import { MOB_EFFECTS } from '../entity/effects';
 import type { SimpleContainer } from '../inventory/container';
 
 interface LootEntry {
@@ -16,6 +17,8 @@ interface LootEntry {
   enchant?: boolean;
   /** enchant_with_levels from #on_random_loot: enchanted as a table would at this level (or one rolled from a range) */
   levels?: number | [number, number];
+  /** set_stew_effect: one of these [effect, seconds from, to] (an instant effect's in ticks) */
+  stewEffects?: [string, number, number][];
 }
 
 interface LootPool {
@@ -300,6 +303,14 @@ function enchantWithLevels(stack: ItemStack, levels: number | [number, number], 
   return new ItemStack(stack.item, stack.count, stack.damage, { ...stack.tag, enchantments: { ...stack.tag?.enchantments, ...m } });
 }
 
+/** vanilla SetStewEffectFunction: a suspicious stew gets one of the effects, for whole seconds in its range */
+export function setStewEffect(stack: ItemStack, effects: [string, number, number][], nextInt: (n: number) => number): void {
+  if (stack.item.id !== 'suspicious_stew' || !effects.length) return;
+  const [id, lo, hi] = effects[nextInt(effects.length)];
+  const n = lo >= hi ? lo : lo + nextInt(hi - lo + 1);
+  stack.tag = { ...stack.tag, stewEffects: [...(stack.tag?.stewEffects ?? []), { id, duration: MOB_EFFECTS[id]?.instant ? n : n * 20 }] };
+}
+
 /** vanilla LootTable.getRandomItems (stacks over the max size are split) */
 export function rollLoot(table: string, r: Rand): ItemStack[] {
   const out: ItemStack[] = [];
@@ -314,6 +325,7 @@ export function rollLoot(table: string, r: Rand): ItemStack[] {
       let stack = new ItemStack(it, entry.count ? between(r, entry.count[0], entry.count[1]) : 1);
       if (entry.enchant) stack = enchantRandomly(stack, r);
       if (entry.levels) stack = enchantWithLevels(stack, entry.levels, r);
+      if (entry.stewEffects) setStewEffect(stack, entry.stewEffects, (n) => r.nextInt(n));
       while (stack.count > stack.maxStack) out.push(stack.split(stack.maxStack));
       out.push(stack);
     }

@@ -231,6 +231,7 @@ const STORAGE: [string, string][] = [
   ['raw_gold_block', 'raw_gold'],
   ['raw_copper_block', 'raw_copper'],
   ['hay_block', 'wheat'],
+  ['bone_block', 'bone_meal'],
 ];
 for (const [block, item] of STORAGE) {
   shaped(block, 1, ['###', '###', '###'], { '#': item });
