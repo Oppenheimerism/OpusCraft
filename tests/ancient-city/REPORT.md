@@ -4,14 +4,14 @@
 
 Branch: `claude/cool-volta-f4wms4` (from main at 42e2ea3; main merged in at 5138ca8 (the ocean), bf4ffb8 (the outer
 End, the snow golem), after M2 at 03a11e2 (parrots, /summon data) and after M3 at b2c18f9 (turtles, fireworks,
-axolotls, rabbits, goats, foxes, frogs and tadpoles; main at ac9d889)).
+axolotls, rabbits, goats, foxes, frogs and tadpoles; main at ac9d889); main hadn't moved by the end of M4).
 
 | Milestone | State | Commits |
 |---|---|---|
 | M1 blocks and items | done: sculk, sculk vein, the catalyst (bloom), the sculk sensor and calibrated sensor (phases, tendrils, amethyst, waterlogging, the active glow), the shrieker (can_summon, shrieking, waterlogged), reinforced deepslate, cracked deepslate bricks and tiles, chiseled deepslate, the 17 candles (1–4, lit, waterlogged, flames and smoke, light 3 per candle), echo shard, recovery compass, disc fragment 5, music disc 5 with its own procedural song; the darkness effect's visuals | 46939f1 |
 | M2 the ancient city | done: the structure set (random spread 24/8, salt 20083232), the jigsaw start (city_center by its city_anchor at y −27, size 7, 116 blocks, only where the deep dark is at the start's centre, beard_box), 3 centres, 10 quarters with the outer wall and gate, 20 buildings and ruins, 12 walls, the entrance tunnel (6 pieces), sculk pieces; the start / generic / walls processor lists with vanilla's position random; `chests/ancient_city` and `chests/ancient_city_ice_box`; the deep dark's sculk_vein and sculk_patch_deep_dark, the city's sculk_patch_ancient_city, and the SculkSpreader behind them; `/locate structure minecraft:ancient_city` | d22523e (merge of main: 03a11e2) |
-| M3 vibrations and sculk behaviour | done: the game events (vanilla GameEvent's 45 and the 15 resonances, their radii, frequencies and tags) and their dispatcher (listeners by chunk, catalysts told last and nearest first); vibrations (vanilla VibrationSystem: the tick's nearest candidate, higher frequency on a tie, travelling a block a tick with its particle, stopped by wool in the way, muffled by wool or carpet where it happens and by dropped wool, not made by sneaking or spectating, saved on its way and shown again when loaded); the sculk sensor and calibrated sensor (30 or 10 ticks active then 10 cooling, power by distance out of 8 or 16, redstone out, strongly into the block below, the calibrated sensor's back filter, amethyst resonance with its chime, stepping on one, the comparator's frequency, the red specks); the shrieker (warning players, the answer from the dark nearer each time, darkness, broken mid-shriek, stepping on one, a hook for the warden); each player's warning level (vanilla WardenSpawnTracker: shared within 16 blocks, 10 s cooldown, falling after 10 min, saved); the catalyst (a death within 8 blocks: its experience becomes charge that spreads sculk, the bloom and its souls, cursors saved); Swift Sneak; Sneak 100 and It Spreads; the vibration, shriek, sculk charge, charge pop, sculk soul and dust transition particles; the warden's four answers (procedural); game events made all over the world (moving, landing, splashing, blocks placed, broken and changed, containers, doors, buttons, levers, plates, tripwires, pistons, dispensers, eating and drinking, using items, projectiles, explosions, lightning, equipment, shearing, taking hold of a mob, mounting, teleports, damage and deaths) | ffece32, 7fd0733, eaf6d6b, 63f6a17, 43f2ff0 (merge of main: b2c18f9), the report (listed below) |
-| M4 the warden | not started | |
+| M3 vibrations and sculk behaviour | done: the game events (vanilla GameEvent's 45 and the 15 resonances, their radii, frequencies and tags) and their dispatcher (listeners by chunk, catalysts told last and nearest first); vibrations (vanilla VibrationSystem: the tick's nearest candidate, higher frequency on a tie, travelling a block a tick with its particle, stopped by wool in the way, muffled by wool or carpet where it happens and by dropped wool, not made by sneaking or spectating, saved on its way and shown again when loaded); the sculk sensor and calibrated sensor (30 or 10 ticks active then 10 cooling, power by distance out of 8 or 16, redstone out, strongly into the block below, the calibrated sensor's back filter, amethyst resonance with its chime, stepping on one, the comparator's frequency, the red specks); the shrieker (warning players, the answer from the dark nearer each time, darkness, broken mid-shriek, stepping on one, a hook for the warden); each player's warning level (vanilla WardenSpawnTracker: shared within 16 blocks, 10 s cooldown, falling after 10 min, saved); the catalyst (a death within 8 blocks: its experience becomes charge that spreads sculk, the bloom and its souls, cursors saved); Swift Sneak; Sneak 100 and It Spreads; the vibration, shriek, sculk charge, charge pop, sculk soul and dust transition particles; the warden's four answers (procedural); game events made all over the world (moving, landing, splashing, blocks placed, broken and changed, containers, doors, buttons, levers, plates, tripwires, pistons, dispensers, eating and drinking, using items, projectiles, explosions, lightning, equipment, shearing, taking hold of a mob, mounting, teleports, damage and deaths) | ffece32, 7fd0733, eaf6d6b, 63f6a17, 43f2ff0 (merge of main: b2c18f9), 5766374 (the report) |
+| M4 the warden | done: the warden (vanilla Warden, WardenAi and its behaviours, AngerManagement, WardenEntitySensor): 500 health, 30 attack (knockback 1.5), speed 0.3, follow range 24, 0.9 by 2.9; no knockback (blasts aside, as 1.21), no fire or lava; blind, it hears through its tendrils (twitching and clicking) every #warden_can_listen vibration within 16 blocks of its head, its own steps never; anger per suspect (35 a vibration, a bump or being sniffed out, a shot's owner 10 then 35, a hit 100; a point a second off; agitated at 40, angry at 80; saved by uuid) with the ambient and listening sounds of each level; investigating where it was disturbed, sniffing (within 6 blocks), wandering; the roar (4.2 s, the sound 1.25 s in) and then melee (30 on normal, every 18 ticks, knocking a shield down) or the sonic boom (15 blocks across and 20 up or down, through walls; charged 1.75 s; 10 on normal, 6 easy, 15 hard, past armour, enchantments and shields; thrown 2.5 back and 0.5 up; 10 s before the first, 2 s between); darkness (13 s) every 6 s to the players within 20 blocks; the heartbeat, every 2 s calm to every 0.5 s angry; emerging (6.7 s) when a shrieker summons it and digging away (5 s) after a minute undisturbed, untouchable meanwhile, the ground crumbling round it; a sculk catalyst and 5 experience; summoned at a can_summon shrieker's fourth warning (vanilla SpawnUtil: 20 tries within 5 blocks, 6 up or down, where it fits); WardenModel with emerge, dig, roar, sniff, sonic boom and attack keyframed, its walk, sway and look, the tendrils flaring, the heart beating and the spots pulsing (the four emissive layers); the procedural skin and layers; the sonic boom's rings; the rest of its voice (16 more sounds, 65 variants, procedural); the spawn egg, `/summon minecraft:warden` | 1c51139 (the warden), the report (listed below) |
 
 M3's commits (the subjects are the player-facing messages; their opening words):
 - ffece32 "Groundwork for the sculk sensors: the game events vibrations are made of (a step, a block placed or broken, a
@@ -27,7 +27,14 @@ M3's commits (the subjects are the player-facing messages; their opening words):
 - 43f2ff0 "Sculk sensors now hear the newcomers too: a turtle laying her eggs, an egg broken, eggs cracking and
   hatching; a frog laying its spawn; a fox picking berries..., a rabbit nibbling a carrot; a goat horn blown; and a
   firework rocket..."
-- the report's own commit: "The deep dark's report: M3 done..."
+- 5766374 "The deep dark's report: M3 done (vibrations, sculk sensors and calibrated sensors, shriekers and the warnings
+  they give, the catalyst, Swift Sneak...)"
+
+M4's commits:
+- 1c51139 "The warden: a shrieker's fourth warning calls it up out of the ground, clawing its way into the world over
+  six and a half seconds. Blind, it hears..." (everything in M4: the entity, its brain and anger, the summons, the
+  model, animations, textures and layers, the sonic boom's particle, its sounds, the egg, the M4 test)
+- the report's own commit: "The deep dark's report: M4 done..."
 
 ## 2. Shared files changed (all additive)
 
@@ -101,11 +108,11 @@ M3 (vibrations and the sculk's behaviour):
 - `src/game/blockBehavior.ts`: `stepOn?` (vanilla Block.stepOn, which main's turtle eggs brought too: one hook,
   called by main's `floorWithHook` in `entity.ts`, the block holding the entity up) and `analogOutput?`
   (getAnalogOutputSignal).
-- `src/entity/entity.ts`: (`stepOn` is main's call since the merge; hit_ground comes after main's `fallOn`) the movement emission split
-  into sounds and events (`emitsMovementEvents()`, default: whatever makes step sounds; bats, boats and minecarts
-  say yes) with step/swim/flap events, `isOnRails()` (a minecart's going counts as steps), `supportingState()` (the
-  block actually stood on, a carpet over the stone), hit_ground on landing, splash, entity_die in `kill()`,
-  entity_mount/dismount, entity_place.
+- `src/entity/entity.ts`: (`stepOn` is main's call since the merge; hit_ground comes after main's `fallOn`) the
+  movement emission split into sounds and events (`emitsMovementEvents()`, default: whatever makes step sounds;
+  bats, boats and minecarts say yes) with step/swim/flap events, `isOnRails()` (a minecart's going counts as
+  steps), `supportingState()` (the block actually stood on, a carpet over the stone), hit_ground on landing,
+  splash, entity_die in `kill()`, entity_mount/dismount, entity_place.
 - `src/entity/living.ts`: `skipDropExperience`; entity_damage in `hurt` (vanilla actuallyHurt).
 - `src/entity/mob.ts`: entity_die before the loot, experience only if no catalyst took it; `equipEvent` first in
   `onEquipItem`; item_interact_start/finish. `src/entity/player.ts`: `wardenSpawnTracker` (ticked, saved in
@@ -142,8 +149,37 @@ M3 (vibrations and the sculk's behaviour):
   `destroyBlock`.
 
 New files: `src/game/gameEvents.ts`, `gameEventDispatcher.ts`, `vibrations.ts`, `sculkSensor.ts`, `sculkShrieker.ts`,
-`sculkCatalyst.ts`, `wardenSpawnTracker.ts` (`src/game/sculk.ts` re-exports the block entities), `src/render/sculkParticles.ts`,
-`src/textures/sculkParticles.ts`, `src/audio/gen/warden.ts`.
+`sculkCatalyst.ts`, `wardenSpawnTracker.ts` (`src/game/sculk.ts` re-exports the block entities),
+`src/render/sculkParticles.ts`, `src/textures/sculkParticles.ts`, `src/audio/gen/warden.ts`.
+
+M4 (the warden), each marked "(M4 ...)":
+- `src/entity/mob.ts`: `| 'triggered'` on `SpawnReason` (vanilla MobSpawnType.TRIGGERED: called up by a shrieker).
+- `src/entity/living.ts`: `BYPASSES_ARMOR.add('sonicBoom')` under the set.
+- `src/item/enchantHelper.ts`: `damageProtection` gives none against `sonicBoom` (vanilla #bypasses_enchantments).
+- `src/entity/shield.ts`: `canDisableShield` asks the attacker's own `canDisableShield?()` first (vanilla
+  Warden.canDisableShield).
+- `src/game/explosion.ts`: `explode` and `windBurst` pass over an entity whose `ignoreExplosion?()` is true (vanilla
+  Entity.ignoreExplosion: a warden digging or emerging).
+- `src/entity/ai/pathfinder.ts`: an optional `stepDistance?(a, b)` on `NodeEvaluator`, which `findPath` uses for a
+  step's length when it's there (vanilla PathFinder.distance, which the warden's overrides with the XZ distance).
+- `src/game/game.ts`: the `sonicBoom` death message.
+- `src/game/spawner.ts`: `import { Warden }` (its module also fills `shriekerHooks.summonWarden`); `warden` in
+  `MOB_TYPES` and `ENTITY_NAMES`, after main's frogs.
+- `src/item/item.ts`: `warden_spawn_egg`, at the end of the deep dark's block. `src/textures/mobs.ts`: its colours in
+  `EGGS`.
+- `src/render/entityRenderers.ts`: `WardenRenderer` imported, built from `this.raiders.kit` with the others, tried in
+  `renderMob` after the frogs; `WARDEN_SHADOW_RADIUS` in `shadowRadius`.
+- `src/render/particleAtlas.ts`, `src/audio/synth.ts`: comments only (the sonic boom's sprites come with the sculk
+  particles', the warden's sounds with its answers).
+- My M3 files: `vibrations.ts` (an entity's own `dampensVibrations?()`), `gameEventDispatcher.ts` (an entity's
+  listener goes on the register of the section it listens from each time its feet change section, vanilla
+  DynamicGameEventListener.move; dropped once it leaves the level), `render/sculkParticles.ts` and
+  `textures/sculkParticles.ts` (the sonic_boom particle and its 16 frames), `audio/gen/warden.ts` (the rest of the
+  warden's voice).
+
+New files: `src/entity/warden.ts` (the entity, its listener, summoning), `wardenAi.ts` (its brain: activities,
+memories, behaviours, sensor), `wardenAnger.ts` (AngerManagement), `src/render/wardenRenderer.ts` (WardenModel, the
+animations, the emissive layers), `src/textures/warden.ts` (the skin and the four layers).
 
 ## 3. Open points
 
@@ -187,8 +223,24 @@ New files: `src/game/gameEvents.ts`, `gameEventDispatcher.ts`, `vibrations.ts`, 
 - M3: the dropper makes no game event when it's empty and clicks, as in vanilla (the dispenser does).
 - M3: `src/item/equipment.ts` (not mine) counts a jack o'lantern as a helmet; in vanilla 1.21 only the carved
   pumpkin is equipable, so putting a jack o'lantern on a head here makes an equip event, not unequip.
-- M3: the warden's answers to a shrieker's warnings are procedural, like every sound here; the warden itself is M4
-  (`shriekerHooks.summonWarden` is where it comes in, and `WardenSpawnTracker.hasNearbyWarden` already looks for one).
+- M3: the warden's answers to a shrieker's warnings are procedural, like every sound here. (Since M4
+  `shriekerHooks.summonWarden` calls up the warden, and `WardenSpawnTracker.hasNearbyWarden` finds it.)
+- M4: the warden's moves are keyframed to vanilla WardenAnimation's lengths and beats (emerge 6.68 s with its arm
+  slams, dig 5 s, roar 4.2 s, sniff 4.16 s, sonic boom 3 s, attack 0.33 s), but the curves are drawn afresh, as are its
+  skin, layers and voice (no game files), so it moves and looks like vanilla's without matching it frame for frame.
+- M4: nothing here has teams, the entity Invulnerable flag, NoAI or the world border, so `canTargetEntity` checks the
+  rest (alive, in its level, not creative or spectator, not an armour stand or another warden). Paths don't tell
+  powder snow or unpassable rails apart, so its malus for them (8 and 0) is left out. Vanilla's NEAREST_PLAYERS
+  sensor isn't ported: nothing of the warden's reads it.
+- M4: its listener goes on the register on its first tick (vanilla: as it's added to the level), so a vibration in
+  between isn't heard. When it stands up from emerging, it isn't nudged out of blocks (vanilla
+  fudgePositionAfterSizeChange); a summons checks it has room standing first, as vanilla's does.
+- M4, vanilla's quirks kept: each of a summons' 20 tries that finds a spot makes a warden, which growls (agitated and
+  ambient) even when it doesn't fit and is thrown away, so a shrieker with no room round it sounds as if one is
+  coming; a warden `/summon`ed with entity data (`{}`) isn't finalized, so has no minute's grace and digs away at
+  once; the sonic boom lands 35 ticks after the charge, a tick after the animation's beat (the brain's memories
+  expire a tick late); and 1.21 knocks back by explosion_knockback_resistance, which the warden hasn't got, so
+  a blast throws it.
 
 ## 4. Tests
 
@@ -202,29 +254,51 @@ New files: `src/game/gameEvents.ts`, `gameEventDispatcher.ts`, `vibrations.ts`, 
   blocks built, about 30% cracked, block entities for every chest, sensor, shrieker, catalyst, campfire and skull,
   the chests' loot tables, the loot itself (Swift Sneak I–III books, the damaged enchanted hoe, Regeneration II, the
   trims' pool, the ice box's stew), sculk in the deep dark and nowhere else, and the time a city costs).
-- `tests/ancient-city/m3-vibrations.mjs`: 137 checks, all pass (10 runs out of 10 before the merge, 5 of 5 after; with
-  the level ticking: a block
-  placed 5 blocks off sets a sensor off 5 ticks later with power 6, the particle and the clicking, 30 ticks active, 10
-  cooling, deaf meanwhile; power and timing at every distance for both sensors; the nearest of a tick's vibrations,
-  the higher frequency on a tie, nothing else while one's on its way; wool in the way, around the corner of one wool
-  block but not two, wool and carpet placed, walking on carpet, a dropped wool block landing; a player's steps setting
-  a sensor off at the right time and strength, sneaking steps and landings unheard with Sneak 100, stepping onto a
-  sensor sneaking; the calibrated sensor's back filter with a redstone block and with dust at 13; amethyst passing
-  frequency 13 on with its chime; a vibration saved on its way and loaded; the shrieker's chain from a step through a
-  sensor, the warning levels 1 to 4 with their answers, the 10 s cooldown, the warden hook, zombies and arrows,
-  placed shriekers, peaceful and doWardenSpawning, broken mid-shriek, players sharing levels, darkness; the tracker's
-  cooldown, decay, bounds and save; the catalyst taking a zombie's experience, blooming, spreading sculk and using up
-  its charge, the nearer of two, babies, too far, a player's death, It Spreads, its cursors saved; Swift Sneak I to
-  III; and block_place, flint and steel's quirk, shearing, entity_damage, equip/unequip, prime_fuse, explode,
-  projectile_shoot and projectile_land where vanilla makes them). It found dropped wool not muffling its landing
-  (the item's stack was read from the wrong field), fixed. After the merge, main's newcomers: a turtle egg broken,
-  cracking and hatching, a frog laying spawn, a fox eating a chorus fruit (eat, then teleport) and picking berries off a
-  bush and a vine, a rabbit's bites (the last making none), a goat horn blown, a rocket shot, bursting and striking a
-  ceiling.
-- After the merge of main (b2c18f9) and again after 43f2ff0: `npm run typecheck` clean; every suite passes
-  (ancient-city m1, m2, m3; temples m1 to m4c; mansion m1 to m3). The M1 test's use-on helper now presses the sneak key
-  as well as crouching (candles, like main's turtle eggs, read the key, vanilla isSecondaryUseActive).
-- `npm run typecheck`: clean. `tests/temples/*` and `tests/mansion/*` still pass.
+- `tests/ancient-city/m3-vibrations.mjs`: 137 checks, all pass (10 runs out of 10 before the merge, 5 of 5 after;
+  with the level ticking: a block placed 5 blocks off sets a sensor off 5 ticks later with power 6, the particle and
+  the clicking, 30 ticks active, 10 cooling, deaf meanwhile; power and timing at every distance for both sensors; the
+  nearest of a tick's vibrations, the higher frequency on a tie, nothing else while one's on its way; wool in the way,
+  around the corner of one wool block but not two, wool and carpet placed, walking on carpet, a dropped wool block
+  landing; a player's steps setting a sensor off at the right time and strength, sneaking steps and landings unheard
+  with Sneak 100, stepping onto a sensor sneaking; the calibrated sensor's back filter with a redstone block and with
+  dust at 13; amethyst passing frequency 13 on with its chime; a vibration saved on its way and loaded; the
+  shrieker's chain from a step through a sensor, the warning levels 1 to 4 with their answers, the 10 s cooldown, the
+  warden hook, zombies and arrows, placed shriekers, peaceful and doWardenSpawning, broken mid-shriek, players
+  sharing levels, darkness; the tracker's cooldown, decay, bounds and save; the catalyst taking a zombie's
+  experience, blooming, spreading sculk and using up its charge, the nearer of two, babies, too far, a player's
+  death, It Spreads, its cursors saved; Swift Sneak I to III; and block_place, flint and steel's quirk, shearing,
+  entity_damage, equip/unequip, prime_fuse, explode, projectile_shoot and projectile_land where vanilla makes them).
+  It found dropped wool not muffling its landing (the item's stack was read from the wrong field), fixed. After the
+  merge, main's newcomers: a turtle egg broken, cracking and hatching, a frog laying spawn, a fox eating a chorus
+  fruit (eat, then teleport) and picking berries off a bush and a vine, a rabbit's bites (the last making none), a
+  goat horn blown, a rocket shot, bursting and striking a ceiling. Since M4 its warning-level checks put a stand-in on
+  `shriekerHooks.summonWarden` (the real one now summons a warden) and check the fourth warning asks it once, the
+  angry answer coming only when it finds no room.
+- `tests/ancient-city/m4-warden.mjs`: 69 checks, all pass (6 runs out of 6 in a row at the end, 8 of 8 while it was
+  written; with the level ticking, on flat deepslate): the attributes, size, fire, shields, vibrations dampened,
+  no despawning, the drop and experience, egg and name; a shrieker's fourth warning (the shriek's end, within 5
+  blocks, on the ground, emerging a block tall, agitated, no answer from the dark; the emerge sound and 134 ticks in
+  place, untouchable, the ground breaking up 4.5 s; then standing 2.9 tall); no warning with a warden within 48
+  blocks; no room under a low roof (twenty tries heard, the angry answer instead); summonWarden's spots; anger from a
+  player's step 10 blocks off (10 ticks, 35), the tendrils and clicks, listening, going to see, deaf 2 s, cooling a
+  point a second; at 80 the roar (its sound 25 ticks in, 84 ticks), then the fight: 10 s before any boom, the blow
+  of 30 on normal with its sound and knockback, the boom 2 s off after it; hurt (+100, after them at once; an archer
+  12 blocks off angers it without drawing it off); a shot (10, then 35 and the archer's spot); a bump (35, once a
+  second); sniffing (84 ticks, 35 at the nearest within 6); the sonic boom (charged, landing 35 ticks on, loud, 10 on
+  normal, 6 easy, 15 hard, through diamond and Protection IV, through a shield, a fifth off with Resistance, the
+  push from its chest 2.5 by 0.5, 2 s to the next); a shield knocked down 5 s; digging (after a minute undisturbed
+  and not walking, a block tall, untouchable, gone after 100 ticks with no drops; a disturbance restarting the minute;
+  never when named; at once when /summoned with data); darkness every 6 s within 20 blocks (13 s of it); the
+  heartbeat (every 2 s calm, 0.5 s angry, lit each beat); death (the catalyst, 5 experience, the cry); saving and
+  loading (memories with their time left, the listener with a vibration on its way, anger found again by uuid); its
+  own steps unheard by a sensor; blasts (not while emerging; standing, hurt and thrown); lava and fire harmless.
+- At the end of M4: `npm run typecheck` clean; every suite passes, run one after another (ancient-city m1 100, m2 42,
+  m3 137, m4 69; temples m1 to m4c; mansion m1 to m3). The M1 test's use-on helper presses the sneak key as well as
+  crouching (candles, like main's turtle eggs, read the key, vanilla isSecondaryUseActive). Run side by side with the
+  other suites, the mansion's m3 generation-cost check can miss its time budget; alone it passes.
+- M4 was also looked at in the browser (headless Chromium, the dev server): the model, its proportions and every
+  animation, the emissive layers, the sonic boom's rings, a live warden in survival hearing, sniffing and angering; its
+  sounds by their spectrograms.
 
 ## 5. Browser checklist
 
@@ -250,12 +324,31 @@ New files: `src/game/gameEvents.ts`, `gameEventDispatcher.ts`, `vibrations.ts`, 
   on it hears only frequency 15 (a death, an explosion).
 - Shrieker: `/gamemode survival`, `/difficulty normal`, `/setblock ~2 ~ ~ minecraft:sculk_shrieker[can_summon=true]`
   and step onto it: rings rise and it shrieks; four and a half seconds later something growls from the dark and
-  darkness falls. Every 10 s or more a step again: the growl comes nearer (warnings 2 and 3), then angry (4).
-  `/setblock ~2 ~ ~ minecraft:sculk_shrieker` (a placed one) just shrieks.
+  darkness falls. Every 10 s or more a step again: the growl comes nearer (warnings 2 and 3); at the fourth a warden
+  claws its way up out of the ground within 5 blocks of the shrieker (M4; under a roof too low for it, an angry
+  growl answers instead). `/setblock ~2 ~ ~ minecraft:sculk_shrieker` (a placed one) just shrieks.
 - Catalyst: `/setblock ~ ~-1 ~3 minecraft:sculk_catalyst`, `/summon zombie ~ ~ ~5`, `/kill @e[type=zombie]`: the
   catalyst blooms, two souls rise and sculk spreads through the ground where the zombie fell, glowing as it goes.
 - In the city (`/tp @s 560.5 -36 -230.5 90 35`, survival): the sensors and shriekers are live, and the shriekers there
-  can summon.
+  can summon: four warnings there bring up a warden.
 - Near a sensor: blow a goat horn (the creative inventory has all eight calls; `/give` makes one with no call, which
   does nothing, as in vanilla); `/give @s minecraft:firework_rocket` and set one off beside it: it clicks for the
   launch (the burst, usually further up than its 8 blocks, isn't heard).
+- M4, the warden, on flat ground in survival (`/gamemode survival`, `/difficulty normal`): `/summon minecraft:warden
+  ~ ~ ~8`. Its heart beats every two seconds (a deep double thud, its chest lighting up with it), two sets of spots
+  on it pulse slowly by turns, and every six seconds darkness washes over you. Walk: at each step its tendrils flare
+  and click and it turns to listen; it comes to where you were and stops to sniff, head raised; sneak and it hears
+  nothing. A few more steps and it's angry: its heart races, it roars (ribcage flung open), then comes for you: one
+  blow is 30 (a raised shield is knocked down for 5 s).
+- The sonic boom: `/summon minecraft:warden ~ ~ ~8`, then `/fill ~3 ~ ~ ~3 ~3 ~ minecraft:stone`,
+  `/tp @s ~3 ~4 ~` (on the pillar, out of its reach), `/give @s minecraft:bow` and `/give @s minecraft:arrow 64`,
+  and shoot it: it roars; ten seconds after, its chest opens and glows as it charges, and a line of rings bursts from
+  it to you: 10 whatever armour you wear, throwing you off the pillar (and it comes over to finish you). While you're
+  out of its reach it booms again every few seconds (15 blocks across, 20 up or down, walls or not). (Tried in
+  headless Chromium with these commands and a real arrow: the roar at once, the boom 12 s on, 20 health to 10.)
+- Digging away: in creative it can't sense you, so after a minute undisturbed it digs back down (5 s, the ground
+  crumbling round it) and is gone. `/summon minecraft:warden ~ ~ ~8 {}` (with entity data) digs away at once, as in
+  vanilla. Name one with a name tag and it stays.
+- Its death: `/kill @e[type=minecraft:warden]` drops a sculk catalyst, and 5 experience too if you've hit it in the
+  last 5 s (vanilla: experience only for a kill a player had a hand in). The spawn egg (creative, Spawn Eggs, deep
+  teal with cyan spots) places one standing.
