@@ -345,7 +345,8 @@ animations, the emissive layers), `src/textures/warden.ts` (the skin and the fou
   and shoot it: it roars; ten seconds after, its chest opens and glows as it charges, and a line of rings bursts from
   it to you: 10 whatever armour you wear, throwing you off the pillar (and it comes over to finish you). While you're
   out of its reach it booms again every few seconds (15 blocks across, 20 up or down, walls or not). (Tried in
-  headless Chromium with these commands and a real arrow: the roar at once, the boom 12 s on, 20 health to 10.)
+  headless Chromium with these commands and a real arrow: the roar within a second of the hit, the boom about 12 s
+  after the roar ended, 20 health to 10.)
 - Digging away: in creative it can't sense you, so after a minute undisturbed it digs back down (5 s, the ground
   crumbling round it) and is gone. `/summon minecraft:warden ~ ~ ~8 {}` (with entity data) digs away at once, as in
   vanilla. Name one with a name tag and it stays.
