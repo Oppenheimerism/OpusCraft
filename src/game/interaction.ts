@@ -347,6 +347,7 @@ export class Interaction {
           if (stack.tag?.customName !== undefined) baby.setCustomName(stack.tag.customName);
           this.level.addEntity(baby);
           if (p.gameMode !== 'creative') p.inventory.consumeSelected(1);
+          e.onOffspringSpawnedFromEgg(p, baby);
           p.swing();
           return 'success';
         }

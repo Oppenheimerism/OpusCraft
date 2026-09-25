@@ -219,7 +219,8 @@ export function chorusTeleport(level: Level, e: Entity): boolean {
     e.yo = e.y;
     e.zo = e.z;
     teleportParticles(e, e.x, e.y, e.z);
-    level.sound.play('item.chorus_fruit.teleport', e.x, e.y, e.z, 1, 1);
+    // (a fox that ate one has a sound of its own)
+    level.sound.play(e.type === 'fox' ? 'entity.fox.teleport' : 'item.chorus_fruit.teleport', e.x, e.y, e.z, 1, 1);
     e.fallDistance = 0;
     return true;
   }

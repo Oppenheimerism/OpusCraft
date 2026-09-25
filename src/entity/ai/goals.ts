@@ -1043,7 +1043,8 @@ export class FleeSunGoal extends Goal {
     if (!m.level.canSeeSky(Math.floor(m.x), Math.floor(m.y), Math.floor(m.z))) return false;
     return this.setWantedPos();
   }
-  private setWantedPos(): boolean {
+  /** vanilla setWantedPos (getHidePos): ten tries at somewhere within 10 across and 3 up or down, out of the sky, that it values below 0 */
+  protected setWantedPos(): boolean {
     const m = this.mob;
     const bx = Math.floor(m.x), by = Math.floor(m.y), bz = Math.floor(m.z);
     for (let i = 0; i < 10; i++) {

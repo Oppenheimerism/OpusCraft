@@ -43,6 +43,7 @@ import { polarBearSounds } from './gen/polarBear';
 import { rabbitSounds } from './gen/rabbit';
 // (M8: goats)
 import { goatSounds } from './gen/goat';
+import { foxSounds } from './gen/fox';
 import { wanderingTraderSounds } from './gen/wanderingTrader';
 import { illagerSounds } from './gen/illagers';
 // (Stage 5: ocean)
@@ -104,6 +105,7 @@ Object.assign(SOUNDS, polarBearSounds());
 Object.assign(SOUNDS, rabbitSounds());
 // (M8: goats, and the goat horn's calls)
 Object.assign(SOUNDS, goatSounds());
+Object.assign(SOUNDS, foxSounds());
 // (vanilla sounds.json: the snow golem's are the snow's breaking, the bow's and the shears')
 for (const [k, v] of Object.entries({ 'entity.snow_golem.hurt': 'block.snow.break', 'entity.snow_golem.death': 'block.snow.break', 'entity.snow_golem.shoot': 'entity.arrow.shoot', 'entity.snow_golem.shear': 'entity.sheep.shear' })) if (SOUNDS[v]) SOUNDS[k] = SOUNDS[v];
 // (vanilla sounds.json: any mob's swimming, and a monster's, is the player's splashing)

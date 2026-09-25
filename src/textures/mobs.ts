@@ -2014,6 +2014,7 @@ const EGGS: [string, number, number][] = [
   ['horse', 0xc09e7d, 0xeee500], ['donkey', 0x534539, 0x867566], ['mule', 0x1b0200, 0x51331d],
   ['llama', 0xc09e7d, 0x995f40], ['trader_llama', 0xeaa430, 0x456296], ['wandering_trader', 0x456296, 0xeaa430], ['snow_golem', 0xd9f2f2, 0x81a4a4], ['parrot', 0x0da70b, 0xff0000], ['polar_bear', 0xeeeede, 0xd5d6cd],
   ['rabbit', 0x995f40, 0x734831],
+  ['fox', 0xd5b69f, 0xcc6920],
 ];
 
 export const SPAWN_EGG_TEXTURES: Record<string, () => TexImage> = {};

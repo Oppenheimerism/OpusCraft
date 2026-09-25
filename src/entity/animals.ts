@@ -205,6 +205,7 @@ export abstract class Animal extends AgeableMob {
     if (!baby) return;
     baby.setAge(-24000);
     baby.moveTo(this.x, this.y, this.z, 0, 0);
+    this.onBredChild(baby, partner);
     this.level.addEntity(baby);
     this.setAge(6000);
     partner.setAge(6000);
@@ -214,6 +215,9 @@ export abstract class Animal extends AgeableMob {
     this.level.onBred?.(baby, cause ?? null);
     if (cause && this.level.gameRules.doMobLoot) this.level.awardExperience(this.x, this.y, this.z, this.random.nextInt(7) + 1);
   }
+
+  /** what a kind does with its newborn before it's out in the world (vanilla FoxBreedGoal.breed: whom the cub trusts) */
+  protected onBredChild(_baby: Animal, _partner: Animal): void {}
 
   protected override saveData(): Record<string, number | string | boolean> {
     return { ...super.saveData(), inLove: this.inLove };
@@ -308,7 +312,7 @@ export class TemptGoal extends Goal {
 }
 
 export class BreedGoal extends Goal {
-  private partner: Animal | null = null;
+  protected partner: Animal | null = null;
   private loveTime = 0;
   constructor(readonly animal: Animal, readonly speed: number) {
     super();
