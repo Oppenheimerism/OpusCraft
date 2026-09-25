@@ -69,6 +69,8 @@ import { RaiderRenderers, RAIDER_SHADOW_RADII } from './illagerRenderers';
 // (Stage 5: ocean)
 import { OceanRenderers, OCEAN_SHADOW_RADII } from './oceanRenderers';
 import { HorseRenderers, HORSE_SHADOW_RADII } from './horseRenderer';
+import { LlamaRenderers, LLAMA_SHADOW_RADII, renderSpit } from './llamaRenderer';
+import { LlamaSpit } from '../entity/llama';
 import { LeashKnot } from '../entity/leash';
 import { renderKnot, renderLeash } from './leashRenderer';
 import { NameTagRenderer } from './nameTagRenderer';
@@ -173,6 +175,8 @@ export class EntityRenderDispatcher {
   private readonly ocean: OceanRenderers;
   /** (Stage 6: tameable animals) horses, donkeys and mules, their markings and armour */
   private readonly horses: HorseRenderers;
+  /** (Stage 6: tameable animals) llamas and their decor */
+  private readonly llamas: LlamaRenderers;
   /** names over mobs, drawn once every entity is down */
   private readonly nameTags: NameTagRenderer;
   /** this frame's options: names shown at all (not with the GUI hidden), and what the crosshair is on */
@@ -201,6 +205,7 @@ export class EntityRenderDispatcher {
     this.ocean = new OceanRenderers(gl, this.raiders.kit);
     // (Stage 6: tameable animals) and again
     this.horses = new HorseRenderers(this.raiders.kit);
+    this.llamas = new LlamaRenderers(this.raiders.kit);
     this.nameTags = new NameTagRenderer(gl);
     this.models = {
       pig: M.pigModel(),
@@ -484,6 +489,10 @@ export class EntityRenderDispatcher {
     else if (e instanceof Boat) this.renderBoat(b, e, dx, dy, dz, p);
     else if (e instanceof EndCrystal) this.endCrystals.render(b, this.pose, e, dx, dy, dz, p);
     else if (e instanceof EvokerFangs) this.raiders.renderFangs(b, e, dx, dy, dz, p); // (Stage 4: illagers)
+    else if (e instanceof LlamaSpit) {
+      const t = this.tex('llama_spit');
+      if (t) renderSpit(b, this.pose, this.state(t), dx, dy, dz, rotLerp(p, e.yawO, e.yaw), e.pitchO + (e.pitch - e.pitchO) * p);
+    }
     else if (e instanceof LeashKnot) {
       const t = this.tex('lead_knot');
       if (t) renderKnot(b, this.pose, this.state(t), dx, dy, dz);
@@ -624,7 +633,15 @@ export class EntityRenderDispatcher {
   /** vanilla AgeableListModel.renderToBuffer */
   private drawModel(b: EntityBatch, def: MobModelDef, baby: boolean, r = 1, g = 1, bl = 1, a = 1): void {
     const pose = this.pose;
-    if (baby && def.baby) {
+    if (baby && def.babyGroups) {
+      for (const grp of def.babyGroups) {
+        pose.push();
+        pose.scale(grp.scale[0], grp.scale[1], grp.scale[2]);
+        pose.translate(grp.translate[0], grp.translate[1], grp.translate[2]);
+        for (const n of grp.parts) def.root.child(n).render(b, pose, def.texW, def.texH, r, g, bl, a);
+        pose.pop();
+      }
+    } else if (baby && def.baby) {
       const bd = def.baby;
       pose.push();
       if (bd.scaleHead) {
@@ -648,7 +665,8 @@ export class EntityRenderDispatcher {
     if (this.raiders.render(b, e, dx, dy, dz, p)) return;
     // (Stage 5: ocean)
     if (this.ocean.render(b, e, dx, dy, dz, p)) return;
-    // (Stage 6: tameable animals)
+    // (Stage 6: tameable animals; a llama before the horses it's kin to)
+    if (this.llamas.render(b, e, dx, dy, dz, p)) return;
     if (this.horses.render(b, e, dx, dy, dz, p)) return;
     const type = e.type;
     const def = this.models[type];
@@ -1601,7 +1619,7 @@ function shadowRadius(e: Entity): number {
   // (Stage 5: ocean)
   if (OCEAN_SHADOW_RADII[e.type] !== undefined) return OCEAN_SHADOW_RADII[e.type];
   // (Stage 6: tameable animals; a foal's is half)
-  let r = HORSE_SHADOW_RADII[e.type] ?? 0;
+  let r = HORSE_SHADOW_RADII[e.type] ?? LLAMA_SHADOW_RADII[e.type] ?? 0;
   switch (e.type) {
     case 'pig':
     case 'cow':

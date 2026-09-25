@@ -621,11 +621,15 @@ export abstract class TargetGoal extends Goal {
     super();
     this.flags = Flag.TARGET;
   }
+  /** vanilla getFollowDistance: how far off it'll go after a target (its follow range) */
+  protected followDistance(): number {
+    return this.mob.followRange;
+  }
   override canContinueToUse(): boolean {
     const m = this.mob;
     const t = m.target ?? this.targetMob;
     if (!t || !m.canAttack(t)) return false;
-    const d = m.followRange;
+    const d = this.followDistance();
     if (m.distanceToSqr(t.x, t.y, t.z) > d * d) return false;
     if (this.mustSee) {
       if (m.sensing.hasLineOfSight(t)) this.unseenTicks = 0;
@@ -663,7 +667,7 @@ export class NearestAttackablePlayerGoal extends TargetGoal {
     if (!p || !m.canAttack(p)) return false;
     // vanilla TargetingConditions: range scaled by getVisibilityPercent (sneaking, invisibility)
     const vis = p.visibilityPercent(m);
-    const range = Math.max(m.followRange * vis, 2);
+    const range = Math.max(this.followDistance() * vis, 2);
     if (Math.abs(p.y - m.y) > 4 + range) return false;
     if (m.distanceToSqr(p.x, p.y, p.z) > range * range) return false;
     if (this.mustSee && !m.sensing.hasLineOfSight(p)) return false;
@@ -692,7 +696,7 @@ export class NearestAttackableMobGoal extends TargetGoal {
     const m = this.mob;
     if (this.randomInterval > 0 && m.random.nextInt(this.randomInterval) !== 0) return false;
     if (!this.extra()) return false;
-    const r = m.followRange;
+    const r = this.followDistance();
     let best: LivingEntity | null = null, bd = Infinity;
     for (const e of m.level.getEntities(m.bb.inflate(r, 4, r), (e) => e instanceof LivingEntity && e !== m && e.isAlive)) {
       const le = e as LivingEntity;

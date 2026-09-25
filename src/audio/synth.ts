@@ -37,6 +37,7 @@ import { wolfSounds } from './gen/wolf';
 import { catSounds } from './gen/cat';
 import { horseSounds } from './gen/horse';
 import { leashSounds } from './gen/leash';
+import { llamaSounds } from './gen/llama';
 import { illagerSounds } from './gen/illagers';
 // (Stage 5: ocean)
 import { oceanSounds } from './gen/ocean';
@@ -91,6 +92,7 @@ Object.assign(SOUNDS, archaeologySounds());
 Object.assign(SOUNDS, horseSounds(SOUNDS));
 // (the lead's knot round a fence)
 Object.assign(SOUNDS, leashSounds());
+Object.assign(SOUNDS, llamaSounds(SOUNDS));
 
 /** Number of in-game (overworld) music tracks. */
 export const MUSIC_TRACK_COUNT: number = MUSIC_TRACKS;

@@ -527,11 +527,17 @@ export abstract class AbstractHorse extends Animal {
     super.aiStep();
     if (!this.isAlive) return;
     if (this.random.nextInt(900) === 0 && this.deathTime === 0) this.heal(1);
+    if (!this.canEatGrass()) return;
     if (!this.eating && !this.isVehicle() && this.random.nextInt(300) === 0 && BLOCKS[STATE_BLOCK[this.level.world.getState(Math.floor(this.x), Math.floor(this.y) - 1, Math.floor(this.z))]].name === 'grass_block') this.setEating(true);
     if (this.eating && ++this.eatingCounter > 50) {
       this.eatingCounter = 0;
       this.setEating(false);
     }
+  }
+
+  /** vanilla canEatGrass */
+  protected canEatGrass(): boolean {
+    return true;
   }
 
   /** vanilla hurt: one time in three it rears */
@@ -768,6 +774,16 @@ export abstract class AbstractChestedHorse extends AbstractHorse {
   protected override inventorySize(): number {
     return 2 + 15;
   }
+
+  /** vanilla AbstractChestedHorse.getDefaultDimensions: a foal is half its own kind (babyDimensions) */
+  override refreshSize(): void {
+    const s = this.isBaby() ? 0.5 : 1;
+    this.setSize(this.adultWidth * s, this.adultHeight * s);
+  }
+  /** vanilla babyDimensions' passenger attachment: 5/32 below the top of a grown one, halved */
+  override passengerAttachmentY(p: Entity): number {
+    return this.isBaby() ? (this.adultHeight - 0.15625) * 0.5 : super.passengerAttachmentY(p);
+  }
   /** vanilla getInventoryColumns */
   inventoryColumns(): number {
     return 5;
@@ -918,7 +934,7 @@ export class Mule extends AbstractChestedHorse {
  * then it either gives in (the likelier the better its temper) or throws them off and rears, its temper a little
  * better for the next try
  */
-class RunAroundLikeCrazyGoal extends Goal {
+export class RunAroundLikeCrazyGoal extends Goal {
   private tx = 0;
   private ty = 0;
   private tz = 0;

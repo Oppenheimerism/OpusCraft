@@ -23,7 +23,7 @@ import { ThrownExperienceBottle } from '../../entity/thrownExperienceBottle';
 import { ThrownTrident } from '../../entity/thrownTrident';
 import { SmallFireball } from '../../entity/fireball';
 import { PrimedTnt } from '../../entity/tnt';
-import { Pig, Sheep } from '../../entity/animals';
+import { Pig, Sheep, DYE_COLORS } from '../../entity/animals';
 import { Strider } from '../../entity/strider';
 import { AbstractHorse, AbstractChestedHorse } from '../../entity/horse';
 import { createBoat, boatItemInfo } from '../../entity/boat';
@@ -529,7 +529,7 @@ const saddle = behavior((src, stack) => {
   return left(stack);
 });
 
-/** vanilla AnimalArmorItem's (ArmorItem.dispenseArmor): onto a tame horse in front wearing none, else thrown out */
+/** vanilla AnimalArmorItem's (ArmorItem.dispenseArmor): onto a tame horse (a carpet: llama) in front wearing none, else thrown out */
 const horseArmor = behavior((src, stack) => {
   const h = src.level.getEntities(cell(front(src)), (o) => o instanceof AbstractHorse && o.isAlive && o.tamed && o.isArmor(stack) && !o.bodyArmor())[0] as AbstractHorse | undefined;
   if (!h) return dropOne(src, stack);
@@ -560,6 +560,8 @@ const BEHAVIORS: Record<string, DispenseBehavior> = {
   // (Stage 6: tameable animals)
   leather_horse_armor: horseArmor, iron_horse_armor: horseArmor, golden_horse_armor: horseArmor, diamond_horse_armor: horseArmor, chest: chestOnDonkey,
 };
+// (vanilla: the wool carpets go on a tame llama as a horse's armour does on a horse)
+for (const c of DYE_COLORS) BEHAVIORS[`${c}_carpet`] = horseArmor;
 
 /** vanilla getDispenseMethod: the item's own behaviour, else thrown out */
 export function dispenseBehaviorFor(stack: ItemStack): DispenseBehavior {

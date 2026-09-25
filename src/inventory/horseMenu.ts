@@ -1,5 +1,6 @@
-// A horse's, donkey's or mule's inventory (vanilla HorseInventoryMenu): the saddle slot, the armour slot (a horse's
-// only), and a donkey's or mule's chest as three rows of five, over the player's inventory. Shift-click sends armour
+// A horse's, donkey's, mule's or llama's inventory (vanilla HorseInventoryMenu): the saddle slot, the armour slot (a
+// horse's armour, a llama's carpet), and the chest as three rows of five (a llama's: of its strength), over the
+// player's inventory. Shift-click sends armour
 // and a saddle to their slots and anything else into the chest.
 
 import { ContainerMenu, Slot, PlayerContainer, type Container } from './container';

@@ -67,3 +67,25 @@ GUI_TEXTURES['horse_armor_slot'] = () => {
   ], { '#': GHOST });
   return t;
 };
+
+/** a llama's carpet slot (vanilla container/horse/llama_armor_slot): a rug with its fringed ends */
+GUI_TEXTURES['llama_armor_slot'] = () => {
+  const t = img(18, 18);
+  slotAt(t, 1, 1);
+  pat(t, 1, 1, [
+    '................',
+    '................',
+    '................',
+    '..#.#.#.#.#.#...',
+    '..###########...',
+    '..##.......##...',
+    '..#..#####..#...',
+    '..#..#...#..#...',
+    '..#..#####..#...',
+    '..##.......##...',
+    '..###########...',
+    '..#.#.#.#.#.#...',
+    '................',
+  ], { '#': GHOST });
+  return t;
+};

@@ -125,6 +125,8 @@ export interface SpawnGroup {
   wolfVariant?: string;
   /** vanilla Horse.HorseGroupData: the coat the herd shares */
   horseColor?: string;
+  /** vanilla Llama.LlamaGroupData: the coat the herd shares */
+  llamaVariant?: string;
 }
 
 export abstract class Mob extends LivingEntity {
