@@ -3,27 +3,49 @@
 ## 1. Branch and milestones
 
 Branch: `claude/cool-volta-f4wms4` (from main at 42e2ea3; main merged in at 5138ca8 (the ocean), bf4ffb8 (the outer
-End, the snow golem) and after M2 (parrots, /summon data)).
+End, the snow golem), after M2 at 03a11e2 (parrots, /summon data) and after M3 at b2c18f9 (turtles, fireworks,
+axolotls, rabbits, goats, foxes, frogs and tadpoles; main at ac9d889)).
 
 | Milestone | State | Commits |
 |---|---|---|
 | M1 blocks and items | done: sculk, sculk vein, the catalyst (bloom), the sculk sensor and calibrated sensor (phases, tendrils, amethyst, waterlogging, the active glow), the shrieker (can_summon, shrieking, waterlogged), reinforced deepslate, cracked deepslate bricks and tiles, chiseled deepslate, the 17 candles (1–4, lit, waterlogged, flames and smoke, light 3 per candle), echo shard, recovery compass, disc fragment 5, music disc 5 with its own procedural song; the darkness effect's visuals | 46939f1 |
 | M2 the ancient city | done: the structure set (random spread 24/8, salt 20083232), the jigsaw start (city_center by its city_anchor at y −27, size 7, 116 blocks, only where the deep dark is at the start's centre, beard_box), 3 centres, 10 quarters with the outer wall and gate, 20 buildings and ruins, 12 walls, the entrance tunnel (6 pieces), sculk pieces; the start / generic / walls processor lists with vanilla's position random; `chests/ancient_city` and `chests/ancient_city_ice_box`; the deep dark's sculk_vein and sculk_patch_deep_dark, the city's sculk_patch_ancient_city, and the SculkSpreader behind them; `/locate structure minecraft:ancient_city` | d22523e (merge of main: 03a11e2) |
-| M3 vibrations and sculk behaviour | done: the game events (vanilla GameEvent's 45 and the 15 resonances, their radii, frequencies and tags) and their dispatcher (listeners by chunk, catalysts told last and nearest first); vibrations (vanilla VibrationSystem: the tick's nearest candidate, higher frequency on a tie, travelling a block a tick with its particle, stopped by wool in the way, muffled by wool or carpet where it happens and by dropped wool, not made by sneaking or spectating, saved on its way and shown again when loaded); the sculk sensor and calibrated sensor (30 or 10 ticks active then 10 cooling, power by distance out of 8 or 16, redstone out, strongly into the block below, the calibrated sensor's back filter, amethyst resonance with its chime, stepping on one, the comparator's frequency, the red specks); the shrieker (warning players, the answer from the dark nearer each time, darkness, broken mid-shriek, stepping on one, a hook for the warden); each player's warning level (vanilla WardenSpawnTracker: shared within 16 blocks, 10 s cooldown, falling after 10 min, saved); the catalyst (a death within 8 blocks: its experience becomes charge that spreads sculk, the bloom and its souls, cursors saved); Swift Sneak; Sneak 100 and It Spreads; the vibration, shriek, sculk charge, charge pop, sculk soul and dust transition particles; the warden's four answers (procedural); game events made all over the world (moving, landing, splashing, blocks placed, broken and changed, containers, doors, buttons, levers, plates, tripwires, pistons, dispensers, eating and drinking, using items, projectiles, explosions, lightning, equipment, shearing, taking hold of a mob, mounting, teleports, damage and deaths) | ffece32, 7fd0733, eaf6d6b, and the tests with dropped wool's muffling fixed (this commit) |
+| M3 vibrations and sculk behaviour | done: the game events (vanilla GameEvent's 45 and the 15 resonances, their radii, frequencies and tags) and their dispatcher (listeners by chunk, catalysts told last and nearest first); vibrations (vanilla VibrationSystem: the tick's nearest candidate, higher frequency on a tie, travelling a block a tick with its particle, stopped by wool in the way, muffled by wool or carpet where it happens and by dropped wool, not made by sneaking or spectating, saved on its way and shown again when loaded); the sculk sensor and calibrated sensor (30 or 10 ticks active then 10 cooling, power by distance out of 8 or 16, redstone out, strongly into the block below, the calibrated sensor's back filter, amethyst resonance with its chime, stepping on one, the comparator's frequency, the red specks); the shrieker (warning players, the answer from the dark nearer each time, darkness, broken mid-shriek, stepping on one, a hook for the warden); each player's warning level (vanilla WardenSpawnTracker: shared within 16 blocks, 10 s cooldown, falling after 10 min, saved); the catalyst (a death within 8 blocks: its experience becomes charge that spreads sculk, the bloom and its souls, cursors saved); Swift Sneak; Sneak 100 and It Spreads; the vibration, shriek, sculk charge, charge pop, sculk soul and dust transition particles; the warden's four answers (procedural); game events made all over the world (moving, landing, splashing, blocks placed, broken and changed, containers, doors, buttons, levers, plates, tripwires, pistons, dispensers, eating and drinking, using items, projectiles, explosions, lightning, equipment, shearing, taking hold of a mob, mounting, teleports, damage and deaths) | ffece32, 7fd0733, eaf6d6b, 63f6a17, 43f2ff0 (merge of main: b2c18f9), the report (listed below) |
 | M4 the warden | not started | |
+
+M3's commits (the subjects are the player-facing messages; their opening words):
+- ffece32 "Groundwork for the sculk sensors: the game events vibrations are made of (a step, a block placed or broken, a
+  chest opened, food eaten, an arrow landing and the rest), each with the frequency a sensor picks up..."
+- 7fd0733 "More groundwork for the sculk sensors and shriekers: how a vibration is heard (the nearest of a tick's, wool
+  in the way stopping it, wool or carpet muffling it, sneaking hiding steps and landings) and each player's warning
+  level..."
+- eaf6d6b "Sculk sensors now hear the world: a step, a landing, a block placed or broken, a chest or door opened, a lever
+  pulled, food eaten, a shot fired, a mob hurt or dying..." (sensors, shriekers, catalysts, Swift Sneak)
+- 63f6a17 "Sculk sensors now hear the rest of the world: arrows and other projectiles landing, armour and saddles put on
+  or taken off..." (the rest of the emission sites, the particles, the warden's answers, the M3 tests, dropped wool)
+- b2c18f9 "Merge main (turtles, fireworks, axolotls, rabbits, goats, foxes, frogs and tadpoles) into the deep dark"
+- 43f2ff0 "Sculk sensors now hear the newcomers too: a turtle laying her eggs, an egg broken, eggs cracking and
+  hatching; a frog laying its spawn; a fox picking berries..., a rabbit nibbling a carrot; a goat horn blown; and a
+  firework rocket..."
+- the report's own commit: "The deep dark's report: M3 done..."
 
 ## 2. Shared files changed (all additive)
 
 - `src/world/blocks.ts`, `src/textures/blocks.ts`: an import and one call each (`registerDeepDarkBlocks()`,
-  `registerSculkTextures(T)`) after the fossils'.
+  `registerSculkTextures(T)`) after the fossils' (after main's frogs' since the merge after M3, so main's blocks keep
+  their ids).
 - `src/world/block.ts`: an `emissive?` block setting and an `EMISSIVE` per-state table (vanilla
   `BlockBehaviour.Properties.emissiveRendering`), filled in `finalizeBlocks`.
 - `src/render/mesher.ts`: emissive states mesh at full brightness (`FULL_BRIGHT` in `lightPacked` and the flat branch).
-- `src/game/blockBehavior.ts`: a `canBeReplaced?(state, block, sneaking)` hook (vanilla `Block.canBeReplaced`).
-- `src/game/blockRules.ts`: `isMultiface(name)` (glow lichen and sculk vein share the multiface rules);
-  `canReplace(target, block, sneaking = false)` asks the behaviour first; experience for the sculk blocks.
+- `src/game/blockBehavior.ts`: a `canBeReplaced?(state, block, sneaking)` hook (vanilla `Block.canBeReplaced`); since
+  the merge after M3 it's main's `canBeReplaced?(state, stack, sneaking)`, which the candles now use.
+- `src/game/blockRules.ts`: `isMultiface(name)` (glow lichen and sculk vein share the multiface rules, in
+  `canReplace` too); experience for the sculk blocks. (M1 had `canReplace` ask a `canBeReplaced(state, block,
+  sneaking)` hook; since main's turtle eggs brought `canBeReplaced(state, stack, sneaking)`, asked in
+  `interaction.ts`, the candles use main's, as vanilla's CandleBlock reads the item in hand.)
 - `src/game/shapeUpdates.ts`: `isMultiface` in place of the glow lichen name checks.
-- `src/game/interaction.ts`: `replaceClicked` and `canReplace` pass the sneaking flag and ask `canBeReplaced`;
+- `src/game/interaction.ts`: `replaceClicked` uses `isMultiface` (main's `canBeReplaced` with the stack and the sneak
+  key serves candles as it does turtle eggs);
   flint and steel / fire charge: `lightCampfire(...) || lightCandle(...)`.
 - `src/game/redstone/piston.ts`: candles and sculk vein added to the DESTROYED pattern.
 - `src/game/redstone/dispenseItems.ts`: a dispensed flint and steel lights candles too.
@@ -76,8 +98,10 @@ M3 (vibrations and the sculk's behaviour):
   `gameEventDispatcher.ts`); `destroyBlock(..., breaker)` gains a last `breaker` parameter (null by default; `false`
   where vanilla removes the block without the event) and posts block_destroy; the particle sink's optional
   `vibration`, `shriek`, `sculkCharge`, `dustTransition`; projectiles loaded from a save marked as shot (`markShot`).
-- `src/game/blockBehavior.ts`: `stepOn?` (vanilla Block.stepOn) and `analogOutput?` (getAnalogOutputSignal) hooks.
-- `src/entity/entity.ts`: `stepOn` called on the block under an entity on the ground; the movement emission split
+- `src/game/blockBehavior.ts`: `stepOn?` (vanilla Block.stepOn, which main's turtle eggs brought too: one hook,
+  called by main's `floorWithHook` in `entity.ts`, the block holding the entity up) and `analogOutput?`
+  (getAnalogOutputSignal).
+- `src/entity/entity.ts`: (`stepOn` is main's call since the merge; hit_ground comes after main's `fallOn`) the movement emission split
   into sounds and events (`emitsMovementEvents()`, default: whatever makes step sounds; bats, boats and minecarts
   say yes) with step/swim/flap events, `isOnRails()` (a minecart's going counts as steps), `supportingState()` (the
   block actually stood on, a carpet over the stone), hit_ground on landing, splash, entity_die in `kill()`,
@@ -110,6 +134,12 @@ M3 (vibrations and the sculk's behaviour):
   `silverfish.ts`, `villager.ts`, `ravager.ts`, `thrownPotion.ts`, `snowGolem.ts`, `animals.ts` (sheep, pig's
   saddle), `horse.ts`, `strider.ts`, `elytra.ts`, `boat.ts`, `minecart.ts`, `itemFrame.ts`, `endCrystal.ts`, `bat.ts`,
   `enderDragon.ts`, `raider.ts`, `inventory/menus.ts` (armour put on in the inventory).
+- After the merge, in main's new files, the same way: `game/turtleEggs.ts` (an egg of a clutch broken, cracking,
+  hatching), `entity/turtle.ts` (eggs laid), `entity/frog.ts` (spawn laid), `entity/fox.ts` (eating, berries off a bush
+  or a cave vine; its chorus fruit already goes through `chorusTeleport`), `entity/rabbit.ts` (a carrot nibbled),
+  `game/goatHorn.ts` (instrument_play), `entity/fireworkRocket.ts` (projectile_shoot, projectile_land, explode). Main's
+  axolotl and tadpole buckets already went through the fish buckets' entity_place, its frogspawn through
+  `destroyBlock`.
 
 New files: `src/game/gameEvents.ts`, `gameEventDispatcher.ts`, `vibrations.ts`, `sculkSensor.ts`, `sculkShrieker.ts`,
 `sculkCatalyst.ts`, `wardenSpawnTracker.ts` (`src/game/sculk.ts` re-exports the block entities), `src/render/sculkParticles.ts`,
@@ -145,8 +175,12 @@ New files: `src/game/gameEvents.ts`, `gameEventDispatcher.ts`, `vibrations.ts`, 
 - Aquifers can flood parts of a city with water (or lava near the bottom), as in vanilla.
 - M3: there are no comparators yet, so a sensor's frequency (vanilla getAnalogOutputSignal) is only an
   `analogOutput` hook on its behaviour for them to read.
-- M3: nothing makes note_block_play, jukebox_play or instrument_play yet (no note blocks, jukeboxes or goat horns
-  here when M3 was done); the events and their frequencies are defined.
+- M3: nothing makes note_block_play, jukebox_play or jukebox_stop_play yet (no note blocks or jukeboxes); the events
+  and their frequencies are defined. Goat horns (from main) make instrument_play.
+- M3: since the merge, what an entity steps on is main's `floorWithHook` (the block whose collision box is a hair under
+  its feet); vanilla's stepOn goes 0.2 down from the supporting block (getOnPosLegacy). The two differ only for a
+  carpet laid on top of a sensor or shrieker: vanilla still sets it off when you walk over the carpet, here it doesn't.
+  Left as main has it (a shared file).
 - M3: a single-player game, so the container events of block containers are by `level.player` (vanilla: whoever opened
   it); projectiles loaded from a save count as shot already (vanilla saves HasBeenShot; the effect is the same).
 - M3: nothing tramples farmland and there's no cake yet, so their block_change events wait for them.
@@ -168,7 +202,8 @@ New files: `src/game/gameEvents.ts`, `gameEventDispatcher.ts`, `vibrations.ts`, 
   blocks built, about 30% cracked, block entities for every chest, sensor, shrieker, catalyst, campfire and skull,
   the chests' loot tables, the loot itself (Swift Sneak I–III books, the damaged enchanted hoe, Regeneration II, the
   trims' pool, the ice box's stew), sculk in the deep dark and nowhere else, and the time a city costs).
-- `tests/ancient-city/m3-vibrations.mjs`: 123 checks, all pass, 10 runs out of 10 (with the level ticking: a block
+- `tests/ancient-city/m3-vibrations.mjs`: 137 checks, all pass (10 runs out of 10 before the merge, 5 of 5 after; with
+  the level ticking: a block
   placed 5 blocks off sets a sensor off 5 ticks later with power 6, the particle and the clicking, 30 ticks active, 10
   cooling, deaf meanwhile; power and timing at every distance for both sensors; the nearest of a tick's vibrations,
   the higher frequency on a tie, nothing else while one's on its way; wool in the way, around the corner of one wool
@@ -182,7 +217,13 @@ New files: `src/game/gameEvents.ts`, `gameEventDispatcher.ts`, `vibrations.ts`, 
   its charge, the nearer of two, babies, too far, a player's death, It Spreads, its cursors saved; Swift Sneak I to
   III; and block_place, flint and steel's quirk, shearing, entity_damage, equip/unequip, prime_fuse, explode,
   projectile_shoot and projectile_land where vanilla makes them). It found dropped wool not muffling its landing
-  (the item's stack was read from the wrong field), fixed.
+  (the item's stack was read from the wrong field), fixed. After the merge, main's newcomers: a turtle egg broken,
+  cracking and hatching, a frog laying spawn, a fox eating a chorus fruit (eat, then teleport) and picking berries off a
+  bush and a vine, a rabbit's bites (the last making none), a goat horn blown, a rocket shot, bursting and striking a
+  ceiling.
+- After the merge of main (b2c18f9) and again after 43f2ff0: `npm run typecheck` clean; every suite passes
+  (ancient-city m1, m2, m3; temples m1 to m4c; mansion m1 to m3). The M1 test's use-on helper now presses the sneak key
+  as well as crouching (candles, like main's turtle eggs, read the key, vanilla isSecondaryUseActive).
 - `npm run typecheck`: clean. `tests/temples/*` and `tests/mansion/*` still pass.
 
 ## 5. Browser checklist
@@ -215,3 +256,6 @@ New files: `src/game/gameEvents.ts`, `gameEventDispatcher.ts`, `vibrations.ts`, 
   catalyst blooms, two souls rise and sculk spreads through the ground where the zombie fell, glowing as it goes.
 - In the city (`/tp @s 560.5 -36 -230.5 90 35`, survival): the sensors and shriekers are live, and the shriekers there
   can summon.
+- Near a sensor: blow a goat horn (the creative inventory has all eight calls; `/give` makes one with no call, which
+  does nothing, as in vanilla); `/give @s minecraft:firework_rocket` and set one off beside it: it clicks for the
+  launch (the burst, usually further up than its 8 blocks, isn't heard).
