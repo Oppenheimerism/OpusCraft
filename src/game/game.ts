@@ -889,6 +889,8 @@ export class Game {
     const kn = k ? entityDisplayName(k) : '';
     switch (source) {
       case 'mob':
+      // (M8: goats) vanilla mob_attack_no_aggro's message is mob's: a goat's ram
+      case 'mobAttackNoAggro':
       // (vanilla mob_projectile's message is mob's: a shulker's bullet)
       case 'mobProjectile':
         return `${n} was slain by ${kn}`;

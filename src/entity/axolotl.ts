@@ -19,6 +19,11 @@ import type { Entity } from './entity';
 import { LivingEntity } from './living';
 import type { Player } from './player';
 import { Behavior, Brain, GateBehavior, oneShot, runOne, type BehaviorControl } from './ai/brain';
+import {
+  animalMakeLove, at, babyFollowAdult, countDownCooldown, followTemptation, isEntityTargetable, isVisibleBy, lookAtPlayerSometimes, lookAtTargetSink,
+  moveToTargetSink, randomStroll, senseNearestAdult, senseNearestLiving, senseTempting, setWalkTargetFromLookTarget, trackerBlock, withinManhattan,
+  type Pos, type Tracker, type WalkTarget,
+} from './ai/brainBehaviors';
 import type { LookControl } from './ai/controls';
 import { AmphibiousPathNavigation, type PathNavigation } from './ai/navigation';
 import { PathType, type Path } from './ai/pathfinder';
@@ -29,7 +34,6 @@ import { MOB_EFFECTS, MobEffectInstance } from './effects';
 import { ItemStack } from '../item/item';
 import { BLOCKS, STATE_BLOCK, FLAGS, F_AIR, F_WATER } from '../world/block';
 
-type Pos = [number, number, number];
 type Activity = 'core' | 'idle' | 'fight' | 'play_dead';
 
 /** vanilla Axolotl.Variant, by id: the four common colours, then the rare blue */
@@ -48,151 +52,16 @@ const ALWAYS_HOSTILES = new Set(['drowned', 'guardian', 'elder_guardian']);
 const HUNT_TARGETS = new Set(['tropical_fish', 'pufferfish', 'salmon', 'cod', 'squid', 'glow_squid', 'tadpole']);
 /** vanilla #axolotl_food */
 const AXOLOTL_FOOD = 'tropical_fish_bucket';
-/** vanilla NearestLivingEntitySensor's reach (the follow range) and Sensor's targeting range */
-const SENSE_RANGE = 16;
-
-/** vanilla PositionTracker: an EntityTracker (at its eyes, or its feet) or a BlockPosTracker */
-export type Tracker = { entity: Entity; eye: boolean } | { pos: Pos };
-/** vanilla WalkTarget */
-export interface WalkTarget {
-  t: Tracker;
-  speed: number;
-  closeEnough: number;
-}
-
-/** vanilla PositionTracker.currentBlockPosition */
-function trackerBlock(t: Tracker): Pos {
-  return 'pos' in t ? t.pos : [Math.floor(t.entity.x), Math.floor(t.entity.y), Math.floor(t.entity.z)];
-}
-/** vanilla PositionTracker.currentPosition: an entity's feet or eyes, a block's middle */
-function trackerPos(t: Tracker): Pos {
-  if ('pos' in t) return [t.pos[0] + 0.5, t.pos[1] + 0.5, t.pos[2] + 0.5];
-  return [t.entity.x, t.entity.y + (t.eye ? t.entity.eyeHeight : 0), t.entity.z];
-}
-const at = (e: Entity, eye: boolean): Tracker => ({ entity: e, eye });
 
 /** vanilla AxolotlAi.getSpeedModifier: idling (and tempted), half speed in the water, crawling on land */
 const idleSpeed = (a: Axolotl): number => (a.inWater ? 0.5 : 0.15);
 /** vanilla getSpeedModifierChasing / getSpeedModifierFollowingAdult */
 const chaseSpeed = (a: Axolotl): number => (a.inWater ? 0.6 : 0.15);
 
-/** vanilla BlockPos.withinManhattan: out from the middle a Manhattan step at a time (each z one way, then the other) */
-function* withinManhattan(cx: number, cy: number, cz: number, rx: number, ry: number, rz: number): Generator<Pos> {
-  for (let depth = 0; depth <= rx + ry + rz; depth++) {
-    const mx = Math.min(rx, depth);
-    for (let x = -mx; x <= mx; x++) {
-      const my = Math.min(ry, depth - Math.abs(x));
-      for (let y = -my; y <= my; y++) {
-        const z = depth - Math.abs(x) - Math.abs(y);
-        if (z > rz) continue;
-        yield [cx + x, cy + y, cz + z];
-        if (z !== 0) yield [cx + x, cy + y, cz - z];
-      }
-    }
-  }
-}
-
 const waterFluidAt = (a: Axolotl, x: number, y: number, z: number): boolean => (FLAGS[a.level.world.getState(x, y, z)] & F_WATER) !== 0;
 
 // ---------------------------------------------------------------------------
 // the behaviours (vanilla ai.behavior), each made for one axolotl's brain
-
-/** vanilla LookAtTargetSink(45, 90): eyes on the look target for 45-90 ticks while it's in sight, then it's forgotten */
-function lookAtTargetSink(min: number, max: number): BehaviorControl<Axolotl> {
-  return new Behavior<Axolotl>({
-    min,
-    max,
-    canStart: (a) => a.lookTarget !== null,
-    canStillUse: (a) => a.lookTarget !== null && a.canSee(a.lookTarget),
-    tick: (a) => {
-      const [x, y, z] = trackerPos(a.lookTarget!);
-      a.lookControl.setLookAt(x, y, z);
-    },
-    stop: (a) => {
-      a.lookTarget = null;
-    },
-  });
-}
-
-/**
- * vanilla MoveToTargetSink (150-250 ticks at a time): a path to the walk target (or, with none, to somewhere up to 10
- * off towards it), a new one when the target has moved more than two blocks; done on arriving (within its
- * close-enough Manhattan distance), or when the path runs out; stuck, it waits up to two seconds before trying again
- */
-function moveToTargetSink(): BehaviorControl<Axolotl> {
-  let cooldown = 0;
-  let path: Path | null = null;
-  let last: Pos | null = null;
-  let speed = 0;
-  const reached = (a: Axolotl, w: WalkTarget): boolean => {
-    const [x, y, z] = trackerBlock(w.t);
-    return Math.abs(x - Math.floor(a.x)) + Math.abs(y - Math.floor(a.y)) + Math.abs(z - Math.floor(a.z)) <= w.closeEnough;
-  };
-  const compute = (a: Axolotl, w: WalkTarget, now: number): boolean => {
-    const [bx, by, bz] = trackerBlock(w.t);
-    path = a.navigation.createPath(bx + 0.5, by, bz + 0.5, 0);
-    speed = w.speed;
-    if (reached(a, w)) {
-      a.cantReachWalkTargetSince = -1;
-      return false;
-    }
-    if (path?.canReach()) a.cantReachWalkTargetSince = -1;
-    else if (a.cantReachWalkTargetSince < 0) a.cantReachWalkTargetSince = now;
-    if (path) return true;
-    const p = defaultRandomPosTowards(a, 10, 7, bx + 0.5, bz + 0.5, Math.PI / 2);
-    if (!p) return false;
-    path = a.navigation.createPath(p[0] + 0.5, p[1], p[2] + 0.5, 0);
-    return path !== null;
-  };
-  return new Behavior<Axolotl>({
-    min: 150,
-    max: 250,
-    canStart: (a, now) => {
-      const w = a.walkTarget;
-      if (!w) return false;
-      if (cooldown > 0) {
-        cooldown--;
-        return false;
-      }
-      const done = reached(a, w);
-      if (!done && compute(a, w, now)) {
-        last = trackerBlock(w.t);
-        return true;
-      }
-      a.walkTarget = null;
-      if (done) a.cantReachWalkTargetSince = -1;
-      return false;
-    },
-    start: (a) => {
-      a.navigation.moveToPath(path, speed);
-    },
-    canStillUse: (a) => {
-      const w = a.walkTarget;
-      if (!path || !last || !w) return false;
-      const spectator = 'entity' in w.t && (w.t.entity as { gameMode?: string }).gameMode === 'spectator';
-      return !a.navigation.isDone() && !reached(a, w) && !spectator;
-    },
-    tick: (a, now) => {
-      const p = a.navigation.path;
-      if (path !== p) path = p;
-      if (p && last) {
-        const w = a.walkTarget!;
-        const b = trackerBlock(w.t);
-        if ((b[0] - last[0]) ** 2 + (b[1] - last[1]) ** 2 + (b[2] - last[2]) ** 2 > 4 && compute(a, w, now)) {
-          last = b;
-          a.navigation.moveToPath(path, speed);
-        }
-      }
-    },
-    stop: (a) => {
-      const w = a.walkTarget;
-      if (w && !reached(a, w) && a.navigation.isStuck) cooldown = a.level.random.nextInt(40);
-      a.navigation.stop();
-      a.walkTarget = null;
-      path = null;
-    },
-  });
-}
 
 /** vanilla ValidatePlayDead: counts its play-dead ticks down; at the end it forgets who hurt it and idles again */
 function validatePlayDead(): BehaviorControl<Axolotl> {
@@ -203,130 +72,6 @@ function validatePlayDead(): BehaviorControl<Axolotl> {
       a.hurtByEntity = null;
       a.useDefaultActivity();
     } else a.playDeadTicks--;
-    return true;
-  });
-}
-
-/** vanilla CountDownCooldownTicks(TEMPTATION_COOLDOWN_TICKS) */
-function countDownTemptationCooldown(): BehaviorControl<Axolotl> {
-  return new Behavior<Axolotl>({
-    timesOut: false,
-    canStart: (a) => a.temptationCooldown >= 0,
-    canStillUse: (a) => a.temptationCooldown > 0,
-    tick: (a) => {
-      a.temptationCooldown--;
-    },
-    stop: (a) => {
-      a.temptationCooldown = -1;
-    },
-  });
-}
-
-/**
- * vanilla SetEntityLookTargetSometimes.create(PLAYER, 6, 30-60): with nothing to look at, now and then (every 30 to 60
- * ticks that a player is within six blocks and seen) it looks at that player
- */
-function lookAtPlayerSometimes(range: number, min: number, max: number): BehaviorControl<Axolotl> {
-  let ticks = 0;
-  return oneShot<Axolotl>((a) => {
-    if (a.lookTarget) return false;
-    const p = a.visibleLiving.find((e) => e.type === 'player' && e.distanceToSqr(a.x, a.y, a.z) <= range * range);
-    if (!p) return false;
-    // vanilla SetEntityLookTargetSometimes.Ticker.tickDownAndCheck
-    if (ticks === 0) {
-      ticks = min + a.random.nextInt(max - min + 1) - 1;
-      return false;
-    }
-    if (--ticks !== 0) return false;
-    a.lookTarget = at(p, true);
-    return true;
-  });
-}
-
-/** vanilla BehaviorUtils.lockGazeAndWalkToEachOther */
-function lockGazeAndWalkToEachOther(a: Axolotl, b: Axolotl, speed: number, dist: number): void {
-  a.lookTarget = at(b, true);
-  b.lookTarget = at(a, true);
-  a.walkTarget = { t: at(b, false), speed, closeEnough: dist };
-  b.walkTarget = { t: at(a, false), speed, closeEnough: dist };
-}
-
-/**
- * vanilla AnimalMakeLove(AXOLOTL, 0.2, 2), up to 110 ticks: in love, with a partner in love in sight, the two come
- * together, and 60-110 ticks on, within three blocks, have their baby
- */
-function animalMakeLove(speed: number, close: number): BehaviorControl<Axolotl> {
-  let spawnAt = 0;
-  const partner = (a: Axolotl): Axolotl | undefined => a.visibleLiving.find((e): e is Axolotl => e instanceof Axolotl && a.canMate(e));
-  return new Behavior<Axolotl>({
-    min: 110,
-    max: 110,
-    canStart: (a) => !a.breedTarget && a.isInLove() && partner(a) !== undefined,
-    start: (a, now) => {
-      const p = partner(a)!;
-      a.breedTarget = p;
-      p.breedTarget = a;
-      lockGazeAndWalkToEachOther(a, p, speed, close);
-      spawnAt = now + 60 + a.random.nextInt(50);
-    },
-    canStillUse: (a, now) => {
-      const p = a.breedTarget;
-      return !!p && p.isAlive && a.canMate(p) && a.visibleLiving.includes(p) && now <= spawnAt;
-    },
-    tick: (a, now) => {
-      const p = a.breedTarget!;
-      lockGazeAndWalkToEachOther(a, p, speed, close);
-      if (a.distanceToSqr(p.x, p.y, p.z) < 9 && now >= spawnAt) {
-        a.spawnChildFromBreeding(p);
-        a.breedTarget = null;
-        p.breedTarget = null;
-      }
-    },
-    stop: (a) => {
-      a.breedTarget = null;
-      a.walkTarget = null;
-      a.lookTarget = null;
-      spawnAt = 0;
-    },
-  });
-}
-
-/**
- * vanilla FollowTemptation: after the player holding its food (looking at them), up to two and a half blocks off;
- * losing them, it pays no heed to food for five seconds
- */
-function followTemptation(speed: (a: Axolotl) => number): BehaviorControl<Axolotl> {
-  return new Behavior<Axolotl>({
-    timesOut: false,
-    canStart: (a) => a.temptationCooldown < 0 && a.temptingPlayer !== null && !a.breedTarget,
-    start: (a) => {
-      a.isTempted = true;
-    },
-    canStillUse: (a) => a.temptingPlayer !== null && !a.breedTarget,
-    tick: (a) => {
-      const p = a.temptingPlayer!;
-      a.lookTarget = at(p, true);
-      if (a.distanceToSqr(p.x, p.y, p.z) < 2.5 * 2.5) a.walkTarget = null;
-      else a.walkTarget = { t: at(p, false), speed: speed(a), closeEnough: 2 };
-    },
-    stop: (a) => {
-      a.temptationCooldown = 100;
-      a.isTempted = false;
-      a.walkTarget = null;
-      a.lookTarget = null;
-    },
-  });
-}
-
-/** vanilla BabyFollowAdult.create(5-16): a baby keeps to the nearest grown one it sees, from 5 to 16 blocks off */
-function babyFollowAdult(min: number, max: number, speed: (a: Axolotl) => number): BehaviorControl<Axolotl> {
-  return oneShot<Axolotl>((a) => {
-    const adult = a.nearestVisibleAdult;
-    if (!adult || a.walkTarget || !a.isBaby()) return false;
-    const d = a.distanceToSqr(adult.x, adult.y, adult.z);
-    if (d >= (max + 1) ** 2 || d < min * min) return false;
-    a.lookTarget = at(adult, true);
-    a.walkTarget = { t: at(adult, false), speed: speed(a), closeEnough: min - 1 };
     return true;
   });
 }
@@ -413,31 +158,6 @@ function swimStroll(speed: number): BehaviorControl<Axolotl> {
   });
 }
 
-/** vanilla RandomStroll.stroll(0.15, false): on land, a crawl somewhere up to ten blocks off */
-function landStroll(speed: number): BehaviorControl<Axolotl> {
-  return oneShot<Axolotl>((a) => {
-    if (a.walkTarget || a.inWater) return false;
-    const p = landRandomPos(a, 10, 7);
-    a.walkTarget = p ? { t: { pos: p }, speed, closeEnough: 0 } : null;
-    return true;
-  });
-}
-
-/**
- * vanilla SetWalkTargetFromLookTarget with AxolotlAi.canSetWalkTargetFromLookTarget: to what it's looking at, when
- * that's in water just as it is (or on land as it is), to within three blocks
- */
-function walkToLookTarget(close: number): BehaviorControl<Axolotl> {
-  return oneShot<Axolotl>((a) => {
-    const t = a.lookTarget;
-    if (a.walkTarget || !t) return false;
-    const [x, y, z] = trackerBlock(t);
-    if (waterFluidAt(a, x, y, z) !== a.inWater) return false;
-    a.walkTarget = { t, speed: idleSpeed(a), closeEnough: close };
-    return true;
-  });
-}
-
 /**
  * vanilla StopAttackingIfTargetInvalid.create(Axolotl::onStopAttacking): gone, dead, no longer attackable, or out of
  * reach for ten seconds, the target is dropped (and a player who finished it off is helped)
@@ -509,13 +229,19 @@ function playDead(): BehaviorControl<Axolotl> {
   });
 }
 
+/** vanilla AxolotlAi.canSetWalkTargetFromLookTarget: what it looks at is in water just as it is (or on land as it is) */
+const canWalkToLookTarget = (a: Axolotl): boolean => {
+  const [x, y, z] = trackerBlock(a.lookTarget!);
+  return waterFluidAt(a, x, y, z) === a.inWater;
+};
+
 /** vanilla AxolotlAi.makeBrain */
 function makeBrain(): Brain<Axolotl, Activity> {
   const b = new Brain<Axolotl, Activity>('idle', ['core']);
-  b.add('core', [[0, lookAtTargetSink(45, 90)], [0, moveToTargetSink()], [0, validatePlayDead()], [0, countDownTemptationCooldown()]]);
+  b.add('core', [[0, lookAtTargetSink<Axolotl>(45, 90)], [0, moveToTargetSink<Axolotl>()], [0, validatePlayDead()], [0, countDownCooldown<Axolotl>((a) => a.temptationCooldown, (a, v) => (a.temptationCooldown = v))]]);
   b.add('idle', [
-    [0, lookAtPlayerSometimes(6, 30, 60)],
-    [1, animalMakeLove(0.2, 2)],
+    [0, lookAtPlayerSometimes<Axolotl>(6, 30, 60)],
+    [1, animalMakeLove<Axolotl>(0.2, 2)],
     [2, runOne<Axolotl>([[followTemptation(idleSpeed), 1], [babyFollowAdult(5, 16, chaseSpeed), 1]])],
     [3, startAttacking()],
     [3, tryFindWater(6, 0.15)],
@@ -524,8 +250,8 @@ function makeBrain(): Brain<Axolotl, Activity> {
       new GateBehavior<Axolotl>(
         [
           [swimStroll(0.5), 2],
-          [landStroll(0.15), 2],
-          [walkToLookTarget(3), 3],
+          [randomStroll(0.15, false), 2],
+          [setWalkTargetFromLookTarget(canWalkToLookTarget, idleSpeed, 3), 3],
           [oneShot<Axolotl>((a) => a.inWater), 5],
           [oneShot<Axolotl>((a) => a.onGround), 5],
         ],
@@ -570,6 +296,8 @@ class AxolotlLookControl extends SmoothSwimmingLookControl {
 }
 
 // ---------------------------------------------------------------------------
+
+export type { Tracker, WalkTarget };
 
 export class Axolotl extends Animal implements Bucketable {
   readonly type = 'axolotl';
@@ -649,8 +377,7 @@ export class Axolotl extends Animal implements Bucketable {
 
   /** vanilla EntityTracker.isVisibleBy: a living thing alive and among those it sees; anything else, always */
   canSee(t: Tracker): boolean {
-    if ('pos' in t || !(t.entity instanceof LivingEntity)) return true;
-    return t.entity.isAlive && this.visibleLiving.includes(t.entity);
+    return isVisibleBy(this, t);
   }
 
   /** vanilla Brain.setActiveActivity: forgetting the other activities' memories (a fight's target, the play-dead count) */
@@ -679,33 +406,18 @@ export class Axolotl extends Animal implements Bucketable {
     if (was === 'fight' && next !== 'fight') this.huntingCooldownUntil = now + HUNTING_COOLDOWN;
   }
 
-  /** vanilla Sensor.isEntityTargetable / isEntityAttackable (TargetingConditions): within 16 (less if it's hard to see), and seen */
-  private targetable(e: LivingEntity, combat: boolean): boolean {
-    if (!e.isAlive || e.removed || e === this) return false;
-    if (e.type === 'player' && (e as Player).gameMode === 'spectator') return false;
-    if (combat && !this.canAttack(e)) return false;
-    // (not while it's its target: vanilla's ..._IGNORE_INVISIBILITY_TESTING)
-    const r = e === this.attackTarget ? SENSE_RANGE : Math.max(SENSE_RANGE * e.visibilityPercent(this), 2);
-    if (e.distanceToSqr(this.x, this.y, this.z) > r * r) return false;
-    return this.sensing.hasLineOfSight(e);
-  }
-
   /** vanilla Brain.tickSensors: each of its sensors once a second */
   private sense(now: number): void {
     const t = this.sensorTimers;
     // vanilla NearestLivingEntitySensor
     if (--t[0] <= 0) {
       t[0] = 20;
-      const r = SENSE_RANGE;
-      const near = this.level.getEntities(this.bb.inflate(r, r, r), (e) => e instanceof LivingEntity && e.isAlive, this) as LivingEntity[];
-      near.sort((a, b) => a.distanceToSqr(this.x, this.y, this.z) - b.distanceToSqr(this.x, this.y, this.z));
-      this.nearestLiving = near;
-      this.visibleLiving = near.filter((e) => this.targetable(e, false));
+      senseNearestLiving(this);
     }
     // vanilla NearestAdultSensor
     if (--t[1] <= 0) {
       t[1] = 20;
-      this.nearestVisibleAdult = (this.visibleLiving.find((e) => e instanceof Axolotl && !e.isBaby()) as Axolotl | undefined) ?? null;
+      senseNearestAdult(this);
     }
     // vanilla HurtBySensor (the damage itself is the living entity's own)
     if (--t[2] <= 0) {
@@ -718,15 +430,12 @@ export class Axolotl extends Animal implements Bucketable {
       t[3] = 20;
       const hunting = now >= this.huntingCooldownUntil;
       this.nearestAttackable =
-        this.visibleLiving.find((e) => e.distanceToSqr(this.x, this.y, this.z) <= 64 && e.inWater && (ALWAYS_HOSTILES.has(e.type) || (hunting && HUNT_TARGETS.has(e.type))) && this.targetable(e, true)) ?? null;
+        this.visibleLiving.find((e) => e.distanceToSqr(this.x, this.y, this.z) <= 64 && e.inWater && (ALWAYS_HOSTILES.has(e.type) || (hunting && HUNT_TARGETS.has(e.type))) && isEntityTargetable(this, e, true)) ?? null;
     }
     // vanilla TemptingSensor (AXOLOTL_TEMPTATIONS): the nearest player within 10 holding a bucket of tropical fish
     if (--t[4] <= 0) {
       t[4] = 20;
-      const p = this.level.player;
-      const holds = (s: ItemStack | null) => s?.item.id === AXOLOTL_FOOD;
-      const ok = p && p.isAlive && p.gameMode !== 'spectator' && p.vehicle !== this && p.distanceToSqr(this.x, this.y, this.z) <= (10 * p.visibilityPercent(this)) ** 2;
-      this.temptingPlayer = ok && (holds(p.inventory.selectedItem) || holds(p.inventory.offhand)) ? p : null;
+      senseTempting(this, (s) => s.item.id === AXOLOTL_FOOD);
     }
   }
 

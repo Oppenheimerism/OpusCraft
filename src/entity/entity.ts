@@ -6,6 +6,8 @@ import type { World } from '../world/world';
 import { DYNAMIC_SHAPE, dynamicCollision } from '../world/dynamicShapes';
 import { fluidType, fluidHeight, fluidFlow, FLUID_WATER, FLUID_LAVA, FLUID_NONE } from '../world/fluids';
 import type { Level } from '../game/level';
+// (M8: goats)
+import type { Player } from './player';
 import { setDripleafTilt } from '../game/blockRules';
 import { behaviorOf, behaviorOfBlock } from '../game/blockBehavior';
 
@@ -359,6 +361,14 @@ export abstract class Entity {
     // vanilla Entity.addPassenger: a player takes the front seat unless a player already has it
     if (this.type === 'player' && vehicle.passengers.length && vehicle.passengers[0].type !== 'player') vehicle.passengers.unshift(this);
     else vehicle.passengers.push(this);
+    // (M8: goats) vanilla: CriteriaTriggers.START_RIDING_TRIGGER for every player aboard the vehicle (or aboard its riders)
+    const aboard = [...vehicle.passengers];
+    for (let i = 0; i < aboard.length; i++) {
+      const p = aboard[i];
+      aboard.push(...p.passengers);
+      const v = p.vehicle;
+      if (p.type === 'player') this.level.onPlayerTrigger?.(p as unknown as Player, 'started_riding', { riding: { vehicle: v?.type ?? null, passengers: v ? v.passengers.map((e) => e.type) : [] } });
+    }
     return true;
   }
 

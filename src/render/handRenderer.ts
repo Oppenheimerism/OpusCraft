@@ -187,6 +187,11 @@ export class HandRenderer {
           pose.rotX(sweep);
           pose.translate(-0.3, 0.22, 0.35);
         }
+      } else if (it.id === 'goat_horn') {
+        // (M8: goats) a goat horn being blown (vanilla's tooting model): held up to the lips, in towards the middle
+        pose.translate(i * 0.56, -0.52 + equip * -0.6, -0.72);
+        pose.translate(i * -0.32, 0.16, 0.1);
+        pose.rotX(12);
       } else {
         // vanilla applyEatTransform + applyItemArmTransform (eating and drinking)
         const f = p.useItemRemaining - partial + 1;

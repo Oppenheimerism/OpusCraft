@@ -71,6 +71,8 @@ import { EnderDragonRenderer } from './enderDragonRenderer';
 import { RaiderRenderers, RAIDER_SHADOW_RADII } from './illagerRenderers';
 // (Stage 5: ocean)
 import { OceanRenderers, OCEAN_SHADOW_RADII } from './oceanRenderers';
+// (M8: goats)
+import { GoatRenderers, GOAT_SHADOW_RADII } from './goatRenderer';
 import { HorseRenderers, HORSE_SHADOW_RADII } from './horseRenderer';
 import { LlamaRenderers, LLAMA_SHADOW_RADII, renderSpit } from './llamaRenderer';
 import { ParrotRenderers, PARROT_SHADOW_RADII } from './parrotRenderer';
@@ -193,6 +195,8 @@ export class EntityRenderDispatcher {
   private readonly raiders: RaiderRenderers;
   /** (Stage 5: ocean) the guardians, their lasers, the elder's ghostly face */
   private readonly ocean: OceanRenderers;
+  // (M8: goats)
+  private readonly goats: GoatRenderers;
   /** (Stage 6: tameable animals) horses, donkeys and mules, their markings and armour */
   private readonly horses: HorseRenderers;
   /** (Stage 6: tameable animals) llamas and their decor */
@@ -230,6 +234,8 @@ export class EntityRenderDispatcher {
     });
     // (Stage 5: ocean) lent the same steps
     this.ocean = new OceanRenderers(gl, this.raiders.kit);
+    // (M8: goats)
+    this.goats = new GoatRenderers(this.raiders.kit);
     // (Stage 6: tameable animals) and again
     this.horses = new HorseRenderers(this.raiders.kit);
     this.llamas = new LlamaRenderers(this.raiders.kit);
@@ -718,6 +724,8 @@ export class EntityRenderDispatcher {
     if (this.raiders.render(b, e, dx, dy, dz, p)) return;
     // (Stage 5: ocean)
     if (this.ocean.render(b, e, dx, dy, dz, p)) return;
+    // (M8: goats)
+    if (this.goats.render(b, e, dx, dy, dz, p)) return;
     // (Stage 6: tameable animals; a llama before the horses it's kin to)
     if (this.llamas.render(b, e, dx, dy, dz, p)) return;
     if (this.horses.render(b, e, dx, dy, dz, p)) return;
@@ -1710,6 +1718,8 @@ function shadowRadius(e: Entity): number {
   if (RAIDER_SHADOW_RADII[e.type] !== undefined) return RAIDER_SHADOW_RADII[e.type];
   // (Stage 5: ocean)
   if (OCEAN_SHADOW_RADII[e.type] !== undefined) return OCEAN_SHADOW_RADII[e.type] * (e instanceof Mob && e.isBaby() ? 0.5 : 1);
+  // (M8: goats)
+  if (GOAT_SHADOW_RADII[e.type] !== undefined) return GOAT_SHADOW_RADII[e.type] * (e instanceof Mob && e.isBaby() ? 0.5 : 1);
   // (Stage 6: tameable animals; a foal's is half)
   let r = HORSE_SHADOW_RADII[e.type] ?? LLAMA_SHADOW_RADII[e.type] ?? PARROT_SHADOW_RADII[e.type] ?? POLAR_BEAR_SHADOW_RADII[e.type] ?? 0;
   switch (e.type) {

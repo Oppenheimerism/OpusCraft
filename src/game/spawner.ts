@@ -32,6 +32,8 @@ import { Dolphin } from '../entity/dolphin';
 import { GlowSquid } from '../entity/glowSquid';
 import { Turtle } from '../entity/turtle';
 import { Axolotl } from '../entity/axolotl';
+// (M8: goats)
+import { Goat } from '../entity/goat';
 import { waterSpawnsFor } from './oceanSpawns';
 import { despawnDistance } from '../entity/mob';
 import { Husk, Stray } from '../entity/biomeMonsters';
@@ -413,7 +415,6 @@ function settingsForLand(name: string): Omit<MobSettings, 'water' | 'ambient'> {
     case 'taiga':
     case 'snowy_taiga':
     case 'grove':
-    case 'snowy_slopes':
     case 'old_growth_pine_taiga':
     case 'old_growth_spruce_taiga':
     case 'swamp':
@@ -435,10 +436,13 @@ function settingsForLand(name: string): Omit<MobSettings, 'water' | 'ambient'> {
     case 'frozen_ocean':
     case 'deep_frozen_ocean':
       return { creature: [S_('polar_bear', 1, 1, 2)], monster: monsters(), creatureProbability: 0.1 };
-    // (goats and rabbits aren't in the game yet)
+    // (M8: goats) vanilla OverworldBiomes.frozenPeaks and jaggedPeaks: goats, in ones to threes
     case 'frozen_peaks':
     case 'jagged_peaks':
-      return { creature: [], monster: monsters(), creatureProbability: 0.1 };
+      return { creature: [S_('goat', 5, 1, 3)], monster: monsters(), creatureProbability: 0.1 };
+    // (M8: goats) vanilla OverworldBiomes.snowySlopes: rabbits (4, in twos and threes, when there are rabbits) and goats
+    case 'snowy_slopes':
+      return { creature: [S_('goat', 5, 1, 3)], monster: monsters(), creatureProbability: 0.1 };
     // vanilla BiomeDefaultFeatures.desertSpawns: few zombies, and husks (no rabbits yet)
     case 'desert':
       return { creature: [], monster: [...monsters(19, 100, 1), S_('husk', 80, 4, 4)], creatureProbability: 0.1 };
@@ -749,6 +753,9 @@ export class NaturalSpawner {
       // (Stage 5: ocean) vanilla Axolotl.checkAxolotlSpawnRules: over clay
       case 'axolotl':
         return Axolotl.checkAxolotlSpawnRules(lvl, x, y, z);
+      // (M8: goats) vanilla Goat.checkGoatSpawnRules: on #goats_spawnable_on, in the light
+      case 'goat':
+        return Goat.checkGoatSpawnRules(lvl, x, y, z);
       case 'hoglin':
         // vanilla Hoglin.checkHoglinSpawnRules: any light, just not on a nether wart block
         return BLOCKS[STATE_BLOCK[lvl.world.getState(x, y - 1, z)]].name !== 'nether_wart_block';
@@ -866,5 +873,8 @@ Object.assign(ENTITY_NAMES, { turtle: 'Turtle' });
 // (Stage 5: ocean) the axolotl
 Object.assign(MOB_TYPES, { axolotl: (l: Level) => new Axolotl(l) });
 Object.assign(ENTITY_NAMES, { axolotl: 'Axolotl' });
+// (M8: goats)
+Object.assign(MOB_TYPES, { goat: (l: Level) => new Goat(l) });
+Object.assign(ENTITY_NAMES, { goat: 'Goat' });
 /** (Stage 5: ocean) vanilla SpawnPlacements IN_WATER: these spawn in water (the squid's and the guardian's are above) */
 const IN_WATER = new Set(['cod', 'salmon', 'pufferfish', 'tropical_fish', 'dolphin', 'glow_squid', 'axolotl']);

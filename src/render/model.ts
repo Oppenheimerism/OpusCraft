@@ -208,7 +208,7 @@ export function animateCrossbowCharge(ra: ModelPart, la: ModelPart, charge: numb
 }
 
 /** vanilla HumanoidModel.ArmPose, as a player's arms take them (PlayerRenderer.getArmPose) */
-export type HumanoidArmPose = 'empty' | 'item' | 'block' | 'bow' | 'crossbow_charge' | 'crossbow_hold' | 'throw_spear' | 'brush';
+export type HumanoidArmPose = 'empty' | 'item' | 'block' | 'bow' | 'crossbow_charge' | 'crossbow_hold' | 'throw_spear' | 'brush' | 'toot_horn';
 
 /** vanilla ArmPose.isTwoHanded */
 export function twoHanded(pose: HumanoidArmPose): boolean {
@@ -280,6 +280,11 @@ export function animateHumanoid(root: ModelPart, limbSwing: number, limbAmount: 
         // (held out a little lower than an item, toward what's being brushed)
         arm.xRot = arm.xRot * 0.5 - Math.PI / 5;
         arm.yRot = 0;
+        break;
+      case 'toot_horn':
+        // (M8: goats) vanilla TOOT_HORN: a goat horn raised to the lips along the look, turned in across the face
+        arm.xRot = Math.max(-1.2, Math.min(1.2, head.xRot)) - 1.4835298;
+        arm.yRot = head.yRot + (right ? -Math.PI / 6 : Math.PI / 6);
         break;
       default:
         arm.yRot = 0;

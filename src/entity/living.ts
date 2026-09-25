@@ -748,12 +748,19 @@ export abstract class LivingEntity extends Entity {
       const lev = this.effectAmp('levitation');
       if (lev >= 0) d2 += (0.05 * (lev + 1) - this.dy) * 0.2;
       else if (!this.noGravity()) d2 -= g;
-      this.dx *= f3;
-      // (vanilla: a FlyingAnimal's climb and fall fade as its flight does)
-      this.dy = d2 * (this.isFlyingAnimal() ? f3 : 0.98);
-      this.dz *= f3;
+      // (M8: goats) vanilla shouldDiscardFriction: a long jump keeps all its speed, only falling
+      if (this.discardFriction) this.dy = d2;
+      else {
+        this.dx *= f3;
+        // (vanilla: a FlyingAnimal's climb and fall fade as its flight does)
+        this.dy = d2 * (this.isFlyingAnimal() ? f3 : 0.98);
+        this.dz *= f3;
+      }
     }
   }
+
+  /** (M8: goats) vanilla LivingEntity.discardFriction: in the air it neither slows nor drags (a long jump) */
+  discardFriction = false;
 
   /** vanilla Entity.isNoGravity (DATA_NO_GRAVITY): a flyer's move control turns gravity off while it flies somewhere */
   noGravityFlag = false;
@@ -917,7 +924,8 @@ export abstract class LivingEntity extends Entity {
     this.lastDamageStamp = this.level.gameTime;
     this.lastDamageEntity = attacker ?? null;
     if (attacker instanceof LivingEntity && attacker !== this) {
-      this.setLastHurtByMob(attacker);
+      // (M8: goats) vanilla #no_anger: a goat's ram (mob_attack_no_aggro) makes nothing angry
+      if (source !== 'mobAttackNoAggro') this.setLastHurtByMob(attacker);
       if (attacker.type === 'player') {
         this.lastHurtByPlayerTime = 100;
         this.lastHurtByPlayer = attacker;
@@ -1049,7 +1057,7 @@ export abstract class LivingEntity extends Entity {
     const on = this.level.world.getState(Math.floor(this.x), Math.floor(this.y - 0.2), Math.floor(this.z));
     const b = BLOCKS[STATE_BLOCK[on]];
     const stalagmite = b.name === 'pointed_dripstone' && b.get(on, 'vertical_direction') === 'up' && b.get(on, 'thickness') === 'tip';
-    const dmg = stalagmite ? Math.ceil((dist + 2.5 - this.safeFallDistance()) * 2) : Math.ceil(dist - this.safeFallDistance());
+    const dmg = (stalagmite ? Math.ceil((dist + 2.5 - this.safeFallDistance()) * 2) : Math.ceil(dist - this.safeFallDistance())) - this.fallDamageReduction();
     if (dmg > 0) {
       this.onFallDamage(dmg, dist);
       this.hurt(dmg, stalagmite ? 'stalagmite' : 'fall');
@@ -1057,6 +1065,11 @@ export abstract class LivingEntity extends Entity {
   }
 
   protected onFallDamage(_dmg: number, _dist: number): void {}
+
+  /** (M8: goats) vanilla calculateFallDamage overrides: how much less a fall hurts it (a goat's 10) */
+  protected fallDamageReduction(): number {
+    return 0;
+  }
 
   isInFluidEye(): boolean {
     return this.eyeFluid === FLUID_WATER;

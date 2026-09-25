@@ -74,6 +74,8 @@ export type Criterion =
   | { t: 'recipe_crafted'; recipe: string; ingredients: string[] }
   /** (Stage 5: ocean) vanilla filled_bucket: filled a bucket that comes out as one of these (a fish scooped up) */
   | { t: 'filled_bucket'; items: string[] }
+  /** (M8: goats) vanilla started_riding: the player's vehicle, of this type, carries one of these too */
+  | { t: 'started_riding'; vehicle: string; passenger: string }
   | { t: 'impossible' };
 
 export interface AdvancementDef {
@@ -275,7 +277,8 @@ const A: AdvancementDef[] = [
   { id: 'husbandry/safely_harvest_honey', parent: 'husbandry/root', title: 'Bee Our Guest', description: 'Use a Campfire to collect Honey from a Beehive using a Glass Bottle without aggravating the Bees', icon: 'honey_bottle', frame: 'task', criteria: one(never) },
   { id: 'husbandry/breed_an_animal', parent: 'husbandry/root', title: 'The Parrots and the Bats', description: 'Breed two animals together', icon: 'wheat', frame: 'task', criteria: one({ t: 'breed', type: '*' }) },
   { id: 'husbandry/allay_deliver_item_to_player', parent: 'husbandry/root', title: "You've Got a Friend in Me", description: 'Have an Allay deliver items to you', icon: 'cookie', frame: 'task', criteria: one(never) },
-  { id: 'husbandry/ride_a_boat_with_a_goat', parent: 'husbandry/root', title: 'Whatever Floats Your Goat!', description: 'Get in a Boat and float with a Goat', icon: 'oak_boat', frame: 'task', criteria: one(never) },
+  // (M8: goats) vanilla: started_riding, the player's vehicle a boat with a goat aboard
+  { id: 'husbandry/ride_a_boat_with_a_goat', parent: 'husbandry/root', title: 'Whatever Floats Your Goat!', description: 'Get in a Boat and float with a Goat', icon: 'oak_boat', frame: 'task', criteria: one({ t: 'started_riding', vehicle: 'boat', passenger: 'goat' }) },
   { id: 'husbandry/tame_an_animal', parent: 'husbandry/root', title: 'Best Friends Forever', description: 'Tame an animal', icon: 'lead', frame: 'task', criteria: one({ t: 'tame', type: '*' }) },
   { id: 'husbandry/make_a_sign_glow', parent: 'husbandry/root', title: 'Glow and Behold!', description: 'Make the text of any kind of sign glow', icon: 'glow_ink_sac', frame: 'task', criteria: one(never) },
   { id: 'husbandry/fishy_business', parent: 'husbandry/root', title: 'Fishy Business', description: 'Catch a fish', icon: 'fishing_rod', frame: 'task', criteria: one(never) },
@@ -505,6 +508,8 @@ export interface TriggerPayload {
   crafted?: { recipe: string; ingredients: string[] };
   /** (Stage 5: ocean) the bucket the player just filled (filled_bucket) */
   filledBucket?: string;
+  /** (M8: goats) what the player rides and all it carries, as someone got on (started_riding) */
+  riding?: { vehicle: string | null; passengers: string[] };
 }
 
 export class PlayerAdvancements {
@@ -689,6 +694,9 @@ function matches(c: Criterion, p: TriggerPayload): boolean {
     // (Stage 5: ocean)
     case 'filled_bucket':
       return !!p.filledBucket && c.items.includes(p.filledBucket);
+    // (M8: goats)
+    case 'started_riding':
+      return !!p.riding && p.riding.vehicle === c.vehicle && p.riding.passengers.includes(c.passenger);
     default:
       return false;
   }
