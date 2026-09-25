@@ -599,7 +599,7 @@ export function lecternAnalogOutput(level: Level, x: number, y: number, z: numbe
       const potted = pottedFor(stack);
       if (!potted) return 'pass';
       level.setBlock(x, y, z, potted.defaultState);
-      level.gameEvent('block_change', x + 0.5, y + 0.5, z + 0.5, { entity: ctx.player });
+      level.gameEvent('block_change', x + 0.5, y + 0.5, z + 0.5, { entity: ctx?.player });
       consumeHeld(ctx.player);
       return 'success';
     },

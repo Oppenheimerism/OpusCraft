@@ -804,9 +804,17 @@ export class Skeleton extends Monster {
     this.goalSelector.removeGoal(this.bowGoal);
     this.goalSelector.removeGoal(this.meleeGoal);
     if (this.mainHand?.item.id === 'bow') {
-      this.bowGoal.attackIntervalMin = this.level.difficulty === 'hard' ? 20 : 40;
+      // (trial chambers) each kind's own least time between shots (vanilla getHardAttackInterval / getAttackInterval)
+      this.bowGoal.attackIntervalMin = this.level.difficulty === 'hard' ? this.hardAttackInterval() : this.attackInterval();
       this.goalSelector.addGoal(4, this.bowGoal);
     } else this.goalSelector.addGoal(4, this.meleeGoal);
+  }
+  /** (trial chambers) vanilla AbstractSkeleton.getHardAttackInterval and getAttackInterval (the bogged's are longer) */
+  protected hardAttackInterval(): number {
+    return 20;
+  }
+  protected attackInterval(): number {
+    return 40;
   }
   override get eyeHeight(): number {
     return 1.74;

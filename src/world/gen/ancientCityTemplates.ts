@@ -106,6 +106,7 @@ export class CityBuilder {
     this.jigsawList.push({
       x, y, z, front: spec.facing, top: vertical ? (spec.top ?? 'north') : 'up', name: spec.name ?? 'minecraft:empty',
       target: spec.target ?? 'minecraft:empty', pool: spec.pool ?? 'empty', rollable: (spec.joint ?? (vertical ? 'rollable' : 'aligned')) === 'rollable',
+      selection: 0, placement: 0,
     });
     return this.set(x, y, z, spec.final ?? 'air');
   }
@@ -375,7 +376,7 @@ export class CityListElement extends PoolElement {
  * the city counts as solid), and each chunk takes the part of it that falls in it.
  */
 export class CitySculkElement extends PoolElement {
-  private static readonly JIGSAW: Jigsaw = { x: 0, y: 0, z: 0, front: 'down', top: 'south', name: 'minecraft:bottom', target: 'minecraft:empty', pool: 'empty', rollable: true };
+  private static readonly JIGSAW: Jigsaw = { x: 0, y: 0, z: 0, front: 'down', top: 'south', name: 'minecraft:bottom', target: 'minecraft:empty', pool: 'empty', rollable: true, selection: 0, placement: 0 };
   constructor() {
     super('rigid');
   }

@@ -205,6 +205,8 @@ export function isValidRepairItem(it: Item, material: ItemStack): boolean {
   if (it.id === 'shield') return PLANKS.test(material.item.id);
   // vanilla ElytraItem.isValidRepairItem: phantom membrane
   if (it.id === 'elytra') return material.item.id === 'phantom_membrane';
+  // (trial chambers) vanilla MaceItem.isValidRepairItem: breeze rods
+  if (it.id === 'mace') return material.item.id === 'breeze_rod';
   const mat = it.id.split('_')[0];
   if (it.tool && it.tool.type !== 'shears') return REPAIR_BY_TIER[mat]?.(material.item.id) ?? false;
   if (it.armor) return REPAIR_BY_ARMOR[mat]?.(material.item.id) ?? false;

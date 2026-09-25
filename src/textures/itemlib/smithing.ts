@@ -38,7 +38,8 @@ const TABLET = [
   '................',
 ];
 
-function tablet(p: TabletPal, design: string[], pal: Record<string, number>, name: string): TexImage {
+// (trial chambers) exported: the bolt and flow armour trims' templates (itemlib/trialChambers.ts)
+export function tablet(p: TabletPal, design: string[], pal: Record<string, number>, name: string): TexImage {
   const t = spr(TABLET, { o: p.o, l: p.l, f: p.f, d: p.d }, name);
   return over(t, design, pal);
 }

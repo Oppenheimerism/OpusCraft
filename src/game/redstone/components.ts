@@ -113,7 +113,7 @@ function registerAttached(name: string, b: BlockBehavior): void {
       updateAttached(level, x, y, z, now);
       if (powered(now)) particle(level, x, y, z, now, 1);
       level.sound.play('block.lever.click', x + 0.5, y + 0.5, z + 0.5, 0.3, powered(now) ? 0.6 : 0.5);
-      level.gameEvent(powered(now) ? 'block_activate' : 'block_deactivate', x + 0.5, y + 0.5, z + 0.5, { entity: ctx.player });
+      level.gameEvent(powered(now) ? 'block_activate' : 'block_deactivate', x + 0.5, y + 0.5, z + 0.5, { entity: ctx?.player });
       return true;
     },
     animateTick(level, x, y, z, st) {
@@ -159,7 +159,7 @@ function registerAttached(name: string, b: BlockBehavior): void {
         updateAttached(level, x, y, z, now);
         level.scheduleBlockTick(x, y, z, STATE_BLOCK[st], ticks);
         click(level, x, y, z, true);
-        level.gameEvent('block_activate', x + 0.5, y + 0.5, z + 0.5, { entity: ctx.player });
+        level.gameEvent('block_activate', x + 0.5, y + 0.5, z + 0.5, { entity: ctx?.player });
         return true;
       },
       tick(level, x, y, z, st) {
@@ -280,6 +280,8 @@ registerBehavior('redstone_lamp', {
 export function openSound(name: string, open: boolean): string {
   const wood = /^(crimson|warped)_/.test(name) ? 'nether_wood_' : name.startsWith('cherry_') ? 'cherry_wood_' : '';
   const kind = name.startsWith('iron_') ? name
+    // (trial chambers) every copper door and trapdoor, at any age, waxed or not (vanilla BlockSetType.COPPER)
+    : /copper_(door|trapdoor)$/.test(name) ? name.replace(/^.*(copper_(door|trapdoor))$/, '$1')
     : name.endsWith('_door') ? `${wood || 'wooden_'}door`
     : name.endsWith('_trapdoor') ? `${wood || 'wooden_'}trapdoor`
     : `${wood}fence_gate`;

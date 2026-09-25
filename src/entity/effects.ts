@@ -175,7 +175,8 @@ reg('bad_omen', 'Bad Omen', 'neutral', 0x0b6138);
 reg('hero_of_the_village', 'Hero of the Village', 'beneficial', 0x44ff44);
 // (the deep dark) vanilla MobEffects.DARKNESS: its fog and pulsing gloom fade in and out over 22 ticks (render/effectVisuals.ts)
 reg('darkness', 'Darkness', 'harmful', 0x292721, { blendDuration: 22 });
-reg('trial_omen', 'Trial Omen', 'neutral', 0x16a6a6);
+// (trial chambers) vanilla ParticleTypes.TRIAL_OMEN
+reg('trial_omen', 'Trial Omen', 'neutral', 0x16a6a6, { particle: 'trial_omen' });
 reg('raid_omen', 'Raid Omen', 'neutral', 0xde4058);
 // the 1.21 potions' effects: what they do when their bearer dies or is hurt is in game/potionEffects.ts
 reg('wind_charged', 'Wind Charged', 'harmful', 0xbdc9ff, { particle: 'small_gust' });

@@ -37,7 +37,8 @@ function delay(level: Level, be: SpawnerBlockEntity): void {
  * vanilla SpawnPlacements.checkSpawnRules with EntitySpawnReason.SPAWNER: monsters skip the darkness
  * test and the floor check (the walk-target check in Mob.checkSpawnRules still keeps them to light <= 11)
  */
-function spawnRulesOk(level: Level, mob: Mob, x: number, y: number, z: number): boolean {
+// (trial chambers) exported: a trial spawner checks the same rules (vanilla EntitySpawnReason.TRIAL_SPAWNER)
+export function spawnRulesOk(level: Level, mob: Mob, x: number, y: number, z: number): boolean {
   // (vanilla Silverfish.checkSilverfishSpawnRules: none right next to a survival player)
   if (mob instanceof Silverfish) return Silverfish.checkSpawnRules(level, x, y, z, true);
   if (mob instanceof Monster) return level.difficulty !== 'peaceful';

@@ -110,12 +110,23 @@ import { renderFireworkRocket } from './fireworkRenderer';
 import { viewVector } from '../entity/elytra';
 import { PistonRenderer } from './pistonRenderer';
 import { ArchaeologyRenderers } from './archaeologyRenderers';
+// (trial chambers)
+import { TrialChamberRenderers } from './trialChamberRenderers';
+import { OminousItemSpawner } from '../entity/ominousItemSpawner';
+// (trial chambers) the breeze, the wind charges and the bogged
+import { BreezeRenderers, BREEZE_SHADOW_RADII } from './breezeRenderer';
+import { AbstractWindCharge } from '../entity/windCharge';
+import { boggedModel, boggedOuterModel } from './boggedModel';
+import '../textures/bogged';
+import { Bogged } from '../entity/bogged';
 import { createMob } from '../game/spawner';
 import { ArmorLayer, renderHeadItem, PIGLIN_HEAD_ITEM_SCALE } from './armorLayer';
 import type { ArmorModelSet } from './armorLayer';
 
 /** the mobs with vanilla's HumanoidArmorLayer and CustomHeadLayer, and their armour models */
 const ARMOR_WEARERS: Record<string, ArmorModelSet> = { zombie: 'humanoid', husk: 'humanoid', drowned: 'humanoid', zombie_villager: 'zombie_villager', skeleton: 'humanoid', stray: 'humanoid', wither_skeleton: 'humanoid', piglin: 'piglin', zombified_piglin: 'piglin' };
+// (trial chambers) the bogged (vanilla BoggedRenderer: BOGGED_INNER_ARMOR and BOGGED_OUTER_ARMOR, the humanoid's)
+ARMOR_WEARERS.bogged = 'humanoid';
 
 export interface EntityRenderOptions {
   shadows: boolean;
@@ -190,6 +201,10 @@ export class EntityRenderDispatcher {
   private readonly pistons = new PistonRenderer();
   /** the decorated pots, and the finds coming out of suspicious sand and gravel */
   private readonly archaeology: ArchaeologyRenderers;
+  /** (trial chambers) the trial spawner's mob, the vault's item and the ominous item spawner */
+  private readonly trialChambers = new TrialChamberRenderers();
+  /** (trial chambers) the breeze, and the wind charges */
+  private readonly breezes: BreezeRenderers;
   private readonly endCrystals: EndCrystalRenderer;
   private readonly dragons: EnderDragonRenderer;
   /** shulker boxes (and the shulkers themselves) */
@@ -260,6 +275,8 @@ export class EntityRenderDispatcher {
     this.frogs = new FrogRenderers(this.raiders.kit);
     // (M4: the warden)
     this.wardens = new WardenRenderer(this.raiders.kit);
+    // (trial chambers)
+    this.breezes = new BreezeRenderers(gl, this.raiders.kit);
     this.nameTags = new NameTagRenderer(gl);
     this.models = {
       pig: M.pigModel(),
@@ -298,6 +315,9 @@ export class EntityRenderDispatcher {
       husk: M.zombieModel(),
       stray: M.skeletonModel(),
       stray_outer: M.strayOuterModel(),
+      // (trial chambers)
+      bogged: boggedModel(),
+      bogged_outer: boggedOuterModel(),
       drowned: M.drownedModel(),
       drowned_outer: M.drownedModel(0.25),
       silverfish: silverfishModel(),
@@ -399,6 +419,8 @@ export class EntityRenderDispatcher {
       if (e instanceof Arrow) size *= 10;
       // (vanilla AbstractHurtingProjectile.shouldRenderAtSqrDistance: fireballs are seen from four times as far)
       else if (e instanceof Fireball) size *= 4;
+      // (trial chambers: and so are wind charges, the same AbstractHurtingProjectile's)
+      else if (e instanceof AbstractWindCharge) size *= 4;
       // (vanilla ShulkerBullet.shouldRenderAtSqrDistance: within 128 blocks)
       else if (e instanceof ShulkerBullet) size = 2;
       // (vanilla ItemFrame.shouldRenderAtSqrDistance: as though 16 blocks across)
@@ -444,6 +466,12 @@ export class EntityRenderDispatcher {
     this.skulls.renderBlockEntities(b, level, cam, partial, frustum);
     this.pistons.render(b, this.items, level, cam, partial, frustum);
     this.archaeology.render(b, this.items, level, cam, partial, frustum);
+    // (trial chambers) drawn in their cages as the spawner's mob is (vanilla SpawnerRenderer.renderEntityInSpawner)
+    this.trialChambers.render(b, this.items, level, cam, partial, frustum, (mob, base) => {
+      this.base = base;
+      this.renderMob(b, mob, 0, 0, 0, partial);
+      this.base = null;
+    });
     b.setOverlay(0, 0, 0, 0);
     b.flush();
     if (this.shadows.length) this.renderShadows(b, level, cam);
@@ -565,6 +593,9 @@ export class EntityRenderDispatcher {
       const t = this.tex('lead_knot');
       if (t) renderKnot(b, this.pose, this.state(t), dx, dy, dz);
     }
+    // (trial chambers)
+    else if (e instanceof OminousItemSpawner) this.trialChambers.renderItemSpawner(b, this.items, level, e, dx, dy, dz, p);
+    else if (e instanceof AbstractWindCharge) this.breezes.renderWindCharge(b, e, dx, dy, dz, p); // (trial chambers)
     if (e instanceof Mob) {
       if (e.leashHolder) {
         this.whiteTex ??= createTexture(this.gl, 1, 1, new Uint8Array([255, 255, 255, 255]));
@@ -760,6 +791,8 @@ export class EntityRenderDispatcher {
     if (this.frogs.render(b, e, dx, dy, dz, p)) return;
     // (M4: the warden)
     if (this.wardens.render(b, e, dx, dy, dz, p)) return;
+    // (trial chambers)
+    if (this.breezes.render(b, e, dx, dy, dz, p)) return;
     const type = e.type;
     const def = this.models[type];
     // (vanilla GhastRenderer.getTextureLocation: its face while charging a shot)
@@ -878,8 +911,11 @@ export class EntityRenderDispatcher {
         break;
       case 'skeleton':
       case 'stray':
+      case 'bogged': // (trial chambers)
       case 'wither_skeleton': {
         const bow = e.mainHand?.item.id === 'bow';
+        // (trial chambers) vanilla BoggedModel.setupAnim: its mushrooms go once it's sheared
+        if (e instanceof Bogged) def.root.child('head').child('mushrooms').visible = !e.sheared;
         armPose = bow && e.aggressive ? 'bow' : 'empty';
         M.animateHumanoidMob(def.root, a.limbSwing, a.limbAmount, a.age, a.headYaw, a.headPitch, attack, armPose, !!e.vehicle);
         if (e.aggressive && !bow) M.animateSkeletonMelee(def.root, attack, a.age);
@@ -1018,9 +1054,9 @@ export class EntityRenderDispatcher {
         this.drawModel(b, cm, baby, ((c >> 16) & 255) / 255, ((c >> 8) & 255) / 255, (c & 255) / 255);
       }
     }
-    // vanilla SkeletonClothingLayer: the stray's rags over its bones, posed as they are
-    if (type === 'stray' && !e.isInvisible()) {
-      const cl = this.models.stray_outer, ct = this.tex('stray_overlay');
+    // vanilla SkeletonClothingLayer: the stray's rags over its bones, posed as they are ((trial chambers) and the bogged's moss)
+    if ((type === 'stray' || type === 'bogged') && !e.isInvisible()) {
+      const cl = this.models[`${type}_outer`], ct = this.tex(`${type}_overlay`);
       if (cl && ct) {
         copyPose(def.root, cl.root);
         b.begin(this.state(ct));
@@ -1753,6 +1789,8 @@ function shadowRadius(e: Entity): number {
   if (FROG_SHADOW_RADII[e.type] !== undefined) return FROG_SHADOW_RADII[e.type];
   // (M4: the warden)
   if (e.type === 'warden') return WARDEN_SHADOW_RADIUS;
+  // (trial chambers)
+  if (BREEZE_SHADOW_RADII[e.type] !== undefined) return BREEZE_SHADOW_RADII[e.type];
   // (Stage 6: tameable animals; a foal's is half)
   let r = HORSE_SHADOW_RADII[e.type] ?? LLAMA_SHADOW_RADII[e.type] ?? PARROT_SHADOW_RADII[e.type] ?? POLAR_BEAR_SHADOW_RADII[e.type] ?? RABBIT_SHADOW_RADII[e.type] ?? FOX_SHADOW_RADII[e.type] ?? 0;
   switch (e.type) {
@@ -1823,6 +1861,7 @@ function shadowRadius(e: Entity): number {
     case 'piglin':
     case 'skeleton':
     case 'stray':
+    case 'bogged': // (trial chambers)
     case 'wither_skeleton':
     case 'blaze':
     case 'creeper':

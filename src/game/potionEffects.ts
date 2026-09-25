@@ -7,16 +7,18 @@ import type { Level } from './level';
 import { FLAGS, F_AIR, F_REPLACEABLE, S } from '../world/block';
 import { sturdyUp } from '../world/gen/structure';
 import { createMob } from './spawner';
-import { windBurst } from './explosion';
+// (trial chambers)
+import { windBurstAt } from './windBurst';
 
 /** vanilla Mth.randomBetweenInclusive */
 function between(level: Level, lo: number, hi: number): number {
   return lo + level.random.nextInt(hi - lo + 1);
 }
 
-// vanilla WindChargedMobEffect.onMobRemoved: a wind charge's burst where it died, 3 across, pushing (never hurting)
+// vanilla WindChargedMobEffect.onMobRemoved: a wind charge's burst where it died, 3 to 5 across, pushing (never hurting);
+// (trial chambers) the wind charges' own burst (game/windBurst.ts), so it sets off doors, switches and bells too
 MOB_EFFECTS.wind_charged.onMobRemoved = (e) => {
-  windBurst(e.level, e, e.x, e.y + e.height / 2, e.z, 3);
+  windBurstAt(e.level, e, e.x, e.y + e.height / 2, e.z, 3 + e.level.random.nextFloat() * 2, { knockback: 1, sound: 'entity.breeze.wind_burst' });
 };
 
 // vanilla WeavingMobEffect.onMobRemoved: 2 or 3 cobwebs in the blocks round where it died (a mob's only with

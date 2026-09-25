@@ -11,7 +11,10 @@ import { sgaParticleTextures } from '../textures/sga';
 import { campfireSmokeTextures } from '../textures/campfireSmoke';
 import { glitterTextures } from '../textures/blocklib/outerEnd';
 import { fireworkParticleTextures } from '../textures/fireworks';
+// (the deep dark)
 import { sculkParticleTextures } from '../textures/sculkParticles';
+// (trial chambers)
+import { trialChamberParticleTextures } from '../textures/trialChamberParticles';
 import type { SpriteRectUV } from './particles';
 
 export function buildParticleAtlas(gl: GL): { texture: WebGLTexture; rects: Record<string, SpriteRectUV> } {
@@ -26,6 +29,8 @@ export function buildParticleAtlas(gl: GL): { texture: WebGLTexture; rects: Reco
   Object.assign(src, fireworkParticleTextures());
   // the deep dark's: vibration, shriek, sculk_charge_0..6, sculk_charge_pop_0..3, sculk_soul_0..10 (and M4's sonic_boom_0..15)
   Object.assign(src, sculkParticleTextures());
+  // (trial chambers) the trial spawner's detection wisps, Trial Omen's curl, the ominous and vault sparks
+  Object.assign(src, trialChamberParticleTextures());
   // item crumb particles (vanilla ItemParticleOption)
   if (ITEM_TEXTURES['slime_ball']) src['item_slime_ball'] = ITEM_TEXTURES['slime_ball'];
   if (ITEM_TEXTURES['egg']) src['item_egg'] = ITEM_TEXTURES['egg'];

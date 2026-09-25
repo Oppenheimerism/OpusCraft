@@ -27,6 +27,8 @@ import { SmallFireball } from '../../entity/fireball';
 import { PrimedTnt } from '../../entity/tnt';
 import { Pig, Sheep, DYE_COLORS } from '../../entity/animals';
 import { SnowGolem } from '../../entity/snowGolem';
+// (trial chambers)
+import { Bogged } from '../../entity/bogged';
 import { Strider } from '../../entity/strider';
 import { AbstractHorse, AbstractChestedHorse } from '../../entity/horse';
 import { createBoat, boatItemInfo } from '../../entity/boat';
@@ -47,6 +49,8 @@ import { isShulkerBox } from '../../world/blocksShulker';
 import { isSkullItem } from '../../world/blocksSkulls';
 import type { Level } from '../level';
 import { equipEvent } from '../vibrations';
+// (trial chambers)
+import { windChargeFrom, windChargeShootSound } from '../windCharges';
 
 const blk = (st: number): Block => BLOCKS[STATE_BLOCK[st]];
 
@@ -479,9 +483,15 @@ const boneMeal = optional((src, stack) => {
   return left(stack);
 });
 
-/** vanilla ShearsDispenseItemBehavior: a sheep or snow golem in front that can be shorn is (beehives, when the game has them) */
+/**
+ * vanilla ShearsDispenseItemBehavior: a sheep or snow golem in front that can be shorn is (beehives, when the game has
+ * them); (trial chambers) and a bogged
+ */
 const shears = optional((src, stack) => {
-  const s = src.level.getEntities(cell(front(src)), (e) => (e instanceof Sheep && e.isAlive && !e.sheared && !e.isBaby()) || (e instanceof SnowGolem && e.readyForShearing()))[0] as Sheep | SnowGolem | undefined;
+  const s = src.level.getEntities(
+    cell(front(src)),
+    (e) => (e instanceof Sheep && e.isAlive && !e.sheared && !e.isBaby()) || (e instanceof SnowGolem && e.readyForShearing()) || (e instanceof Bogged && e.readyForShearing()),
+  )[0] as Sheep | SnowGolem | Bogged | undefined;
   if (!s) {
     src.success = false;
     return stack;
@@ -651,3 +661,14 @@ const fishBucket = behavior((src, stack) => {
 Object.assign(BEHAVIORS, { cod_bucket: fishBucket, salmon_bucket: fishBucket, pufferfish_bucket: fishBucket, tropical_fish_bucket: fishBucket, axolotl_bucket: fishBucket });
 // (M9: frogs)
 Object.assign(BEHAVIORS, { tadpole_bucket: fishBucket });
+// (trial chambers) vanilla WindChargeItem's dispense config: from a block out of the front
+// (DispenserBlock.getDispensePosition(source, 1.0)), headed out a little astray at about a block a tick, with the
+// throw's whoosh (level event 1051) in place of the launch
+const windCharge = behavior((src, stack) => {
+  const f = src.facing;
+  const [x, y, z] = dispensePosition(src, 1);
+  src.level.addEntity(windChargeFrom(src.level, x, y, z, DX[f], DY[f], DZ[f]));
+  stack.count--;
+  return left(stack);
+}, (src) => windChargeShootSound(src.level, src.x, src.y, src.z));
+Object.assign(BEHAVIORS, { wind_charge: windCharge });

@@ -186,9 +186,11 @@ export function lookAtTargetSink<E extends BrainMob>(min: number, max: number): 
 /**
  * vanilla MoveToTargetSink (150-250 ticks at a time): a path to the walk target (or, with none, to somewhere up to 10
  * off towards it), a new one when the target has moved more than two blocks; done on arriving (within its
- * close-enough Manhattan distance), or when the path runs out; stuck, it waits up to two seconds before trying again
+ * close-enough Manhattan distance), or when the path runs out; stuck, it waits up to two seconds before trying again.
+ * (trial chambers) `o`: vanilla MoveToTargetSink(min, max) and a subclass's own start and stop after its own (the
+ * breeze's SlideToTargetSink)
  */
-export function moveToTargetSink<E extends BrainMob>(): BehaviorControl<E> {
+export function moveToTargetSink<E extends BrainMob>(o: { min?: number; max?: number; start?: (a: E) => void; stop?: (a: E) => void } = {}): BehaviorControl<E> {
   let cooldown = 0;
   let path: Path | null = null;
   let last: Pos | null = null;
@@ -214,8 +216,8 @@ export function moveToTargetSink<E extends BrainMob>(): BehaviorControl<E> {
     return path !== null;
   };
   return new Behavior<E>({
-    min: 150,
-    max: 250,
+    min: o.min ?? 150,
+    max: o.max ?? 250,
     canStart: (a, now) => {
       const w = a.walkTarget;
       if (!w) return false;
@@ -234,6 +236,7 @@ export function moveToTargetSink<E extends BrainMob>(): BehaviorControl<E> {
     },
     start: (a) => {
       a.navigation.moveToPath(path, speed);
+      o.start?.(a);
     },
     canStillUse: (a) => {
       const w = a.walkTarget;
@@ -259,6 +262,7 @@ export function moveToTargetSink<E extends BrainMob>(): BehaviorControl<E> {
       a.navigation.stop();
       a.walkTarget = null;
       path = null;
+      o.stop?.(a);
     },
   });
 }

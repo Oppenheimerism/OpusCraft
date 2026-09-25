@@ -17,6 +17,8 @@ import { projectileShot, projectileLandedOn, projectileLandedAt } from '../game/
 import { registerItemBehavior } from '../game/itemBehavior';
 import { DX, DY, DZ } from '../world/dir';
 import { viewVector } from './elytra';
+// (trial chambers)
+import { deflectedBy } from './projectileDeflection';
 import type { Player } from './player';
 import type { SavedEntity } from './mob';
 
@@ -146,9 +148,12 @@ export class FireworkRocket extends Entity {
       }
       const e = this.findHitEntity(x0, y0, z0, x1, y1, z1);
       // (vanilla Projectile.onHit: then PROJECTILE_LAND, where the entity is or at the block)
+      // (trial chambers) a breeze turns it back instead (vanilla hitTargetOrDeflectSelf)
       if (e) {
-        this.onHitEntity(e);
-        projectileLandedOn(this, e);
+        if (!deflectedBy(this, e)) {
+          this.onHitEntity(e);
+          projectileLandedOn(this, e);
+        }
       } else if (bh) {
         this.onHitBlock(bh);
         projectileLandedAt(this, bh.x, bh.y, bh.z);

@@ -39,6 +39,10 @@ import { registerFossilTextures } from './blocklib/fossils';
 import { registerFrogTextures } from './blocklib/frog';
 // (the deep dark)
 import { registerSculkTextures } from './blocklib/sculk';
+// (trial chambers)
+import { registerTuffTextures } from './blocklib/tuff';
+import { registerCopperTextures } from './blocklib/copper';
+import { registerTrialChamberTextures } from './blocklib/trialChambers';
 
 type Gen = () => TexDef;
 export const BLOCK_TEXTURES: Record<string, Gen> = {};
@@ -560,6 +564,11 @@ T['end_portal_frame_side'] = () => EN.endPortalFrameSide(endStoneBase());
 T['end_portal_frame_eye'] = () => EN.endPortalFrameEye();
 T['dragon_egg'] = () => EN.dragonEgg();
 registerOuterEndTextures(T);
+// (trial chambers) the tuff and copper families (the copper bulbs over the advancement icons' oxidized one, drawn the
+// same way), the lightning rod, the heavy core
+registerTuffTextures(T);
+registerCopperTextures(T);
+registerTrialChamberTextures(T);
 
 // Missing texture (vanilla's magenta/black checkerboard)
 T['missing'] = () => {

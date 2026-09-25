@@ -6,6 +6,8 @@ import type { Level } from '../game/level';
 import { LivingEntity } from './living';
 import { clipBlocks, type SegmentHit } from '../game/raycast';
 import { onProjectileHit } from '../game/blockRules';
+// (trial chambers)
+import { deflectedBy } from './projectileDeflection';
 import { ItemStack, ITEMS } from '../item/item';
 import { Chicken } from './animals';
 import type { Player } from './player';
@@ -92,13 +94,16 @@ export class ThrownItem extends Entity {
         hit = e;
       }
     }
-    if (hit) {
+    // (trial chambers) a breeze turns it back instead (vanilla hitTargetOrDeflectSelf): nothing's hit this tick, and it
+    // flies on the other way
+    const deflected = hit !== null && deflectedBy(this, hit);
+    if (hit && !deflected) {
       this.onHitEntity(hit);
       projectileLandedOn(this, hit);
       this.onHit(hit.x, hit.y, hit.z, hit);
       return;
     }
-    if (bh) {
+    if (bh && !deflected) {
       onProjectileHit(this.level, bh.x, bh.y, bh.z, bh, this);
       this.onHitBlock(bh);
       projectileLandedAt(this, bh.x, bh.y, bh.z);
@@ -113,7 +118,7 @@ export class ThrownItem extends Entity {
     this.pitch = Math.atan2(this.dy, h) * RAD;
     let f = 0.99;
     if (this.inWater) f = 0.8;
-    const nx = x1, ny = y1, nz = z1;
+    const nx = deflected ? x0 + this.dx : x1, ny = deflected ? y0 + this.dy : y1, nz = deflected ? z0 + this.dz : z1;
     this.dx *= f;
     this.dy *= f;
     this.dz *= f;

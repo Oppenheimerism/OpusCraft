@@ -39,6 +39,9 @@ import { Frog } from '../entity/frog';
 import { Tadpole } from '../entity/tadpole';
 // (M4: the deep dark's warden; its module also answers a shrieker's fourth warning)
 import { Warden } from '../entity/warden';
+// (trial chambers)
+import { Breeze } from '../entity/breeze';
+import { Bogged } from '../entity/bogged';
 import { waterSpawnsFor } from './oceanSpawns';
 import { despawnDistance } from '../entity/mob';
 import { Husk, Stray } from '../entity/biomeMonsters';
@@ -285,6 +288,10 @@ export function entityDisplayName(e: Entity | string): string {
   return ENTITY_NAMES[t] ?? t;
 }
 
+// (trial chambers) the breeze (only trial spawners bring it: no natural spawns), the bogged, and the wind charges
+Object.assign(MOB_TYPES, { breeze: (l: Level) => new Breeze(l), bogged: (l: Level) => new Bogged(l) });
+Object.assign(ENTITY_NAMES, { breeze: 'Breeze', bogged: 'Bogged', wind_charge: 'Wind Charge', breeze_wind_charge: 'Breeze Wind Charge' });
+
 // (Stage 4: the outer End)
 Object.assign(ENTITY_NAMES, { shulker: 'Shulker', shulker_bullet: 'Shulker Bullet', item_frame: 'Item Frame', glow_item_frame: 'Glow Item Frame', firework_rocket: 'Firework Rocket' });
 
@@ -431,10 +438,10 @@ function settingsForLand(name: string): Omit<MobSettings, 'water' | 'ambient'> {
     case 'dark_forest':
       return { creature: farmAnimals(), monster: monsters(), creatureProbability: 0.1 };
     // (M9: frogs) vanilla OverworldBiomes.swamp and mangroveSwamp: frogs in twos to fives, and a slime more among the
-    // monsters (the mangroves have no farm animals)
+    // monsters (the mangroves have no farm animals); (trial chambers) 1.21's bogged in fours, and fewer skeletons
     case 'swamp':
     case 'mangrove_swamp':
-      return { creature: [...(name === 'swamp' ? farmAnimals() : []), S_('frog', 10, 2, 5)], monster: [...monsters(), S_('slime', 1, 1, 1)], creatureProbability: 0.1 };
+      return { creature: [...(name === 'swamp' ? farmAnimals() : []), S_('frog', 10, 2, 5)], monster: [...monsters(95, 70), S_('bogged', 50, 4, 4), S_('slime', 1, 1, 1)], creatureProbability: 0.1 };
     // vanilla OverworldBiomes.forest with isFlowerForest: rabbits
     case 'flower_forest':
       return { creature: [...farmAnimals(), S_('rabbit', 4, 2, 3)], monster: monsters(), creatureProbability: 0.1 };

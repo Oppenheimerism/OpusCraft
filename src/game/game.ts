@@ -71,6 +71,8 @@ import { PortalPoi, portalRectangle, relativePortalPosition, portalExit, createP
 import { setVillageMenuHook } from './villageBlocks';
 import { setShulkerBoxMenuHook } from './shulkerBox';
 import { tickOuterEndProgress } from './outerEndProgress';
+// (trial chambers)
+import { tickTrialChamberProgress } from './trialChamberProgress';
 import { setGenerateLootListener } from './archaeology';
 import { setPotCraftedListener } from './decoratedPot';
 import { openJobSite } from './jobSites';
@@ -487,6 +489,8 @@ export class Game {
       emitAround: (k, e, life) => particles.emitAround(k, e, life),
       fallingDust: (x, y, z, c) => particles.fallingDust(x, y, z, c),
       blockParticle: (x, y, z, xd, yd, zd, st, bx, by, bz) => particles.blockParticle(x, y, z, xd, yd, zd, st, bx, by, bz),
+      // (trial chambers)
+      dustPillar: (x, y, z, yd, st, bx, by, bz) => particles.dustPillar(x, y, z, yd, st, bx, by, bz),
       entityEffect: (x, y, z, c, a) => particles.entityEffect(x, y, z, c, a),
       dust: (x, y, z, r, g, b, s) => particles.dust(x, y, z, r, g, b, s),
       spell: (k, x, y, z, xd, yd, zd, r, g, b, pw) => particles.spell(k, x, y, z, xd, yd, zd, r, g, b, pw),
@@ -914,9 +918,14 @@ export class Game {
       case 'mobAttackNoAggro':
       // (vanilla mob_projectile's message is mob's: a shulker's bullet)
       case 'mobProjectile':
+      // (trial chambers) and wind_charge's: whoever sent it, else the charge itself
+      case 'windCharge':
         return `${n} was slain by ${kn}`;
       case 'player':
         return `${n} was slain by ${kn}`;
+      // (trial chambers) vanilla death.attack.mace_smash
+      case 'maceSmash':
+        return `${n} was smashed by ${kn}`;
       case 'arrow':
         return k && k !== victim && k.type !== 'arrow' ? `${n} was shot by ${kn}` : `${n} was shot by Arrow`;
       case 'trident':
@@ -1818,6 +1827,8 @@ export class Game {
     }
     // (Stage 4: the outer End) Great View From Up Here
     tickOuterEndProgress(this.level, p, this.advancements);
+    // (trial chambers) Minecraft: Trial(s) Edition
+    tickTrialChamberProgress(this.level, p, this.advancements);
     // vanilla trackEnteredOrExitedLavaOnVehicle: how far a mount has carried the player across lava (ride_entity_in_lava)
     const v = p.vehicle;
     if (v?.inLava) {

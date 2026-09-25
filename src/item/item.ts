@@ -7,6 +7,8 @@ import type { ItemEntity } from '../entity/itemEntity';
 import { SHULKER_BOXES } from '../world/blocksShulker';
 import { SKULL_TYPES, SKULL_BLOCKS } from '../world/blocksSkulls';
 import type { Fireworks, FireworkExplosion } from './fireworks';
+// (trial chambers)
+import { registerTrialChamberItems } from './itemsTrialChambers';
 
 export interface ToolInfo {
   type: ToolType;
@@ -479,6 +481,9 @@ reg({ id: 'goat_spawn_egg', texture: 'goat_spawn_egg', creativeTab: 'spawn_eggs'
     prev = id;
   }
 }
+// (trial chambers) the tuff and copper families' places, the lightning rod, honeycomb, the heavy core, the trial keys,
+// the mace and wind charges, the new music discs and sherds
+registerTrialChamberItems(reg, ITEMS, ITEM_LIST);
 // sugar cane item places the block
 {
   const sc = ITEMS.get('sugar_cane');
@@ -535,7 +540,7 @@ for (const [id, tex] of [['redstone_torch', 'block:redstone_torch'], ['repeater'
 
 // (the deep dark) vanilla Items.ECHO_SHARD, RECOVERY_COMPASS (its needle turns to where its holder last died:
 // item/compass.ts), DISC_FRAGMENT_5 (DiscFragmentItem: "Music Disc - 5" under its name), MUSIC_DISC_5 (its song in
-// item/jukeboxSongs.ts) and HONEYCOMB (the candles' wax; no bees make it yet); the candles are their flat sprites and
+// item/jukeboxSongs.ts); the candles are their flat sprites and
 // the sculk vein its block texture, like glow lichen; each put where vanilla's creative tabs list it
 {
   const after = (id: string, prev: string): void => {
@@ -550,8 +555,7 @@ for (const [id, tex] of [['redstone_torch', 'block:redstone_torch'], ['repeater'
   after('recovery_compass', 'compass');
   reg({ id: 'music_disc_5', name: 'Music Disc', texture: 'music_disc_5', maxStack: 1, creativeTab: 'tools', rarity: 'rare', lore: ['Samuel Åberg - 5'] });
   after('music_disc_5', 'music_disc_otherside');
-  reg({ id: 'honeycomb', texture: 'honeycomb' });
-  after('honeycomb', 'rabbit_hide');
+  // (honeycomb, the candles' wax, is the trial chambers' item: it waxes copper too; item/itemsTrialChambers.ts)
   // the building blocks: chiseled deepslate after the cobbled, the cracked bricks and tiles after theirs, reinforced
   // deepslate after the tiles' wall
   after('chiseled_deepslate', 'cobbled_deepslate');

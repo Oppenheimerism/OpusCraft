@@ -18,17 +18,22 @@ import { registerItemBehavior } from './itemBehavior';
 import type { Level } from './level';
 import type { Entity } from '../entity/entity';
 import type { Player } from '../entity/player';
+// (trial chambers)
+import { fillContainer } from './loot';
 
 const blk = (st: number): Block => BLOCKS[STATE_BLOCK[st]];
 
 /**
  * vanilla ItemTags.DECORATED_POT_SHERDS, as far as the game has them (the desert wells' arms up and brewer; (Stage 5:
- * ocean) the ocean ruins' angler, blade, explorer, mourner, plenty, shelter and snort)
+ * ocean) the ocean ruins' angler, blade, explorer, mourner, plenty, shelter and snort; the trial chambers' flow, guster and
+ * scrape)
  */
 export const SHERDS = [
   'angler_pottery_sherd', 'archer_pottery_sherd', 'arms_up_pottery_sherd', 'blade_pottery_sherd', 'brewer_pottery_sherd', 'explorer_pottery_sherd',
-  'miner_pottery_sherd', 'mourner_pottery_sherd', 'plenty_pottery_sherd', 'prize_pottery_sherd', 'shelter_pottery_sherd', 'skull_pottery_sherd',
-  'snort_pottery_sherd',
+  // (trial chambers) the flow, guster and scrape sherds
+  'flow_pottery_sherd', 'guster_pottery_sherd',
+  'miner_pottery_sherd', 'mourner_pottery_sherd', 'plenty_pottery_sherd', 'prize_pottery_sherd', 'scrape_pottery_sherd', 'shelter_pottery_sherd',
+  'skull_pottery_sherd', 'snort_pottery_sherd',
 ];
 /** vanilla ItemTags.DECORATED_POT_INGREDIENTS: bricks and the sherds */
 const INGREDIENTS = new Set(['brick', ...SHERDS]);
@@ -64,12 +69,26 @@ export class DecoratedPotBlockEntity extends BlockEntity {
   decorations: PotDecorations = NO_DECORATIONS;
   wobbleStartedAtTick = 0;
   lastWobbleStyle: number | null = null;
+  /**
+   * (trial chambers) vanilla RandomizableContainer's LootTable / LootTableSeed: what a structure's pot holds, rolled
+   * the first time it's looked in or broken
+   */
+  lootTable: string | null = null;
+  lootSeed = 0;
   constructor(x: number, y: number, z: number) {
     super(x, y, z, 1);
   }
-  /** vanilla getTheItem */
+  /** vanilla getTheItem ((trial chambers) its loot rolled first) */
   get theItem(): ItemStack | null {
+    this.unpackLoot();
     return this.container.get(0);
+  }
+  /** (trial chambers) vanilla RandomizableContainer.unpackLootTable */
+  override unpackLoot(): void {
+    if (!this.lootTable) return;
+    const table = this.lootTable;
+    this.lootTable = null;
+    fillContainer(this.container, table, this.lootSeed, this);
   }
   /** vanilla applyImplicitComponents: the item's decorations (the pots here carry no contents) */
   override applyComponents(s: ItemStack): void {
@@ -84,13 +103,17 @@ export class DecoratedPotBlockEntity extends BlockEntity {
   wobble(level: Level, style: number): void {
     level.blockEvent(this.x, this.y, this.z, STATE_BLOCK[level.getState(this.x, this.y, this.z)], 1, style);
   }
-  /** vanilla saveAdditional: the sherds, back, left, right, front (not for a plain pot) */
+  /** vanilla saveAdditional: the sherds, back, left, right, front (not for a plain pot); (trial chambers) its loot table */
   protected override saveData(): Record<string, number | string> | undefined {
-    return this.decorations.some((x) => x !== 'brick') ? { sherds: this.decorations.join(',') } : undefined;
+    const d: Record<string, number | string> = {};
+    if (this.decorations.some((x) => x !== 'brick')) d.sherds = this.decorations.join(',');
+    if (this.lootTable) (d.lootTable = this.lootTable), (d.lootSeed = this.lootSeed);
+    return Object.keys(d).length ? d : undefined;
   }
   protected override loadData(d: Record<string, number | string>): void {
     const s = typeof d.sherds === 'string' ? d.sherds.split(',') : [];
     this.decorations = [0, 1, 2, 3].map((i) => (s[i] && ITEMS.has(s[i]) ? s[i] : 'brick')) as unknown as PotDecorations;
+    if (typeof d.lootTable === 'string') (this.lootTable = d.lootTable), (this.lootSeed = Number(d.lootSeed ?? 0));
   }
 }
 
@@ -148,7 +171,7 @@ registerBehavior('decorated_pot', {
       // (vanilla ServerLevel.sendParticles: 7, no spread, no speed)
       for (let i = 0; i < 7; i++) level.particles.spawn?.('dust_plume', x + 0.5, y + 1.2, z + 0.5, 0, 0, 0);
       be.container.changed();
-      level.gameEvent('block_change', x + 0.5, y + 0.5, z + 0.5, { entity: ctx.player });
+      level.gameEvent('block_change', x + 0.5, y + 0.5, z + 0.5, { entity: ctx?.player });
       return 'consume';
     }
     if (ctx.hand !== 'off') knock(level, x, y, z, st, ctx.player);

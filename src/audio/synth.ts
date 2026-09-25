@@ -16,6 +16,8 @@ import { netherMobSounds } from './gen/netherMobs';
 import { netherMobSounds2 } from './gen/netherMobs2';
 import { NETHER_MUSIC_POOLS, renderNetherMusic } from './gen/netherMusic';
 import { END_MUSIC_POOLS, renderEndMusic } from './gen/endMusic';
+// (trial chambers) the music discs' songs
+import { DISC_MUSIC_POOLS, renderDiscMusic } from './gen/discMusic';
 import { crossbowSounds } from './gen/crossbow';
 import { armorSounds } from './gen/armor';
 import { villagerSounds } from './gen/villager';
@@ -53,7 +55,12 @@ import { oceanSounds } from './gen/ocean';
 // (the deep dark)
 import { sculkSounds } from './gen/sculk';
 import { wardenSounds } from './gen/warden';
-import { DISC_MUSIC_POOLS, renderDiscMusic } from './gen/disc5';
+import { DISC_MUSIC_POOLS as DISC5_MUSIC_POOLS, renderDiscMusic as renderDisc5Music } from './gen/disc5';
+// (trial chambers)
+import { copperTuffSounds } from './gen/copperTuff';
+import { trialChamberSounds } from './gen/trialChambers';
+import { trialCombatSounds } from './gen/trialCombat';
+import { crafterSounds } from './gen/crafter';
 
 export const SAMPLE_RATE = 44100;
 
@@ -118,6 +125,12 @@ Object.assign(SOUNDS, frogSounds());
 Object.assign(SOUNDS, sculkSounds());
 // (the warden's voice: its answers to a shrieker's warnings, and (M4) the rest of it)
 Object.assign(SOUNDS, wardenSounds());
+// (trial chambers) the tuff and copper families', the heavy core's, the copper bulb and doors', scraping and waxing
+Object.assign(SOUNDS, copperTuffSounds());
+// (trial chambers) the trial spawner's and the vault's, Trial Omen's and the honey bottle's
+Object.assign(SOUNDS, trialChamberSounds());
+// (trial chambers) the breeze's, the wind charges', the bogged's and the mace's; the crafter's
+Object.assign(SOUNDS, trialCombatSounds(), crafterSounds());
 // (vanilla sounds.json: the snow golem's are the snow's breaking, the bow's and the shears')
 for (const [k, v] of Object.entries({ 'entity.snow_golem.hurt': 'block.snow.break', 'entity.snow_golem.death': 'block.snow.break', 'entity.snow_golem.shoot': 'entity.arrow.shoot', 'entity.snow_golem.shear': 'entity.sheep.shear' })) if (SOUNDS[v]) SOUNDS[k] = SOUNDS[v];
 // (vanilla sounds.json: any mob's swimming, and a monster's, is the player's splashing)
@@ -146,7 +159,9 @@ export function generateMenuMusic(sampleRate: number): Float32Array {
 }
 
 /** Situational music pools (vanilla music.nether.<biome>, music.end): event name -> number of tracks in it. */
-export const MUSIC_POOLS: Record<string, number> = Object.fromEntries([...Object.entries(NETHER_MUSIC_POOLS), ...Object.entries(END_MUSIC_POOLS), ...Object.entries(DISC_MUSIC_POOLS)].map(([k, v]) => [k, v.length]));
+export const MUSIC_POOLS: Record<string, number> = Object.fromEntries(
+  [...Object.entries(NETHER_MUSIC_POOLS), ...Object.entries(END_MUSIC_POOLS), ...Object.entries(DISC_MUSIC_POOLS), ...Object.entries(DISC5_MUSIC_POOLS)].map(([k, v]) => [k, v.length]),
+);
 
 /**
  * Render track `index` (0..MUSIC_POOLS[pool]-1) of a situational pool: the Nether's dark ambient
@@ -154,6 +169,8 @@ export const MUSIC_POOLS: Record<string, number> = Object.fromEntries([...Object
  */
 export function generatePoolMusic(pool: string, index: number, sampleRate: number): Float32Array {
   // (the deep dark: music disc 5's song, for the jukebox to play)
+  if (pool in DISC5_MUSIC_POOLS) return renderDisc5Music(pool, sampleRate);
+  // (trial chambers) a music disc's song (vanilla music_disc.*), a pool of one
   if (pool in DISC_MUSIC_POOLS) return renderDiscMusic(pool, sampleRate);
   return pool in END_MUSIC_POOLS ? renderEndMusic(pool, index, sampleRate) : renderNetherMusic(pool, index, sampleRate);
 }

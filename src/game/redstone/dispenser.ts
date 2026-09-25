@@ -80,7 +80,8 @@ registerBlockEntityType('dropper', (x, y, z) => new DispenserBlockEntity(x, y, z
 // Where a dropper puts things (vanilla HopperBlockEntity.getContainerAt and addItem)
 
 /** a container as a hopper or dropper sees it: its slots, which of them a face takes, and what they take */
-interface InsertTarget {
+// (trial chambers: exported for the crafter)
+export interface InsertTarget {
   container: Container;
   /** vanilla WorldlyContainer.getSlotsForFace (null: all of them) */
   slotsFor?(face: Dir): number[];
@@ -151,6 +152,9 @@ function entityTarget(level: Level, x: number, y: number, z: number): InsertTarg
   return { container: e.container };
 }
 
+/** (trial chambers) the block entities kept elsewhere that hoppers and droppers put things into (the crafter) */
+export const CONTAINER_TARGETS: ((be: BlockEntity) => InsertTarget | null)[] = [];
+
 /** vanilla HopperBlockEntity.getContainerAt: the block's container (or composter), else a container entity there */
 export function containerAt(level: Level, x: number, y: number, z: number): InsertTarget | null {
   const st = level.getState(x, y, z);
@@ -159,6 +163,11 @@ export function containerAt(level: Level, x: number, y: number, z: number): Inse
   if (be instanceof ChestBlockEntity || be instanceof DispenserBlockEntity) return { container: be.container };
   if (be instanceof FurnaceBlockEntity) return furnaceTarget(be);
   if (be instanceof BrewingStandBlockEntity) return brewingTarget(be);
+  // (trial chambers)
+  if (be) for (const f of CONTAINER_TARGETS) {
+    const t = f(be);
+    if (t) return t;
+  }
   return entityTarget(level, x, y, z);
 }
 

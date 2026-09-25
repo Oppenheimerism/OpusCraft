@@ -27,6 +27,8 @@ import { Piglin, GUARDED_BY_PIGLINS } from '../entity/piglin';
 import { Villager } from '../entity/villager';
 import { WanderingTrader } from '../entity/wanderingTrader';
 import { SnowGolem } from '../entity/snowGolem';
+// (trial chambers)
+import { Bogged } from '../entity/bogged';
 import { IronGolem } from '../entity/ironGolem';
 import { ZombieVillager } from '../entity/zombieVillager';
 import { Arrow } from '../entity/arrow';
@@ -35,6 +37,7 @@ import { PrimedTnt } from '../entity/tnt';
 import { ThrownItem, ThrownKind } from '../entity/throwable';
 import { createMob } from './spawner';
 import { SpawnerBlockEntity } from '../world/blockEntity';
+import { TrialSpawnerBlockEntity } from './trialSpawner';
 import { playerAttack } from './combat';
 import { canPlaceFire, fireStateAt, placeFire } from './fire';
 import { Minecart, MinecartChest, createMinecart } from '../entity/minecart';
@@ -240,8 +243,8 @@ export class Interaction {
     const b = BLOCKS[STATE_BLOCK[st]];
     if (b.hardness < 0 && p.gameMode !== 'creative') return;
     const held = p.inventory.selectedItem;
-    // swords and tridents can't break blocks in creative (vanilla canAttackBlock)
-    if (p.gameMode === 'creative' && (held?.item.tool?.type === 'sword' || held?.item.id === 'trident')) return;
+    // swords and tridents can't break blocks in creative (vanilla canAttackBlock) ((trial chambers) nor the mace)
+    if (p.gameMode === 'creative' && (held?.item.tool?.type === 'sword' || held?.item.id === 'trident' || held?.item.id === 'mace')) return;
     const survival = p.gameMode === 'survival' || p.gameMode === 'adventure';
     // vanilla Block.playerWillDestroy: breaking what piglins guard angers every one about, seen or not
     if (GUARDED_BY_PIGLINS.has(b.name)) Piglin.angerNearbyPiglins(p, false);
@@ -264,8 +267,9 @@ export class Interaction {
     }
     if (survival) {
       p.food.addExhaustion(0.005);
-      // (vanilla Tool.damagePerBlock: 2 for a sword or trident, 1 for the rest)
-      if (held && (held.item.tool || held.item.id === 'trident') && b.hardness > 0) this.damageHeld(held.item.tool?.type === 'sword' || held.item.id === 'trident' ? 2 : 1);
+      // (vanilla Tool.damagePerBlock: 2 for a sword or trident ((trial chambers) or the mace), 1 for the rest)
+      const mace = held?.item.id === 'mace';
+      if (held && (held.item.tool || held.item.id === 'trident' || mace) && b.hardness > 0) this.damageHeld(held.item.tool?.type === 'sword' || held.item.id === 'trident' || mace ? 2 : 1);
       else if (held && held.item.tool && held.item.tool.type !== 'sword' && b.hardness === 0) {
         /* no durability loss on instant blocks */
       }
@@ -395,6 +399,11 @@ export class Interaction {
         p.swing();
         return 'success';
       }
+      // (trial chambers) vanilla Bogged.mobInteract: shears take its mushrooms off
+      if (e instanceof Bogged && e.interact(p, stack)) {
+        p.swing();
+        return 'success';
+      }
       // vanilla IronGolem.mobInteract: an iron ingot to mend it
       if (e instanceof IronGolem && e.interact(p, stack)) {
         p.swing();
@@ -484,7 +493,8 @@ export class Interaction {
     if (h && stack && stack.item.id.endsWith('_spawn_egg') && p.gameMode !== 'spectator') {
       // on a spawner: it spawns this mob from now on
       const be = this.level.world.getBlockEntity(h.x, h.y, h.z);
-      if (be instanceof SpawnerBlockEntity) {
+      // (trial chambers) on a trial spawner too: its next mob (vanilla Spawner.setEntityId)
+      if (be instanceof SpawnerBlockEntity || be instanceof TrialSpawnerBlockEntity) {
         be.setEntityId(stack.item.id.slice(0, -10));
         this.level.world.getChunk(h.x >> 4, h.z >> 4)!.modified = true;
         if (p.gameMode !== 'creative') p.inventory.consumeSelected(1);
@@ -1029,7 +1039,8 @@ export class Interaction {
   private itemUseEffects(s: ItemStack): void {
     const p = this.player;
     const anim = useAnimation(s);
-    if (anim === 'drink') this.level.sound.play('entity.generic.drink', p.x, p.y, p.z, 0.5, Math.random() * 0.1 + 0.9);
+    // (trial chambers) an item's own gulp if it has one (vanilla getDrinkingSound: the honey bottle's)
+    if (anim === 'drink') this.level.sound.play(itemBehaviorOf(s.item.id)?.drinkSound ?? 'entity.generic.drink', p.x, p.y, p.z, 0.5, Math.random() * 0.1 + 0.9);
     else if (anim === 'eat') this.level.sound.play('entity.generic.eat', p.x, p.y, p.z, 0.5 + 0.5 * Math.floor(Math.random() * 2), (Math.random() - Math.random()) * 0.2 + 1);
   }
 

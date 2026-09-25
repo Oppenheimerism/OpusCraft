@@ -2,6 +2,7 @@
 // the vanilla data pack for the items this game has.
 
 import { ITEMS, ItemStack } from '../item/item';
+import { registerTrialChamberRecipes } from './recipesTrialChambers';
 
 /** ingredient: item id, '#tag', or list of alternatives */
 type Ing = string | string[];
@@ -425,6 +426,8 @@ shaped('calibrated_sculk_sensor', 1, [' # ', '#X#'], { '#': 'amethyst_shard', X:
 shaped('recovery_compass', 1, ['SSS', 'SCS', 'SSS'], { S: 'echo_shard', C: 'compass' });
 shapeless('music_disc_5', 1, ...Array<Ing>(9).fill('disc_fragment_5'));
 shaped('chiseled_deepslate', 1, ['#', '#'], { '#': 'cobbled_deepslate_slab' });
+// (trial chambers) the tuff and copper families, waxing, the lightning rod, the wind charge and the mace
+registerTrialChamberRecipes(shaped, shapeless);
 
 // drop recipes whose items don't exist in this game
 for (let i = RECIPES.length - 1; i >= 0; i--) {

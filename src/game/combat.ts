@@ -8,6 +8,8 @@ import type { ItemStack } from '../item/item';
 import { LivingEntity } from '../entity/living';
 import { damageBonus, levelOf, sweepingRatio } from '../item/enchantHelper';
 import { doPostAttackEffects } from './enchantEffects';
+// (trial chambers)
+import { maceHurtEnemy, macePostHurtEnemy, maceWindBurst, smashDamageBonus, smashDamageSource, withBreach } from './mace';
 
 const RAD = Math.PI / 180;
 
@@ -39,6 +41,8 @@ export function playerAttack(level: Level, p: Player, target: Entity, damageHeld
     level.sound.play('entity.player.attack.knockback', p.x, p.y, p.z, 1, 1);
     sprintKnock = true;
   }
+  // (trial chambers) vanilla Item.getAttackDamageBonus: the mace's smash attack, before a critical hit's half again
+  f += smashDamageBonus(p, held);
   const crit = full && p.fallDistance > 0 && !p.onGround && !p.onClimbable() && !p.inWater && !p.hasEffect('blindness') && target instanceof LivingEntity && !p.sprinting;
   if (crit) f *= 1.5;
   let sweep = false;
@@ -48,11 +52,16 @@ export function playerAttack(level: Level, p: Player, target: Entity, damageHeld
     if (d0 < d1 * d1 && held?.item.tool?.type === 'sword') sweep = true;
   }
   const healthBefore = target instanceof LivingEntity ? target.health : 0;
-  const ok = target.hurt(f + f1, 'player', p);
+  // (trial chambers) vanilla Item.getDamageSource (a mace's smash) and the weapon's breach on the target's armour
+  const source = smashDamageSource(p, held) ?? 'player';
+  const ok = withBreach(held, () => target.hurt(f + f1, source, p));
   if (!ok) {
     level.sound.play('entity.player.attack.nodamage', p.x, p.y, p.z, 1, 1);
     return;
   }
+  // (trial chambers) vanilla PlayerHurtEntityTrigger (from the target's hurt): the blow's damage as dealt, its kind,
+  // what was in hand (Over-Overkill)
+  if (target instanceof LivingEntity) level.onPlayerTrigger?.(p, 'player_hurt_entity', { hurtEntity: { dealt: f + f1, source, weapon: held?.item.id ?? null } });
   // vanilla getKnockback: the knockback enchantment, +1 for a sprinting hit
   const kb = levelOf(held, 'knockback') + (sprintKnock ? 1 : 0);
   if (kb > 0) {
@@ -84,8 +93,12 @@ export function playerAttack(level: Level, p: Player, target: Entity, damageHeld
   // vanilla magicCrit
   if (f1 > 0) level.particles.emitAround?.('enchanted_hit', target);
   if (target instanceof LivingEntity) p.lastHurtMob = target;
+  // (trial chambers) vanilla ItemStack.hurtEnemy: a mace's smash attack
+  if (target instanceof LivingEntity) maceHurtEnemy(level, p, target, held);
   // fire aspect, bane of arthropods; the target's thorns
   doPostAttackEffects(target, p, held, true);
+  // (trial chambers) and a mace's wind burst
+  maceWindBurst(level, p, held);
   if (target instanceof LivingEntity) {
     const dealt = healthBefore - target.health;
     if (dealt > 2) {
@@ -101,7 +114,10 @@ export function playerAttack(level: Level, p: Player, target: Entity, damageHeld
     }
   }
   // weapon durability (vanilla Item.postHurtEnemy, living targets only: swords and tridents 1, other tools 2)
-  const wear = held?.item.tool ? (held.item.tool.type === 'sword' ? 1 : 2) : held?.item.id === 'trident' ? 1 : 0;
+  // ((trial chambers) and the mace 1)
+  const wear = held?.item.tool ? (held.item.tool.type === 'sword' ? 1 : 2) : held?.item.id === 'trident' || held?.item.id === 'mace' ? 1 : 0;
   if (wear && p.gameMode !== 'creative' && target instanceof LivingEntity) damageHeld(wear);
+  // (trial chambers) vanilla MaceItem.postHurtEnemy: the smash attack's fall is spent
+  if (target instanceof LivingEntity) macePostHurtEnemy(p, held);
   p.food.addExhaustion(0.1);
 }

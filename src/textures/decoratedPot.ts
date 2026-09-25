@@ -181,6 +181,44 @@ export const MOTIFS: Record<string, string[]> = {
     'DDDDDDDDDD',
     '..........',
   ],
+  // (trial chambers) the flow sherd's wind wound in on itself, the guster's breeze over its swirling rods, the
+  // scrape's axe
+  flow: [
+    'DDDDDDDDDD',
+    '.........D',
+    '.DDDDDDD.D',
+    '.D.....D.D',
+    '.D.DDD.D.D',
+    '.D.D.D.D.D',
+    '.D.D...D.D',
+    '.D.DDDDD.D',
+    '.D.......D',
+    '.DDDDDDDDD',
+  ],
+  guster: [
+    '...DDDD...',
+    '..DllllD..',
+    '.DlDllDlD.',
+    '.DllllllD.',
+    '..DDDDDD..',
+    '...D..D...',
+    '.DDDDDDDD.',
+    '..D....D..',
+    '.DDDDDDDD.',
+    '..........',
+  ],
+  scrape: [
+    '....DDD...',
+    '...DlllD..',
+    '..DlllllD.',
+    '..DlllDD..',
+    '...DDDd...',
+    '....Dd....',
+    '...Dd.....',
+    '..Dd......',
+    '.Dd.......',
+    '.D........',
+  ],
 };
 
 /** a sherd's pattern, by its item (vanilla DecoratedPotPatterns.getPatternFromItem; a brick: none) */

@@ -25,6 +25,8 @@ import { OCEAN_ITEMS } from './itemlib/ocean';
 import { FIREWORK_ITEMS } from './fireworks';
 // (the deep dark)
 import { DEEP_DARK_ITEMS } from './itemlib/deepDark';
+// (trial chambers: the copper doors, the breeze rod)
+import { TRIAL_CHAMBER_ITEMS } from './itemlib/trialChambers';
 
 export const ITEM_TEXTURES: Record<string, () => TexImage> = {
   ...SPAWN_EGG_TEXTURES,
@@ -45,4 +47,5 @@ export const ITEM_TEXTURES: Record<string, () => TexImage> = {
   ...ARCHAEOLOGY_ITEMS,
   ...FIREWORK_ITEMS,
   ...DEEP_DARK_ITEMS,
+  ...TRIAL_CHAMBER_ITEMS,
 };

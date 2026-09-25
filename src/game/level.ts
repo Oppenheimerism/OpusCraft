@@ -72,6 +72,10 @@ import './candles';
 // (the deep dark: game events and the listeners that hear them)
 import { postGameEvent } from './gameEventDispatcher';
 import type { GameEventName, GameEventContext } from './gameEvents';
+// (trial chambers) copper weathering, waxing and scraping, the copper bulb and the lightning rod
+import { findLightningRod } from './copper';
+// (trial chambers) the trial spawner and the vault
+import './trialChambers';
 
 export interface SoundSink {
   play(name: string, x: number, y: number, z: number, volume?: number, pitch?: number): void;
@@ -91,6 +95,8 @@ export interface ParticleSink {
   fallingDust?(x: number, y: number, z: number, color: number): void;
   /** vanilla BLOCK particle (TerrainParticle with a starting speed) for the block at bx, by, bz */
   blockParticle?(x: number, y: number, z: number, xd: number, yd: number, zd: number, state: number, bx: number, by: number, bz: number): void;
+  /** (trial chambers) vanilla DUST_PILLAR (TerrainParticle.DustPillarProvider): a speck of the block at bx, by, bz shot up at about `yd` (a mace's smash) */
+  dustPillar?(x: number, y: number, z: number, yd: number, state: number, bx: number, by: number, bz: number): void;
   /** vanilla ENTITY_EFFECT (SpellParticle) swirl in an effect colour; alpha 38/255 for ambient effects */
   entityEffect?(x: number, y: number, z: number, color: number, alpha: number): void;
   /** vanilla DUST (DustParticle): a coloured speck, as powered redstone gives off */
@@ -411,7 +417,9 @@ export class Level {
   /** vanilla findLightningTargetAround: the top of the column, or something alive under the open sky close by */
   private findLightningTargetAround(x: number, z: number): [number, number, number] {
     let y = this.motionBlockingHeight(x, z);
-    // (no lightning rods yet)
+    // (trial chambers) a lightning rod within 128 blocks draws it
+    const rod = findLightningRod(this, x, y, z);
+    if (rod) return rod;
     const box = new AABB(x - 3, y - 3, z - 3, x + 4, MAX_Y + 4, z + 4);
     const list = this.getEntities(box, (e) => e instanceof LivingEntity && e.isAlive && this.canSeeSky(Math.floor(e.x), Math.floor(e.y), Math.floor(e.z)));
     if (list.length) {

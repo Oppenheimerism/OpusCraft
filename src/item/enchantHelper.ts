@@ -127,6 +127,8 @@ const ARMOR_VALUE: Record<string, number> = { leather: 15, chainmail: 12, iron: 
 /** vanilla Item.getEnchantmentValue: tool tier / armour material enchantability, 1 for books, bows, crossbows, tridents and rods */
 export function enchantmentValue(it: Item): number {
   if (it.id === 'book' || it.id === 'bow' || it.id === 'crossbow' || it.id === 'trident' || it.id === 'fishing_rod') return 1;
+  // (trial chambers) vanilla MaceItem.getEnchantmentValue
+  if (it.id === 'mace') return 15;
   const mat = it.id.split('_')[0];
   if (it.tool && it.tool.type !== 'shears') return TIER_VALUE[mat] ?? 0;
   if (it.armor) return ARMOR_VALUE[mat] ?? 0;
@@ -309,7 +311,8 @@ export function sweepingRatio(e: unknown): number {
 
 const FIRE = new Set(['onFire', 'inFire', 'lava', 'hotFloor', 'fireball', 'campfire']);
 const EXPLOSION = new Set(['explosion', 'playerExplosion', 'fireworks', 'badRespawnPoint']);
-const PROJECTILE = new Set(['arrow', 'thrown', 'fireball', 'mobProjectile', 'trident', 'witherSkull']);
+// (trial chambers: a wind charge's too, vanilla #is_projectile)
+const PROJECTILE = new Set(['arrow', 'thrown', 'fireball', 'mobProjectile', 'trident', 'witherSkull', 'windCharge']);
 const FALL = new Set(['fall', 'stalagmite', 'enderPearl']);
 
 /**

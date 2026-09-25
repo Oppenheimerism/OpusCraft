@@ -89,6 +89,14 @@ interface SpriteParticle {
   spark?: { trail: boolean; twinkle: boolean };
   /** (fireworks) vanilla FireworkParticles.OverlayParticle: the explosion's flash, sized and faded by its age */
   flash?: boolean;
+  /** (trial chambers) vanilla FlyStraightTowardsParticle: from this point plus its speed, straight back in to the point */
+  straight?: { x: number; y: number; z: number };
+  /** (trial chambers) its colour over its life, from the first three to the last three (vanilla ARGB32.lerp) */
+  colorLerp?: [number, number, number, number, number, number];
+  /** (trial chambers) vanilla Particle.LifetimeAlpha: its alpha from the first to the second between those fractions of its life */
+  lifetimeAlpha?: [number, number, number, number];
+  /** (trial chambers) vanilla SingleQuadParticle.FacingCameraMode.LOOKAT_Y: it stands upright, turned to the camera */
+  upright?: boolean;
 }
 
 /** a 0xRRGGBB colour as vanilla Particle.setColor's three floats */
@@ -220,6 +228,22 @@ export class ParticleEngine {
     p.dx = mx;
     p.dy = my;
     p.dz = mz;
+    this.add(p);
+  }
+
+  /**
+   * (trial chambers) vanilla TerrainParticle.DustPillarProvider: a speck of the block, its speed set outright (straight
+   * up at about `yd`, barely drifting) and living a second or two
+   */
+  dustPillar(x: number, y: number, z: number, yd: number, state: number, bx: number, by: number, bz: number): void {
+    if (FLAGS[state] & F_AIR) return;
+    const p = this.terrain(x, y, z, 0, 0, 0, state, bx, by, bz);
+    if (!p) return;
+    const g = () => Math.sqrt(-2 * Math.log(1 - Math.random())) * Math.cos(2 * Math.PI * Math.random());
+    p.dx = g() / 30;
+    p.dy = yd + g() / 2;
+    p.dz = g() / 30;
+    p.lifetime = 20 + Math.floor(Math.random() * 20);
     this.add(p);
   }
 
@@ -373,7 +397,10 @@ export class ParticleEngine {
         break;
       }
       case 'smoke':
-      case 'large_smoke': {
+      case 'large_smoke':
+      // (trial chambers) vanilla WhiteSmokeParticle (the crafter's puff, level event 2010): the smoke, but always its
+      // own pale grey (0xbab1c2)
+      case 'white_smoke': {
         const mul = kind === 'large_smoke' ? 2.5 : 1;
         const p = this.base(kind, x, y, z);
         this.withSpeed(p, 0, 0, 0);
@@ -385,6 +412,7 @@ export class ParticleEngine {
         p.dz = p.dz * 0.1 + zd;
         const c = Math.random() * 0.3;
         p.r = p.g = p.b = c;
+        if (kind === 'white_smoke') [p.r, p.g, p.b] = [0.7294118, 0.69411767, 0.7607843];
         p.size *= 0.75 * mul;
         p.lifetime = Math.max(1, Math.floor((8 / (Math.random() * 0.8 + 0.2)) * mul));
         p.grow = true;
@@ -681,6 +709,33 @@ export class ParticleEngine {
         this.addSprite(p);
         break;
       }
+      // (trial chambers) vanilla GlowParticle.WaxOnProvider, WaxOffProvider, ScrapeProvider and ElectricSparkProvider:
+      // the glow sprite in wax's amber, a pale white, the patina's greens or a spark's white, barely drifting from where
+      // it was set off the block's faces (a spark flies faster and is gone in a few ticks)
+      case 'wax_on':
+      case 'wax_off':
+      case 'scrape':
+      case 'electric_spark': {
+        const p = this.base(kind, x, y, z);
+        const spark = kind === 'electric_spark', flat = kind === 'wax_on' || kind === 'wax_off' ? 0.5 : 1;
+        const k = spark ? 0.25 : 0.01;
+        p.dx = xd * k * flat;
+        p.dy = yd * k;
+        p.dz = zd * k * flat;
+        if (kind === 'wax_on') [p.r, p.g, p.b] = [0.91, 0.55, 0.08];
+        else if (kind === 'scrape') [p.r, p.g, p.b] = Math.random() < 0.5 ? [0.29, 0.58, 0.51] : [0.43, 0.77, 0.62];
+        else [p.r, p.g, p.b] = [1, 0.9, 1];
+        p.lifetime = spark ? 2 + Math.floor(Math.random() * 2) : 10 + Math.floor(Math.random() * 30);
+        p.friction = 0.96;
+        p.speedUpWhenBlocked = true;
+        p.size *= 0.75;
+        p.physics = false;
+        p.lightMode = 'flame';
+        p.frames = ['glow'];
+        p.frame = 0;
+        this.addSprite(p);
+        break;
+      }
       // (Stage 5: ocean) vanilla SuspendedTownParticle.DolphinSpeedProvider: a blue speck left in a dolphin's wake
       case 'dolphin': {
         const p = this.base(kind, x, y, z);
@@ -729,7 +784,9 @@ export class ParticleEngine {
       case 'item_egg':
         this.breakingItem(kind, x, y, z, xd, yd, zd);
         break;
-      case 'infested': {
+      case 'infested':
+      // (trial chambers) vanilla SpellParticle.Provider with Trial Omen's sprite
+      case 'trial_omen': {
         // vanilla SpellParticle.Provider: the infested effect's mites, rising like an effect's swirl
         const p = this.base(kind, x, y, z);
         this.withSpeed(p, 0.5 - Math.random(), yd, 0.5 - Math.random());
@@ -744,7 +801,72 @@ export class ParticleEngine {
         p.size *= 0.75;
         p.lifetime = Math.floor(8 / (Math.random() * 0.8 + 0.2));
         p.physics = false;
-        p.frames = ['infested'];
+        p.frames = [kind];
+        p.frame = 0;
+        this.addSprite(p);
+        break;
+      }
+      // (trial chambers) vanilla TrialSpawnerDetectionParticle (its Provider: 1.5 times over): a wisp rising up a trial
+      // spawner's side as it sees someone, upright, lit full, dwindling through its frames over 12 to 24 ticks
+      case 'trial_spawner_detection':
+      case 'trial_spawner_detection_ominous': {
+        const p = this.base(kind, x, y, z);
+        this.withSpeed(p, 0, 0, 0);
+        p.friction = 0.96;
+        p.gravity = -0.1;
+        p.speedUpWhenBlocked = true;
+        p.dx = xd;
+        p.dy = p.dy * 0.9 + yd;
+        p.dz = zd;
+        p.size *= 0.75 * 1.5;
+        p.lifetime = Math.max(1, Math.floor((8 / (0.5 + Math.random() * 0.5)) * 1.5));
+        p.grow = true;
+        p.fullBright = true;
+        p.upright = true;
+        p.frames = [0, 1, 2, 3, 4].map((i) => `${kind}_${i}`);
+        this.addSprite(p);
+        break;
+      }
+      // (trial chambers) vanilla FlyStraightTowardsParticle.OminousSpawnProvider: a spark 3 to 5 times the size that starts
+      // out at (x, y, z) + speed and flies straight in to (x, y, z) over 25 to 29 ticks, lit full, from the ominous blue
+      // (0x45aefe) to white
+      case 'ominous_spawning': {
+        const p = this.base(kind, x + xd, y + yd, z + zd);
+        p.straight = { x, y, z };
+        p.dx = xd;
+        p.dy = yd;
+        p.dz = zd;
+        p.size = 0.1 * (Math.random() * 0.5 + 0.2) * (3 + Math.random() * 2);
+        p.physics = false;
+        p.lifetime = Math.floor(Math.random() * 5) + 25;
+        p.fullBright = true;
+        p.colorLerp = [0x45 / 255, 0xae / 255, 0xfe / 255, 1, 1, 1];
+        [p.r, p.g, p.b] = [0x45 / 255, 0xae / 255, 0xfe / 255];
+        p.frames = ['ominous_spawning'];
+        p.frame = 0;
+        this.addSprite(p);
+        break;
+      }
+      // (trial chambers) vanilla FlyTowardsPositionParticle.VaultConnectionProvider: flies in from (x, y, z) + speed to
+      // (x, y, z) as an enchanting rune does (dropping 1.2 at the very end), one and a half times the size, lit full,
+      // fading in from nothing after a quarter of its life to 0.6 at its end
+      case 'vault_connection': {
+        const p = this.base(kind, x + xd, y + yd, z + zd);
+        p.enchant = { x, y, z };
+        p.dx = xd;
+        p.dy = yd;
+        p.dz = zd;
+        p.size = 0.1 * (Math.random() * 0.5 + 0.2) * 1.5;
+        const f = Math.random() * 0.6 + 0.4;
+        p.r = 0.9 * f;
+        p.g = 0.9 * f;
+        p.b = f;
+        p.physics = false;
+        p.lifetime = Math.floor(Math.random() * 10) + 30;
+        p.fullBright = true;
+        p.alpha = 0;
+        p.lifetimeAlpha = [0, 0.6, 0.25, 1];
+        p.frames = ['vault_connection'];
         p.frame = 0;
         this.addSprite(p);
         break;
@@ -763,9 +885,10 @@ export class ParticleEngine {
       }
       case 'flame':
       case 'soul_fire_flame':
+      // (the deep dark: a candle's; trial chambers: the trial spawner's, the vault's) vanilla FlameParticle.SmallFlameProvider:
+      // the flame at half its size
       case 'small_flame': {
-        // vanilla FlameParticle (RisingParticle): flickers in place, shrinking, brightening (SmallFlameProvider, a
-        // candle's: the flame at half the size)
+        // vanilla FlameParticle (RisingParticle): flickers in place, shrinking, brightening
         const p = this.base(kind, x, y, z);
         if (kind === 'small_flame') p.size *= 0.5;
         this.withSpeed(p, xd, yd, zd);
@@ -1154,6 +1277,17 @@ export class ParticleEngine {
         list[w++] = p;
         continue;
       }
+      // (trial chambers) vanilla FlyStraightTowardsParticle.tick: straight in, its colour going over as it comes
+      if (p.straight) {
+        const f = p.age / p.lifetime, g = 1 - f;
+        p.x = p.straight.x + p.dx * g;
+        p.y = p.straight.y + p.dy * g;
+        p.z = p.straight.z + p.dz * g;
+        const c = p.colorLerp;
+        if (c) [p.r, p.g, p.b] = [c[0] + (c[3] - c[0]) * f, c[1] + (c[4] - c[1]) * f, c[2] + (c[5] - c[2]) * f];
+        list[w++] = p;
+        continue;
+      }
       if (p.portal) {
         const f = p.age / p.lifetime;
         const f1 = -f + f * f * 2;
@@ -1468,7 +1602,8 @@ export class ParticleEngine {
     if (p.spark?.twinkle && !(p.age < Math.floor(p.lifetime / 3) || Math.floor((p.age + p.lifetime) / 3) % 2 === 0)) return;
     const yr = (cam.yaw * Math.PI) / 180, pr = (cam.pitch * Math.PI) / 180;
     const rx = -Math.cos(yr), rz = -Math.sin(yr);
-    const ux = -Math.sin(yr) * Math.sin(pr), uy = Math.cos(pr), uz = Math.cos(yr) * Math.sin(pr);
+    // (trial chambers) an upright one (LOOKAT_Y) keeps its up straight up
+    const ux = p.upright ? 0 : -Math.sin(yr) * Math.sin(pr), uy = p.upright ? 1 : Math.cos(pr), uz = p.upright ? 0 : Math.cos(yr) * Math.sin(pr);
     const name = p.frame >= 0 ? p.frames[p.frame] : p.frames[Math.min(p.frames.length - 1, Math.floor((p.age * (p.frames.length - 1)) / Math.max(1, p.lifetime)))];
     const r = this.spriteRects[name];
     if (!r) return;
@@ -1511,6 +1646,11 @@ export class ParticleEngine {
       s *= 1 - f;
     }
     let alpha = p.alpha ?? 1;
+    // (trial chambers) vanilla Particle.LifetimeAlpha.currentAlphaForAge
+    if (p.lifetimeAlpha) {
+      const [a0, a1, t0, t1] = p.lifetimeAlpha;
+      alpha = a0 + (a1 - a0) * Math.max(0, Math.min(1, ((p.age + partial) / p.lifetime - t0) / (t1 - t0)));
+    }
     // (fireworks) vanilla OverlayParticle.getQuadSize and render: 7.1 sin(t / 4 pi) across, alpha 0.6 - t / 8
     if (p.flash) {
       const t = p.age + partial - 1;

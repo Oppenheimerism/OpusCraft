@@ -25,6 +25,10 @@ import { registerFossilBlocks } from './blocksFossils';
 import { registerFrogBlocks } from './blocksFrog';
 // (the deep dark)
 import { registerDeepDarkBlocks } from './blocksDeepDark';
+// (trial chambers)
+import { registerTuffBlocks } from './blocksTuff';
+import { registerCopperBlocks } from './blocksCopper';
+import { registerTrialChamberBlocks } from './blocksTrialChambers';
 
 const px = (v: number) => v / 16;
 const bx = (x0: number, y0: number, z0: number, x1: number, y1: number, z1: number): Box => [px(x0), px(y0), px(z0), px(x1), px(y1), px(z1)];
@@ -578,7 +582,8 @@ for (const [name, bottom, top, side, sound, hardness, resistance = 6] of SLAB_MA
   });
 }
 
-function stairBoxes(s: StateView): Box[] {
+/** vanilla StairBlock's shapes (exported for the tuff and copper stairs, blocksTuff.ts) */
+export function stairBoxes(s: StateView): Box[] {
   const top = s.get('half') === 'top';
   const base: Box = top ? bx(0, 8, 0, 16, 16, 16) : bx(0, 0, 0, 16, 8, 16);
   const y0 = top ? 0 : 8, y1 = top ? 8 : 16;
@@ -602,7 +607,7 @@ function stairBoxes(s: StateView): Box[] {
   return [base, half[f], quad(back[f], right[f])];
 }
 
-function stairVariant(s: StateView, straight: ModelDef, inner: ModelDef, outer: ModelDef): ModelChoice {
+export function stairVariant(s: StateView, straight: ModelDef, inner: ModelDef, outer: ModelDef): ModelChoice {
   // vanilla stairs blockstate rotations (model faces east by default)
   const facing = s.get('facing') as string;
   const half = s.get('half') as string;
@@ -645,6 +650,10 @@ registerFossilBlocks();
 registerFrogBlocks();
 // (the deep dark)
 registerDeepDarkBlocks();
+// (trial chambers) the tuff and copper families, the lightning rod, and the trial chambers' own blocks
+registerTuffBlocks();
+registerCopperBlocks();
+registerTrialChamberBlocks();
 
 finalizeBlocks();
 

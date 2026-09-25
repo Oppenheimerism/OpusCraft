@@ -24,6 +24,8 @@ import { OceanMonuments } from './monument';
 import { OceanStructures } from './oceanStructures';
 // (the deep dark)
 import { AncientCities } from './ancientCity';
+// (trial chambers)
+import { TrialChambers, quartBiome3d } from './trialChambers';
 import { worldSeed64 } from './jigsaw';
 import { S, getBlock } from '../block';
 import { MIN_Y, MAX_Y, SEA_LEVEL, COLUMN_VOLUME, colIndex, CAVE_BIOME_LEVELS, NO_CAVE_BIOME } from '../constants';
@@ -84,6 +86,8 @@ export class ChunkGenerator {
   readonly oceanStructures: OceanStructures;
   /** (the deep dark) ancient cities (world/gen/ancientCity) */
   readonly ancientCities: AncientCities;
+  /** (trial chambers) trial chambers (world/gen/trialChambers) */
+  readonly trialChambers: TrialChambers;
   /** corner columns for terrain height queries, with the noise at their cell corners as it's needed */
   private readonly heightCols = new Map<number, { c: ColumnSample; exactTop: number; corners: (Float32Array | undefined)[] }>();
 
@@ -129,6 +133,11 @@ export class ChunkGenerator {
     this.desertWells = new DesertWells(this.seedHash, this);
     const villages = this.decorator.villages;
     this.decorator.villages = { place: (ctx) => (villages?.place(ctx), this.ruinedPortals.place(ctx), this.desertWells.place(ctx)) };
+    // (trial chambers) the step's last structures (vanilla UNDERGROUND_STRUCTURES: after the mineshafts and buried
+    // treasure), so before the fossils below; its biome is the one down at its start (the deep dark's excluded)
+    this.trialChambers = new TrialChambers(worldSeed64(seed), { biome: quartBiome3d(this.router) });
+    const underground = this.decorator.mineshafts;
+    this.decorator.mineshafts = { place: (ctx, r) => (underground?.place(ctx, r), this.trialChambers.place(ctx)) };
     // (fossils) the UNDERGROUND_STRUCTURES step's first features, after its structures and before the monster rooms
     this.fossils = new Fossils(this.seedHash, fossilTerrain(this));
     const mineshafts = this.decorator.mineshafts;
@@ -328,7 +337,11 @@ export class ChunkGenerator {
       }
     const oreGap = router.n.ore_gap;
     // structures nearby bend the terrain around themselves (vanilla Beardifier, added to the final density)
-    const beard = addBeards(addBeards(this.outposts.beardFor(cx, cz, this.villages.beardFor(cx, cz)), this.strongholds.buryFor(cx, cz)), this.ancientCities.beardFor(cx, cz));
+    // (trial chambers) and the ground round a trial chambers is filled in solid (vanilla TerrainAdjustment.ENCAPSULATE)
+    const beard = addBeards(
+      addBeards(addBeards(this.outposts.beardFor(cx, cz, this.villages.beardFor(cx, cz)), this.strongholds.buryFor(cx, cz)), this.ancientCities.beardFor(cx, cz)),
+      this.trialChambers.encapsulateFor(cx, cz),
+    );
     const bY0 = beard ? beard.minY : Infinity, bY1 = beard ? beard.maxY : -Infinity;
     const cv = new Float32Array(8 * CHANNELS);
     for (let ck = 0; ck < 4; ck++)
