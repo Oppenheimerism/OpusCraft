@@ -101,6 +101,8 @@ const NAME_OVERRIDES: Record<string, string> = {
   mutton: 'Raw Mutton',
   cod: 'Raw Cod',
   salmon: 'Raw Salmon',
+  rabbit: 'Raw Rabbit',
+  rabbit_foot: "Rabbit's Foot",
   map: 'Empty Map',
   filled_map: 'Map',
   clock: 'Clock',
@@ -260,10 +262,12 @@ reg({ id: 'turtle_helmet', name: 'Turtle Shell', maxStack: 1, creativeTab: 'comb
 const FOOD: [string, number, number, Partial<FoodInfo>?][] = [
   ['apple', 4, 0.3], ['golden_apple', 4, 1.2, { alwaysEat: true }], ['bread', 5, 0.6], ['carrot', 3, 0.6], ['potato', 1, 0.3],
   ['baked_potato', 5, 0.6], ['beef', 3, 0.3], ['cooked_beef', 8, 0.8], ['porkchop', 3, 0.3], ['cooked_porkchop', 8, 0.8],
-  ['chicken', 2, 0.3], ['cooked_chicken', 6, 0.6], ['mutton', 2, 0.3], ['cooked_mutton', 6, 0.8], ['cod', 2, 0.1],
+  ['chicken', 2, 0.3], ['cooked_chicken', 6, 0.6], ['mutton', 2, 0.3], ['cooked_mutton', 6, 0.8], ['rabbit', 3, 0.3],
+  ['cooked_rabbit', 5, 0.6], ['cod', 2, 0.1],
   ['cooked_cod', 5, 0.6], ['salmon', 2, 0.1], ['cooked_salmon', 6, 0.8], ['cookie', 2, 0.1], ['melon_slice', 2, 0.3],
   ['sweet_berries', 2, 0.1], ['rotten_flesh', 4, 0.1], ['spider_eye', 2, 0.8], ['mushroom_stew', 6, 0.6, { remainder: 'bowl' }],
-  ['beetroot', 1, 0.6], ['beetroot_soup', 6, 0.6, { remainder: 'bowl' }], ['golden_carrot', 6, 1.2], ['poisonous_potato', 2, 0.3],
+  ['beetroot', 1, 0.6], ['beetroot_soup', 6, 0.6, { remainder: 'bowl' }], ['rabbit_stew', 10, 0.6, { remainder: 'bowl' }],
+  ['golden_carrot', 6, 1.2], ['poisonous_potato', 2, 0.3],
   ['pumpkin_pie', 8, 0.3], ['glow_berries', 2, 0.1], ['pufferfish', 1, 0.1],
   // (vanilla Foods.SUSPICIOUS_STEW; what else it gives is the stack's, game/desertWells.ts)
   ['suspicious_stew', 6, 0.6, { remainder: 'bowl', alwaysEat: true }],
