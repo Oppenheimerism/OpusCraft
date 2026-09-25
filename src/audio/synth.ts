@@ -38,6 +38,7 @@ import { catSounds } from './gen/cat';
 import { horseSounds } from './gen/horse';
 import { leashSounds } from './gen/leash';
 import { llamaSounds } from './gen/llama';
+import { wanderingTraderSounds } from './gen/wanderingTrader';
 import { illagerSounds } from './gen/illagers';
 // (Stage 5: ocean)
 import { oceanSounds } from './gen/ocean';
@@ -66,6 +67,7 @@ export const SOUNDS: Record<string, SoundGen> = {
   ...crossbowSounds(),
   ...armorSounds(),
   ...villagerSounds(),
+  ...wanderingTraderSounds(),
   ...ironGolemSounds(),
   ...zombieVillagerSounds(),
   ...zombieDoorSounds(),

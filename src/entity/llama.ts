@@ -338,6 +338,12 @@ export class TraderLlama extends Llama {
     return new TraderLlama(this.level);
   }
 
+  /** vanilla TraderLlama.finalizeSpawn: one that comes with a wandering trader (an EVENT spawn) is grown */
+  override finalizeSpawn(reason: SpawnReason, group?: SpawnGroup): void {
+    if (reason === 'event') this.setAge(0);
+    super.finalizeSpawn(reason, group);
+  }
+
   /** the wandering trader leading it, if one is */
   private trader(): (Mob & { despawnDelay: number }) | null {
     const h = this.leashHolder;

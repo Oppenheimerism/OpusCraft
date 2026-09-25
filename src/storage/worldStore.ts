@@ -64,6 +64,8 @@ export interface WorldMeta {
   dragonFight?: import('../game/endDragonFight').DragonFightData;
   /** (Stage 4: raids) vanilla data/raids.dat, every dimension's (game/raids.ts) */
   raids?: import('../game/raids').RaidsData;
+  /** vanilla level.dat WanderingTraderSpawnDelay, WanderingTraderSpawnChance and WanderingTraderId */
+  wanderingTrader?: import('../game/wanderingTraderSpawner').WanderingTraderData;
   version: number;
   /** quick-test worlds are never written to storage */
   transient?: boolean;

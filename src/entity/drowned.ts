@@ -49,7 +49,7 @@ export class Drowned extends Zombie implements RangedAttacker {
     // (it won't turn on another drowned for hurting it)
     this.targetSelector.addGoal(1, new HurtByTargetGoal(this, (by) => by instanceof Drowned).setAlertOthers('zombified_piglin'));
     this.targetSelector.addGoal(2, new DrownedTargetPlayerGoal(this));
-    this.targetSelector.addGoal(3, new NearestAttackableMobGoal(this, (e) => e.type === 'villager', false));
+    this.targetSelector.addGoal(3, new NearestAttackableMobGoal(this, (e) => e.type === 'villager' || e.type === 'wandering_trader', false));
     this.targetSelector.addGoal(3, new NearestAttackableMobGoal(this, (e) => e.type === 'iron_golem', true));
   }
 

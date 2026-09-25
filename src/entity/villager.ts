@@ -18,7 +18,7 @@ import { MobEffectInstance, MOB_EFFECTS } from './effects';
 import { defaultRandomPosTowards, landRandomPos, landRandomPosAway } from './ai/goals';
 import type { Node, Path } from './ai/pathfinder';
 import { Behavior, Brain, GateBehavior, doNothing, oneShot, runOne, triggerOneShuffled, type BehaviorControl } from './ai/brain';
-import { MerchantOffer, VILLAGER_TRADES, addOffersFromListings, type SavedOffer } from './trading';
+import { MerchantOffer, VILLAGER_TRADES, addOffersFromListings, type Merchant, type SavedOffer } from './trading';
 import { ItemStack, saveStack, loadStack, type SavedStack } from '../item/item';
 import { ItemEntity } from './itemEntity';
 import { BLOCKS, STATE_BLOCK, FLAGS, F_FULL_COLLISION, F_AIR, getBlock } from '../world/block';
@@ -1629,7 +1629,7 @@ function showTradesToPlayer(min: number, max: number): BehaviorControl<Villager>
  */
 export const lightningConversion: { witch: ((v: Villager) => Mob | null) | null } = { witch: null };
 
-export class Villager extends AgeableMob {
+export class Villager extends AgeableMob implements Merchant {
   readonly type = 'villager';
   readonly category: MobCategory = 'misc';
   /** vanilla AbstractVillager.canBeLeashed: never on a lead */
@@ -2232,6 +2232,11 @@ export class Villager extends AgeableMob {
 
   /** vanilla canRestock: an employed villager's offers come back */
   canRestock(): boolean {
+    return true;
+  }
+
+  /** vanilla Merchant.showProgressBar: its level and the experience toward the next */
+  showProgressBar(): boolean {
     return true;
   }
 
