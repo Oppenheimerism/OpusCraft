@@ -61,6 +61,8 @@ function categoryOf(name: string): Category {
   // (Stage 4: illagers) the totem is its user's (a player's, mostly); the raiders and the vex are hostile
   if (name === 'item.totem.use') return 'players';
   if (/^entity\.(pillager|vindicator|evoker|evoker_fangs|vex|ravager|illusioner)\./.test(name)) return 'hostile';
+  // (vanilla Rabbit.getSoundSource: the killer bunny's is HOSTILE, and only it bites)
+  if (name === 'entity.rabbit.attack') return 'hostile';
   // (Stage 5: ocean) the guardians are hostile
   if (/^entity\.(guardian|elder_guardian)\./.test(name)) return 'hostile';
   // (vanilla: a fish scooped up is the player's sound, one poured out SoundSource.NEUTRAL)

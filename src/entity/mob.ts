@@ -135,6 +135,8 @@ export interface SpawnGroup {
   llamaVariant?: string;
   /** (Stage 5: ocean) vanilla Axolotl.AxolotlGroupData: the two colours the group's axolotls come in */
   axolotlVariants?: number[];
+  /** vanilla Rabbit.RabbitGroupData: the coat the group shares */
+  rabbitVariant?: number;
 }
 
 export abstract class Mob extends LivingEntity {
@@ -143,7 +145,7 @@ export abstract class Mob extends LivingEntity {
   readonly targetSelector = new GoalSelector();
   readonly lookControl: LookControl;
   private ownMoveControl: MoveControl;
-  private readonly ownJumpControl: JumpControl;
+  private ownJumpControl: JumpControl;
   readonly bodyControl: BodyRotationControl;
   /**
    * this mob's own navigation (goals use `navigation`, which is the mount's while this steers one); a drowned swaps
@@ -223,6 +225,9 @@ export abstract class Mob extends LivingEntity {
 
   get jumpControl(): JumpControl {
     return this.controlledVehicle()?.jumpControl ?? this.ownJumpControl;
+  }
+  set jumpControl(c: JumpControl) {
+    this.ownJumpControl = c;
   }
 
   /** vanilla Mob.getControllingPassenger: a mob up front steers (not a slime) */

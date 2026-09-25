@@ -18,6 +18,8 @@ export interface MobModelDef {
   baby?: { headParts: string[]; scaleHead: boolean; yHead: number; zHead: number; headScale: number; bodyScale: number; bodyY: number };
   /** a model's own baby rendering (vanilla LlamaModel): groups of parts, each scaled then moved */
   babyGroups?: { parts: string[]; scale: [number, number, number]; translate: [number, number, number] }[];
+  /** the same for the grown one, a model drawn smaller than it's built (vanilla RabbitModel.renderToBuffer) */
+  groups?: { parts: string[]; scale: [number, number, number]; translate: [number, number, number] }[];
 }
 
 // ---------------------------------------------------------------------------
