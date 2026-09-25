@@ -23,14 +23,16 @@ import { type PadNote, addBell, pianoDecay, pianoNote, pluckNote, renderBass, re
 
 // ------------------------------------------------------------------ theory
 
-const MODES = {
+// (trial chambers: MODES, parseChords, parseMelody, degMidi, TrackDef and renderTrack are exported for the music discs,
+// gen/discMusic.ts)
+export const MODES = {
   ionian: [0, 2, 4, 5, 7, 9, 11],
   lydian: [0, 2, 4, 6, 7, 9, 11],
   mixolydian: [0, 2, 4, 5, 7, 9, 10],
   dorian: [0, 2, 3, 5, 7, 9, 10],
   aeolian: [0, 2, 3, 5, 7, 8, 10],
 };
-type ModeName = keyof typeof MODES;
+export type ModeName = keyof typeof MODES;
 
 /** chord qualities: intervals above the root */
 const QUAL: Record<string, number[]> = {
@@ -53,7 +55,7 @@ const QUAL: Record<string, number[]> = {
   'maj7#11': [0, 4, 7, 11, 18],
 };
 
-interface Chord {
+export interface Chord {
   /** semitones above the tonic */
   root: number;
   tones: number[];
@@ -62,7 +64,7 @@ interface Chord {
 }
 
 /** "1maj7 6m7:2 5/7 4add9:0.5" — degree (with b/#), quality, optional /bass degree, :bars */
-function parseChords(spec: string, mode: number[], bpb: number): Chord[] {
+export function parseChords(spec: string, mode: number[], bpb: number): Chord[] {
   const out: Chord[] = [];
   for (const tok of spec.trim().split(/\s+/)) {
     const m = /^([b#]?)([1-7])([^/:]*)(?:\/([b#]?)([1-7]))?(?::([\d.]+))?$/.exec(tok);
@@ -77,7 +79,7 @@ function parseChords(spec: string, mode: number[], bpb: number): Chord[] {
   return out;
 }
 
-interface MNote {
+export interface MNote {
   beat: number;
   dur: number;
   deg: number;
@@ -93,7 +95,7 @@ const DUR: Record<string, number> = { w: 4, h: 2, q: 1, e: 0.5, s: 0.25 };
  * Note: [b|#]degree['...|,...][:dur[.]]  e.g. 5  3':h  #4:q.  1,:e   rest: r:h
  * Durations: w h q e s (dotted with "."); a missing duration repeats the previous one.
  */
-function parseMelody(spec: string, bpb: number): { notes: MNote[]; misaligned: number } {
+export function parseMelody(spec: string, bpb: number): { notes: MNote[]; misaligned: number } {
   const notes: MNote[] = [];
   let beat = 0;
   let last = 1;
@@ -121,7 +123,7 @@ function parseMelody(spec: string, bpb: number): { notes: MNote[]; misaligned: n
   return { notes, misaligned };
 }
 
-function degMidi(tonic: number, mode: number[], deg: number, oct: number, acc: number): number {
+export function degMidi(tonic: number, mode: number[], deg: number, oct: number, acc: number): number {
   const d = deg - 1;
   return tonic + mode[((d % 7) + 7) % 7] + 12 * (Math.floor(d / 7) + oct) + acc;
 }
@@ -161,10 +163,10 @@ function closeVoicing(ch: Chord, tonicPc: number, lo: number, max = 4): number[]
 
 // ------------------------------------------------------------------ score description
 
-type LhPattern = 'arp8' | 'arp8b' | 'arp6' | 'waltz' | 'block' | 'sparse' | 'pulse' | 'none';
-type Variation = 'orn' | 'thirds' | 'octave' | 'double' | 'sparse' | 'half' | 'shift';
+export type LhPattern = 'arp8' | 'arp8b' | 'arp6' | 'waltz' | 'block' | 'sparse' | 'pulse' | 'none';
+export type Variation = 'orn' | 'thirds' | 'octave' | 'double' | 'sparse' | 'half' | 'shift';
 
-interface Section {
+export interface Section {
   bars: number;
   chords: string;
   lh: LhPattern;
@@ -179,7 +181,7 @@ interface Section {
   arp?: number;
 }
 
-interface TrackDef {
+export interface TrackDef {
   name: string;
   seed: number;
   /** MIDI note of the melody's scale degree 1 */
@@ -499,7 +501,7 @@ function wow(buf: Float32Array, sr: number, rng: Rng): Float32Array {
   return out;
 }
 
-function renderTrack(def: TrackDef, sr: number): Float32Array {
+export function renderTrack(def: TrackDef, sr: number): Float32Array {
   const rng = new Rng(def.seed);
   const sc = buildScore(def, rng);
   const bpb = def.beats;

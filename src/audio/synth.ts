@@ -16,6 +16,8 @@ import { netherMobSounds } from './gen/netherMobs';
 import { netherMobSounds2 } from './gen/netherMobs2';
 import { NETHER_MUSIC_POOLS, renderNetherMusic } from './gen/netherMusic';
 import { END_MUSIC_POOLS, renderEndMusic } from './gen/endMusic';
+// (trial chambers) the music discs' songs
+import { DISC_MUSIC_POOLS, renderDiscMusic } from './gen/discMusic';
 import { crossbowSounds } from './gen/crossbow';
 import { armorSounds } from './gen/armor';
 import { villagerSounds } from './gen/villager';
@@ -142,13 +144,17 @@ export function generateMenuMusic(sampleRate: number): Float32Array {
 }
 
 /** Situational music pools (vanilla music.nether.<biome>, music.end): event name -> number of tracks in it. */
-export const MUSIC_POOLS: Record<string, number> = Object.fromEntries([...Object.entries(NETHER_MUSIC_POOLS), ...Object.entries(END_MUSIC_POOLS)].map(([k, v]) => [k, v.length]));
+export const MUSIC_POOLS: Record<string, number> = Object.fromEntries(
+  [...Object.entries(NETHER_MUSIC_POOLS), ...Object.entries(END_MUSIC_POOLS), ...Object.entries(DISC_MUSIC_POOLS)].map(([k, v]) => [k, v.length]),
+);
 
 /**
  * Render track `index` (0..MUSIC_POOLS[pool]-1) of a situational pool: the Nether's dark ambient
  * pieces, mono, 120–150 s, RMS matched to the overworld tracks, peak <= 0.6; ~2 s in Node.
  */
 export function generatePoolMusic(pool: string, index: number, sampleRate: number): Float32Array {
+  // (trial chambers) a music disc's song (vanilla music_disc.*), a pool of one
+  if (pool in DISC_MUSIC_POOLS) return renderDiscMusic(pool, sampleRate);
   return pool in END_MUSIC_POOLS ? renderEndMusic(pool, index, sampleRate) : renderNetherMusic(pool, index, sampleRate);
 }
 

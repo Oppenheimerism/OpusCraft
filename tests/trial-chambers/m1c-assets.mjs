@@ -9,7 +9,7 @@ setTimeout(() => { console.log('TIMEOUT'); process.exit(2); }, 300000).unref();
 
 const { m, close } = await load([
   '/src/textures/blocks.ts', '/src/textures/items.ts', '/src/textures/decoratedPot.ts', '/src/audio/synth.ts', '/src/render/particles.ts', '/src/render/mesher.ts',
-  '/src/game/decoratedPot.ts', '/src/game/redstone/components.ts',
+  '/src/game/decoratedPot.ts', '/src/game/redstone/components.ts', '/src/audio/gen/discMusic.ts',
 ]);
 const AGES = ['', 'exposed_', 'weathered_', 'oxidized_'];
 const KINDS = ['copper_block', 'chiseled_copper', 'copper_grate', 'cut_copper', 'cut_copper_stairs', 'cut_copper_slab', 'copper_door', 'copper_trapdoor', 'copper_bulb'];
@@ -171,6 +171,27 @@ function texturesOf(st) {
   const faces = ['flow', 'guster', 'scrape'].map((s) => m.decoratedPotSideTexture(m.patternOf(`${s}_pottery_sherd`)));
   const plain = m.decoratedPotSideTexture(null);
   check('sherds: each draws its own motif on the pot', faces.every((f) => f && !same(f, plain)) && !same(faces[0], faces[1]) && !same(faces[1], faces[2]));
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// The music discs' songs
+
+{
+  const SONGS = { 'music_disc.creator': 176, 'music_disc.creator_music_box': 73, 'music_disc.precipice': 299 };
+  check('discs: each song is a music pool of one', Object.keys(SONGS).every((k) => m.MUSIC_POOLS[k] === 1));
+  check('discs: the song table names its disc, length and comparator level (vanilla JukeboxSongs)', m.DISC_SONGS?.['music_disc.precipice']?.comparator === 13 && m.DISC_SONGS['music_disc.creator'].disc === 'music_disc_creator');
+  for (const [pool, secs] of Object.entries(SONGS)) {
+    const x = m.generatePoolMusic(pool, 0, 22050);
+    let pk = 0, bad = 0;
+    for (const v of x) {
+      if (!Number.isFinite(v)) bad++;
+      pk = Math.max(pk, Math.abs(v));
+    }
+    let tail = 0;
+    for (const v of x.subarray(x.length - 1100)) tail = Math.max(tail, Math.abs(v));
+    const dur = x.length / 22050;
+    check(`discs: ${pool} renders about as long as vanilla's (${secs} s), at the music's level, fading out`, !bad && Math.abs(dur - secs) < 4 && Math.abs(pk - 0.6) < 0.01 && tail < 0.01, `${dur.toFixed(1)} s, peak ${pk.toFixed(2)}, tail ${tail.toFixed(3)}`);
+  }
 }
 
 await exitWithStatus(close);

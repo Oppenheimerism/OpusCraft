@@ -31,7 +31,10 @@ All small and additive; each new line is marked `(trial chambers)`.
 - `src/textures/decoratedPot.ts`: three new `MOTIFS` (flow, guster, scrape); `src/textures/itemlib/archaeology.ts`:
   their sherd shapes in `SHARD_LIKE`; `src/game/decoratedPot.ts`: the three in `SHERDS`.
 - `src/audio/synth.ts`: `Object.assign(SOUNDS, copperTuffSounds())` after the frogs' (new `src/audio/gen/copperTuff.ts`);
-  `src/audio/gen/blocks.ts`: `stoneStep` and `stoneBreak` exported (tuff's sounds build on them).
+  `src/audio/gen/blocks.ts`: `stoneStep` and `stoneBreak` exported (tuff's sounds build on them). The discs' songs:
+  `MUSIC_POOLS` also lists `DISC_MUSIC_POOLS`, and `generatePoolMusic` renders them (new `src/audio/gen/discMusic.ts`);
+  `src/audio/gen/music.ts` only gained `export` on `MODES`, `parseChords`, `parseMelody`, `degMidi`, `TrackDef`,
+  `renderTrack` and the types they use.
 - `src/game/level.ts`: `import { findLightningRod } from './copper'` (new `src/game/copper.ts`, which also registers all
   the copper behaviour); in `findLightningTargetAround` the `(no lightning rods yet)` comment became the rod lookup.
 - `src/entity/lightning.ts`: at the strike, `lightningStruck(lvl, this)` (vanilla powerLightningRod and
@@ -64,7 +67,11 @@ All small and additive; each new line is marked `(trial chambers)`.
 - **Lighten Up** also counts the waxed exposed, weathered and oxidized bulbs, as vanilla's criterion lists them (taking
   the wax off doesn't make them brighter, but vanilla awards it).
 - **Comparators don't exist yet.** `copperBulbAnalogOutput(state)` in `game/copper.ts` is the hook (15 lit, 0 out).
-- **No jukebox yet.** The three discs are items with their song names, like the game's other discs; no music.
+- **No jukebox yet.** The three discs' songs are original procedural pieces of about vanilla's lengths (176, 73 and
+  299 s), served as music pools `music_disc.creator`, `music_disc.creator_music_box` and `music_disc.precipice`
+  (`DISC_SONGS` in `gen/discMusic.ts` also has each disc's comparator level for the jukebox). Nothing plays them
+  until there's a jukebox; the game's older discs have no songs at all.
+- **Banner patterns**: the flow and guster banner patterns were already in the game; the vaults give them (M2).
 - **Trims don't exist yet.** The bolt and flow armour trim templates are for the vaults' loot (M2), as other loot
   tables already name templates the game doesn't have.
 - **Lightning rods in unloaded chunks** aren't found (the points of interest live with loaded chunks); vanilla reads
@@ -85,7 +92,7 @@ on a failure.
 |---|---|---|
 | `m1a-blocks.mjs` | all 13 tuff and 72 copper blocks, strength, tools, sounds, map colours, light, shapes, drops; the items and their creative-tab positions; every crafting and stonecutting recipe and its recipe book category | all pass (83) |
 | `m1b-copper.mjs` | weathering odds and neighbour rule (and 40000 ticks against the expected rate), doors weathering together, random ticks through the level; the axe and honeycomb through the game's interaction (scrape, wax off, the shield rule, sneaking on doors, creative); the bulb's rising-edge toggle and light; the lightning rod: what it draws, its power and strong power, 8 ticks, the struck copper cleaned, the waxed left alone; channeling; the four advancements | all pass (83) |
-| `m1c-assets.mjs` | every texture of every state of the 87 new blocks, each age different and greener, the bulbs, the rod; item icons; the seven sound groups and every sound the copper plays, rendered clean; the glow particles' colours, speeds and lifetimes; the sherds on a pot | all pass (34) |
+| `m1c-assets.mjs` | every texture of every state of the 87 new blocks, each age different and greener, the bulbs, the rod; item icons; the seven sound groups and every sound the copper plays, rendered clean; the glow particles' colours, speeds and lifetimes; the sherds on a pot; the three disc songs' lengths and levels | all pass (39) |
 
 Also run: `npm run typecheck` (clean); `tests/temples/*` and `tests/mansion/*` (all pass); `scripts/audio-check.mjs` (no
 warnings for the new sounds).
