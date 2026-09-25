@@ -79,8 +79,11 @@ export type Criterion =
   | { t: 'started_riding'; vehicle: string; passenger: string }
   /** (M9: frogs) vanilla player_interacted_with_entity: used this item on this kind of mob (of this variant) */
   | { t: 'player_interacted_with_entity'; item: string; entity: string; variant?: string }
-  /** (trial chambers) vanilla item_used_on_block: used one of these items on one of these blocks (as it was before) */
-  | { t: 'item_used_on_block'; items: string[]; blocks: string[] }
+  /**
+   * (trial chambers) vanilla item_used_on_block: used one of these items on one of these blocks, with these block state
+   * properties if given (the block as it was when the trigger fired: before an item's own use changed it, after a block's)
+   */
+  | { t: 'item_used_on_block'; items: string[]; blocks: string[]; state?: Record<string, string | boolean> }
   /**
    * (trial chambers) vanilla lightning_strike: a bolt within that distance of the player, that set no more than that
    * many blocks on fire, went with one of that kind standing by unharmed
@@ -276,13 +279,13 @@ const A: AdvancementDef[] = [
   { id: 'adventure/adventuring_time', parent: 'adventure/sleep_in_bed', title: 'Adventuring Time', description: 'Discover every biome', icon: 'diamond_boots', frame: 'challenge', criteria: each(OVERWORLD_BIOMES, (b) => ({ t: 'biome', biome: b })) },
   { id: 'adventure/play_jukebox_in_meadows', parent: 'adventure/sleep_in_bed', title: 'Sound of Music', description: 'Make the Meadows come alive with the sound of music from a Jukebox', icon: 'jukebox', frame: 'task', criteria: one(never) },
   { id: 'adventure/walk_on_powder_snow_with_leather_boots', parent: 'adventure/sleep_in_bed', title: 'Light as a Rabbit', description: 'Walk on Powder Snow... without sinking in it', icon: 'leather_boots', frame: 'task', criteria: one(never) },
-  { id: 'adventure/under_lock_and_key', parent: 'adventure/minecraft_trials_edition', title: 'Under Lock and Key', description: 'Unlock a Vault with a Trial Key', icon: 'trial_key', frame: 'task', criteria: one(never) },
+  { id: 'adventure/under_lock_and_key', parent: 'adventure/minecraft_trials_edition', title: 'Under Lock and Key', description: 'Unlock a Vault with a Trial Key', icon: 'trial_key', frame: 'task', criteria: { under_lock_and_key: { t: 'item_used_on_block', items: ['trial_key'], blocks: ['vault'], state: { ominous: false } } } },
   { id: 'adventure/blowback', parent: 'adventure/minecraft_trials_edition', title: 'Blowback', description: 'Kill a Breeze with a deflected Breeze-shot Wind Charge', icon: 'wind_charge', frame: 'challenge', criteria: one(never) },
   { id: 'adventure/who_needs_rockets', parent: 'adventure/minecraft_trials_edition', title: 'Who Needs Rockets?', description: 'Use a Wind Charge to launch yourself upward 8 blocks', icon: 'wind_charge', frame: 'task', criteria: one(never) },
   { id: 'adventure/crafters_crafting_crafters', parent: 'adventure/minecraft_trials_edition', title: 'Crafters Crafting Crafters', description: 'Be near a Crafter when it crafts a Crafter', icon: 'crafter', frame: 'task', criteria: one(never) },
   { id: 'adventure/lighten_up', parent: 'adventure/minecraft_trials_edition', title: 'Lighten Up', description: 'Scrape a Copper Bulb with an Axe to make it brighter', icon: 'oxidized_copper_bulb', frame: 'task', criteria: { lighten_up: { t: 'item_used_on_block', items: AXES, blocks: ['oxidized_copper_bulb', 'weathered_copper_bulb', 'exposed_copper_bulb', 'waxed_oxidized_copper_bulb', 'waxed_weathered_copper_bulb', 'waxed_exposed_copper_bulb'] } } },
   { id: 'adventure/overoverkill', parent: 'adventure/minecraft_trials_edition', title: 'Over-Overkill', description: 'Deal 50 hearts of damage in a single hit using the Mace', icon: 'mace', frame: 'challenge', criteria: one(never) },
-  { id: 'adventure/revaulting', parent: 'adventure/under_lock_and_key', title: 'Revaulting', description: 'Unlock an Ominous Vault with an Ominous Trial Key', icon: 'ominous_trial_key', frame: 'goal', criteria: one(never) },
+  { id: 'adventure/revaulting', parent: 'adventure/under_lock_and_key', title: 'Revaulting', description: 'Unlock an Ominous Vault with an Ominous Trial Key', icon: 'ominous_trial_key', frame: 'goal', criteria: { revaulting: { t: 'item_used_on_block', items: ['ominous_trial_key'], blocks: ['vault'], state: { ominous: true } } } },
   { id: 'adventure/spyglass_at_ghast', parent: 'adventure/spyglass_at_parrot', title: 'Is It a Balloon?', description: 'Look at a Ghast through a Spyglass', icon: 'spyglass', frame: 'task', criteria: one(never) },
   { id: 'adventure/very_very_frightening', parent: 'adventure/throw_trident', title: 'Very Very Frightening', description: 'Strike a Villager with lightning', icon: 'trident', frame: 'task', criteria: one({ t: 'channeled_lightning', victims: ['villager'] }) },
   { id: 'adventure/sniper_duel', parent: 'adventure/shoot_arrow', title: 'Sniper Duel', description: 'Kill a Skeleton from at least 50 meters away', icon: 'arrow', frame: 'challenge', criteria: one({ t: 'sniper' }) },
@@ -531,8 +534,8 @@ export interface TriggerPayload {
   riding?: { vehicle: string | null; passengers: string[] };
   /** (M9: frogs) the item the player used on a mob (as it was before), the mob's type and variant (player_interacted_with_entity) */
   interacted?: { item: string | null; entity: string; variant?: string };
-  /** (trial chambers) the item the player used on a block, and the block as it was (item_used_on_block) */
-  usedOnBlock?: { item: string; block: string };
+  /** (trial chambers) the item the player used on a block (as it was before), the block and its properties (item_used_on_block) */
+  usedOnBlock?: { item: string; block: string; props?: Record<string, string | number | boolean> };
   /**
    * (trial chambers) a bolt as it went: how far from the player, how many blocks it set on fire, and the kinds of
    * whatever stood by it unharmed (lightning_strike)
@@ -731,7 +734,7 @@ function matches(c: Criterion, p: TriggerPayload): boolean {
       return !!p.interacted && p.interacted.item === c.item && p.interacted.entity === c.entity && (c.variant === undefined || p.interacted.variant === c.variant);
     // (trial chambers)
     case 'item_used_on_block':
-      return !!p.usedOnBlock && c.items.includes(p.usedOnBlock.item) && c.blocks.includes(p.usedOnBlock.block);
+      return !!p.usedOnBlock && c.items.includes(p.usedOnBlock.item) && c.blocks.includes(p.usedOnBlock.block) && (!c.state || Object.entries(c.state).every(([k, v]) => p.usedOnBlock!.props?.[k] === v));
     case 'lightning_strike':
       return !!p.lightning && p.lightning.distance <= c.maxDistance && p.lightning.blocksSetOnFire <= c.maxBlocksSetOnFire && p.lightning.bystanders.includes(c.bystander);
     default:

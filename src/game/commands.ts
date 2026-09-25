@@ -38,6 +38,8 @@ import { templeKind, locateTemple } from './temples';
 import { locateEndCity } from './endCities';
 import { locateMansion } from './mansions';
 import { isRuinedPortal, locateRuinedPortal } from './ruinedPortals';
+// (trial chambers)
+import { snbtEnd } from './snbt';
 
 class CommandError extends Error {
   constructor(msg: string, readonly pos = -1) {
@@ -179,7 +181,8 @@ function blockPos(c: Ctx, i: number): [number, number, number] {
 }
 
 function parseBlock(c: Ctx, i: number): number {
-  const s = needArg(c, i).replace(/^minecraft:/, '');
+  // (trial chambers) block entity data after it ({...}) is setblock's to read
+  const s = needArg(c, i).replace(/^minecraft:/, '').replace(/\{.*$/, '');
   const name = s.split('[')[0];
   if (!BLOCK_BY_NAME.has(name)) throw new CommandError(`Unknown block type 'minecraft:${name}'`, c.args[i].pos);
   return stateFromString(s);
@@ -854,12 +857,18 @@ export const COMMANDS: Record<string, CommandDef> = {
     run: (c) => {
       const [x, y, z] = blockPos(c, 0);
       const st = parseBlock(c, 3);
-      const mode = c.args[4]?.s ?? 'replace';
+      // (trial chambers) block entity data right after the block, spaces and all (vanilla BlockStateParser.readNbt),
+      // given to the new block's block entity: a vault's config, a trial spawner's
+      const brace = c.args[3].s.indexOf('{');
+      const nbtEnd = brace < 0 ? -1 : snbtEnd(c.line, c.args[3].pos + brace);
+      const nbt = brace < 0 ? '' : c.line.slice(c.args[3].pos + brace, nbtEnd);
+      const mode = (brace < 0 ? c.args[4] : c.args.find((a) => a.pos >= nbtEnd))?.s ?? 'replace';
       if (y < MIN_Y || y >= MAX_Y || !c.game.world.getChunk(x >> 4, z >> 4)) throw new CommandError('That position is not loaded');
       const lvl = c.game.level;
       const cur = lvl.getState(x, y, z);
       if ((mode === 'keep' && cur !== 0) || cur === st) throw new CommandError('Could not set the block');
       lvl.setBlock(x, y, z, st);
+      if (nbt) (lvl.world.getBlockEntity(x, y, z) as { readBlockEntityData?: (nbt: string) => void } | null)?.readBlockEntityData?.(nbt);
       c.ok(`Changed the block at ${x}, ${y}, ${z}`);
     },
   },

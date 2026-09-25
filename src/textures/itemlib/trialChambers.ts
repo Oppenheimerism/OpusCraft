@@ -1,10 +1,12 @@
 // (trial chambers) Item sprites for the 1.21 items that don't have one yet: the copper doors at each age (vanilla
-// item/<age>copper_door, the waxed doors sharing them) and the breeze rod (vanilla item/breeze_rod). Original pixel
-// art.
+// item/<age>copper_door, the waxed doors sharing them), the breeze rod (vanilla item/breeze_rod), and what the vaults
+// give that the game didn't have: the honey bottle (vanilla item/honey_bottle) and the bolt and flow armour trims'
+// smithing templates (vanilla item/bolt_armor_trim_smithing_template and flow_...). Original pixel art.
 
 import { TexImage, plot } from '../tex';
 import { Gen, spr, outline4 } from './common';
-import { blank } from './misc';
+import { blank, liquidBottle } from './misc';
+import { tablet } from './smithing';
 
 export const TRIAL_CHAMBER_ITEMS: Record<string, Gen> = {};
 const X = TRIAL_CHAMBER_ITEMS;
@@ -59,3 +61,44 @@ X['breeze_rod'] = (): TexImage => {
   outline4(t, 0x2b376d);
   return t;
 };
+
+/** the honey bottle: the glass bottle full of honey, amber at its edge to gold, a glint or two of pale gold */
+X['honey_bottle'] = () => liquidBottle([0xb8650c, 0xe8981c, 0xf8c23a], 'honey_bottle', 0xffe28a);
+
+/** the bolt armour trim's template: a tuff-grey tablet with a copper bolt of lightning cut into it */
+// prettier-ignore
+X['bolt_armor_trim_smithing_template'] = () =>
+  tablet({ o: 0x16171a, l: 0x6c6f68, f: 0x494b45, d: 0x2e302b }, [
+    '................',
+    '................',
+    '................',
+    '........Cc......',
+    '.......Cc.......',
+    '......Cc........',
+    '.....CCCCc......',
+    '.......Cc.......',
+    '......Cc........',
+    '.....Cc.....x...',
+    '....Cc..........',
+    '...s............',
+    '..........s.....',
+  ], { C: 0xdb8f5e, c: 0x9c5436, s: 0x3a3c36, x: 0x5a5c55 }, 'bolt_armor_trim_smithing_template');
+
+/** the flow armour trim's template: a pale tablet with the breeze's swirl of wind cut into it */
+// prettier-ignore
+X['flow_armor_trim_smithing_template'] = () =>
+  tablet({ o: 0x1a1d24, l: 0x9aa2ac, f: 0x737b86, d: 0x4c535c }, [
+    '................',
+    '................',
+    '................',
+    '.....wWWWw......',
+    '....W.....W.....',
+    '....W..ww..W....',
+    '....W.W..W.W....',
+    '....W.W.Wb.W....',
+    '....W..W..W.....',
+    '.....W...W......',
+    '......WWW...x...',
+    '...s............',
+    '..........s.....',
+  ], { W: 0xd8f0f8, w: 0x9cc8dc, b: 0x6aa6c4, s: 0x5a616b, x: 0x8c949e }, 'flow_armor_trim_smithing_template');

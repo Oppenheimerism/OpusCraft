@@ -4,8 +4,10 @@
 // copper, game/copper.ts; creative only while there are no bees) after the rabbit hide, the breeze rod after the
 // blaze rod and the heavy core (epic) after that, the trial keys, the mace and the wind charge in the combat tab, the
 // three new music discs where vanilla lists them among the others, and the flow, guster and scrape pottery sherds
-// sorted in with the rest. (The bolt and flow armour trim templates wait for armour trims: a hook, the vaults' loot
-// names them.)
+// sorted in with the rest; the trial spawner after the spawner and the vault after the end portal frame, with the
+// functional blocks. And what the vaults give that the game didn't have: the honey bottle (game/honeyBottle.ts)
+// after the milk bucket, and the flow and bolt armour trims' smithing templates after the netherite upgrade's (there
+// are no armour trims yet: they're kept, not used).
 
 import type { Item, Rarity } from './item';
 import { COPPER_KINDS, copperName } from '../world/blocksCopper';
@@ -76,6 +78,21 @@ export function registerTrialChamberItems(reg: Reg, items: Map<string, Item>, li
     const prev = DISCS.slice(0, DISCS.indexOf(id)).reverse().find((d) => items.has(d));
     if (prev) after(id, prev);
   }
+  // the trial spawner after the spawner (vanilla's spawn eggs tab opens with the two; the spawner is with the
+  // functional blocks here) and the vault with the functional blocks after the end portal frame
+  for (const id of ['trial_spawner', 'vault']) if (items.has(id)) items.get(id)!.creativeTab = 'functional';
+  after('trial_spawner', 'spawner');
+  after('vault', 'end_portal_frame');
+  // vanilla Items.HONEY_BOTTLE (HoneyBottleItem): a drink of 6 food, 16 to a stack
+  reg({ id: 'honey_bottle', texture: 'honey_bottle', creativeTab: 'food', maxStack: 16, food: { nutrition: 6, saturation: 0.1 } });
+  after('honey_bottle', 'milk_bucket');
+  // vanilla SmithingTemplateItem.createArmorTrimTemplate for TrimPatterns.FLOW and BOLT (uncommon): the pattern,
+  // what it applies to and needs, as the netherite upgrade's shows them; vanilla's ingredients tab ends ..., flow, bolt
+  for (const [id, pattern] of [['flow', 'Flow Armor Trim'], ['bolt', 'Bolt Armor Trim']]) {
+    const tid = `${id}_armor_trim_smithing_template`;
+    reg({ id: tid, name: 'Smithing Template', texture: tid, rarity: 'uncommon', lore: [pattern, '', 'Applies to:', ' §9Armor', 'Ingredients:', ' §9Ingots & Crystals'] });
+  }
+  run(['flow_armor_trim_smithing_template', 'bolt_armor_trim_smithing_template'], 'netherite_upgrade_smithing_template');
   // the trial chambers' pottery sherds (game/decoratedPot.ts), all the sherds then in name order where the first was
   for (const s of ['flow', 'guster', 'scrape']) reg({ id: `${s}_pottery_sherd`, texture: `${s}_pottery_sherd` });
   const sherds = list.filter((x) => x.id.endsWith('_pottery_sherd')).sort((a, b) => (a.id < b.id ? -1 : 1));

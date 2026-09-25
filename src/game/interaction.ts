@@ -34,6 +34,7 @@ import { PrimedTnt } from '../entity/tnt';
 import { ThrownItem, ThrownKind } from '../entity/throwable';
 import { createMob } from './spawner';
 import { SpawnerBlockEntity } from '../world/blockEntity';
+import { TrialSpawnerBlockEntity } from './trialSpawner';
 import { playerAttack } from './combat';
 import { canPlaceFire, fireStateAt, placeFire } from './fire';
 import { Minecart, MinecartChest, createMinecart } from '../entity/minecart';
@@ -479,7 +480,8 @@ export class Interaction {
     if (h && stack && stack.item.id.endsWith('_spawn_egg') && p.gameMode !== 'spectator') {
       // on a spawner: it spawns this mob from now on
       const be = this.level.world.getBlockEntity(h.x, h.y, h.z);
-      if (be instanceof SpawnerBlockEntity) {
+      // (trial chambers) on a trial spawner too: its next mob (vanilla Spawner.setEntityId)
+      if (be instanceof SpawnerBlockEntity || be instanceof TrialSpawnerBlockEntity) {
         be.setEntityId(stack.item.id.slice(0, -10));
         this.level.world.getChunk(h.x >> 4, h.z >> 4)!.modified = true;
         if (p.gameMode !== 'creative') p.inventory.consumeSelected(1);
@@ -999,7 +1001,8 @@ export class Interaction {
   private itemUseEffects(s: ItemStack): void {
     const p = this.player;
     const anim = useAnimation(s);
-    if (anim === 'drink') this.level.sound.play('entity.generic.drink', p.x, p.y, p.z, 0.5, Math.random() * 0.1 + 0.9);
+    // (trial chambers) an item's own gulp if it has one (vanilla getDrinkingSound: the honey bottle's)
+    if (anim === 'drink') this.level.sound.play(itemBehaviorOf(s.item.id)?.drinkSound ?? 'entity.generic.drink', p.x, p.y, p.z, 0.5, Math.random() * 0.1 + 0.9);
     else if (anim === 'eat') this.level.sound.play('entity.generic.eat', p.x, p.y, p.z, 0.5 + 0.5 * Math.floor(Math.random() * 2), (Math.random() - Math.random()) * 0.2 + 1);
   }
 

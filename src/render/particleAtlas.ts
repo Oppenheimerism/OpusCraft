@@ -11,6 +11,8 @@ import { sgaParticleTextures } from '../textures/sga';
 import { campfireSmokeTextures } from '../textures/campfireSmoke';
 import { glitterTextures } from '../textures/blocklib/outerEnd';
 import { fireworkParticleTextures } from '../textures/fireworks';
+// (trial chambers)
+import { trialChamberParticleTextures } from '../textures/trialChamberParticles';
 import type { SpriteRectUV } from './particles';
 
 export function buildParticleAtlas(gl: GL): { texture: WebGLTexture; rects: Record<string, SpriteRectUV> } {
@@ -23,6 +25,8 @@ export function buildParticleAtlas(gl: GL): { texture: WebGLTexture; rects: Reco
   Object.assign(src, glitterTextures());
   // a firework's flash (vanilla particle/flash)
   Object.assign(src, fireworkParticleTextures());
+  // (trial chambers) the trial spawner's detection wisps, Trial Omen's curl, the ominous and vault sparks
+  Object.assign(src, trialChamberParticleTextures());
   // item crumb particles (vanilla ItemParticleOption)
   if (ITEM_TEXTURES['slime_ball']) src['item_slime_ball'] = ITEM_TEXTURES['slime_ball'];
   if (ITEM_TEXTURES['egg']) src['item_egg'] = ITEM_TEXTURES['egg'];

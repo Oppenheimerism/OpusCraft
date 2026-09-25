@@ -108,6 +108,9 @@ import { renderFireworkRocket } from './fireworkRenderer';
 import { viewVector } from '../entity/elytra';
 import { PistonRenderer } from './pistonRenderer';
 import { ArchaeologyRenderers } from './archaeologyRenderers';
+// (trial chambers)
+import { TrialChamberRenderers } from './trialChamberRenderers';
+import { OminousItemSpawner } from '../entity/ominousItemSpawner';
 import { createMob } from '../game/spawner';
 import { ArmorLayer, renderHeadItem, PIGLIN_HEAD_ITEM_SCALE } from './armorLayer';
 import type { ArmorModelSet } from './armorLayer';
@@ -188,6 +191,8 @@ export class EntityRenderDispatcher {
   private readonly pistons = new PistonRenderer();
   /** the decorated pots, and the finds coming out of suspicious sand and gravel */
   private readonly archaeology: ArchaeologyRenderers;
+  /** (trial chambers) the trial spawner's mob, the vault's item and the ominous item spawner */
+  private readonly trialChambers = new TrialChamberRenderers();
   private readonly endCrystals: EndCrystalRenderer;
   private readonly dragons: EnderDragonRenderer;
   /** shulker boxes (and the shulkers themselves) */
@@ -438,6 +443,12 @@ export class EntityRenderDispatcher {
     this.skulls.renderBlockEntities(b, level, cam, partial, frustum);
     this.pistons.render(b, this.items, level, cam, partial, frustum);
     this.archaeology.render(b, this.items, level, cam, partial, frustum);
+    // (trial chambers) drawn in their cages as the spawner's mob is (vanilla SpawnerRenderer.renderEntityInSpawner)
+    this.trialChambers.render(b, this.items, level, cam, partial, frustum, (mob, base) => {
+      this.base = base;
+      this.renderMob(b, mob, 0, 0, 0, partial);
+      this.base = null;
+    });
     b.setOverlay(0, 0, 0, 0);
     b.flush();
     if (this.shadows.length) this.renderShadows(b, level, cam);
@@ -559,6 +570,8 @@ export class EntityRenderDispatcher {
       const t = this.tex('lead_knot');
       if (t) renderKnot(b, this.pose, this.state(t), dx, dy, dz);
     }
+    // (trial chambers)
+    else if (e instanceof OminousItemSpawner) this.trialChambers.renderItemSpawner(b, this.items, level, e, dx, dy, dz, p);
     if (e instanceof Mob) {
       if (e.leashHolder) {
         this.whiteTex ??= createTexture(this.gl, 1, 1, new Uint8Array([255, 255, 255, 255]));

@@ -68,6 +68,8 @@ import './archaeology';
 import './desertWells';
 // (trial chambers) copper weathering, waxing and scraping, the copper bulb and the lightning rod
 import { findLightningRod } from './copper';
+// (trial chambers) the trial spawner and the vault
+import './trialChambers';
 
 export interface SoundSink {
   play(name: string, x: number, y: number, z: number, volume?: number, pitch?: number): void;

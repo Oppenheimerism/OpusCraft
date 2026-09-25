@@ -24,6 +24,8 @@ interface LootEntry {
    * set_name, set_potion), given where the loot is being rolled
    */
   apply?: (stack: ItemStack, r: Rand, origin: LootOrigin | null) => ItemStack;
+  /** (trial chambers) vanilla loot_table entry (NestedLootTable): that table's items in its place (`item` unused) */
+  table?: string;
 }
 
 /** (Stage 5: ocean) where loot is rolled (vanilla LootContextParams.ORIGIN: a chest's position) */
@@ -36,6 +38,8 @@ export interface LootOrigin {
 interface LootPool {
   rolls: number | [number, number];
   entries: LootEntry[];
+  /** (trial chambers) vanilla random_chance condition on the pool: it's rolled at all only this often */
+  chance?: number;
 }
 
 const e = (item: string, weight: number, count?: [number, number], enchant?: boolean): LootEntry => ({ item, weight, count, enchant });
@@ -332,11 +336,18 @@ export function setStewEffect(stack: ItemStack, effects: [string, number, number
 export function rollLoot(table: string, r: Rand, origin: LootOrigin | null = null): ItemStack[] {
   const out: ItemStack[] = [];
   for (const pool of LOOT_TABLES[table] ?? []) {
+    // (trial chambers) vanilla LootItemRandomChanceCondition, tested before the rolls are
+    if (pool.chance !== undefined && !(r.nextFloat() < pool.chance)) continue;
     const rolls = typeof pool.rolls === 'number' ? pool.rolls : between(r, pool.rolls[0], pool.rolls[1]);
     const total = pool.entries.reduce((a, x) => a + x.weight, 0);
     for (let i = 0; i < rolls; i++) {
       let k = r.nextInt(total);
       const entry = pool.entries.find((x) => (k -= x.weight) < 0)!;
+      // (trial chambers) vanilla NestedLootTable
+      if (entry.table) {
+        out.push(...rollLoot(entry.table, r, origin));
+        continue;
+      }
       const it = ITEMS.get(entry.item);
       if (!it) continue;
       let stack = new ItemStack(it, entry.count ? between(r, entry.count[0], entry.count[1]) : 1);
