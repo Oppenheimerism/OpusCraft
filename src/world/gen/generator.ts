@@ -13,6 +13,7 @@ import { Geodes, SUB_AIR, SUB_SOLID, SUB_FLUID } from './geode';
 import { Villages } from './villages';
 import { Temples } from './temples';
 import { WoodlandMansions } from './mansion';
+import { RuinedPortals, overworldPortalTerrain } from './ruinedPortal';
 import { Strongholds, biomeAtY0, addBeards } from './stronghold';
 // (Stage 4: outposts)
 import { PillagerOutposts } from './outposts';
@@ -63,6 +64,8 @@ export class ChunkGenerator {
   readonly temples: Temples;
   /** woodland mansions (world/gen/mansion) */
   readonly mansions: WoodlandMansions;
+  /** ruined portals (world/gen/ruinedPortal) */
+  readonly ruinedPortals: RuinedPortals;
   readonly strongholds: Strongholds;
   /** (Stage 4: outposts) */
   readonly outposts: PillagerOutposts;
@@ -98,6 +101,10 @@ export class ChunkGenerator {
     // (mansions) woodland mansions, placed after the temples
     this.mansions = new WoodlandMansions(worldSeed64(seed), { firstFreeHeight: (x, z) => this.firstFreeHeight(x, z), quartBiome: (x, z) => this.quartBiome(x, z) });
     this.decorator.temples = { place: (ctx) => (this.temples.place(ctx), this.mansions.place(ctx)) };
+    // (ruined portals) the step's last structures, placed after the villages
+    this.ruinedPortals = new RuinedPortals(worldSeed64(seed), overworldPortalTerrain(this));
+    const villages = this.decorator.villages;
+    this.decorator.villages = { place: (ctx) => (villages?.place(ctx), this.ruinedPortals.place(ctx)) };
     this.strongholds = new Strongholds(worldSeed64(seed), biomeAtY0(this.router));
     this.decorator.strongholds = this.strongholds;
   }

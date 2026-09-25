@@ -1,5 +1,5 @@
-// The woodland mansion's templates are authored here in code (vanilla ships them as woodland_mansion/*.nbt, which
-// can't be used): a builder fills a box block by block, box by box or a layer at a time from rows of characters,
+// The woodland mansion's templates (and the ruined portals') are authored in code (vanilla ships them as .nbt files,
+// which can't be used): a builder fills a box block by block, box by box or a layer at a time from rows of characters,
 // and marks the data markers vanilla's templates have (chests, mobs). What a template doesn't set is left as the
 // world has it (vanilla structure void); air it sets clears the space.
 
@@ -45,7 +45,7 @@ export class TemplateBuilder {
 
   private index(x: number, y: number, z: number): number {
     const i = x - this.ox, k = z - this.oz;
-    if (i < 0 || y < 0 || k < 0 || i >= this.sx || y >= this.sy || k >= this.sz) throw new Error(`mansion template ${this.name}: ${x}, ${y}, ${z} is outside`);
+    if (i < 0 || y < 0 || k < 0 || i >= this.sx || y >= this.sy || k >= this.sz) throw new Error(`template ${this.name}: ${x}, ${y}, ${z} is outside`);
     return (y * this.sz + k) * this.sx + i;
   }
 
@@ -107,7 +107,7 @@ export class TemplateBuilder {
         const ch = lines[z][x];
         if (ch === ' ') continue;
         const b = key[ch];
-        if (b === undefined) throw new Error(`mansion template ${this.name}: no block for '${ch}'`);
+        if (b === undefined) throw new Error(`template ${this.name}: no block for '${ch}'`);
         this.set(x0 + x, y, z0 + z, b);
       }
     return this;

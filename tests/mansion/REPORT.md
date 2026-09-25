@@ -8,7 +8,7 @@ Branch: `claude/beautiful-darwin-4duqdn` (from main at f08dd21).
 |---|---|---|
 | M1 woodland mansions | done: placement, the grid and every piece vanilla lays out, all 51 room templates, the markers (loot chests, evokers, vindicators; the allays' cells stand empty), the foundation, `/locate structure mansion` | 020ed44 Woodland mansions: great dark oak houses deep in dark forests, … |
 | (merge) | main merged in (horses, donkeys and mules; leads and name tags): no conflicts | 2ff0fcd Merge remote-tracking branch 'origin/main' |
-| M2 ruined portals | not started | |
+| M2 ruined portals | done: the seven kinds and all their setups (on the ground, half buried, sea bed, underground, in a mountain, the Nether), all 13 templates, vanilla's processors (crying obsidian, gold taken, lava cooled, magma, aged and mossy bricks, blackstone), the netherrack spread and drips, vines and jungle leaves, waterlogging, the loot chest, `/locate` for all seven; a repaired frame lights | M2COMMIT |
 | M3 desert wells and fossils | not started | |
 
 ## 2. Shared files changed (all additive)
@@ -24,13 +24,28 @@ Branch: `claude/beautiful-darwin-4duqdn` (from main at f08dd21).
   vindicators get their iron axes (vanilla handleDataMarker finalizes with STRUCTURE). Any structure can use it.
 - Loot: `chests/woodland_mansion` is registered from `src/game/mansions.ts` (as `chests/pillager_outpost` is from
   `outposts.ts`); `src/game/loot.ts` is untouched.
+- M2, `src/world/gen/generator.ts`: imports `RuinedPortals`/`overworldPortalTerrain`; a `readonly ruinedPortals` field
+  built after the mansions; the villages hook is wrapped so the portals go in after the villages (vanilla's order in
+  the step): three new lines, the existing ones untouched.
+- M2, `src/world/gen/nether.ts`: imports; a `readonly ruinedPortals` built next to the fortresses (from
+  `worldSeed64(seed)`, so the Nether's portals are where vanilla's are); `this.ruinedPortals.place(ctx)` at the start
+  of the SURFACE_STRUCTURES step in `decorate`, before the deltas.
+- M2, `src/game/commands.ts`: `import { isRuinedPortal, locateRuinedPortal } from './ruinedPortals'` and one more
+  branch at the end of `/locate`'s chain (the seven `ruined_portal*` ids, which `STRUCTURES` already had).
+- M2, `src/world/gen/templePiece.ts`: `positionSeed` (vanilla `Mth.getSeed`) exported, for the portals' processors.
+- M2 loot: `chests/ruined_portal` is registered from `src/game/ruinedPortals.ts`.
 
 New files: `src/world/gen/mansion.ts` (placement, MansionGrid, MansionPiecePlacer, the pieces, afterPlace),
-`src/world/gen/mansionBuilder.ts` (the template builder), `src/world/gen/mansionTemplates.ts` (walls, roofs, corridors,
-inner walls, the entrance), `src/world/gen/mansionRooms.ts` (the 51 rooms), `src/game/mansions.ts` (main-thread
-locator, loot table), `tests/mansion/m1-mansion.mjs`.
+`src/world/gen/mansionBuilder.ts` (the template builder, shared with the portals), `src/world/gen/mansionTemplates.ts`
+(walls, roofs, corridors, inner walls, the entrance), `src/world/gen/mansionRooms.ts` (the 51 rooms),
+`src/game/mansions.ts` (main-thread locator, loot table), `tests/mansion/m1-mansion.mjs`; for M2
+`src/world/gen/ruinedPortal.ts` (placement, the processors, the per-chunk placing), `src/world/gen/ruinedPortalTemplates.ts`
+(the 13 templates), `src/game/ruinedPortals.ts` (main-thread locator for both dimensions, loot table),
+`tests/mansion/m2-ruined-portals.mjs`.
 
 ## 3. Open points
+
+### M1 woodland mansions
 
 - **Templates.** Vanilla's `woodland_mansion/*.nbt` can't be used, so all 72 are authored in code (a small builder:
   boxes, layers of characters, data markers, and "soft" blocks that only go into air). The structural ones fit
@@ -116,6 +131,57 @@ locator, loot table), `tests/mansion/m1-mansion.mjs`.
 - **Lights.** The rooms are lit with lanterns (and glowstone, jack o'lanterns, a campfire); vanilla's 1.11 templates
   predate lanterns, so this is a style choice.
 
+### M2 ruined portals
+
+- **Templates.** Vanilla's `ruined_portal/*.nbt` can't be used, so the 13 are authored in code with the mansions'
+  builder, after vanilla's style: an obsidian frame (4 × 5 in the ten small ones; 6 × 10 and 7 × 10 in the giants)
+  standing, or fallen flat in three of them, with 2 to 5 of its blocks gone; a netherrack base, lava pockets in eight;
+  stone brick rubble (stairs, slabs, walls, iron bars, pillars, plinths, steps); one to three gold blocks; one chest.
+  What each is: portal_1 a frame standing in the ground; _2 on a plinth by the stump of a wall with a barred window;
+  _3 fallen round a lava pool; _4 up steps on a raised floor; _5 one side fallen in, two blocks lying by it; _6
+  between two pillars under a broken lintel; _7 fallen and broken in two; _8 inside low walls with lava behind; _9 on
+  a pedestal; _10 sunk in a netherrack mound; giant_portal_1 a 6 × 10 frame between buttress stumps; _2 a 7 × 10 on a
+  plinth with steps; _3 a 7 × 10 fallen over lava, a piece broken off. The names, the count, which are giant and the
+  5% chance of a giant are vanilla's; the contents and sizes are mine.
+- **Setups.** As vanilla's `Structures.bootstrap`: standard (underground, air pocket 1, mossiness 0.2, can be cold,
+  weight 0.5; on the ground, air pocket 0.5), desert (partly buried, 0, 0), jungle (on the ground, 0.5, 0.8,
+  overgrown, vines), swamp (sea bed, 0, 0.5, vines), mountain (in the mountain, 1, 0.2, can be cold; on the ground,
+  0.5), ocean (sea bed, 0, 0.8, can be cold), nether (0.5, 0, blackstone). Unsure: the mountain kind's second setup
+  (on the ground), and in the Nether without an air pocket half at y 27-29 and half at 29-100.
+- **Biomes.** vanilla's tags: standard #is_beach, #is_river, #is_taiga, #is_forest (grove included), mushroom fields,
+  ice spikes, dripstone and lush caves, savanna, snowy plains, plains, sunflower plains; desert; #is_jungle; swamp and
+  mangrove swamp; mountain #is_badlands, #is_hill, savanna plateau, windswept savanna, stony shore, #is_mountain
+  (meadow, the peaks, snowy slopes, cherry grove); #is_ocean; #is_nether. The biome is read in 3D at the spot the
+  kind picks (so an underground standard portal can stand in a lush or dripstone cave under a desert, and none in the
+  deep dark), from the same climate as the chunks' cave biomes.
+- **Placing by chunk.** Vanilla builds the whole portal from the chunk its middle is in, looking into the chunks
+  round it. Here each chunk builds its own part: the template's blocks and the processors come out as vanilla's
+  (their randoms are vanilla's, seeded by each block's position with `Mth.getSeed`), but the netherrack spread, the
+  drips, the vines and the leaves draw from a hash per column (or block) instead of vanilla's one stream, and the
+  spread's offset `m` from one per portal. The chest's loot seed is a positional hash.
+- **The ground the spread sees.** Vanilla's spread reads the WORLD_SURFACE_WG / OCEAN_FLOOR_WG heightmaps, which don't
+  move for anything placed in the features step, so it sees the ground as it was before the portal. Kept: on uneven
+  ground the spread's netherrack and the drip under it (which goes in whatever is there) can eat into the frame's
+  crying obsidian and its bottom row, as vanilla's can. The template's ground layer is re-paved round the middle, so
+  the templates keep their gold and ruins above it.
+- **Heights.** On the noise terrain as the temples (vanilla getBaseHeight and getBaseColumn: `firstFreeHeight` and
+  `substanceAt`, three of the box's four corners solid), the same in every worker and on the main thread. In the
+  Nether: the noise's netherrack, lava below y 32.
+- **Lighting.** A standing frame lights once its gaps are filled and its crying obsidian swapped for obsidian (crying
+  obsidian doesn't make a frame, as in vanilla). The fallen ones can't be lit where they lie.
+- **Order in the step.** After the villages (vanilla: …, village_taiga, ruined_portal, …); in the Nether at the start of
+  its SURFACE_STRUCTURES step.
+- **Numbers used as vanilla's:** spacing 40, separation 15, salt 34222645, linear spread; the seven kinds each weight
+  1, drawn and struck off; gold 30% gone, lava to magma 20% (always on the sea bed, netherrack when cold), netherrack to
+  magma 7% (not when cold), obsidian 15% crying, bricks 50% aged (cracked or stairs, mossy by the setup's
+  mossiness), stairs 50% to mossy stairs or a mossy slab, slabs and walls mossy by mossiness; the spread's chances by
+  distance (1 × 9, 0.9, 0.9, 0.8, 0.7, 0.6, 0.4, 0.2: unsure of the table's length), drips 50% a block for up to 8,
+  leaves 50%; vines on a random side; the loot table (4-8 rolls: obsidian, flint, iron nuggets, flint and steel, fire
+  charge 40 each; golden apple, gold nuggets and the nine golden tools and armour, enchanted, 15 each; glistering
+  melon, golden horse armour, light pressure plate, golden carrots, clock, gold ingots 5 each; bell, enchanted golden
+  apple, gold block 1 each). Unsure: whether 1.21's table has a second pool (a lodestone, which the game hasn't got):
+  left out.
+
 ## 4. Tests
 
 Run with `node tests/mansion/<file>.mjs` (Node 22, after `npm ci`).
@@ -134,6 +200,24 @@ Run with `node tests/mansion/<file>.mjs` (Node 22, after `npm ci`).
   in the clear; the cobblestone foundation with nothing hollow; the front door open; stairs, fences and panes
   marked for shaping); `/locate` (and none in the Nether); the cost (laying out a mansion ≈ 1-2 ms, its chunks ≈ the
   same ms with and without it, the per-chunk lookup cached).
+- `tests/mansion/m2-ruined-portals.mjs`: **61 passed, 0 failed** (about 12 s). Placement with made-up terrains
+  (the start chunk from the salt 34222645, checked against java.util.Random; a portal of the right kind in every
+  region of an all-plains, desert, jungle, swamp, meadow, ocean and Nether world, with the kind's setups; none in the
+  deep dark, none of the Nether's in the Overworld or the Overworld's in the Nether; standard ones half underground,
+  always with an air pocket, half on the ground with one half the time; one in twenty giant, every template, turn and
+  mirror; the template, turn, mirror and height drawn in vanilla's order, checked against the random worked
+  independently; the heights of each placement; cold in snowy plains; the box turned about the template's middle as
+  vanilla's transform with a pivot); the templates (all 13, a chest and gold in each, 1-6 frame blocks lost, the frame
+  sizes, lava in some, three fallen); the processors, over portals placed chunk by chunk into flat ground (crying
+  obsidian 15%, gold taken 30%, lava kept 80%, magma 7%, bricks and stairs aged half the time; cold: lava to
+  netherrack and no magma; on the sea bed: magma for lava, waterlogged stairs, slabs, walls, bars and chests; the
+  jungle's vines each on one solid side and its persistent jungle leaves on netherrack, mostly mossy bricks; the
+  Nether's blackstone and chains); the spread (round the middle, none beyond 15 blocks, drips below) and the air
+  pocket underground; seed 12345's portals (the one under spawn: its chest with the loot table, filling from it when
+  opened, its box cleared; as found its frame doesn't light, repaired with obsidian flint and steel lights it into a
+  portal; the river, desert and Nether ones where the checklist says); `/locate` for the kinds in both dimensions (and
+  none in the wrong one); the cost (working out a region's portal ≈ 1.5 ms, its chunks ≈ the same ms with and without
+  it, the per-chunk lookup ≈ 10 µs).
 - The temples suites (`tests/temples/*.mjs`) all still pass, before and after the merge, and `npm run typecheck`
   is clean.
 - Also looked at in the browser (headless Chromium, seed 12345): the front from the forest (second storey windows,
@@ -158,3 +242,25 @@ Run with `node tests/mansion/<file>.mjs` (Node 22, after `npm ci`).
     up to their neighbours; no holes in the floors at corridor crossings.
 - **Two more:** `/locate` from -2000, 600 → -2240, ~, 576 (entrance -2233 62 583); from 2900, -2200 → 2864, ~, -2224
   (entrance 2871 70 -2217).
+
+Ruined portals (from spawn, 0 0):
+
+- **Under spawn:** `/locate structure ruined_portal` → 16, ~, 0: portal_6 underground at y 15, in a cleared box in
+  the rock (x 18-24, y 15-20, z -2..7). `/tp @s 24.3 16 7.3 145 5` stands in its corner looking at the frame, which
+  runs north-south at x 21 with its bottom row in the netherrack floor (the top of its south pillar gone, crying
+  obsidian in the lintel, iron bars and mossy stairs beside it); the chest at 19 16 6. Put obsidian in the gap and in
+  place of the crying obsidian, then flint and steel on its floor: it lights.
+- **On a river:** -544, ~, 240 (portal_1 on the water at y 62, its netherrack floating, drips below): `/tp @s -534 68
+  253 140 25`.
+- **Desert:** `/locate structure ruined_portal_desert` → 6000, ~, 6000: portal_3 fallen flat, half in the sand
+  (y 65-67), with its lava pool: `/tp @s 6011 73 6013 140 30`.
+- **Jungle:** `/locate structure ruined_portal_jungle` → 848, ~, -3056: portal_5 with vines and jungle leaves, mossy:
+  `/tp @s 858 69 -3043 140 28`.
+- **Swamp:** → 4032, ~, 3952 (portal_4 at y 63, vines). **Mountain:** → -1264, ~, -928 (portal_9 on the ground at
+  y 64). **Ocean:** → -640, ~, -944 (portal_7 fallen on the sea bed at y 45: magma for lava, waterlogged rubble).
+- **Giants:** -320, ~, -1824 (giant_portal_2 at y 77) and 2240, ~, -2368 (giant_portal_1 at y 72, in an air pocket).
+- **Nether:** in the Nether, `/locate structure ruined_portal_nether` → 16, ~, 0: portal_6 in blackstone (chains for
+  the bars) in a pocket in the netherrack at y 78.
+- Check: frames with gaps and crying obsidian; netherrack and magma round each (none under a cold one's lava, which is
+  netherrack), drips of it below; gold blocks (some taken); chests open with ruined portal loot (obsidian, flint,
+  flint and steel, fire charges, golden things); `/locate structure ruined_portal_nether` in the Overworld finds none.

@@ -103,7 +103,7 @@ const MIRRORED_FACING: Record<number, Record<string, string>> = { [LEFT_RIGHT]: 
 const HANDED: Record<string, string> = { inner_left: 'inner_right', inner_right: 'inner_left', outer_left: 'outer_right', outer_right: 'outer_left' };
 const mirroredCache: Map<number, number>[] = [new Map(), new Map(), new Map()];
 
-function mirrorState(st: number, mirror: Mirror): number {
+export function mirrorState(st: number, mirror: Mirror): number {
   if (!mirror || st <= 0) return st;
   const cache = mirroredCache[mirror];
   const c = cache.get(st);
