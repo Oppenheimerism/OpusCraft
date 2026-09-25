@@ -743,12 +743,21 @@ export abstract class LivingEntity extends Entity {
       if (lev >= 0) d2 += (0.05 * (lev + 1) - this.dy) * 0.2;
       else if (!this.noGravity()) d2 -= g;
       this.dx *= f3;
-      this.dy = d2 * 0.98;
+      // (vanilla: a FlyingAnimal's climb and fall fade as its flight does)
+      this.dy = d2 * (this.isFlyingAnimal() ? f3 : 0.98);
       this.dz *= f3;
     }
   }
 
+  /** vanilla Entity.isNoGravity (DATA_NO_GRAVITY): a flyer's move control turns gravity off while it flies somewhere */
+  noGravityFlag = false;
+
   noGravity(): boolean {
+    return this.noGravityFlag;
+  }
+
+  /** vanilla FlyingAnimal (the parrot) */
+  isFlyingAnimal(): boolean {
     return false;
   }
 

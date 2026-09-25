@@ -328,13 +328,15 @@ export class NonTameRandomTargetGoal extends NearestAttackableMobGoal {
 
 /**
  * vanilla TamableAnimal.TamableAnimalPanicGoal with DamageTypeTags.PANIC_ENVIRONMENTAL_CAUSES: it only runs from
- * what the world does to it (fire, lava, cactus, freezing, lightning...), and turns up by its owner if it's far behind
+ * what the world does to it (fire, lava, cactus, freezing, lightning...), and turns up by its owner if it's far behind;
+ * without the tag (`environmentalOnly` false: the parrot's) it runs from whatever hurts it, as any animal does
  */
 export class TamableAnimalPanicGoal extends PanicGoal {
-  constructor(readonly tamable: TamableAnimal, speed: number) {
+  constructor(readonly tamable: TamableAnimal, speed: number, readonly environmentalOnly = true) {
     super(tamable, speed);
   }
   protected override shouldPanic(): boolean {
+    if (!this.environmentalOnly) return super.shouldPanic();
     const s = this.tamable.recentDamageSource();
     return s !== null && ENVIRONMENTAL.has(s);
   }

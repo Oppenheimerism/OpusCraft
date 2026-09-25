@@ -330,6 +330,10 @@ export class Game {
     };
     inp.onLockChange = (locked) => {
       if (!locked && this.inWorld && this.spawned && !this.screen) this.openPause();
+      // (the browser keeps the Escape that lets the mouse go to itself: over a screen that holds on to the mouse,
+      // like the credits, letting go of it with the page still in front is that Escape)
+      const s = this.screen;
+      if (!locked && s && (s as { keepsMouse?: boolean }).keepsMouse && s.shouldCloseOnEsc() && document.hasFocus()) s.onClose();
     };
     // the browser refused to grab the mouse (no recent click): show the pause menu so a click on
     // "Back to Game" can grab it
@@ -531,6 +535,8 @@ export class Game {
         this.player.respawnForced = pd.respawn[3] === 1;
       }
       this.player.seenCredits = !!pd.seenCredits;
+      this.player.shoulderLeft = pd.shoulderLeft ?? null;
+      this.player.shoulderRight = pd.shoulderRight ?? null;
       this.spawnSearch = false;
       // vanilla RootVehicle: back in the minecart you left the game in
       const v = pd.vehicle && !pd.dead ? loadEntity(pd.vehicle, this.level) : null;
@@ -596,6 +602,8 @@ export class Game {
       vehicle: p.vehicle ? saveEntity(p.vehicle) : null,
       dimension: this.world.dim.id,
       seenCredits: p.seenCredits || undefined,
+      shoulderLeft: p.shoulderLeft ?? undefined,
+      shoulderRight: p.shoulderRight ?? undefined,
     };
     m.portals = this.portalPoi.save();
     m.arrivals = this.arrivals.save();
