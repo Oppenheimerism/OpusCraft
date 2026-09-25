@@ -57,6 +57,9 @@ export interface WorldMeta {
     seenCredits?: boolean;
     /** vanilla LastDeathLocation: the dimension and block they last died at */
     lastDeath?: { dim: string; pos: [number, number, number] };
+    /** vanilla ShoulderEntityLeft / ShoulderEntityRight: the parrots riding on its shoulders */
+    shoulderLeft?: SavedEntity | null;
+    shoulderRight?: SavedEntity | null;
   } | null;
   /** nether portal blocks per dimension (vanilla POI records), as x, y, z triples */
   portals?: Record<string, number[]>;

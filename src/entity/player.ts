@@ -17,6 +17,8 @@ import { findStandUpPosition } from '../game/sleep';
 import { hurtAndBreak, oxygenBonus } from '../item/enchantHelper';
 import { playerAttack } from '../game/combat';
 import { tryToStartFallFlying } from './elytra';
+import { shoulderHooks } from './shoulder';
+import type { SavedEntity } from './mob';
 
 export type GameMode = 'survival' | 'creative' | 'adventure' | 'spectator';
 
@@ -252,6 +254,8 @@ export class Player extends LivingEntity {
   }
 
   setGameMode(m: GameMode): void {
+    // (vanilla ServerPlayer.setGameMode: a spectator carries no one)
+    if (m === 'spectator' && this.gameMode !== 'spectator') this.removeEntitiesOnShoulder();
     this.gameMode = m;
     const creative = m === 'creative';
     this.mayFly = creative || m === 'spectator';
@@ -380,6 +384,49 @@ export class Player extends LivingEntity {
     this.handsBusy = false;
   }
 
+  // --- what rides on its shoulders (vanilla Player's ShoulderEntityLeft / ShoulderEntityRight) --------------------
+
+  /** a parrot on the left shoulder, as its saved record */
+  shoulderLeft: SavedEntity | null = null;
+  /** and on the right */
+  shoulderRight: SavedEntity | null = null;
+  /** vanilla timeEntitySatOnShoulder: the game time the last one got up there */
+  private timeEntitySatOnShoulder = 0;
+
+  /** vanilla Player.setEntityOnShoulder: only standing on the ground, out of water and powder snow; left one first */
+  setEntityOnShoulder(d: SavedEntity): boolean {
+    if (this.vehicle || !this.onGround || this.inWater || this.isInPowderSnow()) return false;
+    if (!this.shoulderLeft) this.shoulderLeft = d;
+    else if (!this.shoulderRight) this.shoulderRight = d;
+    else return false;
+    this.timeEntitySatOnShoulder = this.level.gameTime;
+    return true;
+  }
+
+  /** vanilla removeEntitiesOnShoulder: once they've been up there a second, both hop down */
+  removeEntitiesOnShoulder(): void {
+    if (this.timeEntitySatOnShoulder + 20 >= this.level.gameTime) return;
+    this.respawnEntityOnShoulder(this.shoulderLeft);
+    this.shoulderLeft = null;
+    this.respawnEntityOnShoulder(this.shoulderRight);
+    this.shoulderRight = null;
+  }
+
+  /** vanilla respawnEntityOnShoulder: back in the world just over the player, still theirs */
+  private respawnEntityOnShoulder(d: SavedEntity | null): void {
+    if (!d) return;
+    const e = shoulderHooks.load?.(d, this.level);
+    if (!e) return;
+    if ('ownerUUID' in e) (e as { ownerUUID: string | null }).ownerUUID = this.uuid;
+    e.setPos(this.x, this.y + 0.699999988079071, this.z);
+    this.level.addEntity(e);
+  }
+
+  /** vanilla isInPowderSnow: standing in powder snow */
+  isInPowderSnow(): boolean {
+    return BLOCKS[STATE_BLOCK[this.level.world.getState(Math.floor(this.x), Math.floor(this.y), Math.floor(this.z))]].name === 'powder_snow';
+  }
+
   override tick(): void {
     // vanilla LocalPlayer.aiStep input handling happens in serverAiStep via input state
     this.bobO = this.bob;
@@ -438,6 +485,10 @@ export class Player extends LivingEntity {
         else if (e instanceof Arrow) e.playerTouch(this);
       }
     }
+    // vanilla Player.aiStep: a parrot on a shoulder chatters; a drop, water, flying, sleeping or powder snow and they get off
+    if (this.shoulderLeft) shoulderHooks.ambient?.(this, this.shoulderLeft);
+    if (this.shoulderRight) shoulderHooks.ambient?.(this, this.shoulderRight);
+    if (this.fallDistance > 0.5 || this.inWater || this.flying || this.isSleeping() || this.isInPowderSnow()) this.removeEntitiesOnShoulder();
     if (this.flying) this.fallDistance = 0;
     this.updateGlidePose();
   }
@@ -660,6 +711,8 @@ export class Player extends LivingEntity {
 
   override hurt(amount: number, source: string, attacker?: Entity | null, direct?: Entity | null): boolean {
     if (this.isInvulnerableTo(source)) return false;
+    // (vanilla Player.hurt: whatever the damage comes to, the parrots on its shoulders fly off)
+    if (this.health > 0) this.removeEntitiesOnShoulder();
     // vanilla Player.hurt: damage caused by mobs (and all explosions) scales with difficulty
     const scales = source === 'explosion' || source === 'playerExplosion' || source === 'badRespawnPoint' || (attacker && attacker !== this && attacker instanceof LivingEntity && attacker.type !== 'player' && source !== 'thorns');
     if (scales) {
@@ -746,6 +799,8 @@ export class Player extends LivingEntity {
 
   override die(source: string, attacker: Entity | null = null): void {
     if (this.dead) return;
+    // (vanilla ServerPlayer.die)
+    this.removeEntitiesOnShoulder();
     super.die(source, attacker);
     // (vanilla ServerPlayer.die: setLastDeathLocation)
     this.lastDeathLocation = { dim: this.level.dim.id, pos: [Math.floor(this.x), Math.floor(this.y), Math.floor(this.z)] };

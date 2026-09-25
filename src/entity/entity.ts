@@ -1,7 +1,7 @@
 // Base entity with vanilla-style movement/collision.
 
 import { AABB, collideWithBoxes } from '../core/aabb';
-import { COLLISION, FLAGS, F_WATER, F_LAVA, BLOCKS, STATE_BLOCK, F_CLIMBABLE, type Box } from '../world/block';
+import { COLLISION, FLAGS, F_AIR, F_WATER, F_LAVA, BLOCKS, STATE_BLOCK, F_CLIMBABLE, type Box } from '../world/block';
 import type { World } from '../world/world';
 import { DYNAMIC_SHAPE, dynamicCollision } from '../world/dynamicShapes';
 import { fluidType, fluidHeight, fluidFlow, FLUID_WATER, FLUID_LAVA, FLUID_NONE } from '../world/fluids';
@@ -94,6 +94,8 @@ export abstract class Entity {
   walkDist = 0;
   walkDistO = 0;
   moveDist = 0;
+  /** vanilla flyDist: how far it's moved every way, up and down too (a flyer's wingbeats) */
+  flyDist = 0;
   private nextStep = 1;
   /** vanilla crystalSoundIntensity / lastCrystalSoundPlayTick (amethyst chimes while walking) */
   private crystalSoundIntensity = 0;
@@ -568,9 +570,12 @@ export abstract class Entity {
       const onState = this.level.world.getState(onX, onY, onZ);
       const climbing = this.onClimbable();
       const vy = climbing ? ry : 0;
+      this.flyDist += Math.sqrt(rx * rx + ry * ry + rz * rz) * 0.6;
       this.walkDist += Math.sqrt(rx * rx + rz * rz) * 0.6;
       this.moveDist += Math.sqrt(rx * rx + vy * vy + rz * rz) * 0.6;
-      if (this.moveDist > this.nextStep && (onState !== 0 || this.inWater || climbing) && this.makesStepSounds()) {
+      // vanilla processFlappingMovement: over air, a flyer's wings beat as it goes
+      if (FLAGS[onState] & F_AIR && !this.inWater && !climbing && this.makesStepSounds() && this.isFlapping()) this.onFlap();
+      else if (this.moveDist > this.nextStep && (onState !== 0 || this.inWater || climbing) && this.makesStepSounds()) {
         this.nextStep = this.nextStepDistance();
         if (this.inWater) this.playSwimSound();
         else if (this.onGround || climbing) {
@@ -668,6 +673,14 @@ export abstract class Entity {
   protected makesStepSounds(): boolean {
     return false;
   }
+
+  /** vanilla Entity.isFlapping: whether it's due a wingbeat (the parrot's, by how far it's flown) */
+  protected isFlapping(): boolean {
+    return false;
+  }
+
+  /** vanilla Entity.onFlap: a wingbeat's sound */
+  protected onFlap(): void {}
 
   /** vanilla Entity.nextStep: where along the walk the next step sounds */
   protected nextStepDistance(): number {

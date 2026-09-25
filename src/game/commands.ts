@@ -388,11 +388,70 @@ function snbtStack(e: string): ItemStack | null {
   return s;
 }
 
+/** the plain values at the top of an SNBT compound: numbers (their b/s/L/f/d dropped), strings, true and false */
+export function snbtScalars(nbt: string): Record<string, number | string | boolean> {
+  const out: Record<string, number | string | boolean> = {};
+  const s = nbt.trim(), n = s.length;
+  if (s[0] !== '{') return out;
+  let i = 1;
+  const ws = () => {
+    while (i < n && /\s/.test(s[i])) i++;
+  };
+  const quoted = () => {
+    const q = s[i++];
+    let v = '';
+    while (i < n && s[i] !== q) {
+      if (s[i] === '\\') i++;
+      v += s[i++];
+    }
+    i++;
+    return v;
+  };
+  while (i < n) {
+    ws();
+    if (s[i] === '}') break;
+    let key = '';
+    if (s[i] === '"' || s[i] === "'") key = quoted();
+    else while (i < n && /[\w.+-]/.test(s[i])) key += s[i++];
+    ws();
+    if (s[i] !== ':') break;
+    i++;
+    ws();
+    if (s[i] === '"' || s[i] === "'") out[key] = quoted();
+    else if (s[i] === '{' || s[i] === '[') {
+      // (a compound or a list: passed over)
+      let depth = 0, q = '';
+      for (; i < n; i++) {
+        const ch = s[i];
+        if (q) {
+          if (ch === '\\') i++;
+          else if (ch === q) q = '';
+        } else if (ch === '"' || ch === "'") q = ch;
+        else if (ch === '{' || ch === '[') depth++;
+        else if ((ch === '}' || ch === ']') && --depth === 0) {
+          i++;
+          break;
+        }
+      }
+    } else {
+      let v = '';
+      while (i < n && !/[,}\s]/.test(s[i])) v += s[i++];
+      const num = /^([-+]?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?)[bslfd]?$/i.exec(v);
+      out[key] = num ? Number(num[1]) : v === 'true' ? true : v === 'false' ? false : v;
+    }
+    ws();
+    if (s[i] === ',') i++;
+  }
+  return out;
+}
+
 /**
  * vanilla Mob.readAdditionalSaveData for /summon's entity data: ArmorItems (feet to head) and HandItems (main, off),
  * ArmorDropChances / HandDropChances, CanPickUpLoot, PersistenceRequired
  */
 function mobData(m: Mob, nbt: string): void {
+  // (a mob's own saved values: a parrot's or a horse's Variant, a sheep's Color, a baby's Age)
+  m.readSummonData(snbtScalars(nbt));
   // (a mob's own entity data, as a shulker's AttachFace, Peek and Color)
   (m as { readEntityData?: (nbt: string) => void }).readEntityData?.(nbt);
   const slots = { ArmorItems: ['feet', 'legs', 'chest', 'head'], HandItems: ['mainhand', 'offhand'] } as const;
