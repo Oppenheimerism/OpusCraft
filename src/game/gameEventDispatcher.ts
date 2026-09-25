@@ -61,6 +61,9 @@ export function blockListenerAt<T extends ListeningBlockEntity>(level: Level, x:
 interface EntityListener {
   entity: Entity;
   listener: GameEventListener;
+  /** the section its feet were in when it last moved on the register, and the one it listens in (vanilla lastSection) */
+  feet: [number, number, number] | null;
+  section: [number, number, number] | null;
 }
 
 /** vanilla DynamicGameEventListener: the listeners that go about with an entity (a warden's), by level */
@@ -71,7 +74,7 @@ export function registerEntityListener(level: Level, entity: Entity, listener: G
   let set = ENTITY_LISTENERS.get(level);
   if (!set) ENTITY_LISTENERS.set(level, (set = new Set()));
   for (const l of set) if (l.entity === entity && l.listener === listener) return;
-  set.add({ entity, listener });
+  set.add({ entity, listener, feet: null, section: null });
 }
 
 /**
@@ -112,12 +115,20 @@ export function postGameEvent(level: Level, event: GameEventName, x: number, y: 
   if (moving)
     for (const el of moving) {
       const e = el.entity;
-      if (e.removed) {
+      if (e.removed || e.level !== level) {
         moving.delete(el);
         continue;
       }
-      const ex = Math.floor(e.x), ey = Math.floor(e.y), ez = Math.floor(e.z);
-      if (ex >> 4 < cx0 || ex >> 4 > cx1 || ez >> 4 < cz0 || ez >> 4 > cz1 || ey >> 4 < sy0 || ey >> 4 > sy1) continue;
+      // vanilla DynamicGameEventListener.move: each time its feet cross into another section, it goes on the register
+      // of the section its listener is in just then (a warden's, the one its head is in)
+      const fx = Math.floor(e.x) >> 4, fy = Math.floor(e.y) >> 4, fz = Math.floor(e.z) >> 4;
+      if (!el.feet || el.feet[0] !== fx || el.feet[1] !== fy || el.feet[2] !== fz) {
+        el.feet = [fx, fy, fz];
+        const p = el.listener.listenerPosition(level);
+        if (p) el.section = [Math.floor(p[0]) >> 4, Math.floor(p[1]) >> 4, Math.floor(p[2]) >> 4];
+      }
+      const s = el.section;
+      if (!s || s[0] < cx0 || s[0] > cx1 || s[2] < cz0 || s[2] > cz1 || s[1] < sy0 || s[1] > sy1) continue;
       visit(el.listener);
     }
   // vanilla handleGameEventMessagesInQueue: the BY_DISTANCE listeners, the nearest first

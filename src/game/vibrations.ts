@@ -137,8 +137,12 @@ const gameModeOf = (e: Entity): string | null => ('gameMode' in e ? String((e as
 /** vanilla Entity.isSteppingCarefully: sneaking */
 const steppingCarefully = (e: Entity): boolean => e.isShiftKeyDown();
 
-/** vanilla Entity.dampensVibrations (ItemEntity's: its stack is #dampens_vibrations): a dropped wool or carpet */
+/**
+ * vanilla Entity.dampensVibrations: ItemEntity's (its stack is #dampens_vibrations: a dropped wool or carpet), and
+ * the warden's (always: nothing hears it go about)
+ */
 function entityDampens(e: Entity): boolean {
+  if ((e as { dampensVibrations?: () => boolean }).dampensVibrations?.()) return true;
   const stack = (e as { stack?: ItemStack | null }).stack;
   return e.type === 'item' && !!stack && itemDampensVibrations(stack.item.id);
 }

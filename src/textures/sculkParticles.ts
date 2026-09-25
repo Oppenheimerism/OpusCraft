@@ -1,6 +1,7 @@
 // The deep dark's particle sprites, drawn in code: the vibration (vanilla particle/vibration), the shriek's ring
 // (shriek), a sculk charge's glow shrinking away (sculk_charge_0..6), its pop as it's spent (sculk_charge_pop_0..3)
-// and the sculk soul that rises from a blooming catalyst (sculk_soul_0..10), all in sculk's cold teal.
+// and the sculk soul that rises from a blooming catalyst (sculk_soul_0..10), all in sculk's cold teal; and (M4) the
+// ring of a warden's sonic boom (sonic_boom_0..15).
 
 import { TexImage, img, plot, pattern, Rand } from './tex';
 
@@ -113,10 +114,32 @@ function sculkSoul(i: number): TexImage {
   return t;
 }
 
+/**
+ * (M4: the warden) vanilla sonic_boom_i: a ring bursting outward, thick and white-hot at first, spreading thinner
+ * and deeper in colour, an echo of it following inside, and breaking up as it goes
+ */
+function sonicBoom(i: number): TexImage {
+  const t = img(16, 16);
+  const r = new Rand(0x50b0 + i);
+  const k = i / 15;
+  const radius = 1.2 + k * 6.3, width = 1.5 - k * 0.8;
+  const echo = radius * 0.55, echoWidth = 0.45;
+  for (let y = 0; y < 16; y++)
+    for (let x = 0; x < 16; x++) {
+      const d = Math.hypot(x - 7.5, y - 7.5);
+      const off = d - radius;
+      if (k > 0.55 && r.nextFloat() < (k - 0.55) * 1.3) continue;
+      if (Math.abs(off) <= width) plot(t, x, y, off > width * 0.35 ? (k < 0.5 ? PALE : CYAN) : off < -width * 0.35 ? (k < 0.4 ? CYAN : TEAL) : k < 0.3 ? GLOW : k < 0.7 ? PALE : CYAN);
+      else if (i >= 3 && i <= 12 && Math.abs(d - echo) <= echoWidth) plot(t, x, y, i < 8 ? CYAN : TEAL);
+    }
+  return t;
+}
+
 export function sculkParticleTextures(): Record<string, () => TexImage> {
   const out: Record<string, () => TexImage> = { vibration, shriek };
   for (let i = 0; i < 7; i++) out[`sculk_charge_${i}`] = () => sculkCharge(i);
   for (let i = 0; i < 4; i++) out[`sculk_charge_pop_${i}`] = () => sculkChargePop(i);
   for (let i = 0; i < 11; i++) out[`sculk_soul_${i}`] = () => sculkSoul(i);
+  for (let i = 0; i < 16; i++) out[`sonic_boom_${i}`] = () => sonicBoom(i);
   return out;
 }

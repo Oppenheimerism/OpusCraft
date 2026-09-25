@@ -116,7 +116,7 @@ Object.assign(SOUNDS, foxSounds());
 Object.assign(SOUNDS, frogSounds());
 // (the deep dark: sculk, its sensors, shrieker and catalyst; candles)
 Object.assign(SOUNDS, sculkSounds());
-// (the warden's voice: so far its answers to a shrieker's warnings)
+// (the warden's voice: its answers to a shrieker's warnings, and (M4) the rest of it)
 Object.assign(SOUNDS, wardenSounds());
 // (vanilla sounds.json: the snow golem's are the snow's breaking, the bow's and the shears')
 for (const [k, v] of Object.entries({ 'entity.snow_golem.hurt': 'block.snow.break', 'entity.snow_golem.death': 'block.snow.break', 'entity.snow_golem.shoot': 'entity.arrow.shoot', 'entity.snow_golem.shear': 'entity.sheep.shear' })) if (SOUNDS[v]) SOUNDS[k] = SOUNDS[v];

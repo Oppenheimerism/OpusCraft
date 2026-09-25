@@ -24,7 +24,7 @@ export function buildParticleAtlas(gl: GL): { texture: WebGLTexture; rects: Reco
   Object.assign(src, glitterTextures());
   // a firework's flash (vanilla particle/flash)
   Object.assign(src, fireworkParticleTextures());
-  // the deep dark's: vibration, shriek, sculk_charge_0..6, sculk_charge_pop_0..3, sculk_soul_0..10
+  // the deep dark's: vibration, shriek, sculk_charge_0..6, sculk_charge_pop_0..3, sculk_soul_0..10 (and M4's sonic_boom_0..15)
   Object.assign(src, sculkParticleTextures());
   // item crumb particles (vanilla ItemParticleOption)
   if (ITEM_TEXTURES['slime_ball']) src['item_slime_ball'] = ITEM_TEXTURES['slime_ball'];

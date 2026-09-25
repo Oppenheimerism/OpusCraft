@@ -1,9 +1,10 @@
 // The deep dark's particles: the vibration flying to a sculk sensor (vanilla VibrationSignalParticle), the rings a
 // shrieker sends up (ShriekParticle), the glow of a charge creeping over sculk and its pop as it's spent
 // (SculkChargeParticle, SculkChargePopParticle), the souls over a blooming catalyst (SoulParticle, sculk_soul) and
-// the specks an active sensor gives off, sculk teal turning redstone red (DustColorTransitionParticle). All but the
-// specks glow in the dark and are drawn translucent; the vibration and the rings are quads turned in the world
-// rather than toward the camera. The ParticleEngine hands these over and ticks and draws them with its own.
+// the specks an active sensor gives off, sculk teal turning redstone red (DustColorTransitionParticle), and (M4) the
+// rings of a warden's sonic boom (SonicBoomParticle). All but the specks glow in the dark; they and the booms are
+// drawn opaque, the rest translucent; the vibration and the rings are quads turned in the world rather than toward
+// the camera. The ParticleEngine hands these over and ticks and draws them with its own.
 
 import type { EntityBatch } from './entityRenderer';
 import type { Camera } from './renderer';
@@ -15,7 +16,7 @@ import { AABB, collideWithBoxes } from '../core/aabb';
 type Vec3 = [number, number, number];
 
 interface SculkParticle {
-  kind: 'vibration' | 'shriek' | 'sculk_charge' | 'sculk_charge_pop' | 'sculk_soul' | 'dust_color_transition';
+  kind: 'vibration' | 'shriek' | 'sculk_charge' | 'sculk_charge_pop' | 'sculk_soul' | 'dust_color_transition' | 'sonic_boom';
   x: number; y: number; z: number;
   xo: number; yo: number; zo: number;
   dx: number; dy: number; dz: number;
@@ -52,6 +53,8 @@ const CHARGE_POP = Array.from({ length: 4 }, (_, i) => `sculk_charge_pop_${i}`);
 const SOUL = Array.from({ length: 11 }, (_, i) => `sculk_soul_${i}`);
 /** vanilla particles/dust_color_transition.json: the dust's frames (here the generic puffs, largest first) */
 const DUST = Array.from({ length: 8 }, (_, i) => `generic_${i}`);
+/** (M4: the warden) vanilla particles/sonic_boom.json */
+const BOOM = Array.from({ length: 16 }, (_, i) => `sonic_boom_${i}`);
 
 const lerp = (t: number, a: number, b: number): number => a + (b - a) * t;
 const clamp01 = (v: number): number => (v < 0 ? 0 : v > 1 ? 1 : v);
@@ -162,8 +165,21 @@ export class SculkParticles {
     this.add(p);
   }
 
-  /** the plain deep-dark particle types by name (vanilla sculk_soul, sculk_charge_pop); false if it isn't one */
+  /** the plain deep-dark particle types by name (vanilla sculk_soul, sculk_charge_pop, sonic_boom); false if it isn't one */
   spawn(kind: string, x: number, y: number, z: number, xd: number, yd: number, zd: number): boolean {
+    if (kind === 'sonic_boom') {
+      // (M4: the warden) vanilla SonicBoomParticle, a HugeExplosionParticle: still, its own light, a random grey
+      // over it, three blocks across, its sixteen frames over sixteen ticks
+      const p = this.base(kind, x, y, z);
+      const f = Math.random() * 0.6 + 0.4;
+      p.r = p.g = p.b = f;
+      p.size = 1.5;
+      p.lifetime = 16;
+      p.physics = false;
+      p.frames = BOOM;
+      this.add(p);
+      return true;
+    }
     if (kind === 'sculk_charge_pop') {
       // vanilla SculkChargePopParticle
       const p = this.base(kind, x, y, z);
@@ -233,6 +249,8 @@ export class SculkParticles {
       p.pitch = Math.atan2(f, Math.sqrt(e * e + g * g));
       return true;
     }
+    // vanilla HugeExplosionParticle.tick: it only ages
+    if (p.kind === 'sonic_boom') return true;
     // vanilla Particle.tick (gravity 0 for all of these)
     this.move(p);
     if (p.speedUpWhenBlocked && p.y === p.yo) {
@@ -277,19 +295,23 @@ export class SculkParticles {
     p.z += dz;
   }
 
-  /** draw them: the dust specks opaque, then the rest blended (vanilla PARTICLE_SHEET_OPAQUE and _TRANSLUCENT) */
+  /**
+   * draw them: the dust specks and the sonic booms opaque, then the rest blended (vanilla PARTICLE_SHEET_OPAQUE and
+   * PARTICLE_SHEET_LIT, then _TRANSLUCENT)
+   */
   render(batch: EntityBatch, cam: Camera, partial: number, texture: WebGLTexture, rects: Record<string, SpriteRectUV>): void {
     if (!this.list.length) return;
     let translucent = false;
+    const opaque = (p: SculkParticle): boolean => p.kind === 'dust_color_transition' || p.kind === 'sonic_boom';
     batch.begin({ texture, cutoff: 0.1, blend: false, cull: false, lit: false, useLightmap: true });
     for (const p of this.list) {
-      if (p.kind === 'dust_color_transition') this.renderOne(batch, p, cam, partial, rects);
+      if (opaque(p)) this.renderOne(batch, p, cam, partial, rects);
       else translucent = true;
     }
     batch.flush();
     if (!translucent) return;
     batch.begin({ texture, cutoff: 0.01, blend: true, cull: false, lit: false, useLightmap: true, depthWrite: false });
-    for (const p of this.list) if (p.kind !== 'dust_color_transition') this.renderOne(batch, p, cam, partial, rects);
+    for (const p of this.list) if (!opaque(p)) this.renderOne(batch, p, cam, partial, rects);
     batch.flush();
   }
 

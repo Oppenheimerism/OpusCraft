@@ -574,6 +574,8 @@ for (const [id, tex] of [['redstone_torch', 'block:redstone_torch'], ['repeater'
     after(b.name, prev);
     prev = b.name;
   }
+  // (M4) vanilla Items.WARDEN_SPAWN_EGG
+  reg({ id: 'warden_spawn_egg', texture: 'warden_spawn_egg', creativeTab: 'spawn_eggs' });
 }
 
 export function itemForBlock(name: string): Item | undefined {

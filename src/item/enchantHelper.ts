@@ -318,6 +318,8 @@ const FALL = new Set(['fall', 'stalagmite', 'enderPearl']);
  */
 export function damageProtection(e: unknown, source: string): number {
   if (source === 'void' || source === 'genericKill') return 0;
+  // (M4: the warden) vanilla #bypasses_enchantments: its sonic boom
+  if (source === 'sonicBoom') return 0;
   let f = 0;
   for (const [slot, s] of equipment(e)) {
     const m = s.tag?.enchantments;

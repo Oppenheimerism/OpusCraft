@@ -975,6 +975,9 @@ export class Game {
         return `${n} was squashed by a falling block`;
       case 'thorns':
         return `${n} was killed while trying to hurt ${kn}`;
+      // (M4: the warden) vanilla death.attack.sonic_boom
+      case 'sonicBoom':
+        return `${n} was obliterated by a sonically-charged shriek`;
       default:
         return `${n} died`;
     }

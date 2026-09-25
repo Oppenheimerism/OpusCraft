@@ -477,6 +477,12 @@ const answers = (sounds, t) => sounds.filter((s) => s.t === t && s.name.startsWi
   ticks(level, 10);
   const r2 = round();
   check('shrieker: warned in the last 10 seconds, a player isn\'t warned again, and the shrieker stays quiet', !r2.shrieked && tr.warningLevel === 1 && tr.cooldownTicks > 0);
+  // (the warden itself is M4's, tests/ancient-city/m4-warden.mjs: here a stand-in for its summoning finds no room at
+  // the first fourth warning, and calls it up at the next)
+  const summon = m.shriekerHooks.summonWarden;
+  const calls = [];
+  let room = false;
+  m.shriekerHooks.summonWarden = (_lvl, x, y, z) => (calls.push([x, y, z]), room);
   const want = ['entity.warden.nearby_closer', 'entity.warden.nearby_closest', 'entity.warden.listening_angry'];
   const got = [];
   for (let i = 0; i < 3; i++) {
@@ -486,15 +492,15 @@ const answers = (sounds, t) => sounds.filter((s) => s.t === t && s.name.startsWi
     ticks(level, 90);
     got.push(`${r.shrieked}:${tr.warningLevel}:${answers(sounds, level.gameTime).map((s) => s.name).join('+')}`);
   }
-  check('shrieker: warnings 2, 3 and 4 are answered nearer each time, then angrily (no warden to come yet)', got.join() === want.map((w, i) => `true:${i + 2}:${w}`).join(), got.join());
-  // the fifth: still at 4, the warden's summoning hook is called (the warden itself: M4), and nothing else answers
-  const calls = [];
-  m.shriekerHooks.summonWarden = (_lvl, x, y, z) => (calls.push([x, y, z]), true);
+  check('shrieker: warnings 2, 3 and 4 are answered nearer each time, then angrily (at 4, when the warden finds no room)', got.join() === want.map((w, i) => `true:${i + 2}:${w}`).join() && calls.length === 1, got.join());
+  // the fifth: still at 4, the warden is called up, and nothing else answers
+  room = true;
+  calls.length = 0;
   while (tr.cooldownTicks > 0) level.tick();
   ticks(level, 45);
   const r5 = round();
   ticks(level, 90);
-  m.shriekerHooks.summonWarden = null;
+  m.shriekerHooks.summonWarden = summon;
   check('shrieker: at warning 4 it calls the warden up, from where it is, and nothing answers instead', r5.shrieked && tr.warningLevel === 4 && calls.length === 1 && calls[0].join() === `0,${G},0` && answers(sounds, level.gameTime).length === 0);
   // a zombie's steps set the sensor off, but the shrieker hears only a player behind it (the zombie isn't let loose
   // in the level, or it would go for the player, whose being hurt the sensor hears)

@@ -37,6 +37,8 @@ import { Goat } from '../entity/goat';
 // (M9: frogs)
 import { Frog } from '../entity/frog';
 import { Tadpole } from '../entity/tadpole';
+// (M4: the deep dark's warden; its module also answers a shrieker's fourth warning)
+import { Warden } from '../entity/warden';
 import { waterSpawnsFor } from './oceanSpawns';
 import { despawnDistance } from '../entity/mob';
 import { Husk, Stray } from '../entity/biomeMonsters';
@@ -916,5 +918,8 @@ Object.assign(ENTITY_NAMES, { goat: 'Goat' });
 // (M9: frogs)
 Object.assign(MOB_TYPES, { frog: (l: Level) => new Frog(l), tadpole: (l: Level) => new Tadpole(l) });
 Object.assign(ENTITY_NAMES, { frog: 'Frog', tadpole: 'Tadpole' });
+// (M4: the deep dark's warden)
+Object.assign(MOB_TYPES, { warden: (l: Level) => new Warden(l) });
+Object.assign(ENTITY_NAMES, { warden: 'Warden' });
 /** (Stage 5: ocean) vanilla SpawnPlacements IN_WATER: these spawn in water (the squid's and the guardian's are above) */
 const IN_WATER = new Set(['cod', 'salmon', 'pufferfish', 'tropical_fish', 'dolphin', 'glow_squid', 'axolotl']);

@@ -223,6 +223,8 @@ export interface NodeEvaluator {
   getStart(): Node | null;
   /** fills `out` with the nodes to try from `node`, returning how many */
   neighbors(out: Node[], node: Node): number;
+  /** (M4: the warden) vanilla PathFinder.distance: a step's length, when it isn't the straight line's */
+  stepDistance?(a: Node, b: Node): number;
 }
 
 /** ground-walking node evaluator (vanilla WalkNodeEvaluator) */
@@ -916,7 +918,7 @@ export function findPath(evaluator: NodeEvaluator, world: World, mob: PathMob, t
     const k = evaluator.neighbors(nb, node);
     for (let i = 0; i < k; i++) {
       const n = nb[i];
-      const d = node.distanceTo(n);
+      const d = evaluator.stepDistance ? evaluator.stepDistance(node, n) : node.distanceTo(n);
       n.walkedDistance = node.walkedDistance + d;
       const g = node.g + d + n.costMalus;
       if (n.walkedDistance < maxRange && (!n.inOpenSet() || g < n.g)) {
