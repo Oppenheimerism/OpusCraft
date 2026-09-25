@@ -3,9 +3,10 @@
 import type { Level } from './level';
 import type { Player } from '../entity/player';
 import { raycast, BlockHit } from './raycast';
-import { destroyProgress, placementState, canReplace, canSurvive, isCorrectTool, blockExperience, hasVacantFace } from './blockRules';
+import { destroyProgress, placementState, canReplace, canSurvive, isCorrectTool, blockExperience, hasVacantFace, isMultiface } from './blockRules';
 import { behaviorOf } from './blockBehavior';
 import { lightCampfire, dowseCampfire } from './villageBlocks';
+import { lightCandle } from './candles';
 import { itemBehaviorOf } from './itemBehavior';
 import { openSound } from './redstone/components';
 import { BLOCKS, BLOCK_BY_NAME, STATE_BLOCK, FLAGS, F_AIR, F_WATER, F_LAVA, F_OPAQUE, F_REPLACEABLE, COLLISION, FACE_OCC, getBlock, S } from '../world/block';
@@ -504,7 +505,8 @@ export class Interaction {
     const clickedBlock = BLOCKS[STATE_BLOCK[clicked]];
     const replaceClicked =
       (FLAGS[clicked] & F_REPLACEABLE && clickedBlock !== block && !(clickedBlock.name === 'water' && block.name !== 'water')) ||
-      (clickedBlock === block && block.name === 'glow_lichen' && hasVacantFace(clicked));
+      (clickedBlock === block && isMultiface(block.name) && hasVacantFace(clicked)) ||
+      !!behaviorOf(clicked)?.canBeReplaced?.(clicked, block, p.crouching);
     // slab merging into a double slab
     if (clickedBlock === block && block.name.endsWith('_slab')) {
       const type = block.get(clicked, 'type');
@@ -525,7 +527,7 @@ export class Interaction {
     if (y < world.dim.minY || y >= world.dim.maxY) return false;
     const target = world.getState(x, y, z);
     const targetBlock = BLOCKS[STATE_BLOCK[target]];
-    if (!(canReplace(target, block) || (targetBlock.name === 'water' && block.name !== 'water'))) {
+    if (!(canReplace(target, block, p.crouching) || (targetBlock.name === 'water' && block.name !== 'water'))) {
       // slab into slab at adjacent position
       if (targetBlock === block && block.name.endsWith('_slab') && block.get(target, 'type') !== 'double') {
         return this.commitPlace(x, y, z, block.with(target, 'type', 'double'), stack, block.sound);
@@ -693,9 +695,9 @@ export class Interaction {
       p.swing();
       return true;
     }
-    // vanilla FlintAndSteelItem.useOn: light a campfire that is out, else a fire on the clicked face
+    // vanilla FlintAndSteelItem.useOn: light a campfire or candles that are out, else a fire on the clicked face
     if (id === 'flint_and_steel' || id === 'fire_charge') {
-      const lit = lightCampfire(lvl, h.x, h.y, h.z);
+      const lit = lightCampfire(lvl, h.x, h.y, h.z) || lightCandle(lvl, h.x, h.y, h.z);
       const fx = lit ? h.x : h.x + DX[h.face], fy = lit ? h.y : h.y + DY[h.face], fz = lit ? h.z : h.z + DZ[h.face];
       if (lit || canPlaceFire(lvl.world, fx, fy, fz, DIR_NAMES[dirFromYaw(p.yaw)])) {
         if (!lit) placeFire(lvl, fx, fy, fz, fireStateAt(lvl.world, fx, fy, fz));

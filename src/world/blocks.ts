@@ -20,6 +20,8 @@ import { registerInfestedBlocks } from './blocksInfested';
 import { registerOceanBlocks } from './blocksOcean';
 // (fossils)
 import { registerFossilBlocks } from './blocksFossils';
+// (the deep dark)
+import { registerDeepDarkBlocks } from './blocksDeepDark';
 
 const px = (v: number) => v / 16;
 const bx = (x0: number, y0: number, z0: number, x1: number, y1: number, z1: number): Box => [px(x0), px(y0), px(z0), px(x1), px(y1), px(z1)];
@@ -634,6 +636,8 @@ registerInfestedBlocks();
 registerOceanBlocks();
 // (fossils)
 registerFossilBlocks();
+// (the deep dark)
+registerDeepDarkBlocks();
 
 finalizeBlocks();
 

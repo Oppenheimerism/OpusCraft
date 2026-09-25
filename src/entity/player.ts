@@ -130,6 +130,8 @@ export class Player extends LivingEntity {
   respawnForced = false;
   /** vanilla ServerPlayer.seenCredits: they've left the End through its exit portal before (the End Poem and credits roll only the first time) */
   seenCredits = false;
+  /** vanilla Player.lastDeathLocation: the dimension and block they last died at (the recovery compass points there) */
+  lastDeathLocation: { dim: string; pos: [number, number, number] } | null = null;
   /** bed head block while asleep (vanilla sleepingPos) */
   sleepingPos: [number, number, number] | null = null;
   /** vanilla sleepCounter: climbs to 100 asleep, then 100..110 fades back after waking */
@@ -712,6 +714,8 @@ export class Player extends LivingEntity {
   override die(source: string, attacker: Entity | null = null): void {
     if (this.dead) return;
     super.die(source, attacker);
+    // (vanilla ServerPlayer.die: setLastDeathLocation)
+    this.lastDeathLocation = { dim: this.level.dim.id, pos: [Math.floor(this.x), Math.floor(this.y), Math.floor(this.z)] };
     this.onDeath?.(this, source);
   }
 

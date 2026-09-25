@@ -13,6 +13,7 @@ import type { Rand } from '../core/rng';
 import type { Hand } from '../item/inventory';
 import type { PlaceContext } from './blockRules';
 import type { BlockEntity } from '../world/blockEntity';
+import type { Block } from '../world/block';
 
 /** a right click on the block (vanilla BlockHitResult) */
 export interface UseContext {
@@ -95,6 +96,11 @@ export interface BlockBehavior {
   cloneStack?(level: Level, x: number, y: number, z: number, state: number): ItemStack | null;
   /** vanilla getSoundType(state).getBreakSound(), where it isn't the block's own (a cracked pot's shatter) */
   breakSound?(state: number): string;
+  /**
+   * vanilla canBeReplaced(state, BlockPlaceContext): placing `block` (sneaking or not) goes into this block's place
+   * instead of against it (another candle into a candle: its count goes up)
+   */
+  canBeReplaced?(state: number, block: Block, sneaking: boolean): boolean;
 }
 
 const BEHAVIORS: (BlockBehavior | undefined)[] = [];

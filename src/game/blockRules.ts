@@ -52,6 +52,9 @@ export const MULTIFACE: [string, number, number, number, number][] = [
   ['down', 0, -1, 0, UP], ['up', 0, 1, 0, DOWN], ['north', 0, 0, -1, SOUTH], ['south', 0, 0, 1, NORTH], ['west', -1, 0, 0, EAST], ['east', 1, 0, 0, WEST],
 ];
 
+/** the multiface blocks (vanilla MultifaceBlock): glow lichen and the sculk vein */
+export const isMultiface = (name: string): boolean => name === 'glow_lichen' || name === 'sculk_vein';
+
 /** vanilla MultifaceBlock.canAttachTo: the neighbour's touching face is full */
 export function multifaceSupported(world: World, x: number, y: number, z: number, face: string): boolean {
   const m = MULTIFACE.find((f) => f[0] === face)!;
@@ -124,7 +127,7 @@ export function canSurvive(world: World, x: number, y: number, z: number, state:
     const inWater = blk(here) === b ? !!b.get(here, 'waterlogged') : blk(here).name === 'water' && blk(here).get(here, 'level') === 0;
     return inWater && PLANT_SOIL.has(bn);
   }
-  if (n === 'glow_lichen') return MULTIFACE.some(([d]) => b.get(state, d) && multifaceSupported(world, x, y, z, d));
+  if (isMultiface(n)) return MULTIFACE.some(([d]) => b.get(state, d) && multifaceSupported(world, x, y, z, d));
   if (n === 'pointed_dripstone') return dripstoneSupported(world, x, y, z, b.get(state, 'vertical_direction') as 'up' | 'down');
   if (AMETHYST_BUD.test(n)) {
     // vanilla AmethystClusterBlock.canSurvive: the block it grows out of has a full face towards it
@@ -290,7 +293,7 @@ export function placementState(block: Block, ctx: PlaceContext): number | null {
   }
   // vanilla MultifaceBlock.getStateForPlacement: the first face, towards the clicked block and then
   // in the order the player looks, that is still free and can hang on its neighbour
-  if (n === 'glow_lichen') {
+  if (isMultiface(n)) {
     const cur = ctx.world.getState(ctx.x, ctx.y, ctx.z);
     const base = blk(cur) === block ? cur : blk(cur).name === 'water' && blk(cur).get(cur, 'level') === 0 ? block.with(st, 'waterlogged', true) : st;
     const looking = lookingDirections(ctx.yaw, ctx.pitch);
@@ -412,13 +415,14 @@ function doorHinge(ctx: PlaceContext, facing: string): 'left' | 'right' {
 }
 
 /** Is the target position replaceable by placing `block`? */
-export function canReplace(target: number, block: Block): boolean {
+export function canReplace(target: number, block: Block, sneaking = false): boolean {
+  if (behaviorOf(target)?.canBeReplaced?.(target, block, sneaking)) return true;
   const f = FLAGS[target];
   if (f & F_AIR) return true;
   if (f & F_REPLACEABLE) {
     const tb = blk(target);
-    // (more glow lichen adds a face to the lichen already there)
-    if (tb === block) return block.name === 'glow_lichen' && hasVacantFace(target);
+    // (more glow lichen adds a face to the lichen already there; sculk vein the same)
+    if (tb === block) return isMultiface(block.name) && hasVacantFace(target);
     return true;
   }
   return false;
@@ -502,6 +506,9 @@ export function blockExperience(state: number, tool: Item | null, r: Rand, silk 
     case 'nether_gold_ore': return uniform(0, 1);
     case 'redstone_ore': return 1 + r.nextInt(5);
     case 'spawner': return 15 + r.nextInt(15) + r.nextInt(15);
+    // (the deep dark: vanilla SculkBlock's point, and the five of the catalyst, the sensors and the shrieker)
+    case 'sculk': return 1;
+    case 'sculk_catalyst': case 'sculk_sensor': case 'calibrated_sculk_sensor': case 'sculk_shrieker': return 5;
   }
   return 0;
 }

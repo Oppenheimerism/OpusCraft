@@ -3,7 +3,7 @@
 // renderer. Input is a padded 20^3 copy of blocks + light around a section.
 
 import {
-  BLOCKS, STATE_BLOCK, OPACITY, EMISSION, FLAGS, FACE_OCC, LAYER, STATE_VIEWS,
+  BLOCKS, STATE_BLOCK, OPACITY, EMISSION, EMISSIVE, FLAGS, FACE_OCC, LAYER, STATE_VIEWS,
   F_AIR, F_OPAQUE, F_FULL_COLLISION, F_VIEW_BLOCKING, F_WATER, F_LAVA, F_CULL_SAME, F_LEAVES, F_HAS_MODEL, F_COLLIDE,
 } from '../world/block';
 import type { Block } from '../world/block';
@@ -186,9 +186,14 @@ const PRIMARY_AXIS = [0, 0, 1, 0, 1, 1];
 
 let inp: MeshInput;
 
+/** full sky and block light (vanilla LightTexture.FULL_BRIGHT), packed as lightPacked's */
+const FULL_BRIGHT = (15 << 12) | (15 << 4);
+
 function lightPacked(i: number): number {
   // returns (sky*16) << 8 | (block*16), with block raised to emission
   const st = inp.blocks[i];
+  // (vanilla LevelRenderer.getLightColor: an emissive state is full bright)
+  if (EMISSIVE[st]) return FULL_BRIGHT;
   const l = inp.light[i];
   let blk = l & 15;
   const e = EMISSION[st];
@@ -335,7 +340,8 @@ function emitQuad(
     }
   } else {
     const li = q.flush ? pidx(x + DX[d], y + DY[d], z + DZ[d]) : selfIdx;
-    const l = flatLight(li);
+    // (vanilla renderModelFaceFlat asks getLightColor with the drawn block's state: an emissive one is full bright)
+    const l = EMISSIVE[inp.blocks[selfIdx]] ? FULL_BRIGHT : flatLight(li);
     const sky = (l >> 8) & 0xff, blk = l & 0xff;
     for (let k = 0; k < 4; k++) {
       w.vertex(x + ox + pos[k * 3], y + oy + pos[k * 3 + 1], z + oz + pos[k * 3 + 2], uv[k * 2], uv[k * 2 + 1], r * shade, g * shade, b * shade, alpha, blk, sky);

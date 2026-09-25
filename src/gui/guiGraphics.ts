@@ -5,6 +5,7 @@ import type { TexImage } from '../textures/tex';
 import type { FontData } from '../textures/font';
 import type { ItemStack } from '../item/item';
 import { crossbowTexture } from '../item/crossbow';
+import { dialTexture } from '../item/compass';
 import { itemLayers, layerTint } from '../item/itemColors';
 
 export const COLOR_CODES: Record<string, number> = {
@@ -398,7 +399,7 @@ export class GuiGraphics {
    */
   stack(s: ItemStack, x: number, y: number, ticksUsing = -1): boolean {
     for (const hook of stackIconHooks.values()) if (hook(this, s, x, y)) return true;
-    let id = s.item.id === 'crossbow' ? crossbowTexture(s, ticksUsing) ?? s.item.id : s.item.id;
+    let id = s.item.id === 'crossbow' ? crossbowTexture(s, ticksUsing) ?? s.item.id : dialTexture(s) ?? s.item.id;
     // (a dyed stack's or a potion's colour tints its icon: vanilla ItemColors)
     if (itemLayers(s.item)) id += `#${layerTint(s).toString(16)}`;
     const ok = this.item(id, x, y);

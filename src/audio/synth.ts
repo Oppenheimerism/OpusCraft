@@ -41,6 +41,9 @@ import { llamaSounds } from './gen/llama';
 import { illagerSounds } from './gen/illagers';
 // (Stage 5: ocean)
 import { oceanSounds } from './gen/ocean';
+// (the deep dark)
+import { sculkSounds } from './gen/sculk';
+import { DISC_MUSIC_POOLS, renderDiscMusic } from './gen/disc5';
 
 export const SAMPLE_RATE = 44100;
 
@@ -93,6 +96,8 @@ Object.assign(SOUNDS, horseSounds(SOUNDS));
 // (the lead's knot round a fence)
 Object.assign(SOUNDS, leashSounds());
 Object.assign(SOUNDS, llamaSounds(SOUNDS));
+// (the deep dark: sculk, its sensors, shrieker and catalyst; candles)
+Object.assign(SOUNDS, sculkSounds());
 
 /** Number of in-game (overworld) music tracks. */
 export const MUSIC_TRACK_COUNT: number = MUSIC_TRACKS;
@@ -115,13 +120,15 @@ export function generateMenuMusic(sampleRate: number): Float32Array {
 }
 
 /** Situational music pools (vanilla music.nether.<biome>, music.end): event name -> number of tracks in it. */
-export const MUSIC_POOLS: Record<string, number> = Object.fromEntries([...Object.entries(NETHER_MUSIC_POOLS), ...Object.entries(END_MUSIC_POOLS)].map(([k, v]) => [k, v.length]));
+export const MUSIC_POOLS: Record<string, number> = Object.fromEntries([...Object.entries(NETHER_MUSIC_POOLS), ...Object.entries(END_MUSIC_POOLS), ...Object.entries(DISC_MUSIC_POOLS)].map(([k, v]) => [k, v.length]));
 
 /**
  * Render track `index` (0..MUSIC_POOLS[pool]-1) of a situational pool: the Nether's dark ambient
  * pieces, mono, 120–150 s, RMS matched to the overworld tracks, peak <= 0.6; ~2 s in Node.
  */
 export function generatePoolMusic(pool: string, index: number, sampleRate: number): Float32Array {
+  // (the deep dark: music disc 5's song, for the jukebox to play)
+  if (pool in DISC_MUSIC_POOLS) return renderDiscMusic(pool, sampleRate);
   return pool in END_MUSIC_POOLS ? renderEndMusic(pool, index, sampleRate) : renderNetherMusic(pool, index, sampleRate);
 }
 

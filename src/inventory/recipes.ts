@@ -402,6 +402,16 @@ shaped('sea_lantern', 1, ['SCS', 'CCC', 'SCS'], { S: 'prismarine_shard', C: 'pri
 // (Stage 5: ocean) vanilla conduit: a heart of the sea in eight nautilus shells
 shaped('conduit', 1, ['###', '#X#', '###'], { '#': 'nautilus_shell', X: 'heart_of_the_sea' });
 
+// (the deep dark) vanilla candle (string over honeycomb) and the dyed candles; the calibrated sculk sensor (amethyst
+// over a sensor), the recovery compass (a compass in eight echo shards), music disc 5 from its nine fragments, and
+// chiseled deepslate from two cobbled deepslate slabs
+shaped('candle', 1, ['S', 'H'], { S: 'string', H: 'honeycomb' });
+for (const c of COLORS) shapeless(`${c}_candle`, 1, 'candle', `${c}_dye`);
+shaped('calibrated_sculk_sensor', 1, [' # ', '#X#'], { '#': 'amethyst_shard', X: 'sculk_sensor' });
+shaped('recovery_compass', 1, ['SSS', 'SCS', 'SSS'], { S: 'echo_shard', C: 'compass' });
+shapeless('music_disc_5', 1, ...Array<Ing>(9).fill('disc_fragment_5'));
+shaped('chiseled_deepslate', 1, ['#', '#'], { '#': 'cobbled_deepslate_slab' });
+
 // drop recipes whose items don't exist in this game
 for (let i = RECIPES.length - 1; i >= 0; i--) {
   const r = RECIPES[i];
@@ -499,6 +509,9 @@ smelt(['cobblestone'], 'stone', 0.1);
 smelt(['stone'], 'smooth_stone', 0.1);
 smelt(['cobbled_deepslate'], 'deepslate', 0.1);
 smelt(['stone_bricks'], 'cracked_stone_bricks', 0.1);
+// (the deep dark) vanilla cracked deepslate bricks and tiles
+smelt(['deepslate_bricks'], 'cracked_deepslate_bricks', 0.1);
+smelt(['deepslate_tiles'], 'cracked_deepslate_tiles', 0.1);
 smelt(['sandstone'], 'smooth_sandstone', 0.1);
 smelt(['red_sandstone'], 'smooth_red_sandstone', 0.1);
 smelt(['clay_ball'], 'brick', 0.3);

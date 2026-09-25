@@ -36,6 +36,7 @@ import { canSurvive } from '../blockRules';
 import { performBoneMeal, boneMealParticles } from '../boneMeal';
 import { canPlaceFire, placeFire, fireStateAt } from '../fire';
 import { lightCampfire } from '../villageBlocks';
+import { lightCandle } from '../candles';
 import { isRail, railShape, isAscending } from '../rails';
 import { BlockPattern } from '../blockPattern';
 import type { Level } from '../level';
@@ -423,8 +424,8 @@ const flintAndSteel = optional((src, stack) => {
   // (vanilla isPortal: the frame's axis from the dispenser's facing, or either way at random for up and down)
   const facing = f === UP || f === DOWN ? (level.random.nextInt(2) ? 'north' : 'east') : DIR_NAMES[f];
   if (canPlaceFire(level.world, x, y, z, facing)) placeFire(level, x, y, z, fireStateAt(level.world, x, y, z));
-  else if (lightCampfire(level, x, y, z)) {
-    // (candles and candle cakes, when the game has them)
+  else if (lightCampfire(level, x, y, z) || lightCandle(level, x, y, z)) {
+    // (and candle cakes, when the game has them)
   } else if (level.getBlockName(x, y, z) === 'tnt') {
     PrimedTnt.prime(level, x, y, z, null);
     level.setBlock(x, y, z, 0);

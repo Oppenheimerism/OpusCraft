@@ -55,6 +55,8 @@ export interface WorldMeta {
     dimension?: string;
     /** vanilla seenCredits: they've left the End through its exit portal once (the credits roll only the first time) */
     seenCredits?: boolean;
+    /** vanilla LastDeathLocation: the dimension and block they last died at */
+    lastDeath?: { dim: string; pos: [number, number, number] };
   } | null;
   /** nether portal blocks per dimension (vanilla POI records), as x, y, z triples */
   portals?: Record<string, number[]>;

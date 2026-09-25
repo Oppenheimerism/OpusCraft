@@ -450,6 +450,49 @@ for (const [id, tex] of [['redstone_torch', 'block:redstone_torch'], ['repeater'
   if (it) it.texture = tex;
 }
 
+// (the deep dark) vanilla Items.ECHO_SHARD, RECOVERY_COMPASS (its needle turns to where its holder last died:
+// item/compass.ts), DISC_FRAGMENT_5 (DiscFragmentItem: "Music Disc - 5" under its name), MUSIC_DISC_5 (its song in
+// item/jukeboxSongs.ts) and HONEYCOMB (the candles' wax; no bees make it yet); the candles are their flat sprites and
+// the sculk vein its block texture, like glow lichen; each put where vanilla's creative tabs list it
+{
+  const after = (id: string, prev: string): void => {
+    const it = ITEM_LIST.splice(ITEM_LIST.findIndex((x) => x.id === id), 1)[0];
+    ITEM_LIST.splice(ITEM_LIST.findIndex((x) => x.id === prev) + 1, 0, it);
+  };
+  reg({ id: 'echo_shard', texture: 'echo_shard', rarity: 'uncommon' });
+  reg({ id: 'disc_fragment_5', name: 'Disc Fragment', texture: 'disc_fragment_5', rarity: 'uncommon', lore: ['Music Disc - 5'] });
+  const dyes = ITEM_LIST.findIndex((x) => x.id === 'white_dye');
+  ITEM_LIST.splice(dyes, 0, ...ITEM_LIST.splice(ITEM_LIST.length - 2, 2));
+  reg({ id: 'recovery_compass', texture: 'recovery_compass', creativeTab: 'tools', rarity: 'uncommon' });
+  after('recovery_compass', 'compass');
+  reg({ id: 'music_disc_5', name: 'Music Disc', texture: 'music_disc_5', maxStack: 1, creativeTab: 'tools', rarity: 'rare', lore: ['Samuel Åberg - 5'] });
+  after('music_disc_5', 'music_disc_otherside');
+  reg({ id: 'honeycomb', texture: 'honeycomb' });
+  after('honeycomb', 'rabbit_hide');
+  // the building blocks: chiseled deepslate after the cobbled, the cracked bricks and tiles after theirs, reinforced
+  // deepslate after the tiles' wall
+  after('chiseled_deepslate', 'cobbled_deepslate');
+  after('cracked_deepslate_bricks', 'deepslate_bricks');
+  after('cracked_deepslate_tiles', 'deepslate_tiles');
+  after('reinforced_deepslate', 'deepslate_tile_wall');
+  // the natural blocks: the sculk before the cobweb (the calibrated sensor is only a redstone block)
+  let prev = ITEM_LIST[ITEM_LIST.findIndex((x) => x.id === 'cobweb') - 1].id;
+  for (const id of ['sculk', 'sculk_vein', 'sculk_catalyst', 'sculk_shrieker', 'sculk_sensor']) {
+    ITEMS.get(id)!.creativeTab = 'natural';
+    after(id, prev);
+    prev = id;
+  }
+  ITEMS.get('sculk_vein')!.texture = 'block:sculk_vein';
+  // the colored blocks: the candles before the banners
+  prev = ITEM_LIST[ITEM_LIST.findIndex((x) => x.id === 'white_banner') - 1].id;
+  for (const b of BLOCKS) {
+    if (!/^([a-z_]+_)?candle$/.test(b.name)) continue;
+    Object.assign(ITEMS.get(b.name)!, { texture: b.name, creativeTab: 'colored' });
+    after(b.name, prev);
+    prev = b.name;
+  }
+}
+
 export function itemForBlock(name: string): Item | undefined {
   // (a block that is another's item's: a wall banner is its banner's)
   const own = BLOCK_BY_NAME.get(name)?.s.item;

@@ -14,6 +14,7 @@ import { allEffects, contentsOf, potionColor, potionEffects } from '../item/poti
 import { BLOCKS, STATE_BLOCK } from '../world/block';
 import { DX, DY, DZ } from '../world/dir';
 import { dowseCampfire } from '../game/villageBlocks';
+import { extinguishCandle } from '../game/candles';
 
 /** hooks for what the game has elsewhere: the lingering potion's cloud (the End's AreaEffectCloud) */
 export const THROWN_POTION_HOOKS: { makeCloud: ((p: ThrownPotion) => void) | null } = { makeCloud: null };
@@ -68,11 +69,11 @@ export class ThrownPotion extends ThrownItem {
     for (const [dx, dz] of [[0, -1], [0, 1], [-1, 0], [1, 0]]) this.dowseFire(x + dx, y, z + dz);
   }
 
-  /** vanilla ThrownPotion.dowseFire: fire goes out, and a lit campfire (candles when the game has them) */
+  /** vanilla ThrownPotion.dowseFire: fire goes out, and lit candles, and a lit campfire */
   private dowseFire(x: number, y: number, z: number): void {
     const name = BLOCKS[STATE_BLOCK[this.level.getState(x, y, z)]].name;
     if (name === 'fire' || name === 'soul_fire') this.level.destroyBlock(x, y, z, false);
-    else dowseCampfire(this.level, x, y, z);
+    else if (!extinguishCandle(this.level, x, y, z)) dowseCampfire(this.level, x, y, z);
   }
 
   /** vanilla ThrownPotion.onHit, where the potion is (it breaks before it moves on) */

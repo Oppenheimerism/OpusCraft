@@ -1,6 +1,7 @@
 // Status effect camera visuals: night vision strength (vanilla GameRenderer.getNightVisionScale,
-// used by LightTexture and FogRenderer), the blindness fog wall (FogRenderer.BlindnessFogFunction)
-// and the nausea wobble on the projection (GameRenderer.renderLevel).
+// used by LightTexture and FogRenderer), the blindness fog wall (FogRenderer.BlindnessFogFunction),
+// darkness's closing fog and pulsing gloom (DarknessFogFunction, LightTexture) and the nausea wobble on
+// the projection (GameRenderer.renderLevel).
 
 import type { LivingEntity } from '../entity/living';
 import type { Player } from '../entity/player';
@@ -30,6 +31,25 @@ export function blindnessFog(e: LivingEntity, far: number): BlindnessFog | null 
   if (!inst) return null;
   const end = inst.isInfinite() ? 5 : far + Math.min(1, inst.duration / 20) * (5 - far);
   return { end, darkness: inst.endsWithin(19) ? 1 - inst.duration / 20 : 0 };
+}
+
+/** the darkness effect's visuals this frame (vanilla DarknessFogFunction, LightTexture.getDarknessGamma / calculateDarknessScale) */
+export interface DarknessVisuals {
+  /** the effect's blend factor: the fog closes in to 15 blocks and its colour to black as it rises */
+  factor: number;
+  /** taken off the brightness option (the blend factor times the Darkness Pulsing option) */
+  gamma: number;
+  /** the gloom's pulse, taken off every lightmap colour (every 80 ticks it swells and ebbs) */
+  pulse: number;
+}
+
+/** the darkness effect's fog and lightmap, with the Darkness Pulsing option's `effectScale`; null without the effect */
+export function darknessVisuals(e: LivingEntity, partial: number, effectScale: number): DarknessVisuals | null {
+  const inst = e.getEffect('darkness');
+  if (!inst) return null;
+  const factor = inst.blendFactor(partial);
+  const gamma = factor * effectScale;
+  return { factor, gamma, pulse: Math.max(0, Math.cos((e.tickCount - partial) * Math.PI * 0.025) * 0.45 * gamma) * effectScale };
 }
 
 const AXIS = Math.SQRT1_2;

@@ -7,7 +7,7 @@ import { BLOCKS, STATE_BLOCK, FLAGS, FACE_OCC, COLLISION, F_AIR, F_OPAQUE, Block
 import { DOWN, UP, NORTH, SOUTH, WEST, EAST } from '../world/dir';
 import type { World } from '../world/world';
 import { fireCanSurvive, fireStateAt, isSoulFireBase } from './fire';
-import { MULTIFACE, multifaceSupported, dripstoneSupported, dripstoneThickness } from './blockRules';
+import { MULTIFACE, multifaceSupported, dripstoneSupported, dripstoneThickness, isMultiface } from './blockRules';
 import { portalStillStands } from './portal';
 import { behaviorOf } from './blockBehavior';
 
@@ -160,7 +160,7 @@ export function updateShape(world: World, x: number, y: number, z: number, st: n
   // vanilla NetherPortalBlock.updateShape: a portal whose frame was broken goes out
   if (n === 'nether_portal') return portalStillStands(world, x, y, z, st, world.dim.minY) ? st : 0;
   // vanilla MultifaceBlock.updateShape: faces that lost their support go; with none left the block goes
-  if (n === 'glow_lichen') {
+  if (isMultiface(n)) {
     let s = st, any = false;
     for (const [d] of MULTIFACE) {
       if (!b.get(s, d)) continue;
@@ -270,7 +270,7 @@ function plantOf(name: string): Block {
 export function hasShapeUpdates(st: number): boolean {
   if (behaviorOf(st)?.updateShape) return true;
   const n = blk(st).name;
-  return n === 'glow_lichen' || n === 'pointed_dripstone' || n === 'cave_vines' || n === 'cave_vines_plant' || n.endsWith('ing_vines') || n.endsWith('ing_vines_plant') || n === 'big_dripleaf' || n.endsWith('_stairs') || n.endsWith('_fence') || n.endsWith('_pane') || n === 'iron_bars' || n.endsWith('_wall') || n.endsWith('_fence_gate') || n.endsWith('_door') || n.endsWith('_bed') || n === 'grass_block' || n === 'podzol' || n === 'mycelium' || n.startsWith('attached_') || n === 'fire' || n === 'soul_fire' || n === 'nether_portal';
+  return isMultiface(n) || n === 'pointed_dripstone' || n === 'cave_vines' || n === 'cave_vines_plant' || n.endsWith('ing_vines') || n.endsWith('ing_vines_plant') || n === 'big_dripleaf' || n.endsWith('_stairs') || n.endsWith('_fence') || n.endsWith('_pane') || n === 'iron_bars' || n.endsWith('_wall') || n.endsWith('_fence_gate') || n.endsWith('_door') || n.endsWith('_bed') || n === 'grass_block' || n === 'podzol' || n === 'mycelium' || n.startsWith('attached_') || n === 'fire' || n === 'soul_fire' || n === 'nether_portal';
 }
 
 export { F_OPAQUE };

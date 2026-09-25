@@ -64,7 +64,7 @@ import { Monster } from '../entity/monsters';
 import { Piglin, isLovedItem } from '../entity/piglin';
 import type { MinecartChest } from '../entity/minecart';
 import { ChestBoat } from '../entity/boat';
-import { nightVisionScale, blindnessFog, applyNausea } from '../render/effectVisuals';
+import { nightVisionScale, blindnessFog, darknessVisuals, applyNausea } from '../render/effectVisuals';
 import { OVERWORLD, THE_NETHER, THE_END, dimensionById, teleportationScale, type DimensionType } from '../world/dimension';
 import { PortalPoi, portalRectangle, relativePortalPosition, portalExit, createPortal, isPortal, portalAxis, type PortalRect } from './portal';
 import { setVillageMenuHook } from './villageBlocks';
@@ -74,6 +74,8 @@ import { openJobSite } from './jobSites';
 import { endPortalTravel, PortalArrivals } from './endTravel';
 import { EndDragonFight, ARENA_TICKET_LEVEL } from './endDragonFight';
 import { gatewayTravel } from './gatewayTravel';
+// (the deep dark)
+import { setDialViewer } from '../item/compass';
 
 export type { GameOptions } from './options';
 /** vanilla ReceivingLevelScreen.Reason: what the loading screen shows while changing dimension */
@@ -525,6 +527,7 @@ export class Game {
         this.player.respawnForced = pd.respawn[3] === 1;
       }
       this.player.seenCredits = !!pd.seenCredits;
+      this.player.lastDeathLocation = pd.lastDeath ? { dim: pd.lastDeath.dim, pos: [...pd.lastDeath.pos] } : null;
       this.spawnSearch = false;
       // vanilla RootVehicle: back in the minecart you left the game in
       const v = pd.vehicle && !pd.dead ? loadEntity(pd.vehicle, this.level) : null;
@@ -590,6 +593,7 @@ export class Game {
       vehicle: p.vehicle ? saveEntity(p.vehicle) : null,
       dimension: this.world.dim.id,
       seenCredits: p.seenCredits || undefined,
+      lastDeath: p.lastDeathLocation ?? undefined,
     };
     m.portals = this.portalPoi.save();
     m.arrivals = this.arrivals.save();
@@ -1483,6 +1487,8 @@ export class Game {
 
   renderWorld(partial: number, camOverride?: Camera): void {
     const p = this.player;
+    // (the compass and clock needles are read for this player: item/compass.ts)
+    setDialViewer(p, this.worldSpawn ?? [p.spawnX, p.spawnY, p.spawnZ]);
     const ex = p.lerpX(partial), ez = p.lerpZ(partial);
     const eyeH = p.eyeHeightCamO + (p.eyeHeightCam - p.eyeHeightCamO) * partial;
     const ey = p.lerpY(partial) + eyeH;
@@ -1533,6 +1539,7 @@ export class Game {
       gamma: this.opts.gamma,
       nightVision: nightVisionScale(p, partial),
       blindness: blindnessFog(p, Math.max(this.opts.renderDistance * 16, 32)),
+      darkness: darknessVisuals(p, partial, this.opts.darknessEffectScale),
       bob: camOverride ? null : bob,
       underwater: eyeFluid === FLUID_WATER,
       waterFogColor: [((b.waterFog >> 16) & 255) / 255, ((b.waterFog >> 8) & 255) / 255, (b.waterFog & 255) / 255],

@@ -46,7 +46,7 @@ const DESTROYED = new RegExp(
     '(soul_)?lantern|glow_lichen|budding_amethyst|(small|medium|large)_amethyst_bud|amethyst_cluster|pointed_dripstone|azalea|flowering_azalea|' +
     'hanging_roots|spore_blossom|cave_vines(_plant)?|big_dripleaf(_stem)?|small_dripleaf|moss_carpet|(crimson|warped)_(fungus|roots)|nether_sprouts|' +
     '(weeping|twisting)_vines(_plant)?|lever|.*_button|.*_pressure_plate|redstone_wire|repeater|comparator|tripwire_hook|tripwire|bell|dragon_egg|' +
-    'decorated_pot|suspicious_(sand|gravel)|(.*_)?candle|cake)$',
+    'decorated_pot|suspicious_(sand|gravel)|(.*_)?candle|cake|sculk_vein)$',
 );
 /** pushReaction(BLOCK): never moved (anvils, grindstones, the piston's own head and moving blocks) */
 const BLOCKED = /^(anvil|chipped_anvil|damaged_anvil|grindstone|piston_head|moving_piston|nether_portal|lodestone)$/;

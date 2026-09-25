@@ -296,7 +296,10 @@ export abstract class LivingEntity extends Entity {
   loadEffects(list: SavedEffect[] | undefined): void {
     for (const d of list ?? []) {
       const inst = loadEffect(d);
-      if (inst) this.activeEffects.set(inst.id, inst);
+      if (inst) {
+        inst.skipBlending();
+        this.activeEffects.set(inst.id, inst);
+      }
     }
     this.effectsDirty = true;
   }
