@@ -46,6 +46,7 @@ import { LevelTicks } from './ticks';
 import { PoiManager } from './poi';
 import './redstone/components';
 import { isConductor } from './redstone/signal';
+import { DX, DY, DZ, OPPOSITE, type Dir } from '../world/dir';
 import { hasAnalogOutput } from './redstone/comparator';
 import './villageBlocks';
 import './banners';
@@ -867,6 +868,7 @@ export class Level {
    */
   updateNeighbors(x: number, y: number, z: number, changed?: number): void {
     this.updateNeighborsFluid(x, y, z);
+    this.shapeUpdateHooks(x, y, z);
     const dirs = [[0, 1, 0], [0, -1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1]];
     for (const [dx, dy, dz] of dirs) {
       const nx = x + dx, ny = y + dy, nz = z + dz;
@@ -885,6 +887,8 @@ export class Level {
         }
         if (nu !== ns) {
           this.world.setState(nx, ny, nz, nu);
+          // (vanilla Block.updateOrDestroy sets it with its own shape updates: an observer on it sees it change)
+          this.shapeUpdateHooks(nx, ny, nz);
           ns = nu;
           // a dripstone's new thickness reshapes the pieces above and below it in turn
           if (STATE_BLOCK[nu] === DRIPSTONE()) this.updateNeighbors(nx, ny, nz);
@@ -896,6 +900,15 @@ export class Level {
         else if (isDripstoneFacing(ns, 'down')) this.fallStalactite(nx, ny, nz);
         else this.destroyBlock(nx, ny, nz, true, null, true);
       }
+    }
+  }
+
+  /** vanilla updateNeighbourShapes, the side effects of it: each neighbour of (x, y, z) with a shapeUpdate hears which way the change was */
+  private shapeUpdateHooks(x: number, y: number, z: number): void {
+    for (let d = 0; d < 6; d++) {
+      const nx = x + DX[d], ny = y + DY[d], nz = z + DZ[d];
+      const ns = this.world.getState(nx, ny, nz);
+      behaviorOf(ns)?.shapeUpdate?.(this, nx, ny, nz, ns, OPPOSITE[d] as Dir);
     }
   }
 

@@ -78,6 +78,11 @@ export interface BlockBehavior {
   projectileHit?(level: Level, x: number, y: number, z: number, state: number, hit: ProjectileHit, projectile: Entity): void;
   /** vanilla updateShape, from all the neighbours at once: the state to become (0: it breaks) */
   updateShape?(world: World, x: number, y: number, z: number, state: number): number;
+  /**
+   * vanilla updateShape's side effects, one neighbour at a time: the block toward `dir` was set or reshaped (an
+   * observer watching that way starts its pulse)
+   */
+  shapeUpdate?(level: Level, x: number, y: number, z: number, state: number, dir: Dir): void;
   /** vanilla LiquidBlockContainer.placeLiquid: a water bucket emptied into the block; true if it took it */
   placeLiquid?(level: Level, x: number, y: number, z: number, state: number): boolean;
   /** the block's loot table (vanilla block loot): what breaking it with `tool` drops, when it has one of its own */

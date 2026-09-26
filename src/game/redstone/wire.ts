@@ -37,7 +37,7 @@ export function canSurviveOn(st: number): boolean {
   return sturdyFace(st, UP) || blk(st).name === 'hopper';
 }
 
-/** vanilla shouldConnectTo: dust, a repeater along the line, or any other signal source from the side */
+/** vanilla shouldConnectTo: dust, a repeater along the line, an observer's back, or any other signal source from the side */
 function shouldConnectTo(st: number, d: Dir | null): boolean {
   if (isWire(st)) return true;
   const b = blk(st);
@@ -46,6 +46,7 @@ function shouldConnectTo(st: number, d: Dir | null): boolean {
     const f = b.get<string>(st, 'facing');
     return f === SIDE_PROP[d] || f === SIDE_PROP[OPPOSITE[d]];
   }
+  if (b.name === 'observer') return d !== null && b.get<string>(st, 'facing') === SIDE_PROP[d];
   return isSignalSource(st) && d !== null;
 }
 

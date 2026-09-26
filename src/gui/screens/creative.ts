@@ -81,6 +81,8 @@ REDSTONE_ORDER.splice(REDSTONE_ORDER.indexOf('dropper') + 1, 0, 'crafter');
 REDSTONE_ORDER.splice(REDSTONE_ORDER.indexOf('crafter') + 1, 0, 'hopper');
 // (the comparator after the repeater)
 REDSTONE_ORDER.splice(REDSTONE_ORDER.indexOf('repeater') + 1, 0, 'comparator');
+// (the observer after the hopper)
+REDSTONE_ORDER.splice(REDSTONE_ORDER.indexOf('hopper') + 1, 0, 'observer');
 /** (the deep dark) listed in the redstone tab as well as their own, as vanilla does: the sensor, the shrieker, and what they react to */
 const REDSTONE_ALSO = new Set(['sculk_sensor', 'sculk_shrieker', 'amethyst_block', 'white_wool']);
 const REDSTONE = new Set(REDSTONE_ORDER.filter((id) => !REDSTONE_ALSO.has(id)));

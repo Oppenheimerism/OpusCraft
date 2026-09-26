@@ -24,6 +24,7 @@ import './dispenser';
 import './piston';
 import './hopper';
 import './comparator';
+import './observer';
 
 const blk = (st: number): Block => BLOCKS[STATE_BLOCK[st]];
 

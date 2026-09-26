@@ -568,6 +568,15 @@ export function registerRedstoneComponents(): void {
       },
     });
   }
+
+  // Observer: faces any of the six ways (vanilla strength 3; a pickaxe to drop)
+  {
+    const off = observerModel(false), on = observerModel(true);
+    registerBlock('observer', {
+      props: [P.facing, P.powered], defaults: { facing: 'south' }, hardness: 3, sound: 'stone', tool: 'pickaxe', requiresTool: true,
+      model: (s) => facingVariant(s.get('powered') ? on : off, s.get('facing') as string),
+    });
+  }
 }
 
 export { HOR_Y };
