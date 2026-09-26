@@ -73,6 +73,7 @@ import { setShulkerBoxMenuHook } from './shulkerBox';
 import { tickOuterEndProgress } from './outerEndProgress';
 // (trial chambers)
 import { tickTrialChamberProgress } from './trialChamberProgress';
+import { tickBastionProgress } from './bastions';
 import { setGenerateLootListener } from './archaeology';
 import { setPotCraftedListener } from './decoratedPot';
 import { openJobSite } from './jobSites';
@@ -846,6 +847,16 @@ export class Game {
   containerScreenFactory: ((menu: InventoryMenu | CraftingMenu | FurnaceMenu | ChestMenu | BrewingStandMenu | EnchantmentMenu | AnvilMenu | GrindstoneMenu | MerchantMenu) => Screen) | null = null;
 
   /** right-clicked a block with a menu */
+  /**
+   * (bastions) vanilla RandomizableContainer.unpackLootTable(player): a container's loot rolled as the player opens
+   * it, and the player_generates_container_loot trigger for its table (War Pigs)
+   */
+  private unpackLootFor(be: { lootTable?: string | null; unpackLoot(): void }): void {
+    const table = be.lootTable ?? null;
+    be.unpackLoot();
+    if (table) this.advancements.trigger('container_loot', { lootTable: table });
+  }
+
   openContainer(kind: string, x: number, y: number, z: number): void {
     if (!this.containerScreenFactory) return;
     const p = this.player;
@@ -858,7 +869,7 @@ export class Game {
       if (!(be instanceof ChestBlockEntity)) return;
       // a solid block above keeps the lid shut, and so does a cat sitting on it (vanilla ChestBlock.isChestBlockedAt)
       if (FLAGS[this.world.getState(x, y + 1, z)] & F_OPAQUE || catSittingOn(this.level, x, y, z)) return;
-      be.unpackLoot();
+      this.unpackLootFor(be);
       this.setScreen(this.containerScreenFactory(new ChestMenu(p, be)));
       if (be.openCount++ === 0) {
         this.sound.play('block.chest.open', x + 0.5, y + 0.5, z + 0.5, 0.5, Math.random() * 0.1 + 0.9);
@@ -869,7 +880,7 @@ export class Game {
       // vanilla BarrelBlock.useWithoutItem: a chest's menu, titled Barrel; the lid opens
       const be = this.world.getBlockEntity(x, y, z);
       if (!(be instanceof BarrelBlockEntity)) return;
-      be.unpackLoot();
+      this.unpackLootFor(be);
       this.setScreen(this.containerScreenFactory(new ChestMenu(p, be, 'Barrel')));
       be.startOpen(this.level);
     } else if (kind === 'brewing_stand') {
@@ -1851,6 +1862,8 @@ export class Game {
     tickOuterEndProgress(this.level, p, this.advancements);
     // (trial chambers) Minecraft: Trial(s) Edition
     tickTrialChamberProgress(this.level, p, this.advancements);
+    // (bastions) Those Were the Days
+    tickBastionProgress(this.level, p, this.advancements);
     // vanilla trackEnteredOrExitedLavaOnVehicle: how far a mount has carried the player across lava (ride_entity_in_lava)
     const v = p.vehicle;
     if (v?.inLava) {

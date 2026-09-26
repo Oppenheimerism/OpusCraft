@@ -16,6 +16,7 @@ import { computeChunkLight } from '../lightlocal';
 import { NetherFortresses } from './fortress';
 import { RuinedPortals, netherPortalTerrain } from './ruinedPortal';
 import { worldSeed64 } from './jigsaw';
+import { BastionRemnants } from './bastion';
 import type { GenOutput } from './generator';
 import { placeOre, sampleHeight, type OreSpec } from './features';
 import {
@@ -75,6 +76,8 @@ export class NetherGenerator {
   readonly fortresses: NetherFortresses;
   /** the world's ruined portals (vanilla ruined_portals structure set) */
   readonly ruinedPortals: RuinedPortals;
+  /** (bastions) the world's bastion remnants (the nether_complexes set's other structure) */
+  readonly bastions: BastionRemnants;
 
   constructor(seed: string | number | bigint) {
     this.seeds = SeedSource.fromWorldSeed(typeof seed === 'string' ? seed : BigInt(seed)).sub('minecraft:the_nether');
@@ -94,6 +97,7 @@ export class NetherGenerator {
     this.stateSelector = new NormalNoise(s.sub('minecraft:nether_state_selector'), { firstOctave: -4, amplitudes: [1] });
     this.fortresses = new NetherFortresses(this.seedHash, (x, z) => BIOMES[this.biomeAt(x, z)].name);
     this.ruinedPortals = new RuinedPortals(worldSeed64(seed), netherPortalTerrain(this));
+    this.bastions = new BastionRemnants(worldSeed64(seed), this.fortresses);
   }
 
   // -------------------------------------------------------------------------
@@ -327,7 +331,8 @@ export class NetherGenerator {
     };
     // LOCAL_MODIFICATIONS
     step([SV], (r) => this.count(ctx, r, 10, 0, TOP, [SV], feature(F_PILLAR)));
-    // SURFACE_STRUCTURES: the step's structures (ruined portals) go in before its features
+    // SURFACE_STRUCTURES: the step's structures (the bastion remnants, then the ruined portals) go in before its features
+    this.bastions.place(ctx);
     this.ruinedPortals.place(ctx);
     // (deltas are let into the floor block under the layer's empty block)
     step([BD], (r) => this.everyLayer(ctx, r, 40, [BD], (r2, x, y, z) => feature(F_DELTA)(r2, x, y - 1, z)));
