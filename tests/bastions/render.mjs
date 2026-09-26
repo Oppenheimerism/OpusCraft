@@ -1,7 +1,7 @@
 // A look at the bastions without the world round them: each kind assembled from its own start (as the world
 // generator does, from a start chunk's large-feature random) and placed into a bare voxel map, then drawn from above
 // (the highest block, darker the lower it is), from the south and from the east (the nearest block, darker the
-// further it is), and as the pieces' boxes seen from above. The mobs are dots: piglins pink, brutes red, hoglins
+// further it is), the same two cut open (the nearest six blocks taken away), and as the pieces' boxes seen from above. The mobs are dots: piglins pink, brutes red, hoglins
 // brown. PNGs go to the directory given (default: the system's temporary directory).
 //
 //   node tests/bastions/render.mjs [outDir] [kind] [seeds]     e.g. node tests/bastions/render.mjs /tmp/b units 3
@@ -77,7 +77,7 @@ function render(kind, pieces, file) {
   const pad = 8;
   // four panels: top, south, east, boxes; laid out 2 x 2
   const pw = Math.max(W, D) * S + pad, ph = Math.max(D, H) * S + pad;
-  const img = new Uint8Array(pw * 2 * ph * 2 * 4).fill(255);
+  const img = new Uint8Array(pw * 2 * ph * 3 * 4).fill(255);
   const IW = pw * 2;
   const px = (ox, oy, x, y, c) => {
     for (let i = 0; i < S; i++) for (let j = 0; j < S; j++) {
@@ -114,6 +114,24 @@ function render(kind, pieces, file) {
         px(0, ph, z - box.minZ, box.maxY - y, shade(colorOf(st), 1 - 0.6 * (box.maxX - x) / Math.max(1, W - 1)));
         break;
       }
+  // cut open: from the south with the nearest 6 blocks taken away, and from the east the same
+  const cut = 6;
+  for (let x = box.minX; x <= box.maxX; x++)
+    for (let y = box.minY; y <= box.maxY; y++)
+      for (let z = box.maxZ - cut; z >= box.minZ; z--) {
+        const st = at(x, y, z);
+        if (!st) continue;
+        px(0, 2 * ph, x - box.minX, box.maxY - y, shade(colorOf(st), 1 - 0.6 * (box.maxZ - cut - z) / Math.max(1, D - 1)));
+        break;
+      }
+  for (let z = box.minZ; z <= box.maxZ; z++)
+    for (let y = box.minY; y <= box.maxY; y++)
+      for (let x = box.maxX - cut; x >= box.minX; x--) {
+        const st = at(x, y, z);
+        if (!st) continue;
+        px(pw, 2 * ph, z - box.minZ, box.maxY - y, shade(colorOf(st), 1 - 0.6 * (box.maxX - cut - x) / Math.max(1, W - 1)));
+        break;
+      }
   // the pieces' boxes from above, the deeper the redder; mobs as dots
   const depthColor = [[0, 0, 0], [0, 0, 255], [0, 150, 0], [200, 120, 0], [200, 0, 200], [255, 0, 0], [0, 180, 180]];
   pieces.forEach((p, i) => {
@@ -130,7 +148,7 @@ function render(kind, pieces, file) {
     px(0, 0, Math.floor(e.x) - box.minX, Math.floor(e.z) - box.minZ, c);
     px(pw, ph, Math.floor(e.x) - box.minX, Math.floor(e.z) - box.minZ, c);
   }
-  writePNG(file, IW, ph * 2, img);
+  writePNG(file, IW, ph * 3, img);
   const count = (f) => [...blocks.values()].filter((st) => f(name(st))).length;
   const mobs = {};
   for (const e of ctx.entities) mobs[e.id] = (mobs[e.id] ?? 0) + 1;
