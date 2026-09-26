@@ -48,6 +48,11 @@ export class World {
   onTypeChanged: ((x: number, y: number, z: number, old: number, now: number) => void) | null = null;
   /** what a block entity holds changed (vanilla BlockEntity.setChanged: the level tells the comparators round it) */
   onBlockEntityChanged: ((be: BlockEntity) => void) | null = null;
+  /**
+   * any block changed, however (setState, setStateQuiet, generation writes baked in from a neighbour): vanilla
+   * ChunkHolder.blockChanged, which the server sends on to the players who have the chunk (net/)
+   */
+  onBlockChanged: ((x: number, y: number, z: number, old: number, now: number) => void) | null = null;
   biomeBlend = 2;
   /** called when a section's mesh became stale */
   onDirty: ((c: Chunk, section: number) => void) | null = null;
@@ -148,13 +153,16 @@ export class World {
     if (newH !== h) this.light.skyColumnChanged(x, z, h, newH);
     if (OPACITY[old] !== OPACITY[state] || this.emissionDiffers(old, state) || newH !== h || true) this.light.blockChanged(x, y, z);
     this.markBlockDirty(x, y, z);
+    this.onBlockChanged?.(x, y, z, old, state);
     return old;
   }
 
   /** change a state that renders and lights the same (vanilla flag UPDATE_INVISIBLE, e.g. fire age) */
   setStateQuiet(x: number, y: number, z: number, state: number): void {
     const c = this.getChunk(x >> 4, z >> 4);
-    if (c && y >= MIN_Y && y < MAX_Y) c.setState(x & 15, y, z & 15, state);
+    if (!c || y < MIN_Y || y >= MAX_Y) return;
+    const old = c.setState(x & 15, y, z & 15, state);
+    if (old !== state) this.onBlockChanged?.(x, y, z, old, state);
   }
 
   getBlockEntity(x: number, y: number, z: number): BlockEntity | null {
@@ -164,6 +172,7 @@ export class World {
   private addBlockEntity(be: BlockEntity, c: Chunk): void {
     be.container.onChange = () => {
       c.modified = true;
+      be.version++;
       this.onBlockEntityChanged?.(be);
     };
     this.blockEntities.set(be.key, be);

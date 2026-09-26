@@ -24,6 +24,8 @@ export abstract class BlockEntity {
   abstract readonly id: string;
   readonly container: SimpleContainer;
   removed = false;
+  /** counts the changes to what it holds (vanilla BlockEntity.setChanged), for whoever keeps a copy in step (net/) */
+  version = 0;
   constructor(readonly x: number, readonly y: number, readonly z: number, size: number) {
     this.container = new SimpleContainer(size);
   }

@@ -605,7 +605,11 @@ export class Level {
   destroyBlockProgress(id: number, x: number, y: number, z: number, stage: number): void {
     if (stage >= 0 && stage < 10) this.destroyProgress.set(id, { x, y, z, stage, time: this.gameTime });
     else this.destroyProgress.delete(id);
+    this.onDestroyBlockProgress?.(id, x, y, z, stage);
   }
+
+  /** a crack changed (vanilla ServerLevel.destroyBlockProgress sends it to the players near: net/) */
+  onDestroyBlockProgress: ((id: number, x: number, y: number, z: number, stage: number) => void) | null = null;
 
   /** vanilla: entities tick only inside the simulation distance (and in loaded chunks) */
   isEntityTicking(x: number, z: number): boolean {
