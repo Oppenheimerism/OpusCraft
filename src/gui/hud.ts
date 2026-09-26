@@ -76,6 +76,8 @@ export class Hud {
   render(g: GuiGraphics, game: Game, partial: number, chatOpen: boolean): void {
     const p = game.player;
     const W = g.width, H = g.height;
+    // (powder snow) vanilla Gui.renderCameraOverlays: frost round the screen's edges as the player freezes
+    if (p.ticksFrozen > 0) g.sprite('powder_snow_outline', 0, 0, W, H, 0, 0, 256, 256, p.percentFrozen());
     // (Stage 4: totems) vanilla GameRenderer.renderItemActivation, drawn just before the HUD
     renderItemActivation(g, partial);
     if (p.gameMode === 'spectator') {

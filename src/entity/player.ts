@@ -475,9 +475,9 @@ export class Player extends LivingEntity {
     this.level.addEntity(e);
   }
 
-  /** vanilla isInPowderSnow: standing in powder snow */
+  /** vanilla isInPowderSnow: in powder snow this tick ((powder snow) its entityInside says so, game/powderSnow) */
   isInPowderSnow(): boolean {
-    return BLOCKS[STATE_BLOCK[this.level.world.getState(Math.floor(this.x), Math.floor(this.y), Math.floor(this.z))]].name === 'powder_snow';
+    return this.inPowderSnow;
   }
 
   override tick(): void {

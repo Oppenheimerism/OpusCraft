@@ -1781,7 +1781,8 @@ function attackAnim(e: LivingEntity, p: number): number {
  * it's cold): the body twitches ±1.26°
  */
 function shakeYaw(e: LivingEntity): number {
-  return (e instanceof Hoglin && e.isConverting()) || (e instanceof Piglin && e.isConverting()) || (e instanceof Strider && e.suffocating) || (e instanceof ZombieVillager && e.converting) || (e instanceof Zombie && e.underWaterConverting)
+  // ((powder snow) vanilla LivingEntityRenderer.isShaking: and anything fully frozen)
+  return (e instanceof Hoglin && e.isConverting()) || (e instanceof Piglin && e.isConverting()) || (e instanceof Strider && e.suffocating) || (e instanceof ZombieVillager && e.converting) || (e instanceof Zombie && e.underWaterConverting) || e.isFullyFrozen()
     ? Math.cos(e.tickCount * 3.25) * Math.PI * 0.4
     : 0;
 }

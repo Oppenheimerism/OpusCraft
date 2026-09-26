@@ -78,6 +78,8 @@ import { findLightningRod } from './copper';
 import './trialChambers';
 // (jukebox)
 import './jukebox';
+// (powder snow)
+import './powderSnow';
 
 export interface SoundSink {
   play(name: string, x: number, y: number, z: number, volume?: number, pitch?: number): void;

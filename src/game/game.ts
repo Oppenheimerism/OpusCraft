@@ -973,6 +973,9 @@ export class Game {
         return k === victim || !k ? `${n} blew up` : `${n} was blown up by ${kn}`;
       case 'fall':
         return `${n} fell from a high place`;
+      // (powder snow) vanilla death.attack.freeze (and .player, killed fleeing someone)
+      case 'freeze':
+        return k && k !== victim ? `${n} was frozen to death by ${kn}` : `${n} froze to death`;
       // (Stage 4: the outer End) an elytra into a wall
       case 'flyIntoWall':
         return `${n} experienced kinetic energy`;
@@ -1621,6 +1624,8 @@ export class Game {
       underwater: eyeFluid === FLUID_WATER,
       waterFogColor: [((b.waterFog >> 16) & 255) / 255, ((b.waterFog >> 8) & 255) / 255, (b.waterFog & 255) / 255],
       lava: eyeFluid !== FLUID_LAVA ? null : p.gameMode === 'spectator' ? 'spectator' : p.hasEffect('fire_resistance') ? 'fire_resistant' : 'normal',
+      // (powder snow) vanilla Camera.getFluidInCamera: the camera's block is powder snow
+      powderSnow: eyeFluid || BLOCKS[STATE_BLOCK[w.getState(Math.floor(cam.x), Math.floor(cam.y), Math.floor(cam.z))]].name !== 'powder_snow' ? null : p.gameMode === 'spectator' ? 'spectator' : 'normal',
       dim: w.dim,
       worldFog: this.hud.bossOverlay.shouldCreateWorldFog(),
       biomeColors: blendBiomeColors(cam.x, cam.y, cam.z, (qx, qy, qz) => BIOMES[w.getBiome3(qx * 4 + 2, qy * 4 + 2, qz * 4 + 2)] ?? b),

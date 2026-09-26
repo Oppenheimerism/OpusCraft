@@ -122,6 +122,8 @@ const GUST = Array.from({ length: 12 }, (_, i) => `gust_${i}`);
 const DRAGON_BREATH = ['generic_2', 'generic_1', 'generic_0'];
 /** vanilla particles/campfire_cosy_smoke.json and campfire_signal_smoke.json */
 const BIG_SMOKE = Array.from({ length: 12 }, (_, i) => `big_smoke_${i}`);
+/** (powder snow) vanilla particles/snowflake.json */
+const SNOWFLAKE = Array.from({ length: 5 }, (_, i) => `snowflake_${i}`);
 /**
  * vanilla particles/end_rod.json (and firework.json, totem_of_undying.json): glitter_7 down to glitter_0 (the
  * textures are textures/blocklib/outerEnd.ts's, glitter_7 the biggest sparkle)
@@ -474,6 +476,22 @@ export class ParticleEngine {
         p.size *= 0.75;
         p.lifetime = Math.max(1, Math.floor(20 / (Math.random() * 0.8 + 0.2)));
         p.physics = false;
+        this.addSprite(p);
+        break;
+      }
+      case 'snowflake': {
+        // (powder snow) vanilla SnowflakeParticle: kicked up out of powder snow, falling (gravity 0.225, no drag but
+        // its own), a flake that shrinks through its five sprites as it ages
+        const p = this.base(kind, x, y, z);
+        p.gravity = 0.225;
+        p.friction = 1;
+        p.dx = xd + (Math.random() * 2 - 1) * 0.05;
+        p.dy = yd + (Math.random() * 2 - 1) * 0.05;
+        p.dz = zd + (Math.random() * 2 - 1) * 0.05;
+        p.size = 0.1 * (Math.random() * Math.random() + 1);
+        p.lifetime = Math.floor(16 / (Math.random() * 0.8 + 0.2)) + 2;
+        p.frames = SNOWFLAKE;
+        p.frame = -1;
         this.addSprite(p);
         break;
       }
@@ -1359,6 +1377,12 @@ export class ParticleEngine {
       if (p.kind === 'totem_of_undying' && p.age > p.lifetime / 2) p.alpha = 1 - (p.age - p.lifetime / 2) / p.lifetime;
       // vanilla LavaParticle.tick: embers trail smoke while young
       if (p.kind === 'lava' && Math.random() > p.age / p.lifetime) this.spawn('smoke', p.x, p.y, p.z, p.dx, p.dy, p.dz);
+      // ((powder snow) vanilla SnowflakeParticle.tick: slowing as it drifts down)
+      if (p.kind === 'snowflake') {
+        p.dx *= 0.95;
+        p.dy *= 0.9;
+        p.dz *= 0.95;
+      }
       // (fireworks) vanilla SparkParticle.tick: through the first half of its life, every other tick, a spark where it
       // is, still, in its colour and already half through its own life (and, vanilla's slip, never fading)
       if (p.spark?.trail && p.age < Math.floor(p.lifetime / 2) && (p.age + p.lifetime) % 2 === 0) {
