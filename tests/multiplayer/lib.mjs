@@ -31,7 +31,7 @@ function recordingLevel(level) {
  * a host: `world`/`level` from genLevel or flatLevel (chunks made on demand by `makeChunk(cx, cz)` when a guest's
  * ticket asks), its own player at (x, y, z)
  */
-export function makeHost(m, { world, level }, { makeChunk, x = 0.5, y = 65, z = 0.5, spawn = [0.5, 65, 0.5], hostName = 'Host', gameMode = 'creative' } = {}) {
+export function makeHost(m, { world, level }, { makeChunk, x = 0.5, y = 65, z = 0.5, spawn = [0.5, 65, 0.5], hostName = 'Host', gameMode = 'creative', transport } = {}) {
   recordingLevel(level);
   const p = new m.Player(level);
   p.setGameMode(gameMode);
@@ -55,14 +55,13 @@ export function makeHost(m, { world, level }, { makeChunk, x = 0.5, y = 65, z = 
     },
     hostBreaking: () => breaking,
   };
-  const server = new m.HostServer(level, net.host, hooks, { lanId: 'test-world-0000', announce: false });
+  const server = new m.HostServer(level, transport ?? net.host, hooks, { lanId: 'test-world-0000', announce: false });
   return { m, world, level, player: p, net, server, chat, tickets, guests: [], setBreaking: (b) => (breaking = b) };
 }
 
-/** a guest connecting to `host` as `name` (it says hello once `step` delivers the connection) */
-export function makeGuest(host, name = 'Guest', { viewDistance = 3, uuid } = {}) {
-  const { m, net } = host;
-  const transport = net.connect();
+/** a guest connecting to `host` as `name` (it says hello once `step` delivers the connection), over `transport` if given */
+export function makeGuest(host, name = 'Guest', { viewDistance = 3, uuid, transport = host.net.connect() } = {}) {
+  const { m } = host;
   const g = { name, transport, chat: [], disconnected: null, world: null, level: null, player: null, session: null, chunkAdds: 0 };
   const hooks = {
     login(info) {
