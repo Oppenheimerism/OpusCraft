@@ -10,8 +10,9 @@
 // pools of lava, a hut with a chest). Piglin brutes guard the centre, piglins the hall, the galleries and the towers.
 
 import {
-  BastionGrid, element, bastionPool, wallX, floor, h, stairs, slab, EMPTY,
-  PBB, CPBB, PB, CPB, BS, GOLD, BASALT, PBASALT, MAGMA, LAVA, AIR, CHAIN, PBB_WALL, BS_WALL, PBB_, BS_, PB_,
+  BastionGrid, element, bastionPool, wallX, floor, h, stairs, slab, EMPTY, OPP,
+  noiseOf, breakTop, breach, spall, rubble, hangLantern, stump, vee, deepest, teeth, walkway, type Noise,
+  PBB, CPBB, PB, CPB, BS, GILD, GOLD, BASALT, PBASALT, MAGMA, LAVA, AIR, CHAIN, PBB_WALL, BS_WALL, PB_WALL, PBB_, BS_, PB_, LANTERN_UP,
 } from './bastionPieces';
 import type { PoolElement } from './jigsaw';
 
@@ -48,7 +49,68 @@ function hall(): PoolElement {
   g.connect(0, 0, 15, 'west', { target: T.wall, pool: 'bastion/treasure/walls' });
   // piglins about the floor, clear of the stairs and the bridges
   for (const [x, z] of [[2, 8], [29, 23], [8, 29], [23, 2]]) g.mob(x, 0, z, 'piglin');
+  const n = noiseOf('bastion/treasure/big_air_full');
+  // in the two corners the stairs leave free, a hearth: lava in a curb of magma and blackstone, sunk in the floor
+  for (const [x0, z0] of [[HALL - 4, 0], [0, HALL - 4]])
+    for (let x = x0; x < x0 + 4; x++)
+      for (let z = z0; z < z0 + 4; z++) {
+        const inner = x > x0 && x < x0 + 3 && z > z0 && z < z0 + 3;
+        g.set(x, 0, z, inner || (x + z) % 2 === 0 ? MAGMA : CPB);
+        g.set(x, 1, z, inner ? LAVA : (x + z) % 2 ? CPB : slab(PBB_));
+      }
+  // what's left of the floors that once ran round the hall: ledges on corbels along its walls at different heights,
+  // two of them on the pillars in the corners, beams out over the drop, all broken off short, lanterns hanging
+  stump(g, n, HALL - 1, 2, 21, 0);
+  stump(g, n, 0, 2, 25, HALL - 1);
+  ledge(g, n, 17, 0, HALL - 1, 2, 22, 'south', true, false);
+  ledge(g, n, 0, HALL - 3, 11, HALL - 1, 26, 'north', false, true);
+  ledge(g, n, 0, 19, 1, 27, 20, 'east', true, true);
+  ledge(g, n, HALL - 3, 3, HALL - 1, 10, 17, 'west', true, true);
+  beam(g, n, 9, 0, 0, 1, 7, 25);
+  beam(g, n, HALL - 1, 21, -1, 0, 6, 28);
+  beam(g, n, 0, 12, 1, 0, 9, 30);
+  // heaps of what fell at the walls' feet
+  for (const [x, z, r] of [[20, 1, 1.8], [30, 10, 1.5], [11, 30, 1.7], [1, 22, 1.4]]) rubble(g, n, x, 1, z, r, x);
   return element(g, 'bastion/treasure/big_air_full', 'bastion_generic_degradation');
+}
+
+/**
+ * a ledge along a wall of the hall at y over x0..x1, z0..z1, the drop on its `pit` side: bricks and blackstone on
+ * corbels of upside-down stairs, its edge ragged, broken off short at its start or end (or both), rubble on it and a
+ * lantern hanging from it
+ */
+function ledge(g: BastionGrid, n: Noise, x0: number, z0: number, x1: number, z1: number, y: number, pit: 'north' | 'south' | 'east' | 'west', broken0: boolean, broken1: boolean): void {
+  const alongX = pit === 'north' || pit === 'south';
+  const [u0, u1] = alongX ? [x0, x1] : [z0, z1];
+  const [v0, v1] = alongX ? [z0, z1] : [x0, x1];
+  const out = pit === 'south' || pit === 'east' ? 1 : -1, wall = out > 0 ? v0 : v1, deep = v1 - v0 + 1;
+  let lantern: [number, number] | null = null;
+  for (let u = u0; u <= u1; u++) {
+    const short = (broken0 ? Math.max(0, 3 - (u - u0)) : 0) + (broken1 ? Math.max(0, 3 - (u1 - u)) : 0);
+    const reach = deep - (n(u, y, 0, 1) < 0.3 ? 1 : 0) - Math.floor(short * (0.5 + n(u, y, 1, 1)));
+    if (reach <= 0) continue;
+    for (let i = 0; i < reach; i++) {
+      const v = wall + out * i, [x, z] = alongX ? [u, v] : [v, u];
+      g.set(x, y, z, i === reach - 1 && n(x, y, z, 2) < 0.4 ? slab(PBB_) : n(x, y, z, 3) < 0.35 ? BS : PBB);
+    }
+    const [cx, cz] = alongX ? [u, wall] : [wall, u];
+    g.set(cx, y - 1, cz, stairs(PBB_, OPP[pit], 'top'));
+    if (u % 3 === 0) g.set(cx, y - 2, cz, stairs(PBB_, OPP[pit], 'top'));
+    if (reach >= 2 && Math.abs(u - ((u0 + u1) >> 1)) <= 1) lantern = alongX ? [u, wall + out * (reach - 1)] : [wall + out * (reach - 1), u];
+  }
+  const [mx, mz] = alongX ? [(u0 + u1) >> 1, wall] : [wall, (u0 + u1) >> 1];
+  rubble(g, n, mx, y + 1, mz, 1.6);
+  if (lantern) hangLantern(g, lantern[0], y - 1, lantern[1], 1);
+}
+
+/** a beam out from a wall at (x, y, z) along x or z (`dx`, `dz`) for `len`, its end broken off; a lantern from its end */
+function beam(g: BastionGrid, n: Noise, x: number, z: number, dx: number, dz: number, len: number, y: number): void {
+  for (let i = 0; i < len; i++) {
+    const bx = x + dx * i, bz = z + dz * i;
+    g.set(bx, y, bz, i === len - 1 ? slab(PBB_) : n(bx, y, bz, 4) < 0.3 ? CPBB : PBB);
+    if (i < 2) g.set(bx, y - 1, bz, i === 0 ? PBB : stairs(PBB_, dx > 0 ? 'west' : dx < 0 ? 'east' : dz > 0 ? 'north' : 'south', 'top'));
+  }
+  hangLantern(g, x + dx * (len - 2), y - 1, z + dz * (len - 2), 3);
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -114,7 +176,48 @@ function wall(kind: WallKind, id: string): PoolElement {
   g.mob(6, GALLERY, 4, 'piglin').mob(26, GALLERY, 4, 'piglin');
   g.mob(16, WALK, 3, 'piglin');
   g.gold(9, WALK, 4).gold(23, WALK, 4);
+  ruinWall(g, kind, noiseOf(id));
   return element(g, id, 'treasure_rooms');
+}
+
+/**
+ * what the years have done to a wall of the hall: its top fallen in (deep at one end beside a corner tower, shallow
+ * elsewhere, the parapet gone in stretches), a breach or two, the facing fallen from its outer face in patches, rubble
+ * on what's left of the walkway's outer side, lanterns in the gallery. Each of the three walls differently. The
+ * outer half of the wall falls as it may; the inner half (z 3-5) only so far that the rampart's walkway still runs
+ * from corner tower to corner tower, down into each gap and up out of it a block a step. Nothing under the walkway's
+ * piglin and gold, nor the gallery, which stays whole to walk along
+ */
+function ruinWall(g: BastionGrid, kind: WallKind, n: Noise): void {
+  const top = WALL_H - 2;
+  const fallen = (depth: (u: number) => number) => {
+    breakTop(g, n, 0, HALL - 1, 0, 2, top, depth);
+    breakTop(g, n, 0, HALL - 1, 3, WALL_T - 1, top, walkway(depth, top - WALK, 3, 0, HALL - 1), true, true);
+  };
+  if (kind === 'plain') {
+    // fallen in all along, down almost to the gallery's roof at the ends: stumps of it left standing where the
+    // walkway's piglin and gold are
+    fallen(deepest(teeth(12, [9, 16, 23], 2.6), vee(26, 60, 17, 2.5), vee(-30, 4, 15, 1, 2.5)));
+    breach(g, n, 5, 5.5, 2.4, 3, 0, WALL_T - 1);
+    breach(g, n, 27, 7, 2, 2.6, 0, WALL_T - 1);
+  } else if (kind === 'windows') {
+    // fallen in by its own corner tower, the facing slumped off the middle, a gap further on, a breach high up
+    fallen(deepest(vee(-30, 7, 11, 1, 1.5), vee(18, 21, 3)));
+    breakTop(g, n, 10, 22, 0, 2, top, vee(10, 22, 13, 1.6, 1.6));
+    breakTop(g, n, 25, 31, 0, 1, top, () => 2);
+    breach(g, n, 27.5, 24, 2.2, 3, 0, WALL_T - 1);
+  } else {
+    // the gate's wall: its right half fallen but for a stump, the parapet gone over the left
+    fallen(deepest((u) => (u < 18 ? 0 : teeth(12, [23], 1.6)(u)), vee(11, 14, 2)));
+    breakTop(g, n, 2, 10, 0, 1, top, () => 2);
+    breach(g, n, 6, 22, 1.6, 2.2, 0, 2);
+  }
+  // the outer face spalled in patches, more high up than low
+  spall(g, n, 0, HALL - 1, 2, GALLERY - 2, 0, 1, 0.16, true, 3, 2);
+  spall(g, n, 0, HALL - 1, GALLERY + 5, WALK - 3, 0, 1, 0.3, true, 3, 2);
+  // fallen blocks on the walkway's outer side, and a lantern or two in the gallery under its chains
+  for (const x of [4, 13, 20, 29]) rubble(g, n, x, WALK + 1, 1.2, 1.6, x);
+  for (const x of [3, 19]) hangLantern(g, x, GALLERY + 3, 4, 0);
 }
 
 /**
@@ -162,6 +265,19 @@ function corner(broken: boolean, id: string): PoolElement {
   }
   g.mob(2, WALK, 3, 'piglin_melee');
   g.connect(WALL_T - 1, 0, 2, 'east', { name: T.corner });
+  const n = noiseOf(id);
+  if (broken) {
+    // the turret broken down to its floor on the outer side, stumps of its walls standing on the inner; the stone of
+    // it lying on the floor
+    breakTop(g, n, 0, WALL_T - 1, 0, WALL_T - 1, t0 + 6, (x) => (x <= 2 ? 7 : x === 3 ? 5 : 3));
+    rubble(g, n, 3.5, t0, 1.5, 1.5);
+  } else {
+    // a finial of basalt on one corner of the crown, a lantern in the turret
+    g.fill(WALL_T - 1, t0 + 5, WALL_T - 1, WALL_T - 1, t0 + 7, WALL_T - 1, PBASALT).set(WALL_T - 1, t0 + 8, WALL_T - 1, slab(BS_));
+    hangLantern(g, 3, t0 + 1, 3, 0);
+  }
+  spall(g, n, 0, WALL_T - 1, 2, WALK - 2, 0, 1, 0.16);
+  spall(g, n, 0, WALL_T - 1, 2, WALK - 2, 0, 1, 0.16, false);
   return element(g, id, 'high_rampart');
 }
 
@@ -191,6 +307,16 @@ function extensionEnds(g: BastionGrid, w: number, deck: number, mx = (w >> 1) - 
   g.mob(mx, deck, mz, 'piglin');
 }
 
+/** a platform's far corner broken off, a stretch of its railing gone, a lantern on a post of it */
+function weather(g: BastionGrid, id: string, w: number, deck: number): void {
+  const n = noiseOf(id);
+  const right = n(0, 0, 0) < 0.5, x0 = right ? w - 1 : 0, dx = right ? -1 : 1;
+  for (let i = 0; i < 3; i++)
+    for (let z = 0; z < 3 - i; z++) if (n(i, deck, z, 1) < 0.8 || i + z < 2) g.knock(x0 + dx * i, deck, z), g.knock(x0 + dx * i, deck - 1, z), g.knock(x0 + dx * i, deck + 1, z);
+  for (let x = 3; x < w - 3; x++) if (n(x, deck, 0, 2) < 0.45) g.knock(x, deck + 1, 0);
+  g.set(w - 1 - x0, deck + 1, 0, PBB_WALL).set(w - 1 - x0, deck + 2, 0, LANTERN_UP);
+}
+
 function largePool(): PoolElement {
   const w = 15, deck = 10;
   const g = new BastionGrid(w, deck + 4, 10);
@@ -204,6 +330,7 @@ function largePool(): PoolElement {
   g.gold(2, deck, 2).gold(12, deck, 7);
   // (its piglin beside the pool, not in it)
   extensionEnds(g, w, deck, 12, 4);
+  weather(g, 'bastion/treasure/extensions/large_pool', w, deck);
   return element(g, 'bastion/treasure/extensions/large_pool', 'bastion_generic_degradation');
 }
 
@@ -214,6 +341,7 @@ function smallPool(): PoolElement {
   for (let x = 3; x <= 5; x++) for (let z = 2; z <= 4; z++) g.set(x, deck, z, x === 4 && z === 3 ? LAVA : MAGMA);
   g.gold(1, deck, 7);
   extensionEnds(g, w, deck);
+  weather(g, 'bastion/treasure/extensions/small_pool', w, deck);
   return element(g, 'bastion/treasure/extensions/small_pool', 'bastion_generic_degradation');
 }
 
@@ -235,6 +363,10 @@ function house(): PoolElement {
   g.set(5, deck + 4, 3, CHAIN);
   g.connect(w >> 1, deck, 9, 'south', { name: T.extension });
   g.mob(6, deck, 3, 'piglin');
+  // a lantern on its chain, a corner of the roof fallen in
+  hangLantern(g, 5, deck + 3, 3, 0);
+  g.set(8, deck + 5, 6, AIR).set(7, deck + 5, 6, AIR).set(8, deck + 5, 5, AIR).set(8, deck + 4, 6, AIR).set(7, deck + 1, 5, slab(PBB_));
+  weather(g, 'bastion/treasure/extensions/houses', w, deck);
   return element(g, 'bastion/treasure/extensions/houses', 'bastion_generic_degradation');
 }
 
@@ -256,7 +388,10 @@ function base(): PoolElement {
         g.set(x, 1, z, (x + z) % 6 === 0 ? CPB : PBB);
         g.set(x, 2, z, (x + z) % 2 === 0 ? slab(PBB_) : AIR);
       } else if (x < P0 || z < P0 || x > P1 || z > P1) {
-        g.set(x, 1, z, LAVA);
+        // the moat: lava laid in a lattice of magma, diamonds all the way round (vanilla's basin floor)
+        const lattice = (x + z) % 4 === 1 || (x - z + BASE) % 4 === 1;
+        g.set(x, 0, z, MAGMA);
+        g.set(x, 1, z, lattice ? MAGMA : LAVA);
         g.fill(x, 2, z, x, BASE_TOP, z, AIR);
       }
     }
@@ -300,6 +435,15 @@ function base(): PoolElement {
   g.mob(11, BASE_TOP, P0 - 2, 'piglin_melee').mob(11, BASE_TOP, P1 + 2, 'piglin_melee');
   // its own connector, under its middle, to the hall's floor
   g.connect(12, 0, 12, 'down', { name: T.base, top: 'north', joint: 'aligned' });
+  // lanterns hung under the arms over the lava, the block's faces worn, a bite out of its shoulder fallen in the moat
+  const n = noiseOf('bastion/treasure/bases/lava_basin');
+  for (const [x, z] of [[2, 11], [BASE - 3, 12], [12, 2], [11, BASE - 3]]) hangLantern(g, x, BASE_TOP - 2, z, 1);
+  for (const [v, back] of [[P0, P0 + 1], [P1, P1 - 1]]) {
+    spall(g, n, P0 + 2, P1 - 2, 1, BASE_TOP - 3, v, back, 0.2);
+    spall(g, n, P0 + 2, P1 - 2, 1, BASE_TOP - 3, v, back, 0.2, false);
+  }
+  breach(g, n, 15, 8.5, 1.8, 1.5, P1, P1);
+  g.set(15, 1, P1 + 1, CPBB).set(14, 1, P1 + 2, BS).set(16, 1, P1 + 1, BS).set(15, 2, P1 + 1, slab(BS_));
   return element(g, 'bastion/treasure/bases/lava_basin', 'treasure_rooms');
 }
 
@@ -372,7 +516,14 @@ function center(n: number): PoolElement {
   g.gold(12, 0, 1);
   g.set(12, 0, 1, PBB);
   g.connect(6, 0, 6, 'down', { name: T.center, top: 'north' });
-  return element(g, `bastion/treasure/bases/centers/center_${n}`, 'treasure_rooms');
+  // lanterns on posts by the dais, gilded blackstone let into its bricks
+  const id = `bastion/treasure/bases/centers/center_${n}`, nz = noiseOf(id);
+  for (const [x, z] of [[3, 12], [10, 1]]) g.set(x, 0, z, PB_WALL).set(x, 1, z, LANTERN_UP);
+  g.fill(0, 0, 0, 13, 7, 13, (x, y, z) => {
+    const s = g.get(x, y, z);
+    return (s === PBB || s === PB || s === BS) && !g.reserved(x, y, z) && nz(x, y, z, 5) < 0.25 ? GILD : s;
+  });
+  return element(g, id, 'treasure_rooms');
 }
 
 /** a bridge from an arm's end to the wall's gallery: 4 long, 3 wide; the broken one has lost its middle */
