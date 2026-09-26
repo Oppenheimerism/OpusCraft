@@ -22,6 +22,13 @@ const BYPASSES_ARMOR = new Set(['onFire', 'inWall', 'drown', 'starve', 'fall', '
 BYPASSES_ARMOR.add('sonicBoom');
 /** damage sources that never knock back (vanilla #no_knockback) */
 const NO_KNOCKBACK = new Set(['explosion', 'playerExplosion', 'badRespawnPoint', 'fall', 'stalagmite', 'drown', 'starve', 'onFire', 'inFire', 'campfire', 'lava', 'lightningBolt', 'inWall', 'void', 'genericKill', 'magic', 'wither', 'cactus', 'sweetBerryBush', 'generic']);
+// (powder snow) freezing ignores armour and doesn't knock back
+BYPASSES_ARMOR.add('freeze');
+NO_KNOCKBACK.add('freeze');
+/** (powder snow) vanilla #freeze_immune_wearables: leather armour keeps the cold out */
+const FREEZE_IMMUNE_WEARABLES = new Set(['leather_helmet', 'leather_chestplate', 'leather_leggings', 'leather_boots', 'leather_horse_armor']);
+/** (powder snow) vanilla #freeze_hurts_extra_types: 5 a time instead of 1 */
+const FREEZE_HURTS_EXTRA = new Set(['strider', 'blaze', 'magma_cube']);
 /** vanilla #bypasses_resistance */
 const BYPASSES_RESISTANCE = new Set(['void', 'genericKill']);
 /** vanilla #damages_helmet */
@@ -145,7 +152,45 @@ export abstract class LivingEntity extends Entity {
 
   /** effective movement speed (sprint modifier +30%, speed / slowness) */
   movementSpeed(): number {
-    return Math.max(0, this.speed * (this.sprinting ? 1.3 : 1) * this.speedEffectFactor());
+    return Math.max(0, (this.speed + this.frostSpeed) * (this.sprinting ? 1.3 : 1) * this.speedEffectFactor());
+  }
+
+  /**
+   * (powder snow) vanilla SPEED_MODIFIER_POWDER_SNOW (tryAddFrost / removeFrost): frozen at all, on something, up to
+   * 0.05 off the base speed (an ADD_VALUE modifier: before the sprint's and the effects' multipliers)
+   */
+  frostSpeed = 0;
+
+  /** (powder snow) the armour it wears, feet, legs, chest, head (a player's is in its inventory, a mob's armorItems) */
+  armorSlots(): readonly (ItemStack | null)[] {
+    const worn = this as { inventory?: { armor?: (ItemStack | null)[] }; armorItems?: (ItemStack | null)[] };
+    return worn.inventory?.armor ?? worn.armorItems ?? [];
+  }
+
+  /** (powder snow) vanilla PowderSnowBlock.canEntityWalkOnPowderSnow: its kind can, or it has leather boots on */
+  override canWalkOnPowderSnow(): boolean {
+    return super.canWalkOnPowderSnow() || this.armorSlots()[0]?.item.id === 'leather_boots';
+  }
+
+  /** (powder snow) vanilla LivingEntity.canFreeze: not a spectator, and none of #freeze_immune_wearables (leather) worn */
+  override canFreeze(): boolean {
+    if ((this as { gameMode?: string }).gameMode === 'spectator') return false;
+    return !this.armorSlots().some((s) => s && FREEZE_IMMUNE_WEARABLES.has(s.item.id)) && super.canFreeze();
+  }
+
+  /**
+   * (powder snow) vanilla LivingEntity.aiStep's freezing: a tick colder in powder snow (up to fully frozen), 2 warmer
+   * out of it; the frost's slowness while on something (tryAddFrost); and fully frozen, 1 damage every 40 ticks
+   * (5 for #freeze_hurts_extra_types: striders, blazes, magma cubes)
+   */
+  protected tickFreezing(): void {
+    if (this.health > 0) {
+      if (this.inPowderSnow && this.canFreeze()) this.ticksFrozen = Math.min(140, this.ticksFrozen + 1);
+      else this.ticksFrozen = Math.max(0, this.ticksFrozen - 2);
+    }
+    const on = this.level.world.getState(Math.floor(this.x), Math.floor(this.y - 0.2), Math.floor(this.z));
+    this.frostSpeed = !(FLAGS[on] & F_AIR) && this.ticksFrozen > 0 ? -0.05 * this.percentFrozen() : 0;
+    if (this.tickCount % 40 === 0 && this.isFullyFrozen() && this.canFreeze()) this.hurt(FREEZE_HURTS_EXTRA.has(this.type) ? 5 : 1, 'freeze');
   }
 
   flyingSpeed(): number {
@@ -593,6 +638,8 @@ export abstract class LivingEntity extends Entity {
       this.autoSpinAttackTicks--;
       this.checkAutoSpinAttack(before, this.bb);
     }
+    // (powder snow)
+    this.tickFreezing();
     this.pushEntities();
   }
 
@@ -671,6 +718,11 @@ export abstract class LivingEntity extends Entity {
 
   protected jumpInLiquid(): void {
     this.dy += 0.04;
+  }
+
+  /** vanilla goDownInWater: down through the water, as jumpInLiquid is up (a player sneaking in it) */
+  protected goDownInWater(): void {
+    this.dy -= 0.04;
   }
 
   jumpFromGround(): void {
@@ -756,7 +808,8 @@ export abstract class LivingEntity extends Entity {
       this.moveRelative(speed, sx, sy, sz);
       this.handleOnClimbable();
       this.move(this.dx, this.dy, this.dz);
-      if ((this.horizontalCollision || this.jumping) && this.onClimbable()) this.dy = 0.2;
+      // ((powder snow) and in powder snow, for whatever can walk on it: it climbs out)
+      if ((this.horizontalCollision || this.jumping) && (this.onClimbable() || (this.inPowderSnowBlock() && this.canWalkOnPowderSnow()))) this.dy = 0.2;
       let d2 = this.dy;
       // vanilla: levitation eases vertical speed toward 0.05 per level instead of falling
       const lev = this.effectAmp('levitation');
@@ -1069,6 +1122,8 @@ export abstract class LivingEntity extends Entity {
   }
 
   protected override causeFallDamage(dist: number): void {
+    // (powder snow) vanilla PowderSnowBlock.fallOn: a landing in powder snow doesn't hurt; from 4 blocks up it thumps
+    if (this.fallOnPowderSnow(dist)) return;
     // vanilla PointedDripstoneBlock.fallOn: landing on a stalagmite's tip hurts twice as much, from 2.5 blocks higher
     const on = this.level.world.getState(Math.floor(this.x), Math.floor(this.y - 0.2), Math.floor(this.z));
     const b = BLOCKS[STATE_BLOCK[on]];
@@ -1081,6 +1136,22 @@ export abstract class LivingEntity extends Entity {
   }
 
   protected onFallDamage(_dmg: number, _dist: number): void {}
+
+  /** (powder snow) its feet in powder snow (vanilla getInBlockState) */
+  inPowderSnowBlock(): boolean {
+    return BLOCKS[STATE_BLOCK[this.level.world.getState(Math.floor(this.x), Math.floor(this.y), Math.floor(this.z))]].name === 'powder_snow';
+  }
+
+  /**
+   * (powder snow) vanilla PowderSnowBlock.fallOn, landing on its crust (the falling shape, 0.9 up): no damage, and from
+   * 4 blocks or more the fall sound (getFallSounds: the small one under 7); true if it was powder snow
+   */
+  protected fallOnPowderSnow(dist: number): boolean {
+    const on = this.level.world.getState(Math.floor(this.x), Math.floor(this.y - 0.2), Math.floor(this.z));
+    if (BLOCKS[STATE_BLOCK[on]].name !== 'powder_snow') return false;
+    if (dist >= 4) this.level.sound.play(`entity.${this.type === 'player' ? 'player' : 'generic'}.${dist < 7 ? 'small' : 'big'}_fall`, this.x, this.y, this.z, 1, 1);
+    return true;
+  }
 
   /** (M8: goats) vanilla calculateFallDamage overrides: how much less a fall hurts it (a goat's 10) */
   protected fallDamageReduction(): number {

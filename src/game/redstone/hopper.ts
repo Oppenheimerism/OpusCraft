@@ -14,6 +14,7 @@ import { AABB } from '../../core/aabb';
 import { fillContainer } from '../loot';
 import { registerBehavior } from '../blockBehavior';
 import { DecoratedPotBlockEntity } from '../decoratedPot';
+import { JukeboxBlockEntity } from '../jukebox';
 import { hasNeighborSignal } from './signal';
 import { containerAt, insertItem, isFullContainer, slotsOf, takeOneFrom, CONTAINER_TARGETS, type InsertTarget } from './dispenser';
 import type { Level } from '../level';
@@ -103,12 +104,33 @@ registerBlockEntityType('hopper', (x, y, z) => new HopperBlockEntity(x, y, z));
 // what hoppers (and droppers) see of the block entities that aren't a plain chest's: the hopper itself; a shulker box,
 // which won't take another shulker box (vanilla ShulkerBoxBlockEntity.canPlaceItemThroughFace); a decorated pot's
 // one slot
-CONTAINER_TARGETS.push((be) => {
+CONTAINER_TARGETS.push((be, level) => {
   if (be instanceof HopperBlockEntity) return be.target;
   if (be instanceof ShulkerBoxBlockEntity) return { container: be.container, canPlace: (_i, s) => !isShulkerBox(s.item.id) };
   if (be instanceof DecoratedPotBlockEntity) return { container: be.container };
+  if (be instanceof JukeboxBlockEntity) return jukeboxTarget(be, level);
   return null;
 });
+
+/**
+ * vanilla JukeboxBlockEntity as a ContainerSingleItem: a disc goes into an empty jukebox and plays; a hopper under
+ * it takes the disc out (stopping the song) if it has an empty slot (canTakeItem: hasAnyMatching(isEmpty)). It
+ * holds one (getMaxStackSize 1)
+ */
+function jukeboxTarget(be: JukeboxBlockEntity, level: Level): InsertTarget {
+  return {
+    container: {
+      size: 1,
+      maxStackSize: 1,
+      get: (i) => (i === 0 ? be.getTheItem() : null),
+      set: (_i, s) => void (s ? be.setItem(level, 0, s) : be.removeItem(level, 0, 1)),
+      // (setTheItem and removeTheItem already tell the neighbours and mark the chunk)
+      changed() {},
+    },
+    canPlace: (_i, s) => be.canPlaceItem(0, s),
+    canTake: (_i, _s, _face, into) => be.canTakeItem([...Array(into.container.size).keys()].some((i) => !into.container.get(i))),
+  };
+}
 
 const facingOf = (st: number): Dir => DIR_NAMES.indexOf(hopper().get<string>(st, 'facing') as (typeof DIR_NAMES)[number]) as Dir;
 

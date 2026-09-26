@@ -11,7 +11,7 @@ import type { Camera } from './renderer';
 import type { Frustum } from '../core/math';
 import { wrapDegrees } from '../core/math';
 import { ModelPart, playerModel, animateHumanoid } from './model';
-import { drawArmItem, drawPlayerHeldItems, playerArms } from './playerPose';
+import { animatePlayerSwim, drawArmItem, drawPlayerHeldItems, playerArms } from './playerPose';
 import * as M from './mobModels';
 import type { MobModelDef } from './mobModels';
 import type { Level } from '../game/level';
@@ -696,6 +696,12 @@ export class EntityRenderDispatcher {
         const k = e.dx * lz - e.dz * lx;
         pose.rotY((Math.sign(k) * Math.acos(Math.max(-1, Math.min(1, j))) * 180) / Math.PI);
       }
+    } else if (e.type === 'player' && e.swimAmountAt(p) > 0) {
+      // ((swimming) vanilla PlayerRenderer.setupRotations: swimming, a player tips forward to lie along its look (flat
+      // when crawling out of the water) as it eases into the pose; once in it, a block down and 0.3 ahead)
+      const f3 = e.inWater ? -90 - e.pitch : -90;
+      pose.rotX(e.swimAmountAt(p) * f3);
+      if (e.isVisuallySwimming()) pose.translate(0, -1, 0.3);
     }
     // vanilla CatRenderer.setupRotations: lying down, it rolls onto its side (a touch further over by a sleeper)
     if (e instanceof Cat) {
@@ -1348,7 +1354,10 @@ export class EntityRenderDispatcher {
     // (the swing divided by (speed² / 0.2)³)
     const gliding = e.fallFlyTicks > 4;
     const still = gliding ? Math.max(1, ((e.dx * e.dx + e.dy * e.dy + e.dz * e.dz) / 0.2) ** 3) : 1;
-    animateHumanoid(m, a.limbSwing, a.limbAmount / still, a.age, a.headYaw, gliding ? -45 : a.headPitch, attackAnim(e, p), crouch, !!e.vehicle, playerArms(e, this.mainArm));
+    const arms = playerArms(e, this.mainArm), attack = attackAnim(e, p);
+    animateHumanoid(m, a.limbSwing, a.limbAmount / still, a.age, a.headYaw, gliding ? -45 : a.headPitch, attack, crouch, !!e.vehicle, arms);
+    // (swimming) and the swimmer's stroke and kick, as it eases into the swimming pose
+    if (!gliding) animatePlayerSwim(m, a.limbSwing, e.swimAmountAt(p), a.headPitch, e.isVisuallySwimming(), attack > 0 ? arms.attackArm : null, e.isUsingItem());
     this.overlay(b, e);
     // vanilla: an invisible player's body isn't drawn (a spectator's is, faintly, to the spectator: themselves), the
     // armour and held items still are; a spectator has no layers at all
@@ -1772,7 +1781,8 @@ function attackAnim(e: LivingEntity, p: number): number {
  * it's cold): the body twitches ±1.26°
  */
 function shakeYaw(e: LivingEntity): number {
-  return (e instanceof Hoglin && e.isConverting()) || (e instanceof Piglin && e.isConverting()) || (e instanceof Strider && e.suffocating) || (e instanceof ZombieVillager && e.converting) || (e instanceof Zombie && e.underWaterConverting)
+  // ((powder snow) vanilla LivingEntityRenderer.isShaking: and anything fully frozen)
+  return (e instanceof Hoglin && e.isConverting()) || (e instanceof Piglin && e.isConverting()) || (e instanceof Strider && e.suffocating) || (e instanceof ZombieVillager && e.converting) || (e instanceof Zombie && e.underWaterConverting) || e.isFullyFrozen()
     ? Math.cos(e.tickCount * 3.25) * Math.PI * 0.4
     : 0;
 }

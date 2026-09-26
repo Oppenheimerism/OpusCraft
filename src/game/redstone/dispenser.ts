@@ -87,8 +87,8 @@ export interface InsertTarget {
   slotsFor?(face: Dir): number[];
   /** vanilla canPlaceItem / canPlaceItemThroughFace (`face` null: an item entity's stack, which comes in by no face) */
   canPlace?(slot: number, s: ItemStack, face: Dir | null): boolean;
-  /** vanilla canTakeItem / canTakeItemThroughFace: a hopper under it may take this out */
-  canTake?(slot: number, s: ItemStack, face: Dir): boolean;
+  /** vanilla canTakeItem / canTakeItemThroughFace: a hopper under it (`into`) may take this out */
+  canTake?(slot: number, s: ItemStack, face: Dir, into: InsertTarget): boolean;
   /** after something went in (vanilla setChanged) */
   changed?(): void;
   /**
@@ -189,7 +189,7 @@ function entityTarget(level: Level, x: number, y: number, z: number): InsertTarg
  * (trial chambers) the block entities kept elsewhere that hoppers and droppers put things into (the crafter; the
  * hopper, shulker boxes and decorated pots: game/redstone/hopper.ts)
  */
-export const CONTAINER_TARGETS: ((be: BlockEntity) => InsertTarget | null)[] = [];
+export const CONTAINER_TARGETS: ((be: BlockEntity, level: Level) => InsertTarget | null)[] = [];
 
 /** vanilla HopperBlockEntity.getContainerAt: the block's container (or composter), else a container entity there */
 export function containerAt(level: Level, x: number, y: number, z: number): InsertTarget | null {
@@ -200,7 +200,7 @@ export function containerAt(level: Level, x: number, y: number, z: number): Inse
   be?.unpackLoot();
   // (trial chambers; hoppers) the ones kept elsewhere first: a shulker box is a barrel of sorts here
   if (be) for (const f of CONTAINER_TARGETS) {
-    const t = f(be);
+    const t = f(be, level);
     if (t) return t;
   }
   if (be instanceof ChestBlockEntity || be instanceof DispenserBlockEntity) return { container: be.container };
@@ -237,7 +237,7 @@ export function isFullContainer(target: InsertTarget, face: Dir): boolean {
 export function takeOneFrom(source: InsertTarget, slot: number, into: InsertTarget): boolean {
   const s = source.container.get(slot);
   if (!s || s.count <= 0) return false;
-  if (source.canTake && !source.canTake(slot, s, DOWN)) return false;
+  if (source.canTake && !source.canTake(slot, s, DOWN, into)) return false;
   if (insertItem(into, s.copyWithCount(1), null, source)) return false;
   if (s.count <= 1) source.container.set(slot, null);
   else {

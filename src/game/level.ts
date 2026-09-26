@@ -79,10 +79,17 @@ import type { GameEventName, GameEventContext } from './gameEvents';
 import { findLightningRod } from './copper';
 // (trial chambers) the trial spawner and the vault
 import './trialChambers';
+// (jukebox)
+import './jukebox';
+// (powder snow)
+import './powderSnow';
 
 export interface SoundSink {
   play(name: string, x: number, y: number, z: number, volume?: number, pitch?: number): void;
   playUI(name: string, volume?: number, pitch?: number): void;
+  /** (jukebox) vanilla LevelRenderer.playJukeboxSong / stopJukeboxSong: a jukebox's song, by the jukebox's position */
+  playJukeboxSong?(event: string, x: number, y: number, z: number): void;
+  stopJukeboxSong?(x: number, y: number, z: number): void;
 }
 
 export interface ParticleSink {

@@ -81,3 +81,58 @@ export function drawPlayerHeldItems(b: EntityBatch, items: ItemRenderer, pose: P
     if (s) drawArmItem(b, items, pose, root, s, arm === 'left', e.useItem === s ? e.ticksUsingItem() : -1);
   }
 }
+
+/** vanilla ModelPart.rotlerpRad: from `a` toward `b` by `t`, the short way round */
+function rotlerpRad(t: number, a: number, b: number): number {
+  let f = (b - a) % (Math.PI * 2);
+  if (f < -Math.PI) f += Math.PI * 2;
+  if (f >= Math.PI) f -= Math.PI * 2;
+  return a + t * f;
+}
+
+/** vanilla HumanoidModel.quadraticArmUpdate */
+const quadraticArmUpdate = (f: number): number => -65 * f + f * f;
+
+/**
+ * (swimming) vanilla HumanoidModel.setupAnim's swimming part (swimAmount `swim` over 0), after the rest: the head
+ * looks down ahead (in the swimming pose; else as it was); the arms sweep round in a breaststroke over 26 of the walk
+ * cycle's steps (not while using an item; the arm mid-attack keeps its swing); the legs kick slowly
+ */
+export function animatePlayerSwim(root: ModelPart, limbSwing: number, swim: number, headPitch: number, visuallySwimming: boolean, attackArm: Arm | null, usingItem: boolean): void {
+  if (swim <= 0) return;
+  const head = root.child('head'), ra = root.child('right_arm'), la = root.child('left_arm');
+  head.xRot = rotlerpRad(swim, head.xRot, visuallySwimming ? -Math.PI / 4 : (headPitch * Math.PI) / 180);
+  const f1 = limbSwing % 26;
+  const f2 = attackArm === 'right' ? 0 : swim;
+  const f3 = attackArm === 'left' ? 0 : swim;
+  const lerp = (t: number, a: number, b: number) => a + t * (b - a);
+  if (!usingItem) {
+    if (f1 < 14) {
+      la.xRot = rotlerpRad(f3, la.xRot, 0);
+      ra.xRot = lerp(f2, ra.xRot, 0);
+      la.yRot = rotlerpRad(f3, la.yRot, Math.PI);
+      ra.yRot = lerp(f2, ra.yRot, Math.PI);
+      la.zRot = rotlerpRad(f3, la.zRot, Math.PI + (1.8707964 * quadraticArmUpdate(f1)) / quadraticArmUpdate(14));
+      ra.zRot = lerp(f2, ra.zRot, Math.PI - (1.8707964 * quadraticArmUpdate(f1)) / quadraticArmUpdate(14));
+    } else if (f1 < 22) {
+      const f6 = (f1 - 14) / 8;
+      la.xRot = rotlerpRad(f3, la.xRot, (Math.PI / 2) * f6);
+      ra.xRot = lerp(f2, ra.xRot, (Math.PI / 2) * f6);
+      la.yRot = rotlerpRad(f3, la.yRot, Math.PI);
+      ra.yRot = lerp(f2, ra.yRot, Math.PI);
+      la.zRot = rotlerpRad(f3, la.zRot, 5.012389 - 1.8707964 * f6);
+      ra.zRot = lerp(f2, ra.zRot, 1.2707963 + 1.8707964 * f6);
+    } else if (f1 < 26) {
+      const f4 = (f1 - 22) / 4;
+      la.xRot = rotlerpRad(f3, la.xRot, Math.PI / 2 - (Math.PI / 2) * f4);
+      ra.xRot = lerp(f2, ra.xRot, Math.PI / 2 - (Math.PI / 2) * f4);
+      la.yRot = rotlerpRad(f3, la.yRot, Math.PI);
+      ra.yRot = lerp(f2, ra.yRot, Math.PI);
+      la.zRot = rotlerpRad(f3, la.zRot, Math.PI);
+      ra.zRot = lerp(f2, ra.zRot, Math.PI);
+    }
+  }
+  const ll = root.child('left_leg'), rl = root.child('right_leg');
+  ll.xRot = lerp(swim, ll.xRot, 0.3 * Math.cos(limbSwing * 0.33333334 + Math.PI));
+  rl.xRot = lerp(swim, rl.xRot, 0.3 * Math.cos(limbSwing * 0.33333334));
+}

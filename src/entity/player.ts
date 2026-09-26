@@ -4,7 +4,7 @@
 import { LivingEntity } from './living';
 import type { Entity } from './entity';
 import { MOB_EFFECTS, MobEffectInstance } from './effects';
-import { FLUID_WATER } from '../world/fluids';
+import { FLUID_NONE, FLUID_WATER, fluidType } from '../world/fluids';
 import type { Level } from '../game/level';
 import type { ItemStack } from '../item/item';
 import { Inventory, type Hand } from '../item/inventory';
@@ -176,8 +176,41 @@ export class Player extends LivingEntity {
 
   override get eyeHeight(): number {
     if (this.sleepingPos) return 0.2;
-    if (this.spinPose || this.glidePose) return 0.4;
+    if (this.spinPose || this.glidePose || this.swimPose) return 0.4;
     return this.crouching ? 1.27 : 1.62;
+  }
+
+  /**
+   * vanilla Pose.SWIMMING: flat, 0.6 tall (eyes at 0.4), while swimming; and crawling, when it's left somewhere too
+   * low to crouch in (updateSwimPose)
+   */
+  swimPose = false;
+
+  /** vanilla isVisuallySwimming: in the swimming pose (swimming, or crawling out of the water) */
+  override isVisuallySwimming(): boolean {
+    return this.swimPose;
+  }
+
+  /** vanilla isVisuallyCrawling: in the swimming pose out of the water */
+  isVisuallyCrawling(): boolean {
+    return this.swimPose && !this.inWater;
+  }
+
+  /** vanilla isUnderWater: in the water with the eyes under it too */
+  isUnderWater(): boolean {
+    return this.inWater && this.eyeFluid === FLUID_WATER;
+  }
+
+  /**
+   * vanilla Entity.updateSwimming: a swimmer keeps swimming while it sprints in the water; it starts sprinting under
+   * it, in a water block (not riding)
+   */
+  protected override updateSwimming(): void {
+    if (this.swimming) this.swimming = this.sprinting && this.inWater && !this.vehicle;
+    else {
+      const here = this.level.world.getState(Math.floor(this.x), Math.floor(this.y), Math.floor(this.z));
+      this.swimming = this.sprinting && this.isUnderWater() && !this.vehicle && fluidType(here) === FLUID_WATER;
+    }
   }
 
   /** (Stage 4: the outer End) vanilla Pose.FALL_FLYING: 0.6 tall (eyes at 0.4) while gliding on an elytra */
@@ -442,9 +475,9 @@ export class Player extends LivingEntity {
     this.level.addEntity(e);
   }
 
-  /** vanilla isInPowderSnow: standing in powder snow */
+  /** vanilla isInPowderSnow: in powder snow this tick ((powder snow) its entityInside says so, game/powderSnow) */
   isInPowderSnow(): boolean {
-    return BLOCKS[STATE_BLOCK[this.level.world.getState(Math.floor(this.x), Math.floor(this.y), Math.floor(this.z))]].name === 'powder_snow';
+    return this.inPowderSnow;
   }
 
   override tick(): void {
@@ -512,6 +545,39 @@ export class Player extends LivingEntity {
     if (this.fallDistance > 0.5 || this.inWater || this.flying || this.isSleeping() || this.isInPowderSnow()) this.removeEntitiesOnShoulder();
     if (this.flying) this.fallDistance = 0;
     this.updateGlidePose();
+    this.updateSwimPose();
+  }
+
+  /**
+   * vanilla Player.updatePlayerPose, for swimming (after the glide's: gliding and sleeping come first): Pose.SWIMMING,
+   * 0.6 tall, from the tick swimming starts. After it, the pose it would take (crouching if sneaking, else standing)
+   * if there's room; else crouching if there's room for that; else it stays flat, crawling (isVisuallyCrawling), and
+   * gets up as soon as it can
+   */
+  private updateSwimPose(): void {
+    if (this.swimming && !this.fallFlying && !this.sleepingPos) {
+      if (this.swimPose) return;
+      this.swimPose = true;
+      this.crouching = false;
+      this.setSize(0.6, 0.6);
+      return;
+    }
+    if (!this.swimPose) return;
+    // (a glide's pose or a sleeper's takes over from it)
+    if (this.fallFlying || this.sleepingPos || this.spinPose) {
+      this.swimPose = false;
+      return;
+    }
+    const fits = (h: number) => {
+      const b = this.bb.clone();
+      b.maxY = b.minY + h;
+      return this.collisionBoxes(b.inflate(-1e-4, 0, -1e-4)).length === 0;
+    };
+    const crouch = (this.input.sneak && !this.flying) || !fits(1.8);
+    if (crouch && !fits(1.5) && this.gameMode !== 'spectator' && !this.vehicle) return;
+    this.swimPose = false;
+    this.crouching = crouch;
+    this.setSize(0.6, crouch ? 1.5 : 1.8);
   }
 
   /**
@@ -602,13 +668,17 @@ export class Player extends LivingEntity {
           b.maxY = b.minY + h;
           return this.collisionBoxes(b.inflate(-1e-4, 0, -1e-4)).length === 0;
         };
-        this.crouching = !fits(1.8);
-        this.setSize(0.6, this.crouching ? 1.5 : 1.8);
+        // ((swimming) a swimmer's pose is flat as the spin's was)
+        if (!this.swimPose) {
+          this.crouching = !fits(1.8);
+          this.setSize(0.6, this.crouching ? 1.5 : 1.8);
+        }
       }
     }
-    // crouching pose (vanilla: shift while on ground / not flying)
-    const wantCrouch = inp.sneak && !this.flying && !this.inWater && !this.spinPose && !this.glidePose;
-    if (!this.spinPose && !this.glidePose && wantCrouch !== this.crouching) {
+    // crouching pose (vanilla updatePlayerPose: shift, not flying; in the water too, where it slows you as on land;
+    // swimming, or crawling, the swimming pose instead)
+    const wantCrouch = inp.sneak && !this.flying && !this.spinPose && !this.glidePose && !this.swimPose;
+    if (!this.spinPose && !this.glidePose && !this.swimPose && wantCrouch !== this.crouching) {
       if (wantCrouch) {
         this.crouching = true;
         this.setSize(0.6, 1.5);
@@ -624,7 +694,8 @@ export class Player extends LivingEntity {
     }
     let fwd = (inp.forward ? 1 : 0) - (inp.back ? 1 : 0);
     let left = (inp.left ? 1 : 0) - (inp.right ? 1 : 0);
-    if (this.crouching) {
+    // (vanilla LocalPlayer.isMovingSlowly: crouching, or crawling)
+    if (this.crouching || this.isVisuallyCrawling()) {
       // vanilla Attributes.SNEAKING_SPEED: 0.3, and 0.15 more a level of Swift Sneak on the leggings (at most 1)
       const f = Math.min(1, 0.3 + 0.15 * sumLevels(this, 'swift_sneak'));
       fwd *= f;
@@ -638,14 +709,28 @@ export class Player extends LivingEntity {
     const canSprint = (this.food.level > 6 || this.mayFly) && !this.vehicle;
     const forwardDown = inp.forward;
     if (this.sprintTriggerTime > 0) this.sprintTriggerTime--;
-    if (!this.sprinting && canSprint && fwd >= 0.8 && !this.crouching && this.usingItemTicks === 0 && !this.hasEffect('blindness')) {
-      if (forwardDown && !this.wasForward && (this.onGround || this.flying || this.inWater)) {
+    // ((swimming) vanilla hasEnoughImpulseToStartSprinting: under the water any push forward will do, else 0.8 of one)
+    const underWater = this.isUnderWater();
+    const impulse = underWater ? fwd > 1e-5 : fwd >= 0.8;
+    if (!this.sprinting && canSprint && impulse && !this.crouching && this.usingItemTicks === 0 && !this.hasEffect('blindness')) {
+      // (vanilla: the double tap on the ground or under the water, not on its surface)
+      if (forwardDown && !this.wasForward && (this.onGround || this.flying || underWater)) {
         if (this.sprintTriggerTime > 0) this.sprinting = true;
         else this.sprintTriggerTime = 7;
       }
-      if (inp.sprint) this.sprinting = true;
+      // (vanilla: the sprint key anywhere but on the water's surface)
+      if (inp.sprint && (!this.inWater || underWater)) this.sprinting = true;
     }
-    if (this.sprinting && (fwd < 0.8 || (this.horizontalCollision && !this.flying) || !canSprint || this.crouching && !this.flying)) this.sprinting = false;
+    if (this.sprinting) {
+      if (this.swimming) {
+        // vanilla LocalPlayer.aiStep: a swimmer sprints on till it leaves the water, or stops pushing forward while
+        // off the bottom and not sneaking (bumping into things doesn't stop a swim)
+        if ((!this.onGround && !inp.sneak && (fwd <= 1e-5 || !canSprint)) || !this.inWater) this.sprinting = false;
+      } else if ((underWater ? fwd <= 1e-5 : fwd < 0.8) || (this.horizontalCollision && !this.flying) || !canSprint || (this.crouching && !this.flying) || (this.inWater && !underWater)) {
+        // (and wading, the head above the water, stops a sprint)
+        this.sprinting = false;
+      }
+    }
     this.wasForward = forwardDown;
     this.rideJump(inp.jump);
     // flying toggle: double-tap jump (not on a mount)
@@ -663,6 +748,9 @@ export class Player extends LivingEntity {
     // flying, riding or on a ladder)
     if (inp.jump && !this.wasJump && !toggled && !this.flying && !this.vehicle && !this.onClimbable()) tryToStartFallFlying(this);
     this.wasJump = inp.jump;
+    // vanilla LocalPlayer.aiStep: sneaking in the water (not flying: isAffectedByFluids) sinks you faster
+    // (LivingEntity.goDownInWater)
+    if (this.inWater && inp.sneak && this.isAffectedByFluids()) this.goDownInWater();
     if (this.flying) {
       let v = 0;
       if (inp.sneak) v--;
@@ -709,6 +797,15 @@ export class Player extends LivingEntity {
   }
 
   override travel(sx: number, sy: number, sz: number): void {
+    // ((swimming) vanilla Player.travel: a swimmer heads where it looks: its climb or dive eases toward the look's
+    // height, a steeper share of the way (0.085) diving hard than otherwise (0.06); looking up, only with jump held or
+    // water still over its head, so it doesn't leap out at the surface)
+    if (this.swimming && !this.vehicle) {
+      const look = -Math.sin((this.pitch * Math.PI) / 180);
+      const d1 = look < -0.2 ? 0.085 : 0.06;
+      const above = this.level.world.getState(Math.floor(this.x), Math.floor(this.y + 1 - 0.1), Math.floor(this.z));
+      if (look <= 0 || this.jumping || fluidType(above) !== FLUID_NONE) this.dy += (look - this.dy) * d1;
+    }
     if (this.flying && !this.vehicle) {
       const d0 = this.dy;
       super.travel(sx, sy, sz);

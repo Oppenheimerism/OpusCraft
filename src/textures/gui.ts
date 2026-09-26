@@ -1120,6 +1120,32 @@ G['vignette'] = () => {
 };
 
 // ===========================================================================
+// (powder snow) vanilla misc/powder_snow_outline: frost creeping in from the screen's edges, thickest in the corners,
+// in pale icy blues with brighter crystals; clear in the middle (drawn over the screen at the frozen share's alpha)
+
+G['powder_snow_outline'] = () => {
+  const S = 256;
+  const t = img(S, S);
+  const r = R('powder_snow_outline');
+  const coarse = valueNoise(r, S, S, 32), fine = valueNoise(r, S, S, 8), grain = whiteNoise(r, S, S);
+  for (let y = 0; y < S; y++)
+    for (let x = 0; x < S; x++) {
+      const i = y * S + x;
+      const ex = Math.min(x, S - 1 - x) / S, ey = Math.min(y, S - 1 - y) / S;
+      // how far in from the nearest edge, the corners reaching further in
+      const d = Math.min(ex, ey) - 0.35 * Math.max(0, 0.16 - Math.hypot(ex, ey) * 0.7);
+      const reach = 0.1 + 0.07 * coarse[i] + 0.035 * fine[i];
+      const f = Math.max(0, Math.min(1, 1 - d / reach));
+      if (f <= 0) continue;
+      const a = Math.pow(f, 1.6) * (0.75 + 0.25 * grain[i]);
+      const bright = fine[i] > 0.62 || grain[i] > 0.93 ? 1 : 0.55 + 0.45 * coarse[i];
+      const c = mixC(0x8fc4e3, 0xf2fbff, bright);
+      plot(t, x, y, c, Math.round(Math.min(1, a) * 235));
+    }
+  return t;
+};
+
+// ===========================================================================
 // Title logo: blocky stone letters with a dark extruded side and black outline
 
 type LRect = [number, number, number, number];

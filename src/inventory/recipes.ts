@@ -96,6 +96,8 @@ shaped('soul_lantern', 1, ['XXX', 'X#X', 'XXX'], { X: 'iron_nugget', '#': 'soul_
 shaped('ladder', 3, ['# #', '###', '# #'], { '#': 'stick' });
 shaped('bowl', 4, ['# #', ' # '], { '#': '#planks' });
 shaped('bookshelf', 1, ['###', 'XXX', '###'], { '#': '#planks', X: 'book' });
+// (jukebox) vanilla recipes/jukebox.json
+shaped('jukebox', 1, ['###', '#X#', '###'], { '#': '#planks', X: 'diamond' });
 shaped('enchanting_table', 1, [' B ', 'D#D', '###'], { B: 'book', D: 'diamond', '#': 'obsidian' });
 shaped('anvil', 1, ['III', ' i ', 'iii'], { I: 'iron_block', i: 'iron_ingot' });
 shaped('grindstone', 1, ['I-I', '# #'], { I: 'stick', '-': 'stone_slab', '#': '#planks' });
@@ -611,6 +613,8 @@ const FUEL: Record<string, number> = {
   stick: 100, bowl: 100, dead_bush: 100,
   // (the wooden job sites)
   lectern: 300, loom: 300, barrel: 300, cartography_table: 300, fletching_table: 300, smithing_table: 300, composter: 300,
+  // (jukebox)
+  jukebox: 300,
 };
 export function fuelTime(s: ItemStack | null): number {
   if (!s) return 0;

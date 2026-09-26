@@ -1852,6 +1852,28 @@ MOB_PARTICLE_TEXTURES['enchanted_hit'] = () =>
   starParticle(['...g....', '.w.W.w..', '..WWW...', 'gWWWWWg.', '..WWW...', '.w.W.w..', '...g....', '........']);
 MOB_PARTICLE_TEXTURES['damage'] = () => heartParticle(0x000000, 0x5a0000, 0x8c0a0a, 0x420000);
 MOB_PARTICLE_TEXTURES['heart'] = () => heartParticle(0x3c0404, 0xe41c1c, 0xffffff, 0xae0f0f);
+// (powder snow) vanilla particle/snowflake_0..4: a white six-armed flake, smaller in each (as it ages)
+{
+  const flakes = [
+    ['...W....', '.W.W.W..', '..WWW...', 'WWWlWWW.', '..WWW...', '.W.W.W..', '...W....', '........'],
+    ['........', '..W.W...', '...W....', '.WWlWW..', '...W....', '..W.W...', '........', '........'],
+    ['........', '........', '...W....', '..WlW...', '...W....', '........', '........', '........'],
+    ['........', '........', '...W....', '..WWW...', '...W....', '........', '........', '........'],
+    ['........', '........', '........', '...W....', '........', '........', '........', '........'],
+  ];
+  flakes.forEach((rows, i) => (MOB_PARTICLE_TEXTURES['snowflake_' + i] = () => pixelSprite(rows, { W: 0xffffff, l: 0xd6ecf7 })));
+}
+// (jukebox) vanilla particle/note: a pale eighth note with a darker rim, tinted by the particle's colour
+MOB_PARTICLE_TEXTURES['note'] = () => pixelSprite([
+  '...dWd..',
+  '...dWWd.',
+  '...dWdWd',
+  '...dWd.d',
+  '.ddWWd..',
+  'dWWWWd..',
+  'dWWWd...',
+  '.ddd....',
+], { d: 0x9a9a9a, W: 0xffffff });
 // vanilla particle/angry: the dark cross of veins over a vexed villager
 MOB_PARTICLE_TEXTURES['angry_villager'] = () => pixelSprite([
   '..d..d..',
