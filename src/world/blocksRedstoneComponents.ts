@@ -577,6 +577,16 @@ export function registerRedstoneComponents(): void {
       model: (s) => facingVariant(s.get('powered') ? on : off, s.get('facing') as string),
     });
   }
+
+  // Daylight detector: a slab-high sensor (vanilla strength 0.2; wood; an axe's block)
+  {
+    const normal = daylightDetectorModel('daylight_detector_top'), inverted = daylightDetectorModel('daylight_detector_inverted_top');
+    registerBlock('daylight_detector', {
+      props: [POWER, INVERTED], hardness: 0.2, sound: 'wood', tool: 'axe',
+      collision: [bx(0, 0, 0, 16, 6, 16)], opaque: false, aoCaster: false, opacity: 0, faceOcclusion: 1,
+      model: (s) => ({ model: s.get('inverted') ? inverted : normal }),
+    });
+  }
 }
 
 export { HOR_Y };
