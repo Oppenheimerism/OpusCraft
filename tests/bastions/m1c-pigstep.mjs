@@ -16,7 +16,7 @@ const x = m.generatePoolMusic('music_disc.pigstep', 0, SR);
 const ms = performance.now() - t0;
 const s = analyze(x, SR);
 console.log(`dur ${s.dur.toFixed(1)} s, peak ${s.peak.toFixed(2)}, centroid ${s.centroid | 0} Hz, ${ms | 0} ms`);
-check('length about 149 s', s.dur > 140 && s.dur < 156, `${s.dur}`);
+check('length: the jukebox song\'s 149 s, near enough (the music running to its end)', s.dur > 147 && s.dur <= 149.5, `${s.dur}`);
 check('no NaN', !s.nan);
 check('no clipping', !s.clip);
 check('peak within the music level', s.peak > 0.3 && s.peak <= 0.62, `${s.peak}`);
@@ -25,7 +25,7 @@ for (const v of x.subarray(x.length - Math.round(SR * 0.05))) tail = Math.max(ta
 check('fades out at the end', tail < 0.01, `${tail}`);
 check('renders in under 10 s', ms < 10000, `${ms}`);
 // the beat: energy below 150 Hz at the kick (bar starts in the groove) against halfway between
-const BEAT = 60 / 86, BAR = BEAT * 4;
+const BEAT = 60 / 83.5, BAR = BEAT * 4;
 const lowEnergy = (t) => {
   const i0 = Math.round(t * SR), n = Math.round(0.08 * SR);
   let lp = 0, e = 0;

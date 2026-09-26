@@ -12,12 +12,12 @@ import { type Note, Mix, chordOf, legato, lowpassSweep, master, melody, nm, synt
 /** the song's length (vanilla JukeboxSong length_in_seconds 149) */
 export const PIGSTEP_SECONDS = 149;
 
-const BPM = 86;
+const BPM = 83.5;
 const BEAT = 60 / BPM;
 const BAR = BEAT * 4;
 /** the swing: every second sixteenth is pushed late by this share of a sixteenth */
 const SWING = 0.28;
-/** where each part begins, in bars (52 bars in all, about 145 s, and the tail) */
+/** where each part begins, in bars (52 bars in all: the music runs to 148 s, its last grunt and echoes to the 149th) */
 const INTRO = 0, GROOVE = 4, HOOK = 12, GROOVE2 = 20, BREAK = 28, HOOK2 = 32, OUTRO = 44, END = 52;
 
 /** the time of sixteenth `s` of bar `bar`, swung */
