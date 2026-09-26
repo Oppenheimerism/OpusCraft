@@ -170,6 +170,11 @@ export class Level {
   player!: Player;
   /** the players among `entities`, in the order they came, leaving with them (vanilla ServerLevel.players) */
   private readonly playerList: Player[] = [];
+  /**
+   * vanilla Level.isClientSide: a guest's copy of the host's level, which only shows what the host sends (net/);
+   * nothing here changes its blocks, schedules ticks, adds entities or sends game events — the host does all that
+   */
+  isClientSide = false;
   gameTime = 0;
   dayTime = 0;
   doDaylightCycle = true;
@@ -230,6 +235,7 @@ export class Level {
     world.onTypeChanged = (x, y, z, old, now) => this.poi.changed(x, y, z, old, now);
     // (vanilla BlockEntity.setChanged: a container's contents changed, so may what a comparator reads)
     world.onBlockEntityChanged = (be) => {
+      if (this.isClientSide) return;
       const st = world.getState(be.x, be.y, be.z);
       if (!(FLAGS[st] & F_AIR)) this.updateNeighbourForOutputSignal(be.x, be.y, be.z, STATE_BLOCK[st]);
     };
@@ -254,10 +260,20 @@ export class Level {
   }
 
   addEntity(e: Entity): void {
+    if (this.isClientSide) return;
     this.entities.push(e);
     if (e.type === 'player' && !this.playerList.includes(e as Player)) this.playerList.push(e as Player);
     // vanilla addFreshEntityWithPassengers: riders loaded with their vehicle come along
     for (const p of e.passengers) if (!this.entities.includes(p)) this.addEntity(p);
+  }
+
+  /**
+   * on a guest (`isClientSide`): an entity it shows, as the host sent it, or its own player (which `addEntity` won't
+   * take there)
+   */
+  addMirrorEntity(e: Entity): void {
+    this.entities.push(e);
+    if (e.type === 'player' && !this.playerList.includes(e as Player)) this.playerList.push(e as Player);
   }
 
   /**
@@ -358,6 +374,7 @@ export class Level {
    * shriekers, catalysts and wardens round about may hear it (game/gameEventDispatcher.ts)
    */
   gameEvent(event: GameEventName, x: number, y: number, z: number, ctx: GameEventContext = {}): void {
+    if (this.isClientSide) return;
     postGameEvent(this, event, x, y, z, ctx);
   }
 
@@ -678,11 +695,13 @@ export class Level {
 
   /** a tick for whatever is at (x, y, z) in `delay` ticks: fluids flowing, blocks falling, fire spreading */
   scheduleTick(x: number, y: number, z: number, delay: number): void {
+    if (this.isClientSide) return;
     this.blockTicks.schedule(x, y, z, LEGACY_TICK, this.gameTime + delay);
   }
 
   /** vanilla Level.scheduleTick(pos, block, delay, priority): the block's own tick, if it's still there by then */
   scheduleBlockTick(x: number, y: number, z: number, block: number, delay: number, priority = 0): void {
+    if (this.isClientSide) return;
     this.blockTicks.schedule(x, y, z, block, this.gameTime + delay, priority);
   }
 
@@ -697,6 +716,7 @@ export class Level {
 
   /** vanilla Level.blockEvent: `block` at (x, y, z) gets triggerEvent(a, b) in this tick's block events (or the next's) */
   blockEvent(x: number, y: number, z: number, block: number, a: number, b: number): void {
+    if (this.isClientSide) return;
     const key = `${x},${y},${z},${block},${a},${b}`;
     if (!this.blockEvents.has(key)) this.blockEvents.set(key, [x, y, z, block, a, b]);
   }
@@ -829,6 +849,7 @@ export class Level {
    * bits; true tells the neighbours and updates their shapes (UPDATE_ALL), false does neither.
    */
   setBlock(x: number, y: number, z: number, state: number, flags: boolean | number = true): number {
+    if (this.isClientSide) return this.world.getState(x, y, z);
     const f = flags === true ? UPDATE_ALL : flags === false ? UPDATE_CLIENTS | UPDATE_KNOWN_SHAPE : flags;
     const old = this.world.setState(x, y, z, state);
     if (old === state) return old;
@@ -854,6 +875,7 @@ export class Level {
    * `skip` leaves out the one toward that direction (updateNeighborsAtExceptFromFacing)
    */
   updateNeighborsAt(x: number, y: number, z: number, source: number, skip = -1): void {
+    if (this.isClientSide) return;
     this.neighborUpdater.updateNeighborsAt(x, y, z, source, skip);
   }
 
@@ -879,6 +901,7 @@ export class Level {
 
   /** vanilla Level.neighborChanged: just the block at (x, y, z) hears it */
   neighborChanged(x: number, y: number, z: number, source: number, fx: number, fy: number, fz: number): void {
+    if (this.isClientSide) return;
     this.neighborUpdater.neighborChanged(x, y, z, source, fx, fy, fz);
   }
 
@@ -887,6 +910,7 @@ export class Level {
    * who broke it, for the game event (vanilla Level.destroyBlock's entity; false where vanilla removes it without one)
    */
   destroyBlock(x: number, y: number, z: number, drop: boolean, tool: Item | null = null, effects = true, stack: ItemStack | null = null, breaker: Entity | null | false = null): boolean {
+    if (this.isClientSide) return false;
     const st = this.world.getState(x, y, z);
     if (FLAGS[st] & F_AIR) return false;
     const b = BLOCKS[STATE_BLOCK[st]];
@@ -966,6 +990,7 @@ export class Level {
    * support pop off. `changed` is the previous state at (x, y, z) (vanilla's neighborBlock).
    */
   updateNeighbors(x: number, y: number, z: number, changed?: number): void {
+    if (this.isClientSide) return;
     this.updateNeighborsFluid(x, y, z);
     this.shapeUpdateHooks(x, y, z);
     const dirs = [[0, 1, 0], [0, -1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1]];
@@ -1013,6 +1038,7 @@ export class Level {
 
   /** vanilla PointedDripstoneBlock.spawnFallingStalactite: the stalactite falls from here to its tip, and the tip hurts what it lands on */
   fallStalactite(x: number, y: number, z: number): void {
+    if (this.isClientSide) return;
     for (let yy = y; ; yy--) {
       const st = this.world.getState(x, yy, z);
       if (!isDripstoneFacing(st, 'down')) break;

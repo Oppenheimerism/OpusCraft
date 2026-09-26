@@ -604,8 +604,25 @@ export abstract class LivingEntity extends Entity {
     }
   }
 
+  /**
+   * moved by another game, which says where it is each tick (vanilla ServerPlayer: a guest's player on the host is
+   * moved by the guest): no steering, jumping or travelling here, `moveFromElsewhere` puts it where it was said to be
+   */
+  protected movedElsewhere(): boolean {
+    return false;
+  }
+
+  /** (movedElsewhere) this tick's move, as its game said */
+  protected moveFromElsewhere(): void {}
+
   aiStep(): void {
     if (this.noJumpDelay > 0) this.noJumpDelay--;
+    if (this.movedElsewhere()) {
+      this.moveFromElsewhere();
+      // (powder snow)
+      this.tickFreezing();
+      return;
+    }
     if (Math.abs(this.dx) < 0.003) this.dx = 0;
     if (Math.abs(this.dy) < 0.003) this.dy = 0;
     if (Math.abs(this.dz) < 0.003) this.dz = 0;
@@ -964,6 +981,8 @@ export abstract class LivingEntity extends Entity {
    * sounds. `attacker` is the entity responsible, `direct` the projectile if any.
    */
   override hurt(amount: number, source: string, attacker?: Entity | null, direct?: Entity | null): boolean {
+    // (vanilla: only the server hurts things; a guest hears of it from the host)
+    if (this.level.isClientSide) return false;
     if (this.isInvulnerableTo(source) || this.removed || this.health <= 0) return false;
     if (this.shrugsOffFire(source, attacker, direct)) return false;
     this.noActionTime = 0;
