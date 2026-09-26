@@ -131,6 +131,8 @@ type LookTarget = Entity | [number, number, number];
 export abstract class AbstractPiglin extends Monster {
   timeInOverworld = 0;
   immuneToZombification = false;
+  /** (bastions) vanilla NEAREST_VISIBLE_ATTACKABLE_PLAYER, a sensor's memory both kinds have */
+  nearestVisibleAttackablePlayer: Player | null = null;
 
   constructor(level: Level) {
     super(level);
@@ -142,6 +144,13 @@ export abstract class AbstractPiglin extends Monster {
   isAdult(): boolean {
     return !this.isBaby();
   }
+
+  /** (bastions) vanilla AbstractPiglin.canHunt (hoglins: a piglin that hasn't been told not to; never a brute) */
+  abstract canHunt(): boolean;
+  /** (bastions) vanilla ANGRY_AT, while it lasts */
+  abstract angryTarget(): LivingEntity | null;
+  /** (bastions) vanilla PiglinAi.setAngerTarget, for either kind (broadcastAngerTarget reaches both) */
+  abstract setAngerTarget(t: LivingEntity): void;
 
   isConverting(): boolean {
     return !this.level.world.dim.piglinSafe && !this.immuneToZombification;
@@ -256,15 +265,15 @@ export class Piglin extends AbstractPiglin {
   // sensor memories
   private visibleLiving: LivingEntity[] = [];
   private nearestVisiblePlayer: Player | null = null;
-  private nearestVisibleAttackablePlayer: Player | null = null;
   private nemesis: LivingEntity | null = null;
   private huntableHoglin: Hoglinish | null = null;
   private babyHoglin: Hoglinish | null = null;
   private zombified: LivingEntity | null = null;
   private playerNotWearingGold: Player | null = null;
   private playerHoldingWanted: Player | null = null;
-  private nearbyAdultPiglins: Piglin[] = [];
-  private visibleAdultPiglins: Piglin[] = [];
+  // (bastions) vanilla NEARBY_ADULT_PIGLINS and NEAREST_VISIBLE_ADULT_PIGLINS: brutes count as well as piglins
+  private nearbyAdultPiglins: AbstractPiglin[] = [];
+  private visibleAdultPiglins: AbstractPiglin[] = [];
   private visibleAdultHoglins = 0;
   private repellent: [number, number, number] | null = null;
   private wantedItem: ItemEntity | null = null;
@@ -344,7 +353,7 @@ export class Piglin extends AbstractPiglin {
   private huntedRecently(): boolean {
     return this.huntedRecentlyUntil > this.now;
   }
-  private angryTarget(): LivingEntity | null {
+  angryTarget(): LivingEntity | null {
     return this.angryUntil > this.now ? this.angryAt : null;
   }
   private avoiding(): LivingEntity | null {
@@ -400,7 +409,7 @@ export class Piglin extends AbstractPiglin {
           this.visibleAdultHoglins++;
           if (!this.huntableHoglin && !h.cannotBeHunted) this.huntableHoglin = h;
         }
-      } else if (e instanceof Piglin) {
+      } else if (e instanceof AbstractPiglin) {
         if (e.isAdult()) this.visibleAdultPiglins.push(e);
       } else if (e.type === 'player') {
         const p = e as Player;
@@ -411,7 +420,7 @@ export class Piglin extends AbstractPiglin {
       } else if (!this.nemesis && (e.type === 'wither_skeleton' || e.type === 'wither')) this.nemesis = e;
       else if (!this.zombified && isZombified(e)) this.zombified = e;
     }
-    this.nearbyAdultPiglins = near.filter((e): e is Piglin => e instanceof Piglin && e.isAdult());
+    this.nearbyAdultPiglins = near.filter((e): e is AbstractPiglin => e instanceof AbstractPiglin && e.isAdult());
     this.repellent = this.findRepellent();
     // vanilla NearestItemSensor: the nearest item it wants and can see, within 32 (16 up and down)
     this.wantedItem = null;
@@ -1117,6 +1126,7 @@ export class Piglin extends AbstractPiglin {
       this.retreatFrom(t);
       // broadcastRetreat: every grown piglin it sees runs from the nearest of that, what it fled and what it fought
       for (const p of this.visibleAdultPiglins) {
+        if (!(p instanceof Piglin)) continue;
         let n: LivingEntity = t;
         for (const o of [p.avoiding(), p.target]) if (o && p.distanceToSqr(o.x, o.y, o.z) < p.distanceToSqr(n.x, n.y, n.z)) n = o;
         p.retreatFrom(n);

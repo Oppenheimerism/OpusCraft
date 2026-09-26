@@ -894,6 +894,17 @@ function zombifiedPiglin(): TexImage {
 // dark hooves. The zombified texture shares the layout.
 
 function piglin(): TexImage {
+  return piglinSkin(false);
+}
+
+// (bastions) Piglin brute (64x64, the piglin's model): the same face, scarred across the brow, but dressed for war
+// in black: a tunic trimmed with gold at the collar and hem, a gold buckle and studded belt, black sleeves with a gold
+// band round the right arm, black breeches over the hooves.
+function piglinBrute(): TexImage {
+  return piglinSkin(true);
+}
+
+function piglinSkin(brute: boolean): TexImage {
   const t = img(64, 64);
   const r = new Rand(0x9161a);
   const SK = [0xb66a5e, 0xc87a6c, 0xd88a7a, 0xe49a88, 0xeea996, 0xf5b8a4];
@@ -938,6 +949,10 @@ function piglin(): TexImage {
   for (const tb of [tuskA, tuskB]) noiseBox(t, tb, r, [0xe4dcc0, 0xf2ecd4]);
   // ears: a darker inside (the face towards the head)
   for (const f of [earL.right, earR.left]) paintFace(t, f, (x, y, _c, w, h) => (x > 0 && x < w - 1 && y > 0 && y < h - 1 ? pick(r, BRISTLE) : undefined));
+  if (brute) {
+    bruteOutfit(t, r, { head, body, armR, armL, legR, legL }, GOLD, HOOF, HIDE, BRISTLE);
+    return t;
+  }
   // body: the belt, its gold buckle at the front and gold studs round it
   const hide = () => pick(r, HIDE, [1, 3, 3, 1]);
   drawFace(t, body.front, [
@@ -969,6 +984,41 @@ function piglin(): TexImage {
     noiseFace(t, leg.bottom, r, HOOF);
   }
   return t;
+}
+
+/** (bastions) the brute's black clothes over the piglin's skin (see piglinBrute) */
+function bruteOutfit(
+  t: TexImage, r: Rand, p: { head: ReturnType<typeof boxFaces>; body: ReturnType<typeof boxFaces>; armR: ReturnType<typeof boxFaces>; armL: ReturnType<typeof boxFaces>; legR: ReturnType<typeof boxFaces>; legL: ReturnType<typeof boxFaces> },
+  GOLD: number[], HOOF: number[], HIDE: number[], BRISTLE: number[],
+): void {
+  const CLOTH = [0x15121a, 0x1c1822, 0x24202b, 0x2d2835];
+  const cloth = () => pick(r, CLOTH, [1, 3, 3, 1]);
+  // a scar across the brow
+  paintFace(t, p.head.front, (x, y) => (y === 2 && x >= 5 && x <= 7 ? BRISTLE[0] : y === 1 && x === 7 ? BRISTLE[0] : undefined));
+  // the tunic: black all round, gold at the collar and the hem, the belt with its buckle and studs
+  for (const k of ['front', 'back', 'right', 'left'] as FaceName[]) {
+    const [, , w] = p.body[k];
+    paintFace(t, p.body[k], (x, y) => {
+      if (y === 0) return x % 2 === 0 ? GOLD[1] : GOLD[0];
+      if (y === 8) return k === 'front' && (x === 3 || x === 4) ? GOLD[2] : pick(r, HIDE, [2, 3, 2, 1]);
+      if (y === 9) return k === 'front' && (x === 3 || x === 4) ? GOLD[1] : x % 3 === 1 ? GOLD[1] : pick(r, HIDE, [2, 3, 2, 1]);
+      if (y === 11) return x % 2 ? GOLD[0] : cloth();
+      return cloth();
+    });
+    void w;
+  }
+  noiseFace(t, p.body.top, r, CLOTH);
+  // sleeves to the elbow; a gold band round the right arm
+  for (const [arm, band] of [[p.armR, true], [p.armL, false]] as const) {
+    for (const k of SIDES) paintFace(t, arm[k], (_x, y) => (y < 5 ? (band && y === 4 ? GOLD[1] : cloth()) : y >= 11 ? pick(r, BRISTLE) : undefined));
+    noiseFace(t, arm.top, r, CLOTH);
+    noiseFace(t, arm.bottom, r, BRISTLE);
+  }
+  // breeches to the shin, the hooves under them
+  for (const leg of [p.legR, p.legL]) {
+    for (const k of SIDES) paintFace(t, leg[k], (x, y) => (y < 9 ? (y === 8 && x % 2 === 0 ? CLOTH[0] : cloth()) : y >= 10 ? pick(r, HOOF) : undefined));
+    noiseFace(t, leg.bottom, r, HOOF);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1825,6 +1875,7 @@ export const MOB_TEXTURES: Record<string, () => TexImage> = {
   blaze,
   zombified_piglin: zombifiedPiglin,
   piglin,
+  piglin_brute: piglinBrute,
   hoglin: () => hoglinSkin(HOGLIN_LOOK),
   zoglin: () => hoglinSkin(ZOGLIN_LOOK),
   strider: () => striderSkin(STRIDER_LOOK),

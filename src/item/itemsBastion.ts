@@ -37,4 +37,7 @@ export function registerBastionItems(reg: Reg, items: Map<string, Item>, list: I
   reg({ id: tid, name: 'Smithing Template', texture: tid, rarity: 'uncommon', lore: ['Snout Armor Trim', '', 'Applies to:', ' §9Armor', 'Ingredients:', ' §9Ingots & Crystals'] });
   if (items.has('flow_armor_trim_smithing_template')) before(tid, 'flow_armor_trim_smithing_template');
   else after(tid, 'netherite_upgrade_smithing_template');
+  // the piglin brute's spawn egg, after the piglin's
+  reg({ id: 'piglin_brute_spawn_egg', texture: 'piglin_brute_spawn_egg', creativeTab: 'spawn_eggs' });
+  after('piglin_brute_spawn_egg', 'piglin_spawn_egg');
 }

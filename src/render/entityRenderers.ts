@@ -30,7 +30,8 @@ import { Ghast } from '../entity/ghast';
 import { Blaze } from '../entity/blaze';
 import { Hoglin, Zoglin } from '../entity/hoglin';
 import { Strider } from '../entity/strider';
-import { Piglin } from '../entity/piglin';
+import { Piglin, AbstractPiglin } from '../entity/piglin';
+import type { PiglinBrute } from '../entity/piglinBrute';
 import { Villager } from '../entity/villager';
 import { WanderingTrader } from '../entity/wanderingTrader';
 import { SnowGolem } from '../entity/snowGolem';
@@ -124,7 +125,7 @@ import { ArmorLayer, renderHeadItem, PIGLIN_HEAD_ITEM_SCALE } from './armorLayer
 import type { ArmorModelSet } from './armorLayer';
 
 /** the mobs with vanilla's HumanoidArmorLayer and CustomHeadLayer, and their armour models */
-const ARMOR_WEARERS: Record<string, ArmorModelSet> = { zombie: 'humanoid', husk: 'humanoid', drowned: 'humanoid', zombie_villager: 'zombie_villager', skeleton: 'humanoid', stray: 'humanoid', wither_skeleton: 'humanoid', piglin: 'piglin', zombified_piglin: 'piglin' };
+const ARMOR_WEARERS: Record<string, ArmorModelSet> = { zombie: 'humanoid', husk: 'humanoid', drowned: 'humanoid', zombie_villager: 'zombie_villager', skeleton: 'humanoid', stray: 'humanoid', wither_skeleton: 'humanoid', piglin: 'piglin', zombified_piglin: 'piglin', piglin_brute: 'piglin' };
 // (trial chambers) the bogged (vanilla BoggedRenderer: BOGGED_INNER_ARMOR and BOGGED_OUTER_ARMOR, the humanoid's)
 ARMOR_WEARERS.bogged = 'humanoid';
 
@@ -298,6 +299,8 @@ export class EntityRenderDispatcher {
       magma_cube: M.magmaCubeModel(),
       zombified_piglin: M.piglinModel(),
       piglin: M.piglinModel(),
+      // (bastions) vanilla PiglinRenderer for the brute: the piglin's model
+      piglin_brute: M.piglinModel(),
       ghast: M.ghastModel(),
       blaze: M.blazeModel(),
       wither_skeleton: M.skeletonModel(),
@@ -909,6 +912,11 @@ export class EntityRenderDispatcher {
         M.animatePiglinEars(def.root, a.limbSwing, a.limbAmount, a.age);
         M.animatePiglinPose(def.root, (e as Piglin).armPose(), a.age, attack, crossbowChargeProgress(e.mainHand, e.useItemTicks));
         break;
+      case 'piglin_brute':
+        M.animateHumanoidMob(def.root, a.limbSwing, a.limbAmount, a.age, a.headYaw, a.headPitch, attack, 'empty', !!e.vehicle);
+        M.animatePiglinEars(def.root, a.limbSwing, a.limbAmount, a.age);
+        M.animatePiglinPose(def.root, (e as PiglinBrute).armPose(), a.age, attack, 0);
+        break;
       case 'skeleton':
       case 'stray':
       case 'bogged': // (trial chambers)
@@ -1088,7 +1096,7 @@ export class EntityRenderDispatcher {
         b.flush();
       }
     }
-    if (e.mainHand && (e instanceof Zombie || e instanceof Skeleton || e instanceof Piglin)) {
+    if (e.mainHand && (e instanceof Zombie || e instanceof Skeleton || e instanceof AbstractPiglin)) {
       b.setOverlay(0, 0, 0, 0);
       this.drawHeldItem(b, def.root, e.mainHand, baby, e.usingItem ? e.useItemTicks + p : -1);
     }
@@ -1136,7 +1144,7 @@ export class EntityRenderDispatcher {
       pose.pop();
     }
     // (the offhand in the left: a piglin's, the gold it's admiring)
-    if (e.offHand && (e instanceof Zombie || e instanceof Skeleton || e instanceof Piglin)) {
+    if (e.offHand && (e instanceof Zombie || e instanceof Skeleton || e instanceof AbstractPiglin)) {
       b.setOverlay(0, 0, 0, 0);
       this.drawHeldItem(b, def.root, e.offHand, baby, -1, true);
     }
@@ -1772,7 +1780,7 @@ function attackAnim(e: LivingEntity, p: number): number {
  * it's cold): the body twitches ±1.26°
  */
 function shakeYaw(e: LivingEntity): number {
-  return (e instanceof Hoglin && e.isConverting()) || (e instanceof Piglin && e.isConverting()) || (e instanceof Strider && e.suffocating) || (e instanceof ZombieVillager && e.converting) || (e instanceof Zombie && e.underWaterConverting)
+  return (e instanceof Hoglin && e.isConverting()) || (e instanceof AbstractPiglin && e.isConverting()) || (e instanceof Strider && e.suffocating) || (e instanceof ZombieVillager && e.converting) || (e instanceof Zombie && e.underWaterConverting)
     ? Math.cos(e.tickCount * 3.25) * Math.PI * 0.4
     : 0;
 }
@@ -1859,6 +1867,7 @@ function shadowRadius(e: Entity): number {
     case 'zombie_villager':
     case 'zombified_piglin':
     case 'piglin':
+    case 'piglin_brute':
     case 'skeleton':
     case 'stray':
     case 'bogged': // (trial chambers)

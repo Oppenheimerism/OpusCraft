@@ -14,6 +14,7 @@ import { Blaze } from '../entity/blaze';
 import { Hoglin, Zoglin } from '../entity/hoglin';
 import { Strider } from '../entity/strider';
 import { Piglin } from '../entity/piglin';
+import { PiglinBrute } from '../entity/piglinBrute';
 import { Villager } from '../entity/villager';
 import { Witch } from '../entity/witch';
 // (Stage 4: illagers)
@@ -291,6 +292,10 @@ export function entityDisplayName(e: Entity | string): string {
 // (trial chambers) the breeze (only trial spawners bring it: no natural spawns), the bogged, and the wind charges
 Object.assign(MOB_TYPES, { breeze: (l: Level) => new Breeze(l), bogged: (l: Level) => new Bogged(l) });
 Object.assign(ENTITY_NAMES, { breeze: 'Breeze', bogged: 'Bogged', wind_charge: 'Wind Charge', breeze_wind_charge: 'Breeze Wind Charge' });
+
+// (bastions) the piglin brute: only the bastion remnants bring it (no natural spawns, no spawners)
+Object.assign(MOB_TYPES, { piglin_brute: (l: Level) => new PiglinBrute(l) });
+Object.assign(ENTITY_NAMES, { piglin_brute: 'Piglin Brute' });
 
 // (Stage 4: the outer End)
 Object.assign(ENTITY_NAMES, { shulker: 'Shulker', shulker_bullet: 'Shulker Bullet', item_frame: 'Item Frame', glow_item_frame: 'Glow Item Frame', firework_rocket: 'Firework Rocket' });
