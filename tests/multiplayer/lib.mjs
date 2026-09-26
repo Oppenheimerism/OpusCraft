@@ -7,7 +7,7 @@ import { load, check, exitWithStatus, genLevel, flatLevel } from '../fixes/lib.m
 export { check, exitWithStatus };
 
 export const NET_MODULES = [
-  '/src/net/codec.ts', '/src/net/protocol.ts', '/src/net/config.ts', '/src/net/items.ts', '/src/net/chunkData.ts',
+  '/src/net/codec.ts', '/src/net/protocol.ts', '/src/net/config.ts', '/src/net/items.ts', '/src/net/chunkData.ts', '/src/net/playerState.ts',
   '/src/net/transport/memory.ts', '/src/net/transport/transport.ts', '/src/net/server/hostServer.ts', '/src/net/server/session.ts',
   '/src/net/client/clientSession.ts', '/src/net/client/mirrorPlayer.ts', '/src/world/dimension.ts', '/src/item/item.ts',
   '/src/world/blockEntity.ts', '/src/game/interaction.ts',
@@ -98,6 +98,46 @@ export function makeGuest(host, name = 'Guest', { viewDistance = 3, uuid } = {})
   g.session = new m.ClientSession(transport, hooks, { name, uuid: uuid ?? m.randomId(), viewDistance });
   host.guests.push(g);
   return g;
+}
+
+/**
+ * a bare connection to `host`, without a ClientSession (for what an honest guest wouldn't send): what the host sends it,
+ * decoded, in `got`; `send(packets)` sends one message of them, `sendBytes(b)` any bytes; `reason()` the Disconnect's
+ */
+export function rawGuest(host) {
+  const { m, net } = host;
+  const t = net.connect();
+  const r = {
+    t,
+    got: [],
+    gone: false,
+    send(packets) {
+      t.send(m.HOST_PEER, m.encode(packets));
+    },
+    sendBytes(b) {
+      t.send(m.HOST_PEER, b);
+    },
+    /** the packets of kind `id` it was sent */
+    packets(id) {
+      return r.got.flat().filter((p) => p[0] === id);
+    },
+    reason() {
+      return r.packets(m.CB.Disconnect)[0]?.[1] ?? null;
+    },
+    hello(name = 'Raw', { protocol = m.PROTOCOL_VERSION, build = m.BUILD_ID, uuid = m.randomId(), viewDistance = 2 } = {}) {
+      r.send([[m.SB.Hello, protocol, build, name, uuid, viewDistance]]);
+    },
+  };
+  t.onMessage((_peer, data) => r.got.push(m.decode(data, m.MAX_HOST_MESSAGE)));
+  t.onPeer((_peer, joined) => {
+    if (!joined) r.gone = true;
+  });
+  return r;
+}
+
+/** the guest's player as the host has it */
+export function hostCopy(host, g) {
+  return host.level.players().find((p) => p.profileName === g.name) ?? null;
 }
 
 /** host tick → deliver → each guest's tick → deliver, `n` times */
