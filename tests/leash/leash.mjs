@@ -154,10 +154,12 @@ const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
   check('loaded: the cow tied to the loaded knot, the sheep to the player', c2.leashHolder === k2 && s2.leashHolder === w2.p);
   const lone = m.loadEntity({ ...ds, leash: { uuid: 'nobody' } }, w2.level);
   w2.level.addEntity(lone);
+  // (the lead drops where the sheep is; if it hasn't strolled off, that's by the player, who picks the lead up)
+  const leads = () => items(w2.level, 'lead') + w2.p.inventory.main.filter((s) => s?.item.id === 'lead').reduce((n, s) => n + s.count, 0);
   tick(w2.level, 50);
-  const early = lone.leashHolder === null && items(w2.level, 'lead') === 0;
+  const early = lone.leashHolder === null && leads() === 0;
   tick(w2.level, 60);
-  check('a lead whose holder never turns up drops after five seconds', early && items(w2.level, 'lead') === 1);
+  check('a lead whose holder never turns up drops after five seconds', early && leads() === 1);
 }
 
 // --- name tags
