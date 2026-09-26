@@ -43,6 +43,8 @@ import { registerSculkTextures } from './blocklib/sculk';
 import { registerTuffTextures } from './blocklib/tuff';
 import { registerCopperTextures } from './blocklib/copper';
 import { registerTrialChamberTextures } from './blocklib/trialChambers';
+// (bastions)
+import { registerBastionTextures } from './blocklib/bastion';
 
 type Gen = () => TexDef;
 export const BLOCK_TEXTURES: Record<string, Gen> = {};
@@ -569,6 +571,8 @@ registerOuterEndTextures(T);
 registerTuffTextures(T);
 registerCopperTextures(T);
 registerTrialChamberTextures(T);
+// (bastions) polished basalt, the block of netherite, the lodestone
+registerBastionTextures(T);
 
 // Missing texture (vanilla's magenta/black checkerboard)
 T['missing'] = () => {

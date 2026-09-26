@@ -180,6 +180,9 @@ const OVERWORLD_BIOMES = [
   'bamboo_jungle', 'eroded_badlands', 'windswept_savanna', 'cherry_grove', 'frozen_peaks', 'dripstone_caves', 'lush_caves', 'deep_dark',
 ];
 
+/** (bastions) vanilla nether/loot_bastion's criteria: its four chests' loot tables */
+const LOOT_BASTION = ['loot_bastion_other', 'loot_bastion_treasure', 'loot_bastion_hoglin_stable', 'loot_bastion_bridge'];
+
 function each(names: string[], mk: (n: string) => Criterion): Record<string, Criterion> {
   const o: Record<string, Criterion> = {};
   for (const n of names) o[n] = mk(n);
@@ -224,7 +227,7 @@ const A: AdvancementDef[] = [
   // --- Nether
   { id: 'nether/root', parent: null, title: 'Nether', description: 'Bring summer clothes', icon: 'red_nether_bricks', frame: 'task', toast: false, announce: false, criteria: { entered_nether: toNether } },
   { id: 'nether/return_to_sender', parent: 'nether/root', title: 'Return to Sender', description: 'Destroy a Ghast with a fireball', icon: 'fire_charge', frame: 'challenge', criteria: one({ t: 'return_to_sender' }) },
-  { id: 'nether/find_bastion', parent: 'nether/root', title: 'Those Were the Days', description: 'Enter a Bastion Remnant', icon: 'polished_blackstone_bricks', frame: 'task', criteria: one(never) },
+  { id: 'nether/find_bastion', parent: 'nether/root', title: 'Those Were the Days', description: 'Enter a Bastion Remnant', icon: 'polished_blackstone_bricks', frame: 'task', criteria: { bastion: { t: 'structure', structure: 'bastion_remnant' } } },
   { id: 'nether/obtain_ancient_debris', parent: 'nether/root', title: 'Hidden in the Depths', description: 'Obtain Ancient Debris', icon: 'ancient_debris', frame: 'task', criteria: { ancient_debris: inv('ancient_debris') } },
   { id: 'nether/fast_travel', parent: 'nether/root', title: 'Subspace Bubble', description: 'Use the Nether to travel 7 km in the Overworld', icon: 'map', frame: 'challenge', criteria: { travelled: { t: 'nether_travel', distance: 7000 } } },
   { id: 'nether/find_fortress', parent: 'nether/root', title: 'A Terrible Fortress', description: 'Break your way into a Nether Fortress', icon: 'nether_bricks', frame: 'task', criteria: { fortress: { t: 'structure', structure: 'fortress' } } },
@@ -232,7 +235,8 @@ const A: AdvancementDef[] = [
   { id: 'nether/distract_piglin', parent: 'nether/root', title: 'Oh Shiny', description: 'Distract Piglins with gold', icon: 'gold_ingot', frame: 'task', criteria: { distract_piglin: { t: 'distract_piglin', how: 'thrown' }, distract_piglin_directly: { t: 'distract_piglin', how: 'directly' } }, requirements: [['distract_piglin', 'distract_piglin_directly']] },
   { id: 'nether/ride_strider', parent: 'nether/root', title: 'This Boat Has Legs', description: 'Ride a Strider with a Warped Fungus on a Stick', icon: 'warped_fungus_on_a_stick', frame: 'task', criteria: { used_warped_fungus_on_a_stick: { t: 'item_durability', item: 'warped_fungus_on_a_stick', vehicle: 'strider' } } },
   { id: 'nether/uneasy_alliance', parent: 'nether/return_to_sender', title: 'Uneasy Alliance', description: 'Rescue a Ghast from the Nether, bring it safely home to the Overworld... and then kill it', icon: 'ghast_tear', frame: 'challenge', criteria: one(never) },
-  { id: 'nether/loot_bastion', parent: 'nether/find_bastion', title: 'War Pigs', description: 'Loot a Chest in a Bastion Remnant', icon: 'chest', frame: 'task', criteria: one(never) },
+  // (bastions) vanilla: any of the four bastion chests' loot tables rolled for the player
+  { id: 'nether/loot_bastion', parent: 'nether/find_bastion', title: 'War Pigs', description: 'Loot a Chest in a Bastion Remnant', icon: 'chest', frame: 'task', criteria: each(LOOT_BASTION, (n) => ({ t: 'container_loot', table: `chests/${n.slice(5)}` })), requirements: [LOOT_BASTION] },
   { id: 'nether/use_lodestone', parent: 'nether/obtain_ancient_debris', title: 'Country Lode, Take Me Home', description: 'Use a Compass on a Lodestone', icon: 'lodestone', frame: 'task', criteria: one(never) },
   {
     id: 'nether/netherite_armor', parent: 'nether/obtain_ancient_debris', title: 'Cover Me in Debris', description: 'Get a full suit of Netherite armor', icon: 'netherite_chestplate', frame: 'challenge',

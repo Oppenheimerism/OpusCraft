@@ -41,6 +41,7 @@ import { isRuinedPortal, locateRuinedPortal } from './ruinedPortals';
 import { locateAncientCity } from './ancientCities';
 // (trial chambers)
 import { locateTrialChambers } from './trialChamberStructure';
+import { locateBastion } from './bastions';
 import { snbtEnd } from './snbt';
 
 class CommandError extends Error {
@@ -818,6 +819,13 @@ export const COMMANDS: Record<string, CommandDef> = {
       // (trial chambers) in the Overworld (game/trialChamberStructure)
       if (name === 'minecraft:trial_chambers') {
         const t = dim.id === 'overworld' ? locateTrialChambers(c.game.level.seed, x, z) : null;
+        if (!t) throw new CommandError(`Could not find a structure of type "${name}" nearby`);
+        c.ok(`The nearest ${name} is at §a[${t[0]}, ~, ${t[1]}]§r (${Math.floor(Math.hypot(t[0] - x, t[1] - z))} blocks away)`);
+        return;
+      }
+      // (bastions) in the Nether (game/bastions)
+      if (name === 'minecraft:bastion_remnant') {
+        const t = dim.id === 'the_nether' ? locateBastion(c.game.level, x, z) : null;
         if (!t) throw new CommandError(`Could not find a structure of type "${name}" nearby`);
         c.ok(`The nearest ${name} is at §a[${t[0]}, ~, ${t[1]}]§r (${Math.floor(Math.hypot(t[0] - x, t[1] - z))} blocks away)`);
         return;

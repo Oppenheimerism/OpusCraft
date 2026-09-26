@@ -19,6 +19,8 @@ export const JUKEBOX_SONGS: Record<string, JukeboxSong> = {
   music_disc_creator: { sound: 'music_disc.creator', description: 'Lena Raine - Creator', lengthSeconds: 176, comparatorOutput: 12 },
   music_disc_creator_music_box: { sound: 'music_disc.creator_music_box', description: 'Lena Raine - Creator (Music Box)', lengthSeconds: 73, comparatorOutput: 11 },
   music_disc_precipice: { sound: 'music_disc.precipice', description: 'Aaron Cherof - Precipice', lengthSeconds: 299, comparatorOutput: 13 },
+  // (bastions) its song is audio/gen/discPigstep.ts
+  music_disc_pigstep: { sound: 'music_disc.pigstep', description: 'Lena Raine - Pigstep', lengthSeconds: 149, comparatorOutput: 13 },
 };
 
 /** vanilla JukeboxSong.lengthInTicks: the length rounded up to a whole tick */

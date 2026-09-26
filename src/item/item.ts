@@ -9,6 +9,8 @@ import { SKULL_TYPES, SKULL_BLOCKS } from '../world/blocksSkulls';
 import type { Fireworks, FireworkExplosion } from './fireworks';
 // (trial chambers)
 import { registerTrialChamberItems } from './itemsTrialChambers';
+// (bastions)
+import { registerBastionItems } from './itemsBastion';
 
 export interface ToolInfo {
   type: ToolType;
@@ -581,6 +583,8 @@ for (const [id, tex] of [['redstone_torch', 'block:redstone_torch'], ['repeater'
   // (M4) vanilla Items.WARDEN_SPAWN_EGG
   reg({ id: 'warden_spawn_egg', texture: 'warden_spawn_egg', creativeTab: 'spawn_eggs' });
 }
+// (bastions) netherite scrap, the netherite block, polished basalt, the lodestone, Pigstep, the snout trim's template
+registerBastionItems(reg, ITEMS, ITEM_LIST);
 
 export function itemForBlock(name: string): Item | undefined {
   // (a block that is another's item's: a wall banner is its banner's)

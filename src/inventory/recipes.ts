@@ -3,6 +3,8 @@
 
 import { ITEMS, ItemStack } from '../item/item';
 import { registerTrialChamberRecipes } from './recipesTrialChambers';
+// (bastions)
+import { registerBastionRecipes } from './recipesBastion';
 
 /** ingredient: item id, '#tag', or list of alternatives */
 type Ing = string | string[];
@@ -434,6 +436,8 @@ shapeless('music_disc_5', 1, ...Array<Ing>(9).fill('disc_fragment_5'));
 shaped('chiseled_deepslate', 1, ['#', '#'], { '#': 'cobbled_deepslate_slab' });
 // (trial chambers) the tuff and copper families, waxing, the lightning rod, the wind charge and the mace
 registerTrialChamberRecipes(shaped, shapeless);
+// (bastions) polished basalt, the netherite block and ingot, the lodestone, the snout trim's template
+registerBastionRecipes(shaped, shapeless);
 
 // drop recipes whose items don't exist in this game
 for (let i = RECIPES.length - 1; i >= 0; i--) {
@@ -545,6 +549,8 @@ smelt(['potato'], 'baked_potato', 0.35);
 for (const m of ['beef', 'porkchop', 'chicken', 'mutton', 'cod', 'salmon', 'rabbit']) smelt([m], `cooked_${m}`, 0.35);
 // (Stage 5: ocean) vanilla wet_sponge smelting: dried out (and a bucket in the fuel slot is filled: world/blockEntity.ts)
 smelt(['wet_sponge'], 'sponge', 0.15);
+// (bastions) vanilla netherite_scrap: ancient debris smelted (and blasted, below)
+smelt(['ancient_debris'], 'netherite_scrap', 2.0);
 
 export function smeltingResult(s: ItemStack | null): Smelt | null {
   return s ? SMELT.get(s.item.id) ?? null : null;

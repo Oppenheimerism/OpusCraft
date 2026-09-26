@@ -903,19 +903,26 @@ export class NetherFortresses {
     return [rx * SPACING + r.nextInt(SPACING - SEPARATION), rz * SPACING + r.nextInt(SPACING - SEPARATION)];
   }
 
+  /**
+   * (bastions) which of the set a 27 x 27-chunk region has, and its start chunk. Vanilla ChunkGenerator.createStructures:
+   * a weighted pick from the set (fortress 2, bastion remnant 3); if the pick can't generate there, it's struck off and
+   * the rest are drawn from. Bastions don't generate in basalt deltas (the bastion's start is world/gen/bastion.ts)
+   */
+  complexInRegion(rx: number, rz: number): { kind: 'fortress' | 'bastion_remnant'; cx: number; cz: number } {
+    const [cx, cz] = this.potentialChunk(rx, rz);
+    const pick = new Rand(hash2(cx, cz, this.seed ^ 0x6e657468), 0x7069);
+    let fortress = pick.nextInt(5) < 2;
+    if (!fortress && this.biomeName(cx * 16 + 8, cz * 16 + 8) === 'basalt_deltas') fortress = true;
+    return { kind: fortress ? 'fortress' : 'bastion_remnant', cx, cz };
+  }
+
   /** the fortress of a 27 x 27-chunk region, if the region has one rather than a bastion */
   startInRegion(rx: number, rz: number): FortressStart | null {
     const key = ((rx & 0xffff) << 16) | (rz & 0xffff);
     const cached = this.cache.get(key);
     if (cached !== undefined) return cached;
-    const [cx, cz] = this.potentialChunk(rx, rz);
-    // vanilla ChunkGenerator.createStructures: a weighted pick from the set (fortress 2, bastion remnant 3); if the pick
-    // can't generate there, it's struck off and the rest are drawn from. Bastions don't generate in basalt deltas
-    // (bastions aren't in the game yet: their regions stay empty, so fortresses are as rare as they should be)
-    const pick = new Rand(hash2(cx, cz, this.seed ^ 0x6e657468), 0x7069);
-    let fortress = pick.nextInt(5) < 2;
-    if (!fortress && this.biomeName(cx * 16 + 8, cz * 16 + 8) === 'basalt_deltas') fortress = true;
-    const s = fortress ? generateFortress(new Rand(hash2(cx, cz, this.seed ^ 0x466f7274), 0x7473), cx, cz) : null;
+    const { kind, cx, cz } = this.complexInRegion(rx, rz);
+    const s = kind === 'fortress' ? generateFortress(new Rand(hash2(cx, cz, this.seed ^ 0x466f7274), 0x7473), cx, cz) : null;
     if (this.cache.size > 256) this.cache.clear();
     this.cache.set(key, s);
     return s;
