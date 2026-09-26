@@ -22,6 +22,10 @@ import './repeater';
 import './tripwire';
 import './dispenser';
 import './piston';
+import './hopper';
+import './comparator';
+import './observer';
+import './daylightDetector';
 
 const blk = (st: number): Block => BLOCKS[STATE_BLOCK[st]];
 

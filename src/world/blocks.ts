@@ -451,6 +451,12 @@ registerBlock('furnace', {
   model: (s) => ({ model: orientable(s.get('lit') ? 'furnace_front_on' : 'furnace_front', 'furnace_side', 'furnace_top'), y: HOR_ROT[s.get('facing') as string] }),
 });
 registerBlock('bookshelf', { hardness: 1.5, sound: 'wood', tool: 'axe', model: one(cubeColumn('bookshelf', 'oak_planks')) });
+// (jukebox) vanilla Blocks.JUKEBOX: strength 2 / 6, wood; block/jukebox.json is cube_top (the side below as well),
+// the same with a disc in it or not (what it does: game/jukebox.ts)
+registerBlock('jukebox', {
+  props: [{ name: 'has_record', values: [false, true] }], hardness: 2, resistance: 6, sound: 'wood', tool: 'axe',
+  model: one(cubeBottomTop('jukebox_side', 'jukebox_side', 'jukebox_top')),
+});
 registerBlock('glowstone', { hardness: 0.3, sound: 'glass', light: 15, model: one(cubeAll('glowstone')) });
 registerBlock('sea_lantern', { hardness: 0.3, sound: 'glass', light: 15, model: one(cubeAll('sea_lantern')) });
 registerBlock('moss_block', { hardness: 0.1, sound: 'moss', tool: 'hoe', model: one(cubeAll('moss_block')) });

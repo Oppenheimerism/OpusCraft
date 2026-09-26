@@ -42,9 +42,11 @@ export class LoopSound {
   }
 }
 
-type Category = 'master' | 'music' | 'blocks' | 'weather' | 'hostile' | 'friendly' | 'players' | 'ambient';
+type Category = 'master' | 'music' | 'records' | 'blocks' | 'weather' | 'hostile' | 'friendly' | 'players' | 'ambient';
 
 function categoryOf(name: string): Category {
+  // (jukebox) vanilla SimpleSoundInstance.forJukeboxSong: SoundSource.RECORDS ("Jukebox/Note Blocks")
+  if (name.startsWith('music_disc.')) return 'records';
   // vanilla plays these with SimpleSoundInstance.forLocalAmbience (SoundSource.AMBIENT)
   if (name === 'block.portal.trigger' || name === 'block.portal.travel') return 'ambient';
   // vanilla global level event 1038 plays the end portal's opening as SoundSource.HOSTILE
@@ -172,6 +174,12 @@ export class SoundManager {
   private musicPool: string | null = null;
   private musicReq = 0;
   private readonly loops: LoopSound[] = [];
+  /**
+   * (jukebox) vanilla LevelRenderer.playingJukeboxSongs: the song each jukebox is playing, by position (`e` null
+   * while it's still being rendered), and the songs rendered so far, kept so a disc put back in starts at once
+   */
+  private readonly jukeboxSongs = new Map<string, { e: SoundManager['active'][number] | null }>();
+  private readonly songBuffers = new Map<string, AudioBuffer>();
   private readonly minecarts = new MinecartSounds(this);
   private readonly elytra = new ElytraSounds(this);
   readonly biomeAmbience = new BiomeAmbience(this);
@@ -257,7 +265,7 @@ export class SoundManager {
   private catVolume(cat: Category): number {
     const o = this.opts;
     if (!o) return 1;
-    const v = { master: 1, music: o.musicVolume, blocks: o.blocksVolume, weather: o.weatherVolume, hostile: o.hostileVolume, friendly: o.friendlyVolume, players: o.playersVolume, ambient: o.ambientVolume }[cat];
+    const v = { master: 1, music: o.musicVolume, records: o.recordsVolume, blocks: o.blocksVolume, weather: o.weatherVolume, hostile: o.hostileVolume, friendly: o.friendlyVolume, players: o.playersVolume, ambient: o.ambientVolume }[cat];
     return v * o.masterVolume;
   }
 
@@ -311,6 +319,62 @@ export class SoundManager {
       const i = this.active.indexOf(e);
       if (i >= 0) this.active.splice(i, 1);
     };
+  }
+
+  /**
+   * (jukebox) vanilla LevelRenderer.playJukeboxSong (level event 1010): the song from the jukebox at (x, y, z),
+   * SimpleSoundInstance.forJukeboxSong: at the block's middle, volume 4 (heard fading linearly out to 64 blocks), not
+   * looping. The song is rendered first (a few seconds, the first time); it starts when it's ready
+   */
+  playJukeboxSong(event: string, x: number, y: number, z: number): void {
+    this.stopJukeboxSong(x, y, z);
+    this.ensure();
+    if (!this.ctx || !this.master) return;
+    const key = `${x},${y},${z}`;
+    const entry: { e: SoundManager['active'][number] | null } = { e: null };
+    this.jukeboxSongs.set(key, entry);
+    const start = (buf: AudioBuffer) => {
+      if (this.jukeboxSongs.get(key) !== entry || !this.ctx) return;
+      const ctx = this.ctx;
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      const gain = ctx.createGain();
+      const pan = ctx.createStereoPanner();
+      src.connect(gain).connect(pan).connect(this.master!);
+      const e = { src, gain, pan, x: x + 0.5, y: y + 0.5, z: z + 0.5, vol: 1, range: 16 * 4, cat: 'records' as Category, ui: false };
+      this.applySpatial(e);
+      src.start();
+      this.active.push(e);
+      entry.e = e;
+      src.onended = () => {
+        const i = this.active.indexOf(e);
+        if (i >= 0) this.active.splice(i, 1);
+        if (this.jukeboxSongs.get(key) === entry) this.jukeboxSongs.delete(key);
+      };
+    };
+    const cached = this.songBuffers.get(event);
+    if (cached) return start(cached);
+    void this.request({ type: 'pool', pool: event, index: 0 }).then((d) => {
+      if (!d || !this.ctx) return;
+      const b = this.ctx.createBuffer(1, d.length, SR);
+      b.copyToChannel(d as Float32Array<ArrayBuffer>, 0);
+      this.songBuffers.set(event, b);
+      start(b);
+    });
+  }
+
+  /** (jukebox) vanilla LevelRenderer.stopJukeboxSong (level event 1011): the jukebox at (x, y, z) falls silent */
+  stopJukeboxSong(x: number, y: number, z: number): void {
+    const key = `${x},${y},${z}`;
+    const entry = this.jukeboxSongs.get(key);
+    if (!entry) return;
+    this.jukeboxSongs.delete(key);
+    if (!entry.e) return;
+    try {
+      entry.e.src.stop();
+    } catch {
+      /* already stopped */
+    }
   }
 
   private applySpatial(e: SoundManager['active'][number]): void {
@@ -566,6 +630,8 @@ export class SoundManager {
       }
     }
     this.active.length = 0;
+    // (jukebox) and the songs still being rendered don't start after all
+    this.jukeboxSongs.clear();
     for (const s of this.loops) s.stop();
     this.updateLoops();
     this.stopMusic();

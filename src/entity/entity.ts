@@ -113,6 +113,13 @@ export abstract class Entity {
   remainingFireTicks = -1;
   /** vanilla stuckSpeedMultiplier (cobwebs, berry bushes): scales the next move */
   private stuckSpeed: [number, number, number] | null = null;
+  /**
+   * (powder snow) vanilla isInPowderSnow / wasInPowderSnow: in powder snow this tick (its entityInside, game/powderSnow)
+   * and last; and ticksFrozen, how frozen it is (0 to 140 in powder snow, a tick at a time, thawing 2 a tick out of it)
+   */
+  inPowderSnow = false;
+  wasInPowderSnow = false;
+  ticksFrozen = 0;
   /** what this rides, and who rides it (vanilla vehicle / passengers) */
   vehicle: Entity | null = null;
   readonly passengers: Entity[] = [];
@@ -171,6 +178,9 @@ export abstract class Entity {
     this.pitchO = this.pitch;
     this.walkDistO = this.walkDist;
     this.tickCount++;
+    // (powder snow) vanilla Entity.baseTick: whether it's in powder snow is found afresh as it moves
+    this.wasInPowderSnow = this.inPowderSnow;
+    this.inPowderSnow = false;
     this.handlePortal();
     this.updateFluids();
     this.updateSwimming();
@@ -485,8 +495,8 @@ export abstract class Entity {
             if (b.intersects(box)) out.push(b);
             continue;
           }
-          // (a shulker box's shape grows with its lid: world/dynamicShapes)
-          const boxes = DYNAMIC_SHAPE[st] ? dynamicCollision(world, x, y, z, st) : COLLISION[st] ?? DYNAMIC_COLLISION[STATE_BLOCK[st]]?.(world, x, y, z, st);
+          // (a shulker box's shape grows with its lid: world/dynamicShapes; powder snow's is the entity's own)
+          const boxes = STATE_BLOCK[st] === powderSnowId() ? this.powderSnowCollision(y) : DYNAMIC_SHAPE[st] ? dynamicCollision(world, x, y, z, st) : COLLISION[st] ?? DYNAMIC_COLLISION[STATE_BLOCK[st]]?.(world, x, y, z, st);
           if (!boxes) continue;
           for (const c of boxes) {
             const b = new AABB(x + c[0], y + c[1], z + c[2], x + c[3], y + c[4], z + c[5]);
@@ -501,6 +511,45 @@ export abstract class Entity {
   /** vanilla LivingEntity.canStandOnFluid: walks on this fluid (FLUID_*) as on a floor (the strider on lava) */
   canStandOnFluid(_fluid: number): boolean {
     return false;
+  }
+
+  /**
+   * (powder snow) vanilla PowderSnowBlock.getCollisionShape for this entity at the block y: falling more than 2.5
+   * blocks, it lands on the snow's crust 0.9 up; a falling block, or whatever can walk on powder snow standing on top
+   * of it and not sneaking down (isDescending), finds it solid; anything else sinks in
+   */
+  powderSnowCollision(y: number): Box[] | null {
+    if (this.fallDistance > 2.5) return POWDER_SNOW_FALLING;
+    if (this.type === 'falling_block' || (this.canWalkOnPowderSnow() && this.y > y + 1 - 1e-5 && !this.isDescending())) return POWDER_SNOW_FULL;
+    return null;
+  }
+
+  /**
+   * (powder snow) vanilla PowderSnowBlock.canEntityWalkOnPowderSnow: #powder_snow_walkable_mobs (rabbits, endermites,
+   * silverfish, foxes), or leather boots on (LivingEntity's own check)
+   */
+  canWalkOnPowderSnow(): boolean {
+    return POWDER_SNOW_WALKABLE.has(this.type);
+  }
+
+  /** vanilla isDescending: going down through what would hold it (sneaking) */
+  isDescending(): boolean {
+    return this.isShiftKeyDown();
+  }
+
+  /** (powder snow) vanilla canFreeze: all but #freeze_immune_entity_types (strays, polar bears, snow golems, the wither) */
+  canFreeze(): boolean {
+    return !FREEZE_IMMUNE.has(this.type);
+  }
+
+  /** (powder snow) vanilla getPercentFrozen: how far to fully frozen (140 ticks, getTicksRequiredToFreeze) */
+  percentFrozen(): number {
+    return Math.min(this.ticksFrozen, TICKS_TO_FREEZE) / TICKS_TO_FREEZE;
+  }
+
+  /** (powder snow) vanilla isFullyFrozen */
+  isFullyFrozen(): boolean {
+    return this.ticksFrozen >= TICKS_TO_FREEZE;
   }
 
   /** vanilla canBeCollidedWith: solid to other entities (boats) */
@@ -624,8 +673,8 @@ export abstract class Entity {
     const f = this.blockSpeedFactor();
     this.dx *= f;
     this.dz *= f;
-    // vanilla: leaving fire resets the catch-fire delay; water and rain put fires out
-    const wet = this.inWater || this.isInWaterOrRainNow();
+    // vanilla: leaving fire resets the catch-fire delay; water and rain ((powder snow) and powder snow) put fires out
+    const wet = this.inWater || this.isInWaterOrRainNow() || this.inPowderSnow;
     if (!touchingFire) {
       if (this.remainingFireTicks <= 0) this.remainingFireTicks = -this.fireImmuneTicks();
       if (wasOnFire && wet) this.level.sound.play('entity.generic.extinguish_fire', this.x, this.y, this.z, 0.7, 1.6 + (Math.random() - Math.random()) * 0.4);
@@ -757,8 +806,19 @@ export abstract class Entity {
     return false;
   }
 
+  /**
+   * vanilla Player.isAboveGround: on the ground, or not yet fallen a step's height with something under it within
+   * the rest of that step (canFallAtLeast: nothing there, and it could fall; a swimmer in open water can)
+   */
+  private isAboveGround(): boolean {
+    if (this.onGround) return true;
+    if (this.fallDistance >= this.stepHeight) return false;
+    const b = this.bb;
+    return this.collisionBoxes(new AABB(b.minX, b.minY - (this.stepHeight - this.fallDistance) - 1e-5, b.minZ, b.maxX, b.minY, b.maxZ)).length > 0;
+  }
+
   private maybeBackOffFromEdge(mx: number, my: number, mz: number): [number, number] {
-    if (this.pistonMoving || !this.isSneakingForEdges() || my > 0 || !(this.onGround || this.fallDistance < this.stepHeight)) return [mx, mz];
+    if (this.pistonMoving || !this.isSneakingForEdges() || my > 0 || !this.isAboveGround()) return [mx, mz];
     const step = this.stepHeight;
     const test = (x: number, z: number) => this.collisionBoxes(this.bb.move(x, -step, z)).length === 0;
     while (mx !== 0 && test(mx, 0)) {
@@ -1001,6 +1061,21 @@ function solidEntities(level: Level): Entity[] {
     SOLID.set(level, c);
   }
   return c.list;
+}
+
+// (powder snow) vanilla PowderSnowBlock's shapes, EntityTypeTags.POWDER_SNOW_WALKABLE_MOBS and FREEZE_IMMUNE_ENTITY_TYPES,
+// and getTicksRequiredToFreeze
+const POWDER_SNOW_FALLING: Box[] = [[0, 0, 0, 1, 0.9, 1]];
+const POWDER_SNOW_FULL: Box[] = [[0, 0, 0, 1, 1, 1]];
+const POWDER_SNOW_WALKABLE = new Set(['rabbit', 'endermite', 'silverfish', 'fox']);
+const FREEZE_IMMUNE = new Set(['stray', 'polar_bear', 'snow_golem', 'wither']);
+const TICKS_TO_FREEZE = 140;
+let POWDER_SNOW_ID = -2;
+
+/** the powder snow block's id (-1 if there's none) */
+function powderSnowId(): number {
+  if (POWDER_SNOW_ID === -2) POWDER_SNOW_ID = BLOCKS.find((b) => b.name === 'powder_snow')?.id ?? -1;
+  return POWDER_SNOW_ID;
 }
 
 const INSIDE_NONE = 0, INSIDE_FIRE = 1, INSIDE_LAVA = 2, INSIDE_COBWEB = 3, INSIDE_BERRY_BUSH = 4, INSIDE_CACTUS = 5, INSIDE_DRIPLEAF = 6, INSIDE_PORTAL = 7, INSIDE_SOUL_FIRE = 8;

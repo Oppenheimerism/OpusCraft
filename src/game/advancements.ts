@@ -3,6 +3,9 @@
 // and husbandry trees with their criteria, per-player progress, which
 // advancements are visible, and the layout of each tab.
 
+// (jukebox) the discs, for Sound of Music
+import { JUKEBOX_SONGS } from '../item/jukeboxSongs';
+
 export type FrameType = 'task' | 'goal' | 'challenge';
 
 /** a criterion: a trigger type and the condition the trigger's payload must meet */
@@ -87,7 +90,7 @@ export type Criterion =
    * (trial chambers) vanilla item_used_on_block: used one of these items on one of these blocks, with these block state
    * properties if given (the block as it was when the trigger fired: before an item's own use changed it, after a block's)
    */
-  | { t: 'item_used_on_block'; items: string[]; blocks: string[]; state?: Record<string, string | boolean> }
+  | { t: 'item_used_on_block'; items: string[]; blocks: string[]; state?: Record<string, string | boolean>; biome?: string }
   /**
    * (trial chambers) vanilla lightning_strike: a bolt within that distance of the player, that set no more than that
    * many blocks on fire, went with one of that kind standing by unharmed
@@ -303,7 +306,7 @@ const A: AdvancementDef[] = [
   { id: 'adventure/arbalistic', parent: 'adventure/ol_betsy', title: 'Arbalistic', description: 'Kill five unique mobs with one crossbow shot', icon: 'crossbow', frame: 'challenge', hidden: true, criteria: one({ t: 'killed_by_crossbow', uniqueTypes: 5 }) },
   { id: 'adventure/craft_decorated_pot_using_only_sherds', parent: 'adventure/salvage_sherd', title: 'Careful Restoration', description: 'Make a Decorated Pot out of 4 Pottery Sherds', icon: 'decorated_pot', frame: 'task', criteria: { pot_crafted_using_only_sherds: { t: 'recipe_crafted', recipe: 'decorated_pot', ingredients: Array(4).fill('#decorated_pot_sherds') } } },
   { id: 'adventure/adventuring_time', parent: 'adventure/sleep_in_bed', title: 'Adventuring Time', description: 'Discover every biome', icon: 'diamond_boots', frame: 'challenge', criteria: each(OVERWORLD_BIOMES, (b) => ({ t: 'biome', biome: b })) },
-  { id: 'adventure/play_jukebox_in_meadows', parent: 'adventure/sleep_in_bed', title: 'Sound of Music', description: 'Make the Meadows come alive with the sound of music from a Jukebox', icon: 'jukebox', frame: 'task', criteria: one(never) },
+  { id: 'adventure/play_jukebox_in_meadows', parent: 'adventure/sleep_in_bed', title: 'Sound of Music', description: 'Make the Meadows come alive with the sound of music from a Jukebox', icon: 'jukebox', frame: 'task', criteria: { play_jukebox_in_meadows: { t: 'item_used_on_block', items: Object.keys(JUKEBOX_SONGS), blocks: ['jukebox'], biome: 'meadow' } } },
   { id: 'adventure/walk_on_powder_snow_with_leather_boots', parent: 'adventure/sleep_in_bed', title: 'Light as a Rabbit', description: 'Walk on Powder Snow... without sinking in it', icon: 'leather_boots', frame: 'task', criteria: one(never) },
   { id: 'adventure/under_lock_and_key', parent: 'adventure/minecraft_trials_edition', title: 'Under Lock and Key', description: 'Unlock a Vault with a Trial Key', icon: 'trial_key', frame: 'task', criteria: { under_lock_and_key: { t: 'item_used_on_block', items: ['trial_key'], blocks: ['vault'], state: { ominous: false } } } },
   { id: 'adventure/blowback', parent: 'adventure/minecraft_trials_edition', title: 'Blowback', description: 'Kill a Breeze with a deflected Breeze-shot Wind Charge', icon: 'wind_charge', frame: 'challenge', criteria: { blowback: { t: 'player_killed_entity', victim: 'breeze', direct: 'breeze_wind_charge' } } },
@@ -561,7 +564,7 @@ export interface TriggerPayload {
   /** (M9: frogs) the item the player used on a mob (as it was before), the mob's type and variant (player_interacted_with_entity) */
   interacted?: { item: string | null; entity: string; variant?: string };
   /** (trial chambers) the item the player used on a block (as it was before), the block and its properties (item_used_on_block) */
-  usedOnBlock?: { item: string; block: string; props?: Record<string, string | number | boolean> };
+  usedOnBlock?: { item: string; block: string; props?: Record<string, string | number | boolean>; biome?: string };
   /**
    * (trial chambers) a bolt as it went: how far from the player, how many blocks it set on fire, and the kinds of
    * whatever stood by it unharmed (lightning_strike)
@@ -773,7 +776,7 @@ function matches(c: Criterion, p: TriggerPayload): boolean {
       return !!p.interacted && p.interacted.item === c.item && p.interacted.entity === c.entity && (c.variant === undefined || p.interacted.variant === c.variant);
     // (trial chambers)
     case 'item_used_on_block':
-      return !!p.usedOnBlock && c.items.includes(p.usedOnBlock.item) && c.blocks.includes(p.usedOnBlock.block) && (!c.state || Object.entries(c.state).every(([k, v]) => p.usedOnBlock!.props?.[k] === v));
+      return !!p.usedOnBlock && c.items.includes(p.usedOnBlock.item) && c.blocks.includes(p.usedOnBlock.block) && (!c.state || Object.entries(c.state).every(([k, v]) => p.usedOnBlock!.props?.[k] === v)) && (!c.biome || p.usedOnBlock.biome === c.biome);
     case 'lightning_strike':
       return !!p.lightning && p.lightning.distance <= c.maxDistance && p.lightning.blocksSetOnFire <= c.maxBlocksSetOnFire && p.lightning.bystanders.includes(c.bystander);
     case 'player_killed_entity':

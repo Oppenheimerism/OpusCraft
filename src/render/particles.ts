@@ -122,6 +122,8 @@ const GUST = Array.from({ length: 12 }, (_, i) => `gust_${i}`);
 const DRAGON_BREATH = ['generic_2', 'generic_1', 'generic_0'];
 /** vanilla particles/campfire_cosy_smoke.json and campfire_signal_smoke.json */
 const BIG_SMOKE = Array.from({ length: 12 }, (_, i) => `big_smoke_${i}`);
+/** (powder snow) vanilla particles/snowflake.json */
+const SNOWFLAKE = Array.from({ length: 5 }, (_, i) => `snowflake_${i}`);
 /**
  * vanilla particles/end_rod.json (and firework.json, totem_of_undying.json): glitter_7 down to glitter_0 (the
  * textures are textures/blocklib/outerEnd.ts's, glitter_7 the biggest sparkle)
@@ -477,6 +479,22 @@ export class ParticleEngine {
         this.addSprite(p);
         break;
       }
+      case 'snowflake': {
+        // (powder snow) vanilla SnowflakeParticle: kicked up out of powder snow, falling (gravity 0.225, no drag but
+        // its own), a flake that shrinks through its five sprites as it ages
+        const p = this.base(kind, x, y, z);
+        p.gravity = 0.225;
+        p.friction = 1;
+        p.dx = xd + (Math.random() * 2 - 1) * 0.05;
+        p.dy = yd + (Math.random() * 2 - 1) * 0.05;
+        p.dz = zd + (Math.random() * 2 - 1) * 0.05;
+        p.size = 0.1 * (Math.random() * Math.random() + 1);
+        p.lifetime = Math.floor(16 / (Math.random() * 0.8 + 0.2)) + 2;
+        p.frames = SNOWFLAKE;
+        p.frame = -1;
+        this.addSprite(p);
+        break;
+      }
       case 'dust_plume': {
         // vanilla DustPlumeParticle (a BaseAshSmokeParticle): the puff out of a decorated pot something is put in,
         // thrown up and falling back, grey-violet, its fall and its drag dying away as it goes
@@ -576,6 +594,29 @@ export class ParticleEngine {
         p.size *= 1.5;
         p.lifetime = 16;
         p.physics = false;
+        p.grow = true;
+        p.frames = [kind];
+        p.frame = 0;
+        this.addSprite(p);
+        break;
+      }
+      case 'note': {
+        // (jukebox) vanilla NoteParticle: pops up and stops short (friction 0.66), gone in 6 ticks; `xd` (0..1) is
+        // its colour's place round the wheel, as a note block's pitch or a jukebox's 0..3/24 gives it
+        const p = this.base(kind, x, y, z);
+        this.withSpeed(p, 0, 0, 0);
+        p.speedUpWhenBlocked = true;
+        p.friction = 0.66;
+        p.dx *= 0.01;
+        p.dy *= 0.01;
+        p.dz *= 0.01;
+        p.dy += 0.2;
+        const hue = (o: number) => Math.max(0, Math.sin((xd + o) * Math.PI * 2) * 0.65 + 0.35);
+        p.r = hue(0);
+        p.g = hue(1 / 3);
+        p.b = hue(2 / 3);
+        p.size *= 1.5;
+        p.lifetime = 6;
         p.grow = true;
         p.frames = [kind];
         p.frame = 0;
@@ -1336,6 +1377,12 @@ export class ParticleEngine {
       if (p.kind === 'totem_of_undying' && p.age > p.lifetime / 2) p.alpha = 1 - (p.age - p.lifetime / 2) / p.lifetime;
       // vanilla LavaParticle.tick: embers trail smoke while young
       if (p.kind === 'lava' && Math.random() > p.age / p.lifetime) this.spawn('smoke', p.x, p.y, p.z, p.dx, p.dy, p.dz);
+      // ((powder snow) vanilla SnowflakeParticle.tick: slowing as it drifts down)
+      if (p.kind === 'snowflake') {
+        p.dx *= 0.95;
+        p.dy *= 0.9;
+        p.dz *= 0.95;
+      }
       // (fireworks) vanilla SparkParticle.tick: through the first half of its life, every other tick, a spark where it
       // is, still, in its colour and already half through its own life (and, vanilla's slip, never fading)
       if (p.spark?.trail && p.age < Math.floor(p.lifetime / 2) && (p.age + p.lifetime) % 2 === 0) {

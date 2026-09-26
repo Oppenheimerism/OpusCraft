@@ -527,7 +527,7 @@ export function lecternTakeBook(level: Level, be: LecternBlockEntity): ItemStack
 
 /**
  * vanilla LecternBlock.getAnalogOutputSignal (LecternBlockEntity.getRedstoneSignal): how far through its book the
- * lectern is open, 1 on the first page to 15 on the last, 0 with no book. For a comparator (none in the game yet)
+ * lectern is open, 1 on the first page to 15 on the last, 0 with no book: what a comparator reads
  */
 export function lecternAnalogOutput(level: Level, x: number, y: number, z: number): number {
   const st = level.getState(x, y, z);
@@ -542,6 +542,7 @@ export function lecternAnalogOutput(level: Level, x: number, y: number, z: numbe
 {
   const LECTERN_BOOKS = new Set(['writable_book', 'written_book']);
   registerBehavior('lectern', {
+    analogOutput: (level, x, y, z) => lecternAnalogOutput(level, x, y, z),
     // vanilla LecternBlock.useItemOn / tryPlaceBook / placeBook: a book goes on an empty lectern; anything else is
     // the item's business
     useItemOn(level, x, y, z, st, stack, ctx) {

@@ -180,8 +180,7 @@ export function checkAndFlip(level: Level, x: number, y: number, z: number, st: 
 }
 
 /**
- * vanilla CopperBulbBlock.getAnalogOutputSignal: a comparator reads 15 from a lit bulb, 0 from one that's out (a
- * hook: the game has no comparators yet)
+ * vanilla CopperBulbBlock.getAnalogOutputSignal: a comparator reads 15 from a lit bulb, 0 from one that's out
  */
 export function copperBulbAnalogOutput(st: number): number {
   return blk(st).get(st, 'lit') ? 15 : 0;
@@ -190,6 +189,7 @@ export function copperBulbAnalogOutput(st: number): number {
 for (let age = 0; age < 4; age++)
   for (const waxed of [false, true])
     registerBehavior(copperName('copper_bulb', age, waxed), {
+      analogOutput: (_level, _x, _y, _z, st) => copperBulbAnalogOutput(st),
       // (vanilla onPlace: a new bulb, or one that just changed age or wax, looks at its power at once)
       onPlace(level, x, y, z, st, old) {
         if (STATE_BLOCK[old] !== STATE_BLOCK[st]) checkAndFlip(level, x, y, z, st);

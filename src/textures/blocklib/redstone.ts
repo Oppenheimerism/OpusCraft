@@ -215,6 +215,181 @@ function pistonInner(cobble: TexImage): TexImage {
   return t;
 }
 
+/** vanilla comparator.png / comparator_on.png: the smooth stone top, grooves of dust from the two back torches joining and running to the front one */
+function comparatorTop(base: TexImage, on: boolean): TexImage {
+  const t = base;
+  const r = R(on ? 'comparator_on' : 'comparator');
+  const hi = on ? 0xff3a2a : 0x7a1410, mid = on ? 0xd41010 : 0x5a0c0a, lo = on ? 0x9c0606 : 0x3f0806;
+  const dust = (x: number, y: number, left: boolean) => plot(t, x, y, left ? (r.next() < 0.3 ? mid : hi) : r.next() < 0.4 ? lo : mid);
+  // (the worn stone round the grooves first, then the dust in them)
+  for (let y = 3; y < 15; y++) for (const x of [3, 6, 9, 12]) if (y >= 7 || x === 6 || x === 9) plot(t, x, y, x === 3 || x === 9 ? 0x8e8e8e : 0x9e9e9e);
+  for (let x = 3; x < 13; x++) {
+    plot(t, x, 6, 0x8e8e8e);
+    plot(t, x, 9, 0x9e9e9e);
+  }
+  for (let y = 7; y < 15; y++) {
+    dust(4, y, true);
+    dust(5, y, false);
+    dust(10, y, true);
+    dust(11, y, false);
+  }
+  for (let x = 4; x < 12; x++) {
+    dust(x, 7, true);
+    dust(x, 8, false);
+  }
+  for (let y = 3; y < 7; y++) {
+    dust(7, y, true);
+    dust(8, y, false);
+  }
+  return t;
+}
+
+/** vanilla hopper_outside.png: a dark iron plate, bevelled lighter along its top and left, faintly mottled */
+function hopperOutside(): TexImage {
+  const t = img();
+  const r = R('hopper_outside');
+  for (let y = 0; y < 16; y++)
+    for (let x = 0; x < 16; x++) {
+      let c = mixC(0x3f3f3f, 0x4b4b4b, r.next());
+      if (x === 0 || y === 0 || x === 15 || y === 15) c = 0x2b2b2b;
+      else if (x === 1 || y === 1) c = 0x5c5c5c;
+      else if (x === 14 || y === 14) c = 0x353535;
+      plot(t, x, y, c);
+    }
+  return t;
+}
+
+/** vanilla hopper_inside.png: the bowl's floor, darker, sloping in to the funnel's mouth */
+function hopperInside(): TexImage {
+  const t = img();
+  const r = R('hopper_inside');
+  for (let y = 0; y < 16; y++)
+    for (let x = 0; x < 16; x++) {
+      const d = Math.max(Math.abs(x - 7.5), Math.abs(y - 7.5));
+      let c = mixC(0x2c2c2c, 0x343434, r.next());
+      if (d > 6.5) c = 0x3c3c3c;
+      else if (d < 2) c = 0x151515;
+      else if (d < 3) c = 0x202020;
+      plot(t, x, y, c);
+    }
+  return t;
+}
+
+/** vanilla hopper_top.png: the rim round the bowl, two pixels wide, lit on its outer edge (the middle is open) */
+function hopperTop(): TexImage {
+  const t = img();
+  const r = R('hopper_top');
+  for (let y = 0; y < 16; y++)
+    for (let x = 0; x < 16; x++) {
+      const d = Math.max(Math.abs(x - 7.5), Math.abs(y - 7.5));
+      if (d < 5.5) continue;
+      const outer = d > 6.5;
+      plot(t, x, y, outer ? (x === 0 || y === 0 ? 0x6e6e6e : 0x5a5a5a) : mixC(0x444444, 0x4c4c4c, r.next()));
+    }
+  return t;
+}
+
+/** the observer's stone: dark gray, mottled, a lighter bevel at the top and left and a shadowed one at the bottom and right */
+function observerBase(name: string): TexImage {
+  const t = img();
+  const r = R(name);
+  for (let y = 0; y < 16; y++)
+    for (let x = 0; x < 16; x++) {
+      let c = mixC(0x5f5f5f, 0x707070, r.next());
+      if (x === 0 || y === 0) c = 0x8a8a8a;
+      else if (x === 15 || y === 15) c = 0x3f3f3f;
+      plot(t, x, y, c);
+    }
+  return t;
+}
+
+/** vanilla observer_front.png: its face, a dark recess across the middle with two pale eyes in it */
+function observerFront(): TexImage {
+  const t = observerBase('observer_front');
+  for (let y = 4; y < 12; y++) for (let x = 2; x < 14; x++) plot(t, x, y, y === 4 || x === 2 ? 0x262626 : 0x323232);
+  for (let x = 2; x < 14; x++) plot(t, x, 12, 0x8a8a8a);
+  for (let y = 4; y < 13; y++) plot(t, 14, y, 0x8a8a8a);
+  for (const x0 of [4, 9])
+    for (let y = 6; y < 9; y++)
+      for (let x = x0; x < x0 + 3; x++) plot(t, x, y, y === 6 ? 0xd8d8d8 : x === x0 + 2 || y === 8 ? 0x8e8e8e : 0xb4b4b4);
+  return t;
+}
+
+/** vanilla observer_back.png / observer_back_on.png: the plate its power comes out of, a dark dot, red while it pulses */
+function observerBack(on: boolean): TexImage {
+  const t = observerBase(on ? 'observer_back_on' : 'observer_back');
+  for (let y = 5; y < 11; y++) for (let x = 5; x < 11; x++) plot(t, x, y, y === 5 || x === 5 ? 0x2a2a2a : 0x3a3a3a);
+  for (let y = 6; y < 10; y++)
+    for (let x = 6; x < 10; x++) {
+      const edge = x === 6 || y === 6 || x === 9 || y === 9;
+      plot(t, x, y, on ? (edge ? 0xc40c0c : x + y < 15 ? 0xffb4a8 : 0xff2a1a) : edge ? 0x3f0806 : 0x5a0c0a);
+    }
+  return t;
+}
+
+/** vanilla observer_side.png: an arrow pressed into the stone, pointing to its face */
+function observerSide(): TexImage {
+  const t = observerBase('observer_side');
+  for (let y = 3; y < 14; y++) {
+    plot(t, 7, y, 0x383838);
+    plot(t, 8, y, 0x484848);
+  }
+  for (let i = 0; i < 4; i++) {
+    plot(t, 6 - i, 4 + i, 0x383838);
+    plot(t, 9 + i, 4 + i, 0x484848);
+    plot(t, 6 - i, 5 + i, 0x8a8a8a);
+    plot(t, 9 + i, 5 + i, 0x8a8a8a);
+  }
+  return t;
+}
+
+/** vanilla observer_top.png: the stone ribbed across, three grooves */
+function observerTop(): TexImage {
+  const t = observerBase('observer_top');
+  for (const y of [4, 8, 12])
+    for (let x = 2; x < 14; x++) {
+      plot(t, x, y - 1, 0x3c3c3c);
+      plot(t, x, y, 0x848484);
+    }
+  return t;
+}
+
+/**
+ * vanilla daylight_detector_top.png / daylight_detector_inverted_top.png: a quartz frame round nine panes, pale and
+ * sky-lit on the normal one, deep blue on the inverted one, in a wooden rim
+ */
+function daylightTop(inverted: boolean): TexImage {
+  const t = img();
+  const r = R(inverted ? 'daylight_detector_inverted_top' : 'daylight_detector_top');
+  const lines = [1, 5, 10, 14];
+  for (let y = 0; y < 16; y++)
+    for (let x = 0; x < 16; x++) {
+      let c: number;
+      if (x === 0 || y === 0 || x === 15 || y === 15) c = x === 15 || y === 15 ? 0x5a4127 : 0x7d5d3a;
+      else if (lines.includes(x) || lines.includes(y)) c = mixC(0xd8d0c4, 0xebe5dd, r.next());
+      else {
+        // (each pane lit from its top left)
+        const cx = x < 5 ? 2 : x < 10 ? 6 : 11, cy = y < 5 ? 2 : y < 10 ? 6 : 11;
+        const f = (x - cx + y - cy) / 7;
+        c = inverted ? mixC(0x46607f, 0x2b3c52, f) : mixC(0xc4d6e2, 0x8ea5b8, f);
+      }
+      plot(t, x, y, c);
+    }
+  return t;
+}
+
+/** vanilla daylight_detector_side.png: its wooden case, the quartz of the top along the upper edge of the slab */
+function daylightSide(planks: TexImage): TexImage {
+  const t = planks;
+  for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) plot(t, x, y, mulC(getPx(t, x, y), 0.82));
+  for (let x = 0; x < 16; x++) {
+    plot(t, x, 10, 0xe2dbd0);
+    plot(t, x, 11, 0x9a8f80);
+    plot(t, x, 15, mulC(getPx(t, x, 15), 0.8));
+  }
+  return t;
+}
+
 /** add the redstone components' block textures to a registry (textures/blocks.ts) */
 export function registerRedstoneTextures(T: Record<string, () => TexImage | { w: number; h: number; frames: Uint8ClampedArray[] }>): void {
   const G = T as Record<string, Gen>;
@@ -234,4 +409,17 @@ export function registerRedstoneTextures(T: Record<string, () => TexImage | { w:
   G['piston_side'] = () => pistonSide(G['oak_planks'](), G['cobblestone']());
   G['piston_bottom'] = () => pistonBottom(G['cobblestone']());
   G['piston_inner'] = () => pistonInner(G['cobblestone']());
+  G['comparator'] = () => comparatorTop(G['smooth_stone'](), false);
+  G['comparator_on'] = () => comparatorTop(G['smooth_stone'](), true);
+  G['hopper_outside'] = hopperOutside;
+  G['hopper_inside'] = hopperInside;
+  G['hopper_top'] = hopperTop;
+  G['observer_front'] = observerFront;
+  G['observer_back'] = () => observerBack(false);
+  G['observer_back_on'] = () => observerBack(true);
+  G['observer_side'] = observerSide;
+  G['observer_top'] = observerTop;
+  G['daylight_detector_top'] = () => daylightTop(false);
+  G['daylight_detector_inverted_top'] = () => daylightTop(true);
+  G['daylight_detector_side'] = () => daylightSide(G['oak_planks']());
 }

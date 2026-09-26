@@ -49,6 +49,8 @@ export interface FrameEnv {
   waterFogColor?: [number, number, number];
   /** the camera is in lava: how far the player can see there (vanilla FogRenderer, FogType.LAVA) */
   lava?: 'normal' | 'fire_resistant' | 'spectator' | null;
+  /** (powder snow) the camera is in powder snow (vanilla FogType.POWDER_SNOW): 'spectator' sees further */
+  powderSnow?: 'normal' | 'spectator' | null;
   /** the dimension's sky, fog and light (vanilla DimensionSpecialEffects) */
   dim?: DimensionType;
   /** a boss bar asks for the fog to close in (vanilla BossHealthOverlay.shouldCreateWorldFog: the dragon's) */
@@ -147,6 +149,12 @@ export class Renderer {
       if (e.lava === 'spectator') [fogStart, fogEnd] = [-8, rdBlocks * 0.5];
       else if (e.lava === 'fire_resistant') [fogStart, fogEnd] = [0, 5];
       else [fogStart, fogEnd] = [0.25, 1];
+    } else if (e.powderSnow) {
+      // (powder snow) vanilla FogRenderer, FogType.POWDER_SNOW: a white-blue wall two blocks off
+      fog = [0.623, 0.734, 0.785];
+      fogShape = 0;
+      if (e.powderSnow === 'spectator') [fogStart, fogEnd] = [-8, rdBlocks * 0.5];
+      else [fogStart, fogEnd] = [0, 2];
     } else if (e.underwater) {
       fog = e.waterFogColor ?? [0.02, 0.02, 0.2];
       fogStart = -8;
@@ -194,7 +202,8 @@ export class Renderer {
     gl.depthMask(true);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     // vanilla LevelRenderer.renderSky: no sky in lava or while blind or in darkness (doesMobEffectBlockSky), none at all in the Nether
-    const skyBlocked = !!blind || !!e.darkness;
+    // ((powder snow) nor in powder snow)
+    const skyBlocked = !!blind || !!e.darkness || !!e.powderSnow;
     if (!e.underwater && !e.lava && !skyBlocked && dim.effects.sky === 'normal') {
       this.sky.render({
         proj: this.proj,

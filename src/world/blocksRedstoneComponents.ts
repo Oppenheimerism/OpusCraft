@@ -31,6 +31,11 @@ export const PISTON_TYPE = enumProp('type', ['normal', 'sticky']);
 export const TRIGGERED = boolProp('triggered');
 export const ATTACHED = boolProp('attached');
 export const DISARMED = boolProp('disarmed');
+/** vanilla BlockStateProperties.FACING_HOPPER, ENABLED, MODE_COMPARATOR, INVERTED */
+export const FACING_HOPPER = enumProp('facing', ['down', 'north', 'south', 'west', 'east']);
+export const ENABLED = boolProp('enabled');
+export const MODE_COMPARATOR = enumProp('mode', ['compare', 'subtract']);
+export const INVERTED = boolProp('inverted');
 
 const HOR_Y: Record<string, number> = { north: 0, east: 90, south: 180, west: 270 };
 
@@ -314,6 +319,118 @@ const WIRE_LOOSE_SHAPE = bx(0, 0, 0, 16, 8, 16);
 /** vanilla TripWireHookBlock NORTH/SOUTH/WEST/EAST_AABB */
 const HOOK_SHAPES: Record<string, Box> = { north: bx(5, 0, 10, 11, 10, 16), south: bx(5, 0, 0, 11, 10, 6), west: bx(10, 0, 5, 16, 10, 11), east: bx(0, 0, 5, 6, 10, 11) };
 
+// ---------------------------------------------------------------------------
+// Hopper (vanilla HopperBlock; models hopper and hopper_side, blockstates hopper.json)
+
+/**
+ * vanilla block/hopper and block/hopper_side: the open bowl (its rim walls' inner faces culled only by a block on top,
+ * as vanilla's are), the funnel under it, and the spout: straight down, or (hopper_side) out to the north
+ */
+function hopperModel(side: boolean): ModelDef {
+  const o = 'hopper_outside', top = 'hopper_top', inside = 'hopper_inside';
+  const spout: ElementDef = side
+    ? { from: [6, 4, 0], to: [10, 8, 4], faces: { down: f(o, [6, 12, 10, 16]), up: f(o, [6, 0, 10, 4]), north: f(o, [6, 8, 10, 12], 'north'), west: f(o, [0, 8, 4, 12]), east: f(o, [12, 8, 16, 12]) } }
+    : { from: [6, 0, 6], to: [10, 4, 10], faces: { down: f(o, [6, 6, 10, 10], 'down'), north: f(o, [6, 12, 10, 16]), south: f(o, [6, 12, 10, 16]), west: f(o, [6, 12, 10, 16]), east: f(o, [6, 12, 10, 16]) } };
+  return {
+    ao: false,
+    particle: o,
+    elements: [
+      {
+        from: [0, 10, 0], to: [16, 11, 16],
+        faces: { down: f(o, [0, 0, 16, 16]), up: f(inside, [0, 0, 16, 16]), north: f(o, [0, 5, 16, 6], 'north'), south: f(o, [0, 5, 16, 6], 'south'), west: f(o, [0, 5, 16, 6], 'west'), east: f(o, [0, 5, 16, 6], 'east') },
+      },
+      { from: [0, 11, 0], to: [2, 16, 16], faces: { up: f(top, [0, 0, 2, 16], 'up'), north: f(o, [14, 0, 16, 5], 'north'), south: f(o, [0, 0, 2, 5], 'south'), west: f(o, [0, 0, 16, 5], 'west'), east: f(o, [0, 0, 16, 5], 'up') } },
+      { from: [14, 11, 0], to: [16, 16, 16], faces: { up: f(top, [14, 0, 16, 16], 'up'), north: f(o, [0, 0, 2, 5], 'north'), south: f(o, [14, 0, 16, 5], 'south'), west: f(o, [0, 0, 16, 5], 'up'), east: f(o, [0, 0, 16, 5], 'east') } },
+      { from: [2, 11, 0], to: [14, 16, 2], faces: { up: f(top, [2, 0, 14, 2], 'up'), north: f(o, [2, 0, 14, 5], 'north'), south: f(o, [2, 0, 14, 5], 'up') } },
+      { from: [2, 11, 14], to: [14, 16, 16], faces: { up: f(top, [2, 14, 14, 16], 'up'), north: f(o, [2, 0, 14, 5], 'up'), south: f(o, [2, 0, 14, 5], 'south') } },
+      {
+        from: [4, 4, 4], to: [12, 10, 12],
+        faces: { down: f(o, [4, 4, 12, 12]), north: f(o, [4, 6, 12, 12]), south: f(o, [4, 6, 12, 12]), west: f(o, [4, 6, 12, 12]), east: f(o, [4, 6, 12, 12]) },
+      },
+      spout,
+    ],
+  };
+}
+
+/** vanilla HopperBlock BASE (the bowl, hollow above its floor, and the funnel) and its spouts */
+const HOPPER_BASE: Box[] = [bx(0, 10, 0, 16, 11, 16), bx(0, 11, 0, 2, 16, 16), bx(14, 11, 0, 16, 16, 16), bx(2, 11, 0, 14, 16, 2), bx(2, 11, 14, 14, 16, 16), bx(4, 4, 4, 12, 10, 12)];
+const HOPPER_SPOUT: Record<string, Box> = {
+  down: bx(6, 0, 6, 10, 4, 10), north: bx(6, 4, 0, 10, 8, 4), south: bx(6, 4, 12, 10, 8, 16), west: bx(0, 4, 6, 4, 8, 10), east: bx(12, 4, 6, 16, 8, 10),
+};
+
+// ---------------------------------------------------------------------------
+// Comparator (vanilla ComparatorBlock; models comparator[_on][_subtract])
+
+/** a redstone torch standing on the comparator at (x0, z0), `h` tall unlit; lit, the glow round its head */
+function diodeTorch(x0: number, z0: number, lit: boolean, h = 5): ElementDef[] {
+  if (!lit) {
+    const t = 'redstone_torch_off';
+    const side: UV4 = [7, 6, 9, 6 + h];
+    return [{ from: [x0, 2, z0], to: [x0 + 2, 2 + h, z0 + 2], faces: { down: f(t, [7, 13, 9, 15]), up: f(t, [7, 6, 9, 8]), north: f(t, side), south: f(t, side), west: f(t, side), east: f(t, side) } }];
+  }
+  const t = 'redstone_torch';
+  const top = 2 + h + 1, glow: UV4 = [6, 5, 10, 5 + h + 1];
+  return [
+    { from: [x0, top - 1, z0], to: [x0 + 2, top - 1, z0 + 2], faces: { up: f(t, [7, 6, 9, 8]) } },
+    { from: [x0, 2, z0 - 1], to: [x0 + 2, top, z0 + 3], faces: { west: f(t, glow), east: f(t, glow) } },
+    { from: [x0 - 1, 2, z0], to: [x0 + 3, top, z0 + 2], faces: { north: f(t, glow), south: f(t, glow) } },
+  ];
+}
+
+/**
+ * the model facing south (input from the south, output north), as vanilla's unrotated comparator: its two torches at
+ * the back, lit while it gives power, and the short one at the front, lit in subtract mode
+ */
+function comparatorModel(powered: boolean, subtract: boolean): ModelDef {
+  const top = powered ? 'comparator_on' : 'comparator';
+  return {
+    ao: false,
+    particle: top,
+    elements: [
+      {
+        from: [0, 0, 0], to: [16, 2, 16],
+        faces: {
+          down: f('smooth_stone', [0, 0, 16, 16], 'down'), up: f(top, [0, 0, 16, 16]),
+          north: f('smooth_stone', [0, 14, 16, 16], 'north'), south: f('smooth_stone', [0, 14, 16, 16], 'south'),
+          west: f('smooth_stone', [0, 14, 16, 16], 'west'), east: f('smooth_stone', [0, 14, 16, 16], 'east'),
+        },
+      },
+      ...diodeTorch(4, 11, powered),
+      ...diodeTorch(10, 11, powered),
+      ...diodeTorch(7, 2, subtract, subtract ? 3 : 2),
+    ],
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Observer (vanilla ObserverBlock; block/observer and observer_on) and daylight detector (DaylightDetectorBlock;
+// template_daylight_detector)
+
+/** vanilla block/observer: the face to the north, what it gives power out of to the south */
+function observerModel(powered: boolean): ModelDef {
+  return cube(
+    { down: 'observer_top', up: 'observer_top', north: 'observer_front', south: powered ? 'observer_back_on' : 'observer_back', west: 'observer_side', east: 'observer_side' },
+    { particle: 'observer_front' },
+  );
+}
+
+/** vanilla template_daylight_detector: a slab 6 high, its sensor on top */
+function daylightDetectorModel(top: string): ModelDef {
+  const side = 'daylight_detector_side';
+  return {
+    particle: top,
+    elements: [
+      {
+        from: [0, 0, 0], to: [16, 6, 16],
+        faces: {
+          down: f(side, [0, 0, 16, 16], 'down'), up: f(top, [0, 0, 16, 16]),
+          north: f(side, [0, 10, 16, 16], 'north'), south: f(side, [0, 10, 16, 16], 'south'), west: f(side, [0, 10, 16, 16], 'west'), east: f(side, [0, 10, 16, 16], 'east'),
+        },
+      },
+    ],
+  };
+}
+
 export function registerRedstoneComponents(): void {
   // Redstone dust: the redstone item places it
   registerBlock('redstone_wire', {
@@ -423,6 +540,51 @@ export function registerRedstoneComponents(): void {
         if (!parts.length) parts.push({ model: m }, { model: m, y: 180 });
         return { parts };
       },
+    });
+  }
+
+  // Hopper: down, or out of a side (vanilla strength 3, 4.8; metal; a pickaxe to drop)
+  {
+    const down = hopperModel(false), side = hopperModel(true);
+    registerBlock('hopper', {
+      props: [FACING_HOPPER, ENABLED], defaults: { facing: 'down', enabled: true },
+      hardness: 3, resistance: 4.8, sound: 'metal', tool: 'pickaxe', requiresTool: true, opaque: false, aoCaster: false, opacity: 0,
+      collision: (s) => [...HOPPER_BASE, HOPPER_SPOUT[s.get('facing') as string]],
+      model: (s) => (s.get('facing') === 'down' ? { model: down } : { model: side, y: HOR_Y[s.get('facing') as string] }),
+    });
+  }
+
+  // Comparator: a diode like the repeater (vanilla strength 0; stone)
+  {
+    const models = new Map<string, ModelDef>();
+    registerBlock('comparator', {
+      props: [P.facingH, MODE_COMPARATOR, P.powered], defaults: { facing: 'north', mode: 'compare' },
+      hardness: 0, sound: 'stone', collision: [bx(0, 0, 0, 16, 2, 16)], opaque: false, aoCaster: false, opacity: 0, faceOcclusion: 1,
+      model: (s) => {
+        const key = `${s.get('powered')},${s.get('mode')}`;
+        let m = models.get(key);
+        if (!m) models.set(key, (m = comparatorModel(s.get('powered') as boolean, s.get('mode') === 'subtract')));
+        return { model: m, y: REPEATER_Y[s.get('facing') as string] };
+      },
+    });
+  }
+
+  // Observer: faces any of the six ways (vanilla strength 3; a pickaxe to drop)
+  {
+    const off = observerModel(false), on = observerModel(true);
+    registerBlock('observer', {
+      props: [P.facing, P.powered], defaults: { facing: 'south' }, hardness: 3, sound: 'stone', tool: 'pickaxe', requiresTool: true,
+      model: (s) => facingVariant(s.get('powered') ? on : off, s.get('facing') as string),
+    });
+  }
+
+  // Daylight detector: a slab-high sensor (vanilla strength 0.2; wood; an axe's block)
+  {
+    const normal = daylightDetectorModel('daylight_detector_top'), inverted = daylightDetectorModel('daylight_detector_inverted_top');
+    registerBlock('daylight_detector', {
+      props: [POWER, INVERTED], hardness: 0.2, sound: 'wood', tool: 'axe',
+      collision: [bx(0, 0, 0, 16, 6, 16)], opaque: false, aoCaster: false, opacity: 0, faceOcclusion: 1,
+      model: (s) => ({ model: s.get('inverted') ? inverted : normal }),
     });
   }
 }

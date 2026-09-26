@@ -91,7 +91,7 @@ export class Parrot extends TamableAnimal {
   oFlapSpeed = 0;
   private flapping = 1;
   private nextFlap = 1;
-  /** vanilla partyParrot: dancing to a jukebox nearby (there are no jukeboxes yet: setRecordPlayingNearby) */
+  /** vanilla partyParrot: dancing to a jukebox nearby (game/jukebox.ts tells it: setRecordPlayingNearby) */
   partyParrot = false;
   private jukebox: [number, number, number] | null = null;
   /** vanilla ShoulderRidingEntity.rideCooldownCounter: ticks since it came to be (or came down off a shoulder) */

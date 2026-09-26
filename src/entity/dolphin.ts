@@ -343,9 +343,9 @@ export class Dolphin extends WaterAnimal {
 // ---------------------------------------------------------------------------
 // the goals
 
-/** is this player swimming (vanilla isSwimming: sprinting under the water; the game has no swimming pose, so that's all) */
+/** is this player swimming (vanilla isSwimming: Player.updateSwimming's) */
 function isSwimming(p: Player): boolean {
-  return p.swimming || (p.sprinting && !p.flying && p.inWater && p.eyeFluid === FLUID_WATER && !p.vehicle);
+  return p.swimming;
 }
 
 /** vanilla BreathAirGoal: nearly out of breath, it makes for the nearest air above (or straight up 8) */

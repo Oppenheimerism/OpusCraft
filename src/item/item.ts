@@ -534,8 +534,8 @@ for (const b of BLOCKS) {
 }
 
 // the redstone components' items (vanilla item/generated): the torch and tripwire hook as their block textures, the
-// repeater its own sprite
-for (const [id, tex] of [['redstone_torch', 'block:redstone_torch'], ['repeater', 'repeater'], ['tripwire_hook', 'block:tripwire_hook']]) {
+// repeater its own sprite (and so do the hopper and comparator)
+for (const [id, tex] of [['redstone_torch', 'block:redstone_torch'], ['repeater', 'repeater'], ['tripwire_hook', 'block:tripwire_hook'], ['hopper', 'hopper'], ['comparator', 'comparator']]) {
   const it = ITEMS.get(id);
   if (it) it.texture = tex;
 }

@@ -3,16 +3,23 @@
 // of the soundtrack these are pieces of our own, written here in scale degrees and rendered by the music engine
 // (gen/music.ts), at about the lengths vanilla gives the songs: Creator, bright and driving, with plucked arpeggios
 // over a pulse; Creator (Music Box), its theme on a clockwork comb that runs down at the end; Precipice, slow and dark,
-// building twice to a climax. They are music pools (synth.ts MUSIC_POOLS), for the jukebox to play when there is one.
+// building twice to a climax. They are music pools (synth.ts MUSIC_POOLS), for the jukebox to play (game/jukebox.ts).
+// (jukebox) And the three older discs the game has (vanilla JukeboxSongs THIRTEEN, CAT and OTHERSIDE: music_disc.13,
+// .cat and .otherside), pieces of our own too, nothing like the real ones: 13, slow and hollow, a few notes over a
+// drone in a cave's reverb; cat, bright and bouncy; otherside, driving, in a minor key.
 
 import { Rng, addMode, clamp, fadeIn, highShelf, lowShelf, mtof, peakEq, reverb } from './dsp';
 import { MODES, MUSIC_PEAK, degMidi, parseChords, parseMelody, renderTrack, type TrackDef } from './music';
 
 /**
  * vanilla JukeboxSongs: each disc's song, its length in seconds and what a comparator reads off a jukebox playing it
- * (hooks for the jukebox; the game has none yet)
+ * (the jukebox itself reads item/jukeboxSongs.ts)
  */
 export const DISC_SONGS: Record<string, { disc: string; title: string; seconds: number; comparator: number }> = {
+  // (jukebox)
+  'music_disc.13': { disc: 'music_disc_13', title: 'C418 - 13', seconds: 178, comparator: 1 },
+  'music_disc.cat': { disc: 'music_disc_cat', title: 'C418 - cat', seconds: 185, comparator: 2 },
+  'music_disc.otherside': { disc: 'music_disc_otherside', title: 'Lena Raine - otherside', seconds: 195, comparator: 14 },
   'music_disc.creator': { disc: 'music_disc_creator', title: 'Lena Raine - Creator', seconds: 176, comparator: 12 },
   'music_disc.creator_music_box': { disc: 'music_disc_creator_music_box', title: 'Lena Raine - Creator (Music Box)', seconds: 73, comparator: 11 },
   'music_disc.precipice': { disc: 'music_disc_precipice', title: 'Aaron Cherof - Precipice', seconds: 299, comparator: 13 },
@@ -183,8 +190,132 @@ function renderMusicBox(sr: number): Float32Array {
   return mixed;
 }
 
+// ------------------------------------------------------------------ (jukebox) 13
+
+const THEME_13A = '5:w | 4:h 3:h | 2:w | r:w | 5:h 6:h | 7:h. 6:q | 5:w | r:w';
+const THEME_13B = "r:h 1':h | 7:h 5:h | 6:w | r:w | r:h 3:h | 4:h 2:h | 1:w | r:w";
+const CHORDS_13A = '1m9 1m9 7maj7 4m7 1m9 6maj7 4m9 5m7';
+const CHORDS_13B = '3maj7 4m9 1m9 7maj7 3maj7 4m9 5m7 1m9';
+
+const THIRTEEN: TrackDef = {
+  name: '13',
+  seed: 0x13d15c,
+  tonic: 69, // A4
+  mode: 'dorian',
+  bpm: 58,
+  beats: 4,
+  lhLow: 36,
+  tone: 0.3,
+  verb: { t60: 4.5, wet: 1.1 },
+  pad: { attack: 3, release: 4, cutoff: 900 },
+  sections: [
+    { bars: 8, chords: CHORDS_13A, lh: 'none', vel: 0.26, pad: 1 },
+    { bars: 8, chords: CHORDS_13A, lh: 'sparse', vel: 0.3, mel: THEME_13A, pad: 0.9 },
+    { bars: 8, chords: CHORDS_13B, lh: 'sparse', vel: 0.32, mel: THEME_13B, pad: 1, bells: 0.3 },
+    { bars: 8, chords: CHORDS_13A, lh: 'arp6', vel: 0.34, mel: THEME_13A, vary: ['sparse'], pad: 0.9, bass: 0.4 },
+    { bars: 8, chords: '1m9 7maj7 6maj7 5m7 4m9 3maj7 4m9 1m9', lh: 'none', vel: 0.24, pad: 1 },
+  ],
+  endChord: '1m9',
+  endHold: 9,
+  mix: { pad: 0.42, bass: 0.3, bell: 0.2, pluck: 0.2 },
+};
+
+// ------------------------------------------------------------------ (jukebox) cat
+
+const THEME_CAT_A = "1:e 3:e 5:q 5:e 6:e 5:q | 4:q 3:q 2:h | 2:e 4:e 6:q 6:e 7:e 6:q | 5:q 4:q 3:h | 1:e 3:e 5:q 5:e 6:e 5:q | 1':q 7:q 6:h | 5:e 6:e 5:e 4:e 3:q 2:q | 1:w";
+const THEME_CAT_B = "3':q 2':e 1':e 7:q 5:q | 6:h 4:h | 2':q 1':e 7:e 6:q 4:q | 5:w | 3':q 2':e 1':e 7:q 5:q | 6:q 1':q 4':h | 3':e 2':e 1':e 7:e 6:q 5:q | 5:w";
+const CHORDS_CAT_A = '1 4 2m7 5 1 7 4 1';
+const CHORDS_CAT_B = '6m7 4 2m7 5 6m7 4 2m7 5sus4';
+
+const CAT: TrackDef = {
+  name: 'cat',
+  seed: 0xca7d15,
+  tonic: 72, // C5
+  mode: 'mixolydian',
+  bpm: 116,
+  beats: 4,
+  lhLow: 43,
+  tone: 0.6,
+  verb: { t60: 1.8, wet: 0.6 },
+  pad: { attack: 0.6, release: 1.2, cutoff: 2200 },
+  sections: [
+    { bars: 4, chords: '1 4 1 5', lh: 'pulse', vel: 0.4, arp: 0.6 },
+    { bars: 8, chords: CHORDS_CAT_A, lh: 'arp8', vel: 0.44, mel: THEME_CAT_A, bass: 0.6, arp: 0.6 },
+    { bars: 8, chords: CHORDS_CAT_A, lh: 'arp8b', vel: 0.48, mel: THEME_CAT_A, vary: ['orn'], bass: 0.7, bells: 0.4 },
+    { bars: 8, chords: CHORDS_CAT_B, lh: 'pulse', vel: 0.46, mel: THEME_CAT_B, bass: 0.7, pad: 0.6 },
+    { bars: 8, chords: CHORDS_CAT_B, lh: 'arp8', vel: 0.5, mel: THEME_CAT_B, vary: ['double'], bass: 0.8, bells: 0.5 },
+    { bars: 8, chords: '4 5 3m7 6m7 2m7 5 1 1', lh: 'block', vel: 0.42, pad: 0.8, arp: 0.8 },
+    { bars: 8, chords: CHORDS_CAT_A, lh: 'arp8b', vel: 0.52, mel: THEME_CAT_A, melOct: 1, vary: ['thirds'], bass: 0.8, bells: 0.6, arp: 0.8 },
+    { bars: 8, chords: CHORDS_CAT_B, lh: 'arp8', vel: 0.5, mel: THEME_CAT_B, bass: 0.8 },
+    { bars: 8, chords: CHORDS_CAT_A, lh: 'arp8', vel: 0.52, mel: THEME_CAT_A, vary: ['double'], bass: 0.8, bells: 0.5, arp: 0.9 },
+    { bars: 8, chords: '6m7 4 1 5 6m7 4 1 1', lh: 'sparse', vel: 0.36, pad: 0.8, mel: '3:w | 4:w | 5:h 3:h | 2:w | 3:w | 4:h 6:h | 5:w | 1:w' },
+    { bars: 8, chords: CHORDS_CAT_A, lh: 'arp8', vel: 0.48, mel: THEME_CAT_A, bass: 0.7, arp: 0.8, bells: 0.4 },
+  ],
+  endChord: '1add9',
+  endHold: 5,
+  mix: { pad: 0.26, pluck: 0.5, bass: 0.34, bell: 0.3 },
+};
+
+// ------------------------------------------------------------------ (jukebox) otherside
+
+const THEME_OTH_A = "1:q 1:e 3:e 5:q 4:e 3:e | 4:h 2:h | 7,:q 7,:e 2:e 4:q 3:e 2:e | 3:w | 1:q 1:e 3:e 5:q 7:e 6:e | 5:h 1':h | 7:e 6:e 5:e 4:e 3:q 2:q | 1:w";
+const THEME_OTH_B = "5:e 5:e 5:q 6:q 5:q | 3:h 1:h | 4:e 4:e 4:q 5:q 4:q | 2:w | 5:e 5:e 5:q 7:q 1':q | 2':h 7:h | 1':q 7:q 6:q 5:q | 5:w";
+const CHORDS_OTH_A = '1m7 4 7 5m7 1m7 3 4 1m7';
+const CHORDS_OTH_B = '6m7 4 2m7 5m7 6m7 7 4 5m7';
+
+const OTHERSIDE: TrackDef = {
+  name: 'otherside',
+  seed: 0x07e451,
+  tonic: 74, // D5
+  mode: 'dorian',
+  bpm: 128,
+  beats: 4,
+  lhLow: 38,
+  tone: 0.55,
+  verb: { t60: 2.2, wet: 0.7 },
+  pad: { attack: 0.8, release: 1.5, cutoff: 2000 },
+  sections: [
+    { bars: 8, chords: '1m7 7 4 1m7 1m7 7 4 5m7', lh: 'pulse', vel: 0.38, arp: 0.7, pad: 0.6 },
+    { bars: 8, chords: CHORDS_OTH_A, lh: 'arp8', vel: 0.44, mel: THEME_OTH_A, bass: 0.7, arp: 0.6 },
+    { bars: 8, chords: CHORDS_OTH_A, lh: 'arp8b', vel: 0.48, mel: THEME_OTH_A, vary: ['octave'], bass: 0.8, bells: 0.4, arp: 0.7 },
+    { bars: 8, chords: CHORDS_OTH_B, lh: 'pulse', vel: 0.5, mel: THEME_OTH_B, bass: 0.8, pad: 0.8 },
+    { bars: 8, chords: CHORDS_OTH_B, lh: 'arp8', vel: 0.54, mel: THEME_OTH_B, vary: ['double'], bass: 0.9, bells: 0.5, arp: 0.9 },
+    { bars: 8, chords: '4maj7 5m7 3m7 6m7 4maj7 5m7 7 7', lh: 'block', vel: 0.46, pad: 1, arp: 0.8 },
+    { bars: 8, chords: CHORDS_OTH_A, lh: 'arp8b', vel: 0.56, mel: THEME_OTH_A, melOct: 1, vary: ['thirds'], bass: 0.9, bells: 0.6, arp: 1 },
+    { bars: 8, chords: CHORDS_OTH_B, lh: 'arp8', vel: 0.56, mel: THEME_OTH_B, melOct: 1, bass: 0.9, bells: 0.6, arp: 1 },
+    { bars: 8, chords: '1m9 7 6m7 7 1m9 7 4 5m7', lh: 'sparse', vel: 0.32, pad: 1, mel: '5:w | 4:w | 3:w | 2:w | 5:h 4:h | 3:h 2:h | 1:w | 7,:w' },
+    { bars: 8, chords: CHORDS_OTH_A, lh: 'arp8', vel: 0.56, mel: THEME_OTH_A, vary: ['double', 'orn'], bass: 0.9, bells: 0.6, arp: 1 },
+    { bars: 8, chords: CHORDS_OTH_B, lh: 'arp8b', vel: 0.52, mel: THEME_OTH_B, bass: 0.8, arp: 0.9 },
+    { bars: 8, chords: '1m7 7 4 1m7 1m7 7 4 1m7', lh: 'arp6', vel: 0.38, pad: 0.8, arp: 0.6 },
+  ],
+  endChord: '1m9',
+  endHold: 6,
+  mix: { pad: 0.3, pluck: 0.46, bass: 0.36, bell: 0.26 },
+};
+
+/** (jukebox) the pieces the music engine renders, by sound event */
+const DISC_TRACKS: Record<string, TrackDef> = {
+  'music_disc.creator': CREATOR,
+  'music_disc.precipice': PRECIPICE,
+  'music_disc.13': THIRTEEN,
+  'music_disc.cat': CAT,
+  'music_disc.otherside': OTHERSIDE,
+};
+
 /** render a disc's song (a music pool of one, `index` ignored) */
 export function renderDiscMusic(event: string, sr: number): Float32Array {
   if (event === 'music_disc.creator_music_box') return renderMusicBox(sr);
-  return renderTrack(event === 'music_disc.precipice' ? PRECIPICE : CREATOR, sr);
+  return renderTrack(DISC_TRACKS[event] ?? CREATOR, sr);
+}
+
+/** (jukebox) dev helper: each engine-rendered disc's melody bars that don't fill their bar, and its written length in seconds */
+export function checkDiscScores(): { event: string; misaligned: number; seconds: number }[] {
+  return Object.entries(DISC_TRACKS).map(([event, d]) => {
+    let misaligned = 0, beats = 0;
+    for (const s of d.sections) {
+      if (s.mel) misaligned += parseMelody(s.mel, d.beats).misaligned;
+      beats += s.bars * d.beats;
+    }
+    return { event, misaligned, seconds: (beats * 60) / d.bpm + d.endHold };
+  });
 }
