@@ -10,7 +10,7 @@
 import { hash3 } from '../../core/rng';
 import { BLOCK_BY_NAME, blockOf, FLAGS, F_LAVA } from '../block';
 import { MIN_Y, MAX_Y } from '../constants';
-import { SingleElement, pool, parseState, rotateState, EMPTY, type Dir6, type JigsawSpec, type PlaceCtx, type Piece, type PoolElement, type Template } from './jigsaw';
+import { SingleElement, pool, parseState, rotateState, rotDir, EMPTY, type Dir6, type JigsawSpec, type PlaceCtx, type Piece, type PoolElement, type Template } from './jigsaw';
 import { Grid, legacyRandom, mthSeed, type TemplateBlockEntity } from './trialChamberPieces';
 import type { SavedEntity } from '../../entity/mob';
 
@@ -312,7 +312,7 @@ export function wallBlock(u: number, y: number, v = 0, height = 20): string {
   if (y === height - 2) return (u & 3) === 1 ? CPB : PB;
   const n = h(u >> 1, y >> 1, v, 2);
   if (n < 0.14) return BS;
-  if (n > 0.985) return GOLD;
+  if (n > 0.997) return GOLD;
   return PBB;
 }
 
@@ -408,4 +408,53 @@ export function isSolid(s: string | null): boolean {
 /** a named pool of elements with their weights (vanilla StructureTemplatePool, fallback minecraft:empty) */
 export function bastionPool(name: string, entries: [PoolElement, number][], fallback = 'empty'): void {
   pool(name, fallback, entries);
+}
+
+/** a template's size across and its own connector (facing down, its top north), for seating it with `seat` */
+export interface Seatable {
+  sx: number;
+  sz: number;
+  jx: number;
+  jy: number;
+  jz: number;
+}
+
+/**
+ * a connector in this piece facing up (an aligned joint) that seats a child from `pool` turned `rot` quarter turns
+ * clockwise with its box's least corner at (x0, y0, z0) of this piece: where vanilla's big "air" start pieces hold
+ * the parts of a bastion, each in its own place (the child's own connector faces down, its top north)
+ */
+export function seat(g: BastionGrid, x0: number, y0: number, z0: number, rot: 0 | 1 | 2 | 3, c: Seatable, target: string, pool: string): void {
+  let x: number, z: number;
+  if (rot === 0) [x, z] = [x0 + c.jx, z0 + c.jz];
+  else if (rot === 1) [x, z] = [x0 + c.sz - 1 - c.jz, z0 + c.jx];
+  else if (rot === 2) [x, z] = [x0 + c.sx - 1 - c.jx, z0 + c.sz - 1 - c.jz];
+  else [x, z] = [x0 + c.jz, z0 + c.sx - 1 - c.jx];
+  g.connect(x, y0 + c.jy - 1, z, 'up', { target, pool, top: rotDir('north', rot), joint: 'aligned' });
+}
+
+/** a box of wall courses (`wallBlock`), `u` running along x or z */
+export function masonry(g: BastionGrid, x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, alongX = true): void {
+  g.fill(x0, y0, z0, x1, y1, z1, (x, y, z) => wallBlock(alongX ? x : z, y - y0, alongX ? z : x, y1 - y0 + 1));
+}
+
+/** a doorway through a wall, `w` wide and `hgt` high from (x0, y0, z0) along x or z, `d` deep, its lintel of upside-down stairs */
+export function doorway(g: BastionGrid, x0: number, y0: number, z0: number, w: number, hgt: number, d: number, alongX: boolean): void {
+  for (let i = 0; i < w; i++)
+    for (let k = 0; k < d; k++) {
+      const [x, z] = alongX ? [x0 + i, z0 + k] : [x0 + k, z0 + i];
+      g.fill(x, y0, z, x, y0 + hgt - 1, z, AIR);
+    }
+  // (the lintel's ends stepped in: stairs facing into the opening)
+  for (let k = 0; k < d; k++) {
+    const [ax, az] = alongX ? [x0, z0 + k] : [x0 + k, z0];
+    const [bx, bz] = alongX ? [x0 + w - 1, z0 + k] : [x0 + k, z0 + w - 1];
+    g.set(ax, y0 + hgt - 1, az, stairs(PBB_, alongX ? 'east' : 'south', 'top'));
+    g.set(bx, y0 + hgt - 1, bz, stairs(PBB_, alongX ? 'west' : 'north', 'top'));
+  }
+}
+
+/** a pillar from y0 to y1: polished basalt, chiseled blackstone at the foot and the head */
+export function pillar(g: BastionGrid, x: number, y0: number, y1: number, z: number): void {
+  for (let y = y0; y <= y1; y++) g.set(x, y, z, y === y0 || y === y1 ? CPB : PBASALT);
 }

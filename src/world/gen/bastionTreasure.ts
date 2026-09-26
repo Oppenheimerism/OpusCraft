@@ -297,6 +297,8 @@ function base(): PoolElement {
   g.connect(9, 0, 0, 'north', { target: T.stairs, pool: 'bastion/treasure/stairs' });
   // brutes at the arms' roots
   g.mob(11, BASE_TOP, P0 - 2, 'piglin_melee').mob(11, BASE_TOP, P1 + 2, 'piglin_melee');
+  // its own connector, under its middle, to the hall's floor
+  g.connect(12, 0, 12, 'down', { name: T.base, top: 'north', joint: 'aligned' });
   return element(g, 'bastion/treasure/bases/lava_basin', 'treasure_rooms');
 }
 
