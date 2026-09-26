@@ -110,7 +110,7 @@ function stageShell(level: number, doors: Side[], stair: boolean, top: boolean):
   }
   if (top) {
     // the roof, the stair's hole in it, a parapet of merlons, the roof's piglin and gold
-    floor(g, 0, SH, U - 1, U - 1, SH);
+    floor(g, 0, 0, U - 1, U - 1, SH);
     g.fill(1, SH, 6, 2, SH, 8, AIR);
     for (let x = 0; x < U; x++)
       for (let z = 0; z < U; z++) {

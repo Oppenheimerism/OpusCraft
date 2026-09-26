@@ -185,10 +185,10 @@ function platform(g: BastionGrid, w: number, deck: number): void {
   g.fill(1, deck + 1, 1, w - 2, deck + 3, d - 1, AIR);
 }
 
-/** an extension's connector on its wall side (z 9, in the middle) at the deck, and its piglin */
-function extensionEnds(g: BastionGrid, w: number, deck: number): void {
+/** an extension's connector on its wall side (z 9, in the middle) at the deck, and its piglin (at `mx`, `mz`) */
+function extensionEnds(g: BastionGrid, w: number, deck: number, mx = (w >> 1) - 2, mz = 5): void {
   g.connect(w >> 1, deck, 9, 'south', { name: T.extension });
-  g.mob((w >> 1) - 2, deck, 5, 'piglin');
+  g.mob(mx, deck, mz, 'piglin');
 }
 
 function largePool(): PoolElement {
@@ -202,7 +202,8 @@ function largePool(): PoolElement {
       g.set(x, deck - 1, z, PBB);
     }
   g.gold(2, deck, 2).gold(12, deck, 7);
-  extensionEnds(g, w, deck);
+  // (its piglin beside the pool, not in it)
+  extensionEnds(g, w, deck, 12, 4);
   return element(g, 'bastion/treasure/extensions/large_pool', 'bastion_generic_degradation');
 }
 

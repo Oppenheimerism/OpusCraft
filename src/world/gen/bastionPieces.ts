@@ -239,9 +239,10 @@ export class BastionElement extends SingleElement {
       ctx.blockEntities.push({ id: e.block, x: wx, y: wy, z: wz, items: [], data });
     }
     for (const m of this.t.grid.mobs) {
-      // (vanilla StructureTemplate.transform(Vec3) about the block corner: the middle of its block stays the middle)
+      // (vanilla StructureTemplate.transform(Vec3): x' = 1 - z and so on, so the middle of a block turns to the middle
+      // of the block that block turns to)
       const bx = piece.x + turnX(m.x, m.z, rot), bz = piece.z + turnZ(m.x, m.z, rot);
-      const wx = bx + (rot === 1 || rot === 2 ? -0.5 : 0.5), wz = bz + (rot === 2 || rot === 3 ? -0.5 : 0.5);
+      const wx = bx + 0.5, wz = bz + 0.5;
       const cx = Math.floor(wx), cz = Math.floor(wz);
       if (!inChunk(cx, cz)) continue;
       const yaw = (hash3(cx, piece.y + m.y, cz, pc.salt ^ 0x3a7) >>> 0) % 360;

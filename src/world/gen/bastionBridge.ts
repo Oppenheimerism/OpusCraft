@@ -47,7 +47,7 @@ function entranceBase(): PoolElement {
   doorway(g, 5, 1, BD - 2, 3, 4, 2, true);
   g.set(6, 5, BD - 1, CPB);
   // its top (the gatehouse's floor and the terrace round it)
-  floor(g, 0, TOP, BW - 1, BD - 1, TOP);
+  floor(g, 0, 0, BW - 1, BD - 1, TOP);
   // the steps up the front, walls either side
   for (let k = 0; k < STEPS; k++) {
     const z = BD + STEPS - 1 - k, y = 1 + k;
@@ -273,7 +273,8 @@ function wall(keep: boolean): PoolElement {
       g.fill(x, FOOT + 1 + k, WT - 2, x, WH - 1, WT - 1, AIR);
       g.set(x, FOOT + 1 + k, WT - 2, stairs(BS_, 'west')).set(x, FOOT + 1 + k, WT - 1, stairs(BS_, 'west'));
     }
-    g.mob(7, FOOT + 7, WT - 1, 'piglin');
+    // (a piglin on the stair, half way up)
+    g.mob(7, FOOT + 8, WT - 1, 'piglin');
   }
   g.connect(7, WH - 1, 3, 'up', { target: J.rampart, pool: 'bastion/bridge/ramparts', top: 'north', joint: 'aligned' });
   g.connect(7, FOOT, WT - 1, 'south', { name: J.wall });
