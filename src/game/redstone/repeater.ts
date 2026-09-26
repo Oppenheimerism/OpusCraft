@@ -26,9 +26,12 @@ const delayOf = (st: number) => blk(st).get<number>(st, 'delay') * 2;
 /** vanilla DiodeBlock.isDiode: repeaters and comparators (comparator.ts shares the diode's workings below) */
 export const isDiode = (st: number) => /^(repeater|comparator)$/.test(blk(st).name);
 
-/** vanilla DiodeBlock.canSurviveOn: a rigid, full top under it */
+/**
+ * vanilla DiodeBlock.canSurviveOn: a rigid top under it (canSupportRigidBlock: its rim will do, so a hopper's bowl
+ * holds one up)
+ */
 export function canSurviveOn(st: number): boolean {
-  return sturdyFace(st, UP);
+  return sturdyFace(st, UP) || blk(st).name === 'hopper';
 }
 
 /** vanilla getInputSignal: the power coming in at its back, dust counted at its full power */

@@ -49,6 +49,10 @@ const out = (level, x, y, z) => {
   level.setBlock(0, G - 1, 0, 0);
   check('support: gone without the block under it', level.getBlockName(0, G, 0) === 'air');
   check('diode: it is one', m.isDiode(b.defaultState));
+  // (vanilla canSupportRigidBlock: a hopper's rim holds a diode up)
+  place(m, level, 'hopper', 4, G, 0, { props: { facing: 'down', enabled: true } });
+  place(m, level, 'comparator', 4, G + 1, 0, { yaw: 0 });
+  check('support: a comparator stands on a hopper (not on air)', level.getBlockName(4, G + 1, 0) === 'comparator' && m.behaviorOf(level.getState(4, G + 1, 0)).canSurvive(level.world, 4, G + 1, 0) && !m.behaviorOf(level.getState(4, G + 1, 0)).canSurvive(level.world, 4, G + 3, 0));
 }
 
 // ---------------------------------------------------------------------------------------------------------------
