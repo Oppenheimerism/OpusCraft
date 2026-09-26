@@ -256,7 +256,8 @@ const bytes = (...parts) => new Uint8Array(parts.flat());
 // ---------------------------------------------------------------------------
 // the LAN list: what other windows say of their worlds is shown as plain text, or not at all
 {
-  const list = new m.LanWorldList();
+  // (its clock held still: nothing heard here goes stale while the test waits)
+  const list = new m.LanWorldList(() => 0);
   const ch = new BroadcastChannel('mc-mp');
   const say = (w) => ch.postMessage({ t: 'world', protocol: m.PROTOCOL_VERSION, build: m.BUILD_ID, players: 1, max: 8, ...w });
   say({ id: '0123456789abcdef', name: '§4Red <b>World</b>\u0007', host: 'Hosty§k' });
@@ -267,6 +268,8 @@ const bytes = (...parts) => new Uint8Array(parts.flat());
   ch.postMessage('just text');
   ch.postMessage(null);
   for (let i = 0; i < 100; i++) say({ id: `${String(i).padStart(4, '0')}dddddddddddd`, name: `Flood ${i}`, host: 'f' });
+  // (they come in the order sent: once the flood fills the list, everything before it has been heard)
+  for (let waited = 0; list.worlds().length < 32 && waited < 10000; waited += 25) await new Promise((res) => setTimeout(res, 25));
   await new Promise((res) => setTimeout(res, 100));
   const worlds = list.worlds();
   const red = worlds.find((w) => w.id === '0123456789abcdef');
