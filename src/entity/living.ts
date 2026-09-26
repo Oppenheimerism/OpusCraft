@@ -673,6 +673,11 @@ export abstract class LivingEntity extends Entity {
     this.dy += 0.04;
   }
 
+  /** vanilla goDownInWater: down through the water, as jumpInLiquid is up (a player sneaking in it) */
+  protected goDownInWater(): void {
+    this.dy -= 0.04;
+  }
+
   jumpFromGround(): void {
     this.dy = this.jumpPower();
     if (this.sprinting) {

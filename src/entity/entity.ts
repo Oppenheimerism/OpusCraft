@@ -757,8 +757,19 @@ export abstract class Entity {
     return false;
   }
 
+  /**
+   * vanilla Player.isAboveGround: on the ground, or not yet fallen a step's height with something under it within
+   * the rest of that step (canFallAtLeast: nothing there, and it could fall; a swimmer in open water can)
+   */
+  private isAboveGround(): boolean {
+    if (this.onGround) return true;
+    if (this.fallDistance >= this.stepHeight) return false;
+    const b = this.bb;
+    return this.collisionBoxes(new AABB(b.minX, b.minY - (this.stepHeight - this.fallDistance) - 1e-5, b.minZ, b.maxX, b.minY, b.maxZ)).length > 0;
+  }
+
   private maybeBackOffFromEdge(mx: number, my: number, mz: number): [number, number] {
-    if (this.pistonMoving || !this.isSneakingForEdges() || my > 0 || !(this.onGround || this.fallDistance < this.stepHeight)) return [mx, mz];
+    if (this.pistonMoving || !this.isSneakingForEdges() || my > 0 || !this.isAboveGround()) return [mx, mz];
     const step = this.stepHeight;
     const test = (x: number, z: number) => this.collisionBoxes(this.bb.move(x, -step, z)).length === 0;
     while (mx !== 0 && test(mx, 0)) {

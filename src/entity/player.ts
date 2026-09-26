@@ -606,8 +606,8 @@ export class Player extends LivingEntity {
         this.setSize(0.6, this.crouching ? 1.5 : 1.8);
       }
     }
-    // crouching pose (vanilla: shift while on ground / not flying)
-    const wantCrouch = inp.sneak && !this.flying && !this.inWater && !this.spinPose && !this.glidePose;
+    // crouching pose (vanilla updatePlayerPose: shift, not flying; in the water too, where it slows you as on land)
+    const wantCrouch = inp.sneak && !this.flying && !this.spinPose && !this.glidePose;
     if (!this.spinPose && !this.glidePose && wantCrouch !== this.crouching) {
       if (wantCrouch) {
         this.crouching = true;
@@ -663,6 +663,9 @@ export class Player extends LivingEntity {
     // flying, riding or on a ladder)
     if (inp.jump && !this.wasJump && !toggled && !this.flying && !this.vehicle && !this.onClimbable()) tryToStartFallFlying(this);
     this.wasJump = inp.jump;
+    // vanilla LocalPlayer.aiStep: sneaking in the water (not flying: isAffectedByFluids) sinks you faster
+    // (LivingEntity.goDownInWater)
+    if (this.inWater && inp.sneak && this.isAffectedByFluids()) this.goDownInWater();
     if (this.flying) {
       let v = 0;
       if (inp.sneak) v--;
