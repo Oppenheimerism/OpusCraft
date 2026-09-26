@@ -45,6 +45,9 @@ import { NeighborUpdater } from './neighborUpdater';
 import { LevelTicks } from './ticks';
 import { PoiManager } from './poi';
 import './redstone/components';
+import { isConductor } from './redstone/signal';
+import { DX, DY, DZ, OPPOSITE, type Dir } from '../world/dir';
+import { hasAnalogOutput } from './redstone/comparator';
 import './villageBlocks';
 import './banners';
 import './maps';
@@ -207,6 +210,11 @@ export class Level {
     this.world = world;
     this.poi = new PoiManager(world);
     world.onTypeChanged = (x, y, z, old, now) => this.poi.changed(x, y, z, old, now);
+    // (vanilla BlockEntity.setChanged: a container's contents changed, so may what a comparator reads)
+    world.onBlockEntityChanged = (be) => {
+      const st = world.getState(be.x, be.y, be.z);
+      if (!(FLAGS[st] & F_AIR)) this.updateNeighbourForOutputSignal(be.x, be.y, be.z, STATE_BLOCK[st]);
+    };
     this.seed = seed;
     this.rainTime = 12000 + this.random.nextInt(168000);
     this.thunderTime = 12000 + this.random.nextInt(168000);
@@ -733,7 +741,11 @@ export class Level {
     if (STATE_BLOCK[old] !== STATE_BLOCK[state] && isRail(state)) railOnPlace(this, x, y, z, state);
     behaviorOf(state)?.onPlace?.(this, x, y, z, state, old, moving);
     if (this.world.getState(x, y, z) !== state) return old;
-    if (f & UPDATE_NEIGHBORS) this.updateNeighborsAt(x, y, z, STATE_BLOCK[old]);
+    if (f & UPDATE_NEIGHBORS) {
+      this.updateNeighborsAt(x, y, z, STATE_BLOCK[old]);
+      // (vanilla markAndNotifyBlock, and Containers.updateNeighboursAfterDestroy for one taken away: comparators read again)
+      if (hasAnalogOutput(state) || hasAnalogOutput(old)) this.updateNeighbourForOutputSignal(x, y, z, STATE_BLOCK[state]);
+    }
     if (!(f & UPDATE_KNOWN_SHAPE) && this.world.getState(x, y, z) === state) this.updateNeighbors(x, y, z, old);
     return old;
   }
@@ -744,6 +756,26 @@ export class Level {
    */
   updateNeighborsAt(x: number, y: number, z: number, source: number, skip = -1): void {
     this.neighborUpdater.updateNeighborsAt(x, y, z, source, skip);
+  }
+
+  /**
+   * vanilla Level.updateNeighbourForOutputSignal: what a comparator reads from (x, y, z) may have changed, so the
+   * comparators beside it, and those just beyond a conductor beside it, look again
+   */
+  updateNeighbourForOutputSignal(x: number, y: number, z: number, source: number): void {
+    for (const [dx, dz] of HORIZONTAL_STEPS) {
+      let nx = x + dx, nz = z + dz;
+      if (!this.world.isLoaded(nx, nz)) continue;
+      let st = this.world.getState(nx, y, nz);
+      if (STATE_BLOCK[st] !== COMPARATOR()) {
+        if (!isConductor(st)) continue;
+        nx += dx;
+        nz += dz;
+        st = this.world.getState(nx, y, nz);
+        if (STATE_BLOCK[st] !== COMPARATOR()) continue;
+      }
+      this.neighborChanged(nx, y, nz, source, x, y, z);
+    }
   }
 
   /** vanilla Level.neighborChanged: just the block at (x, y, z) hears it */
@@ -803,6 +835,7 @@ export class Level {
       behaviorOf(st)?.spawnAfterBreak?.(this, x, y, z, st, stack);
     }
     this.updateNeighborsAt(x, y, z, b.id);
+    if (hasAnalogOutput(st)) this.updateNeighbourForOutputSignal(x, y, z, b.id);
     this.updateNeighbors(x, y, z, st);
     if (other) {
       this.updateNeighborsAt(other[0], other[1], other[2], b.id);
@@ -835,6 +868,7 @@ export class Level {
    */
   updateNeighbors(x: number, y: number, z: number, changed?: number): void {
     this.updateNeighborsFluid(x, y, z);
+    this.shapeUpdateHooks(x, y, z);
     const dirs = [[0, 1, 0], [0, -1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1]];
     for (const [dx, dy, dz] of dirs) {
       const nx = x + dx, ny = y + dy, nz = z + dz;
@@ -853,6 +887,8 @@ export class Level {
         }
         if (nu !== ns) {
           this.world.setState(nx, ny, nz, nu);
+          // (vanilla Block.updateOrDestroy sets it with its own shape updates: an observer on it sees it change)
+          this.shapeUpdateHooks(nx, ny, nz);
           ns = nu;
           // a dripstone's new thickness reshapes the pieces above and below it in turn
           if (STATE_BLOCK[nu] === DRIPSTONE()) this.updateNeighbors(nx, ny, nz);
@@ -864,6 +900,15 @@ export class Level {
         else if (isDripstoneFacing(ns, 'down')) this.fallStalactite(nx, ny, nz);
         else this.destroyBlock(nx, ny, nz, true, null, true);
       }
+    }
+  }
+
+  /** vanilla updateNeighbourShapes, the side effects of it: each neighbour of (x, y, z) with a shapeUpdate hears which way the change was */
+  private shapeUpdateHooks(x: number, y: number, z: number): void {
+    for (let d = 0; d < 6; d++) {
+      const nx = x + DX[d], ny = y + DY[d], nz = z + DZ[d];
+      const ns = this.world.getState(nx, ny, nz);
+      behaviorOf(ns)?.shapeUpdate?.(this, nx, ny, nz, ns, OPPOSITE[d] as Dir);
     }
   }
 
@@ -881,6 +926,15 @@ export class Level {
       }
     }
   }
+}
+
+/** vanilla Direction.Plane.HORIZONTAL: north, east, south, west */
+const HORIZONTAL_STEPS: [number, number][] = [[0, -1], [1, 0], [0, 1], [-1, 0]];
+
+let COMPARATOR_ID = -1;
+function COMPARATOR(): number {
+  if (COMPARATOR_ID < 0) COMPARATOR_ID = BLOCKS.findIndex((b) => b.name === 'comparator');
+  return COMPARATOR_ID;
 }
 
 let DRIPSTONE_ID = -1;

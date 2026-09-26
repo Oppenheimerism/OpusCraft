@@ -1,5 +1,5 @@
 // The redstone components' sounds. Most are vanilla's shared samples under their own event names (sounds.json):
-// the torch burning out is random/fizz, the dispenser's and tripwire's clicks are random/click, the dispenser's
+// the torch burning out is random/fizz, the dispenser's, comparator's and tripwire's clicks are random/click, the dispenser's
 // launch is random/bow and the tripwire snapping is random/bowhit; each is played at its own pitch. A bottle o'
 // enchanting is thrown with random/bow too. The pistons have their own (tile/piston/out and in), made here.
 
@@ -49,6 +49,7 @@ export function redstoneSounds(base: Record<string, SoundGen>): Record<string, S
   const click = base['block.lever.click'], bow = base['entity.arrow.shoot'], bowhit = base['entity.arrow.hit'];
   return {
     'block.redstone_torch.burnout': base['block.fire.extinguish'],
+    'block.comparator.click': click,
     'block.dispenser.dispense': click,
     'block.dispenser.fail': click,
     'block.dispenser.launch': bow,

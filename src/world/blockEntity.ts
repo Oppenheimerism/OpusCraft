@@ -204,7 +204,8 @@ export class FurnaceBlockEntity extends BlockEntity {
     if (wasLit !== this.isLit) {
       const st = level.getState(this.x, this.y, this.z);
       const b = BLOCKS[STATE_BLOCK[st]];
-      if (b.name === this.id) level.setBlock(this.x, this.y, this.z, b.with(st, 'lit', this.isLit), false);
+      // (vanilla setBlock flag 3: its neighbours hear it, and an observer watching it sees it light or go out)
+      if (b.name === this.id) level.setBlock(this.x, this.y, this.z, b.with(st, 'lit', this.isLit), 3);
     }
   }
 

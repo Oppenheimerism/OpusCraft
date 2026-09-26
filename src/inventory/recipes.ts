@@ -187,11 +187,15 @@ shaped('heavy_weighted_pressure_plate', 1, ['##'], { '#': 'iron_ingot' });
 shaped('redstone_lamp', 1, [' R ', 'RGR', ' R '], { R: 'redstone', G: 'glowstone' });
 shaped('redstone_torch', 1, ['X', '#'], { X: 'redstone', '#': 'stick' });
 shaped('repeater', 1, ['#X#', 'III'], { '#': 'redstone_torch', X: 'redstone', I: 'stone' });
+shaped('comparator', 1, [' # ', '#X#', 'III'], { '#': 'redstone_torch', X: 'quartz', I: 'stone' });
 shaped('tripwire_hook', 2, ['I', 'S', '#'], { I: 'iron_ingot', S: 'stick', '#': '#planks' });
 shaped('dispenser', 1, ['###', '#X#', '#R#'], { '#': 'cobblestone', X: 'bow', R: 'redstone' });
 shaped('dropper', 1, ['###', '# #', '#R#'], { '#': 'cobblestone', R: 'redstone' });
 shaped('piston', 1, ['TTT', '#X#', '#R#'], { T: '#planks', '#': '#stone_crafting_materials', X: 'iron_ingot', R: 'redstone' });
 shaped('sticky_piston', 1, ['S', 'P'], { S: 'slime_ball', P: 'piston' });
+shaped('hopper', 1, ['I I', 'ICI', ' I '], { I: 'iron_ingot', C: 'chest' });
+shaped('observer', 1, ['###', 'RRQ', '###'], { '#': 'cobblestone', R: 'redstone', Q: 'quartz' });
+shaped('daylight_detector', 1, ['GGG', 'QQQ', 'WWW'], { G: 'glass', Q: 'quartz', W: '#wooden_slabs' });
 // archaeology (a decorated pot of sherds is a special recipe: game/decoratedPot.ts)
 shaped('brush', 1, ['X', '#', 'I'], { X: 'feather', '#': 'copper_ingot', I: 'stick' });
 shaped('decorated_pot', 1, [' # ', '# #', ' # '], { '#': 'brick' });
