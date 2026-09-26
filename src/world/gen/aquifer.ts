@@ -9,6 +9,9 @@ export const FLUID_NONE = 0, FLUID_WATER = 1, FLUID_LAVA = 2;
 const WAY_BELOW = -2032;
 const SEA_LEVEL = 63;
 const LAVA_LEVEL = -54;
+// vanilla OverworldBiomeBuilder.isDeepDarkRegion: erosion < -0.225F && depth > 0.9F (floats, compared as doubles)
+const DEEP_DARK_EROSION = Math.fround(-0.225);
+const DEEP_DARK_DEPTH = Math.fround(0.9);
 
 const SURFACE_OFFSETS = [
   [-2, -1], [-1, -1], [0, -1], [1, -1], [-3, 0], [-2, 0], [-1, 0], [0, 0], [1, 0], [-2, 1], [-1, 1], [0, 1], [1, 1],
@@ -107,6 +110,11 @@ export class Aquifer {
   }
 
   private surfaceLevel(x: number, y: number, z: number, global: FluidStatus, minSurface: number, flag: boolean): number {
+    // vanilla NoiseBasedAquifer.computeSurfaceLevel: where the deep dark can be, the aquifers hold no water or lava
+    // (only the lava sea below y -54 is left), so the deep dark and its ancient cities are dry. Erosion and the
+    // offset come from the quart column, as vanilla's flat-cached router functions do inside a chunk.
+    const c = this.col(x, z);
+    if (c.erosion < DEEP_DARK_EROSION && this.router.depth(y, c) > DEEP_DARK_DEPTH) return WAY_BELOW;
     const n = this.router.n;
     const i = minSurface + 8 - y;
     const d2 = flag ? clampedMap(i, 0, 64, 1, 0) : 0;
