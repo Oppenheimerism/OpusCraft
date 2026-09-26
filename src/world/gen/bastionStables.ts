@@ -11,7 +11,8 @@
 
 import {
   BastionGrid, element, bastionPool, seat, masonry, doorway, floor, h, stairs, slab, type Seatable,
-  PBB, CPBB, PB, CPB, BS, GOLD, BASALT, PBASALT, AIR, CHAIN, PBB_WALL, BS_WALL, PB_WALL, PBB_, BS_, PB_,
+  noiseOf, breakTop, breach, spall, rubble, hangLantern, stump, vee, deepest, wearParapet, type Noise,
+  PBB, CPBB, PB, CPB, BS, GOLD, BASALT, PBASALT, AIR, CHAIN, PBB_WALL, BS_WALL, PB_WALL, PBB_, BS_, PB_, LANTERN_UP, SOUL_SAND,
 } from './bastionPieces';
 import type { PoolElement } from './jigsaw';
 
@@ -108,6 +109,12 @@ function firstFlight(id: string, n: number, mirrored: boolean): PoolElement {
   if (mirrored) g.gold(5, 3, 3);
   g.connect(RUN - 1, RISE, 2, 'east', { target: J.stairs, pool: 'bastion/hoglin_stable/stairs' });
   g.connect(14, 1, 2, 'down', { name: J.ramp, top: 'north', joint: 'aligned' });
+  // lanterns hung in the arches, the bulk's face worn, the railing broken here and there
+  const nz = noiseOf(id);
+  hangLantern(g, 14, 4, 2, 0);
+  hangLantern(g, 21, 5, 2, 0);
+  spall(g, nz, 2, RUN - 1, 1, RISE - 2, RAMP_W - 1, RAMP_W - 2, 0.2, true, 3, 2);
+  for (let x = 4; x < RUN; x++) if (nz(x >> 2, 0, 0, 3) < 0.3) g.knock(x, 1 + (x >> 1) + 1, RAMP_W - 1);
   return element(g, id, 'side_wall_degradation');
 }
 
@@ -146,7 +153,17 @@ function secondFlight(n: number): PoolElement {
   g.mob(RAMP_W + 13, 7, 2, 'piglin').mob(RAMP_W + RUN + 2, RISE, 2, n === 0 ? 'piglin_melee' : 'piglin');
   g.gold(1, 0, 1);
   g.connect(2, 0, RAMP_W - 1, 'south', { name: J.stairs });
-  return element(g, `bastion/hoglin_stable/stairs/stairs_1_${n}`, 'side_wall_degradation');
+  // lanterns on the chains under it, one on the top landing's railing; its edge broken off in places, rubble
+  const id = `bastion/hoglin_stable/stairs/stairs_1_${n}`, nz = noiseOf(id);
+  hangLantern(g, 12, 1, 3, 0);
+  hangLantern(g, 24, 7, 3, 0);
+  g.put(RAMP_W + RUN + 2, RISE + 2, RAMP_W - 1, LANTERN_UP);
+  for (let i = 3; i < RUN - 2; i++) {
+    const x = RAMP_W + i, y = 1 + (i >> 1);
+    if (nz(i >> 1, 0, 0, 4) < 0.22) g.knock(x, y, RAMP_W - 1), g.knock(x, y + 1, RAMP_W - 1), g.knock(x, y - 1, RAMP_W - 1);
+  }
+  rubble(g, nz, RAMP_W + RUN + 3, RISE + 1, 3, 1.3);
+  return element(g, id, 'side_wall_degradation');
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -167,6 +184,11 @@ function stairPost(): PoolElement {
   for (const [x, z] of [[0, 0], [4, 0], [0, 4], [4, 4]]) g.fill(x, 1, z, x, WALL_H - 1, z, (_x, y) => (y % 6 === 0 ? CPB : PBASALT));
   g.set(2, 5, 2, CHAIN).set(2, 4, 2, CHAIN);
   g.connect(2, 1, 2, 'down', { name: J.post, top: 'north', joint: 'aligned' });
+  // a lantern on its chain, its faces worn
+  const n = noiseOf('bastion/hoglin_stable/posts/stair_post');
+  hangLantern(g, 2, 3, 2, 0);
+  spall(g, n, 1, 3, 6, WALL_H - 2, RAMP_W - 1, RAMP_W - 2, 0.35, true, 2, 2);
+  spall(g, n, 1, 3, 6, WALL_H - 2, RAMP_W - 1, RAMP_W - 2, 0.35, false, 2, 2);
   return element(g, 'bastion/hoglin_stable/posts/stair_post', 'stable_degradation');
 }
 
@@ -180,6 +202,10 @@ function endPost(): PoolElement {
   g.set(2, WALL_H - 1, 0, stairs(PBB_, 'west', 'top')).set(0, WALL_H - 1, 2, stairs(PBB_, 'north', 'top'));
   g.set(3, 1, 3, GOLD);
   g.connect(2, 1, 2, 'down', { name: J.post, top: 'north', joint: 'aligned' });
+  // a lantern hung from the corbel, fallen stone at the pillar's foot
+  const n = noiseOf('bastion/hoglin_stable/posts/end_post');
+  hangLantern(g, 2, WALL_H - 2, 0, 1);
+  rubble(g, n, 2.5, 1, 2.5, 1.6);
   return element(g, 'bastion/hoglin_stable/posts/end_post', 'stable_degradation');
 }
 
@@ -210,7 +236,18 @@ function stalls(n: number): PoolElement {
   }
   g.gold(0, 0, 3).gold(RUN - 1, 0, 1);
   g.connect(14, 1, 2, 'down', { name: J.stall, top: 'north', joint: 'aligned' });
-  return element(g, `bastion/hoglin_stable/small_stables/outer/outer_${n}`, 'stable_degradation');
+  // soul sand trodden into the stalls' floors, lanterns on two of the partitions' posts
+  const id = `bastion/hoglin_stable/small_stables/outer/outer_${n}`;
+  treadSoulSand(g, noiseOf(id), pens.map(([a, b]) => [a, 0, b, RAMP_W - 2]));
+  for (const x of n === 1 ? [2, 18] : [9, 25]) g.put(x, 4, RAMP_W - 1, LANTERN_UP);
+  return element(g, id, 'stable_degradation');
+}
+
+/** soul sand trodden into floors (at y 0) over some of each box x0, z0, x1, z1, in patches; never under a mob or a chest */
+function treadSoulSand(g: BastionGrid, n: Noise, boxes: number[][]): void {
+  for (const [x0, z0, x1, z1] of boxes)
+    for (let x = x0; x <= x1; x++)
+      for (let z = z0; z <= z1; z++) if (!g.reserved(x, 0, z) && n(x >> 1, 0, z >> 1, 6) < 0.55 && n(x, 0, z, 7) < 0.8) g.set(x, 0, z, SOUL_SAND);
 }
 
 /**
@@ -262,14 +299,54 @@ function greatPen(n: number): PoolElement {
   g.gold(24, 0, 3).gold(4, 0, 14).gold(22, 0, 13);
   for (const [x, z] of [[a, a], [b, a], [a, b], [b, b]]) g.set(x, 5, z, slab(PB_));
   g.connect(14, 1, 14, 'down', { name: J.pen, top: 'north', joint: 'aligned' });
-  return element(g, `bastion/hoglin_stable/large_stables/inner/inner_${n}`, 'stable_degradation');
+  const id = `bastion/hoglin_stable/large_stables/inner/inner_${n}`, nz = noiseOf(id);
+  // soul sand trodden into the pens
+  treadSoulSand(g, nz, [[a + 1, a + 1, b - 1, b - 1]]);
+  // the bridge that crossed the yard between the two ramps half way up, fallen in the middle; its piers, lanterns
+  // under its broken ends
+  yardBridge(g, nz);
+  // pillars that held something up once, broken off, and rubble in the yard
+  stump(g, nz, RUN - 2, 1, 9, 1);
+  stump(g, nz, 1, 1, 13, RUN - 2);
+  rubble(g, nz, RUN - 3, 1, 2.5, 1.8, 1);
+  rubble(g, nz, 2.5, 1, RUN - 4, 1.6, 2);
+  return element(g, id, 'stable_degradation');
+}
+
+/**
+ * a bridge across the yard (along z, x 12-14) at the height the two lower ramps reach half way along it, from one to
+ * the other: a deck of bricks and blackstone, a railing of walls, piers of basalt; its middle fallen, a beam of it
+ * left, and lanterns hung under the broken ends
+ */
+function yardBridge(g: BastionGrid, n: Noise): void {
+  const y = 8, x0 = 12, x1 = 14;
+  for (let z = 0; z < RUN; z++) {
+    const mid = z >= 11 && z <= 16;
+    for (let x = x0; x <= x1; x++) {
+      const edge = x !== 13;
+      if (mid && (edge || z === 13 || z === 14)) continue;
+      if (mid && n(x, y, z, 8) < 0.2) continue;
+      g.set(x, y, z, edge ? PBB : n(x, y, z, 9) < 0.3 ? BS : PB);
+      if (edge) {
+        g.set(x, y - 1, z, stairs(PBB_, x === x0 ? 'east' : 'west', 'top'));
+        if (z > 0 && z < RUN - 1 && z % 2 === 0 && n(x, y, z, 10) < 0.8) g.set(x, y + 1, z, PBB_WALL);
+      }
+    }
+  }
+  for (const z of [5, 22]) for (const x of [x0, x1]) g.fill(x, 1, z, x, y - 1, z, (_x, yy) => (yy === y - 1 ? CPB : yy % 4 === 0 ? BASALT : PBASALT));
+  hangLantern(g, 13, y - 1, 10, 2);
+  hangLantern(g, 13, y - 1, 17, 1);
 }
 
 // ---------------------------------------------------------------------------------------------------------------
 // The walls and the ramparts
 
-/** the lower half of a wall, along x, its outer face north (z 0): the corner's gate (x 5-7) in it, buttresses */
+/**
+ * the lower half of a wall, along x, its outer face north (z 0): the corner's gate (x 5-7) in it, buttresses; a
+ * breach high in it (out of a hoglin's reach), its face worn
+ */
 function wallBase(): PoolElement {
+  const id = 'bastion/hoglin_stable/walls/wall_base';
   const g = new BastionGrid(WALL_L, WALL_H, WALL_T);
   masonry(g, 0, 0, 0, WALL_L - 1, WALL_H - 1, WALL_T - 1);
   for (let x = 10; x < WALL_L; x += 8) g.fill(x, 1, 0, x + 1, WALL_H - 1, 0, (xx, y) => (y === WALL_H - 1 ? CPB : xx === x ? PB : PBB));
@@ -277,11 +354,26 @@ function wallBase(): PoolElement {
   g.set(5, 6, 0, CPB).set(7, 6, 0, CPB).set(6, 6, 0, GOLD);
   g.connect(21, WALL_H - 1, 1, 'up', { target: J.sideWall, pool: 'bastion/hoglin_stable/walls', top: 'north', joint: 'aligned' });
   g.connect(21, 1, 1, 'down', { name: J.wall, top: 'north', joint: 'aligned' });
-  return element(g, 'bastion/hoglin_stable/walls/wall_base', 'side_wall_degradation');
+  const n = noiseOf(id);
+  breach(g, n, 30.5, 8.5, 2.2, 2.6, 0, WALL_T - 1);
+  spall(g, n, 0, WALL_L - 1, 2, WALL_H - 2, 0, 1, 0.22, true, 3, 2);
+  return element(g, id, 'side_wall_degradation');
 }
 
-/** the upper half of a wall: great arched windows (side_wall_0) or a row of loopholes (side_wall_1) */
+/**
+ * where the tops of the walls have fallen, the same for every side wall and every rampart over one (any may stand on
+ * any): the ramparts gone over x 9-15 and 22-31, and the side walls under them broken there, one deep and the other
+ * shallow. On the side walls' inner half the breaks slope a course a block, so the ramparts can still be walked round,
+ * down into a break and up the other side; their outer half has fallen further
+ */
+const BREAK_A = [10, 14], BREAK_B = [23, 30];
+
+/**
+ * the upper half of a wall: great arched windows (side_wall_0) or a row of loopholes (side_wall_1); fallen in deep at
+ * one of the two breaks and a little at the other, a breach through it, its face worn
+ */
 function sideWall(n: number): PoolElement {
+  const id = `bastion/hoglin_stable/walls/side_wall_${n}`;
   const g = new BastionGrid(WALL_L, WALL_H, WALL_T);
   masonry(g, 0, 0, 0, WALL_L - 1, WALL_H - 1, WALL_T - 1);
   for (let x = 0; x < WALL_L; x++) g.set(x, 0, 0, (x & 3) === 1 ? CPB : PB).set(x, WALL_H - 2, 0, (x & 3) === 3 ? CPB : PB);
@@ -297,11 +389,23 @@ function sideWall(n: number): PoolElement {
   }
   g.connect(21, WALL_H - 1, 2, 'up', { target: J.rampart, pool: 'bastion/hoglin_stable/ramparts', top: 'north', joint: 'aligned' });
   g.connect(21, 0, 1, 'down', { name: J.sideWall, top: 'north', joint: 'aligned' });
-  return element(g, `bastion/hoglin_stable/walls/side_wall_${n}`, 'side_wall_degradation');
+  const nz = noiseOf(id);
+  const [a, b] = n === 0 ? [3, 2] : [1, 4];
+  const walk = deepest(vee(BREAK_A[0], BREAK_A[1], a), vee(BREAK_B[0], BREAK_B[1], b));
+  breakTop(g, nz, 0, WALL_L - 1, WALL_T - 1, WALL_T - 1, WALL_H - 1, walk, true, true);
+  breakTop(g, nz, 0, WALL_L - 1, 0, WALL_T - 2, WALL_H - 1, (u) => (walk(u) ? Math.min(12, Math.round(walk(u) * 3.2 + 3)) : 0));
+  if (n === 0) breach(g, nz, 36, 6, 2.2, 3.2, 0, WALL_T - 1);
+  else breach(g, nz, 4.5, 5.5, 2.4, 2.8, 0, WALL_T - 1);
+  spall(g, nz, 0, WALL_L - 1, 1, WALL_H - 3, 0, 1, 0.26, true, 3, 2);
+  return element(g, id, 'side_wall_degradation');
 }
 
-/** a rampart on a wall: the walkway (level with the ramps' tops), merlons outside, a low wall inside */
+/**
+ * a rampart on a wall: the walkway (level with the ramps' tops), merlons outside, a low wall inside; gone at the side
+ * walls' two breaks, its parapet broken in stretches, rubble on it
+ */
 function rampart(n: number): PoolElement {
+  const id = `bastion/hoglin_stable/ramparts/ramparts_${n}`;
   const g = new BastionGrid(WALL_L, 3, WALL_T);
   for (let x = 0; x < WALL_L; x++) {
     for (let z = 0; z < WALL_T; z++) g.set(x, 0, z, z === 0 ? PBB : h(x, 0, z, 75) < 0.35 ? BS : PBB);
@@ -317,7 +421,15 @@ function rampart(n: number): PoolElement {
   if (n === 3) g.chest(20, 1, 1, 'south', 'bastion_other');
   g.mob(16, 0, 2, 'piglin').gold(32, 0, 1);
   g.connect(21, 0, 2, 'down', { name: J.rampart, top: 'north', joint: 'aligned' });
-  return element(g, `bastion/hoglin_stable/ramparts/ramparts_${n}`, 'rampart_degradation');
+  const nz = noiseOf(id);
+  const gap = (u: number) => ((u >= BREAK_A[0] - 1 && u <= BREAK_A[1] + 1) || (u >= BREAK_B[0] - 1 && u <= BREAK_B[1] + 1) ? 3 : 0);
+  breakTop(g, nz, 0, WALL_L - 1, 0, WALL_T - 1, 2, gap, true, true);
+  // the parapet worn, and gone altogether over a stretch, different on each
+  const [p0, p1] = n === 1 ? [33, 40] : n === 2 ? [1, 7] : [16, 20];
+  wearParapet(g, nz, 0, WALL_L - 1, 0, 1, 2);
+  breakTop(g, nz, p0, p1, 0, 0, 2, () => 2);
+  for (const x of [3, 19, 35]) rubble(g, nz, x, 1, 1 + (x & 1), 1.4, x);
+  return element(g, id, 'rampart_degradation');
 }
 
 // ---------------------------------------------------------------------------------------------------------------
