@@ -20,9 +20,11 @@ export interface LanWorld {
 }
 
 const ID = /^[0-9a-f-]{8,64}$/;
-/** text heard from another window, fit to show: no formatting codes or control characters, not too long */
+/** the most worlds listed at once (more heard of are let be until some go quiet) */
+const MAX_WORLDS = 32;
+/** text heard from another window, fit to show: no formatting codes (vanilla ChatFormatting.stripFormatting) or control characters, not too long */
 export function plainText(v: unknown, max: number): string {
-  return typeof v === 'string' ? v.replace(/[\u0000-\u001f\u007f§]/g, '').slice(0, max) : '';
+  return typeof v === 'string' ? v.replace(/§[\s\S]?/g, '').replace(/[\u0000-\u001f\u007f]/g, '').slice(0, max) : '';
 }
 
 function parse(m: Record<string, unknown>): LanWorld | null {
@@ -77,6 +79,7 @@ export class LanWorldList {
         const w = parse(m);
         if (!w) return;
         const had = this.heard.get(w.id);
+        if (!had && this.heard.size >= MAX_WORLDS && this.worlds().length >= MAX_WORLDS) return;
         this.heard.set(w.id, { world: w, at: this.now() });
         if (!had || JSON.stringify(had.world) !== JSON.stringify(w)) this.version++;
       } else if (m.t === 'gone' && typeof m.id === 'string' && this.heard.delete(m.id)) this.version++;

@@ -43,6 +43,8 @@ export class HostServer {
   private announcer: LanAnnouncer | null = null;
   private readonly undo: (() => void)[] = [];
   private ticks = 0;
+  /** the clock as the last tick left it (a change since, a command's, is sent at once) */
+  private clock = '';
   private weather = '';
   private hostCrack = '';
   /** the guest whose player is ticking (what that sets off, its own game shows it: not sent back to it) */
@@ -137,6 +139,16 @@ export class HostServer {
   receive(): void {
     if (this.closed) return;
     for (const s of [...this.sessions.values()]) s.receive();
+    // vanilla MinecraftServer.tickChildren: the time every second, before the level's tick moves it on (a guest's tick
+    // moves its own on as that does); and at once when it was changed between ticks (vanilla TimeCommand's
+    // forceTimeSynchronization: /time set, /gamerule doDaylightCycle)
+    const lvl = this.level;
+    if ((this.ticks + 1) % 20 === 0 || this.clockKey() !== this.clock) this.broadcast([CB.SetTime, lvl.gameTime, lvl.dayTime, lvl.doDaylightCycle]);
+  }
+
+  private clockKey(): string {
+    const l = this.level;
+    return `${l.gameTime},${l.dayTime},${l.doDaylightCycle}`;
   }
 
   /** (Game.tick, after the level's tick) the guests' clicks, then what each needs to hear, sent */
@@ -153,9 +165,7 @@ export class HostServer {
       if (hb) this.broadcastNear([CB.BlockDestruction, id, hb.x, hb.y, hb.z, hb.stage], hb.x + 0.5, hb.y + 0.5, hb.z + 0.5, 32);
       else this.broadcast([CB.BlockDestruction, id, 0, 0, 0, -1]);
     }
-    // vanilla MinecraftServer.tickChildren: the time every second
-    const lvl = this.level;
-    if (this.ticks % 20 === 0) this.broadcast([CB.SetTime, lvl.gameTime, lvl.dayTime, lvl.doDaylightCycle]);
+    this.clock = this.clockKey();
     const w = this.weatherPacket();
     const wk = w.join(',');
     if (wk !== this.weather) {

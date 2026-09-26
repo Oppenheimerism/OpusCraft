@@ -184,7 +184,8 @@ export class ServerPlayerSession {
       case SB.Chat:
         return this.chat(p[1] as string);
       case SB.ChatCommand:
-        // (vanilla: commands need permission; a guest has none here yet)
+        // (vanilla handleChatCommand: counted as chat is; and commands need permission, which a guest hasn't here yet)
+        if (this.spammed()) return;
         return this.systemChat('§cOnly the host can use commands.');
       case SB.Disconnect:
         return this.gone('left');
@@ -281,8 +282,15 @@ export class ServerPlayerSession {
     p.pitch = m.xRot;
     p.headYaw = m.yRot;
     if (p.flying || p.onGround) p.fallDistance = 0;
-    // (pressure plates, tripwires, portals: vanilla ServerPlayer.doCheckFallDamage / checkInsideBlocks)
-    p.checkInsideBlocks();
+    // (pressure plates, tripwires, portals: vanilla ServerPlayer.doCheckFallDamage / checkInsideBlocks. What the
+    // blocks do about it, a plate's click, is the world's doing, not the player's own: the guest hears it too)
+    const srv = this.server, actor = srv.actor;
+    srv.actor = null;
+    try {
+      p.checkInsideBlocks();
+    } finally {
+      srv.actor = actor;
+    }
   }
 
   /** vanilla ServerGamePacketListenerImpl.teleport: the guest's player goes there, and the host waits to hear it did */
@@ -321,10 +329,17 @@ export class ServerPlayerSession {
   /** vanilla handleChat: plain text, not too much of it */
   private chat(text: string): void {
     if (!isAllowedChat(text)) return this.disconnect('Illegal characters in chat');
-    this.chatSpam += CHAT_SPAM_STEP;
-    if (this.chatSpam > CHAT_SPAM_LIMIT) return this.disconnect('Kicked for spamming');
+    if (this.spammed()) return;
     const msg = text.trim().replace(/\s+/g, ' ');
     if (msg) this.server.broadcastChat(`<${this.name}> ${msg}`);
+  }
+
+  /** vanilla detectRateSpam: 20 a line, less a tick's worth each tick; past 200, the guest is kicked */
+  private spammed(): boolean {
+    this.chatSpam += CHAT_SPAM_STEP;
+    if (this.chatSpam <= CHAT_SPAM_LIMIT) return false;
+    this.disconnect('Kicked for spamming');
+    return true;
   }
 
   // -------------------------------------------------------------------------

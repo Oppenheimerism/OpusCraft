@@ -4,7 +4,7 @@
 // block state that exists, a move that isn't too far) is the receiver's to check on top.
 
 import type { Value } from './codec';
-import { NAME_PATTERN, MAX_CHAT } from './config';
+import { MAX_CHAT } from './config';
 import { SECTIONS, CAVE_BIOME_LEVELS } from '../world/constants';
 
 /** guest → host (vanilla Serverbound*Packet) */
@@ -171,7 +171,8 @@ export const ITEM: Check = orNull((v) => Array.isArray(v) && v.length === 4 && s
 const SECTION = (v: Value | undefined) => v === null || (v instanceof Uint16Array && v.length === 4096);
 
 const SERVERBOUND: Check[][] = [];
-SERVERBOUND[SB.Hello] = [int(0, 0x7fffffff), str(1, 64), str(3, 16, NAME_PATTERN), UUID, int(2, 32)];
+// (a name that isn't one is turned away with a word on what a name is: ServerPlayerSession.hello)
+SERVERBOUND[SB.Hello] = [int(0, 0x7fffffff), str(1, 64), str(0, 64), UUID, int(2, 32)];
 SERVERBOUND[SB.KeepAlive] = [ID];
 SERVERBOUND[SB.MovePlayer] = [X, Y, X, ANGLE, PITCH, FLAGS];
 SERVERBOUND[SB.AcceptTeleportation] = [ID];

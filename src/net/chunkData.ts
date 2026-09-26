@@ -18,9 +18,10 @@ export function visibleBlockEntity(be: BlockEntity): Record<string, Value> {
   const s = be.save();
   const out: Record<string, Value> = { id: s.id, x: s.x, y: s.y, z: s.z, items: HIDDEN_CONTENTS.test(s.id) ? [] : (s.items as unknown as Value[]) };
   if (s.data) {
+    // (a loot chest's table is the host's secret: a guest's copy has no data, as a chest without one saves)
     const data: Record<string, Value> = {};
     for (const [k, v] of Object.entries(s.data)) if (k !== 'lootTable' && k !== 'lootSeed') data[k] = v;
-    out.data = data;
+    if (Object.keys(data).length) out.data = data;
   }
   return out;
 }

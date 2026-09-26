@@ -253,6 +253,8 @@ export class ClientSession {
     this.info = info;
     this.playerId = info.playerId;
     const { level, player, chunks } = this.hooks.login(info);
+    // (the clock runs as the host's does from the first tick, before its first SetTime)
+    level.doDaylightCycle = info.gameRules.doDaylightCycle !== false;
     this.level = level;
     this.player = player;
     this.sink = chunks;
