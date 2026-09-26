@@ -166,6 +166,10 @@ export class Player extends LivingEntity {
   remote = false;
   /** (remote) puts it where its game last said it is, in its tick (the host's session sets this) */
   remoteMove: ((p: Player) => void) | null = null;
+  /** vanilla GameProfile.getName: who it is, over its head (null in single-player, where nobody else sees it) */
+  profileName: string | null = null;
+  /** picks nothing up off the ground (a guest's player on the host in stage 1: its inventory is the guest's own) */
+  noPickup = false;
   override lastDamageSource = '';
 
   constructor(level: Level) {
@@ -508,7 +512,8 @@ export class Player extends LivingEntity {
     const nausea = this.getEffect('nausea');
     // (vanilla Portal.Transition.CONFUSION: the nether portal's; an end portal has none)
     if (this.portal?.inside && this.portal.kind === 'nether') {
-      if (this.spinningEffectIntensity === 0) this.level.sound.playUI('block.portal.trigger', 0.25, Math.random() * 0.4 + 0.8);
+      // (the whoosh is for the ears of whoever's in the portal: not the host's, for a guest's player)
+      if (this.spinningEffectIntensity === 0 && !this.remote) this.level.sound.playUI('block.portal.trigger', 0.25, Math.random() * 0.4 + 0.8);
       this.spinningEffectIntensity = Math.min(1, this.spinningEffectIntensity + 0.0125);
     } else if (nausea && !nausea.endsWithin(60)) this.spinningEffectIntensity = Math.min(1, this.spinningEffectIntensity + 0.006666667);
     else if (this.spinningEffectIntensity > 0) this.spinningEffectIntensity = Math.max(0, this.spinningEffectIntensity - 0.05);
@@ -560,6 +565,11 @@ export class Player extends LivingEntity {
 
   protected override movedElsewhere(): boolean {
     return this.remote;
+  }
+
+  /** (a guest's player can't ride yet in stage 1: its own game would have to steer the vehicle) */
+  protected override canRide(vehicle: Entity): boolean {
+    return !this.remote && super.canRide(vehicle);
   }
 
   protected override moveFromElsewhere(): void {

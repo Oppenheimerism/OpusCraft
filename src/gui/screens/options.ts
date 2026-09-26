@@ -47,7 +47,8 @@ export class OptionsScreen extends Screen {
         if (!meta.transient) void saveWorldMeta(meta);
       });
       d.tooltip = DIFFICULTY_INFO[meta.difficulty];
-      d.active = !meta.hardcore;
+      // (vanilla: only the world's own game sets it; a guest's is the host's)
+      d.active = !meta.hardcore && g.mode !== 'client';
       this.add(d);
     } else {
       this.add(new Button(cx + 4, 29, 150, 20, 'Online...', () => g.setScreen(new OnlineOptionsScreen(g, this))));

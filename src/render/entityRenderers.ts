@@ -609,6 +609,10 @@ export class EntityRenderDispatcher {
         this.setLight(b, level, e, x, y, z);
         this.nameTags.add(e.customName!, dx, dy + e.height + 0.5, dz, b.lightB, b.lightS);
       }
+    } else if (e.type === 'player' && this.showsPlayerName(e as Player, level, dx * dx + dy * dy + dz * dz)) {
+      // (multiplayer: vanilla PlayerRenderer.renderNameTag, another player's name over its head)
+      this.setLight(b, level, e, x, y, z);
+      this.nameTags.add((e as Player).profileName!, dx, dy + e.height + 0.5, dz, b.lightB, b.lightS, e.isShiftKeyDown());
     }
     // (at the renderer's offset: a crouching player's flames sink with it)
     if (e.isOnFire() && !(e instanceof ItemEntity) && !(e instanceof ExperienceOrb)) this.renderFlame(b, e, dx, dy + renderOffsetY(e), dz, cam.yaw, level.gameTime);
@@ -619,6 +623,15 @@ export class EntityRenderDispatcher {
    * invisible and not carrying anyone, while it's looked at (always, with its name set visible); never with the GUI
    * hidden
    */
+  /**
+   * vanilla LivingEntityRenderer.shouldShowName for a player: someone else's (one's own never; single-player's player
+   * has no name to show), within 64 blocks, not invisible and not carrying anyone; never with the GUI hidden
+   */
+  private showsPlayerName(e: Player, level: Level, d2: number): boolean {
+    if (!this.renderNames || e.profileName === null || e === level.player || d2 >= 64 * 64) return false;
+    return !e.isInvisible() && e.passengers.length === 0;
+  }
+
   private showsName(e: Mob, d2: number): boolean {
     if (!this.renderNames || e.customName === null || d2 >= 64 * 64) return false;
     if (e.isInvisible() || e.passengers.length > 0) return false;

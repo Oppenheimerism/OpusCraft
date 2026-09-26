@@ -26,7 +26,8 @@ import type { Player } from '../entity/player';
 import type { World } from '../world/world';
 
 /** the game's container screens: shows the box's menu (set by Game) */
-type MenuOpener = (menu: ShulkerBoxMenu) => void;
+/** false: the menu wasn't opened after all (a guest's player, in multiplayer) */
+type MenuOpener = (menu: ShulkerBoxMenu) => boolean | void;
 let openMenu: MenuOpener | null = null;
 
 export function setShulkerBoxMenuHook(fn: MenuOpener | null): void {
@@ -96,7 +97,7 @@ for (const [name] of SHULKER_BOXES) {
       if (p.gameMode === 'spectator') return 'consume';
       if (canOpen(level, x, y, z, st, be)) {
         be.unpackLoot();
-        openMenu?.(new ShulkerBoxMenu(p, be, be.displayName()));
+        if (openMenu?.(new ShulkerBoxMenu(p, be, be.displayName())) === false) return true;
         be.startOpen(level, p);
         Piglin.angerNearbyPiglins(p, true);
       }

@@ -169,6 +169,18 @@ export class World {
     return this.blockEntities.get(blockEntityKey(x, y, z)) ?? null;
   }
 
+  /**
+   * put `be` in its place instead of the block entity there (vanilla ClientPacketListener.handleBlockEntityData: a
+   * guest's copy of the host's, net/); nothing if its chunk isn't loaded
+   */
+  setBlockEntity(be: BlockEntity): void {
+    const c = this.getChunk(be.x >> 4, be.z >> 4);
+    if (!c) return;
+    const old = this.blockEntities.get(be.key);
+    if (old) old.removed = true;
+    this.addBlockEntity(be, c);
+  }
+
   private addBlockEntity(be: BlockEntity, c: Chunk): void {
     be.container.onChange = () => {
       c.modified = true;

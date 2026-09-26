@@ -651,13 +651,7 @@ export class Level {
       if (!e.removed) this.onEntityTick?.(e);
       if (e.passengers.length) this.tickPassengers(e);
     }
-    // prune removed
-    let w = 0;
-    for (let i = 0; i < this.entities.length; i++) if (!this.entities[i].removed) this.entities[w++] = this.entities[i];
-    this.entities.length = w;
-    w = 0;
-    for (let i = 0; i < this.playerList.length; i++) if (!this.playerList[i].removed) this.playerList[w++] = this.playerList[i];
-    this.playerList.length = w;
+    this.pruneRemoved();
     if (this.skyFlash > 0) this.skyFlash--;
     this.handlingTick = true;
     this.runScheduledTicks();
@@ -682,6 +676,16 @@ export class Level {
         if (c) c.modified = true;
       }
     }
+  }
+
+  /** the entities (and players) that were removed are let go (each tick, after they've all ticked; a guest's too) */
+  pruneRemoved(): void {
+    let w = 0;
+    for (let i = 0; i < this.entities.length; i++) if (!this.entities[i].removed) this.entities[w++] = this.entities[i];
+    this.entities.length = w;
+    w = 0;
+    for (let i = 0; i < this.playerList.length; i++) if (!this.playerList[i].removed) this.playerList[w++] = this.playerList[i];
+    this.playerList.length = w;
   }
 
   /** vanilla ServerLevel.tickPassenger: riders tick after their vehicle, then sit back in their seat */

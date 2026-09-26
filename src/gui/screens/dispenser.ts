@@ -44,8 +44,10 @@ export class HopperScreen extends AbstractContainerScreen<HopperMenu> {
 export function installDispenserScreen(game: Game): void {
   setDispenserMenuHook((be, p) => {
     if (p === game.player) game.setScreen(new DispenserScreen(game, new DispenserMenu(p, be)));
+    else game.refuseGuestMenu(p);
   });
   setHopperMenuHook((be, p) => {
     if (p === game.player) game.setScreen(new HopperScreen(game, new HopperMenu(p, be)));
+    else game.refuseGuestMenu(p);
   });
 }

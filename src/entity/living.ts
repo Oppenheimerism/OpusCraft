@@ -542,7 +542,7 @@ export abstract class LivingEntity extends Entity {
   }
 
   /** vanilla updateSwimAmount */
-  private updateSwimAmount(): void {
+  protected updateSwimAmount(): void {
     this.swimAmountO = this.swimAmount;
     this.swimAmount = this.isVisuallySwimming() ? Math.min(1, this.swimAmount + 0.09) : Math.max(0, this.swimAmount - 0.09);
   }

@@ -66,7 +66,7 @@ export class ItemEntity extends Entity {
     // pickup (vanilla Player.touch: each player near enough in turn, while there's any of it left)
     for (const p of this.level.players()) {
       if (this.stack.count <= 0) break;
-      if (p.health > 0 && this.pickupDelay === 0 && p.gameMode !== 'spectator' && p.bb.inflate(1, 0.5, 1).intersects(this.bb)) this.playerTouch(p);
+      if (p.health > 0 && this.pickupDelay === 0 && p.gameMode !== 'spectator' && !p.noPickup && p.bb.inflate(1, 0.5, 1).intersects(this.bb)) this.playerTouch(p);
     }
   }
 

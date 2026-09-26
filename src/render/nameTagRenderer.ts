@@ -1,6 +1,7 @@
-// Names over mobs (vanilla EntityRenderer.renderNameTag): half a block over its head, turned to face the camera, in
-// the font at a fortieth of a block a pixel. First the see-through name, seen through walls and all, faint white on a
-// quarter-dark strip (vanilla Font.DisplayMode.SEE_THROUGH); then the name itself in white wherever it isn't hidden.
+// Names over mobs and other players (vanilla EntityRenderer.renderNameTag): half a block over its head, turned to face
+// the camera, in the font at a fortieth of a block a pixel. First the see-through name, seen through walls and all,
+// faint white on a quarter-dark strip (vanilla Font.DisplayMode.SEE_THROUGH); then the name itself in white wherever
+// it isn't hidden. A sneaking player's is only the faint name on its strip, hidden by walls like anything else.
 // Lit by the light where the mob is. Collected while the entities are drawn and drawn after all of them, as vanilla's
 // text buffers are.
 
@@ -17,6 +18,8 @@ interface Tag {
   z: number;
   lightB: number;
   lightS: number;
+  /** vanilla Entity.isDiscrete (a sneaking player): no see-through name, only a faint one where it isn't hidden */
+  discrete: boolean;
 }
 
 interface GlyphUV {
@@ -29,6 +32,8 @@ interface GlyphUV {
 const BACKGROUND_ALPHA = 63 / 255;
 /** vanilla's see-through text colour 0x20FFFFFF */
 const SEE_THROUGH_ALPHA = 32 / 255;
+/** vanilla EntityRenderer.renderNameTag's colour 0x80FFFFFF for a discrete one's name (its only one) */
+const DISCRETE_ALPHA = 128 / 255;
 
 export class NameTagRenderer {
   private font: WebGLTexture | null = null;
@@ -39,8 +44,8 @@ export class NameTagRenderer {
   constructor(private readonly gl: GL) {}
 
   /** a name to draw, with the top of its strip's middle at camera-relative (x, y, z), in the given light */
-  add(name: string, x: number, y: number, z: number, lightB: number, lightS: number): void {
-    this.tags.push({ name, x, y, z, lightB, lightS });
+  add(name: string, x: number, y: number, z: number, lightB: number, lightS: number, discrete = false): void {
+    this.tags.push({ name, x, y, z, lightB, lightS, discrete });
   }
 
   /** draw the names collected, facing a camera turned `yaw`, `pitch` (vanilla cameraOrientation), and forget them */
@@ -57,6 +62,7 @@ export class NameTagRenderer {
     for (const seeThrough of [true, false]) {
       b.begin(seeThrough ? { ...base, depthTest: false, depthWrite: false } : base);
       for (const t of this.tags) {
+        if (seeThrough && t.discrete) continue;
         pose.reset();
         pose.translate(t.x, t.y, t.z);
         pose.rotY(180 - yaw);
@@ -66,11 +72,11 @@ export class NameTagRenderer {
         b.lightS = t.lightS;
         // (vanilla: centred on whole pixels; deadmau5's is drawn higher, over his ears)
         const w = textWidth(t.name), x0 = -Math.trunc(w / 2), y0 = t.name === 'deadmau5' ? -10 : 0;
-        if (seeThrough) {
+        if (seeThrough || t.discrete) {
           const [wu, wv] = this.white;
           b.quad(pose, [x0 - 1, y0 + 9, -0.01, x0 + w, y0 + 9, -0.01, x0 + w, y0 - 1, -0.01, x0 - 1, y0 - 1, -0.01], [wu, wv, wu, wv, wu, wv, wu, wv], 0, 0, 1, 0, 0, 0, BACKGROUND_ALPHA);
         }
-        const a = seeThrough ? SEE_THROUGH_ALPHA : 1;
+        const a = seeThrough ? SEE_THROUGH_ALPHA : t.discrete ? DISCRETE_ALPHA : 1;
         let x = x0;
         for (const ch of t.name) {
           const g = this.glyphs.get(ch) ?? this.glyphs.get('?')!;
