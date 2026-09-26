@@ -25,7 +25,7 @@ const COLORS = {
   chiseled_polished_blackstone: [104, 96, 112], blackstone: [44, 38, 48], gilded_blackstone: [150, 116, 40], gold_block: [250, 208, 60],
   basalt: [104, 104, 112], polished_basalt: [124, 124, 132], magma_block: [170, 70, 20], lava: [255, 120, 0], chain: [60, 70, 90],
   chest: [190, 120, 30], spawner: [40, 90, 160], soul_lantern: [80, 200, 220], lantern: [250, 200, 120], netherrack: [110, 40, 40],
-  soul_sand: [90, 70, 55], soul_soil: [80, 62, 50], nether_wart_block: [130, 20, 20], crimson_nylium: [150, 30, 30], nether_bricks: [60, 30, 36],
+  soul_sand: [90, 70, 55], soul_soil: [80, 62, 50], nether_wart_block: [130, 20, 20], nether_wart: [170, 30, 40], crimson_nylium: [150, 30, 30], nether_bricks: [60, 30, 36],
   crying_obsidian: [60, 20, 110], obsidian: [20, 16, 30], iron_bars: [150, 150, 150], ancient_debris: [100, 70, 60], lodestone: [150, 150, 160],
 };
 function colorOf(st) {
