@@ -87,9 +87,10 @@ export class ExperienceOrb extends Entity {
   }
 
   private scanForEntities(): void {
-    const p = this.level.player;
     if (!this.following || this.following.distanceToSqr(this.x, this.y, this.z) > 64) {
-      this.following = p && p.gameMode !== 'spectator' && p.health > 0 && p.distanceToSqr(this.x, this.y, this.z) < 64 ? p : null;
+      // (vanilla getNearestPlayer(this, 8), unless that's a spectator or dying; not one that picks nothing up)
+      const p = this.level.nearestPlayer(this.x, this.y, this.z, 8, (q) => !q.noPickup);
+      this.following = p && p.gameMode !== 'spectator' && p.health > 0 ? p : null;
     }
     // merge with nearby orbs of the same value (vanilla tryMergeToExisting)
     for (const e of this.level.getEntities(this.bb.inflate(0.5), (e) => e instanceof ExperienceOrb, this)) {

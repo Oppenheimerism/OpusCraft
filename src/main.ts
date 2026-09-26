@@ -3,8 +3,13 @@
 import { Game } from './game/game';
 import { installScreens } from './gui/screens';
 import { TitleScreen, newWorldMeta } from './gui/screens/menus';
+import { openToLanOnceSpawned, joinFirstLanWorld } from './gui/screens/multiplayer';
+import { MULTIPLAYER_ENABLED } from './net/config';
+import { getWorldMeta } from './storage/worldStore';
 
 const params = new URLSearchParams(location.search);
+/** ?mp=host (with &world=<id>, or a quick-start world) opens the world to LAN once it's in; ?mp=join joins one */
+const mp = MULTIPLAYER_ENABLED ? params.get('mp') : null;
 
 async function main(): Promise<void> {
   const canvas = document.getElementById('gl') as HTMLCanvasElement;
@@ -21,6 +26,7 @@ async function main(): Promise<void> {
     if (params.has('t')) meta.dayTime = +params.get('t')!;
     if (params.has('rd')) game.opts.renderDistance = +params.get('rd')!;
     await game.startWorld(meta);
+    if (mp === 'host') openToLanOnceSpawned(game);
     if (params.has('t')) game.freezeTime = true;
     if (params.has('x')) {
       const wait = setInterval(() => {
@@ -30,6 +36,16 @@ async function main(): Promise<void> {
         if (params.has('fly')) game.player.flying = true;
       }, 50);
     }
+  } else if (mp === 'host' && params.get('world')) {
+    // (a saved world by its id; the title screen if there's none)
+    const meta = await getWorldMeta(params.get('world')!);
+    if (meta) {
+      await game.startWorld(meta);
+      openToLanOnceSpawned(game);
+    } else game.setScreen(new TitleScreen(game, true));
+  } else if (mp === 'join') {
+    game.setScreen(new TitleScreen(game, false));
+    joinFirstLanWorld(game);
   } else {
     game.setScreen(new TitleScreen(game, true));
   }
@@ -38,5 +54,9 @@ async function main(): Promise<void> {
 
 main().catch((e) => {
   console.error(e);
-  document.body.innerHTML = `<pre style="color:#f55;padding:16px;white-space:pre-wrap">${String(e?.stack ?? e)}</pre>`;
+  // (as text: an error's message can carry anything)
+  const pre = document.createElement('pre');
+  pre.style.cssText = 'color:#f55;padding:16px;white-space:pre-wrap';
+  pre.textContent = String(e?.stack ?? e);
+  document.body.replaceChildren(pre);
 });

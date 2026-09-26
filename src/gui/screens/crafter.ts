@@ -88,5 +88,6 @@ export class CrafterScreen extends AbstractContainerScreen<CrafterMenu> {
 export function installCrafterScreen(game: Game): void {
   setCrafterMenuHook((be, p) => {
     if (p === game.player) game.setScreen(new CrafterScreen(game, new CrafterMenu(p, be)));
+    else game.refuseGuestMenu(p);
   });
 }

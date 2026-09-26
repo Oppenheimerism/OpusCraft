@@ -48,7 +48,7 @@ export function channel(level: Level, victim: Entity, owner: Entity | null, weap
   if (!level.canSeeSky(Math.floor(victim.x), Math.floor(victim.y), Math.floor(victim.z))) return;
   const bolt = new LightningBolt(level);
   bolt.moveTo(victim.x, victim.y, victim.z, 0, 0);
-  if (owner && owner === level.player) bolt.cause = owner;
+  if (owner?.type === 'player') bolt.cause = owner;
   level.addEntity(bolt);
   level.sound.play('item.trident.thunder', victim.x, victim.y, victim.z, 5, 1);
 }

@@ -29,8 +29,10 @@ export type Pickup = 'disallowed' | 'allowed' | 'creative_only';
 export class Arrow extends Entity {
   readonly type: string = 'arrow';
   owner: Entity | null = null;
-  /** a saved arrow the player shot: its owner is the player once they're back in the world */
+  /** a saved arrow a player shot: its owner is that player once they're back in the world */
   private ownerIsPlayer = false;
+  /** which player (vanilla AbstractArrow.ownerUUID); saved without one, it was the world's own player */
+  private ownerUuid: string | null = null;
   private leftOwner = false;
   inGround = false;
   inGroundTime = 0;
@@ -139,7 +141,7 @@ export class Arrow extends Entity {
   /** vanilla AbstractArrow.tick; with no physics (a loyal trident coming back) it flies through everything, hitting nothing */
   private tickArrow(): void {
     this.baseTick();
-    if (this.ownerIsPlayer && !this.owner && this.level.player) this.owner = this.level.player;
+    if (this.ownerIsPlayer && !this.owner) this.owner = (this.ownerUuid === null ? this.level.player : this.level.playerByUuid(this.ownerUuid)) ?? null;
     const w = this.level.world;
     const noPhysics = this.noPhysics;
     if (this.pitchO === 0 && this.yawO === 0) {
@@ -290,7 +292,7 @@ export class Arrow extends Entity {
     const fire = e.remainingFireTicks;
     if (this.isOnFire() && e.type !== 'enderman') e.igniteForSeconds(5);
     if (e.hurt(dmg, 'arrow', owner ?? this, this)) {
-      if (owner && owner === this.level.player) this.level.onPlayerArrowHit?.(e);
+      if (owner?.type === 'player') this.level.onPlayerArrowHit?.(e, owner as Player);
       if (e.type === 'enderman') return;
       if (e instanceof LivingEntity) {
         this.doKnockback(e);
@@ -299,9 +301,9 @@ export class Arrow extends Entity {
         this.doPostHurtEffects(e);
         if (!e.isAlive && this.piercedAndKilled) this.piercedAndKilled.push(e);
         // vanilla KilledByCrossbowTrigger: everything this crossbow arrow has killed so far
-        if (owner && owner === this.level.player && this.weapon?.item.id === 'crossbow') {
-          if (this.piercedAndKilled) this.level.onPlayerCrossbowKill?.(this.piercedAndKilled);
-          else if (!e.isAlive) this.level.onPlayerCrossbowKill?.([e]);
+        if (owner?.type === 'player' && this.weapon?.item.id === 'crossbow') {
+          if (this.piercedAndKilled) this.level.onPlayerCrossbowKill?.(this.piercedAndKilled, owner as Player);
+          else if (!e.isAlive) this.level.onPlayerCrossbowKill?.([e], owner as Player);
         }
       }
       this.level.sound.play(this.hitSound, this.x, this.y, this.z, 1, 1.2 / (this.rnd() * 0.2 + 0.9));
@@ -401,6 +403,7 @@ export class Arrow extends Entity {
         inGround: this.inGround, life: this.life, shake: this.shakeTime, pickup: this.pickup, crit: this.crit, damageBase: this.baseDamage, pierce: this.pierceLevel,
         ...(this.lastState >= 0 ? { inBlockState: this.lastState } : {}),
         ...(this.owner?.type === 'player' || this.ownerIsPlayer ? { ownerIsPlayer: true } : {}),
+        ...(this.owner?.type === 'player' ? { owner: this.owner.uuid } : this.ownerIsPlayer && this.ownerUuid !== null ? { owner: this.ownerUuid } : {}),
         ...this.saveData(),
       },
     };
@@ -426,6 +429,7 @@ export class Arrow extends Entity {
     this.pierceLevel = Number(v.pierce ?? 0);
     this.lastState = Number(v.inBlockState ?? -1);
     this.ownerIsPlayer = v.ownerIsPlayer === true;
+    this.ownerUuid = this.ownerIsPlayer && typeof v.owner === 'string' ? v.owner : null;
     this.leftOwner = true;
     this.loadData(v);
   }

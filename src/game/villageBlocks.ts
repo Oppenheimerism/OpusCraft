@@ -445,7 +445,7 @@ registerBehavior('composter', {
 // The job sites' menus (vanilla useWithoutItem opening CartographyTableMenu, LoomMenu, StonecutterMenu, SmithingMenu,
 // BrewingStandMenu, and LecternMenu for a lectern's book): the game opens whichever it has a screen for
 
-type MenuOpener = (kind: string, x: number, y: number, z: number) => void;
+type MenuOpener = (kind: string, x: number, y: number, z: number, player: Player) => void;
 let openMenu: MenuOpener | null = null;
 
 /** the game's container screens (Game.openContainer), which open the job sites' menus by block name */
@@ -455,8 +455,8 @@ export function setVillageMenuHook(fn: MenuOpener | null): void {
 
 for (const name of ['cartography_table', 'loom', 'stonecutter', 'smithing_table', 'brewing_stand']) {
   registerBehavior(name, {
-    use(_level, x, y, z) {
-      openMenu?.(name, x, y, z);
+    use(_level, x, y, z, _st, ctx) {
+      openMenu?.(name, x, y, z, ctx.player);
       return true;
     },
   });
@@ -562,9 +562,9 @@ export function lecternAnalogOutput(level: Level, x: number, y: number, z: numbe
       return 'success';
     },
     // vanilla LecternBlock.useWithoutItem: its book opens to be read; without one the click is simply spent
-    use(_level, x, y, z, st) {
+    use(_level, x, y, z, st, ctx) {
       if (!lectern.get(st, 'has_book')) return 'consume';
-      openMenu?.('lectern', x, y, z);
+      openMenu?.('lectern', x, y, z, ctx.player);
       return true;
     },
     tick(level, x, y, z, st) {

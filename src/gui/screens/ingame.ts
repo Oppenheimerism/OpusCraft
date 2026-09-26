@@ -6,6 +6,8 @@ import type { GuiGraphics } from '../guiGraphics';
 import { OptionsScreen } from './options';
 import { ConfirmScreen, GenericMessageScreen } from './menus';
 import { suggestCommand } from '../../game/commands';
+import { ShareToLanScreen, JoinMultiplayerScreen } from './multiplayer';
+import { MULTIPLAYER_ENABLED } from '../../net/config';
 
 export class PauseScreen extends Screen {
   constructor(game: Game) {
@@ -27,11 +29,15 @@ export class PauseScreen extends Screen {
     this.add(new Button(col(0), row(2), 98, 20, 'Give Feedback', () => {})).active = false;
     this.add(new Button(col(1), row(2), 98, 20, 'Report Bugs', () => {})).active = false;
     this.add(new Button(col(0), row(3), 98, 20, 'Options...', () => g.setScreen(new OptionsScreen(g, this))));
-    this.add(new Button(col(1), row(3), 98, 20, 'Open to LAN', () => {})).active = false;
+    // (vanilla: a world of our own can be opened to LAN, once; multiplayer/ switched off, the button stays greyed out)
+    this.add(new Button(col(1), row(3), 98, 20, 'Open to LAN', () => g.setScreen(new ShareToLanScreen(g, this)))).active = MULTIPLAYER_ENABLED && g.mode === 'single';
+    // (vanilla: a guest disconnects, back to the Multiplayer screen, with nothing to save)
+    const guest = g.mode === 'client';
     const quit = this.add(
-      new Button(col(0), row(4), 204, 20, 'Save and Quit to Title', () => {
+      new Button(col(0), row(4), 204, 20, guest ? 'Disconnect' : 'Save and Quit to Title', () => {
         quit.active = false;
-        void g.quitToTitle(new GenericMessageScreen(g, 'Saving world'));
+        if (guest) void g.leaveWorld(new JoinMultiplayerScreen(g, g.titleScreenFactory?.() ?? null));
+        else void g.quitToTitle(new GenericMessageScreen(g, 'Saving world'));
       }),
     );
   }

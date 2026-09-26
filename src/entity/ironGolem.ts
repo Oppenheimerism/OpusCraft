@@ -3,7 +3,7 @@
 // nearby (but never a creeper), and any player the villagers have come to hate or who hits it. One the player built
 // never turns on a player. It doesn't drown, fall damage can't hurt it, and an iron ingot patches it up.
 
-import { Mob, isValidEmptySpawnBlock, type MobCategory, type LootEntry } from './mob';
+import { Mob, isValidEmptySpawnBlock, angryAtData, angryAtFrom, type MobCategory, type LootEntry } from './mob';
 import { LivingEntity } from './living';
 import type { Entity } from './entity';
 import type { Level } from '../game/level';
@@ -183,21 +183,24 @@ class DefendVillageTargetGoal extends TargetGoal {
   }
   canUse(): boolean {
     const g = this.golem;
-    const p = g.level.player;
     this.potential = null;
-    if (!p || !p.isAlive) return false;
     const box = g.bb.inflate(10, 8, 10);
     // (vanilla TargetingConditions.forCombat().range(64): what it could fight, in sight)
     const seen = (e: LivingEntity) => {
       const r = 64 * Math.max(e.visibilityPercent(g), 2 / 64);
       return e.distanceToSqr(g.x, g.y, g.z) <= r * r && g.sensing.hasLineOfSight(e);
     };
-    if (!box.intersects(p.bb) || !g.canAttack(p) || !seen(p)) return false;
+    // (vanilla getNearbyPlayers(attackTargeting, golem, box): then each villager in sight, each of them; the last of
+    // those it holds a grudge against)
+    const players = g.level.players().filter((p) => p.isAlive && box.intersects(p.bb) && g.canAttack(p) && seen(p));
+    if (!players.length) return false;
     for (const e of g.level.getEntities(box, (e) => e instanceof Villager && e.isAlive)) {
-      if (seen(e as Villager) && (e as Villager).playerReputation(p) <= -100) this.potential = p;
+      if (!seen(e as Villager)) continue;
+      for (const p of players) if ((e as Villager).playerReputation(p) <= -100) this.potential = p;
     }
-    if (!this.potential) return false;
-    return p.gameMode !== 'spectator' && p.gameMode !== 'creative';
+    const t = this.potential as Player | null;
+    if (!t) return false;
+    return t.gameMode !== 'spectator' && t.gameMode !== 'creative';
   }
   override start(): void {
     this.golem.setTarget(this.potential);
@@ -210,9 +213,8 @@ class AngryAtPlayerGoal extends NearestAttackablePlayerGoal {
   constructor(readonly golem: IronGolem) {
     super(golem, true);
   }
-  protected override extraCondition(): boolean {
-    const p = this.golem.level.player;
-    return !!p && this.golem.isAngryAt(p);
+  protected override acceptsPlayer(p: Player): boolean {
+    return this.golem.isAngryAt(p);
   }
 }
 
@@ -389,12 +391,12 @@ export class IronGolem extends Mob {
   }
 
   protected override saveData(): Record<string, number | string | boolean> {
-    return { playerCreated: this.playerCreated, anger: this.angerTime };
+    return { playerCreated: this.playerCreated, anger: this.angerTime, ...angryAtData(this.angerTarget) };
   }
   protected override loadData(d: Record<string, number | string | boolean>): void {
     this.playerCreated = d.playerCreated === true;
     this.angerTime = Number(d.anger ?? 0);
-    if (this.angerTime > 0) this.angerTarget = this.level.player ?? null;
+    if (this.angerTime > 0) this.angerTarget = angryAtFrom(this.level, d);
   }
 }
 

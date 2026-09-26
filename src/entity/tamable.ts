@@ -55,8 +55,7 @@ export abstract class TamableAnimal extends Animal {
 
   /** vanilla getOwner: its owner, if it's here */
   owner(): LivingEntity | null {
-    const p = this.level.player;
-    return this.ownerUUID !== null && p && p.uuid === this.ownerUUID ? p : null;
+    return this.ownerUUID !== null ? this.level.playerByUuid(this.ownerUUID) : null;
   }
 
   isOwnedBy(e: Entity | null): boolean {

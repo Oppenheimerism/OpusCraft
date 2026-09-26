@@ -167,7 +167,7 @@ function isAlive(e: Entity): boolean {
 
 /** vanilla ServerLevel.getEntity(UUID): the one of that uuid in the level (the player too) */
 function entityByUuid(level: Level, uuid: string): Entity | null {
-  const p = level.player;
-  if (p && p.hasUuid && p.uuid === uuid) return p;
+  const p = level.players().find((q) => q.hasUuid && q.uuid === uuid);
+  if (p) return p;
   return level.entities.find((e) => !e.removed && e.hasUuid && e.uuid === uuid) ?? null;
 }

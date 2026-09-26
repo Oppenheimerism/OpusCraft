@@ -22,9 +22,7 @@ const SPAWN_RANGE = 4;
 
 /** vanilla Level.hasNearbyAlivePlayer (spectators don't count) */
 function isNearPlayer(level: Level, be: SpawnerBlockEntity): boolean {
-  const p = level.player;
-  if (!p || !p.isAlive || p.gameMode === 'spectator') return false;
-  return p.distanceToSqr(be.x + 0.5, be.y + 0.5, be.z + 0.5) < REQUIRED_PLAYER_RANGE * REQUIRED_PLAYER_RANGE;
+  return level.hasNearbyAlivePlayer(be.x + 0.5, be.y + 0.5, be.z + 0.5, REQUIRED_PLAYER_RANGE);
 }
 
 /** vanilla BaseSpawner.delay: next attempt in 200-799 ticks; the client countdown restarts at 200 */

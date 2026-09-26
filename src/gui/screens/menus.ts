@@ -9,6 +9,8 @@ import { OptionsScreen, LanguageScreen, AccessibilityOptionsScreen, DIFFICULTY_N
 import { WorldMeta, listWorlds, saveWorldMeta, deleteWorld } from '../../storage/worldStore';
 import { tidyUpInterruptedImport } from '../../storage/worldTransfer';
 import { makeBackup, importWorldFiles, pickWorldFiles, WorldFileDrop } from './worldFiles';
+import { JoinMultiplayerScreen } from './multiplayer';
+import { MULTIPLAYER_ENABLED } from '../../net/config';
 
 export const GAME_VERSION = '1.21.8';
 
@@ -54,7 +56,8 @@ export class TitleScreen extends Screen {
     const cx = Math.floor(this.width / 2);
     const l = Math.floor(this.height / 4) + 48;
     this.add(new Button(cx - 100, l, 200, 20, 'Singleplayer', () => g.setScreen(new SelectWorldScreen(g, this))));
-    this.add(new Button(cx - 100, l + 24, 200, 20, 'Multiplayer', () => {})).active = false;
+    // (multiplayer/ switched off, the button stays greyed out, as it was)
+    this.add(new Button(cx - 100, l + 24, 200, 20, 'Multiplayer', () => g.setScreen(new JoinMultiplayerScreen(g, this)))).active = MULTIPLAYER_ENABLED;
     this.add(new Button(cx - 100, l + 48, 200, 20, 'Minecraft Realms', () => {})).active = false;
     this.add(new IconButton(cx - 124, l + 84, 'icon_language', () => g.setScreen(new LanguageScreen(g, this)), 'Language'));
     this.add(new Button(cx - 100, l + 84, 98, 20, 'Options...', () => g.setScreen(new OptionsScreen(g, this))));

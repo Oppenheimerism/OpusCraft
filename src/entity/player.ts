@@ -159,6 +159,17 @@ export class Player extends LivingEntity {
   onDeath: ((p: Player, source: string) => void) | null = null;
   /** spawns an item entity from the player (set by the game shell) */
   dropHandler: ((s: ItemStack, thrown: boolean) => void) | null = null;
+  /**
+   * a guest's player on the host (vanilla ServerPlayer, which its own game moves): its moves, pose and look come from
+   * that game each tick, through `remoteMove`; the rest of its tick (effects, air, food, animations) runs here
+   */
+  remote = false;
+  /** (remote) puts it where its game last said it is, in its tick (the host's session sets this) */
+  remoteMove: ((p: Player) => void) | null = null;
+  /** vanilla GameProfile.getName: who it is, over its head (null in single-player, where nobody else sees it) */
+  profileName: string | null = null;
+  /** picks nothing up off the ground (a guest's player on the host in stage 1: its inventory is the guest's own) */
+  noPickup = false;
   override lastDamageSource = '';
 
   constructor(level: Level) {
@@ -501,7 +512,8 @@ export class Player extends LivingEntity {
     const nausea = this.getEffect('nausea');
     // (vanilla Portal.Transition.CONFUSION: the nether portal's; an end portal has none)
     if (this.portal?.inside && this.portal.kind === 'nether') {
-      if (this.spinningEffectIntensity === 0) this.level.sound.playUI('block.portal.trigger', 0.25, Math.random() * 0.4 + 0.8);
+      // (the whoosh is for the ears of whoever's in the portal: not the host's, for a guest's player)
+      if (this.spinningEffectIntensity === 0 && !this.remote) this.level.sound.playUI('block.portal.trigger', 0.25, Math.random() * 0.4 + 0.8);
       this.spinningEffectIntensity = Math.min(1, this.spinningEffectIntensity + 0.0125);
     } else if (nausea && !nausea.endsWithin(60)) this.spinningEffectIntensity = Math.min(1, this.spinningEffectIntensity + 0.006666667);
     else if (this.spinningEffectIntensity > 0) this.spinningEffectIntensity = Math.max(0, this.spinningEffectIntensity - 0.05);
@@ -520,7 +532,8 @@ export class Player extends LivingEntity {
     let f = 0;
     if (this.onGround && this.health > 0) f = Math.min(0.1, Math.sqrt(this.dx * this.dx + this.dz * this.dz));
     this.bob += (f - this.bob) * 0.4;
-    this.food.tick(this);
+    // (vanilla FoodData.tick runs on the server: a guest hears how hungry it is from the host)
+    if (!this.level.isClientSide) this.food.tick(this);
     this.wardenSpawnTracker.tick();
     this.tickAir();
     this.inventory.tick(this);
@@ -544,8 +557,23 @@ export class Player extends LivingEntity {
     if (this.shoulderRight) shoulderHooks.ambient?.(this, this.shoulderRight);
     if (this.fallDistance > 0.5 || this.inWater || this.flying || this.isSleeping() || this.isInPowderSnow()) this.removeEntitiesOnShoulder();
     if (this.flying) this.fallDistance = 0;
+    // (a remote player's pose is its own game's, as it said)
+    if (this.remote) return;
     this.updateGlidePose();
     this.updateSwimPose();
+  }
+
+  protected override movedElsewhere(): boolean {
+    return this.remote;
+  }
+
+  /** (a guest's player can't ride yet in stage 1: its own game would have to steer the vehicle) */
+  protected override canRide(vehicle: Entity): boolean {
+    return !this.remote && super.canRide(vehicle);
+  }
+
+  protected override moveFromElsewhere(): void {
+    this.remoteMove?.(this);
   }
 
   /**
@@ -830,7 +858,7 @@ export class Player extends LivingEntity {
   }
 
   override hurt(amount: number, source: string, attacker?: Entity | null, direct?: Entity | null): boolean {
-    if (this.isInvulnerableTo(source)) return false;
+    if (this.level.isClientSide || this.isInvulnerableTo(source)) return false;
     // (vanilla Player.hurt: whatever the damage comes to, the parrots on its shoulders fly off)
     if (this.health > 0) this.removeEntitiesOnShoulder();
     // vanilla Player.hurt: damage caused by mobs (and all explosions) scales with difficulty

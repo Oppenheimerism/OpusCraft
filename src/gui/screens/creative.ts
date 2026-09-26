@@ -7,8 +7,9 @@ import type { GuiGraphics } from '../guiGraphics';
 import { AbstractContainerScreen, itemTooltip } from './container';
 import { ContainerMenu, Slot, SimpleContainer, ClickType } from '../../inventory/container';
 import { CreativeMenu, InventoryMenu } from '../../inventory/menus';
-import { ITEM_LIST, ItemStack, Item, getItem } from '../../item/item';
-import { ENCHANTMENTS, enchantmentLine, tooltipOrder } from '../../item/enchantments';
+import { ITEM_LIST, ItemStack, Item } from '../../item/item';
+import { enchantmentLine, tooltipOrder } from '../../item/enchantments';
+import { enchantedBooks, stacksOf } from '../../item/creativeStacks';
 import { craftingEnchants } from '../../item/enchantHelper';
 import { KEYS } from '../../game/input';
 
@@ -23,25 +24,6 @@ interface Tab {
   items: Item[];
   /** stacks listed after the items (the ingredients tab's enchanted books) */
   extra?: ItemStack[];
-}
-
-/**
- * vanilla CreativeModeTabs.generateEnchantmentBookTypesOnlyMaxLevel / AllLevels: an enchanted book for each
- * enchantment in registry order (ids, alphabetically, for the data-driven registry), at its maximum level or at
- * every level
- */
-function enchantedBooks(allLevels: boolean): ItemStack[] {
-  const out: ItemStack[] = [];
-  for (const id of [...ENCHANTMENTS.keys()].sort()) {
-    const max = ENCHANTMENTS.get(id)!.maxLevel;
-    for (let l = allLevels ? 1 : max; l <= max; l++) out.push(new ItemStack(getItem('enchanted_book'), 1, 0, { stored: { [id]: l } }));
-  }
-  return out;
-}
-
-/** an item's creative stacks: one of it, or its variants (vanilla generatePotionEffectTypes: a potion of each kind) */
-function stacksOf(it: Item): ItemStack[] {
-  return it.creativeStacks?.() ?? [new ItemStack(it, 1)];
 }
 
 /** the search tab's stacks: every item, with the books of every level among the ingredients (before the spawn eggs) */

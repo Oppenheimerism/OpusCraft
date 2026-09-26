@@ -90,7 +90,7 @@ export class ThrownTrident extends Arrow {
     this.dealtDamage = true;
     if (e.hurt(f, 'trident', owner ?? this, this)) {
       if (e.type === 'enderman') return;
-      if (owner && owner === this.level.player) this.level.onPlayerTridentHit?.(e);
+      if (owner?.type === 'player') this.level.onPlayerTridentHit?.(e, owner as Player);
       channel(this.level, e, owner, weapon);
       if (e instanceof LivingEntity) doPostAttackEffects(e, owner, weapon, false);
     }

@@ -13,6 +13,7 @@ import { Monster, validSpawnBlock } from './monsters';
 import { LargeFireball } from './fireball';
 import { COLLISION } from '../world/block';
 import { AABB } from '../core/aabb';
+import type { Player } from './player';
 
 const RAD = 180 / Math.PI;
 
@@ -144,9 +145,8 @@ class GhastTargetGoal extends NearestAttackablePlayerGoal {
   constructor(readonly g: Ghast) {
     super(g, true);
   }
-  protected override extraCondition(): boolean {
-    const p = this.g.level.player;
-    return !!p && Math.abs(p.y - this.g.y) <= 4;
+  protected override acceptsPlayer(p: Player): boolean {
+    return Math.abs(p.y - this.g.y) <= 4;
   }
 }
 

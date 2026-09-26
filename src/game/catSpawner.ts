@@ -20,7 +20,8 @@ export class CatSpawner {
     if (level.world.dim.id !== 'overworld') return 0;
     if (--this.nextTick > 0) return 0;
     this.nextTick = 1200;
-    const p = level.player;
+    // (vanilla ServerLevel.getRandomPlayer: a living one)
+    const p = level.randomPlayer((q) => q.isAlive);
     if (!p) return 0;
     const r = level.random;
     const i = (8 + r.nextInt(24)) * (r.nextBool() ? -1 : 1);

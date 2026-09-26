@@ -87,6 +87,11 @@ import './powderSnow';
 export interface SoundSink {
   play(name: string, x: number, y: number, z: number, volume?: number, pitch?: number): void;
   playUI(name: string, volume?: number, pitch?: number): void;
+  /**
+   * a sound for `p`'s ears only (vanilla ServerPlayer.connection.send(ClientboundSoundPacket)): without it, only this
+   * game's own player hears such sounds, through `play`
+   */
+  playTo?(p: Player, name: string, x: number, y: number, z: number, volume?: number, pitch?: number): void;
   /** (jukebox) vanilla LevelRenderer.playJukeboxSong / stopJukeboxSong: a jukebox's song, by the jukebox's position */
   playJukeboxSong?(event: string, x: number, y: number, z: number): void;
   stopJukeboxSong?(x: number, y: number, z: number): void;
@@ -158,7 +163,18 @@ const NULL_PARTICLES: ParticleSink = { blockBreak() {}, blockHit() {} };
 export class Level {
   readonly world: World;
   readonly entities: Entity[] = [];
+  /**
+   * this game's own player (the one at the keyboard): the camera, the HUD, the sounds heard. Everything that reacts to
+   * players out in the world asks `players()` instead, which has everyone in the level (vanilla ServerLevel.players)
+   */
   player!: Player;
+  /** the players among `entities`, in the order they came, leaving with them (vanilla ServerLevel.players) */
+  private readonly playerList: Player[] = [];
+  /**
+   * vanilla Level.isClientSide: a guest's copy of the host's level, which only shows what the host sends (net/);
+   * nothing here changes its blocks, schedules ticks, adds entities or sends game events — the host does all that
+   */
+  isClientSide = false;
   gameTime = 0;
   dayTime = 0;
   doDaylightCycle = true;
@@ -219,6 +235,7 @@ export class Level {
     world.onTypeChanged = (x, y, z, old, now) => this.poi.changed(x, y, z, old, now);
     // (vanilla BlockEntity.setChanged: a container's contents changed, so may what a comparator reads)
     world.onBlockEntityChanged = (be) => {
+      if (this.isClientSide) return;
       const st = world.getState(be.x, be.y, be.z);
       if (!(FLAGS[st] & F_AIR)) this.updateNeighbourForOutputSignal(be.x, be.y, be.z, STATE_BLOCK[st]);
     };
@@ -243,9 +260,91 @@ export class Level {
   }
 
   addEntity(e: Entity): void {
+    if (this.isClientSide) return;
     this.entities.push(e);
+    if (e.type === 'player' && !this.playerList.includes(e as Player)) this.playerList.push(e as Player);
     // vanilla addFreshEntityWithPassengers: riders loaded with their vehicle come along
     for (const p of e.passengers) if (!this.entities.includes(p)) this.addEntity(p);
+  }
+
+  /**
+   * on a guest (`isClientSide`): an entity it shows, as the host sent it, or its own player (which `addEntity` won't
+   * take there)
+   */
+  addMirrorEntity(e: Entity): void {
+    this.entities.push(e);
+    if (e.type === 'player' && !this.playerList.includes(e as Player)) this.playerList.push(e as Player);
+  }
+
+  /**
+   * vanilla ServerLevel.players: everyone in this level, in the order they came, `player` among them (first, if it
+   * never came in as an entity; whether removed or not, as before there were others)
+   */
+  players(): readonly Player[] {
+    const list = this.playerList, own = this.player;
+    let whole = !own || list.includes(own);
+    for (let i = 0; whole && i < list.length; i++) if (list[i].removed) whole = false;
+    if (whole) return list;
+    const out = list.filter((p) => !p.removed);
+    if (own && !out.includes(own)) out.unshift(own);
+    return out;
+  }
+
+  /**
+   * vanilla EntityGetter.getNearestPlayer(x, y, z, distance, predicate): the nearest player (the first of equals)
+   * that `test` accepts, closer than `max` (any distance when negative)
+   */
+  nearestPlayer(x: number, y: number, z: number, max = -1, test?: (p: Player) => boolean): Player | null {
+    let best: Player | null = null;
+    let bestD = -1;
+    for (const p of this.players()) {
+      if (test && !test(p)) continue;
+      const d = p.distanceToSqr(x, y, z);
+      if ((max < 0 || d < max * max) && (bestD === -1 || d < bestD)) {
+        bestD = d;
+        best = p;
+      }
+    }
+    return best;
+  }
+
+  /** the players closer than `max` to (x, y, z) that `test` accepts, in `players()` order */
+  playersNear(x: number, y: number, z: number, max: number, test?: (p: Player) => boolean): Player[] {
+    const out: Player[] = [];
+    for (const p of this.players()) if ((!test || test(p)) && p.distanceToSqr(x, y, z) < max * max) out.push(p);
+    return out;
+  }
+
+  /** vanilla EntityGetter.hasNearbyAlivePlayer: a player not spectating, alive, closer than `max` (any when negative) */
+  hasNearbyAlivePlayer(x: number, y: number, z: number, max: number): boolean {
+    for (const p of this.players()) {
+      if (p.gameMode === 'spectator' || !p.isAlive) continue;
+      if (max < 0 || p.distanceToSqr(x, y, z) < max * max) return true;
+    }
+    return false;
+  }
+
+  /**
+   * vanilla ServerLevel.getRandomPlayer (and PatrolSpawner's players().get(random.nextInt(n))): one of the players `test`
+   * accepts, drawn with `random`; a lone player is taken as it is, with no draw, as before there were others
+   */
+  randomPlayer(test?: (p: Player) => boolean): Player | null {
+    const all = this.players();
+    if (all.length <= 1) return all[0] ?? null;
+    const list = test ? all.filter(test) : all;
+    return list.length ? list[this.random.nextInt(list.length)] : null;
+  }
+
+  /** a sound only `p` hears (vanilla ServerPlayer.connection.send(ClientboundSoundPacket)) */
+  playSoundTo(p: Player, name: string, x: number, y: number, z: number, volume = 1, pitch = 1): void {
+    if (this.sound.playTo) this.sound.playTo(p, name, x, y, z, volume, pitch);
+    else if (p === this.player) this.sound.play(name, x, y, z, volume, pitch);
+  }
+
+  /** vanilla ServerLevel.getEntity(uuid), among the players */
+  playerByUuid(uuid: string): Player | null {
+    for (const p of this.players()) if (p.uuid === uuid) return p;
+    return null;
   }
 
   /** entities whose bounding box intersects `box` */
@@ -275,6 +374,7 @@ export class Level {
    * shriekers, catalysts and wardens round about may hear it (game/gameEventDispatcher.ts)
    */
   gameEvent(event: GameEventName, x: number, y: number, z: number, ctx: GameEventContext = {}): void {
+    if (this.isClientSide) return;
     postGameEvent(this, event, x, y, z, ctx);
   }
 
@@ -317,6 +417,8 @@ export class Level {
     for (const e of this.entities) if (!keep.includes(e)) e.removed = true;
     this.entities.length = 0;
     this.entities.push(...keep);
+    this.playerList.length = 0;
+    if (this.player) this.playerList.push(this.player);
     this.blockTicks.clear();
     this.skyFlash = 0;
     // (the overworld's weather carried on meanwhile: back under the sky it's as it is, not fading in)
@@ -470,20 +572,20 @@ export class Level {
   onTamed: ((animal: Entity & { variantId(): string | undefined }, by: Entity) => void) | null = null;
   /** a tame animal died; its owner is told how (vanilla TamableAnimal.die) */
   onTamedDeath: ((animal: TamableAnimal, source: string) => void) | null = null;
-  /** an arrow the player shot hurt something (vanilla "Take Aim") */
-  onPlayerArrowHit: ((target: Entity) => void) | null = null;
-  /** a trident the player threw hurt something (vanilla "A Throwaway Joke") */
-  onPlayerTridentHit: ((target: Entity) => void) | null = null;
-  /** lightning the player's channeling trident called down struck these (vanilla channeled_lightning) */
-  onChanneledLightning: ((victims: Entity[]) => void) | null = null;
+  /** an arrow player `p` shot hurt something (vanilla "Take Aim") */
+  onPlayerArrowHit: ((target: Entity, p: Player) => void) | null = null;
+  /** a trident player `p` threw hurt something (vanilla "A Throwaway Joke") */
+  onPlayerTridentHit: ((target: Entity, p: Player) => void) | null = null;
+  /** lightning player `p`'s channeling trident called down struck these (vanilla channeled_lightning) */
+  onChanneledLightning: ((victims: Entity[], p: Player) => void) | null = null;
   /** vanilla LivingEntity.take: something alive picked up an item, arrow or orb (the pop, and it flying to them) */
   onTake: ((e: Entity, taker: LivingEntity, amount: number) => void) | null = null;
   /** a mob picked up an item a player had thrown (vanilla thrown_item_picked_up_by_entity) */
   onThrownItemPickedUp: ((stack: ItemStack, by: Entity) => void) | null = null;
   /** a villager or a wandering trader opened its trading screen for a player (vanilla Merchant.openTradingScreen) */
   onOpenMerchant: ((v: Merchant, p: Player) => void) | null = null;
-  /** a crossbow arrow the player shot killed something: all it has killed so far (vanilla killed_by_crossbow) */
-  onPlayerCrossbowKill: ((killed: Entity[]) => void) | null = null;
+  /** a crossbow arrow player `p` shot killed something: all it has killed so far (vanilla killed_by_crossbow) */
+  onPlayerCrossbowKill: ((killed: Entity[], p: Player) => void) | null = null;
   /** an entity's time in a portal came up (the portal block it was in, and which kind) */
   onPortal: ((e: Entity, x: number, y: number, z: number, kind: 'nether' | 'end' | 'end_gateway') => void) | null = null;
   /** a player cured a zombie villager (vanilla cured_zombie_villager) */
@@ -503,7 +605,11 @@ export class Level {
   destroyBlockProgress(id: number, x: number, y: number, z: number, stage: number): void {
     if (stage >= 0 && stage < 10) this.destroyProgress.set(id, { x, y, z, stage, time: this.gameTime });
     else this.destroyProgress.delete(id);
+    this.onDestroyBlockProgress?.(id, x, y, z, stage);
   }
+
+  /** a crack changed (vanilla ServerLevel.destroyBlockProgress sends it to the players near: net/) */
+  onDestroyBlockProgress: ((id: number, x: number, y: number, z: number, stage: number) => void) | null = null;
 
   /** vanilla: entities tick only inside the simulation distance (and in loaded chunks) */
   isEntityTicking(x: number, z: number): boolean {
@@ -512,11 +618,15 @@ export class Level {
     // (vanilla TicketType.DRAGON: the dragon fight keeps the island's middle ticking while a player is near)
     if (this.dragonFight?.ticksChunk(bx >> 4, bz >> 4)) return true;
     for (const t of this.tickets.values()) if (Math.abs((bx >> 4) - t.cx) <= t.ticking && Math.abs((bz >> 4) - t.cz) <= t.ticking) return true;
-    const p = this.player;
-    if (!p) return true;
-    const dx = (bx >> 4) - (Math.floor(p.x) >> 4), dz = (bz >> 4) - (Math.floor(p.z) >> 4);
+    // (vanilla ChunkMap.anyPlayerCloseEnoughForSpawning: within the simulation distance of any player)
+    const players = this.players();
+    if (!players.length) return true;
     const r = this.simulationDistance;
-    return Math.max(Math.abs(dx), Math.abs(dz)) <= r;
+    for (const p of players) {
+      const dx = (bx >> 4) - (Math.floor(p.x) >> 4), dz = (bz >> 4) - (Math.floor(p.z) >> 4);
+      if (Math.max(Math.abs(dx), Math.abs(dz)) <= r) return true;
+    }
+    return false;
   }
 
   tick(): void {
@@ -536,19 +646,16 @@ export class Level {
       const e = this.entities[i];
       if (e.removed || e.vehicle || this.inTransit.has(e)) continue;
       // (vanilla LocalPlayer.tick: the player stays put while the chunk they're in hasn't come, after a /tp far off)
-      if (e === this.player ? !this.world.isLoaded(Math.floor(e.x), Math.floor(e.z)) : !this.isEntityTicking(e.x, e.z)) continue;
+      if (e.type === 'player' ? !this.world.isLoaded(Math.floor(e.x), Math.floor(e.z)) : !this.isEntityTicking(e.x, e.z)) continue;
       e.tick();
       if (!e.removed) this.onEntityTick?.(e);
       if (e.passengers.length) this.tickPassengers(e);
     }
-    // prune removed
-    let w = 0;
-    for (let i = 0; i < this.entities.length; i++) if (!this.entities[i].removed) this.entities[w++] = this.entities[i];
-    this.entities.length = w;
+    this.pruneRemoved();
     if (this.skyFlash > 0) this.skyFlash--;
     this.handlingTick = true;
     this.runScheduledTicks();
-    if (this.player) this.randomTicks.tick(this.player.x, this.player.z, this.simulationDistance);
+    this.randomTicks.tickAround(this.players(), this.simulationDistance);
     this.runBlockEvents();
     this.handlingTick = false;
     // block entities (furnaces, spawners, the enchanting table's book)
@@ -571,6 +678,16 @@ export class Level {
     }
   }
 
+  /** the entities (and players) that were removed are let go (each tick, after they've all ticked; a guest's too) */
+  pruneRemoved(): void {
+    let w = 0;
+    for (let i = 0; i < this.entities.length; i++) if (!this.entities[i].removed) this.entities[w++] = this.entities[i];
+    this.entities.length = w;
+    w = 0;
+    for (let i = 0; i < this.playerList.length; i++) if (!this.playerList[i].removed) this.playerList[w++] = this.playerList[i];
+    this.playerList.length = w;
+  }
+
   /** vanilla ServerLevel.tickPassenger: riders tick after their vehicle, then sit back in their seat */
   private tickPassengers(v: Entity): void {
     for (const p of [...v.passengers]) {
@@ -586,11 +703,13 @@ export class Level {
 
   /** a tick for whatever is at (x, y, z) in `delay` ticks: fluids flowing, blocks falling, fire spreading */
   scheduleTick(x: number, y: number, z: number, delay: number): void {
+    if (this.isClientSide) return;
     this.blockTicks.schedule(x, y, z, LEGACY_TICK, this.gameTime + delay);
   }
 
   /** vanilla Level.scheduleTick(pos, block, delay, priority): the block's own tick, if it's still there by then */
   scheduleBlockTick(x: number, y: number, z: number, block: number, delay: number, priority = 0): void {
+    if (this.isClientSide) return;
     this.blockTicks.schedule(x, y, z, block, this.gameTime + delay, priority);
   }
 
@@ -605,6 +724,7 @@ export class Level {
 
   /** vanilla Level.blockEvent: `block` at (x, y, z) gets triggerEvent(a, b) in this tick's block events (or the next's) */
   blockEvent(x: number, y: number, z: number, block: number, a: number, b: number): void {
+    if (this.isClientSide) return;
     const key = `${x},${y},${z},${block},${a},${b}`;
     if (!this.blockEvents.has(key)) this.blockEvents.set(key, [x, y, z, block, a, b]);
   }
@@ -737,6 +857,7 @@ export class Level {
    * bits; true tells the neighbours and updates their shapes (UPDATE_ALL), false does neither.
    */
   setBlock(x: number, y: number, z: number, state: number, flags: boolean | number = true): number {
+    if (this.isClientSide) return this.world.getState(x, y, z);
     const f = flags === true ? UPDATE_ALL : flags === false ? UPDATE_CLIENTS | UPDATE_KNOWN_SHAPE : flags;
     const old = this.world.setState(x, y, z, state);
     if (old === state) return old;
@@ -762,6 +883,7 @@ export class Level {
    * `skip` leaves out the one toward that direction (updateNeighborsAtExceptFromFacing)
    */
   updateNeighborsAt(x: number, y: number, z: number, source: number, skip = -1): void {
+    if (this.isClientSide) return;
     this.neighborUpdater.updateNeighborsAt(x, y, z, source, skip);
   }
 
@@ -787,6 +909,7 @@ export class Level {
 
   /** vanilla Level.neighborChanged: just the block at (x, y, z) hears it */
   neighborChanged(x: number, y: number, z: number, source: number, fx: number, fy: number, fz: number): void {
+    if (this.isClientSide) return;
     this.neighborUpdater.neighborChanged(x, y, z, source, fx, fy, fz);
   }
 
@@ -795,6 +918,7 @@ export class Level {
    * who broke it, for the game event (vanilla Level.destroyBlock's entity; false where vanilla removes it without one)
    */
   destroyBlock(x: number, y: number, z: number, drop: boolean, tool: Item | null = null, effects = true, stack: ItemStack | null = null, breaker: Entity | null | false = null): boolean {
+    if (this.isClientSide) return false;
     const st = this.world.getState(x, y, z);
     if (FLAGS[st] & F_AIR) return false;
     const b = BLOCKS[STATE_BLOCK[st]];
@@ -874,6 +998,7 @@ export class Level {
    * support pop off. `changed` is the previous state at (x, y, z) (vanilla's neighborBlock).
    */
   updateNeighbors(x: number, y: number, z: number, changed?: number): void {
+    if (this.isClientSide) return;
     this.updateNeighborsFluid(x, y, z);
     this.shapeUpdateHooks(x, y, z);
     const dirs = [[0, 1, 0], [0, -1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1]];
@@ -921,6 +1046,7 @@ export class Level {
 
   /** vanilla PointedDripstoneBlock.spawnFallingStalactite: the stalactite falls from here to its tip, and the tip hurts what it lands on */
   fallStalactite(x: number, y: number, z: number): void {
+    if (this.isClientSide) return;
     for (let yy = y; ; yy--) {
       const st = this.world.getState(x, yy, z);
       if (!isDripstoneFacing(st, 'down')) break;

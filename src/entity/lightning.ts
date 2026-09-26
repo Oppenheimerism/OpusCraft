@@ -6,6 +6,7 @@
 import { Entity } from './entity';
 import { LivingEntity } from './living';
 import type { Level } from '../game/level';
+import type { Player } from './player';
 import { AABB } from '../core/aabb';
 import { Rand } from '../core/rng';
 import { canPlaceFire, fireStateAt, placeFire } from '../game/fire';
@@ -76,7 +77,7 @@ export class LightningBolt extends Entity {
           this.hitEntities.add(e);
         }
         // vanilla CriteriaTriggers.CHANNELED_LIGHTNING: everything it has struck so far
-        if (this.cause && this.cause === lvl.player) lvl.onChanneledLightning?.([...this.hitEntities]);
+        if (this.cause?.type === 'player') lvl.onChanneledLightning?.([...this.hitEntities], this.cause as Player);
       }
     }
   }

@@ -298,8 +298,8 @@ export class ElderGuardian extends Guardian {
   protected override customServerAiStep(): void {
     super.customServerAiStep();
     if ((this.tickCount + this.id) % 1200 === 0) {
-      const p = this.level.player;
-      if (p && p.isAlive && (p.gameMode === 'survival' || p.gameMode === 'adventure') && p.distanceToSqr(this.x, this.y, this.z) < 50 * 50) {
+      for (const p of this.level.players()) {
+        if (!p.isAlive || (p.gameMode !== 'survival' && p.gameMode !== 'adventure') || p.distanceToSqr(this.x, this.y, this.z) >= 50 * 50) continue;
         // (vanilla MobEffectUtil.addEffectToPlayersAround: unless it has as strong for more than a minute)
         const had = p.getEffect('mining_fatigue');
         if (!had || had.amplifier < 2 || had.endsWithin(1200 - 1)) {

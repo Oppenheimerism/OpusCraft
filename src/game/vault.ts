@@ -16,7 +16,7 @@ import { rollLoot } from './loot';
 import { spawnItem } from './redstone/dispenseItems';
 import { registerBehavior } from './blockBehavior';
 import { UP } from '../world/dir';
-import { blockCloserThan, ejectItemParticles, levelPlayers } from './trialSpawner';
+import { blockCloserThan, ejectItemParticles } from './trialSpawner';
 import { parseSnbt, snbtObject } from './snbt';
 
 /** vanilla VaultConfig */
@@ -169,7 +169,7 @@ export class VaultBlockEntity extends BlockEntity {
    */
   updateConnectedPlayersWithinRange(level: Level, range: number): void {
     const now = new Set<string>();
-    for (const p of levelPlayers(level))
+    for (const p of level.players())
       if (blockCloserThan(p, this.x, this.y, this.z, range) && p.gameMode !== 'spectator' && !this.rewardedPlayers.includes(p.uuid)) now.add(p.uuid);
     if (now.size !== this.connectedPlayers.size || [...now].some((u) => !this.connectedPlayers.has(u))) {
       this.connectedPlayers = now;
@@ -309,7 +309,7 @@ export class VaultBlockEntity extends BlockEntity {
     if (!this.connectedPlayers.size) return;
     const [kx, ky, kz] = this.keyholePos(level);
     const range = this.connectedParticlesRange;
-    for (const p of levelPlayers(level)) {
+    for (const p of level.players()) {
       if (!this.connectedPlayers.has(p.uuid)) continue;
       if ((Math.floor(p.x) - this.x) ** 2 + (Math.floor(p.y) - this.y) ** 2 + (Math.floor(p.z) - this.z) ** 2 > range * range) continue;
       // vanilla emitConnectionParticlesForPlayer: from the player's middle toward the keyhole, each a little astray

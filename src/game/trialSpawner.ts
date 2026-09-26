@@ -153,14 +153,6 @@ const TIME_BETWEEN_EACH_EJECTION = 30;
 // ---------------------------------------------------------------------------
 // seeing the players (vanilla PlayerDetector)
 
-/** vanilla Level.getPlayers: every player in the level (only one in the game, but tests add more) */
-export function levelPlayers(level: Level): Player[] {
-  const out: Player[] = [];
-  for (const e of level.entities) if (e instanceof Player && !e.removed) out.push(e);
-  if (level.player && !out.includes(level.player)) out.unshift(level.player);
-  return out;
-}
-
 /** vanilla BlockPos.closerThan: block positions closer than `d` */
 export function blockCloserThan(e: Entity, x: number, y: number, z: number, d: number): boolean {
   return (Math.floor(e.x) - x) ** 2 + (Math.floor(e.y) - y) ** 2 + (Math.floor(e.z) - z) ** 2 < d * d;
@@ -180,7 +172,7 @@ export function inLineOfSight(level: Level, x: number, y: number, z: number, fx:
  * creative or spectator, and (`sight`) whose eyes see its middle
  */
 function detectPlayers(level: Level, x: number, y: number, z: number, range: number, sight: boolean): Player[] {
-  return levelPlayers(level).filter(
+  return level.players().filter(
     (p) => blockCloserThan(p, x, y, z, range) && p.gameMode !== 'creative' && p.gameMode !== 'spectator' && (!sight || inLineOfSight(level, x, y, z, p.x, p.y + p.eyeHeight, p.z)),
   );
 }
@@ -717,7 +709,7 @@ export class TrialSpawnerBlockEntity extends BlockEntity {
     const near = (e: Entity) => (e.x - cx) ** 2 + (e.y - cy) ** 2 + (e.z - cz) ** 2 <= r2;
     const players: Entity[] = [];
     for (const u of this.detectedPlayers) {
-      const p = levelPlayers(level).find((q) => q.uuid === u);
+      const p = level.players().find((q) => q.uuid === u);
       if (p && p.gameMode !== 'creative' && p.gameMode !== 'spectator' && p.isAlive && near(p)) players.push(p);
     }
     if (!players.length) return null;

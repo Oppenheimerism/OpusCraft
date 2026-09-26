@@ -18,6 +18,7 @@ import { installDispenserScreen } from './dispenser';
 // (trial chambers)
 import { installCrafterScreen } from './crafter';
 import { installHorseScreen } from './horse';
+import { ConnectScreen, DisconnectedScreen } from './multiplayer';
 
 export function installScreens(game: Game): void {
   game.titleScreenFactory = () => new TitleScreen(game, false);
@@ -31,6 +32,8 @@ export function installScreens(game: Game): void {
   game.chatScreenFactory = (initial) => new ChatScreen(game, initial);
   game.inBedScreenFactory = () => new InBedChatScreen(game);
   game.advancementsScreenFactory = () => new AdvancementsScreen(game);
+  game.connectingScreenFactory = (cancel) => new ConnectScreen(game, cancel);
+  game.disconnectedScreenFactory = (title, reason) => new DisconnectedScreen(game, title, reason);
   game.onCommand = (cmd) => executeCommand(game, cmd);
   game.inventoryScreenFactory = () => {
     const p = game.player;

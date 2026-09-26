@@ -22,6 +22,7 @@ import { fluidType, FLUID_WATER } from '../world/fluids';
 import { SEA_LEVEL } from '../world/constants';
 import type { DifficultyInstance } from '../game/difficulty';
 import type { SpawnReason } from './mob';
+import type { Player } from './player';
 
 export class Drowned extends Zombie implements RangedAttacker {
   override readonly type: string = 'drowned';
@@ -234,8 +235,8 @@ class DrownedTargetPlayerGoal extends NearestAttackablePlayerGoal {
   constructor(readonly drowned: Drowned) {
     super(drowned, true, 10);
   }
-  protected override extraCondition(): boolean {
-    return this.drowned.okTarget(this.drowned.level.player);
+  protected override acceptsPlayer(p: Player): boolean {
+    return this.drowned.okTarget(p);
   }
 }
 
