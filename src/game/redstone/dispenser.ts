@@ -85,10 +85,19 @@ export interface InsertTarget {
   container: Container;
   /** vanilla WorldlyContainer.getSlotsForFace (null: all of them) */
   slotsFor?(face: Dir): number[];
-  /** vanilla canPlaceItem / canPlaceItemThroughFace */
-  canPlace?(slot: number, s: ItemStack, face: Dir): boolean;
+  /** vanilla canPlaceItem / canPlaceItemThroughFace (`face` null: an item entity's stack, which comes in by no face) */
+  canPlace?(slot: number, s: ItemStack, face: Dir | null): boolean;
+  /** vanilla canTakeItem / canTakeItemThroughFace: a hopper under it may take this out */
+  canTake?(slot: number, s: ItemStack, face: Dir): boolean;
   /** after something went in (vanilla setChanged) */
   changed?(): void;
+  /**
+   * (hoppers) vanilla tryMoveInItem's `to instanceof HopperBlockEntity`: something went into it while it was empty,
+   * from `from` (null: not from a container)
+   */
+  filledFromEmpty?(from: InsertTarget | null): void;
+  /** (hoppers) vanilla HopperBlockEntity.tickedGameTime, when it is a hopper */
+  tickedGameTime?(): number;
 }
 
 /** vanilla AbstractFurnaceBlockEntity: in from the top, fuel from the sides, the result out of the bottom */
@@ -98,6 +107,8 @@ function furnaceTarget(be: FurnaceBlockEntity): InsertTarget {
     container: c,
     slotsFor: (face) => (face === DOWN ? [2, 1] : face === UP ? [0] : [1]),
     canPlace: (slot, s) => slot === 0 || (slot === 1 && (fuelTime(s) > 0 || (s.item.id === 'bucket' && c.get(1)?.item.id !== 'bucket'))),
+    // (vanilla canTakeItemThroughFace: out of the bottom, only an emptied bucket from the fuel slot)
+    canTake: (slot, s, face) => !(face === DOWN && slot === 1) || s.item.id === 'water_bucket' || s.item.id === 'bucket',
   };
 }
 
@@ -109,16 +120,37 @@ function brewingTarget(be: BrewingStandBlockEntity): InsertTarget {
     container: c,
     slotsFor: (face) => (face === UP ? [3] : face === DOWN ? [0, 1, 2, 3] : [0, 1, 2, 4]),
     canPlace: (slot, s) => (slot === 3 ? isBrewingIngredient(s) : slot === 4 ? s.item.id === 'blaze_powder' : bottle.test(s.item.id) && !c.get(slot)),
+    // (vanilla canTakeItemThroughFace: the ingredient slot gives up only a bottle left in it)
+    canTake: (slot, s) => slot !== 3 || s.item.id === 'glass_bottle',
   };
 }
 
 /**
  * vanilla ComposterBlock.getContainer: below 7, one compostable thing from above goes straight into the compost
  * (InputContainer, level event 1500); at 7 there's no room and when ready nothing goes in, but it's still the
- * composter's (the dropper keeps its item)
+ * composter's (the dropper keeps its item). Ready, its bone meal can be taken out of the bottom (OutputContainer),
+ * which empties it
  */
 function composterTarget(level: Level, x: number, y: number, z: number, st: number): InsertTarget {
   const lvl = blk(st).get<number>(st, 'level');
+  if (lvl === 8) {
+    let taken = false;
+    const out: (ItemStack | null)[] = [ItemStack.of('bone_meal')];
+    return {
+      container: { size: 1, get: (i) => out[i] ?? null, set: (i, s) => void (out[i] = s), changed() {} },
+      slotsFor: (face) => (face === DOWN ? [0] : []),
+      canPlace: () => false,
+      canTake: (_i, s, face) => !taken && face === DOWN && s.item.id === 'bone_meal',
+      // vanilla OutputContainer.setChanged: ComposterBlock.empty
+      changed() {
+        if (taken) return;
+        taken = true;
+        const now = blk(st).with(st, 'level', 0);
+        level.setBlock(x, y, z, now);
+        level.gameEvent('block_change', x + 0.5, y + 0.5, z + 0.5, { state: now });
+      },
+    };
+  }
   const slot: (ItemStack | null)[] = [null];
   let changed = false;
   const container: Container = {
@@ -131,6 +163,7 @@ function composterTarget(level: Level, x: number, y: number, z: number, st: numb
   return {
     container,
     canPlace: (_i, s, face) => lvl < 7 && !changed && face === UP && isCompostable(s.item.id),
+    canTake: () => false,
     changed() {
       const s = slot[0];
       if (!s || changed) return;
@@ -152,7 +185,10 @@ function entityTarget(level: Level, x: number, y: number, z: number): InsertTarg
   return { container: e.container };
 }
 
-/** (trial chambers) the block entities kept elsewhere that hoppers and droppers put things into (the crafter) */
+/**
+ * (trial chambers) the block entities kept elsewhere that hoppers and droppers put things into (the crafter; the
+ * hopper, shulker boxes and decorated pots: game/redstone/hopper.ts)
+ */
 export const CONTAINER_TARGETS: ((be: BlockEntity) => InsertTarget | null)[] = [];
 
 /** vanilla HopperBlockEntity.getContainerAt: the block's container (or composter), else a container entity there */
@@ -160,26 +196,71 @@ export function containerAt(level: Level, x: number, y: number, z: number): Inse
   const st = level.getState(x, y, z);
   if (blk(st).name === 'composter') return composterTarget(level, x, y, z, st);
   const be = level.world.getBlockEntity(x, y, z);
-  if (be instanceof ChestBlockEntity || be instanceof DispenserBlockEntity) return { container: be.container };
-  if (be instanceof FurnaceBlockEntity) return furnaceTarget(be);
-  if (be instanceof BrewingStandBlockEntity) return brewingTarget(be);
-  // (trial chambers)
+  // (vanilla RandomizableContainer.getItem: a structure's chest has its loot rolled when a hopper or dropper gets at it)
+  be?.unpackLoot();
+  // (trial chambers; hoppers) the ones kept elsewhere first: a shulker box is a barrel of sorts here
   if (be) for (const f of CONTAINER_TARGETS) {
     const t = f(be);
     if (t) return t;
   }
+  if (be instanceof ChestBlockEntity || be instanceof DispenserBlockEntity) return { container: be.container };
+  if (be instanceof FurnaceBlockEntity) return furnaceTarget(be);
+  if (be instanceof BrewingStandBlockEntity) return brewingTarget(be);
   return entityTarget(level, x, y, z);
 }
 
-/** vanilla HopperBlockEntity.addItem / tryMoveInItem: into the slots that face takes, merging, then an empty one; what's left */
-export function insertItem(target: InsertTarget, stack: ItemStack, face: Dir): ItemStack | null {
+/** vanilla Container.isEmpty */
+function isEmptyContainer(c: Container): boolean {
+  for (let i = 0; i < c.size; i++) if (c.get(i)) return false;
+  return true;
+}
+
+/** vanilla getSlots: the slots of `target` open toward `face` */
+export function slotsOf(target: InsertTarget, face: Dir): number[] {
+  return target.slotsFor?.(face) ?? [...Array(target.container.size).keys()];
+}
+
+/** vanilla isFullContainer: every slot open toward `face` holds all it can */
+export function isFullContainer(target: InsertTarget, face: Dir): boolean {
   const c = target.container;
-  const slots = target.slotsFor?.(face) ?? [...Array(c.size).keys()];
+  for (const i of slotsOf(target, face)) {
+    const s = c.get(i);
+    if (!s || s.count < Math.min(s.maxStack, c.maxStackSize ?? 64)) return false;
+  }
+  return true;
+}
+
+/**
+ * vanilla HopperBlockEntity.tryTakeInItemFromSlot: one of what's in `source`'s slot moved into `into` (out through
+ * the source's bottom), if it may come out and there's room for it; true if it moved
+ */
+export function takeOneFrom(source: InsertTarget, slot: number, into: InsertTarget): boolean {
+  const s = source.container.get(slot);
+  if (!s || s.count <= 0) return false;
+  if (source.canTake && !source.canTake(slot, s, DOWN)) return false;
+  if (insertItem(into, s.copyWithCount(1), null, source)) return false;
+  if (s.count <= 1) source.container.set(slot, null);
+  else {
+    s.count--;
+    source.container.changed();
+  }
+  source.changed?.();
+  return true;
+}
+
+/**
+ * vanilla HopperBlockEntity.addItem / tryMoveInItem: into the slots that face takes (all of them with no face),
+ * merging, then an empty one; what's left. `from`: the container it comes out of (a hopper's timing goes by it)
+ */
+export function insertItem(target: InsertTarget, stack: ItemStack, face: Dir | null, from: InsertTarget | null = null): ItemStack | null {
+  const c = target.container;
+  const slots = (face !== null && target.slotsFor?.(face)) || [...Array(c.size).keys()];
   let s: ItemStack | null = stack;
   for (const i of slots) {
     if (!s || s.count <= 0) break;
     if (target.canPlace && !target.canPlace(i, s, face)) continue;
     const there = c.get(i);
+    const wasEmpty = target.filledFromEmpty ? isEmptyContainer(c) : false;
     let moved = false;
     if (!there) {
       c.set(i, s);
@@ -194,6 +275,7 @@ export function insertItem(target: InsertTarget, stack: ItemStack, face: Dir): I
       }
     }
     if (moved) {
+      if (wasEmpty) target.filledFromEmpty!(from);
       c.changed();
       target.changed?.();
     }
