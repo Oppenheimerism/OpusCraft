@@ -533,8 +533,8 @@ export class Fox extends Animal {
   override ambientSound(): string {
     if (this.isSleeping()) return 'entity.fox.sleep';
     if (!this.level.isDay() && this.random.nextFloat() < 0.1) {
-      const p = this.level.player;
-      if (!p || p.gameMode === 'spectator' || !p.bb.intersects(this.bb.inflate(16))) return 'entity.fox.screech';
+      const box = this.bb.inflate(16);
+      if (!this.level.players().some((p) => p.gameMode !== 'spectator' && p.bb.intersects(box))) return 'entity.fox.screech';
     }
     return 'entity.fox.ambient';
   }
@@ -668,8 +668,8 @@ function motionBlockingNoLeaves(level: Level, x: number, z: number): number {
 
 /** vanilla ServerLevel.getEntity(uuid): whoever that is, if they're here */
 function entityByUuid(level: Level, u: string): Entity | null {
-  const p = level.player;
-  if (p && p.uuid === u) return p;
+  const p = level.playerByUuid(u);
+  if (p) return p;
   for (const e of level.entities) if (e.hasUuid && e.uuid === u && !e.removed) return e;
   return null;
 }

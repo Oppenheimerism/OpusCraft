@@ -31,7 +31,7 @@ export class PatrolSpawner {
     this.nextTick += 12000 + r.nextInt(1200);
     if (Math.floor(level.dayTime / 24000) < 5 || !level.isDay()) return 0;
     if (r.nextInt(5) !== 0) return 0;
-    const p = level.player;
+    const p = level.randomPlayer();
     if (!p || p.gameMode === 'spectator') return 0;
     const px = Math.floor(p.x), py = Math.floor(p.y), pz = Math.floor(p.z);
     // vanilla ServerLevel.isCloseToVillage(pos, 2)

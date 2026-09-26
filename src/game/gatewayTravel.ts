@@ -234,7 +234,7 @@ export function gatewayTravel(level: Level, e: Entity, x: number, y: number, z: 
 /** there: facing as it was; a player stops (vanilla's is a teleport), anything else keeps its exit movement */
 function arrive(level: Level, e: Entity, [x, y, z]: [number, number, number], vx: number, vy: number, vz: number): void {
   e.moveTo(x, y, z, e.yaw, e.pitch);
-  if (e === level.player) e.dx = e.dy = e.dz = 0;
+  if (e.type === 'player') e.dx = e.dy = e.dz = 0;
   else [e.dx, e.dy, e.dz] = [vx, vy, vz];
   e.fallDistance = 0;
   // vanilla DimensionTransition.PLACE_PORTAL_TICKET: the far side stays loaded 15 seconds, its middle ticking

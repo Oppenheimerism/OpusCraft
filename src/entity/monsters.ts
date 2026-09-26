@@ -1,7 +1,7 @@
 // Hostile mobs (vanilla Monster / Zombie / Skeleton / Creeper / Spider) and
 // their combat goals.
 
-import { Mob, LootEntry, MobCategory, isValidEmptySpawnBlock, EQUIPMENT_SLOTS } from './mob';
+import { Mob, LootEntry, MobCategory, isValidEmptySpawnBlock, EQUIPMENT_SLOTS, angryAtData, angryAtFrom } from './mob';
 import type { SpawnReason } from './mob';
 import type { Level } from '../game/level';
 import type { DifficultyInstance } from '../game/difficulty';
@@ -276,8 +276,7 @@ export class Zombie extends Monster {
       const x1 = i + off(), y1 = j + off(), z1 = k + off();
       if (!z.reinforcementPlacementOk(x1, y1, z1) || !z.reinforcementSpawnRules(x1, y1, z1)) continue;
       z.moveTo(x1, y1, z1, 0, 0);
-      const p = lvl.player;
-      if (p && p.isAlive && p.gameMode !== 'spectator' && p.distanceToSqr(x1, y1, z1) < 49) continue;
+      if (lvl.hasNearbyAlivePlayer(x1, y1, z1, 7)) continue;
       if (!z.checkSpawnObstruction() || lvl.getEntities(z.bb, (e) => e instanceof LivingEntity && e.isAlive).length) continue;
       z.setTarget(t);
       z.finalizeSpawn('reinforcement');
@@ -509,9 +508,8 @@ class AngryAtPlayerGoal extends NearestAttackablePlayerGoal {
   constructor(readonly zp: ZombifiedPiglin) {
     super(zp, true);
   }
-  protected override extraCondition(): boolean {
-    const p = this.zp.level.player;
-    return !!p && this.zp.isAngryAt(p);
+  protected override acceptsPlayer(p: Player): boolean {
+    return this.zp.isAngryAt(p);
   }
 }
 
@@ -653,13 +651,13 @@ export class ZombifiedPiglin extends Zombie {
     ];
   }
   protected override saveData(): Record<string, number | string | boolean> {
-    return { ...super.saveData(), anger: this.angerTime };
+    return { ...super.saveData(), anger: this.angerTime, ...angryAtData(this.angerTarget) };
   }
   protected override loadData(d: Record<string, number | string | boolean>): void {
     super.loadData(d);
-    // vanilla readPersistentAngerSaveData (the one it's angry at can only be the player)
+    // vanilla readPersistentAngerSaveData (the one it's angry at can only be a player)
     this.angerTime = Number(d.anger ?? 0);
-    if (this.angerTime > 0) this.angerTarget = this.level.player ?? null;
+    if (this.angerTime > 0) this.angerTarget = angryAtFrom(this.level, d);
   }
   /**
    * vanilla NetherPortalBlock.randomTick: in a natural dimension a portal now and then (difficulty in 2000 random
@@ -1237,11 +1235,9 @@ class EndermanLookForPlayerGoal extends NearestAttackablePlayerGoal {
     super(e, false);
   }
   override canUse(): boolean {
-    const p = this.e.level.player;
-    this.pending = null;
-    if (!p || !this.e.canAttack(p)) return false;
-    if (this.e.distanceToSqr(p.x, p.y, p.z) > this.e.followRange * this.e.followRange) return false;
-    if (isLookingAt(p, this.e, this.e.y + this.e.eyeHeight) && p.hasLineOfSight(this.e)) this.pending = p;
+    const e = this.e;
+    // (vanilla getNearestPlayer(startAggroTargetConditions, enderman): the nearest staring at it)
+    this.pending = e.level.nearestPlayer(e.x, e.y, e.z, -1, (p) => e.canAttack(p) && e.distanceToSqr(p.x, p.y, p.z) <= e.followRange * e.followRange && isLookingAt(p, e, e.y + e.eyeHeight) && p.hasLineOfSight(e));
     return this.pending !== null;
   }
   override start(): void {

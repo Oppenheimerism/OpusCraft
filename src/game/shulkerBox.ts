@@ -97,7 +97,7 @@ for (const [name] of SHULKER_BOXES) {
       if (canOpen(level, x, y, z, st, be)) {
         be.unpackLoot();
         openMenu?.(new ShulkerBoxMenu(p, be, be.displayName()));
-        be.startOpen(level);
+        be.startOpen(level, p);
         Piglin.angerNearbyPiglins(p, true);
       }
       return true;

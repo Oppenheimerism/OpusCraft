@@ -6,7 +6,7 @@ import { Animal, BreedGoal, DYE_COLORS } from './animals';
 import { TamableAnimal, SitWhenOrderedToGoal, FollowOwnerGoal, OwnerHurtByTargetGoal, OwnerHurtTargetGoal, NonTameRandomTargetGoal, TamableAnimalPanicGoal } from './tamable';
 import type { Level } from '../game/level';
 import type { LootEntry, SpawnGroup, SpawnReason } from './mob';
-import { Mob } from './mob';
+import { Mob, angryAtData, angryAtFrom } from './mob';
 import { Goal, Flag } from './ai/goal';
 import { AvoidEntityGoal, FloatGoal, LeapAtTargetGoal, MeleeAttackGoal, WaterAvoidingRandomStrollGoal, LookAtPlayerGoal, RandomLookAroundGoal, HurtByTargetGoal, NearestAttackableMobGoal } from './ai/goals';
 import { Llama } from './llama';
@@ -399,7 +399,7 @@ export class Wolf extends TamableAnimal {
   protected override saveData(): Record<string, number | string | boolean> {
     const d: Record<string, number | string | boolean> = { ...super.saveData(), CollarColor: this.collarColor, variant: this.variant.id };
     // (vanilla NeutralMob.addPersistentAngerSaveData)
-    if (this.angerTime > 0) d.AngerTime = this.angerTime;
+    if (this.angerTime > 0) Object.assign(d, { AngerTime: this.angerTime, ...angryAtData(this.angerTarget) });
     return d;
   }
   protected override loadData(d: Record<string, number | string | boolean>): void {
@@ -407,7 +407,7 @@ export class Wolf extends TamableAnimal {
     this.variant = VARIANT_BY_ID.get(String(d.variant ?? 'pale')) ?? WOLF_VARIANTS[0];
     if (d.CollarColor !== undefined) this.collarColor = Number(d.CollarColor);
     this.angerTime = Number(d.AngerTime ?? 0);
-    if (this.angerTime > 0) this.angerTarget = this.level.player ?? null;
+    if (this.angerTime > 0) this.angerTarget = angryAtFrom(this.level, d);
     if (this.isTame()) this.maxHealth = 40;
   }
 }
@@ -435,8 +435,9 @@ export class BegGoal extends Goal {
     return false;
   }
   canUse(): boolean {
-    const p = this.wolf.level.player;
-    this.player = p && p.isAlive && p.gameMode !== 'spectator' && this.wolf.distanceToSqr(p.x, p.y, p.z) <= this.lookDistance * this.lookDistance ? p : null;
+    // (vanilla getNearestPlayer(begTargeting, wolf): the nearest in range, holding something or not)
+    const w = this.wolf;
+    this.player = w.level.nearestPlayer(w.x, w.y, w.z, -1, (p) => p.isAlive && p.gameMode !== 'spectator' && w.distanceToSqr(p.x, p.y, p.z) <= this.lookDistance * this.lookDistance);
     return this.player !== null && this.holdingInteresting(this.player);
   }
   override canContinueToUse(): boolean {

@@ -72,7 +72,8 @@ export class WanderingTraderSpawner {
 
   /** vanilla spawn: true when he came (or there was nobody to come to) */
   private spawn(level: Level): boolean {
-    const p = level.player;
+    // (vanilla ServerLevel.getRandomPlayer: a living one)
+    const p = level.randomPlayer((q) => q.isAlive);
     if (!p) return true;
     if (this.random.nextInt(10) !== 0) return false;
     const at: Pos = [Math.floor(p.x), Math.floor(p.y), Math.floor(p.z)];

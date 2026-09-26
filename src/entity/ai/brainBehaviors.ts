@@ -157,10 +157,8 @@ export function senseHurtBy(m: BrainMob & { hurtBy: string | null; hurtByEntity:
 
 /** vanilla TemptingSensor: the nearest player within 10 (less if hard to see) holding its food, not riding it */
 export function senseTempting(m: BrainMob & TemptedMemories, isFood: (s: ItemStack) => boolean): void {
-  const p = m.level.player;
   const holds = (s: ItemStack | null) => !!s && isFood(s);
-  const ok = p && p.isAlive && p.gameMode !== 'spectator' && p.vehicle !== m && p.distanceToSqr(m.x, m.y, m.z) <= (10 * p.visibilityPercent(m)) ** 2;
-  m.temptingPlayer = ok && (holds(p.inventory.selectedItem) || holds(p.inventory.offhand)) ? p : null;
+  m.temptingPlayer = m.level.nearestPlayer(m.x, m.y, m.z, -1, (p) => p.isAlive && p.gameMode !== 'spectator' && p.vehicle !== m && p.distanceToSqr(m.x, m.y, m.z) <= (10 * p.visibilityPercent(m)) ** 2 && (holds(p.inventory.selectedItem) || holds(p.inventory.offhand)));
 }
 
 // ---------------------------------------------------------------------------

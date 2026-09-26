@@ -279,7 +279,7 @@ registerBehavior('lightning_rod', {
     const bolt = new LightningBolt(level);
     bolt.moveTo(hit.px, hit.py, hit.pz, 0, 0);
     const owner = (projectile as Entity & { owner?: Entity | null }).owner ?? null;
-    if (owner && owner === level.player) bolt.cause = owner;
+    if (owner?.type === 'player') bolt.cause = owner;
     level.addEntity(bolt);
     level.sound.play('item.trident.thunder', hit.px, hit.py, hit.pz, 5, 1);
   },
@@ -357,15 +357,16 @@ export function lightningStruck(level: Level, bolt: Entity): void {
 }
 
 /**
- * vanilla CriteriaTriggers.LIGHTNING_STRIKE, as the bolt goes: to the player within 256 blocks, with whatever stood
+ * vanilla CriteriaTriggers.LIGHTNING_STRIKE, as the bolt goes: to each player within 256 blocks, with whatever stood
  * within 15 blocks of it (up to 21 above) and wasn't struck
  */
 export function lightningStrikeTrigger(level: Level, bolt: LightningBolt, hit: ReadonlySet<Entity>): void {
-  const p = level.player;
-  if (!p) return;
-  const distance = Math.hypot(p.x - bolt.x, p.y - bolt.y, p.z - bolt.z);
-  if (distance >= 256) return;
-  const { x, y, z } = bolt;
-  const bystanders = level.getEntities(new AABB(x - 15, y - 15, z - 15, x + 15, y + 6 + 15, z + 15), (e) => !e.removed && (!(e instanceof LivingEntity) || e.isAlive) && !hit.has(e), bolt);
-  level.onPlayerTrigger?.(p, 'lightning_strike', { lightning: { distance, blocksSetOnFire: bolt.blocksSetOnFire, bystanders: bystanders.map((e) => e.type) } });
+  let bystanders: string[] | null = null;
+  for (const p of level.players()) {
+    const distance = Math.hypot(p.x - bolt.x, p.y - bolt.y, p.z - bolt.z);
+    if (distance >= 256) continue;
+    const { x, y, z } = bolt;
+    bystanders ??= level.getEntities(new AABB(x - 15, y - 15, z - 15, x + 15, y + 6 + 15, z + 15), (e) => !e.removed && (!(e instanceof LivingEntity) || e.isAlive) && !hit.has(e), bolt).map((e) => e.type);
+    level.onPlayerTrigger?.(p, 'lightning_strike', { lightning: { distance, blocksSetOnFire: bolt.blocksSetOnFire, bystanders } });
+  }
 }

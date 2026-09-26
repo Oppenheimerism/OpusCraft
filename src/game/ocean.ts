@@ -19,7 +19,10 @@ import { guardianHooks } from '../entity/guardian';
 export const elderAppearance: { level: Level | null; start: number } = { level: null, start: -1 };
 
 guardianHooks.elderCurse = (p) => {
-  elderAppearance.level = p.level;
-  elderAppearance.start = p.level.gameTime;
-  p.level.sound.play('entity.elder_guardian.curse', p.x, p.y, p.z, 1, 1);
+  // (sent to the cursed player alone: the face on this game's own screen only)
+  if (p === p.level.player) {
+    elderAppearance.level = p.level;
+    elderAppearance.start = p.level.gameTime;
+  }
+  p.level.playSoundTo(p, 'entity.elder_guardian.curse', p.x, p.y, p.z, 1, 1);
 };

@@ -78,14 +78,6 @@ export class WardenSpawnTracker {
   }
 }
 
-/** the players of a level (there's one here, but a shrieker warns everyone near) */
-export function levelPlayers(level: Level): Player[] {
-  const out: Player[] = [];
-  for (const e of level.entities) if (e.type === 'player' && !e.removed) out.push(e as Player);
-  if (level.player && !out.includes(level.player)) out.push(level.player);
-  return out;
-}
-
 /** vanilla WardenSpawnTracker.hasNearbyWarden: a warden within a 48-block cube round the shrieker */
 function hasNearbyWarden(level: Level, x: number, y: number, z: number): boolean {
   const box = new AABB(x + 0.5 - 24, y + 0.5 - 24, z + 0.5 - 24, x + 0.5 + 24, y + 0.5 + 24, z + 0.5 + 24);
@@ -95,7 +87,7 @@ function hasNearbyWarden(level: Level, x: number, y: number, z: number): boolean
 /** vanilla WardenSpawnTracker.getNearbyPlayers: players alive, not spectating, within 16 blocks of the shrieker */
 function nearbyPlayers(level: Level, x: number, y: number, z: number): Player[] {
   const cx = x + 0.5, cy = y + 0.5, cz = z + 0.5;
-  return levelPlayers(level).filter((p) => p.isAlive && p.gameMode !== 'spectator' && (p.x - cx) ** 2 + (p.y - cy) ** 2 + (p.z - cz) ** 2 < 16 * 16);
+  return level.players().filter((p) => p.isAlive && p.gameMode !== 'spectator' && (p.x - cx) ** 2 + (p.y - cy) ** 2 + (p.z - cz) ** 2 < 16 * 16);
 }
 
 /**

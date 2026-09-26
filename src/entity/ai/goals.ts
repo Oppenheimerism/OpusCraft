@@ -661,10 +661,13 @@ export class LookAtPlayerGoal extends Goal {
     this.lookAt = this.findLookAt();
     return this.lookAt !== null;
   }
-  /** the one to look at: the player, in range and in sight (vanilla lookAtType Player) */
+  /**
+   * the one to look at: the nearest player in range and in sight (vanilla lookAtType Player: getNearestPlayer(
+   * lookAtContext, mob, x, eyeY, z))
+   */
   protected findLookAt(): LivingEntity | null {
-    const m = this.mob, p = m.level.player;
-    return p && p.isAlive && p.gameMode !== 'spectator' && m.distanceToSqr(p.x, p.y, p.z) <= this.lookDistance * this.lookDistance && m.sensing.hasLineOfSight(p) ? p : null;
+    const m = this.mob, r2 = this.lookDistance * this.lookDistance;
+    return m.level.nearestPlayer(m.x, m.y + m.eyeHeight, m.z, -1, (p) => p.isAlive && p.gameMode !== 'spectator' && m.distanceToSqr(p.x, p.y, p.z) <= r2 && m.sensing.hasLineOfSight(p));
   }
   override canContinueToUse(): boolean {
     const l = this.lookAt;
@@ -841,7 +844,12 @@ export class NearestAttackablePlayerGoal extends TargetGoal {
     super(mob, mustSee);
     this.randomInterval = reducedTickDelay(randomInterval);
   }
+  /** whether the mob goes looking at all (vanilla canUse's own conditions: a spider's darkness) */
   protected extraCondition(): boolean {
+    return true;
+  }
+  /** whether this player will do (vanilla targetConditions' selector: a neutral mob's isAngryAt) */
+  protected acceptsPlayer(_p: Player): boolean {
     return true;
   }
   canUse(): boolean {
@@ -849,16 +857,23 @@ export class NearestAttackablePlayerGoal extends TargetGoal {
     if (this.randomInterval > 0 && m.random.nextInt(this.randomInterval) !== 0) return false;
     if (!this.extraCondition()) return false;
     this.found = null;
-    const p = m.level.player;
-    if (!p || !m.canAttack(p)) return false;
-    // vanilla TargetingConditions: range scaled by getVisibilityPercent (sneaking, invisibility)
-    const vis = p.visibilityPercent(m);
-    const range = Math.max(this.followDistance() * vis, 2);
-    if (Math.abs(p.y - m.y) > 4 + range) return false;
-    if (m.distanceToSqr(p.x, p.y, p.z) > range * range) return false;
-    if (this.mustSee && !m.sensing.hasLineOfSight(p)) return false;
-    this.found = p;
-    return true;
+    // (vanilla findTarget: getNearestPlayer(targetConditions, mob, x, eyeY, z), the first of equals)
+    let best = -1;
+    for (const p of m.level.players()) {
+      if (!this.acceptsPlayer(p) || !m.canAttack(p)) continue;
+      // vanilla TargetingConditions: range scaled by getVisibilityPercent (sneaking, invisibility)
+      const vis = p.visibilityPercent(m);
+      const range = Math.max(this.followDistance() * vis, 2);
+      if (Math.abs(p.y - m.y) > 4 + range) continue;
+      if (m.distanceToSqr(p.x, p.y, p.z) > range * range) continue;
+      if (this.mustSee && !m.sensing.hasLineOfSight(p)) continue;
+      const d = p.distanceToSqr(m.x, m.y + m.eyeHeight, m.z);
+      if (best === -1 || d < best) {
+        best = d;
+        this.found = p;
+      }
+    }
+    return this.found !== null;
   }
   override start(): void {
     this.mob.setTarget(this.found);

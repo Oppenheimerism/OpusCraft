@@ -23,6 +23,7 @@ import { EnderDragon, heightmapY } from '../entity/enderDragon';
 import { PHASE } from '../entity/dragonPhases';
 import { EndCrystal } from '../entity/endCrystal';
 import type { Entity } from '../entity/entity';
+import type { Player } from '../entity/player';
 import { endSpikes, type EndSpike } from '../world/gen/endFeatures';
 import { LegacyRandom, seedLong } from '../world/gen/legacyRandom';
 import { AABB } from '../core/aabb';
@@ -67,8 +68,8 @@ export const ARENA_TICKET_LEVEL = 9;
 export class EndDragonFight {
   /** vanilla dragonEvent */
   readonly bossEvent: BossEvent = { name: 'Ender Dragon', color: 'pink', overlay: 'progress', progress: 1, visible: true, playBossMusic: true, createWorldFog: true };
-  /** whether the player is on the bar's list (vanilla dragonEvent.getPlayers(): alive, within 192 of 0,128,0) */
-  hasPlayer = false;
+  /** vanilla dragonEvent.getPlayers(): the players on the bar's list (alive, within 192 of 0,128,0), each second */
+  readonly barPlayers: Player[] = [];
   /** vanilla origin */
   readonly origin: [number, number, number] = [0, 0, 0];
   /** vanilla gateways: the ring spots still to open, the last first */
@@ -87,8 +88,13 @@ export class EndDragonFight {
   respawnStage: RespawnStage | null = null;
   private respawnTime = 0;
   private respawnCrystals: EndCrystal[] | null = null;
-  /** the summoned_entity trigger of a respawned dragon (the game's advancements listen) */
-  onDragonSummoned: ((d: EnderDragon) => void) | null = null;
+  /** the summoned_entity trigger of a respawned dragon, for each player on the bar's list (the game's advancements listen) */
+  onDragonSummoned: ((d: EnderDragon, p: Player) => void) | null = null;
+
+  /** whether anyone is on the bar's list */
+  get hasPlayer(): boolean {
+    return this.barPlayers.length > 0;
+  }
 
   constructor(readonly level: Level, data: DragonFightData | null) {
     const d = data ?? { needsStateScanning: true, dragonKilled: false, previouslyKilled: false };
@@ -131,9 +137,9 @@ export class EndDragonFight {
     return this.hasPlayer && Math.max(Math.abs(cx - (this.origin[0] >> 4)), Math.abs(cz - (this.origin[2] >> 4))) <= ARENA_TICKET_LEVEL - 2;
   }
 
-  /** the bar on the player's screen: while it's visible and they're near */
-  shownBar(): BossEvent | null {
-    return this.hasPlayer && this.bossEvent.visible ? this.bossEvent : null;
+  /** the bar on `viewer`'s screen (this game's own player's): while it's visible and they're near */
+  shownBar(viewer: Player | null = this.level.player): BossEvent | null {
+    return viewer && this.barPlayers.includes(viewer) && this.bossEvent.visible ? this.bossEvent : null;
   }
 
   /** vanilla EndDragonFight.tick (before the entities, every tick) */
@@ -170,9 +176,9 @@ export class EndDragonFight {
 
   /** vanilla updatePlayers: on the list while alive within 192 of (0, 128, 0) */
   private updatePlayers(): void {
-    const p = this.level.player;
     const [ox, oy, oz] = this.origin;
-    this.hasPlayer = !!p && !p.removed && p.health > 0 && p.distanceToSqr(ox, DRAGON_SPAWN_Y + oy, oz) <= 192 * 192;
+    this.barPlayers.length = 0;
+    for (const p of this.level.players()) if (!p.removed && p.health > 0 && p.distanceToSqr(ox, DRAGON_SPAWN_Y + oy, oz) <= 192 * 192) this.barPlayers.push(p);
   }
 
   /**
@@ -411,7 +417,7 @@ export class EndDragonFight {
       this.respawnStage = null;
       this.dragonKilled = false;
       const d = this.createNewDragon();
-      if (this.hasPlayer) this.onDragonSummoned?.(d);
+      for (const p of this.barPlayers) this.onDragonSummoned?.(d, p);
     } else this.respawnStage = stage;
   }
 

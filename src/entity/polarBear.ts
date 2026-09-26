@@ -15,6 +15,7 @@ import {
   PanicGoal, RandomLookAroundGoal, RandomStrollGoal,
 } from './ai/goals';
 import { AABB } from '../core/aabb';
+import type { Player } from './player';
 
 /** vanilla STAND_ANIMATION_TICKS */
 const STAND_TICKS = 6;
@@ -241,8 +242,7 @@ class AngryAtPlayerGoal extends NearestAttackablePlayerGoal {
   constructor(readonly bear: PolarBear) {
     super(bear, true);
   }
-  protected override extraCondition(): boolean {
-    const p = this.bear.level.player;
-    return !!p && this.bear.isAngryAt(p);
+  protected override acceptsPlayer(p: Player): boolean {
+    return this.bear.isAngryAt(p);
   }
 }

@@ -35,6 +35,19 @@ export type SavedLeash = { uuid: string } | { x: number; y: number; z: number };
 
 export type MobCategory = 'monster' | 'creature' | 'ambient' | 'water_creature' | 'misc' | 'axolotls' | 'underground_water_creature' | 'water_ambient';
 
+/** vanilla NeutralMob.addPersistentAngerSaveData's AngryAt: whom it's angry at, when that's a player (by uuid) */
+export function angryAtData(target: Entity | null): { AngryAt?: string } {
+  return target?.type === 'player' ? { AngryAt: target.uuid } : {};
+}
+
+/**
+ * vanilla NeutralMob.readPersistentAngerSaveData: the player it was angry at (saved without saying whom, it was the
+ * world's own player)
+ */
+export function angryAtFrom(level: Level, d: Record<string, unknown>): Player | null {
+  return (typeof d.AngryAt === 'string' ? level.playerByUuid(d.AngryAt) : level.player) ?? null;
+}
+
 /** (Stage 5: ocean) vanilla MobCategory.getDespawnDistance: 128 blocks, but fish (water_ambient) go at 64 */
 export function despawnDistance(c: MobCategory): number {
   return c === 'water_ambient' ? 64 : 128;
@@ -459,8 +472,7 @@ export abstract class Mob extends LivingEntity {
   private restoreLeash(): void {
     const d = this.delayedLeash!;
     if ('uuid' in d) {
-      const p = this.level.player;
-      const e = p && p.uuid === d.uuid ? p : this.level.entities.find((x) => !x.removed && x.hasUuid && x.uuid === d.uuid);
+      const e = this.level.playerByUuid(d.uuid) ?? this.level.entities.find((x) => !x.removed && x.hasUuid && x.uuid === d.uuid);
       if (e) {
         this.setLeashedTo(e);
         return;
@@ -628,8 +640,9 @@ export abstract class Mob extends LivingEntity {
       this.noActionTime = 0;
       return;
     }
-    const p = this.level.player;
-    if (!p || p.gameMode === 'spectator') return;
+    // (vanilla getNearestPlayer(this, -1): spectators aside)
+    const p = this.level.nearestPlayer(this.x, this.y, this.z, -1, (q) => q.gameMode !== 'spectator');
+    if (!p) return;
     const d0 = p.distanceToSqr(this.x, this.y, this.z);
     // (Stage 5: ocean) the category's despawn distance
     const far = despawnDistance(this.category);

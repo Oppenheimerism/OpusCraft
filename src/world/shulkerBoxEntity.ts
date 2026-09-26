@@ -9,6 +9,7 @@ import { BLOCKS, STATE_BLOCK } from './block';
 import { isShulkerBox } from './blocksShulker';
 import { AABB } from '../core/aabb';
 import type { Level } from '../game/level';
+import type { Entity } from '../entity/entity';
 import type { World } from './world';
 
 /** vanilla ShulkerBoxBlockEntity.AnimationStatus */
@@ -174,23 +175,23 @@ export class ShulkerBoxBlockEntity extends BarrelBlockEntity {
   }
 
   /** vanilla startOpen: the first to look in opens the lid, with its sound */
-  override startOpen(level: Level): void {
+  override startOpen(level: Level, opener: Entity | null = level.player): void {
     if (this.removed) return;
     if (this.openCount < 0) this.openCount = 0;
     this.openCount++;
     this.openCountChanged();
     if (this.openCount !== 1) return;
-    level.gameEvent('container_open', this.x + 0.5, this.y + 0.5, this.z + 0.5, { entity: level.player });
+    level.gameEvent('container_open', this.x + 0.5, this.y + 0.5, this.z + 0.5, { entity: opener });
     level.sound.play('block.shulker_box.open', this.x + 0.5, this.y + 0.5, this.z + 0.5, 0.5, level.random.nextFloat() * 0.1 + 0.9);
   }
 
   /** vanilla stopOpen: the last to leave shuts it */
-  override stopOpen(level: Level): void {
+  override stopOpen(level: Level, closer: Entity | null = level.player): void {
     if (this.removed) return;
     this.openCount--;
     this.openCountChanged();
     if (this.openCount > 0) return;
-    level.gameEvent('container_close', this.x + 0.5, this.y + 0.5, this.z + 0.5, { entity: level.player });
+    level.gameEvent('container_close', this.x + 0.5, this.y + 0.5, this.z + 0.5, { entity: closer });
     level.sound.play('block.shulker_box.close', this.x + 0.5, this.y + 0.5, this.z + 0.5, 0.5, level.random.nextFloat() * 0.1 + 0.9);
   }
 

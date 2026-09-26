@@ -544,10 +544,10 @@ export class NaturalSpawner {
   /** vanilla ServerChunkCache.tickChunks spawning part */
   tick(): void {
     const lvl = this.level;
-    const p = lvl.player;
-    // (the same pass ages the chunks round the player, spawning or not)
+    const players = lvl.players();
+    // (the same pass ages the chunks round the players, spawning or not)
     tickInhabitedTime(lvl);
-    if (!p || !lvl.gameRules.doMobSpawning) return;
+    if (!players.length || !lvl.gameRules.doMobSpawning) return;
     // vanilla: persistent creatures only every 400 ticks; monsters, ambient (bats, even in peaceful)
     // and water creatures every tick
     const spawnFriendlies = lvl.gameTime % 400 === 0;
@@ -556,11 +556,24 @@ export class NaturalSpawner {
     this.patrols.tick(lvl, spawnEnemies);
     this.cats.tick(lvl);
     this.traders.tick(lvl);
-    const pcx = Math.floor(p.x) >> 4, pcz = Math.floor(p.z) >> 4;
+    // (vanilla ChunkMap.anyPlayerCloseEnoughForSpawning: the chunks round any player, once each; a lone player's in the
+    // order they always went, and caps count them all, so more players far apart make room for more mobs)
     const r = Math.min(8, lvl.simulationDistance);
     const chunks: [number, number][] = [];
-    for (let dz = -r; dz <= r; dz++)
-      for (let dx = -r; dx <= r; dx++) if (lvl.world.getChunk(pcx + dx, pcz + dz)) chunks.push([pcx + dx, pcz + dz]);
+    const seen = players.length > 1 ? new Set<string>() : null;
+    for (const p of players) {
+      const pcx = Math.floor(p.x) >> 4, pcz = Math.floor(p.z) >> 4;
+      for (let dz = -r; dz <= r; dz++)
+        for (let dx = -r; dx <= r; dx++) {
+          if (!lvl.world.getChunk(pcx + dx, pcz + dz)) continue;
+          if (seen) {
+            const k = `${pcx + dx},${pcz + dz}`;
+            if (seen.has(k)) continue;
+            seen.add(k);
+          }
+          chunks.push([pcx + dx, pcz + dz]);
+        }
+    }
     if (!chunks.length) return;
     const counts = this.counts();
     const cats: MobCategory[] = [];
@@ -596,7 +609,6 @@ export class NaturalSpawner {
     const st0 = w.getState(x0, y, z0);
     if (FLAGS[st0] & F_OPAQUE && FLAGS[st0] & F_FULL_COLLISION) return 0;
     let spawned = 0;
-    const p = lvl.player;
     for (let k = 0; k < 3; k++) {
       let x = x0, z = z0;
       let data: SpawnerData | null = null;
@@ -606,6 +618,9 @@ export class NaturalSpawner {
       for (let i = 0; i < tries; i++) {
         x += r.nextInt(6) - r.nextInt(6);
         z += r.nextInt(6) - r.nextInt(6);
+        // (vanilla spawnCategoryForPosition: measured from the nearest player — spectators too, as ever here)
+        const p = lvl.nearestPlayer(x + 0.5, y, z + 0.5);
+        if (!p) return spawned;
         const d2 = p.distanceToSqr(x + 0.5, y, z + 0.5);
         if (d2 <= 576) continue;
         if (this.spawnPos && (this.spawnPos[0] - x - 0.5) ** 2 + (this.spawnPos[1] - y) ** 2 + (this.spawnPos[2] - z - 0.5) ** 2 < 576) continue;

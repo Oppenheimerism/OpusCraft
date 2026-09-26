@@ -15,7 +15,7 @@ import { registerBehavior } from './blockBehavior';
 import { registerBlockListener, blockListenerAt, type ListeningBlockEntity } from './gameEventDispatcher';
 import { GAME_EVENT_TAGS, type GameEventName, type GameEventContext } from './gameEvents';
 import { VibrationData, VibrationListener, tickVibrations, projectileOwner, type VibrationUser } from './vibrations';
-import { tryWarn, levelPlayers } from './wardenSpawnTracker';
+import { tryWarn } from './wardenSpawnTracker';
 
 const blk = (st: number): Block => BLOCKS[STATE_BLOCK[st]];
 const isShrieker = (st: number): boolean => blk(st).name === 'sculk_shrieker';
@@ -59,7 +59,7 @@ export function tryGetPlayer(e: Entity | null | undefined): Player | null {
  */
 export function applyDarknessAround(level: Level, x: number, y: number, z: number, source: Entity | null, radius: number): void {
   const effect = MOB_EFFECTS.darkness;
-  for (const p of levelPlayers(level)) {
+  for (const p of level.players()) {
     if (p.gameMode !== 'survival' && p.gameMode !== 'adventure') continue;
     if ((p.x - x) ** 2 + (p.y - y) ** 2 + (p.z - z) ** 2 >= radius * radius) continue;
     const cur = p.getEffect('darkness');

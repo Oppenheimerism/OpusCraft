@@ -63,11 +63,10 @@ export class ItemEntity extends Entity {
     if (this.age >= 6000) this.remove();
     // merge with nearby identical stacks
     if (this.tickCount % 40 === 0) this.tryMerge();
-    // pickup
-    const p = this.level.player;
-    if (p && p.health > 0 && this.pickupDelay === 0 && p.gameMode !== 'spectator') {
-      const bb = p.bb.inflate(1, 0.5, 1);
-      if (bb.intersects(this.bb)) this.playerTouch(p);
+    // pickup (vanilla Player.touch: each player near enough in turn, while there's any of it left)
+    for (const p of this.level.players()) {
+      if (this.stack.count <= 0) break;
+      if (p.health > 0 && this.pickupDelay === 0 && p.gameMode !== 'spectator' && p.bb.inflate(1, 0.5, 1).intersects(this.bb)) this.playerTouch(p);
     }
   }
 

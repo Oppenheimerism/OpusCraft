@@ -158,10 +158,11 @@ export class Bat extends AmbientCreature {
 
   /** vanilla BAT_RESTING_TARGETING (TargetingConditions.forNonCombat().range(4)): a visible player within 4 blocks */
   private nearestPlayerInReach(): boolean {
-    const p = this.level.player;
-    if (!p || !p.isAlive || p.gameMode === 'spectator') return false;
-    const r = Math.max(4 * p.visibilityPercent(this), 2);
-    return this.distanceToSqr(p.x, p.y, p.z) <= r * r && this.sensing.hasLineOfSight(p);
+    return this.level.players().some((p) => {
+      if (!p.isAlive || p.gameMode === 'spectator') return false;
+      const r = Math.max(4 * p.visibilityPercent(this), 2);
+      return this.distanceToSqr(p.x, p.y, p.z) <= r * r && this.sensing.hasLineOfSight(p);
+    });
   }
 
   /** stop hanging, with the level event 1025 flutter (vanilla BAT_TAKEOFF at 0.05) */

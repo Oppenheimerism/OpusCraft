@@ -91,17 +91,20 @@ function pushEntitiesUp(level: Level, x: number, y: number, z: number): void {
   }
 }
 
-/** vanilla LevelRenderer.globalLevelEvent 1038: the portal's opening heard from wherever you are, two blocks from you toward it */
+/**
+ * vanilla LevelRenderer.globalLevelEvent 1038: the portal's opening heard from wherever you are, two blocks from you
+ * toward it (every player in the dimension hears it their own way)
+ */
 function portalSpawnSound(level: Level, x: number, y: number, z: number): void {
-  const p = level.player;
-  if (!p) return;
-  const cx = p.x, cy = p.y + p.eyeHeight, cz = p.z;
-  let dx = x + 0.5 - cx, dy = y + 0.5 - cy, dz = z + 0.5 - cz;
-  const l = Math.hypot(dx, dy, dz) || 1;
-  dx /= l;
-  dy /= l;
-  dz /= l;
-  level.sound.play('block.end_portal.spawn', cx + dx * 2, cy + dy * 2, cz + dz * 2, 1, 1);
+  for (const p of level.players()) {
+    const cx = p.x, cy = p.y + p.eyeHeight, cz = p.z;
+    let dx = x + 0.5 - cx, dy = y + 0.5 - cy, dz = z + 0.5 - cz;
+    const l = Math.hypot(dx, dy, dz) || 1;
+    dx /= l;
+    dy /= l;
+    dz /= l;
+    level.playSoundTo(p, 'block.end_portal.spawn', cx + dx * 2, cy + dy * 2, cz + dz * 2, 1, 1);
+  }
 }
 
 registerItemBehavior('ender_eye', {

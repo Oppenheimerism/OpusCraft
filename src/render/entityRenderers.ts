@@ -713,8 +713,8 @@ export class EntityRenderDispatcher {
         pose.translate(0.4 * j, 0.15 * j, 0.1 * j);
         pose.rotZ(90 * j);
         const bx = Math.floor(e.x), by = Math.floor(e.y), bz = Math.floor(e.z);
-        const pl = e.level.player;
-        if (pl?.isSleeping() && pl.bb.intersects(new AABB(bx - 2, by - 2, bz - 2, bx + 3, by + 3, bz + 3))) pose.translate(0.15 * j, 0, 0);
+        const box = new AABB(bx - 2, by - 2, bz - 2, bx + 3, by + 3, bz + 3);
+        if (e.level.players().some((pl) => pl.isSleeping() && pl.bb.intersects(box))) pose.translate(0.15 * j, 0, 0);
       }
     }
     // vanilla DrownedRenderer.setupRotations: swimming, it leans into its look, about the middle of its body

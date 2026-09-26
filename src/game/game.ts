@@ -470,7 +470,7 @@ export class Game {
         gatewayTravel(this.level, e, x, y, z);
       } else if (e === this.player) this.portalTravel(x, y, z);
     };
-    this.level.onCuredZombieVillager = () => this.advancements.trigger('cured_zombie_villager', { cured: true });
+    this.level.onCuredZombieVillager = (p) => p === this.player && this.advancements.trigger('cured_zombie_villager', { cured: true });
     this.level.onSummonedEntity = (e) => {
       if (e.bb.inflate(5).intersects(this.player.bb)) this.advancements.trigger('summoned_entity', { summoned: e.type });
     };
@@ -885,7 +885,7 @@ export class Game {
       if (!(be instanceof BarrelBlockEntity)) return;
       this.unpackLootFor(be);
       this.setScreen(this.containerScreenFactory(new ChestMenu(p, be, 'Barrel')));
-      be.startOpen(this.level);
+      be.startOpen(this.level, p);
     } else if (kind === 'brewing_stand') {
       const be = this.world.getBlockEntity(x, y, z);
       if (!(be instanceof BrewingStandBlockEntity)) return;
@@ -925,7 +925,7 @@ export class Game {
 
   /** chest closed (called by the chest screen) */
   chestClosed(be: ChestBlockEntity): void {
-    if (be instanceof BarrelBlockEntity) return be.stopOpen(this.level);
+    if (be instanceof BarrelBlockEntity) return be.stopOpen(this.level, this.player);
     be.openCount = Math.max(0, be.openCount - 1);
     if (be.openCount !== 0) return;
     this.sound.play('block.chest.close', be.x + 0.5, be.y + 0.5, be.z + 0.5, 0.5, Math.random() * 0.1 + 0.9);
@@ -1196,7 +1196,7 @@ export class Game {
   /** vanilla ServerLevel: the End has its dragon fight (saved with the world), nowhere else does */
   private attachDragonFight(): void {
     const f = this.world.dim === THE_END ? new EndDragonFight(this.level, this.meta?.dragonFight ?? null) : null;
-    if (f) f.onDragonSummoned = () => this.advancements.trigger('summoned_entity', { summoned: 'ender_dragon' });
+    if (f) f.onDragonSummoned = (_d, p) => p === this.player && this.advancements.trigger('summoned_entity', { summoned: 'ender_dragon' });
     this.level.dragonFight = f;
   }
 
@@ -1825,9 +1825,9 @@ export class Game {
       if (by === this.player) this.advancements.trigger('tame', { tame: { type: animal.type, variant: animal.variantId() } });
     };
     lvl.onTamedDeath = (animal, source) => this.chat(this.deathMessage(source, animal, entityDisplayName(animal)));
-    lvl.onPlayerArrowHit = () => this.advancements.trigger('shoot_arrow');
-    lvl.onPlayerTridentHit = () => this.advancements.trigger('throw_trident');
-    lvl.onChanneledLightning = (victims) => this.advancements.trigger('channeled_lightning', { channeled: victims.map((e) => e.type) });
+    lvl.onPlayerArrowHit = (_e, p) => p === this.player && this.advancements.trigger('shoot_arrow');
+    lvl.onPlayerTridentHit = (_e, p) => p === this.player && this.advancements.trigger('throw_trident');
+    lvl.onChanneledLightning = (victims, p) => p === this.player && this.advancements.trigger('channeled_lightning', { channeled: victims.map((e) => e.type) });
     lvl.onThrownItemPickedUp = (stack, by) => {
       if (by instanceof Piglin && by.isAdult() && isLovedItem(stack)) this.advancements.trigger('distract_piglin', { distract: 'thrown' });
     };
@@ -1837,7 +1837,7 @@ export class Game {
       const variant = (e as { variant?: unknown }).variant;
       this.advancements.trigger('player_interacted_with_entity', { interacted: { item: stack?.item.id ?? null, entity: e.type, variant: typeof variant === 'string' ? variant : undefined } });
     };
-    lvl.onPlayerCrossbowKill = (killed) => this.advancements.trigger('killed_by_crossbow', { crossbowKills: killed.map((e) => e.type) });
+    lvl.onPlayerCrossbowKill = (killed, p) => p === this.player && this.advancements.trigger('killed_by_crossbow', { crossbowKills: killed.map((e) => e.type) });
     // (Stage 4) criteria met out in the world: shields, totems, raids
     lvl.onPlayerTrigger = (p, type, payload) => p === this.player && this.advancements.trigger(type, payload);
     this.interaction.onShotCrossbow = () => this.advancements.trigger('shot_crossbow');

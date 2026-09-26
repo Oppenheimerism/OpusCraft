@@ -472,8 +472,9 @@ class DolphinSwimWithPlayerGoal extends Goal {
     this.flags = Flag.MOVE | Flag.LOOK;
   }
   canUse(): boolean {
-    const d = this.dolphin, p = d.level.player;
-    this.player = p && p.gameMode !== 'spectator' && p.isAlive && d.distanceToSqr(p.x, p.y, p.z) <= 100 ? p : null;
+    // (vanilla getNearestPlayer(SWIM_WITH_PLAYER_TARGETING, dolphin): the nearest within 10, swimming or not)
+    const d = this.dolphin;
+    this.player = d.level.nearestPlayer(d.x, d.y, d.z, -1, (p) => p.gameMode !== 'spectator' && p.isAlive && d.distanceToSqr(p.x, p.y, p.z) <= 100);
     return !!this.player && isSwimming(this.player) && d.target !== this.player;
   }
   override canContinueToUse(): boolean {

@@ -188,14 +188,17 @@ class AvoidPlayerGoal extends Goal {
     this.flags = Flag.MOVE;
   }
   canUse(): boolean {
-    const m = this.mob, p = m.level.player;
+    const m = this.mob;
     this.toAvoid = null;
-    // (vanilla TargetingConditions.forCombat().range(maxDist): not a creative or spectating player, seen, near enough
-    // for how visible it is)
-    if (!p || !p.isAlive || p.gameMode === 'creative' || p.gameMode === 'spectator') return false;
-    if (Math.abs(p.y - m.y) > 3 + this.maxDist) return false;
-    const range = Math.max(this.maxDist * p.visibilityPercent(m), 2);
-    if (p.distanceToSqr(m.x, m.y, m.z) > range * range || !m.sensing.hasLineOfSight(p)) return false;
+    // (vanilla getNearestEntity(avoidEntityTargeting: TargetingConditions.forCombat().range(maxDist)): the nearest
+    // player not creative or spectating, seen, near enough for how visible it is)
+    const p = m.level.nearestPlayer(m.x, m.y, m.z, -1, (p) => {
+      if (!p.isAlive || p.gameMode === 'creative' || p.gameMode === 'spectator') return false;
+      if (Math.abs(p.y - m.y) > 3 + this.maxDist) return false;
+      const range = Math.max(this.maxDist * p.visibilityPercent(m), 2);
+      return p.distanceToSqr(m.x, m.y, m.z) <= range * range && m.sensing.hasLineOfSight(p);
+    });
+    if (!p) return false;
     const v = defaultRandomPosAway(m, 16, 7, p.x, p.y, p.z);
     if (!v) return false;
     const [vx, vy, vz] = [v[0] + 0.5, v[1], v[2] + 0.5];

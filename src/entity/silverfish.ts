@@ -85,9 +85,8 @@ export class Silverfish extends Monster {
       const below = level.world.getState(x, y - 1, z);
       if (!COLLISION[below]?.length || BLOCKS[STATE_BLOCK[below]].name === 'bedrock') return false;
     }
-    const p = level.player;
-    if (p && p.isAlive && p.gameMode !== 'creative' && p.gameMode !== 'spectator' && p.distanceToSqr(x + 0.5, y + 0.5, z + 0.5) < 25) return false;
-    return true;
+    // (vanilla getNearestPlayer(x, y, z, 5, true): not creative or spectating)
+    return !level.nearestPlayer(x + 0.5, y + 0.5, z + 0.5, 5, (p) => p.isAlive && p.gameMode !== 'creative' && p.gameMode !== 'spectator');
   }
 
   override ambientSound(): string {

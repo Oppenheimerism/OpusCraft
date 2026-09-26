@@ -67,23 +67,30 @@ export function currentDifficultyAt(level: Level, x: number, _y: number, z: numb
 const INHABITED_SAVE_STEP = 72000;
 
 /**
- * vanilla ServerChunkCache.tickChunks: every loaded, entity-ticking chunk within the player's spawning range (8
- * chunks) whose centre is within 128 blocks of the player (not a spectator) is inhabited for one more tick, whatever
- * the mob spawning rule says
+ * vanilla ServerChunkCache.tickChunks: every loaded, entity-ticking chunk within a player's spawning range (8
+ * chunks) whose centre is within 128 blocks of that player (not a spectator) is inhabited for one more tick (once,
+ * however many players are near), whatever the mob spawning rule says
  */
 export function tickInhabitedTime(level: Level): void {
-  const p = level.player;
-  if (!p || p.gameMode === 'spectator') return;
   const r = Math.min(8, level.simulationDistance);
-  const pcx = Math.floor(p.x) >> 4, pcz = Math.floor(p.z) >> 4;
-  for (let dz = -r; dz <= r; dz++)
-    for (let dx = -r; dx <= r; dx++) {
-      const cx = pcx + dx, cz = pcz + dz;
-      const ox = cx * 16 + 8 - p.x, oz = cz * 16 + 8 - p.z;
-      if (ox * ox + oz * oz >= 16384) continue;
-      const c = level.world.getChunk(cx, cz);
-      if (!c) continue;
-      c.inhabitedTime++;
-      if (c.inhabitedTime % INHABITED_SAVE_STEP === 0) c.modified = true;
-    }
+  const players = level.players();
+  const done = players.length > 1 ? new Set<object>() : null;
+  for (const p of players) {
+    if (p.gameMode === 'spectator') continue;
+    const pcx = Math.floor(p.x) >> 4, pcz = Math.floor(p.z) >> 4;
+    for (let dz = -r; dz <= r; dz++)
+      for (let dx = -r; dx <= r; dx++) {
+        const cx = pcx + dx, cz = pcz + dz;
+        const ox = cx * 16 + 8 - p.x, oz = cz * 16 + 8 - p.z;
+        if (ox * ox + oz * oz >= 16384) continue;
+        const c = level.world.getChunk(cx, cz);
+        if (!c) continue;
+        if (done) {
+          if (done.has(c)) continue;
+          done.add(c);
+        }
+        c.inhabitedTime++;
+        if (c.inhabitedTime % INHABITED_SAVE_STEP === 0) c.modified = true;
+      }
+  }
 }

@@ -2,6 +2,7 @@
 
 import { BLOCKS, STATE_BLOCK, FLAGS, OPACITY, F_AIR, F_WATER, F_LEAVES, F_OPAQUE, F_RANDOM_TICK, getBlock, S } from '../world/block';
 import type { Level } from './level';
+import type { Chunk } from '../world/chunk';
 import { MIN_Y, SECTIONS } from '../world/constants';
 import { placeTree, TreeKind } from '../world/gen/trees';
 import { canSurvive } from './blockRules';
@@ -30,13 +31,29 @@ export class RandomTicker {
     return this.level.world.getLight(x, y, z) >> 4;
   }
 
-  tick(centerX: number, centerZ: number, radiusChunks: number): void {
+  /**
+   * vanilla ServerChunkCache.tickChunks: every chunk within `radiusChunks` of any of the players, once each (the first
+   * one's square in the order a lone player's always went, then only what each other one adds)
+   */
+  tickAround(players: readonly { x: number; z: number }[], radiusChunks: number): void {
+    if (players.length === 1) this.tick(players[0].x, players[0].z, radiusChunks);
+    else if (players.length > 1) {
+      const done = new Set<Chunk>();
+      for (const p of players) this.tick(p.x, p.z, radiusChunks, done);
+    }
+  }
+
+  tick(centerX: number, centerZ: number, radiusChunks: number, done?: Set<Chunk>): void {
     const world = this.level.world;
     const ccx = Math.floor(centerX) >> 4, ccz = Math.floor(centerZ) >> 4;
     for (let dz = -radiusChunks; dz <= radiusChunks; dz++)
       for (let dx = -radiusChunks; dx <= radiusChunks; dx++) {
         const c = world.getChunk(ccx + dx, ccz + dz);
         if (!c) continue;
+        if (done) {
+          if (done.has(c)) continue;
+          done.add(c);
+        }
         // (vanilla ServerLevel.tickChunk: the thunder roll, then ice and snow, then the chunk's block ticks)
         this.level.tickThunder(c.cx, c.cz);
         for (let k = 0; k < this.speed; k++) if (this.level.random.nextInt(48) === 0) this.level.tickPrecipitation(c.cx, c.cz);

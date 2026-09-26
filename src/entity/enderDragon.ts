@@ -738,8 +738,7 @@ export class EnderDragon extends Mob {
     if (attacker?.type === 'player') player = attacker as LivingEntity;
     else {
       // vanilla getNearestPlayer(CRYSTAL_DESTROY_TARGETING): anyone who could be fought, peaceful aside
-      const p = this.level.player;
-      if (p && p.isAlive && this.canAttack(p) && this.level.difficulty !== 'peaceful') player = p;
+      if (this.level.difficulty !== 'peaceful') player = this.level.nearestPlayer(this.x, this.y, this.z, -1, (p) => p.isAlive && this.canAttack(p));
     }
     void source;
     if (crystal === this.nearestCrystal) this.hurtPart(this.head, 10, player ? 'playerExplosion' : 'explosion', player, crystal);
@@ -823,14 +822,14 @@ function removeBlock(level: Level, x: number, y: number, z: number): boolean {
 
 /**
  * vanilla LevelRenderer.globalLevelEvent (1023, 1028, 1038): a sound heard from anywhere in the dimension, played two
- * blocks from the camera in the direction of where it happened
+ * blocks from the camera in the direction of where it happened (for each player, from where they are)
  */
 export function globalSound(level: Level, name: string, x: number, y: number, z: number, volume: number): void {
-  const p = level.player;
-  if (!p) return;
-  const cx = p.x, cy = p.y + p.eyeHeight, cz = p.z;
-  const [dx, dy, dz] = normalize(Math.floor(x) + 0.5 - cx, Math.floor(y) + 0.5 - cy, Math.floor(z) + 0.5 - cz);
-  level.sound.play(name, cx + dx * 2, cy + dy * 2, cz + dz * 2, volume, 1);
+  for (const p of level.players()) {
+    const cx = p.x, cy = p.y + p.eyeHeight, cz = p.z;
+    const [dx, dy, dz] = normalize(Math.floor(x) + 0.5 - cx, Math.floor(y) + 0.5 - cy, Math.floor(z) + 0.5 - cz);
+    level.playSoundTo(p, name, cx + dx * 2, cy + dy * 2, cz + dz * 2, volume, 1);
+  }
 }
 
 /** the dragon a part (or the dragon itself) belongs to */

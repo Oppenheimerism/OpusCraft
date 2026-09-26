@@ -284,9 +284,9 @@ export class TemptGoal extends Goal {
       this.calmDown--;
       return false;
     }
-    const p = this.mob.level.player;
-    this.player = null;
-    if (p && p.isAlive && p.gameMode !== 'spectator' && this.mob.distanceToSqr(p.x, p.y, p.z) <= 100 && this.shouldFollow(p)) this.player = p;
+    // (vanilla getNearestPlayer(targetingConditions.range(TEMPT_RANGE), mob))
+    const m = this.mob;
+    this.player = m.level.nearestPlayer(m.x, m.y, m.z, -1, (p) => p.isAlive && p.gameMode !== 'spectator' && m.distanceToSqr(p.x, p.y, p.z) <= 100 && this.shouldFollow(p));
     return this.player !== null;
   }
   override start(): void {

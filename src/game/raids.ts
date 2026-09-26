@@ -167,8 +167,8 @@ export class Raid implements RaidLink {
   private groups = 0;
   /** vanilla raidEvent */
   readonly bar: RaidBar = { name: RAID_NAME, color: 'red', overlay: 'notched_10', progress: 0, visible: true, playBossMusic: false, createWorldFog: false };
-  /** vanilla raidEvent.getPlayers(): the player sees the bar (updated each second) */
-  hasPlayer = false;
+  /** vanilla raidEvent.getPlayers(): the players who see the bar (updated each second) */
+  readonly barPlayers: Player[] = [];
   private postRaidTicks = 0;
   raidCooldownTicks = PRE_RAID_TICKS;
   private readonly random = new Rand();
@@ -248,15 +248,20 @@ export class Raid implements RaidLink {
     return out;
   }
 
-  /** vanilla updatePlayers: the bar is shown to a living player whose raid (the nearest within 96) this is */
+  /** whether anyone sees the bar */
+  get hasPlayer(): boolean {
+    return this.barPlayers.length > 0;
+  }
+
+  /** vanilla updatePlayers: the bar is shown to each living player whose raid (the nearest within 96) this is */
   private updatePlayers(): void {
-    const p = this.level.player;
-    if (!p || !p.isAlive || this.level.world.dim.id !== this.dim) {
-      this.hasPlayer = false;
-      return;
+    this.barPlayers.length = 0;
+    if (this.level.world.dim.id !== this.dim) return;
+    for (const p of this.level.players()) {
+      if (!p.isAlive) continue;
+      const [x, y, z] = blockPosOf(p);
+      if (this.level.raids.raidAt(x, y, z) === this) this.barPlayers.push(p);
     }
-    const [x, y, z] = blockPosOf(p);
-    this.hasPlayer = this.level.raids.raidAt(x, y, z) === this;
   }
 
   /** vanilla absorbRaidOmen: the player's Raid Omen raises the omen level by its level (to at most 5) */
@@ -271,7 +276,7 @@ export class Raid implements RaidLink {
   /** vanilla stop */
   stop(): void {
     this.active = false;
-    this.hasPlayer = false;
+    this.barPlayers.length = 0;
     this.status = 'stopped';
   }
 
@@ -440,17 +445,18 @@ export class Raid implements RaidLink {
   }
 
   /**
-   * vanilla playSound: the horn, for a player within 64 blocks of where the wave comes from (or one the bar is shown
-   * to), sounded 13 blocks from them that way and carrying a thousand blocks
+   * vanilla playSound: the horn, for each player within 64 blocks of where the wave comes from (or one the bar is
+   * shown to), sounded 13 blocks from them that way and carrying a thousand blocks, for their ears only
    */
   private playSound(pos: Pos): void {
-    const p = this.level.player;
-    if (!p || this.level.world.dim.id !== this.dim) return;
+    if (this.level.world.dim.id !== this.dim) return;
     const sx = pos[0] + 0.5, sz = pos[2] + 0.5;
-    const d = Math.sqrt((sx - p.x) ** 2 + (sz - p.z) ** 2);
-    if (!(d <= 64) && !this.hasPlayer) return;
-    const k = d > 0 ? 13 / d : 0;
-    this.level.sound.play('event.raid.horn', p.x + k * (sx - p.x), p.y, p.z + k * (sz - p.z), 64, 1);
+    for (const p of this.level.players()) {
+      const d = Math.sqrt((sx - p.x) ** 2 + (sz - p.z) ** 2);
+      if (!(d <= 64) && !this.barPlayers.includes(p)) continue;
+      const k = d > 0 ? 13 / d : 0;
+      this.level.playSoundTo(p, 'event.raid.horn', p.x + k * (sx - p.x), p.y, p.z + k * (sz - p.z), 64, 1);
+    }
   }
 
   /**
@@ -732,9 +738,9 @@ export class Raids {
   }
 
   /** the raid bars the player sees */
-  shownBars(): RaidBar[] {
+  shownBars(viewer: Player | null = this.level.player): RaidBar[] {
     const out: RaidBar[] = [];
-    for (const r of this.list()) if (r.hasPlayer && r.bar.visible) out.push(r.bar);
+    for (const r of this.list()) if (viewer && r.barPlayers.includes(viewer) && r.bar.visible) out.push(r.bar);
     return out;
   }
 

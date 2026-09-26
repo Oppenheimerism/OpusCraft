@@ -213,15 +213,28 @@ function startSleepInBed(host: SleepHost, x: number, y: number, z: number, st: n
   return null;
 }
 
-/** vanilla ServerLevel.tick: everyone asleep long enough → skip to morning, clear the weather, wake up */
+/**
+ * vanilla ServerLevel.tick: everyone asleep long enough → skip to morning, clear the weather, wake up (vanilla
+ * SleepStatus: every player not spectating asleep, and as many asleep long enough; playersSleepingPercentage isn't
+ * heeded yet, as ever: all of them)
+ */
 export function tickSleeping(level: Level): void {
-  const p = level.player;
-  if (!p || !p.isSleepingLongEnough()) return;
+  const players = level.players();
+  let active = 0, sleeping = 0, deep = 0;
+  for (const p of players) {
+    if (p.isSleepingLongEnough()) deep++;
+    if (p.gameMode === 'spectator') continue;
+    active++;
+    if (p.isSleeping()) sleeping++;
+  }
+  const needed = Math.max(1, active);
+  if (sleeping < needed || deep < needed) return;
   if (level.gameRules.doDaylightCycle) {
     const j = level.dayTime + 24000;
     level.dayTime = j - (j % 24000);
   }
-  p.stopSleepInBed(false);
+  // (vanilla wakeUpAllPlayers)
+  for (const p of players) if (p.isSleeping()) p.stopSleepInBed(false);
   if (level.gameRules.doWeatherCycle && level.isRaining()) {
     level.rainTime = 0;
     level.raining = false;

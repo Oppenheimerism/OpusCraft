@@ -38,22 +38,22 @@ export const PHASE = {
 } as const;
 
 /**
- * vanilla TargetingConditions.forCombat (with the dragon testing): a player who can be fought; within `range`
- * (scaled by how visible they are — sneaking, invisibility) when there is one; seen, when `los` — through the
- * dragon's Sensing, which it never clears (vanilla: the dragon has no serverAiStep), so whether it once saw you is
- * what it goes on
+ * vanilla getNearestPlayer(TargetingConditions.forCombat, dragon, x, y, z) (with the dragon testing): the nearest to
+ * `from` (the dragon, unless it says) of the players who can be fought; within `range` (scaled by how visible they are
+ * — sneaking, invisibility) when there is one; seen, when `los` — through the dragon's Sensing, which it never clears
+ * (vanilla: the dragon has no serverAiStep), so whether it once saw you is what it goes on
  */
-function combatTarget(d: EnderDragon, range: number, los: boolean, selector?: (p: LivingEntity) => boolean): LivingEntity | null {
-  const p = d.level.player;
-  if (!p || !p.isAlive || p.gameMode === 'spectator') return null;
-  if (selector && !selector(p)) return null;
-  if (!d.canAttack(p)) return null;
-  if (range > 0) {
-    const r = Math.max(range * p.visibilityPercent(d), 2);
-    if (d.distanceToSqr(p.x, p.y, p.z) > r * r) return null;
-  }
-  if (los && !d.sensing.hasLineOfSight(p)) return null;
-  return p;
+function combatTarget(d: EnderDragon, range: number, los: boolean, selector?: (p: LivingEntity) => boolean, from: readonly [number, number, number] = [d.x, d.y, d.z]): LivingEntity | null {
+  return d.level.nearestPlayer(from[0], from[1], from[2], -1, (p) => {
+    if (!p.isAlive || p.gameMode === 'spectator') return false;
+    if (selector && !selector(p)) return false;
+    if (!d.canAttack(p)) return false;
+    if (range > 0) {
+      const r = Math.max(range * p.visibilityPercent(d), 2);
+      if (d.distanceToSqr(p.x, p.y, p.z) > r * r) return false;
+    }
+    return !los || d.sensing.hasLineOfSight(p);
+  });
 }
 
 /** a random height at or above the node's (vanilla: node y + nextFloat() * 20) */
@@ -146,7 +146,7 @@ export class HoldingPatternPhase extends DragonPhase {
         d.phaseManager.setPhase(PHASE.LANDING_APPROACH);
         return;
       }
-      const player = combatTarget(d, -1, false);
+      const player = combatTarget(d, -1, false, undefined, [px, py, pz]);
       // vanilla distToCenterSqr(player.position()) / 512
       const d0 = player ? ((player.x - px - 0.5) ** 2 + (player.y - py - 0.5) ** 2 + (player.z - pz - 0.5) ** 2) / 512 : 64;
       if (player && (d.random.nextInt(Math.trunc(d0 + 2)) === 0 || d.random.nextInt(i + 2) === 0)) {
@@ -308,7 +308,7 @@ export class LandingApproachPhase extends DragonPhase {
     if (!this.currentPath || this.currentPath.isDone()) {
       const i = d.findClosestNode();
       const [px, py, pz] = d.podiumTop();
-      const player = combatTarget(d, -1, false);
+      const player = combatTarget(d, -1, false, undefined, [px, py, pz]);
       let j: number;
       if (player) {
         const [vx, , vz] = norm(player.x, 0, player.z);

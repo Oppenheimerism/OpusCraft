@@ -9,6 +9,7 @@ import { Mob, type SpawnReason, type SpawnGroup } from './mob';
 
 import type { Level } from '../game/level';
 import type { Entity } from './entity';
+import type { Player } from './player';
 import { LivingEntity } from './living';
 import { ItemEntity } from './itemEntity';
 import { Goal, Flag, reducedTickDelay } from './ai/goal';
@@ -342,9 +343,9 @@ export abstract class Raider extends PatrollingMonster {
         if (attacker?.type === 'player') raid.addHeroOfTheVillage(attacker);
         raid.removeFromRaid(this, false);
       }
-      // (vanilla player_killed_entity, Voluntary Exile: any raider wearing the ominous banner, the player's kill)
-      const p = this.level.player;
-      if (p && (attacker === p || this.lastHurtByPlayer === p) && isOminousBanner(this.armorItems[3])) this.level.onPlayerTrigger?.(p, 'killed_raid_captain');
+      // (vanilla player_killed_entity, Voluntary Exile: any raider wearing the ominous banner, a player's kill)
+      const p = attacker?.type === 'player' ? attacker : this.lastHurtByPlayer?.type === 'player' ? this.lastHurtByPlayer : null;
+      if (p && isOminousBanner(this.armorItems[3])) this.level.onPlayerTrigger?.(p as Player, 'killed_raid_captain');
     }
     super.die(source, attacker);
   }

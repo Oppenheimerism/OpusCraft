@@ -95,18 +95,18 @@ const FACING_NORMAL: Record<string, [number, number, number]> = { down: [0, -1, 
  */
 export class BarrelBlockEntity extends ChestBlockEntity {
   override readonly id: string = 'barrel';
-  /** vanilla startOpen (ContainerOpenersCounter.incrementOpeners: the first to look in is a game event) */
-  startOpen(level: Level): void {
+  /** vanilla startOpen (ContainerOpenersCounter.incrementOpeners: the first to look in, `opener`, is a game event) */
+  startOpen(level: Level, opener: Entity | null = level.player): void {
     if (this.removed || this.openCount++ !== 0) return;
     this.setOpen(level, true);
-    level.gameEvent('container_open', this.x + 0.5, this.y + 0.5, this.z + 0.5, { entity: level.player });
+    level.gameEvent('container_open', this.x + 0.5, this.y + 0.5, this.z + 0.5, { entity: opener });
   }
   /** vanilla stopOpen (decrementOpeners: so is the last to leave) */
-  stopOpen(level: Level): void {
+  stopOpen(level: Level, closer: Entity | null = level.player): void {
     if (this.removed || this.openCount === 0) return;
     if (--this.openCount !== 0) return;
     this.setOpen(level, false);
-    level.gameEvent('container_close', this.x + 0.5, this.y + 0.5, this.z + 0.5, { entity: level.player });
+    level.gameEvent('container_close', this.x + 0.5, this.y + 0.5, this.z + 0.5, { entity: closer });
   }
   /** vanilla BarrelBlockEntity.onOpen / onClose: the lid's sound at its face, and the block's `open` */
   private setOpen(level: Level, open: boolean): void {
@@ -270,8 +270,8 @@ export class EnchantingTableBlockEntity extends BlockEntity {
     this.oOpen = this.open;
     this.oRot = this.rot;
     const cx = this.x + 0.5, cy = this.y + 0.5, cz = this.z + 0.5;
-    const p = level.player;
-    const near = p && p.gameMode !== 'spectator' && p.distanceToSqr(cx, cy, cz) < 9 ? p : null;
+    // (vanilla bookAnimationTick: getNearestPlayer(3, NO_SPECTATORS))
+    const near = level.nearestPlayer(cx, cy, cz, 3, (p) => p.gameMode !== 'spectator');
     if (near) {
       this.tRot = Math.atan2(near.z - cz, near.x - cx);
       this.open += 0.1;

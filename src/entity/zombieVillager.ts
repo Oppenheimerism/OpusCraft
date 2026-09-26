@@ -141,8 +141,9 @@ export class ZombieVillager extends Zombie {
     v.xp = this.xp;
     v.finalizeSpawn('conversion');
     v.refreshBrain();
-    const p = level.player;
-    if (this.conversionStarter && p && p.uuid === this.conversionStarter) {
+    // (vanilla getPlayerByUUID(conversionStarter))
+    const p = this.conversionStarter ? level.playerByUuid(this.conversionStarter) : null;
+    if (p) {
       level.onCuredZombieVillager?.(p, v);
       v.onReputationEvent('zombie_villager_cured', p);
     }

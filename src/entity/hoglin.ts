@@ -78,8 +78,7 @@ function inSenseRange(m: Mob, e: LivingEntity, ignoreSight: boolean): boolean {
 function senseVisibleLiving(m: Mob): LivingEntity[] {
   const r = SENSE_RANGE;
   const list = m.level.getEntities(m.bb.inflate(r, r, r), (e) => e instanceof LivingEntity && e.isAlive, m) as LivingEntity[];
-  const p = m.level.player;
-  if (p && p.isAlive && !list.includes(p) && p.bb.intersects(m.bb.inflate(r, r, r))) list.push(p);
+  for (const p of m.level.players()) if (p.isAlive && !list.includes(p) && p.bb.intersects(m.bb.inflate(r, r, r))) list.push(p);
   const d = (e: LivingEntity) => m.distanceToSqr(e.x, e.y, e.z);
   list.sort((a, b) => d(a) - d(b));
   return list.filter((e) => !(e.type === 'player' && (e as Player).gameMode === 'spectator') && inSenseRange(m, e, false));
