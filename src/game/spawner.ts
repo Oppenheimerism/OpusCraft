@@ -168,6 +168,11 @@ export function saveEntity(e: Entity): SavedEntity | null {
   return e.vehicle ? null : saveWithPassengers(e);
 }
 
+/** (multiplayer, net/entityNet.ts) one entity's record without its riders, which a guest is sent on their own */
+export function saveEntityRecord(e: Entity): SavedEntity | null {
+  return saveOne(e);
+}
+
 /** vanilla Entity.saveAsPassenger: the record plus its riders (players are saved on their own) */
 function saveWithPassengers(e: Entity): SavedEntity | null {
   const d = saveOne(e);
