@@ -23,6 +23,7 @@ import './tripwire';
 import './dispenser';
 import './piston';
 import './hopper';
+import './comparator';
 
 const blk = (st: number): Block => BLOCKS[STATE_BLOCK[st]];
 

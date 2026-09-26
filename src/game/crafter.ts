@@ -188,7 +188,7 @@ registerBlockEntityType('crafter', (x, y, z) => new CrafterBlockEntity(x, y, z))
 // a dropper (or, some day, a hopper) puts things in by its rule
 CONTAINER_TARGETS.push((be) => (be instanceof CrafterBlockEntity ? { container: be.container, canPlace: (slot, s) => be.canPlaceItem(slot, s) } : null));
 
-/** the crafter's comparator output (vanilla getAnalogOutputSignal), for when the game has comparators */
+/** the crafter's comparator output (vanilla getAnalogOutputSignal) */
 export function crafterAnalogOutput(level: Level, x: number, y: number, z: number): number {
   const be = level.world.getBlockEntity(x, y, z);
   return be instanceof CrafterBlockEntity ? be.redstoneSignal() : 0;
@@ -301,6 +301,7 @@ export function setCrafterMenuHook(fn: MenuOpener | null): void {
 }
 
 registerBehavior('crafter', {
+  analogOutput: crafterAnalogOutput,
   // vanilla getStateForPlacement: its front toward the player; its top up, or (set facing up or down) toward where
   // the player faces (looking down at it) or away (looking up); powered if it's placed where power reaches
   placement(ctx) {

@@ -23,16 +23,16 @@ const isOn = (st: number) => blk(st).get(st, 'powered') === true;
 /** vanilla RepeaterBlock.getDelay: two game ticks a step */
 const delayOf = (st: number) => blk(st).get<number>(st, 'delay') * 2;
 
-/** vanilla DiodeBlock.isDiode (repeaters; comparators when there are some) */
+/** vanilla DiodeBlock.isDiode: repeaters and comparators (comparator.ts shares the diode's workings below) */
 export const isDiode = (st: number) => /^(repeater|comparator)$/.test(blk(st).name);
 
 /** vanilla DiodeBlock.canSurviveOn: a rigid, full top under it */
-function canSurviveOn(st: number): boolean {
+export function canSurviveOn(st: number): boolean {
   return sturdyFace(st, UP);
 }
 
 /** vanilla getInputSignal: the power coming in at its back, dust counted at its full power */
-function inputSignal(w: World, x: number, y: number, z: number, st: number): number {
+export function inputSignal(w: World, x: number, y: number, z: number, st: number): number {
   const d = facingOf(st);
   const nx = x + DX[d], ny = y + DY[d], nz = z + DZ[d];
   const i = getSignal(w, nx, ny, nz, d);
@@ -59,7 +59,7 @@ export function isLocked(w: World, x: number, y: number, z: number, st: number):
 const shouldTurnOn = (w: World, x: number, y: number, z: number, st: number) => inputSignal(w, x, y, z, st) > 0;
 
 /** vanilla shouldPrioritize: it feeds a diode that isn't pointing back at it */
-function shouldPrioritize(w: World, x: number, y: number, z: number, st: number): boolean {
+export function shouldPrioritize(w: World, x: number, y: number, z: number, st: number): boolean {
   const d = OPPOSITE[facingOf(st)] as Dir;
   const front = w.getState(x + DX[d], y + DY[d], z + DZ[d]);
   return isDiode(front) && facingOf(front) !== d;
@@ -76,7 +76,7 @@ function checkTickOnNeighbor(level: Level, x: number, y: number, z: number, st: 
 }
 
 /** vanilla updateNeighborsInFront: the block it points into, and all round that but back at the repeater */
-function updateNeighborsInFront(level: Level, x: number, y: number, z: number, st: number): void {
+export function updateNeighborsInFront(level: Level, x: number, y: number, z: number, st: number): void {
   const f = facingOf(st);
   const d = OPPOSITE[f] as Dir;
   const fx = x + DX[d], fy = y + DY[d], fz = z + DZ[d];

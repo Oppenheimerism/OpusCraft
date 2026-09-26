@@ -554,6 +554,20 @@ export function registerRedstoneComponents(): void {
     });
   }
 
+  // Comparator: a diode like the repeater (vanilla strength 0; stone)
+  {
+    const models = new Map<string, ModelDef>();
+    registerBlock('comparator', {
+      props: [P.facingH, MODE_COMPARATOR, P.powered], defaults: { facing: 'north', mode: 'compare' },
+      hardness: 0, sound: 'stone', collision: [bx(0, 0, 0, 16, 2, 16)], opaque: false, aoCaster: false, opacity: 0, faceOcclusion: 1,
+      model: (s) => {
+        const key = `${s.get('powered')},${s.get('mode')}`;
+        let m = models.get(key);
+        if (!m) models.set(key, (m = comparatorModel(s.get('powered') as boolean, s.get('mode') === 'subtract')));
+        return { model: m, y: REPEATER_Y[s.get('facing') as string] };
+      },
+    });
+  }
 }
 
 export { HOR_Y };

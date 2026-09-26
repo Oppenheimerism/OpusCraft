@@ -46,6 +46,8 @@ export class World {
   onPortalChanged: ((x: number, y: number, z: number, present: boolean) => void) | null = null;
   /** a block became another kind of block (the level's points of interest follow it) */
   onTypeChanged: ((x: number, y: number, z: number, old: number, now: number) => void) | null = null;
+  /** what a block entity holds changed (vanilla BlockEntity.setChanged: the level tells the comparators round it) */
+  onBlockEntityChanged: ((be: BlockEntity) => void) | null = null;
   biomeBlend = 2;
   /** called when a section's mesh became stale */
   onDirty: ((c: Chunk, section: number) => void) | null = null;
@@ -160,7 +162,10 @@ export class World {
   }
 
   private addBlockEntity(be: BlockEntity, c: Chunk): void {
-    be.container.onChange = () => (c.modified = true);
+    be.container.onChange = () => {
+      c.modified = true;
+      this.onBlockEntityChanged?.(be);
+    };
     this.blockEntities.set(be.key, be);
   }
 
