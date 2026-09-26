@@ -7,8 +7,12 @@
 import { HOST_PEER, randomId, type PeerId, type Transport } from './transport';
 
 const PREFIX = 'mc-mp:';
-/** a guest that hasn't been let in by then gives up (vanilla's connect timeout is 30 s; a window next door answers at once) */
-const CONNECT_TIMEOUT_MS = 5000;
+/**
+ * a guest that hasn't been let in by then gives up (vanilla's timeout, 30 s). A window next door answers at once, but
+ * on a slow machine both windows may be busy for seconds (drawing, setting up the world), and an answer that comes
+ * late is still an answer; the Connecting screen's Cancel is there for one that never comes
+ */
+const CONNECT_TIMEOUT_MS = 30_000;
 const PEER_ID = /^[0-9a-f-]{8,64}$/;
 
 type Post = { t?: unknown; side?: unknown; from?: unknown; d?: unknown };
