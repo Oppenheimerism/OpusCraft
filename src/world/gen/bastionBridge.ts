@@ -280,9 +280,9 @@ function wall(keep: boolean): PoolElement {
   return element(g, keep ? 'bastion/bridge/walls/wall_base_0' : 'bastion/bridge/walls/wall_base_1', 'rampart_degradation');
 }
 
-/** a chain from (x, y, z) with a soul lantern at its end */
+/** two links of chain hanging from (x, y, z) (no lights: soul lanterns would drive the piglins off) */
 function hang(g: BastionGrid, x: number, y: number, z: number): void {
-  g.set(x, y, z, CHAIN).set(x, y - 1, z, 'soul_lantern[hanging=true]');
+  g.set(x, y, z, CHAIN).set(x, y - 1, z, CHAIN);
 }
 
 /** vanilla bastion/bridge/ramparts/*: along a wall's top, merlons on the outer edge and the ends */

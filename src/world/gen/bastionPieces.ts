@@ -30,8 +30,6 @@ export const MAGMA = 'magma_block';
 export const LAVA = 'lava';
 export const CHAIN = 'chain';
 export const AIR = 'air';
-export const SOUL_LANTERN_HANGING = 'soul_lantern[hanging=true]';
-export const LANTERN_HANGING = 'lantern[hanging=true]';
 export const PBB_WALL = 'polished_blackstone_brick_wall';
 export const BS_WALL = 'blackstone_wall';
 export const PB_WALL = 'polished_blackstone_wall';
@@ -394,10 +392,12 @@ export function foundation(g: BastionGrid, x0: number, z0: number, x1: number, z
       }
 }
 
-/** a chain hanging from (x, yTop, z) down `len` blocks, a lantern (soul or not) at its end */
-export function hangingLantern(g: BastionGrid, x: number, yTop: number, z: number, len: number, soul = true): void {
+/**
+ * a chain hanging from (x, yTop, z) down `len` blocks. (Bastions hang no lanterns: a soul lantern is one of the things
+ * piglins shy away from, vanilla #piglin_repellents)
+ */
+export function hangingChain(g: BastionGrid, x: number, yTop: number, z: number, len: number): void {
   for (let i = 0; i < len; i++) g.set(x, yTop - i, z, CHAIN);
-  g.set(x, yTop - len, z, soul ? SOUL_LANTERN_HANGING : LANTERN_HANGING);
 }
 
 /** is a cell's block a solid one of the palette (for drawing mobs and gold on floors) */

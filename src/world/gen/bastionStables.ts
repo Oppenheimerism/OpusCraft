@@ -165,7 +165,7 @@ function stairPost(): PoolElement {
   doorway(g, 1, 1, RAMP_W - 1, 3, 5, 1, true);
   doorway(g, RAMP_W - 1, 1, 1, 3, 5, 1, false);
   for (const [x, z] of [[0, 0], [4, 0], [0, 4], [4, 4]]) g.fill(x, 1, z, x, WALL_H - 1, z, (_x, y) => (y % 6 === 0 ? CPB : PBASALT));
-  g.set(2, 5, 2, CHAIN).set(2, 4, 2, 'soul_lantern[hanging=true]');
+  g.set(2, 5, 2, CHAIN).set(2, 4, 2, CHAIN);
   g.connect(2, 1, 2, 'down', { name: J.post, top: 'north', joint: 'aligned' });
   return element(g, 'bastion/hoglin_stable/posts/stair_post', 'stable_degradation');
 }
@@ -257,7 +257,7 @@ function greatPen(n: number): PoolElement {
     g.set(9, 2, 10, AIR).set(9, 1, 10, AIR);
     g.mob(17, 0, 10, 'hoglin').mob(10, 0, 17, 'hoglin').mob(17, 0, 17, 'hoglin');
   }
-  // round the pen: brutes and piglins, gold, the posts' lanterns
+  // round the pen: brutes and piglins, gold, slabs capping the posts
   g.mob(3, 0, 3, 'piglin_melee').mob(24, 0, 24, 'piglin').mob(3, 0, 24, 'piglin');
   g.gold(24, 0, 3).gold(4, 0, 14).gold(22, 0, 13);
   for (const [x, z] of [[a, a], [b, a], [a, b], [b, b]]) g.set(x, 5, z, slab(PB_));

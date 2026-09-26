@@ -10,7 +10,7 @@
 // pools of lava, a hut with a chest). Piglin brutes guard the centre, piglins the hall, the galleries and the towers.
 
 import {
-  BastionGrid, element, bastionPool, wallX, floor, hangingLantern, h, stairs, slab, EMPTY,
+  BastionGrid, element, bastionPool, wallX, floor, h, stairs, slab, EMPTY,
   PBB, CPBB, PB, CPB, BS, GOLD, BASALT, PBASALT, MAGMA, LAVA, AIR, CHAIN, PBB_WALL, BS_WALL, PBB_, BS_, PB_,
 } from './bastionPieces';
 import type { PoolElement } from './jigsaw';
@@ -68,14 +68,14 @@ function wall(kind: WallKind, id: string): PoolElement {
     g.set(x, GALLERY - 1, 0, (x & 3) === 2 ? CPB : PB);
     g.set(x, WALK - 1, 0, (x & 3) === 0 ? CPB : PB);
   }
-  // the gallery: its floor, the opening onto the hall between pillars, a lantern now and then
+  // the gallery: its floor, the opening onto the hall between pillars, a chain hanging now and then
   g.fill(0, GALLERY + 1, 3, HALL - 1, GALLERY + 4, 5, AIR);
   floor(g, 0, 3, HALL - 1, 5, GALLERY, PBB);
   for (let x = 0; x < HALL; x += 5) {
     for (let y = GALLERY + 1; y <= GALLERY + 4; y++) g.set(x, y, 5, y === GALLERY + 4 ? CPB : PB);
     if (x + 2 < HALL) g.set(x + 2, GALLERY + 4, 5, stairs(PBB_, 'north', 'top'));
   }
-  for (let x = 3; x < HALL; x += 8) g.set(x, GALLERY + 4, 4, 'soul_lantern[hanging=true]');
+  for (let x = 3; x < HALL; x += 8) g.set(x, GALLERY + 4, 4, CHAIN);
   // the rampart: its walkway, merlons on the outer edge, a low wall on the hall's side
   for (let x = 0; x < HALL; x++) {
     for (let z = 0; z < WALL_T; z++) g.set(x, WALK, z, h(x, WALK, z, 3) < 0.3 ? BS : PBB);
@@ -102,8 +102,8 @@ function wall(kind: WallKind, id: string): PoolElement {
       g.set(12, 0, z, CPB).set(19, 0, z, CPB);
     }
     for (let y = 1; y <= 8; y++) g.set(12, y, 0, PB).set(19, y, 0, PB);
-    g.set(14, 7, 2, CHAIN).set(14, 6, 2, CHAIN).set(17, 7, 2, CHAIN).set(17, 6, 2, 'soul_lantern[hanging=true]');
-    g.set(14, 5, 2, 'soul_lantern[hanging=true]');
+    g.set(14, 7, 2, CHAIN).set(14, 6, 2, CHAIN).set(17, 7, 2, CHAIN).set(17, 6, 2, CHAIN);
+    g.set(14, 5, 2, CHAIN);
     g.set(15, 8, 0, CPB).set(16, 8, 0, CPB);
   }
   // this wall's own connector (to the hall), its corner tower, what stands out from it
@@ -134,7 +134,7 @@ function corner(broken: boolean, id: string): PoolElement {
   // the gallery room: open to both galleries (x 5 and z 5 sides)
   g.fill(3, GALLERY + 1, 3, 5, GALLERY + 4, 5, AIR);
   floor(g, 3, 3, 5, 5, GALLERY);
-  g.set(3, GALLERY + 4, 3, 'soul_lantern[hanging=true]');
+  g.set(3, GALLERY + 4, 3, CHAIN);
   // the turret room over the walkway, doorways onto both ramparts
   const t0 = WALK + 1;
   g.fill(1, t0, 1, 4, t0 + 3, 4, AIR);
@@ -158,7 +158,7 @@ function corner(broken: boolean, id: string): PoolElement {
     g.gold(2, WALK, 2).gold(3, WALK, 3);
   } else {
     g.chest(1, t0, 1, 'south', 'bastion_other');
-    hangingLantern(g, 3, t0 + 3, 3, 1, false);
+    g.set(3, t0 + 3, 3, CHAIN).set(3, t0 + 2, 3, CHAIN);
   }
   g.mob(2, WALK, 3, 'piglin_melee');
   g.connect(WALL_T - 1, 0, 2, 'east', { name: T.corner });
@@ -231,7 +231,7 @@ function house(): PoolElement {
   g.fill(5, deck + 1, 6, 5, deck + 2, 6, AIR);
   g.set(3, deck + 3, 1, PBB_WALL).set(7, deck + 3, 1, PBB_WALL);
   g.chest(3, deck + 1, 2, 'south', 'bastion_other');
-  hangingLantern(g, 5, deck + 4, 3, 0, true);
+  g.set(5, deck + 4, 3, CHAIN);
   g.connect(w >> 1, deck, 9, 'south', { name: T.extension });
   g.mob(6, deck, 3, 'piglin');
   return element(g, 'bastion/treasure/extensions/houses', 'bastion_generic_degradation');
