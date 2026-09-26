@@ -67,7 +67,7 @@ export const CB = {
   SetEquipment: 15,
   /** [name, x, y, z, volume, pitch] */
   Sound: 16,
-  /** [method, args]: a particle sink call (net/particles.ts) */
+  /** [method, args]: a particle sink call (net/effects.ts) */
   LevelParticles: 17,
   /** [text, overlay]: a line of chat, or the action bar's */
   SystemChat: 18,
