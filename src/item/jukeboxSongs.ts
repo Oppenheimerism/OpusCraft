@@ -16,4 +16,6 @@ export const JUKEBOX_SONGS: Record<string, JukeboxSong> = {
   music_disc_cat: { sound: 'music_disc.cat', description: 'C418 - cat', lengthSeconds: 185, comparatorOutput: 2 },
   music_disc_otherside: { sound: 'music_disc.otherside', description: 'Lena Raine - otherside', lengthSeconds: 195, comparatorOutput: 14 },
   music_disc_5: { sound: 'music_disc.5', description: 'Samuel Åberg - 5', lengthSeconds: 178, comparatorOutput: 15 },
+  // (bastions) its song is audio/gen/discPigstep.ts
+  music_disc_pigstep: { sound: 'music_disc.pigstep', description: 'Lena Raine - Pigstep', lengthSeconds: 149, comparatorOutput: 13 },
 };
