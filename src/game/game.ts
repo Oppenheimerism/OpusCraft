@@ -75,6 +75,7 @@ import { tickOuterEndProgress } from './outerEndProgress';
 import { tickTrialChamberProgress } from './trialChamberProgress';
 import { setGenerateLootListener } from './archaeology';
 import { setPotCraftedListener } from './decoratedPot';
+import { setNowPlayingListener } from './jukebox';
 import { openJobSite } from './jobSites';
 import { endPortalTravel, PortalArrivals } from './endTravel';
 import { EndDragonFight, ARENA_TICKET_LEVEL } from './endDragonFight';
@@ -525,6 +526,8 @@ export class Game {
     };
     this.hookPlayerSounds();
     this.hud = new Hud();
+    // (jukebox) vanilla Gui.setNowPlaying, for a song starting in this level
+    setNowPlayingListener((level, description) => level === this.level && this.hud.setNowPlaying(description));
     this.toasts.clear();
     this.advancements = new PlayerAdvancements();
     this.recipeBook = new PlayerRecipeBook();

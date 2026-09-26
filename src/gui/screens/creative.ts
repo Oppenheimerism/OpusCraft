@@ -79,6 +79,9 @@ const REDSTONE_ORDER = [
 REDSTONE_ORDER.splice(REDSTONE_ORDER.indexOf('dropper') + 1, 0, 'crafter');
 /** (the deep dark) listed in the redstone tab as well as their own, as vanilla does: the sensor, the shrieker, and what they react to */
 const REDSTONE_ALSO = new Set(['sculk_sensor', 'sculk_shrieker', 'amethyst_block', 'white_wool']);
+// (jukebox) vanilla lists the jukebox (a signal source while it plays) with the redstone blocks too, after the crafter
+REDSTONE_ORDER.splice(REDSTONE_ORDER.indexOf('crafter') + 1, 0, 'jukebox');
+REDSTONE_ALSO.add('jukebox');
 const REDSTONE = new Set(REDSTONE_ORDER.filter((id) => !REDSTONE_ALSO.has(id)));
 const FUNCTIONAL = new Set(['oak_sign', 'painting', 'item_frame', 'red_bed', 'jack_o_lantern', 'carved_pumpkin']);
 const DYE_ORDER = ['white', 'light_gray', 'gray', 'black', 'brown', 'red', 'orange', 'yellow', 'lime', 'green', 'cyan', 'light_blue', 'blue', 'purple', 'magenta', 'pink'];

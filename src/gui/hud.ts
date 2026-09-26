@@ -9,6 +9,7 @@ import { FLUID_WATER } from '../world/fluids';
 import { RARITY_COLOR, type ItemStack } from '../item/item';
 import { compareEffects } from '../entity/effects';
 import { BossHealthOverlay } from './bossOverlay';
+import { hsvToRgb } from '../core/math';
 // (Stage 4: totems)
 import { renderItemActivation, tickItemActivation } from './itemActivation';
 
@@ -25,13 +26,19 @@ export class Hud {
   private readonly rand = { next: () => Math.random() };
   chat: { text: string; time: number }[] = [];
   title: { text: string; sub: string; time: number } | null = null;
-  actionBar: { text: string; time: number } | null = null;
+  /** `animate`: vanilla animateOverlayMessageColor (a jukebox's "Now Playing", cycling through the colours) */
+  actionBar: { text: string; time: number; animate?: boolean } | null = null;
   /** vanilla Gui.bossOverlay: the ender dragon's bar, a raid's */
   readonly bossOverlay = new BossHealthOverlay();
 
   /** vanilla Gui.setOverlayMessage (the action bar above the hotbar) */
-  setOverlayMessage(text: string): void {
-    this.actionBar = { text, time: 60 };
+  setOverlayMessage(text: string, animate = false): void {
+    this.actionBar = { text, time: 60, animate };
+  }
+
+  /** (jukebox) vanilla Gui.setNowPlaying: record.nowPlaying, "Now Playing: <the song's description>", in cycling colours */
+  setNowPlaying(description: string): void {
+    this.setOverlayMessage(`Now Playing: ${description}`, true);
   }
 
   tick(game: Game): void {
@@ -145,7 +152,9 @@ export class Hud {
       const a = Math.min(255, Math.floor(((this.actionBar.time - partial) * 255) / 20));
       if (a > 8) {
         const w = g.textWidth(this.actionBar.text);
-        g.text(this.actionBar.text, cx - Math.floor(w / 2), H - 72, 0xffffff, true, a / 255);
+        // (jukebox) vanilla renderOverlayMessage: an animated one's colour is Mth.hsvToRgb(f / 50, 0.7, 0.6)
+        const color = this.actionBar.animate ? hsvToRgb((this.actionBar.time - partial) / 50, 0.7, 0.6) : 0xffffff;
+        g.text(this.actionBar.text, cx - Math.floor(w / 2), H - 72, color, true, a / 255);
       }
     }
     this.renderChat(g, game, chatOpen);

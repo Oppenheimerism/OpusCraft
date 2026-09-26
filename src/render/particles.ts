@@ -582,6 +582,29 @@ export class ParticleEngine {
         this.addSprite(p);
         break;
       }
+      case 'note': {
+        // (jukebox) vanilla NoteParticle: pops up and stops short (friction 0.66), gone in 6 ticks; `xd` (0..1) is
+        // its colour's place round the wheel, as a note block's pitch or a jukebox's 0..3/24 gives it
+        const p = this.base(kind, x, y, z);
+        this.withSpeed(p, 0, 0, 0);
+        p.speedUpWhenBlocked = true;
+        p.friction = 0.66;
+        p.dx *= 0.01;
+        p.dy *= 0.01;
+        p.dz *= 0.01;
+        p.dy += 0.2;
+        const hue = (o: number) => Math.max(0, Math.sin((xd + o) * Math.PI * 2) * 0.65 + 0.35);
+        p.r = hue(0);
+        p.g = hue(1 / 3);
+        p.b = hue(2 / 3);
+        p.size *= 1.5;
+        p.lifetime = 6;
+        p.grow = true;
+        p.frames = [kind];
+        p.frame = 0;
+        this.addSprite(p);
+        break;
+      }
       case 'sweep_attack': {
         const p = this.base(kind, x, y, z);
         p.lifetime = 4;
