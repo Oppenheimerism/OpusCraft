@@ -122,8 +122,12 @@ function texturesOf(st) {
   check('creative: the trial spawner right after the spawner, with the functional blocks', tab('trial_spawner') === 'functional' && next('spawner') === 'trial_spawner');
   check('creative: the vault right after the end portal frame', tab('vault') === 'functional' && next('end_portal_frame') === 'vault');
   check('creative: the honey bottle after the milk bucket, 16 to a stack', tab('honey_bottle') === 'food' && next('milk_bucket') === 'honey_bottle' && it('honey_bottle').maxStack === 16);
-  check('creative: the flow then bolt templates after the netherite upgrade, uncommon', next('netherite_upgrade_smithing_template') === 'flow_armor_trim_smithing_template' &&
-    next('flow_armor_trim_smithing_template') === 'bolt_armor_trim_smithing_template' && it('bolt_armor_trim_smithing_template').rarity === 'uncommon');
+  // (bastions) other trims, such as the snout, go between the netherite upgrade and the flow, as in vanilla
+  const at = (id) => m.ITEM_LIST.indexOf(it(id));
+  const between = m.ITEM_LIST.slice(at('netherite_upgrade_smithing_template') + 1, at('flow_armor_trim_smithing_template')).map((i) => i.id);
+  check('creative: the flow then bolt templates after the netherite upgrade (only other trims between), uncommon', at('flow_armor_trim_smithing_template') > at('netherite_upgrade_smithing_template') &&
+    between.every((id) => id.endsWith('_armor_trim_smithing_template')) &&
+    next('flow_armor_trim_smithing_template') === 'bolt_armor_trim_smithing_template' && it('bolt_armor_trim_smithing_template').rarity === 'uncommon', between.join());
 }
 
 // ---------------------------------------------------------------------------------------------------------------

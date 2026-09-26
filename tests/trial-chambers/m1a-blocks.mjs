@@ -130,7 +130,8 @@ const drops = (st, tool) => m.blockDrops(st, tool ? m.ITEMS.get(tool) : null, r)
   check('tabs: honeycomb after the rabbit hide; breeze rod after the blaze rod, heavy core after it; the keys', ing.indexOf('honeycomb') === ing.indexOf('rabbit_hide') + 1 &&
     ing.indexOf('breeze_rod') === ing.indexOf('blaze_rod') + 1 && ing.indexOf('heavy_core') === ing.indexOf('breeze_rod') + 1 && ing.includes('trial_key') && ing.indexOf('ominous_trial_key') === ing.indexOf('trial_key') + 1);
   const tools = tab('tools').filter((id) => id.startsWith('music_disc_'));
-  check('tabs: Creator (Music Box), Creator and Precipice among the discs in vanilla\'s order', tools.join() === 'music_disc_13,music_disc_cat,music_disc_creator_music_box,music_disc_creator,music_disc_precipice,music_disc_otherside,music_disc_5', tools.join());
+  // (bastions) Pigstep follows 5
+  check('tabs: Creator (Music Box), Creator and Precipice among the discs in vanilla\'s order', tools.join() === 'music_disc_13,music_disc_cat,music_disc_creator_music_box,music_disc_creator,music_disc_precipice,music_disc_otherside,music_disc_5,music_disc_pigstep', tools.join());
   const sherds = m.ITEM_LIST.filter((i) => i.id.endsWith('_pottery_sherd')).map((i) => i.id);
   const at = m.ITEM_LIST.findIndex((i) => i.id.endsWith('_pottery_sherd'));
   check('tabs: the sherds together, in name order', sherds.join() === [...sherds].sort().join() && sherds.every((id, i) => m.ITEM_LIST[at + i].id === id));
