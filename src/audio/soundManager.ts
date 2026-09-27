@@ -175,6 +175,12 @@ export class SoundManager {
   /** the situational pool playing (or on its way), and a count that turns away a track that's been cut off */
   private musicPool: string | null = null;
   private musicReq = 0;
+  /**
+   * music rendered before it's wanted, by pool (null while it's on its way): the credits', once the dragon is dead for
+   * a player who hasn't seen them. Vanilla streams the piece and starts it at once; ours takes seconds to render,
+   * seconds the End Poem would otherwise open in silence
+   */
+  private readonly readyMusic = new Map<string, AudioBuffer | null>();
   private readonly loops: LoopSound[] = [];
   /**
    * (jukebox) vanilla LevelRenderer.playingJukeboxSongs: the song each jukebox is playing, by position (`e` null
@@ -505,6 +511,10 @@ export class SoundManager {
         else if (!timing) void this.playMusic(Math.floor(Math.random() * this.musicCount));
       }
     }
+    // (the credits' music got ready while the exit portal is open to a player who has the End Poem to come, and let go
+    // otherwise: the credits are over, or they left the End some other way)
+    if (game.world.dim.id === 'the_end' && game.level.dragonFight?.dragonKilled && !p.seenCredits) this.prefetchMusic('music.credits');
+    else this.readyMusic.delete('music.credits');
     // cave ambience (vanilla AmbientSoundHandler mood; biomes with their own mood use that instead)
     const w = game.world;
     const bx = Math.floor(p.x), by = Math.floor(p.y + p.eyeHeight), bz = Math.floor(p.z);
@@ -529,12 +539,19 @@ export class SoundManager {
     this.musicLoading = true;
     this.musicPool = pool ?? null;
     const req = ++this.musicReq;
-    const d = await this.request(menu ? { type: 'menu', index } : pool ? { type: 'pool', pool, index } : { type: 'music', index });
-    if (req !== this.musicReq) return;
+    // (a piece rendered before it was wanted starts at once: a pool's only track, or one of its others)
+    let b = pool ? this.readyMusic.get(pool) : undefined;
+    if (!b) {
+      const d = await this.request(menu ? { type: 'menu', index } : pool ? { type: 'pool', pool, index } : { type: 'music', index });
+      if (req !== this.musicReq) return;
+      if (!d || !this.ctx) {
+        this.musicLoading = false;
+        return;
+      }
+      b = this.ctx.createBuffer(1, d.length, SR);
+      b.copyToChannel(d as Float32Array<ArrayBuffer>, 0);
+    }
     this.musicLoading = false;
-    if (!d || !this.ctx) return;
-    const b = this.ctx.createBuffer(1, d.length, SR);
-    b.copyToChannel(d as Float32Array<ArrayBuffer>, 0);
     // (whatever was playing stops; when the next piece is due stays as it was set)
     this.stopSource();
     this.musicPool = pool ?? null;
@@ -618,9 +635,24 @@ export class SoundManager {
     this.playSituationalMusic(pool);
   }
 
-  /** vanilla MusicManager.stopPlaying(music): stop the music if it's that pool's */
+  /** vanilla MusicManager.stopPlaying(music): stop the music if it's that pool's (and let go of it, if rendered ahead) */
   stopSituationalMusic(pool: string): void {
     if ((this.musicPlaying || this.musicLoading) && this.musicPool === pool) this.stopMusic();
+    this.readyMusic.delete(pool);
+  }
+
+  /** render a pool's music now, to start at once when it's asked for (one of its tracks, kept until let go) */
+  private prefetchMusic(pool: string): void {
+    const n = this.musicPools[pool] ?? 0;
+    if (!this.ctx || n <= 0 || this.readyMusic.has(pool)) return;
+    this.readyMusic.set(pool, null);
+    void this.request({ type: 'pool', pool, index: Math.floor(Math.random() * n) }).then((d) => {
+      // (let go of while it was on its way: dropped)
+      if (!d || !this.ctx || !this.readyMusic.has(pool)) return;
+      const b = this.ctx.createBuffer(1, d.length, SR);
+      b.copyToChannel(d as Float32Array<ArrayBuffer>, 0);
+      this.readyMusic.set(pool, b);
+    });
   }
 
   stopAll(): void {
