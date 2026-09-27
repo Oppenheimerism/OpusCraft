@@ -4,6 +4,7 @@
 // (discBand.ts) in a file of its own, about as long as vanilla's song, and served as a music pool of one track
 // (synth.ts MUSIC_POOLS) for the jukebox to play (game/jukebox.ts).
 
+import { ELEVEN_SECONDS, renderEleven } from './disc11';
 import { BLOCKS_SECONDS, renderBlocks } from './discBlocks';
 import { CHIRP_SECONDS, renderChirp } from './discChirp';
 import { FAR_SECONDS, renderFar } from './discFar';
@@ -13,6 +14,7 @@ import { RELIC_SECONDS, renderRelic } from './discRelic';
 import { STAL_SECONDS, renderStal } from './discStal';
 import { STRAD_SECONDS, renderStrad } from './discStrad';
 import { WAIT_SECONDS, renderWait } from './discWait';
+import { WARD_SECONDS, renderWard } from './discWard';
 
 /** each song's renderer and its length (vanilla JukeboxSong length_in_seconds), by sound event */
 const SONGS: Record<string, { seconds: number; render: (sr: number) => Float32Array }> = {
@@ -23,6 +25,8 @@ const SONGS: Record<string, { seconds: number; render: (sr: number) => Float32Ar
   'music_disc.mellohi': { seconds: MELLOHI_SECONDS, render: renderMellohi },
   'music_disc.stal': { seconds: STAL_SECONDS, render: renderStal },
   'music_disc.strad': { seconds: STRAD_SECONDS, render: renderStrad },
+  'music_disc.ward': { seconds: WARD_SECONDS, render: renderWard },
+  'music_disc.11': { seconds: ELEVEN_SECONDS, render: renderEleven },
   'music_disc.wait': { seconds: WAIT_SECONDS, render: renderWait },
   'music_disc.relic': { seconds: RELIC_SECONDS, render: renderRelic },
 };
