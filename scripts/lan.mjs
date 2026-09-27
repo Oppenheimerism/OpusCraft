@@ -6,7 +6,7 @@
 // npm run lan -- --tunnel: this computer only, for a tunnel (cloudflared, say) to pass friends in from farther off; only
 // then are the tunnel's names (*.trycloudflare.com) let in. See tests/multiplayer/REPORT-m5.md, "Playing with friends".
 
-import { build, preview } from 'vite';
+import { build, preview, createLogger } from 'vite';
 import { networkInterfaces } from 'node:os';
 
 const PORT = 4173;
@@ -22,10 +22,18 @@ try {
   process.exit(1);
 }
 
+// (the server's words: its warnings and errors, and the relay's comings and goings with the time, a friend's connecting
+// among them, so whether a friend's page reaches this computer at all shows here; nothing else)
+const logger = createLogger('info', { allowClearScreen: false });
+const info = logger.info.bind(logger);
+logger.info = (msg, opts) => {
+  if (msg.startsWith('relay: ')) info(msg, { ...opts, timestamp: true });
+};
+
 let server;
 try {
   server = await preview({
-    logLevel: 'warn',
+    customLogger: logger,
     preview: { host: tunnel ? '127.0.0.1' : '0.0.0.0', port: PORT, strictPort: true, open: false, allowedHosts: tunnel ? ['.trycloudflare.com'] : [] },
   });
 } catch (e) {
@@ -65,7 +73,7 @@ if (tunnel) {
     '  connections: choose Allow.) A phone\'s hotspot that both computers join is a network too.',
   );
 }
-lines.push('', '  Keep this window open while you play. Ctrl+C stops the server.', '');
+lines.push('', '  Friends joining show up below, with where they connect from.', '  Keep this window open while you play. Ctrl+C stops the server.', '');
 console.log(lines.join('\n'));
 
 process.on('SIGINT', () => {
