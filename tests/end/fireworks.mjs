@@ -569,8 +569,10 @@ const useHeld = () => {
   check('balls thrown out at about 0.25 (small) and 0.5 (large)', near(speed(run([X('small_ball', [RED])])), 0.25, 0.03) && near(speed(run([X('large_ball', [RED])])), 0.5, 0.05));
   const st = run([X('star', [RED])]);
   check('a star\'s first spark straight up at 0.5', near(st.sparks[0].yd, 0.5, 1e-12) && st.sparks[0].xd === 0 && st.sparks[0].zd === 0);
-  const bu = run([X('burst', [RED])], undefined, [0.4, 0.6, 0]);
-  check('a burst follows half the rocket\'s motion, up and out', bu.sparks.every((s) => s.yd >= 0.3 && s.yd <= 0.8) && near(bu.sparks.reduce((a, s) => a + s.xd, 0) / 70, 0.2, 0.08));
+  // (a burst's sparks share one random sideways push, as vanilla's do: twenty of them averaged, to see the half)
+  const bursts = Array.from({ length: 20 }, () => run([X('burst', [RED])], undefined, [0.4, 0.6, 0]).sparks);
+  const meanXd = bursts.flat().reduce((a, s) => a + s.xd, 0) / (70 * 20);
+  check('a burst follows half the rocket\'s motion, up and out', bursts.flat().every((s) => s.yd >= 0.3 && s.yd <= 0.8) && near(meanXd, 0.2, 0.05), meanXd.toFixed(3));
   const col = run([X('small_ball', [RED, BLUE], [WHITE, LIME], true, true)]);
   check('each spark one of the colours and one of the fades, with the trail and twinkle', col.sparks.every((s) => (s.c === RED || s.c === BLUE) && (s.f === WHITE || s.f === LIME) && s.trail && s.tw) && col.sparks.some((s) => s.c === RED) && col.sparks.some((s) => s.c === BLUE));
   check('a flash per star in its first colour; no colour: black', col.flashes.join() === String(RED) && run([X('small_ball', [])]).flashes.join() === String(BLACK) && run([X('small_ball', [])]).sparks.every((s) => s.c === BLACK && s.f === -1));
