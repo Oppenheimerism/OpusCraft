@@ -3,7 +3,7 @@
 
 import { SimpleContainer, isEmpty } from '../inventory/container';
 import { ItemStack, ITEMS, ItemTag, cloneTag, type BannerLayer, type Rarity } from '../item/item';
-import { cookingResult, cookingTime, burnDuration, type CookingKind } from '../inventory/recipes';
+import { cookingResult, cookingTime, burnDuration, campfireCookingResult, type CookingKind } from '../inventory/recipes';
 import { BLOCKS, STATE_BLOCK, FACE_OCC } from './block';
 import type { World } from './world';
 import type { Level } from '../game/level';
@@ -474,23 +474,105 @@ export function campfireSmoke(level: Level, x: number, y: number, z: number, sig
   if (extra) level.particles.spawn?.('smoke', x + 0.5 + (Math.random() / 4) * side(), y + 0.4, z + 0.5 + (Math.random() / 4) * side(), 0, 0.005, 0);
 }
 
+/** vanilla Direction.get2DDataValue of a facing, and each 2D direction's step (south, west, north, east) */
+export const FACING_2D: Record<string, number> = { south: 0, west: 1, north: 2, east: 3 };
+const STEP_X_2D = [0, -1, 0, 1];
+const STEP_Z_2D = [1, 0, -1, 0];
+
 /**
- * vanilla CampfireBlockEntity (both campfires have one): four places round the fire for food to cook on (the cooking
- * is still to come) and, while it burns, the smoke it gives off (particleTick)
+ * vanilla CampfireBlockEntity (both campfires have one): four places round the fire where food cooks while it burns
+ * (cookTick) and cools again while it's out (cooldownTick); and, while it burns, the smoke it gives off and the wisps
+ * off what's cooking (particleTick)
  */
 export class CampfireBlockEntity extends BlockEntity {
   readonly id = 'campfire';
+  /** how long each place's food has cooked, and how long it takes to (vanilla cookingProgress, cookingTime) */
+  readonly cookingProgress = [0, 0, 0, 0];
+  readonly cookingTime = [0, 0, 0, 0];
   constructor(x: number, y: number, z: number) {
     super(x, y, z, 4);
   }
   override tick(level: Level): void {
     const st = level.getState(this.x, this.y, this.z);
     const b = BLOCKS[STATE_BLOCK[st]];
-    if (b.propIndex('signal_fire') < 0 || !b.get(st, 'lit')) return;
+    if (b.propIndex('signal_fire') < 0) return;
+    if (!b.get(st, 'lit')) {
+      this.cooldownTick(level);
+      return;
+    }
+    this.cookTick(level, st);
     if (Math.random() < 0.11) {
       const signal = !!b.get(st, 'signal_fire');
       for (let i = Math.floor(Math.random() * 2) + 2; i > 0; i--) campfireSmoke(level, this.x, this.y, this.z, signal, false);
     }
+    // (a wisp of smoke now and then off each place with food on it: the corner of the fire it lies over)
+    const facing = FACING_2D[b.get<string>(st, 'facing')] ?? 0;
+    for (let i = 0; i < 4; i++) {
+      if (!this.container.items[i] || Math.random() >= 0.2) continue;
+      const d = (i + facing) % 4, cw = (d + 1) % 4;
+      const px = this.x + 0.5 - STEP_X_2D[d] * 0.3125 + STEP_X_2D[cw] * 0.3125;
+      const pz = this.z + 0.5 - STEP_Z_2D[d] * 0.3125 + STEP_Z_2D[cw] * 0.3125;
+      for (let k = 0; k < 4; k++) level.particles.spawn?.('smoke', px, this.y + 0.5, pz, 0, 5e-4, 0);
+    }
+  }
+  /**
+   * vanilla cookTick: what's on the fire cooks a tick more; done, what it cooked into drops out where the fire is (the
+   * food itself if it has no recipe any more), with a game event
+   */
+  private cookTick(level: Level, st: number): void {
+    let cooking = false;
+    for (let i = 0; i < 4; i++) {
+      const s = this.container.items[i];
+      if (!s) continue;
+      cooking = true;
+      if (++this.cookingProgress[i] < this.cookingTime[i]) continue;
+      const result = campfireCookingResult(s);
+      level.dropStackAt(this.x, this.y, this.z, result ? ItemStack.of(result) : s);
+      this.container.set(i, null);
+      level.gameEvent('block_change', this.x + 0.5, this.y + 0.5, this.z + 0.5, { state: st });
+    }
+    if (cooking) this.setChanged(level);
+  }
+  /** vanilla cooldownTick: put out, what was cooking loses two ticks' cooking a tick */
+  private cooldownTick(level: Level): void {
+    let cooled = false;
+    for (let i = 0; i < 4; i++) {
+      if (this.cookingProgress[i] <= 0) continue;
+      cooled = true;
+      this.cookingProgress[i] = Math.min(Math.max(this.cookingProgress[i] - 2, 0), this.cookingTime[i]);
+    }
+    if (cooled) this.setChanged(level);
+  }
+  /** vanilla setChanged without markUpdated: the chunk wants saving, and nobody need be told */
+  private setChanged(level: Level): void {
+    const c = level.world.getChunk(this.x >> 4, this.z >> 4);
+    if (c) c.modified = true;
+  }
+  /** vanilla placeFood: `food` (one) goes in the first empty place, to cook for `time` ticks; false if there's none */
+  placeFood(level: Level, by: Entity | null, food: ItemStack, time: number): boolean {
+    const i = this.container.items.findIndex((s) => !s);
+    if (i < 0) return false;
+    this.cookingTime[i] = time;
+    this.cookingProgress[i] = 0;
+    this.container.set(i, food);
+    level.gameEvent('block_change', this.x + 0.5, this.y + 0.5, this.z + 0.5, { entity: by, state: level.getState(this.x, this.y, this.z) });
+    return true;
+  }
+  /** vanilla getCookableRecipe: what `s` cooks into here, if there's an empty place for it */
+  cookable(s: ItemStack | null): string | null {
+    return this.container.items.some((x) => !x) ? campfireCookingResult(s) : null;
+  }
+  protected override saveData(): Record<string, number | string> | undefined {
+    // (vanilla CookingTimes, CookingTotalTimes)
+    if (!this.cookingTime.some((t) => t > 0)) return undefined;
+    return { cookingTimes: this.cookingProgress.join(','), cookingTotalTimes: this.cookingTime.join(',') };
+  }
+  protected override loadData(d: Record<string, number | string>): void {
+    const read = (v: number | string | undefined, into: number[]) => {
+      if (typeof v === 'string') v.split(',').slice(0, 4).forEach((n, i) => (into[i] = Math.max(0, Math.floor(Number(n)) || 0)));
+    };
+    read(d.cookingTimes, this.cookingProgress);
+    read(d.cookingTotalTimes, this.cookingTime);
   }
 }
 

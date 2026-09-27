@@ -1,6 +1,7 @@
 // Block entity renderers of the village blocks: vanilla BellRenderer (the bell under its frame, swinging after a
-// ring), LecternRenderer (the open book on a lectern) and BannerRenderer (render/bannerRenderer.ts). Drawn with the
-// entity batch after the entities, like the spawner's mob and the enchanting table's book.
+// ring), LecternRenderer (the open book on a lectern), CampfireRenderer (the food cooking on it) and BannerRenderer
+// (render/bannerRenderer.ts). Drawn with the entity batch after the entities, like the spawner's mob and the
+// enchanting table's book.
 
 import type { GL } from './gl';
 import { createTexture } from './gl';
@@ -9,7 +10,8 @@ import { ModelPart } from './model';
 import type { Camera } from './renderer';
 import type { Frustum } from '../core/math';
 import type { Level } from '../game/level';
-import { BellBlockEntity, LecternBlockEntity, BannerBlockEntity } from '../world/blockEntity';
+import { BellBlockEntity, LecternBlockEntity, BannerBlockEntity, CampfireBlockEntity, FACING_2D } from '../world/blockEntity';
+import type { ItemRenderer } from './itemRenderer';
 import { BannerRenderer } from './bannerRenderer';
 import { BLOCKS, STATE_BLOCK } from '../world/block';
 import { NORTH, SOUTH, WEST, EAST } from '../world/dir';
@@ -111,6 +113,40 @@ export class VillageBlockRenderers {
         this.bookTex ??= bookTexture(this.gl);
         b.begin(this.state(this.bookTex));
         renderLecternBook(b, this.pose, this.book, block.get<string>(st, 'facing'), dx, dy, dz);
+      }
+    }
+  }
+
+  /**
+   * vanilla CampfireRenderer: what's cooking lies flat on the fire at three-eighths size, each place's food over its
+   * own corner, turned with the campfire's facing
+   */
+  renderCampfires(b: EntityBatch, items: ItemRenderer, level: Level, cam: Camera, frustum: Frustum): void {
+    for (const be of level.world.blockEntities.values()) {
+      if (be.removed || !(be instanceof CampfireBlockEntity) || be.container.items.every((s) => !s)) continue;
+      const dx = be.x - cam.x, dy = be.y - cam.y, dz = be.z - cam.z;
+      if ((dx + 0.5) ** 2 + (dy + 0.5) ** 2 + (dz + 0.5) ** 2 > VIEW_DISTANCE * VIEW_DISTANCE) continue;
+      if (!frustum.testBox(dx, dy, dz, dx + 1, dy + 1, dz + 1)) continue;
+      const st = level.getState(be.x, be.y, be.z);
+      const block = BLOCKS[STATE_BLOCK[st]];
+      if (block.propIndex('signal_fire') < 0) continue;
+      const facing = FACING_2D[block.get<string>(st, 'facing')] ?? 0;
+      const l = level.world.getLight(be.x, be.y, be.z);
+      b.lightS = (l >> 4) * 16;
+      b.lightB = (l & 15) * 16;
+      b.setOverlay(0, 0, 0, 0);
+      const pose = this.pose;
+      for (let i = 0; i < 4; i++) {
+        const s = be.container.items[i];
+        if (!s) continue;
+        pose.reset();
+        pose.translate(dx + 0.5, dy + 0.44921875, dz + 0.5);
+        // (Direction.from2DDataValue(i + facing).toYRot(), negated)
+        pose.rotY(-((i + facing) % 4) * 90);
+        pose.rotX(90);
+        pose.translate(-0.3125, -0.3125, 0);
+        pose.scale(0.375, 0.375, 0.375);
+        items.render(b, pose, s, 'fixed');
       }
     }
   }

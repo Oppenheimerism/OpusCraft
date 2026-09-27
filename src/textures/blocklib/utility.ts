@@ -338,6 +338,45 @@ export function hayTop(): TexImage {
   return t;
 }
 
+const KELP = [0x1b2511, 0x263219, 0x313f1f, 0x3c4c25, 0x48592b, 0x556732];
+
+/** vanilla dried_kelp_side.png (our own drawing): sheets of dried kelp pressed in wavy bands, dark seams between */
+export function driedKelpSide(): TexImage {
+  const r = rng('dried_kelp_side');
+  const f = fbm(r, [[4, 2, 0.5], [2, 1, 0.3]], 0.3);
+  const t = paint(quantize(f, [0.6, 1.5, 3, 3, 1.5, 0.5]), KELP);
+  const phase = r.next() * Math.PI * 2;
+  for (let x = 0; x < N; x++) {
+    const w = Math.round(Math.sin((x / N) * Math.PI * 2 + phase) * 0.8);
+    for (const y0 of [1, 5, 9, 13]) {
+      const y = (y0 + w + N) % N;
+      setPx(t, x, y, r.chance(0.15) ? 0x202b14 : 0x121a0b);
+      setPx(t, x, (y + 1) % N, mixC(getPx(t, x, (y + 1) % N), 0x6a7c3c, 0.25));
+    }
+  }
+  return t;
+}
+
+/** vanilla dried_kelp_top.png / dried_kelp_bottom.png (our own drawing): the end of a roll of kelp, coiled round */
+export function driedKelpEnd(name: string): TexImage {
+  const r = rng(name);
+  const t = speckled(name, KELP, { oct: [[2, 2, 0.5]], white: 0.6, weights: [0.5, 1.5, 3, 3, 1.5, 0.5], dark: 6, darkSize: [1, 1], light: 4, lightSize: [1, 1] });
+  const turn = r.next() * Math.PI * 2;
+  for (let y = 0; y < N; y++)
+    for (let x = 0; x < N; x++) {
+      const dx = x - 7.5, dy = y - 7.5;
+      // (a spiral: a seam every 2.6 pixels out, creeping outward as it goes round)
+      const a = (Math.atan2(dy, dx) + turn) / (Math.PI * 2);
+      const d = Math.sqrt(dx * dx + dy * dy) + a * 2.6;
+      const m = ((d % 2.6) + 2.6) % 2.6;
+      if (m < 0.75) setPx(t, x, y, mixC(getPx(t, x, y), 0x0f160a, 0.75));
+      else if (m < 1.2) setPx(t, x, y, mixC(getPx(t, x, y), 0x6a7c3c, 0.2));
+    }
+  // the frayed rim of the roll
+  for (let i = 0; i < N; i++) for (const [x, y] of [[i, 0], [0, i], [i, 15], [15, i]] as [number, number][]) setPx(t, x, y, mixC(getPx(t, x, y), 0x121a0b, 0.5));
+  return t;
+}
+
 export function glowstone(): TexImage {
   const pal = [0x5a3a18, 0x7a5224, 0x99692f, 0xb5833c, 0xcfa04e, 0xe8c068, 0xfbe39a];
   return stones('glowstone', pal, { sites: 11, minDist: 3.2, mortar: [0x55361a, 0x6b4520], mortarW: 0.6, shadeTones: [2, 3, 3, 4], rim: 0.5, noiseAmt: 1.2 });

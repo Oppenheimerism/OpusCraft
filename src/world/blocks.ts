@@ -463,6 +463,9 @@ registerBlock('moss_block', { hardness: 0.1, sound: 'moss', tool: 'hoe', model: 
 registerBlock('sponge', { hardness: 0.6, sound: 'sponge', tool: 'hoe', model: one(cubeAll('sponge')) });
 registerBlock('hay_block', { props: [P.axis], defaults: { axis: 'y' }, hardness: 0.5, sound: 'grass', tool: 'hoe', model: axisModel(cubeColumn('hay_block_side', 'hay_block_top')) });
 registerBlock('tnt', { hardness: 0, sound: 'grass', model: one(cubeBottomTop('tnt_side', 'tnt_bottom', 'tnt_top')) });
+// vanilla Blocks.DRIED_KELP_BLOCK: strength 0.5 (2.5 against blasts), grass sounds, a hoe's block; block/dried_kelp_block is
+// cube_bottom_top
+registerBlock('dried_kelp_block', { hardness: 0.5, resistance: 2.5, sound: 'grass', tool: 'hoe', model: one(cubeBottomTop('dried_kelp_side', 'dried_kelp_bottom', 'dried_kelp_top')) });
 registerBlock('chest', {
   props: [P.facingH, P.waterlogged], hardness: 2.5, sound: 'wood', tool: 'axe', opaque: false, aoCaster: false,
   collision: [bx(1, 0, 1, 15, 14, 15)],

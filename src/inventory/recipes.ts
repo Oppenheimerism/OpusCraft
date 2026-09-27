@@ -245,6 +245,7 @@ const STORAGE: [string, string][] = [
   ['raw_gold_block', 'raw_gold'],
   ['raw_copper_block', 'raw_copper'],
   ['hay_block', 'wheat'],
+  ['dried_kelp_block', 'dried_kelp'],
   ['bone_block', 'bone_meal'],
 ];
 for (const [block, item] of STORAGE) {
@@ -546,6 +547,7 @@ smelt(['clay_ball'], 'brick', 0.3);
 smelt(['clay'], 'terracotta', 0.35);
 smelt(['cactus'], 'green_dye', 1.0);
 smelt(['potato'], 'baked_potato', 0.35);
+smelt(['kelp'], 'dried_kelp', 0.1);
 for (const m of ['beef', 'porkchop', 'chicken', 'mutton', 'cod', 'salmon', 'rabbit']) smelt([m], `cooked_${m}`, 0.35);
 // (Stage 5: ocean) vanilla wet_sponge smelting: dried out (and a bucket in the fuel slot is filled: world/blockEntity.ts)
 smelt(['wet_sponge'], 'sponge', 0.15);
@@ -605,6 +607,21 @@ export function cookingTime(kind: CookingKind): number {
   return kind === 'furnace' ? 200 : 100;
 }
 
+// (vanilla RecipeType.CAMPFIRE_COOKING: the smoker's foods again, each done on either campfire in 600 ticks; a
+// campfire gives no experience for them)
+const CAMPFIRE = new Map<string, string>();
+for (const [input, result] of [...['beef', 'porkchop', 'chicken', 'mutton', 'cod', 'salmon', 'rabbit'].map((m) => [m, `cooked_${m}`]), ['potato', 'baked_potato'], ['kelp', 'dried_kelp']]) {
+  if (ITEMS.has(input) && ITEMS.has(result)) CAMPFIRE.set(input, result);
+}
+
+/** the campfire_cooking recipes' cookingtime */
+export const CAMPFIRE_COOKING_TIME = 600;
+
+/** what `s` cooks into on a campfire (null: it doesn't go on one) */
+export function campfireCookingResult(s: ItemStack | null): string | null {
+  return s ? CAMPFIRE.get(s.item.id) ?? null : null;
+}
+
 /** vanilla SmokerBlockEntity / BlastFurnaceBlockEntity.getBurnDuration: fuel burns twice as fast in them */
 export function burnDuration(kind: CookingKind, s: ItemStack | null): number {
   const t = fuelTime(s);
@@ -621,6 +638,7 @@ const FUEL: Record<string, number> = {
   lectern: 300, loom: 300, barrel: 300, cartography_table: 300, fletching_table: 300, smithing_table: 300, composter: 300,
   // (jukebox)
   jukebox: 300,
+  dried_kelp_block: 4000,
 };
 export function fuelTime(s: ItemStack | null): number {
   if (!s) return 0;
