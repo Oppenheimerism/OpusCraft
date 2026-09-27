@@ -5,8 +5,8 @@
 // arrived, then hands it on in the order it arrived, as MemoryNetwork's does.
 //
 // MP_LAG=20-200 (with MP_NET=ws): what arrives is held back a while more, 20 to 200 ms at random but in order on each
-// connection, in the tests' time: each deliver() is half a tick (25 ms) on, so a message sent at one tick is heard one
-// to four ticks later, as over a slow network.
+// connection (what's sent at once, together), in the tests' time: each deliver() is half a tick (25 ms) on, so a message
+// sent at one tick is heard one to four ticks later, as over a slow network.
 //
 // The relay here takes the game's limits on a message's size, but not those that go by the clock (a guest's rate, a
 // connection's handshake and idle times): the tests' ticks run far faster than the game's 20 a second. Those are
@@ -16,6 +16,19 @@ import { Worker, MessageChannel, receiveMessageOnPort } from 'node:worker_thread
 import { relayLimits } from '../../../scripts/relay.mjs';
 
 const HOST_PEER = 'host';
+
+/** (MP_LAG) the lag's own dice, from MP_LAG_SEED if given (said at the start, so a run can be had again) */
+const LAG_SEED = /^\d+$/.test(process.env.MP_LAG_SEED ?? '') ? +process.env.MP_LAG_SEED >>> 0 : (Math.random() * 2 ** 32) >>> 0;
+let lagState = LAG_SEED;
+function lagRandom() {
+  // (mulberry32)
+  lagState = (lagState + 0x6d2b79f5) >>> 0;
+  let x = lagState;
+  x = Math.imul(x ^ (x >>> 15), x | 1);
+  x ^= x + Math.imul(x ^ (x >>> 7), x | 61);
+  return ((x ^ (x >>> 14)) >>> 0) / 2 ** 32;
+}
+export const lagSeed = LAG_SEED;
 let worker = null, port = null, flag = null;
 let nextNet = 1, nextEp = 1;
 const networks = new Map();
@@ -144,14 +157,18 @@ export class WsNetwork {
 
   /** everything sent so far that has arrived (and, with MP_LAG, whose time has come), handed on in order */
   deliver() {
+    // (with MP_LAG, what reaches an end of a connection since the last delivery goes together, as what's sent at once
+    // over a socket does, held back as long as the one before it at least: in order)
+    const now = new Map();
     for (const e of sync(this.id)) {
       // (another network's arrivals wait for its own deliver(), at its own clock)
       const n = networks.get(e.net);
       if (!n) continue;
       let at = n.clock;
       if (n.lag) {
-        const key = `${e.ep}|${e.peer}`;
-        at = Math.max(n.last.get(key) ?? 0, n.clock + n.lag.min + Math.random() * (n.lag.max - n.lag.min));
+        const key = `${e.net}|${e.ep}|${e.peer}`;
+        at = now.get(key) ?? Math.max(n.last.get(key) ?? 0, n.clock + n.lag.min + lagRandom() * (n.lag.max - n.lag.min));
+        now.set(key, at);
         n.last.set(key, at);
       }
       n.held.push({ e, at, i: n.order++ });

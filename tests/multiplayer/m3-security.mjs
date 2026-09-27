@@ -8,7 +8,7 @@
 // right and gets nothing by it. On a guest: a menu the host opens that can't be one, contents of the wrong size,
 // slots and values the menu hasn't, offers of items that don't exist have it leave, saying why; a title is plain text.
 
-import { loadNet, ENTITY_MODULES, flatHost, makeGuest, rawGuest, hostCopy, step, check, exitWithStatus } from './lib.mjs';
+import { loadNet, ENTITY_MODULES, flatHost, makeGuest, rawGuest, hostCopy, step, SETTLE, check, exitWithStatus } from './lib.mjs';
 
 const { m, close } = await loadNet([
   ...ENTITY_MODULES, '/src/game/openMenu.ts', '/src/net/menus.ts', '/src/net/client/clientMenus.ts', '/src/net/server/menuSync.ts',
@@ -247,8 +247,9 @@ const key = (s) => m.stackKey(s);
     });
     net.host.onMessage((_peer, data) => f.got.push(...m.decode(data, m.MAX_GUEST_MESSAGE)));
     f.send = (packets) => net.host.send(f.peer, m.encode(packets));
+    // (with MP_LAG, SETTLE more, as step() does)
     f.tick = (k = 1) => {
-      for (let i = 0; i < k; i++) {
+      for (let i = 0; i < k + SETTLE; i++) {
         net.deliver();
         for (const g of f.guests) g.session.tick();
         net.deliver();

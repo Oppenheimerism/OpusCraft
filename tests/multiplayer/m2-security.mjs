@@ -6,7 +6,7 @@
 // kind than it holds, or that are the guest's own to work out, are let be; ids it doesn't know of are ignored; a field
 // naming an entity that comes later has it once it comes, and what waits for that is bounded.
 
-import { loadNet, ENTITY_MODULES, flatHost, makeGuest, rawGuest, hostCopy, copyOf, step, check, exitWithStatus } from './lib.mjs';
+import { loadNet, ENTITY_MODULES, flatHost, makeGuest, rawGuest, hostCopy, copyOf, step, SETTLE, check, exitWithStatus } from './lib.mjs';
 
 const { m, close } = await loadNet(ENTITY_MODULES);
 
@@ -108,8 +108,9 @@ function fakeHost() {
   });
   net.host.onMessage((_peer, data) => f.got.push(...m.decode(data, m.MAX_GUEST_MESSAGE)));
   f.send = (packets) => net.host.send(f.peer, m.encode(packets));
+  // (with MP_LAG, SETTLE more, as step() does)
   f.tick = (k = 1) => {
-    for (let i = 0; i < k; i++) {
+    for (let i = 0; i < k + SETTLE; i++) {
       net.deliver();
       for (const g of f.guests) g.session.tick();
       net.deliver();

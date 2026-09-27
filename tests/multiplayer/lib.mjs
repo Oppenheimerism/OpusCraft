@@ -4,13 +4,13 @@
 // runs host tick → deliver → guest ticks → deliver; `mirrorDiff()` compares what a guest has with the host's world.
 
 import { load, check, exitWithStatus, genLevel, flatLevel } from '../fixes/lib.mjs';
-import { WsNetwork, closeWsNetworks } from './net/wsNetwork.mjs';
+import { WsNetwork, closeWsNetworks, lagSeed } from './net/wsNetwork.mjs';
 export { check, exitWithStatus };
 
 /**
  * (stage 5) MP_NET=ws: every network a test makes (m.MemoryNetwork's) goes through the relay over WebSockets instead
  * (net/wsNetwork.mjs), carried by the game's WebSocket transports; MP_LAG=20-200 holds each message back 20 to 200 ms
- * of the tests' time as well, in order
+ * of the tests' time as well, in order (MP_LAG_SEED=n: the same lags again)
  */
 export const NET_MODE = process.env.MP_NET === 'ws' ? 'ws' : 'memory';
 const LAG = /^(\d+)-(\d+)$/.exec(process.env.MP_LAG ?? '');
@@ -45,7 +45,7 @@ export async function loadNet(extra = []) {
     await closeWsNetworks();
     await close();
   };
-  console.log(`(the networks go through the relay over WebSockets${lag ? `, with ${lag.min} to ${lag.max} ms of lag` : ''})`);
+  console.log(`(the networks go through the relay over WebSockets${lag ? `, with ${lag.min} to ${lag.max} ms of lag (MP_LAG_SEED=${lagSeed})` : ''})`);
   return r;
 }
 
@@ -226,7 +226,7 @@ export function copyOf(g, e) {
  * sent in them to arrive, be answered and the answer arrive, at the most lag (the tests' ticks were written for a
  * network that answers within the tick)
  */
-const SETTLE = LAG ? Math.ceil((2 * Math.max(+LAG[1], +LAG[2])) / 50) + 1 : 0;
+export const SETTLE = LAG ? Math.ceil((2 * Math.max(+LAG[1], +LAG[2])) / 50) + 1 : 0;
 
 /** host tick → deliver → each guest's tick → deliver, `n` times (and, with MP_LAG, SETTLE more) */
 export function step(host, n = 1) {
