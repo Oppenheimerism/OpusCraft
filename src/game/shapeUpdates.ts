@@ -8,7 +8,7 @@ import { DOWN, UP, NORTH, SOUTH, WEST, EAST } from '../world/dir';
 import type { World } from '../world/world';
 import { fireCanSurvive, fireStateAt, isSoulFireBase } from './fire';
 import { MULTIFACE, multifaceSupported, dripstoneSupported, dripstoneThickness, isMultiface } from './blockRules';
-import { portalStillStands } from './portal';
+import { portalStillStands, portalAxis } from './portal';
 import { behaviorOf } from './blockBehavior';
 
 const blk = (st: number): Block => BLOCKS[STATE_BLOCK[st]];
@@ -149,16 +149,26 @@ function raisePost(c: Record<string, string>, above: number, face: Rect[]): bool
   return POST_OVERRIDE.test(ab.name) || covered(face, POST_TEST);
 }
 
-/** Recompute a state from its neighbours; returns 0 if the block must break. */
-export function updateShape(world: World, x: number, y: number, z: number, st: number): number {
+/**
+ * Recompute a state from its neighbours; returns 0 if the block must break. `fromAxis` (0 x, 1 y, 2 z) and `fromState`,
+ * when given, are which way the neighbour that changed is and what it is now (vanilla updateShape's direction and
+ * neighborState), for the blocks that mind them
+ */
+export function updateShape(world: World, x: number, y: number, z: number, st: number, fromAxis = -1, fromState = 0): number {
   if (FLAGS[st] & F_AIR) return st;
   const own = behaviorOf(st)?.updateShape;
   if (own) return own(world, x, y, z, st);
   const b = blk(st);
   const n = b.name;
   if (n.endsWith('_stairs')) return b.with(st, 'shape', stairsShape(world, x, y, z, st));
-  // vanilla NetherPortalBlock.updateShape: a portal whose frame was broken goes out
-  if (n === 'nether_portal') return portalStillStands(world, x, y, z, st, world.dim.minY) ? st : 0;
+  // vanilla NetherPortalBlock.updateShape: a portal whose frame was broken goes out. It minds only a change in its own
+  // plane (above, below, or along its axis) of something that isn't portal itself, so a portal filled in a block at a
+  // time (/fill) stands
+  if (n === 'nether_portal') {
+    const across = fromAxis === 0 ? portalAxis(st) !== 'x' : fromAxis === 2 ? portalAxis(st) !== 'z' : false;
+    if (fromAxis >= 0 && (across || STATE_BLOCK[fromState] === STATE_BLOCK[st])) return st;
+    return portalStillStands(world, x, y, z, st, world.dim.minY) ? st : 0;
+  }
   // vanilla MultifaceBlock.updateShape: faces that lost their support go; with none left the block goes
   if (isMultiface(n)) {
     let s = st, any = false;

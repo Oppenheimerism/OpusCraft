@@ -53,6 +53,8 @@ function playerAt(level, x, y, z, mode = 'survival') {
   check('registered, with a spawn egg and a name', !!spawner.MOB_TYPES.drowned && !!itemMod.ITEMS.get('drowned_spawn_egg') && spawner.entityDisplayName('drowned') === 'Drowned');
   const { level } = makeLevel();
   const d = mobAt(level, 'drowned', 20, 64, 20);
+  // (a spawn egg's drowned is a baby now and then, as a zombie's is: a grown one's size is what's checked)
+  d.setBaby(false);
   check('a zombie\'s size and build', d instanceof D.Drowned && Math.abs(d.width - 0.6) < 1e-6 && Math.abs(d.height - 1.95) < 1e-6 && d.maxHealth === 20);
   const d2 = spawner.loadEntity(d.save(), level);
   check('saved and loaded', d2?.type === 'drowned' && d2 instanceof D.Drowned);
