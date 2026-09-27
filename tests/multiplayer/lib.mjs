@@ -39,7 +39,7 @@ function recordingLevel(level) {
  * a host: `world`/`level` from genLevel or flatLevel (chunks made on demand by `makeChunk(cx, cz)` when a guest's
  * ticket asks), its own player at (x, y, z)
  */
-export function makeHost(m, { world, level }, { makeChunk, x = 0.5, y = 65, z = 0.5, spawn = [0.5, 65, 0.5], hostName = 'Host', gameMode = 'creative', guestGameMode, transport } = {}) {
+export function makeHost(m, { world, level }, { makeChunk, x = 0.5, y = 65, z = 0.5, spawn = [0.5, 65, 0.5], hostName = 'Host', gameMode = 'creative', guestGameMode, transport, hooks: more = {} } = {}) {
   recordingLevel(level);
   const p = new m.Player(level);
   p.setGameMode(gameMode);
@@ -64,6 +64,8 @@ export function makeHost(m, { world, level }, { makeChunk, x = 0.5, y = 65, z = 
           for (let cx = t[0] - t[2]; cx <= t[0] + t[2]; cx++) if (!world.getChunk(cx, cz)) makeChunk(cx, cz);
     },
     hostBreaking: () => breaking,
+    // (stage 4: the guests' players kept with the world, as a test gives them: loadGuest, saveGuest, leaveInDimension)
+    ...more,
   };
   // (the pop of something picked up, as the game's own level plays it: Game.setUpWorld's onTake)
   level.onTake = (e) => level.sound.play(e.type === 'experience_orb' ? 'entity.experience_orb.pickup' : 'entity.item.pickup', e.x, e.y, e.z, 0.2, 1);
@@ -87,6 +89,8 @@ export function makeGuest(host, name = 'Guest', { viewDistance = 3, uuid, transp
       const p = new m.Player(level);
       p.setGameMode(info.gameMode);
       p.moveTo(info.x, info.y, info.z, info.yRot, info.xRot);
+      // (stage 4: flying as it was when it left)
+      p.flying = !!info.flying && p.mayFly;
       level.player = p;
       level.addMirrorEntity(p);
       g.world = world;
