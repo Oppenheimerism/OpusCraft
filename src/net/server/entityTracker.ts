@@ -78,6 +78,12 @@ export class EntityTracker {
     return this.seen.size;
   }
 
+  /** (the guest going to another dimension with the host) nothing it was shown is there any more */
+  clear(): void {
+    this.seen.clear();
+    this.byIds.clear();
+  }
+
   /** (the session's flush, after the players) this tick's comings, moves, changes, riders and goings */
   tick(ticks: number): void {
     const s = this.session, me = s.player!;

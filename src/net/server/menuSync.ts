@@ -135,6 +135,14 @@ export class ServerMenus {
     else if (id === this.containerId) this.closed();
   }
 
+  /**
+   * (the guest in another dimension) all of what it has open sent again: a click it made as it went, let go on the way,
+   * shows as undone
+   */
+  resync(): void {
+    this.remote.full = true;
+  }
+
   /** the guest is gone or dead (vanilla Player.remove / die): everything its menus held goes back to it */
   closeAll(tell: boolean): void {
     if (tell) this.close();

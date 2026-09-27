@@ -36,7 +36,7 @@ import { WorldMeta, saveWorldMeta, serializeChunk, saveChunks, savedChunkKeys, c
 import { NaturalSpawner, saveEntity, loadEntity, isChunkSaved, entityDisplayName } from './spawner';
 import { hashString } from '../core/rng';
 import type { Chunk } from '../world/chunk';
-import type { Entity } from '../entity/entity';
+import type { Entity, PortalKind } from '../entity/entity';
 import { Mob } from '../entity/mob';
 import { SoundManager } from '../audio/soundManager';
 import { Panorama } from '../render/panorama';
@@ -88,13 +88,13 @@ import { savePlayer, loadPlayer, PlayerDataStore } from './playerData';
 import { MULTIPLAYER_ENABLED } from '../net/config';
 import { HostServer } from '../net/server/hostServer';
 import { ClientSession, type GuestIdentity } from '../net/client/clientSession';
-import type { LoginInfo } from '../net/protocol';
+import type { LoginInfo, ReceivingReason } from '../net/protocol';
 import { BroadcastHostTransport, BroadcastGuestTransport } from '../net/transport/broadcastChannel';
 import { randomId } from '../net/transport/transport';
 
 export type { GameOptions } from './options';
-/** vanilla ReceivingLevelScreen.Reason: what the loading screen shows while changing dimension */
-export type ReceivingReason = 'nether_portal' | 'end_portal' | 'other';
+/** vanilla ReceivingLevelScreen.Reason: what the loading screen shows while changing dimension (net/protocol.ts) */
+export type { ReceivingReason };
 
 export class Game {
   gl!: WebGL2RenderingContext;
@@ -511,21 +511,7 @@ export class Game {
     this.interaction.onMounted = () => this.hud.setOverlayMessage(`Press ${keyDisplayName(KEYS.sneak)} to Dismount`);
     this.interaction.onUseBed = (x, y, z) => useBed(this.sleepHost(), x, y, z);
     this.level.onOpenMerchant = (v, p) => this.openMerchant(v, p);
-    this.level.onPortal = (e, x, y, z, kind) => {
-      // (multiplayer: a guest's portals are the host's to take, and stage 1's host doesn't take them)
-      if (this.mode === 'client') return;
-      if (e.type === 'player' && (e as Player).remote) {
-        e.portalCooldown = e.dimensionChangingDelay();
-        this.server?.refuse(e as Player, "Portals don't take guests yet.");
-        return;
-      }
-      if (kind === 'end') endPortalTravel(this, e);
-      else if (kind === 'end_gateway') {
-        // (vanilla enter_block: Remote Getaway)
-        if (e === this.player) this.advancements.trigger('enter_block', { enteredBlock: 'end_gateway' });
-        gatewayTravel(this.level, e, x, y, z);
-      } else if (e === this.player) this.portalTravel(x, y, z);
-    };
+    this.level.onPortal = (e, x, y, z, kind) => this.portalEntered(e, x, y, z, kind);
     this.level.onCuredZombieVillager = (p) => p === this.player && this.advancements.trigger('cured_zombie_villager', { cured: true });
     this.level.onSummonedEntity = (e) => {
       if (e.bb.inflate(5).intersects(this.player.bb)) this.advancements.trigger('summoned_entity', { summoned: e.type });
@@ -1022,8 +1008,9 @@ export class Game {
     const p = this.player;
     const from = this.world.dim.id, to = dim.id;
     const reason: ReceivingReason = !portal ? 'other' : from === 'the_nether' || to === 'the_nether' ? 'nether_portal' : from === 'the_end' || to === 'the_end' ? 'end_portal' : 'other';
-    // (multiplayer, stage 1: one dimension a host, so its guests can't follow)
-    this.stopHosting("The host went to another dimension, where guests can't follow yet.");
+    // (multiplayer: the host's dimension is the only one there is, so its guests go too, out of whatever they were
+    // doing while this one is still here; they're put in beside the host as it arrives)
+    this.server?.hostLeavingDimension(to, reason);
     if (p.isSleeping()) p.stopSleepInBed(true);
     p.removeVehicle();
     for (const c of [...this.world.chunks.values()]) {
@@ -1055,6 +1042,24 @@ export class Game {
     const f = this.world.dim === THE_END ? new EndDragonFight(this.level, this.meta?.dragonFight ?? null) : null;
     if (f) f.onDragonSummoned = (_d, p) => p === this.player && this.advancements.trigger('summoned_entity', { summoned: 'ender_dragon' });
     this.level.dragonFight = f;
+  }
+
+  /** vanilla Entity.handlePortal: `e`'s time in a portal (a nether portal, an end portal or an end gateway) came up */
+  private portalEntered(e: Entity, x: number, y: number, z: number, kind: PortalKind): void {
+    // (multiplayer: a guest's portals are the host's to take. The host's dimension is the only one there is: the host
+    // takes its guests from one to the next, not they it; an end gateway, within the End, takes a guest as anything)
+    if (this.mode === 'client') return;
+    if (e.type === 'player' && (e as Player).remote && kind !== 'end_gateway') {
+      e.portalCooldown = e.dimensionChangingDelay();
+      this.server?.refuse(e as Player, 'Only the host can take everyone to another dimension.');
+      return;
+    }
+    if (kind === 'end') endPortalTravel(this, e);
+    else if (kind === 'end_gateway') {
+      // (vanilla enter_block: Remote Getaway)
+      if (e === this.player) this.advancements.trigger('enter_block', { enteredBlock: 'end_gateway' });
+      gatewayTravel(this.level, e, x, y, z);
+    } else if (e === this.player) this.portalTravel(x, y, z);
   }
 
   /**
@@ -1236,6 +1241,8 @@ export class Game {
     if (!this.spawned) {
       // (the loading screen's portal swirl keeps turning)
       this.atlas.tick();
+      // (multiplayer: the level stands still till the host is in place; guests on their way with it wait, kept alive)
+      this.server?.idleTick();
       // (the world spawn is looked for in the Overworld only)
       if (this.spawnSearch && this.world.dim === OVERWORLD) {
         if (this.findSpawn()) this.spawnSearch = null;
@@ -1248,6 +1255,8 @@ export class Game {
         }
         this.spawned = true;
         this.receivingPortal = null;
+        // (and its guests come in beside it)
+        this.server?.hostArrived();
         if (!this.joined) this.tutorial.start();
         this.joined = true;
         if (this.screen) this.setScreen(null);
@@ -1862,7 +1871,7 @@ export class Game {
     return true;
   }
 
-  /** the world closes to guests (the host leaving it, or going to another dimension): each is told why */
+  /** the world closes to guests (the host leaving it): each is told why */
   stopHosting(reason: string): void {
     const srv = this.server;
     if (!srv) return;
@@ -1954,6 +1963,7 @@ export class Game {
         const sc = this.screen as { menu?: unknown; ghostRecipe?(id: string): void } | null;
         if (sc?.menu === menu) sc.ghostRecipe?.(recipe);
       },
+      changeDimension: (dim, reason) => this.guestChangedDimension(dim, reason),
       // (our recipe book is the host's to fill, as our player unlocks recipes there: new ones with their toast)
       recipes: (rs, replace) => {
         if (!replace) return this.recipeBook.add(rs);
@@ -1961,6 +1971,38 @@ export class Game {
         for (const r of rs) this.recipeBook.known.add(r.id);
       },
     }, me);
+  }
+
+  /**
+   * (a guest) the host went to another dimension and takes us along (vanilla ClientPacketListener.handleRespawn): this
+   * world let go, as Game.changeDimension lets go of the host's, and the loading screen up (the portal's swirl or stars)
+   * till the host has put us there and the chunks round us are in; the portal's whoosh as we arrive through one
+   */
+  private guestChangedDimension(dim: string, reason: ReceivingReason): void {
+    const p = this.player;
+    for (const c of [...this.world.chunks.values()]) {
+      this.world.removeChunk(c.cx, c.cz);
+      this.renderer.world.disposeChunk(c.cx, c.cz);
+    }
+    this.sound.stopAll();
+    this.world.reset(dimensionById(dim));
+    this.chunks.reset();
+    this.level.resetForDimension();
+    this.renderer.particles?.clear();
+    this.interaction.hit = null;
+    this.interaction.entityHit = null;
+    p.dx = p.dy = p.dz = 0;
+    p.fallDistance = 0;
+    const whoosh = reason === 'nether_portal' || (reason === 'end_portal' && dim === 'the_end');
+    this.arrival = whoosh
+      ? (g) => {
+          g.sound.playUI('block.portal.travel', 0.25, Math.random() * 0.4 + 0.8);
+          return true;
+        }
+      : null;
+    this.spawned = false;
+    this.receivingPortal = reason === 'other' ? null : reason;
+    this.setScreen(this.receivingScreenFactory ? this.receivingScreenFactory(reason) : null);
   }
 
   /** (a guest) leave the host's world, if in one: returns whether we were */

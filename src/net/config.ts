@@ -7,7 +7,7 @@
 export const MULTIPLAYER_ENABLED = true;
 
 /** bumped whenever a packet changes; host and guest must agree (vanilla SharedConstants.getProtocolVersion) */
-export const PROTOCOL_VERSION = 4;
+export const PROTOCOL_VERSION = 5;
 
 /** (vite.config.ts: a hash of src/ in a build) */
 declare const __BUILD_ID__: string | undefined;
@@ -63,6 +63,11 @@ export const MAX_LOGIN_BACKLOG = 4;
 /** the same on a guest for what the host sends (chunks included; a host that sends more is let go) */
 export const MAX_HOST_BACKLOG = 2400;
 export const MAX_HOST_BACKLOG_BYTES = 128 * 1024 * 1024;
+/**
+ * a guest respawning at a bed whose chunks aren't in waits this long for them (vanilla reads the bed where it is,
+ * loading its chunk there and then); past that it respawns by the world spawn, its bed kept
+ */
+export const RESPAWN_BED_WAIT_TICKS = 100;
 /** the most guests a host takes (vanilla's LAN server: 8 players) */
 export const MAX_GUESTS = 7;
 /** a guest that hasn't said who it is by then is let go (vanilla ServerLoginPacketListenerImpl: 600 ticks) */
