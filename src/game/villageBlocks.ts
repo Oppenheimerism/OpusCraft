@@ -10,7 +10,8 @@ import { LivingEntity } from '../entity/living';
 import { registerBehavior, type ItemUseResult, type UseContext } from './blockBehavior';
 import type { PlaceContext } from './blockRules';
 import { hasNeighborSignal } from './redstone/signal';
-import { BellBlockEntity, LecternBlockEntity, campfireSmoke } from '../world/blockEntity';
+import { BellBlockEntity, LecternBlockEntity, CampfireBlockEntity, campfireSmoke } from '../world/blockEntity';
+import { CAMPFIRE_COOKING_TIME } from '../inventory/recipes';
 import { composterFloor, cauldronContentTop, POTTABLE, pottedName } from '../world/blocksVillage';
 import { isDyeable } from '../item/dyedColor';
 import type { Entity } from '../entity/entity';
@@ -630,7 +631,8 @@ export function lecternAnalogOutput(level: Level, x: number, y: number, z: numbe
 
 // ---------------------------------------------------------------------------
 // Campfire (vanilla CampfireBlock): lit as it's placed (unless in water), a signal fire over a hay bale, hurts what
-// stands in it; put out by water or a shovel, lit again by flint and steel, a fire charge or a burning arrow
+// stands in it, cooks food put on it (world/blockEntity.ts CampfireBlockEntity); put out by water or a shovel, lit
+// again by flint and steel, a fire charge or a burning arrow
 
 const CAMPFIRES = new Set(['campfire', 'soul_campfire']);
 
@@ -640,7 +642,7 @@ function canLight(st: number): boolean {
   return CAMPFIRES.has(b.name) && !b.get(st, 'waterlogged') && !b.get(st, 'lit');
 }
 
-/** vanilla CampfireBlock.dowse: the smoke of it going out (and what was cooking would fall off), a game event */
+/** vanilla CampfireBlock.dowse: the smoke of it going out, a game event (what's on it stays, to cool) */
 function dowse(level: Level, x: number, y: number, z: number, st: number, by: Entity | null): void {
   const signal = !!blk(st).get(st, 'signal_fire');
   for (let i = 0; i < 20; i++) campfireSmoke(level, x, y, z, signal, true);
@@ -688,6 +690,15 @@ for (const name of CAMPFIRES) {
     // vanilla updateShape: the hay underneath comes and goes
     updateShape(world, x, y, z, st) {
       return b.with(st, 'signal_fire', smokeSource(world.getState(x, y - 1, z)));
+    },
+    // vanilla useItemOn: food that cooks goes on the fire (lit or not) in its first empty place, one of it from the
+    // hand; anything else, or a fire with no room left, is passed on (to be eaten, say)
+    useItemOn(level, x, y, z, _st, stack, ctx) {
+      const be = level.world.getBlockEntity(x, y, z);
+      if (!(be instanceof CampfireBlockEntity) || !be.cookable(stack)) return 'pass';
+      if (!be.placeFood(level, ctx.player, stack.copyWithCount(1), CAMPFIRE_COOKING_TIME)) return 'consume';
+      consumeHeld(ctx.player);
+      return 'success';
     },
     // vanilla entityInside: a lit one burns (twice as hard for soul fire) whatever living thing stands in it
     entityInside(_level, _x, _y, _z, st, e) {

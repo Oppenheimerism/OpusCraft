@@ -270,7 +270,7 @@ const FOOD: [string, number, number, Partial<FoodInfo>?][] = [
   ['cooked_rabbit', 5, 0.6], ['cod', 2, 0.1],
   ['cooked_cod', 5, 0.6], ['salmon', 2, 0.1], ['cooked_salmon', 6, 0.8], ['cookie', 2, 0.1], ['melon_slice', 2, 0.3],
   ['sweet_berries', 2, 0.1], ['rotten_flesh', 4, 0.1], ['spider_eye', 2, 0.8], ['mushroom_stew', 6, 0.6, { remainder: 'bowl' }],
-  ['beetroot', 1, 0.6], ['beetroot_soup', 6, 0.6, { remainder: 'bowl' }], ['rabbit_stew', 10, 0.6, { remainder: 'bowl' }],
+  ['beetroot', 1, 0.6], ['dried_kelp', 1, 0.3, { fast: true }], ['beetroot_soup', 6, 0.6, { remainder: 'bowl' }], ['rabbit_stew', 10, 0.6, { remainder: 'bowl' }],
   ['golden_carrot', 6, 1.2], ['poisonous_potato', 2, 0.3],
   ['pumpkin_pie', 8, 0.3], ['glow_berries', 2, 0.1], ['pufferfish', 1, 0.1],
   // (vanilla Foods.SUSPICIOUS_STEW; what else it gives is the stack's, game/desertWells.ts)

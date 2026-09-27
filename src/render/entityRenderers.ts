@@ -465,6 +465,7 @@ export class EntityRenderDispatcher {
     this.renderSpawners(b, level, cam, partial, frustum);
     this.renderEnchantingBooks(b, level, cam, partial, frustum);
     this.village.render(b, level, cam, partial, frustum);
+    this.village.renderCampfires(b, this.items, level, cam, frustum);
     this.shulkers.renderBlockEntities(b, level, cam, partial, frustum);
     this.skulls.renderBlockEntities(b, level, cam, partial, frustum);
     this.pistons.render(b, this.items, level, cam, partial, frustum);
