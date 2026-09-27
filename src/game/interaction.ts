@@ -261,7 +261,8 @@ export class Interaction {
     }
     // vanilla IceBlock.playerDestroy: without silk touch (#prevents_ice_melting) ice over something solid or liquid melts
     // (in an ultrawarm dimension it just goes)
-    if (survival && b.name === 'ice' && !silk && !this.level.world.dim.ultraWarm) {
+    // ((Frost Walker) frosted ice too: it's one)
+    if (survival && (b.name === 'ice' || b.name === 'frosted_ice') && !silk && !this.level.world.dim.ultraWarm) {
       const below = this.level.world.getState(x, y - 1, z);
       if (COLLISION[below]?.length || FLAGS[below] & (F_WATER | F_LAVA)) this.level.setBlock(x, y, z, S('water'));
     }

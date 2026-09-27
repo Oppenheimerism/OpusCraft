@@ -36,6 +36,10 @@ const DAMAGES_HELMET = new Set(['anvil', 'fallingBlock', 'fallingStalactite']);
 export const FIRE_SOURCES = new Set(['onFire', 'inFire', 'campfire', 'lava', 'hotFloor', 'fireball']);
 /** vanilla Player.getDestroySpeed: mining fatigue multiplier per amplifier (capped at IV) */
 const FATIGUE_DIG = [0.3, 0.09, 0.0027, 8.1e-4];
+/** (Frost Walker) vanilla #burn_from_stepping: what Frost Walker boots are proof against */
+const BURN_FROM_STEPPING = new Set(['hotFloor', 'campfire']);
+/** (Frost Walker) game/frostWalker.ts's freezing of the water around a Frost Walker's feet */
+export const FEET_HOOKS: { frostWalk?: (e: LivingEntity, level: number) => void } = {};
 /** (Soul Speed) vanilla #soul_speed_blocks */
 const SOUL_SPEED_BLOCKS = new Set(['soul_sand', 'soul_soil']);
 
@@ -167,6 +171,7 @@ export abstract class LivingEntity extends Entity {
   private soulY = NaN;
   private soulZ = NaN;
   private soulLevel = 0;
+  private frostLevel = 0;
 
   /** (Soul Speed) the sand or soil underfoot is one of #soul_speed_blocks (vanilla location_check, offsetY -0.5) */
   private onSoulSpeedBlock(): boolean {
@@ -184,19 +189,23 @@ export abstract class LivingEntity extends Entity {
    * (or its boots change): on the ground on soul sand or soul soil, not riding or flying, the speed starts; it keeps
    * on while it's on them or off the ground, and stops once it stands on anything else (or rides, or flies); and a
    * step on to another block of them wears the boots 1 in 25 times. Every fifth tick, running over them, a soul
-   * escapes from under its feet, sighing about a third of the time.
+   * escapes from under its feet, sighing about a third of the time. (Frost Walker) And at the same moments, on the
+   * ground and not riding, Frost Walker boots freeze the still water around it (game/frostWalker.ts).
    */
-  protected tickSoulSpeed(): void {
+  protected tickFeetEnchantments(): void {
     // (vanilla getEnchantmentLevel over its slots: only the feet's for Soul Speed)
     const feet = this.armorSlots()[0];
     const lvl = feet && feet.count > 0 ? levelOf(feet, 'soul_speed') : 0;
+    const frost = feet && feet.count > 0 ? levelOf(feet, 'frost_walker') : 0;
     const bx = Math.floor(this.x), by = Math.floor(this.y), bz = Math.floor(this.z);
     const moved = bx !== this.soulX || by !== this.soulY || bz !== this.soulZ;
-    if (moved || lvl !== this.soulLevel) {
+    if (moved || lvl !== this.soulLevel || frost !== this.frostLevel) {
       this.soulX = bx;
       this.soulY = by;
       this.soulZ = bz;
       this.soulLevel = lvl;
+      this.frostLevel = frost;
+      if (frost > 0 && this.onGround && !this.vehicle && !this.level.isClientSide) FEET_HOOKS.frostWalk?.(this, frost);
       const onSoul = lvl > 0 && this.onSoulSpeedBlock();
       const flying = this.flyingForSoulSpeed();
       const on = lvl > 0 && !this.vehicle && !flying && (this.soulSpeed > 0 ? onSoul || !this.onGround : onSoul && this.onGround);
@@ -681,8 +690,8 @@ export abstract class LivingEntity extends Entity {
 
   aiStep(): void {
     if (this.noJumpDelay > 0) this.noJumpDelay--;
-    // (Soul Speed) as the tick starts, where the last move left it
-    this.tickSoulSpeed();
+    // (Soul Speed, Frost Walker) as the tick starts, where the last move left it
+    this.tickFeetEnchantments();
     if (this.movedElsewhere()) {
       this.moveFromElsewhere();
       // (powder snow)
@@ -1059,6 +1068,8 @@ export abstract class LivingEntity extends Entity {
     if (this.level.isClientSide) return false;
     if (this.isInvulnerableTo(source) || this.removed || this.health <= 0) return false;
     if (this.shrugsOffFire(source, attacker, direct)) return false;
+    // (Frost Walker) vanilla damage_immunity: its boots are proof against #burn_from_stepping (magma, campfires)
+    if (BURN_FROM_STEPPING.has(source) && levelOf(this.armorSlots()[0], 'frost_walker') > 0) return false;
     this.noActionTime = 0;
     if (amount < 0) amount = 0;
     // (Stage 4: shields) vanilla isDamageSourceBlocked: a raised shield takes the hit, which goes on at 0 (entity/shield.ts)
