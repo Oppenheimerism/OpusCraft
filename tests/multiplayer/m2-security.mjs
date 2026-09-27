@@ -6,7 +6,7 @@
 // kind than it holds, or that are the guest's own to work out, are let be; ids it doesn't know of are ignored; a field
 // naming an entity that comes later has it once it comes, and what waits for that is bounded.
 
-import { loadNet, ENTITY_MODULES, flatHost, makeGuest, rawGuest, hostCopy, step, check, exitWithStatus } from './lib.mjs';
+import { loadNet, ENTITY_MODULES, flatHost, makeGuest, rawGuest, hostCopy, copyOf, step, check, exitWithStatus } from './lib.mjs';
 
 const { m, close } = await loadNet(ENTITY_MODULES);
 
@@ -51,6 +51,46 @@ const { m, close } = await loadNet(ENTITY_MODULES);
   r.send([[m.SB.PlayerAction, m.Action.RIDING_JUMP, 100], [m.SB.SetCreativeModeSlot, -1, null], [m.SB.PlayerAction, m.Action.DROP_ALL, 0]]);
   step(host, 3);
   check('fine: a riding jump with nothing to ride, throwing out nothing, a drop with nothing in hand: nothing happens', !r.gone && hostCopy(host, { name: 'Fine' }) !== null && !host.level.entities.some((e) => e.type === 'item'));
+}
+
+// ---------------------------------------------------------------------------
+// the host's own slips: what a guest would have to refuse (and leave over) isn't sent, and the rest of the tick still is
+{
+  let bad = 0;
+  const bytes = m.encodeBundle([[1, 2], [3, NaN], [4, 'x']], () => bad++);
+  check('wire: a number that isn\'t one can\'t be sent (a guest refuses a message with one)', (() => {
+    try {
+      m.encode([1, NaN]);
+      return false;
+    } catch (e) {
+      return e instanceof m.CodecError;
+    }
+  })());
+  check('wire: in a tick\'s packets, the one with it is left out and the others go', bad === 1 && JSON.stringify(m.decode(bytes, 1 << 20)) === '[[1,2],[4,"x"]]', JSON.stringify(m.decode(bytes, 1 << 20)));
+  const host = flatHost(m, 3);
+  const g = makeGuest(host, 'Alex');
+  step(host, 30);
+  // (a zombie whose fire count isn't a number: its record would carry it; a pig beside it, the same tick)
+  const zombie = m.createMob('zombie', host.level);
+  zombie.moveTo(2.5, 64, 2.5, 0, 0);
+  zombie.remainingFireTicks = NaN;
+  host.level.addEntity(zombie);
+  const pig = m.createMob('pig', host.level);
+  pig.moveTo(-2.5, 64, 2.5, 0, 0);
+  host.level.addEntity(pig);
+  // (a bat past the height the wire takes, above the guest)
+  const bat = m.createMob('bat', host.level);
+  bat.moveTo(0.5, 25_000_000, 0.5, 0, 0);
+  bat.noGravity = true;
+  bat.serverAiStep = () => {};
+  host.level.addEntity(bat);
+  step(host, 5);
+  check('host slips: the guest is still in', g.session.state === 'play', g.disconnected);
+  check('host slips: it isn\'t shown what can\'t be sent (a zombie whose record has a number that isn\'t one, a bat past the height)', copyOf(g, zombie) === null && copyOf(g, bat) === null);
+  check('host slips: and is shown what came in the same tick (the pig)', copyOf(g, pig)?.type === 'pig');
+  zombie.remainingFireTicks = 0;
+  step(host, 5);
+  check('host slips: the zombie is shown once it can be', copyOf(g, zombie)?.type === 'zombie' && g.session.state === 'play');
 }
 
 // ---------------------------------------------------------------------------
