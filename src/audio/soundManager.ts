@@ -144,6 +144,9 @@ const ALIASES: [RegExp, string][] = [
 /** how late (ms) a sound that had to be generated first may still start */
 const WAIT_MS = 250;
 
+/** (jukebox) how many rendered songs are kept: all nineteen discs' at once would be over 600 MB */
+const SONGS_KEPT = 4;
+
 export class SoundManager {
   ctx: AudioContext | null = null;
   private master: GainNode | null = null;
@@ -176,7 +179,7 @@ export class SoundManager {
   private readonly loops: LoopSound[] = [];
   /**
    * (jukebox) vanilla LevelRenderer.playingJukeboxSongs: the song each jukebox is playing, by position (`e` null
-   * while it's still being rendered), and the songs rendered so far, kept so a disc put back in starts at once
+   * while it's still being rendered), and the last few songs played, kept so a disc put back in starts at once
    */
   private readonly jukeboxSongs = new Map<string, { e: SoundManager['active'][number] | null }>();
   private readonly songBuffers = new Map<string, AudioBuffer>();
@@ -353,12 +356,19 @@ export class SoundManager {
       };
     };
     const cached = this.songBuffers.get(event);
-    if (cached) return start(cached);
+    if (cached) {
+      // (the most recently played kept last)
+      this.songBuffers.delete(event);
+      this.songBuffers.set(event, cached);
+      return start(cached);
+    }
     void this.request({ type: 'pool', pool: event, index: 0 }).then((d) => {
       if (!d || !this.ctx) return;
       const b = this.ctx.createBuffer(1, d.length, SR);
       b.copyToChannel(d as Float32Array<ArrayBuffer>, 0);
+      this.songBuffers.delete(event);
       this.songBuffers.set(event, b);
+      for (const old of this.songBuffers.keys()) if (this.songBuffers.size > SONGS_KEPT) this.songBuffers.delete(old);
       start(b);
     });
   }
