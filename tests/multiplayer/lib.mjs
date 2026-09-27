@@ -4,7 +4,16 @@
 // runs host tick → deliver → guest ticks → deliver; `mirrorDiff()` compares what a guest has with the host's world.
 
 import { load, check, exitWithStatus, genLevel, flatLevel } from '../fixes/lib.mjs';
+import { WsNetwork, closeWsNetworks } from './net/wsNetwork.mjs';
 export { check, exitWithStatus };
+
+/**
+ * (stage 5) MP_NET=ws: every network a test makes (m.MemoryNetwork's) goes through the relay over WebSockets instead
+ * (net/wsNetwork.mjs), carried by the game's WebSocket transports; MP_LAG=20-200 holds each message back 20 to 200 ms
+ * of the tests' time as well, in order
+ */
+export const NET_MODE = process.env.MP_NET === 'ws' ? 'ws' : 'memory';
+const LAG = /^(\d+)-(\d+)$/.exec(process.env.MP_LAG ?? '');
 
 export const NET_MODULES = [
   '/src/net/codec.ts', '/src/net/protocol.ts', '/src/net/config.ts', '/src/net/items.ts', '/src/net/chunkData.ts', '/src/net/playerState.ts', '/src/net/playerStatus.ts',
@@ -22,7 +31,22 @@ export const ENTITY_MODULES = [
 ];
 
 export async function loadNet(extra = []) {
-  return load([...NET_MODULES, ...extra]);
+  const r = await load([...NET_MODULES, ...extra]);
+  if (NET_MODE !== 'ws') return r;
+  const m = r.m;
+  const lag = LAG ? { min: +LAG[1], max: Math.max(+LAG[1], +LAG[2]) } : null;
+  m.MemoryNetwork = class extends WsNetwork {
+    constructor() {
+      super(m, lag);
+    }
+  };
+  const close = r.close;
+  r.close = async () => {
+    await closeWsNetworks();
+    await close();
+  };
+  console.log(`(the networks go through the relay over WebSockets${lag ? `, with ${lag.min} to ${lag.max} ms of lag` : ''})`);
+  return r;
 }
 
 /** sounds and particles, written down */
@@ -158,6 +182,8 @@ export function rawGuest(host) {
     t,
     got: [],
     gone: false,
+    /** (stage 5) why its connection ended, if the transport said (the relay's word, over WebSockets) */
+    goneReason: null,
     send(packets) {
       t.send(m.HOST_PEER, m.encode(packets));
     },
@@ -168,16 +194,19 @@ export function rawGuest(host) {
     packets(id) {
       return r.got.flat().filter((p) => p[0] === id);
     },
+    /** why it was let go: the host's Disconnect, or else (stage 5) its transport's word */
     reason() {
-      return r.packets(m.CB.Disconnect)[0]?.[1] ?? null;
+      return r.packets(m.CB.Disconnect)[0]?.[1] ?? r.goneReason;
     },
     hello(name = 'Raw', { protocol = m.PROTOCOL_VERSION, build = m.BUILD_ID, uuid = m.offlinePlayerUuid(name), viewDistance = 2, code = host.server.joinCode } = {}) {
       r.send([[m.SB.Hello, protocol, build, name, uuid, viewDistance, code]]);
     },
   };
   t.onMessage((_peer, data) => r.got.push(m.decode(data, m.MAX_HOST_MESSAGE)));
-  t.onPeer((_peer, joined) => {
-    if (!joined) r.gone = true;
+  t.onPeer((_peer, joined, reason) => {
+    if (joined) return;
+    r.gone = true;
+    r.goneReason = reason ?? null;
   });
   return r;
 }
@@ -192,9 +221,16 @@ export function copyOf(g, e) {
   return g.session.entities.get(e.id)?.e ?? null;
 }
 
-/** host tick → deliver → each guest's tick → deliver, `n` times */
+/**
+ * (stage 5, MP_LAG) the ticks each step() and stepIdle() goes on for after those asked for: long enough for what was
+ * sent in them to arrive, be answered and the answer arrive, at the most lag (the tests' ticks were written for a
+ * network that answers within the tick)
+ */
+const SETTLE = LAG ? Math.ceil((2 * Math.max(+LAG[1], +LAG[2])) / 50) + 1 : 0;
+
+/** host tick → deliver → each guest's tick → deliver, `n` times (and, with MP_LAG, SETTLE more) */
 export function step(host, n = 1) {
-  for (let i = 0; i < n; i++) {
+  for (let i = 0; i < n + SETTLE; i++) {
     host.server.receive();
     host.level.tick();
     host.server.tick();
@@ -204,9 +240,9 @@ export function step(host, n = 1) {
   }
 }
 
-/** (stage 4) the host on a loading screen, its level standing still (Game.tick before it's spawned), `n` times */
+/** (stage 4) the host on a loading screen, its level standing still (Game.tick before it's spawned), `n` times (and, with MP_LAG, SETTLE more) */
 export function stepIdle(host, n = 1) {
-  for (let i = 0; i < n; i++) {
+  for (let i = 0; i < n + SETTLE; i++) {
     host.server.idleTick();
     host.net.deliver();
     for (const g of host.guests) g.session.tick();

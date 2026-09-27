@@ -4,9 +4,10 @@
 // reads none of them; what's in them is checked here and above as anything from another game is.
 //
 // Every message goes with a byte in front saying how: as it is, or deflated (CompressionStream's deflate-raw), which
-// the host does to the big ones (chunks, above all) and a guest never does. What's inflated is held to the game's limit
-// on a message, and one that won't inflate, or inflates to more, ends the connection. Messages are handed on in the
-// order they were sent, whatever takes longer to squash or unsquash, and a connection's end comes after them.
+// the host does to the big ones (chunks, above all) and a guest never does. Inflating stops a byte past the game's
+// limit on a message, and what doesn't unpack at all is handed on empty: the game above turns either away as it does
+// any message too big or not its own, saying why. Messages are handed on in the order they were sent, whatever takes
+// longer to squash or unsquash, and a connection's end comes after them.
 //
 // (A way for two browsers to reach each other straight, WebRTC, would be another Transport beside this one.)
 
@@ -48,7 +49,7 @@ const RAW = 0, DEFLATED = 1;
 /** the host deflates a message of this many bytes or more (a tick's moves and sounds are fewer; chunks, many more) */
 const DEFLATE_FROM = 1024;
 /** the relay's close codes (scripts/relay.mjs's CLOSE) */
-const CLOSE_SHUTDOWN = 1001, CLOSE_BAD = 1008, CLOSE_KICKED = 4000, CLOSE_HOST_LEFT = 4001, CLOSE_TIMED_OUT = 4002, CLOSE_NO_HOST = 4004,
+const CLOSE_SHUTDOWN = 1001, CLOSE_BAD = 1008, CLOSE_TOO_BIG = 1009, CLOSE_KICKED = 4000, CLOSE_HOST_LEFT = 4001, CLOSE_TIMED_OUT = 4002, CLOSE_NO_HOST = 4004,
   CLOSE_TOO_MUCH = 4008, CLOSE_FULL = 4010;
 export const CLOSE_HOST_TAKEN = 4009;
 
@@ -80,6 +81,9 @@ export function closeReason(code: number, reason: string, wasOpen: boolean): str
       return wasOpen ? "The host's game server stopped." : "Couldn't reach the host's computer.";
     case CLOSE_BAD:
       return 'The connection was closed: something was sent that the other end refused.';
+    case CLOSE_TOO_BIG:
+      // (the relay holds a guest to the game's own limit on a message: as the host's game would say it)
+      return 'Bad data: a message too big';
     default:
       return wasOpen ? 'Connection lost' : "Couldn't reach the host's computer.";
   }
@@ -146,9 +150,13 @@ async function deflate(data: Uint8Array<ArrayBuffer>): Promise<Uint8Array<ArrayB
   return new Uint8Array(await new Response(cs.readable).arrayBuffer());
 }
 
-/** `data` inflated, if it is deflate-raw and comes to no more than `max` bytes; null if not */
-async function inflate(data: Uint8Array<ArrayBuffer>, max: number): Promise<Uint8Array<ArrayBuffer> | null> {
-  if (!canSquash) return null;
+/**
+ * `data` inflated (deflate-raw), but no more than `max` + 1 bytes of it: one that would come to more than any the game
+ * sends is cut off there, so the game above sees it's too big without its all being unpacked. Empty if it isn't
+ * deflate-raw at all (the game turns an empty message away as it does any that isn't its own)
+ */
+async function inflate(data: Uint8Array<ArrayBuffer>, max: number): Promise<Uint8Array<ArrayBuffer>> {
+  if (!canSquash) return new Uint8Array(0);
   const ds = new DecompressionStream('deflate-raw');
   const w = ds.writable.getWriter();
   w.write(data).catch(() => {});
@@ -160,16 +168,16 @@ async function inflate(data: Uint8Array<ArrayBuffer>, max: number): Promise<Uint
     for (;;) {
       const { done, value } = await r.read();
       if (done) break;
-      n += value.length;
-      // (a message that would inflate to more than any the game sends isn't inflated any further)
+      const room = max + 1 - n;
+      parts.push(value.length > room ? value.subarray(0, room) : value);
+      n += Math.min(value.length, room);
       if (n > max) {
         void r.cancel().catch(() => {});
-        return null;
+        break;
       }
-      parts.push(value);
     }
   } catch {
-    return null;
+    return new Uint8Array(0);
   }
   const out = new Uint8Array(n);
   let at = 0;
@@ -281,9 +289,10 @@ export class WebSocketHostTransport implements Transport {
       const g = this.guests.get(peer);
       if (!g) return;
       const body = b.subarray(5);
-      // (a guest's messages go as they are: one that says otherwise, or says nothing, isn't one of the game's)
-      if (body.length < 1 || body[0] !== RAW) return this.drop(peer, g);
-      this.arrive(g, () => this.guests.get(peer) === g && this.msgCb?.(peer, body.subarray(1)));
+      // (a guest's messages go as they are: one that says otherwise, or says nothing, isn't one of the game's, and
+      // goes on empty for the game to turn away)
+      const m = body.length >= 1 && body[0] === RAW ? body.subarray(1) : new Uint8Array(0);
+      this.arrive(g, () => this.guests.get(peer) === g && this.msgCb?.(peer, m));
     } else if (op === OP_LEAVE) {
       const g = this.guests.get(peer);
       if (!g) return;
@@ -296,13 +305,6 @@ export class WebSocketHostTransport implements Transport {
   private arrive(g: Guest, job: () => void): void {
     if (g.lag) g.incoming.push(g.lag.hold());
     g.incoming.push(job);
-  }
-
-  /** a guest that broke the rules of the connection itself: let go, and the game hears it went */
-  private drop(peer: PeerId, g: Guest): void {
-    this.guests.delete(peer);
-    this.kick(peer, g);
-    this.arrive(g, () => this.peerCb?.(peer, false));
   }
 
   private kick(peer: PeerId, g: Guest): void {
@@ -414,14 +416,12 @@ export class WebSocketGuestTransport implements Transport {
   private received(data: unknown): void {
     if (this.state !== 'open') return;
     const b = bytesOf(data);
-    if (!b || b.length < 1 || (b[0] !== RAW && b[0] !== DEFLATED)) return this.broken();
+    // (what isn't one of the host's messages goes on empty, for the game to turn away)
+    if (!b || b.length < 1 || (b[0] !== RAW && b[0] !== DEFLATED)) return this.arrive(() => this.deliver(new Uint8Array(0)));
     if (b[0] === RAW) return this.arrive(() => this.deliver(b.subarray(1)));
     const z = b.subarray(1);
     this.arrive(async () => {
-      if (this.state !== 'open') return;
-      const m = await inflate(z, MAX_HOST_MESSAGE);
-      if (m) this.deliver(m);
-      else this.broken();
+      if (this.state === 'open') this.deliver(await inflate(z, MAX_HOST_MESSAGE));
     });
   }
 
@@ -429,16 +429,10 @@ export class WebSocketGuestTransport implements Transport {
     if (this.state === 'open') this.msgCb?.(HOST_PEER, m);
   }
 
-  /** the host sent something that isn't a message at all: the connection's over */
-  private broken(): void {
-    this.end("Bad data from the host: a message that couldn't be unpacked", true);
-  }
-
-  private end(reason: string, closeIt = false): void {
+  private end(reason: string): void {
     if (this.state === 'closed') return;
     this.state = 'closed';
     this.endReason = reason;
-    if (closeIt) this.ws.close(1000, 'bye');
     // (after whatever came before it)
     this.arrive(() => this.peerCb?.(HOST_PEER, false, reason));
   }

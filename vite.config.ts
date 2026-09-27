@@ -2,7 +2,7 @@ import { defineConfig, type Plugin } from 'vite';
 import { mkdirSync, writeFileSync, readdirSync, readFileSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { createHash } from 'node:crypto';
-import { attachRelay } from './scripts/relay.mjs';
+import { attachRelay, relayLimits } from './scripts/relay.mjs';
 import * as NET from './src/net/config.ts';
 
 /** dev only: POST /__shot?name=x with a PNG body saves it as tmp/shots/x.png (page captures while the tab is hidden) */
@@ -55,23 +55,7 @@ function buildId(): Plugin {
  * lan, the one command that opens it to the network) and the dev server (this computer only), with the game's limits
  */
 function relay(): Plugin {
-  const limits = {
-    maxGuestMessage: NET.MAX_GUEST_MESSAGE,
-    maxHostMessage: NET.MAX_HOST_MESSAGE,
-    maxConnections: NET.RELAY_MAX_CONNECTIONS,
-    maxPerAddress: NET.RELAY_MAX_PER_ADDRESS,
-    maxGuests: NET.RELAY_MAX_GUESTS,
-    maxListeners: NET.RELAY_MAX_LISTENERS,
-    guestMessagesPerSecond: NET.RELAY_GUEST_MESSAGES_PER_SECOND,
-    guestBurst: NET.RELAY_GUEST_BURST,
-    guestBytesPerSecond: NET.RELAY_GUEST_BYTES_PER_SECOND,
-    guestBurstBytes: NET.RELAY_GUEST_BURST_BYTES,
-    maxGuestBuffer: NET.RELAY_MAX_GUEST_BUFFER,
-    maxWorldInfo: NET.RELAY_MAX_WORLD_INFO,
-    handshakeMs: NET.RELAY_HANDSHAKE_MS,
-    idleMs: NET.RELAY_IDLE_MS,
-    pingMs: NET.RELAY_PING_MS,
-  };
+  const limits = relayLimits(NET);
   return {
     name: 'mp-relay',
     configureServer(server) {

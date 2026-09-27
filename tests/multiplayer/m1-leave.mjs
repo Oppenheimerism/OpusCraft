@@ -5,7 +5,7 @@
 // quiet or goes away, the guest sees the connection lost. And a guest's game never touches the save store: its copy of
 // the host's world is a passing one.
 
-import { loadNet, flatHost, makeGuest, hostCopy, step, assertMirrorEquals, check, exitWithStatus } from './lib.mjs';
+import { loadNet, flatHost, makeGuest, hostCopy, step, assertMirrorEquals, check, exitWithStatus, NET_MODE } from './lib.mjs';
 
 const { m, close } = await loadNet(['/src/game/game.ts']);
 
@@ -113,7 +113,9 @@ function counting(g, id) {
   step(host, 5);
   host.net.host.close();
   step(host, 2);
-  check('host gone: the guest sees "Connection lost"', a.disconnected === 'Connection lost', a.disconnected);
+  // (stage 5: through the relay, the guest hears it was the host that went)
+  const said = NET_MODE === 'ws' ? 'The host closed the world.' : 'Connection lost';
+  check(`host gone: the guest sees "${said}"`, a.disconnected === said, a.disconnected);
 }
 {
   // the host goes quiet (its window died, the browser hid it for good): the guest gives up after 30 seconds
