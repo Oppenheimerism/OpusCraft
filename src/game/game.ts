@@ -2161,7 +2161,9 @@ function relayHostable(): string | null {
   if (typeof WebSocket !== 'function' || (location.protocol !== 'http:' && location.protocol !== 'https:')) return 'Only windows of this browser can join this world.';
   const h = location.hostname;
   if (h === 'localhost' || h.endsWith('.localhost') || h === '[::1]' || /^127\./.test(h)) return null;
-  return `Only windows of this browser can join: to let other computers join, open the game at http://localhost${location.port ? ':' + location.port : ''} on this computer.`;
+  // (a page come through a tunnel has no port of the server's to say)
+  const local = location.port ? `http://localhost:${location.port}` : 'localhost';
+  return `Only windows of this browser can join: to let other computers join, open the game at ${local} on the computer running it.`;
 }
 
 /** (hosting) the link to send a friend on this network: where the relay says the game can be opened, with the join code */
