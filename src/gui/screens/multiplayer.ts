@@ -7,17 +7,16 @@ import { Screen, Button, CycleButton, EditBox } from '../screen';
 import { ScrollList } from '../list';
 import type { GuiGraphics } from '../guiGraphics';
 import { LanWorldList, type LanWorld } from '../../net/transport/lan';
-import { randomId } from '../../net/transport/transport';
+import { offlinePlayerUuid } from '../../net/offlineUuid';
 import type { GuestIdentity } from '../../net/client/clientSession';
 import type { GameMode } from '../../entity/player';
 import { NAME_PATTERN, PROTOCOL_VERSION, BUILD_ID, GUEST_VIEW_DISTANCE } from '../../net/config';
 
 // ---------------------------------------------------------------------------
-// who a guest is (this window's, kept while the tab is open: two windows are two players)
+// who a guest is (this window's name, kept while the tab is open: two windows are two players; the name is who it is
+// to the host's world, as vanilla's LAN worlds know their players, so coming back by the same name is coming back)
 
 const NAME_KEY = 'mc-mp-name';
-const UUID_KEY = 'mc-mp-uuid';
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 function stored(key: string): string | null {
   try {
@@ -41,15 +40,13 @@ export function guestName(): string {
   return n && NAME_PATTERN.test(n) ? n : `Player${100 + Math.floor(Math.random() * 900)}`;
 }
 
-/** who this window joins as: `name`, its uuid (made once per tab), and how far round it wants chunks */
+/**
+ * who this window joins as: `name`, the uuid a LAN world knows that name by (vanilla's offline uuid, made from the name:
+ * the host keeps its player under it), and how far round it wants chunks
+ */
 export function guestIdentity(game: Game, name: string): GuestIdentity {
-  let uuid = stored(UUID_KEY);
-  if (!uuid || !UUID.test(uuid)) {
-    uuid = randomId();
-    store(UUID_KEY, uuid);
-  }
   store(NAME_KEY, name);
-  return { name, uuid, viewDistance: Math.max(2, Math.min(GUEST_VIEW_DISTANCE, game.opts.renderDistance)) };
+  return { name, uuid: offlinePlayerUuid(name), viewDistance: Math.max(2, Math.min(GUEST_VIEW_DISTANCE, game.opts.renderDistance)) };
 }
 
 /** whether this game can join `w` (vanilla ServerData.isCompatible: the same protocol, and here the same build) */

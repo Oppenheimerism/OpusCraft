@@ -4,7 +4,7 @@
 // game (HostHooks), so the tests can run a host without a window.
 
 import type { Value } from '../codec';
-import { CB } from '../protocol';
+import { CB, type ReceivingReason } from '../protocol';
 import { ANNOUNCE_TICKS, PROTOCOL_VERSION, BUILD_ID, MAX_GUESTS, MAX_PENDING_LOGINS } from '../config';
 import type { PeerId, Transport } from '../transport/transport';
 import { LanAnnouncer, type LanWorld } from '../transport/lan';
@@ -23,6 +23,8 @@ import type { Hand } from '../../item/inventory';
 import { Chunk } from '../../world/chunk';
 import { blockEntityKey, type BlockEntity } from '../../world/blockEntity';
 import { STATE_BLOCK } from '../../world/block';
+import type { SavedPlayer } from '../../game/playerData';
+import type { SavedEntity } from '../../entity/mob';
 
 export interface HostHooks {
   /** where a guest new to the world starts (vanilla: the world spawn; here in whatever dimension the host is in) */
@@ -40,6 +42,18 @@ export interface HostHooks {
   hostBreaking(): { x: number; y: number; z: number; stage: number } | null;
   /** guests came or went */
   onGuestsChanged?(guests: number): void;
+  /**
+   * the player of the guest with this uuid as this world last kept it, if it's been here before (vanilla PlayerList.load:
+   * the guest is let in once it's read). None: every guest comes new
+   */
+  loadGuest?(uuid: string): Promise<SavedPlayer | null>;
+  /** a guest's player, kept for when it comes back (vanilla PlayerDataStorage.save: written with the world) */
+  saveGuest?(uuid: string, data: SavedPlayer): void;
+  /**
+   * what a guest rode when it left, put back where it was in dimension `dim` (the guest having come back to find the
+   * host in another): it waits there for that dimension to be loaded again (the Game's PortalArrivals)
+   */
+  leaveInDimension?(dim: string, e: SavedEntity): void;
 }
 
 export class HostServer {
@@ -57,6 +71,8 @@ export class HostServer {
   private hostCrack = '';
   /** vanilla SleepStatus: the players not spectating, and how many of them are asleep, as last counted */
   private sleepStatus = { active: 0, sleeping: 0 };
+  /** the guests are on their way to the host's next dimension with it (hostLeavingDimension, till hostArrived) */
+  travelling = false;
   /** the guest whose player is ticking (what that sets off, its own game shows it: not sent back to it) */
   actor: ServerPlayerSession | null = null;
   /** (runLocal) sounds and particles stay on the host */
@@ -159,6 +175,11 @@ export class HostServer {
     return this.guestCount() > 0;
   }
 
+  /** vanilla PlayerList.saveAll: every guest's player kept as it is now (the world is being saved) */
+  saveAll(): void {
+    for (const s of this.sessions.values()) s.save();
+  }
+
   sessionOf(p: Player): ServerPlayerSession | null {
     for (const s of this.sessions.values()) if (s.player === p && s.state === 'play') return s;
     return null;
@@ -171,6 +192,42 @@ export class HostServer {
 
   // -------------------------------------------------------------------------
   // the tick
+
+  /**
+   * (Game.changeDimension, before the host's own player goes) vanilla ServerPlayer.changeDimension for every guest: the
+   * host's dimension is the only one there is, so each goes along to `dim`, waiting on its loading screen (`reason`'s)
+   * till the host is there (hostArrived)
+   */
+  hostLeavingDimension(dim: string, reason: ReceivingReason): void {
+    if (this.closed) return;
+    this.travelling = true;
+    for (const s of this.sessions.values()) s.leaveDimension(dim, reason);
+    this.dirtyBlockEntities.clear();
+  }
+
+  /** (Game.tick, the host in place in its new dimension) its guests come in beside it */
+  hostArrived(): void {
+    if (this.closed || !this.travelling) return;
+    this.travelling = false;
+    // (the weather told afresh, as it is here: none in the Nether or the End)
+    this.weather = '';
+    for (const s of this.sessions.values()) s.arrive();
+  }
+
+  /**
+   * (Game.tick, the host on a loading screen: a new dimension's chunks, the End Poem, a far bed's) the level stands still.
+   * Guests on their way to the next dimension with the host are kept alive (ServerPlayerSession.idleTick); what the
+   * others say waits for the level, as it always has; and the world is still announced on the LAN
+   */
+  idleTick(): void {
+    if (this.closed) return;
+    this.ticks++;
+    for (const s of [...this.sessions.values()]) {
+      s.idleTick();
+      if (s.state === 'gone') this.sessions.delete(s.peer);
+    }
+    if (this.announcer && this.ticks % ANNOUNCE_TICKS === 0) this.announcer.announce();
+  }
 
   /** (Game.tick, before the level's tick) what the guests said since the last tick */
   receive(): void {
@@ -288,7 +345,7 @@ export class HostServer {
   broadcastNear(p: Value[], x: number, y: number, z: number, r: number, except: ServerPlayerSession | null = null): void {
     for (const s of this.sessions.values()) {
       const pl = s.player;
-      if (s !== except && s.state === 'play' && pl && (pl.x - x) ** 2 + (pl.y - y) ** 2 + (pl.z - z) ** 2 < r * r) s.send(p);
+      if (s !== except && s.state === 'play' && !s.travelling && pl && (pl.x - x) ** 2 + (pl.y - y) ** 2 + (pl.z - z) ** 2 < r * r) s.send(p);
     }
   }
 

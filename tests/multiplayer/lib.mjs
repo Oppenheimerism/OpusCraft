@@ -10,7 +10,7 @@ export const NET_MODULES = [
   '/src/net/codec.ts', '/src/net/protocol.ts', '/src/net/config.ts', '/src/net/items.ts', '/src/net/chunkData.ts', '/src/net/playerState.ts', '/src/net/playerStatus.ts',
   '/src/net/transport/memory.ts', '/src/net/transport/transport.ts', '/src/net/server/hostServer.ts', '/src/net/server/session.ts',
   '/src/net/client/clientSession.ts', '/src/net/client/mirrorPlayer.ts', '/src/world/dimension.ts', '/src/item/item.ts',
-  '/src/world/blockEntity.ts', '/src/game/interaction.ts',
+  '/src/world/blockEntity.ts', '/src/game/interaction.ts', '/src/net/offlineUuid.ts',
 ];
 
 /** (stage 2) the entities' side of it: the registry, the fields, the trackers and copies, and the kinds the tests make */
@@ -39,7 +39,7 @@ function recordingLevel(level) {
  * a host: `world`/`level` from genLevel or flatLevel (chunks made on demand by `makeChunk(cx, cz)` when a guest's
  * ticket asks), its own player at (x, y, z)
  */
-export function makeHost(m, { world, level }, { makeChunk, x = 0.5, y = 65, z = 0.5, spawn = [0.5, 65, 0.5], hostName = 'Host', gameMode = 'creative', guestGameMode, transport } = {}) {
+export function makeHost(m, { world, level }, { makeChunk, x = 0.5, y = 65, z = 0.5, spawn = [0.5, 65, 0.5], hostName = 'Host', gameMode = 'creative', guestGameMode, transport, hooks: more = {} } = {}) {
   recordingLevel(level);
   const p = new m.Player(level);
   p.setGameMode(gameMode);
@@ -64,18 +64,23 @@ export function makeHost(m, { world, level }, { makeChunk, x = 0.5, y = 65, z = 
           for (let cx = t[0] - t[2]; cx <= t[0] + t[2]; cx++) if (!world.getChunk(cx, cz)) makeChunk(cx, cz);
     },
     hostBreaking: () => breaking,
+    // (stage 4: the guests' players kept with the world, as a test gives them: loadGuest, saveGuest, leaveInDimension)
+    ...more,
   };
   // (the pop of something picked up, as the game's own level plays it: Game.setUpWorld's onTake)
   level.onTake = (e) => level.sound.play(e.type === 'experience_orb' ? 'entity.experience_orb.pickup' : 'entity.item.pickup', e.x, e.y, e.z, 0.2, 1);
   // (stage 3) the guests' game mode, as the LAN screen picks it; creative if the test doesn't say, as before
   const server = new m.HostServer(level, transport ?? net.host, hooks, { lanId: 'test-world-0000', announce: false, guestGameMode });
-  return { m, world, level, player: p, net, server, chat, overlays, tickets, guests: [], setBreaking: (b) => (breaking = b) };
+  return { m, world, level, player: p, net, server, chat, overlays, tickets, guests: [], makeChunk, setBreaking: (b) => (breaking = b) };
 }
 
-/** a guest connecting to `host` as `name` (it says hello once `step` delivers the connection), over `transport` if given */
+/**
+ * a guest connecting to `host` as `name` (it says hello once `step` delivers the connection), over `transport` if given;
+ * its uuid its name's (stage 4: vanilla's offline uuid, which the host holds it to), unless a test gives another
+ */
 export function makeGuest(host, name = 'Guest', { viewDistance = 3, uuid, transport = host.net.connect() } = {}) {
   const { m } = host;
-  const g = { name, transport, chat: [], overlays: [], disconnected: null, world: null, level: null, player: null, session: null, chunkAdds: 0, took: [], mounted: [], died: [], respawned: 0, recipes: new Set(), toasts: [] };
+  const g = { name, transport, chat: [], overlays: [], disconnected: null, world: null, level: null, player: null, session: null, chunkAdds: 0, took: [], mounted: [], died: [], respawned: 0, recipes: new Set(), toasts: [], dims: [] };
   const hooks = {
     login(info) {
       const world = new m.World();
@@ -87,6 +92,8 @@ export function makeGuest(host, name = 'Guest', { viewDistance = 3, uuid, transp
       const p = new m.Player(level);
       p.setGameMode(info.gameMode);
       p.moveTo(info.x, info.y, info.z, info.yRot, info.xRot);
+      // (stage 4: flying as it was when it left)
+      p.flying = !!info.flying && p.mayFly;
       level.player = p;
       level.addMirrorEntity(p);
       g.world = world;
@@ -120,8 +127,17 @@ export function makeGuest(host, name = 'Guest', { viewDistance = 3, uuid, transp
       else g.toasts.push(...rs.map((r) => r.id));
       for (const r of rs) g.recipes.add(r.id);
     },
+    // (stage 4) taken along to the host's next dimension: its world let go, as Game.guestChangedDimension does
+    changeDimension: (dim, reason) => {
+      g.dims.push([dim, reason]);
+      for (const c of [...g.world.chunks.values()]) g.world.removeChunk(c.cx, c.cz);
+      g.world.reset(m.dimensionById(dim));
+      g.level.resetForDimension();
+      g.player.dx = g.player.dy = g.player.dz = 0;
+      g.player.fallDistance = 0;
+    },
   };
-  g.session = new m.ClientSession(transport, hooks, { name, uuid: uuid ?? m.randomId(), viewDistance });
+  g.session = new m.ClientSession(transport, hooks, { name, uuid: uuid ?? m.offlinePlayerUuid(name), viewDistance });
   host.guests.push(g);
   return g;
 }
@@ -150,7 +166,7 @@ export function rawGuest(host) {
     reason() {
       return r.packets(m.CB.Disconnect)[0]?.[1] ?? null;
     },
-    hello(name = 'Raw', { protocol = m.PROTOCOL_VERSION, build = m.BUILD_ID, uuid = m.randomId(), viewDistance = 2 } = {}) {
+    hello(name = 'Raw', { protocol = m.PROTOCOL_VERSION, build = m.BUILD_ID, uuid = m.offlinePlayerUuid(name), viewDistance = 2 } = {}) {
       r.send([[m.SB.Hello, protocol, build, name, uuid, viewDistance]]);
     },
   };
@@ -183,6 +199,35 @@ export function step(host, n = 1) {
   }
 }
 
+/** (stage 4) the host on a loading screen, its level standing still (Game.tick before it's spawned), `n` times */
+export function stepIdle(host, n = 1) {
+  for (let i = 0; i < n; i++) {
+    host.server.idleTick();
+    host.net.deliver();
+    for (const g of host.guests) g.session.tick();
+    host.net.deliver();
+  }
+}
+
+/**
+ * (stage 4) the host's player off to dimension `dim`, to wait at (x, y, z) till it's loaded, as Game.changeDimension
+ * does it: its guests told first (`told()` then run, the old dimension still there), then this dimension let go.
+ * `host.server.hostArrived()` once it's there
+ */
+export function hostChangeDimension(host, dim, x, y, z, reason = 'other', told = null) {
+  const { m, world, level, server, player: p } = host;
+  server.hostLeavingDimension(dim, reason);
+  told?.();
+  if (p.isSleeping()) p.stopSleepInBed(true);
+  p.removeVehicle();
+  for (const c of [...world.chunks.values()]) world.removeChunk(c.cx, c.cz);
+  world.reset(m.dimensionById(dim));
+  level.resetForDimension();
+  p.moveTo(x, y, z, p.yaw, p.pitch);
+  p.dx = p.dy = p.dz = 0;
+  p.fallDistance = 0;
+}
+
 /** a flat host world of chunks in [-r, r]², made on demand beyond that */
 export function flatHost(m, r = 4, opts = {}) {
   const { world, level } = flatLevel(m, -r, -r, r, r, 64, 'stone');
@@ -190,7 +235,8 @@ export function flatHost(m, r = 4, opts = {}) {
     const blocks = new Uint16Array(m.COLUMN_VOLUME);
     const S = m.S('stone');
     for (let y = m.MIN_Y; y < 64; y++) for (let lz = 0; lz < 16; lz++) for (let lx = 0; lx < 16; lx++) blocks[m.colIndex(lx, y, lz)] = S;
-    world.addChunk({ cx, cz, blocks, light: m.computeChunkLight(blocks), biomes: new Uint8Array(256).fill(m.B.plains), pending: [] });
+    // (stage 4: lit as its dimension is, the Nether's and the End's without the sky)
+    world.addChunk({ cx, cz, blocks, light: m.computeChunkLight(blocks, world.dim.hasSkyLight), biomes: new Uint8Array(256).fill(m.B.plains), pending: [] });
   };
   return makeHost(m, { world, level }, { makeChunk, ...opts });
 }

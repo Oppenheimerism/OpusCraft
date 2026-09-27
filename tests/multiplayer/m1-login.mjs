@@ -83,7 +83,8 @@ const { m, close } = await loadNet();
   r = tryHello('alex');
   turnedAway('a guest\'s name (any case)', r, 'Someone called alex is already playing here.');
   r = tryHello('Other', { uuid: g.session.me.uuid });
-  turnedAway('a uuid already in the world', r, /already in this world/);
+  // (stage 4: a guest's uuid must be its name's, so another's is turned away as that, before it's looked for here)
+  turnedAway('a uuid already in the world', r, /^Bad data: that uuid isn't the name's$/);
 
   r = rawGuest(host);
   step(host, 1);

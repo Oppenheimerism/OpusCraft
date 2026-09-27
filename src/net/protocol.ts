@@ -161,7 +161,19 @@ export const CB = {
    * replacing what it knew, all of them (vanilla ClientboundRecipeBookAddPacket)
    */
   RecipeBookAdd: 44,
+  /**
+   * [dimension, reason (RECEIVING_REASONS)]: the host went to another dimension and takes the guest along: its world is
+   * let go and the loading screen shown (the nether portal's swirl, the end portal's stars, or neither) till the host
+   * puts its player there (vanilla ClientboundRespawnPacket, with ReceivingLevelScreen's reason)
+   */
+  ChangeDimension: 45,
 } as const;
+
+/** the dimensions there are (vanilla's three: a guest takes no other) */
+export const DIMENSION_IDS: readonly string[] = ['overworld', 'the_nether', 'the_end'];
+/** vanilla ReceivingLevelScreen.Reason: what the loading screen shows while changing dimension */
+export const RECEIVING_REASONS = ['nether_portal', 'end_portal', 'other'] as const;
+export type ReceivingReason = (typeof RECEIVING_REASONS)[number];
 
 /** SB.PlayerAction's actions (vanilla ServerboundPlayerActionPacket.Action / ServerboundUseItemPacket): what the host does with its own player's clicks */
 export const Action = {
@@ -257,6 +269,8 @@ export interface LoginInfo {
   z: number;
   yRot: number;
   xRot: number;
+  /** (stage 4) flying as it was when it left, if its game mode lets it (vanilla ClientboundPlayerAbilitiesPacket; absent: not) */
+  flying?: boolean;
   viewDistance: number;
   hostName: string;
 }
@@ -374,6 +388,8 @@ CLIENTBOUND[CB.OpenBook] = [int(0, 1)];
 CLIENTBOUND[CB.PlaceGhostRecipe] = [CONTAINER, RECIPE];
 // (every recipe in the book at most: inventory/recipeBook.ts has some 800)
 CLIENTBOUND[CB.RecipeBookAdd] = [arr(4096, RECIPE), bool];
+const DIMENSION: Check = (v) => typeof v === 'string' && DIMENSION_IDS.includes(v);
+CLIENTBOUND[CB.ChangeDimension] = [DIMENSION, (v) => typeof v === 'string' && (RECEIVING_REASONS as readonly string[]).includes(v)];
 
 /**
  * the packet `p` if it's one `from` could send with fields of the right types and ranges, else a reason to drop whoever
@@ -396,10 +412,10 @@ export function checkLogin(v: Value): LoginInfo | null {
   const o = v as Record<string, Value>;
   const rules = o.gameRules;
   const ok =
-    ID(o.playerId) && str(0, 64)(o.worldName) && str(1, 32)(o.dimension) && str(1, 16)(o.gameMode) && str(1, 16)(o.difficulty) && bool(o.hardcore) &&
+    ID(o.playerId) && str(0, 64)(o.worldName) && DIMENSION(o.dimension) && str(1, 16)(o.gameMode) && str(1, 16)(o.difficulty) && bool(o.hardcore) &&
     obj(rules) && Object.keys(rules as object).length <= 256 && Object.values(rules as object).every((r) => typeof r === 'boolean' || typeof r === 'number') &&
     num(0, Number.MAX_SAFE_INTEGER)(o.gameTime) && num(-Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER)(o.dayTime) && bool(o.raining) && bool(o.thundering) &&
-    num(0, 1)(o.rainLevel) && num(0, 1)(o.thunderLevel) && X(o.x) && Y(o.y) && X(o.z) && ANGLE(o.yRot) && PITCH(o.xRot) && int(2, 32)(o.viewDistance) && str(0, 16)(o.hostName);
+    num(0, 1)(o.rainLevel) && num(0, 1)(o.thunderLevel) && X(o.x) && Y(o.y) && X(o.z) && ANGLE(o.yRot) && PITCH(o.xRot) && (o.flying === undefined || bool(o.flying)) && int(2, 32)(o.viewDistance) && str(0, 16)(o.hostName);
   return ok ? (o as unknown as LoginInfo) : null;
 }
 

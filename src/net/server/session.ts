@@ -4,8 +4,8 @@
 
 import type { Value } from '../codec';
 import { decode, encodeBundle, CodecError } from '../codec';
-import { SB, CB, Action, PoseFlag, CLICK_TYPES, checkPacket, isAllowedChat, SLOT_ARMOR, SLOT_OFFHAND, SLOT_COUNT, ANIMATE_SWING_MAIN_HAND, ANIMATE_SWING_OFF_HAND, type LoginInfo } from '../protocol';
-import { PROTOCOL_VERSION, BUILD_ID, MAX_GUEST_MESSAGE, MAX_GUEST_PACKETS, MESSAGES_PER_TICK, MAX_GUEST_BACKLOG, MAX_GUEST_BACKLOG_BYTES, MAX_LOGIN_BACKLOG, MAX_GUESTS, LOGIN_TICKS, KEEPALIVE_TICKS, TIMEOUT_TICKS, GUEST_VIEW_DISTANCE, CHUNKS_PER_TICK, MAX_MOVE_PER_TICK, CHAT_SPAM_STEP, CHAT_SPAM_LIMIT, NAME_PATTERN, DROP_SPAM_STEP, DROP_SPAM_LIMIT, ENTITY_REACH_SLACK, MAX_MOTION } from '../config';
+import { SB, CB, Action, PoseFlag, CLICK_TYPES, checkPacket, isAllowedChat, SLOT_ARMOR, SLOT_OFFHAND, SLOT_COUNT, ANIMATE_SWING_MAIN_HAND, ANIMATE_SWING_OFF_HAND, type LoginInfo, type ReceivingReason } from '../protocol';
+import { PROTOCOL_VERSION, BUILD_ID, MAX_GUEST_MESSAGE, MAX_GUEST_PACKETS, MESSAGES_PER_TICK, MAX_GUEST_BACKLOG, MAX_GUEST_BACKLOG_BYTES, MAX_LOGIN_BACKLOG, MAX_GUESTS, LOGIN_TICKS, KEEPALIVE_TICKS, TIMEOUT_TICKS, GUEST_VIEW_DISTANCE, CHUNKS_PER_TICK, MAX_MOVE_PER_TICK, CHAT_SPAM_STEP, CHAT_SPAM_LIMIT, NAME_PATTERN, DROP_SPAM_STEP, DROP_SPAM_LIMIT, ENTITY_REACH_SLACK, MAX_MOTION, RESPAWN_BED_WAIT_TICKS } from '../config';
 import type { PeerId } from '../transport/transport';
 import { creativeItem, itemToWire } from '../items';
 import { applyPoseFlags, equipment, poseFlags, stackKey } from '../playerState';
@@ -13,6 +13,7 @@ import { playerStatus, effectList, effectsChanged, effectsSent } from '../player
 import { claimMatches } from '../menus';
 import { ServerMenus } from './menuSync';
 import { levelChunkPacket } from '../chunkData';
+import { offlinePlayerUuid } from '../offlineUuid';
 import type { HostServer } from './hostServer';
 import { EntityTracker } from './entityTracker';
 import type { Entity } from '../../entity/entity';
@@ -20,8 +21,11 @@ import { Player } from '../../entity/player';
 import { Interaction } from '../../game/interaction';
 import { deathMessage, dropDeathLoot, resetForRespawn, playerHurtSound, playerFallSound } from '../../game/playerDeath';
 import { useBed, findRespawn, MSG, type SleepHost } from '../../game/sleep';
+import { areaComplete } from '../../game/respawnLogic';
 import { writeBook } from '../../game/books';
 import { PlayerRecipeBook } from '../../inventory/recipeBook';
+import { savePlayer, loadPlayer, type SavedPlayer } from '../../game/playerData';
+import { carriesOnePlayer, loadEntity } from '../../game/spawner';
 import { entityContainerMenu } from '../../game/openMenu';
 import { ChestBoat } from '../../entity/boat';
 import { AbstractHorse } from '../../entity/horse';
@@ -86,6 +90,8 @@ export class ServerPlayerSession {
   viewDistance = GUEST_VIEW_DISTANCE;
   /** where the guest last said it was (and was believed): where its chunks are sent round */
   private pos = { x: 0, y: 0, z: 0 };
+  /** where its player was last put, by a move of its own or a teleport: anywhere else, and the host has moved it since */
+  private placed = { x: 0, y: 0, z: 0 };
   private move: Move | null = null;
   private teleportId = 0;
   private awaitingTeleport: number | null = null;
@@ -143,6 +149,15 @@ export class ServerPlayerSession {
   readonly recipes = new PlayerRecipeBook();
   /** when each plain message was last shown (so a held button doesn't repeat it every few ticks) */
   private readonly notices = new Map<string, number>();
+  /** (logging in) its player as the world last kept it, being read: the guest is let in once it's here */
+  private reading: { done: boolean; failed: boolean; data: SavedPlayer | null } | null = null;
+  /** on its way to the host's next dimension with it: out of the level, shown nothing, its moves not taken (leaveDimension) */
+  travelling = false;
+  /** (travelling) the dimension it left, where it still is till it's put in the next */
+  private travelFrom = '';
+  /** (respawning at a bed whose chunks aren't in) ticks left to wait for them, and whether they've been asked for */
+  private respawnWait = 0;
+  private respawnTicket = false;
 
   constructor(readonly server: HostServer, readonly peer: PeerId) {}
 
@@ -153,6 +168,11 @@ export class ServerPlayerSession {
   /** (the state can change under a handler: a packet may drop the guest) */
   private get isGone(): boolean {
     return this.state === 'gone';
+  }
+
+  /** it said who it is and was let in, its player still being read: a seat, and its name and uuid, are taken */
+  get loggingIn(): boolean {
+    return this.reading !== null && this.state === 'login';
   }
 
   // -------------------------------------------------------------------------
@@ -182,12 +202,47 @@ export class ServerPlayerSession {
   /** handle what came since the last tick, a tick's worth at most (vanilla Connection.tick → the packet listener) */
   receive(): void {
     this.ticks++;
-    // (vanilla's chat spam count goes down a tick at a time; here by the real time too, if more: a host whose window
-    // is hidden ticks slowly, its guests don't)
+    this.decaySpam();
+    if (this.refused) return this.disconnect(this.refused);
+    // (its player being read: what it says waits till it's in)
+    const job = this.reading;
+    if (job) {
+      if (!job.done) return;
+      this.reading = null;
+      if (job.failed) return this.disconnect("Couldn't read your player from this world's save.");
+      this.placeNewPlayer(job.data);
+      if (this.isGone) return;
+    }
+    this.drain((p) => this.handle(p));
+  }
+
+  /**
+   * (HostServer.idleTick: the host on a loading screen, its level still) on its way to the host's next dimension with it:
+   * what needs no world is heard (chat, keep-alives, the hotbar, leaving) and the rest let go, being for the dimension it
+   * left; kept alive both ways, the End Poem's minutes included. Otherwise (the host waiting where it is, on a far bed's
+   * chunks) what it says waits for the level, its time not counted, as it always has; so does one still saying who it is
+   */
+  idleTick(): void {
+    if (this.state !== 'play' || !this.travelling) return;
+    this.ticks++;
+    this.decaySpam();
+    if (this.refused) return this.disconnect(this.refused);
+    this.drain((p) => this.handleIdle(p));
+    if (this.isGone) return;
+    if (this.ticks - this.lastHeard > TIMEOUT_TICKS) return this.disconnect('Timed out');
+    if (this.ticks % KEEPALIVE_TICKS === 0) this.send([CB.KeepAlive, ++this.keepAliveId]);
+    this.sendOut();
+  }
+
+  /** (vanilla's chat spam count goes down a tick at a time; here by the real time too, if more: a host whose window is hidden ticks slowly, its guests don't) */
+  private decaySpam(): void {
     const now = performance.now();
     this.chatSpam = Math.max(0, this.chatSpam - Math.max(1, (now - this.lastDecay) / 50));
     this.lastDecay = now;
-    if (this.refused) return this.disconnect(this.refused);
+  }
+
+  /** a tick's worth of what came, each packet checked, then `handle`d; anything wrong drops the guest */
+  private drain(handle: (p: Value[]) => void): void {
     const inbox = this.inbox.splice(0, MESSAGES_PER_TICK);
     for (const data of inbox) {
       if (this.isGone) return;
@@ -204,7 +259,7 @@ export class ServerPlayerSession {
         const bad = checkPacket(p, 'guest');
         if (bad) return this.disconnect(`Bad data: ${bad}`);
         try {
-          this.handle(p as Value[]);
+          handle(p as Value[]);
         } catch (e) {
           console.error('multiplayer: handling a guest packet', e);
           return this.disconnect('Something went wrong with what you sent');
@@ -284,24 +339,80 @@ export class ServerPlayerSession {
     }
   }
 
-  /** vanilla ServerLoginPacketListenerImpl + PlayerList.placeNewPlayer */
+  /** (idleTick) what's heard while the level stands still; the rest is for a world the guest isn't in (yet) */
+  private handleIdle(p: Value[]): void {
+    switch (p[0] as number) {
+      case SB.Hello:
+        return this.disconnect('Already here');
+      case SB.AcceptTeleportation:
+        if (p[1] === this.awaitingTeleport) this.awaitingTeleport = null;
+        return;
+      case SB.SetCarriedItem:
+        this.player!.inventory.selected = this.selected = p[1] as number;
+        this.player!.inventory.version++;
+        return;
+      case SB.Chat:
+        return this.chat(p[1] as string);
+      case SB.ChatCommand:
+        if (this.spammed()) return;
+        return this.systemChat('§cOnly the host can use commands.');
+      case SB.Disconnect:
+        return this.gone('left');
+    }
+  }
+
+  /**
+   * vanilla ServerLoginPacketListenerImpl: who it is, checked; then its player as the world last kept it is read (vanilla
+   * PlayerList.load), and it's let in at the first tick after (placeNewPlayer)
+   */
   private hello(protocol: number, build: string, name: string, uuid: string, viewDistance: number): void {
     if (protocol !== PROTOCOL_VERSION) return this.disconnect(protocol < PROTOCOL_VERSION ? 'Outdated game! This world is open in a newer one.' : 'Outdated host! This world is open in an older one.');
     if (build !== BUILD_ID) return this.disconnect('This world is open in a different version of the game. Reload both windows so they run the same one.');
     if (!NAME_PATTERN.test(name)) return this.disconnect('That name can only have letters, digits and _ (3 to 16 of them).');
+    // (vanilla offline mode: a player is its name, its uuid made from the name, the host's to work out; a guest giving
+    // another's, which would be another's player kept with the world, is refused)
+    if (uuid !== offlinePlayerUuid(name)) return this.disconnect("Bad data: that uuid isn't the name's");
     const srv = this.server;
-    if (srv.guestCount() >= MAX_GUESTS) return this.disconnect('The world is full.');
+    // (the guests in, and those let in whose players are still being read)
+    const others = [...srv.sessions.values()].filter((s) => s !== this && (s.state === 'play' || s.loggingIn));
+    if (others.length >= MAX_GUESTS) return this.disconnect('The world is full.');
     const taken = (n: string) => n.toLowerCase() === name.toLowerCase();
-    if (taken(srv.hooks.hostName()) || [...srv.sessions.values()].some((s) => s !== this && s.state === 'play' && taken(s.name))) return this.disconnect(`Someone called ${name} is already playing here.`);
+    if (taken(srv.hooks.hostName()) || others.some((s) => taken(s.name))) return this.disconnect(`Someone called ${name} is already playing here.`);
     if (srv.level.playerByUuid(uuid) || [...srv.sessions.values()].some((s) => s !== this && s.uuid === uuid)) return this.disconnect('You are already in this world (in another window?).');
     this.name = name;
     this.uuid = uuid;
     this.viewDistance = Math.min(GUEST_VIEW_DISTANCE, viewDistance);
-    const level = srv.level;
+    const load = srv.hooks.loadGuest;
+    if (!load) return this.placeNewPlayer(null);
+    const job: { done: boolean; failed: boolean; data: SavedPlayer | null } = { done: false, failed: false, data: null };
+    this.reading = job;
+    void Promise.resolve()
+      .then(() => load(uuid))
+      .then(
+        (d) => {
+          job.data = d;
+          job.done = true;
+        },
+        (e) => {
+          console.error(`multiplayer: reading ${name}'s player`, e);
+          job.failed = job.done = true;
+        },
+      );
+  }
+
+  /**
+   * vanilla PlayerList.placeNewPlayer: its player in the level, as `pd` kept it if it's been here before (where it was,
+   * what it had, what it rode alone; dead if it left dead), else new by the world spawn; and the guest let in. In
+   * whatever game mode the world is open in, as vanilla's LAN world has everyone (IntegratedServer.getForcedGameType).
+   * A player kept in another dimension than the host's comes in by the host, what it rode left where it was
+   */
+  private placeNewPlayer(pd: SavedPlayer | null): void {
+    const srv = this.server, level = srv.level;
     const p = new GuestPlayer(level, this);
-    p.uuid = uuid;
+    if (pd) loadPlayer(p, pd);
+    p.uuid = this.uuid;
     p.remote = true;
-    p.profileName = name;
+    p.profileName = this.name;
     p.setGameMode(srv.guestGameMode);
     this.gameMode = p.gameMode;
     p.food.difficulty = level.difficulty;
@@ -311,12 +422,34 @@ export class ServerPlayerSession {
     p.onHurtSound = (pl, src) => srv.heardByAll(() => playerHurtSound(level.sound, pl, src));
     p.onFall = (pl, _dmg, dist) => playerFallSound(level.sound, pl, dist);
     p.onDeath = (_pl, src) => this.died(src);
-    const [x, y, z] = srv.hooks.spawnPoint();
-    p.moveTo(x, y, z, 0, 0);
+    const here = !!pd && (pd.dimension ?? 'overworld') === level.world.dim.id;
+    const dead = !!pd && (!!pd.dead || pd.health <= 0);
+    if (!here) {
+      const [x, y, z] = srv.hooks.spawnPoint();
+      p.moveTo(x, y, z, 0, 0);
+    }
+    // (it left dead: dead it comes back, on its death screen, respawning as ever)
+    if (dead) {
+      p.health = 0;
+      p.dead = true;
+    }
     p.remoteMove = () => this.applyMove();
     level.addEntity(p);
     this.player = p;
-    this.pos = { x, y, z };
+    this.pos = { x: p.x, y: p.y, z: p.z };
+    this.placed = { x: p.x, y: p.y, z: p.z };
+    // vanilla RootVehicle: back on what it rode alone as it left
+    if (pd?.vehicle && !dead) {
+      if (!here) srv.hooks.leaveInDimension?.(pd.dimension ?? 'overworld', pd.vehicle);
+      else {
+        const v = loadEntity(pd.vehicle, level);
+        if (v) {
+          level.addEntity(v);
+          p.startRiding(v, true);
+        }
+      }
+    }
+    this.recipes.load(pd?.recipeBook);
     const it = (this.interaction = srv.guestInteraction(this, p));
     // (what doesn't fit in its inventory, or it throws out, lands in the world: vanilla Player.drop)
     p.dropHandler = (s) => it.throwItem(s);
@@ -348,13 +481,16 @@ export class ServerPlayerSession {
       thundering: level.thundering,
       rainLevel: level.rain,
       thunderLevel: level.thunder,
-      x, y, z, yRot: 0, xRot: 0,
+      x: p.x, y: p.y, z: p.z, yRot: p.yaw, xRot: p.pitch,
+      flying: p.flying,
       viewDistance: this.viewDistance,
       hostName: srv.hooks.hostName(),
     };
     this.send([CB.Login, info as unknown as Value]);
     this.send(srv.weatherPacket());
     if (this.recipes.known.size) this.send([CB.RecipeBookAdd, [...this.recipes.known], true]);
+    // (vanilla: a player that comes in dead is shown the death screen, with nothing on it of how it died)
+    if (dead) this.send([CB.PlayerCombatKill, '']);
     srv.joined(this);
   }
 
@@ -413,13 +549,27 @@ export class ServerPlayerSession {
   }
 
   /**
-   * (Player.remoteMove, in its tick) where the guest said it went, with the look and pose it said, and what that did:
-   * a fall's damage when it lands, the hunger a jump costs, a glide into a wall (vanilla handleMovePlayer and
-   * ServerPlayer.doCheckFallDamage)
+   * (Player.remoteMove, in its tick) where the guest said it went, if it said, and then, moved or not, what it's in:
+   * pressure plates, tripwires, portals (vanilla checkInsideBlocks, which a player's travel does every tick, standing
+   * still too). What the blocks do about it, a plate's click, is the world's doing, not the player's own: the guest hears
+   * it too. (A guest's moves don't reach the host one a tick, its game's ticks not the host's: one standing still in a
+   * nether portal is in it every tick all the same, its time there adding up as the host's own player's does)
    */
   private applyMove(): void {
-    const p = this.player, m = this.move;
-    if (!p || !m) return;
+    const p = this.player;
+    if (!p) return;
+    this.takeMove(p);
+    if (p.health > 0 && !p.vehicle && !p.isSleeping()) this.server.heardByAll(() => p.checkInsideBlocks());
+  }
+
+  /**
+   * the guest's move this tick, if one came in: where it went, with the look and pose it said, and what that did: a
+   * fall's damage when it lands, the hunger a jump costs, a glide into a wall (vanilla handleMovePlayer and
+   * ServerPlayer.doCheckFallDamage)
+   */
+  private takeMove(p: Player): void {
+    const m = this.move;
+    if (!m) return;
     this.move = null;
     if (p.health <= 0 || p.isSleeping()) return;
     if (p.vehicle) {
@@ -430,6 +580,9 @@ export class ServerPlayerSession {
       this.lastSpeed = 0;
       return;
     }
+    // (put somewhere else by the host since, earlier this tick: an ender pearl landing, an end gateway letting it out,
+    // a piston. The move is from before that, and the guest is told where it is instead: placedByHost's teleport)
+    if (moved(p, this.placed)) return;
     const dx = m.x - p.x, dy = m.y - p.y, dz = m.z - p.z;
     // (knocked or blown about this tick, before its move came in: that motion stands, for the guest to be told)
     if (!p.hurtMarked) {
@@ -440,6 +593,7 @@ export class ServerPlayerSession {
     const wasOnGround = p.onGround, wasGliding = p.fallFlying;
     applyPoseFlags(p, m.flags);
     p.setPos(m.x, m.y, m.z);
+    this.placed = { x: p.x, y: p.y, z: p.z };
     p.yaw = m.yRot;
     p.pitch = m.xRot;
     p.headYaw = m.yRot;
@@ -460,12 +614,10 @@ export class ServerPlayerSession {
     }
     this.lastSpeed = speed;
     if (p.health <= 0) return;
-    // (pressure plates, tripwires, portals: vanilla ServerPlayer.doCheckFallDamage / checkInsideBlocks. What the
-    // blocks do about it, a plate's click, is the world's doing, not the player's own: the guest hears it too)
+    // (vanilla ServerPlayer.doCheckFallDamage)
     p.doCheckFallDamage(dy, p.onGround);
     // (vanilla ServerPlayer.move: a turtle egg or a sculk shrieker underfoot hears it; the world's doing, heard by all)
     if (p.onGround && p.health > 0) this.server.heardByAll(() => p.stepOnFloor());
-    if (p.health > 0) this.server.heardByAll(() => p.checkInsideBlocks());
     if (p.flying || p.hasEffect('slow_falling') || p.hasEffect('levitation')) p.fallDistance = 0;
   }
 
@@ -479,6 +631,7 @@ export class ServerPlayerSession {
     this.move = null;
     this.lastSpeed = 0;
     p.moveTo(x, y, z, yRot, xRot);
+    this.placed = { x: p.x, y: p.y, z: p.z };
     this.send([CB.PlayerPosition, x, y, z, yRot, xRot, this.teleportId]);
   }
 
@@ -528,6 +681,64 @@ export class ServerPlayerSession {
   }
 
   // -------------------------------------------------------------------------
+  // another dimension
+
+  /**
+   * (HostServer.hostLeavingDimension) vanilla ServerPlayer.changeDimension, for a guest the host takes along: out of what
+   * it was doing (its menus closed, what they held back in its inventory; woken; off what it rode, which stays), all it
+   * was shown of this dimension let go, as its own game lets go of its world (vanilla ClientboundRespawnPacket), and its
+   * moves not taken till it's put in the next one (arrive)
+   */
+  leaveDimension(dim: string, reason: ReceivingReason): void {
+    if (this.state !== 'play') return;
+    const p = this.player!;
+    if (this.crack) this.level.destroyBlockProgress(p.id, 0, 0, 0, -1);
+    this.crack = '';
+    this.menus!.closeAll(true);
+    if (p.isSleeping()) p.stopSleepInBed(true);
+    this.sleeping = '';
+    p.removeVehicle();
+    this.riding = null;
+    if (p.isUsingItem()) p.stopUsingItem();
+    this.releaseRespawnTicket();
+    this.respawnWait = 0;
+    this.server.hooks.setTicket(`player:${p.id}`, null);
+    this.sent.clear();
+    this.blockEntities.clear();
+    this.blockUpdates = [];
+    this.tracker.clear();
+    this.seen.clear();
+    this.move = null;
+    this.target = NO_TARGET;
+    this.attackPressed = this.usePressed = this.attackHeld = this.useHeld = false;
+    this.drops = [];
+    // (a teleport it can't have taken: its moves are the old dimension's till it takes the one arrive sends)
+    this.awaitingTeleport = -1;
+    if (!this.travelling) this.travelFrom = this.level.world.dim.id;
+    this.travelling = true;
+    this.send([CB.ChangeDimension, dim, reason]);
+  }
+
+  /**
+   * (HostServer.hostArrived) in the host's new dimension, beside the host (vanilla puts each where its own portal led;
+   * here all went through the host's), not to go back through a portal at once, and shown the world from there, and
+   * its inventory as it is
+   */
+  arrive(): void {
+    if (this.state !== 'play' || !this.travelling) return;
+    this.travelling = false;
+    const p = this.player!, host = this.level.player;
+    p.removed = false;
+    if (!this.level.entities.includes(p)) this.level.addEntity(p);
+    p.portal = null;
+    p.portalCooldown = p.dimensionChangingDelay();
+    p.fallDistance = 0;
+    p.dx = p.dy = p.dz = 0;
+    this.menus!.resync();
+    this.teleport(host.x, host.y, host.z, host.yaw, host.pitch);
+  }
+
+  // -------------------------------------------------------------------------
   // tick
 
   /** after the level's tick: the guest's clicks, its crack, keeping alive, and its chunks */
@@ -539,6 +750,8 @@ export class ServerPlayerSession {
     if (this.state !== 'play') return;
     if (this.ticks - this.lastHeard > TIMEOUT_TICKS) return this.disconnect('Timed out');
     if (this.ticks % KEEPALIVE_TICKS === 0) this.send([CB.KeepAlive, ++this.keepAliveId]);
+    // (on its way to another dimension: nothing of this one to do)
+    if (this.travelling) return;
     if (this.dropSpam > 0) this.dropSpam--;
     // (a rider is where its mount took it, round which its chunks are sent)
     const p = this.player!;
@@ -549,6 +762,8 @@ export class ServerPlayerSession {
     this.tickInteraction();
     this.menus!.tick();
     this.tickChunks();
+    // (respawning at a bed whose chunks were asked for: once they're in, or it's waited long enough)
+    if (this.respawnWait > 0 && (this.bedLoaded() || --this.respawnWait === 0)) this.respawnNow();
   }
 
   /** vanilla handlePlayerCommand START_RIDING_JUMP: the leap of the mount it steers, with the charge the guest let go at */
@@ -702,7 +917,7 @@ export class ServerPlayerSession {
 
   /** (end of the host's tick) what the guest sees of the others, its inventory's changes, and off it all goes */
   flush(): void {
-    if (this.state !== 'play') return this.sendOut();
+    if (this.state !== 'play' || this.travelling) return this.sendOut();
     this.flushBlocks();
     this.trackPlayers();
     this.tracker.tick(this.ticks);
@@ -915,14 +1130,44 @@ export class ServerPlayerSession {
 
   /**
    * vanilla handleClientCommand PERFORM_RESPAWN → PlayerList.respawn: back alive, at its bed (facing it) if that's still
-   * there and clear, else by the world spawn (the bed forgotten, and the guest told so)
+   * there and clear, else by the world spawn (the bed forgotten, and the guest told so). Vanilla reads the bed where it
+   * is, loading its chunk there and then: here the chunks round it are asked for, and it waits for them (a few seconds
+   * at most). The host in another dimension, it comes back by the host, its bed kept for when they're home
    */
   private respawn(): void {
+    const p = this.player!;
+    if ((p.health > 0 && !p.dead) || this.travelling || this.respawnWait > 0) return;
+    if (this.level.world.dim.id === 'overworld' && !this.bedLoaded()) {
+      const [bx, , bz] = p.respawnPos!;
+      this.respawnWait = RESPAWN_BED_WAIT_TICKS;
+      this.respawnTicket = true;
+      this.server.hooks.setTicket(`respawn:${p.id}`, [bx >> 4, bz >> 4, 1]);
+      return;
+    }
+    this.respawnNow();
+  }
+
+  private releaseRespawnTicket(): void {
+    if (!this.respawnTicket || !this.player) return;
+    this.respawnTicket = false;
+    this.server.hooks.setTicket(`respawn:${this.player.id}`, null);
+  }
+
+  /** its bed's chunks (and theirs round them) are in, or it has none */
+  private bedLoaded(): boolean {
+    const b = this.player!.respawnPos;
+    return !b || areaComplete(this.level.world, b[0], b[2], b[0], b[2]);
+  }
+
+  private respawnNow(): void {
     const p = this.player!, level = this.level;
-    if (p.health > 0 && !p.dead) return;
+    this.releaseRespawnTicket();
+    this.respawnWait = 0;
     resetForRespawn(p, !!level.gameRules.keepInventory);
-    const bed = findRespawn(level, p);
-    if (!bed && p.respawnPos) {
+    // (a bed that couldn't be looked at, its chunks not in or the host elsewhere, is kept)
+    const looked = level.world.dim.id === 'overworld' && this.bedLoaded();
+    const bed = looked ? findRespawn(level, p) : null;
+    if (looked && !bed && p.respawnPos) {
       this.systemChat(MSG.noRespawnBlock);
       p.respawnPos = null;
     }
@@ -1007,18 +1252,43 @@ export class ServerPlayerSession {
     this.server.transport.disconnect(this.peer);
   }
 
-  /** it's gone (left, dropped, or the connection went): its player leaves the level */
+  /**
+   * vanilla PlayerList.saveAll / remove: its player kept with the world as it is now (with its recipe book, and what it
+   * rides alone), for when it comes back
+   */
+  save(): void {
+    const p = this.player;
+    if (this.state !== 'play' || !p) return;
+    // (on its way to another dimension, it's still where it was in the one it left)
+    const dim = this.travelling ? this.travelFrom : this.level.world.dim.id;
+    this.server.hooks.saveGuest?.(this.uuid, savePlayer(p, dim, { recipeBook: this.recipes.save() }));
+  }
+
+  /**
+   * it's gone (left, dropped, or the connection went): its player out of bed (vanilla ServerPlayer.disconnect), kept
+   * for when it comes back, and out of the level, with what it rode alone (vanilla PlayerList.remove)
+   */
   gone(reason: string): void {
     if (this.state === 'gone') return;
     const was = this.state;
-    this.state = 'gone';
-    this.out = [];
     const p = this.player;
-    if (p) {
+    if (p && was === 'play') {
       if (this.crack) this.level.destroyBlockProgress(p.id, 0, 0, 0, -1);
       // (vanilla Player.remove: the open menu closed, a chest's lid shut, what the menus held dropped where it stood)
       p.disconnected = true;
+      if (p.isSleeping()) p.stopSleepInBed(true);
       this.menus?.closeAll(false);
+      this.save();
+      const v = p.vehicle;
+      if (v && carriesOnePlayer(v)) {
+        p.removeVehicle();
+        removeWithRiders(v);
+      }
+    }
+    this.releaseRespawnTicket();
+    this.state = 'gone';
+    this.out = [];
+    if (p) {
       p.remove();
       this.server.hooks.setTicket(`player:${p.id}`, null);
     }
@@ -1044,6 +1314,17 @@ class GuestPlayer extends Player {
       srv.actor = null;
     }
   }
+}
+
+/** `p` isn't where it was put (`at`): something moved it since */
+function moved(p: Player, at: { x: number; y: number; z: number }): boolean {
+  return Math.abs(p.x - at.x) > 1e-9 || Math.abs(p.y - at.y) > 1e-9 || Math.abs(p.z - at.z) > 1e-9;
+}
+
+/** vanilla UNLOADED_WITH_PLAYER: what a leaving guest rode alone goes with it, and whatever else rode that */
+function removeWithRiders(e: Entity): void {
+  for (const r of [...e.passengers]) if (r.type !== 'player') removeWithRiders(r);
+  e.remove();
 }
 
 /** a swing that started since last seen (LivingEntity.swing sets swingTime back to -1) */

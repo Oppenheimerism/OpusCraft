@@ -5,7 +5,7 @@
 
 import type { Value } from '../codec';
 import { decode, encodeBundle, CodecError } from '../codec';
-import { SB, CB, Action, PoseFlag, checkPacket, checkLogin, SLOT_ARMOR, SLOT_OFFHAND, SLOT_COUNT, ANIMATE_SWING_OFF_HAND, type LoginInfo } from '../protocol';
+import { SB, CB, Action, PoseFlag, checkPacket, checkLogin, SLOT_ARMOR, SLOT_OFFHAND, SLOT_COUNT, ANIMATE_SWING_OFF_HAND, type LoginInfo, type ReceivingReason } from '../protocol';
 import { PROTOCOL_VERSION, BUILD_ID, MAX_HOST_MESSAGE, MAX_HOST_BACKLOG, MAX_HOST_BACKLOG_BYTES, TIMEOUT_TICKS, MAX_CHAT, MAX_GUEST_MESSAGE, MAX_GUEST_PACKETS } from '../config';
 import { HOST_PEER, type PeerId, type Transport } from '../transport/transport';
 import { itemFromHost, itemToWire } from '../items';
@@ -71,6 +71,11 @@ export interface ClientHooks {
    * the recipe book had
    */
   recipes?(recipes: BookRecipe[], replace: boolean): void;
+  /**
+   * (stage 4) the host went to another dimension and takes us along (vanilla handleRespawn): our world let go, the
+   * loading screen up (`reason`'s) till the host puts our player there; what the session had of the old one is gone
+   */
+  changeDimension?(dim: string, reason: ReceivingReason): void;
 }
 
 const GAME_MODES: readonly GameMode[] = ['survival', 'creative', 'adventure', 'spectator'];
@@ -443,6 +448,8 @@ export class ClientSession {
         return this.menus!.ghost(p[1] as number, p[2] as string);
       case CB.OpenBook:
         return this.hooks.openBook?.(p[1] === 1 ? 'off' : 'main');
+      case CB.ChangeDimension:
+        return this.changeDimension(p[1] as string, p[2] as ReceivingReason);
       case CB.RecipeBookAdd: {
         const rs: BookRecipe[] = [];
         for (const id of p[1] as string[]) {
@@ -483,6 +490,28 @@ export class ClientSession {
     this.rainTarget = info.rainLevel;
     this.thunderTarget = info.thunderLevel;
     this.state = 'play';
+  }
+
+  /**
+   * vanilla handleRespawn: a new level. Everything shown of the old one goes (the other players, the entities, the chunks
+   * being lit, the cracks), our player gets out of bed and off what it rode, and the game lets go of its world; the
+   * weather comes afresh as the host has it there. The host's teleport puts us in place, and its chunks follow
+   */
+  private changeDimension(dim: string, reason: ReceivingReason): void {
+    // (as the host woke our player there: vanilla ServerPlayer.changeDimension)
+    if (this.player!.isSleeping()) this.player!.stopSleepInBed(true);
+    for (const m of this.mirrors.values()) dropCopy(m);
+    this.mirrors.clear();
+    for (const c of this.entities.values()) dropCopy(c.e);
+    this.entities.clear();
+    this.waiting.clear();
+    this.waitingCount = 0;
+    this.pending.clear();
+    this.target = null;
+    this.level!.destroyProgress.clear();
+    this.player!.removeVehicle();
+    this.rainTarget = this.thunderTarget = 0;
+    this.hooks.changeDimension?.(dim, reason);
   }
 
   /** vanilla ClientPacketListener.handleLevelChunkWithLight: checked, then lit and put in the world (replacing any) */
