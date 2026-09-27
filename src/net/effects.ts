@@ -4,12 +4,15 @@
 
 import type { Value } from './codec';
 import type { Level, ParticleSink, SoundSink } from '../game/level';
+import type { Entity } from '../entity/entity';
 import type { Player } from '../entity/player';
+import type { FireworkExplosion, FireworkShape } from '../item/fireworks';
 import { stateCount } from '../world/block';
 
 /**
- * the particle calls that go across, and how many arguments each takes (numbers, but for a kind's name); those with
- * entities or callbacks in them (poof, emitAround, vibration, fireworks) wait for entities to go across (stage 2)
+ * the particle calls that go across, and how many arguments each takes (numbers, but for a kind's name); those about
+ * an entity (poof, emitAround) and a rocket's burst (fireworks) have their own shapes, below; those with callbacks in
+ * them (vibration) and colour lists (dustTransition) stay on the host
  */
 const PARTICLES: Record<string, { args: number[]; states: number[]; strings: number[] }> = {
   blockBreak: { args: [4], states: [3], strings: [] },
@@ -24,6 +27,10 @@ const PARTICLES: Record<string, { args: number[]; states: number[]; strings: num
   shriek: { args: [4], states: [], strings: [] },
   sculkCharge: { args: [7], states: [], strings: [] },
 };
+
+/** the particles round an entity, which go as its id (vanilla ClientboundEntityEventPacket's poof, the crit emitters) */
+const EMIT_KINDS = new Set(['crit', 'enchanted_hit', 'totem_of_undying']);
+const SHAPES = new Set<FireworkShape>(['small_ball', 'large_ball', 'star', 'creeper', 'burst']);
 
 /** vanilla: sounds carry 16 blocks, more for loud ones (16 × volume) */
 export function soundRange(volume: number): number {
@@ -64,7 +71,25 @@ export function broadcastEffects(level: Level, out: EffectsOut): () => void {
   const p = new Proxy(particles, {
     get(target, key, receiver) {
       const f = Reflect.get(target, key, receiver) as unknown;
-      if (typeof f !== 'function' || typeof key !== 'string' || !PARTICLES[key]) return f;
+      if (typeof f !== 'function' || typeof key !== 'string') return f;
+      const call = (args: unknown[]) => (f as (...a: unknown[]) => void).apply(target, args);
+      if (key === 'poof')
+        return (e: Entity) => {
+          call([e]);
+          out.particles(key, [e.id], e.x, e.y, e.z);
+        };
+      if (key === 'emitAround')
+        return (kind: string, e: Entity, life?: number) => {
+          call(life === undefined ? [kind, e] : [kind, e, life]);
+          out.particles(key, life === undefined ? [kind, e.id] : [kind, e.id, life], e.x, e.y, e.z);
+        };
+      if (key === 'fireworks')
+        return (x: number, y: number, z: number, xd: number, yd: number, zd: number, explosions: readonly FireworkExplosion[]) => {
+          call([x, y, z, xd, yd, zd, explosions]);
+          const stars = explosions.slice(0, 64).map((e) => [e.shape, e.colors.slice(0, 64), e.fadeColors.slice(0, 64), e.hasTrail, e.hasTwinkle] as Value);
+          if ([x, y, z, xd, yd, zd].every(Number.isFinite)) out.particles(key, [x, y, z, xd, yd, zd, stars], x, y, z);
+        };
+      if (!PARTICLES[key]) return f;
       return (...args: unknown[]) => {
         (f as (...a: unknown[]) => void).apply(target, args);
         if (args.every((a) => typeof a === 'number' || typeof a === 'string' || a === undefined)) {
@@ -83,8 +108,13 @@ export function broadcastEffects(level: Level, out: EffectsOut): () => void {
   };
 }
 
-/** play a particle call from the host on `sink`, if it's one that goes across and its arguments make sense */
-export function replayParticles(sink: ParticleSink, method: string, args: Value[]): boolean {
+/**
+ * play a particle call from the host on `sink`, if it's one that goes across and its arguments make sense (an entity
+ * by the host's id, found among the guest's copies by `entity`)
+ */
+export function replayParticles(sink: ParticleSink, method: string, args: Value[], entity: (id: number) => Entity | null = () => null): boolean {
+  if (method === 'poof' || method === 'emitAround') return replayAround(sink, method, args, entity);
+  if (method === 'fireworks') return replayFireworks(sink, args);
   const spec = Object.prototype.hasOwnProperty.call(PARTICLES, method) ? PARTICLES[method] : undefined;
   if (!spec || !spec.args.includes(args.length)) return false;
   const n = stateCount();
@@ -102,6 +132,46 @@ export function replayParticles(sink: ParticleSink, method: string, args: Value[
     (f as (...a: Value[]) => void).apply(sink, args);
   } catch {
     // (a kind of particle this game has no sprite for, say: nothing shows)
+  }
+  return true;
+}
+
+/** poof(entity) and emitAround(kind, entity, lifetime?), the entity being the guest's copy of the host's */
+function replayAround(sink: ParticleSink, method: 'poof' | 'emitAround', args: Value[], entity: (id: number) => Entity | null): boolean {
+  const at = method === 'poof' ? 0 : 1;
+  if (args.length !== (method === 'poof' ? 1 : 2) && !(method === 'emitAround' && args.length === 3)) return false;
+  if (method === 'emitAround' && !(typeof args[0] === 'string' && EMIT_KINDS.has(args[0]))) return false;
+  if (method === 'emitAround' && args.length === 3 && !(typeof args[2] === 'number' && Number.isInteger(args[2]) && args[2] >= 0 && args[2] <= 200)) return false;
+  const id = args[at];
+  if (typeof id !== 'number' || !Number.isInteger(id)) return false;
+  const e = entity(id);
+  if (!e) return true;
+  try {
+    if (method === 'poof') sink.poof?.(e);
+    else sink.emitAround?.(args[0] as 'crit', e, args[2] as number | undefined);
+  } catch {
+    // (nothing shows)
+  }
+  return true;
+}
+
+/** fireworks(x, y, z, xd, yd, zd, stars): each star [shape, colours, fade colours, trail, twinkle] */
+function replayFireworks(sink: ParticleSink, args: Value[]): boolean {
+  if (args.length !== 7) return false;
+  for (let i = 0; i < 6; i++) if (typeof args[i] !== 'number') return false;
+  const stars = args[6];
+  if (!Array.isArray(stars) || stars.length > 64) return false;
+  const colours = (v: Value) => Array.isArray(v) && v.length <= 64 && v.every((c) => typeof c === 'number' && Number.isInteger(c) && c >= 0 && c <= 0xffffff);
+  const list: FireworkExplosion[] = [];
+  for (const st of stars) {
+    if (!Array.isArray(st) || st.length !== 5 || typeof st[0] !== 'string' || !SHAPES.has(st[0] as FireworkShape) || !colours(st[1]) || !colours(st[2]) || typeof st[3] !== 'boolean' || typeof st[4] !== 'boolean') return false;
+    list.push({ shape: st[0] as FireworkShape, colors: [...(st[1] as number[])], fadeColors: [...(st[2] as number[])], hasTrail: st[3], hasTwinkle: st[4] });
+  }
+  const n = args as number[];
+  try {
+    sink.fireworks?.(n[0], n[1], n[2], n[3], n[4], n[5], list);
+  } catch {
+    // (nothing shows)
   }
   return true;
 }

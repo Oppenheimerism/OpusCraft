@@ -527,8 +527,8 @@ export class Game {
       else this.level.sound.play('entity.item.pickup', e.x, e.y, e.z, 0.2, (r() - r()) * 1.4 + 2);
       this.renderer.entities.addPickup(e instanceof ItemEntity ? e.copy() : e, taker);
     };
-    // (a guest can't drop things yet: what it throws out of its inventory is gone)
-    this.player.dropHandler = login ? () => {} : (s) => this.interaction.throwItem(s);
+    // (a guest's drops are the host's to throw: vanilla handleCreativeModeItemDrop)
+    this.player.dropHandler = login ? (s) => this.client?.dropCreative(s) : (s) => this.interaction.throwItem(s);
     this.applyGameRules();
     const world = this.world;
     const particles = new ParticleEngine(this.atlas, world, (x, _y, z, st) => {
@@ -1474,7 +1474,12 @@ export class Game {
       if (code === KEYS.debug) this.showDebug = !this.showDebug;
       else if (code === KEYS.hideGui) this.hideGui = !this.hideGui;
       else if (code === KEYS.togglePerspective) this.thirdPerson = (this.thirdPerson + 1) % 3;
-      else if (code === KEYS.drop) this.interaction.drop(inp.isDown('ControlLeft') || inp.isDown('MetaLeft'));
+      else if (code === KEYS.drop) {
+        // (a guest's drop is the host's to make: vanilla ServerboundPlayerActionPacket DROP_ITEM, nothing guessed here)
+        const all = inp.isDown('ControlLeft') || inp.isDown('MetaLeft');
+        if (client) client.drop(all);
+        else this.interaction.drop(all);
+      }
       else if (code === KEYS.swapHands) this.interaction.swapHands();
       else {
         for (let d = 1; d <= 9; d++)
@@ -1500,7 +1505,7 @@ export class Game {
     const clicks = inp.consumeClicks();
     if (client) {
       // (a guest's attack and use buttons are the host's to act on; picking a block is the guest's own inventory's)
-      client.input(active && clicks.includes(0), active && inp.buttons[0], active && clicks.includes(2), active && inp.buttons[2]);
+      client.input(active && clicks.includes(0), active && inp.buttons[0], active && clicks.includes(2), active && inp.buttons[2], this.interaction.entityHit);
       if (active && clicks.includes(1)) this.interaction.pickBlock();
     } else if (active) {
       if (clicks.includes(0)) this.interaction.startAttack();
@@ -2105,6 +2110,13 @@ export class Game {
       },
       chat: (text, overlay) => (overlay ? this.hud.setOverlayMessage(text) : this.chat(text)),
       disconnected: (reason) => this.connectionLost(reason),
+      // (vanilla handleTakeItemEntity: the host's pop is heard with the rest of its sounds; what was taken flies here)
+      took: (e, taker, amount) => {
+        const shown = e instanceof ItemEntity ? e.copy() : e;
+        if (shown instanceof ItemEntity && amount > 0) shown.stack = shown.stack.copyWithCount(amount);
+        this.renderer.entities.addPickup(shown, taker);
+      },
+      mounted: () => this.hud.setOverlayMessage(`Press ${keyDisplayName(KEYS.sneak)} to Dismount`),
     }, me);
   }
 

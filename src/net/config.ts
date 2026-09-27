@@ -7,7 +7,7 @@
 export const MULTIPLAYER_ENABLED = true;
 
 /** bumped whenever a packet changes; host and guest must agree (vanilla SharedConstants.getProtocolVersion) */
-export const PROTOCOL_VERSION = 1;
+export const PROTOCOL_VERSION = 2;
 
 /** (vite.config.ts: a hash of src/ in a build) */
 declare const __BUILD_ID__: string | undefined;
@@ -68,3 +68,14 @@ export const LOGIN_TICKS = 600;
 export const MAX_PENDING_LOGINS = 8;
 /** vanilla ServerGamePacketListenerImpl: a move of more than 10 blocks in a tick isn't believed (100 blocks²) */
 export const MAX_MOVE_PER_TICK = 10;
+/**
+ * vanilla ServerGamePacketListenerImpl.dropSpamThrottler: each item a creative guest throws out of its inventory adds
+ * 20, a tick takes 1 away, and at 1480 more are refused
+ */
+export const DROP_SPAM_STEP = 20;
+export const DROP_SPAM_LIMIT = 1480;
+/**
+ * vanilla ServerPlayer.canInteractWithEntity(box, 3.0): a guest's click on an entity counts within its reach and 3
+ * blocks more (what it sees of a moving mob is a tick or three behind the host's)
+ */
+export const ENTITY_REACH_SLACK = 3;

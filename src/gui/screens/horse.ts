@@ -32,5 +32,6 @@ export class HorseInventoryScreen extends AbstractContainerScreen<HorseInventory
 export function installHorseScreen(game: Game): void {
   horseHooks.openInventory = (h, p) => {
     if (p === game.player) game.setScreen(new HorseInventoryScreen(game, new HorseInventoryMenu(p, h)));
+    else game.refuseGuestMenu(p);
   };
 }

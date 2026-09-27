@@ -3,14 +3,16 @@
 // own as the host does its own player's; the chunks it has been sent; and everything it's told, a tick at a time.
 
 import type { Value } from '../codec';
-import { decode, encode, CodecError } from '../codec';
+import { decode, encodeBundle, CodecError } from '../codec';
 import { SB, CB, Action, PoseFlag, checkPacket, isAllowedChat, SLOT_ARMOR, SLOT_OFFHAND, SLOT_COUNT, ANIMATE_SWING_MAIN_HAND, ANIMATE_SWING_OFF_HAND, type LoginInfo } from '../protocol';
-import { PROTOCOL_VERSION, BUILD_ID, MAX_GUEST_MESSAGE, MAX_GUEST_PACKETS, MESSAGES_PER_TICK, MAX_GUEST_BACKLOG, MAX_GUEST_BACKLOG_BYTES, MAX_LOGIN_BACKLOG, MAX_GUESTS, LOGIN_TICKS, KEEPALIVE_TICKS, TIMEOUT_TICKS, GUEST_VIEW_DISTANCE, CHUNKS_PER_TICK, MAX_MOVE_PER_TICK, CHAT_SPAM_STEP, CHAT_SPAM_LIMIT, NAME_PATTERN } from '../config';
+import { PROTOCOL_VERSION, BUILD_ID, MAX_GUEST_MESSAGE, MAX_GUEST_PACKETS, MESSAGES_PER_TICK, MAX_GUEST_BACKLOG, MAX_GUEST_BACKLOG_BYTES, MAX_LOGIN_BACKLOG, MAX_GUESTS, LOGIN_TICKS, KEEPALIVE_TICKS, TIMEOUT_TICKS, GUEST_VIEW_DISTANCE, CHUNKS_PER_TICK, MAX_MOVE_PER_TICK, CHAT_SPAM_STEP, CHAT_SPAM_LIMIT, NAME_PATTERN, DROP_SPAM_STEP, DROP_SPAM_LIMIT, ENTITY_REACH_SLACK } from '../config';
 import type { PeerId } from '../transport/transport';
 import { creativeItem, itemToWire } from '../items';
 import { applyPoseFlags, equipment, poseFlags, stackKey } from '../playerState';
 import { levelChunkPacket } from '../chunkData';
 import type { HostServer } from './hostServer';
+import { EntityTracker } from './entityTracker';
+import type { Entity } from '../../entity/entity';
 import { Player } from '../../entity/player';
 import { Interaction } from '../../game/interaction';
 import { raycast } from '../../game/raycast';
@@ -35,6 +37,18 @@ interface Move {
   yRot: number;
   xRot: number;
   flags: number;
+}
+
+/** (MovePlayer's target) no entity under the crosshair */
+const NO_TARGET = -1;
+
+/** the kinds of packet that couldn't be sent to a guest, told once each (a bug in whatever built them) */
+const unsentIds = new Set<Value>();
+function unsent(p: Value, e: CodecError): void {
+  const id = Array.isArray(p) ? p[0] : null;
+  if (unsentIds.has(id)) return;
+  unsentIds.add(id);
+  console.error(`multiplayer: a packet (${String(id)}) left out of a message to a guest`, e);
 }
 
 export class ServerPlayerSession {
@@ -66,6 +80,18 @@ export class ServerPlayerSession {
   private usePressed = false;
   private attackHeld = false;
   private useHeld = false;
+  /** the entity under the guest's crosshair, as it said (its id; checked when the host clicks for it) */
+  private target = NO_TARGET;
+  /** the drop key's presses this tick (vanilla ServerboundPlayerActionPacket DROP_ITEM / DROP_ALL_ITEMS) */
+  private drops: boolean[] = [];
+  /** vanilla dropSpamThrottler: what a creative guest throws out of its inventory */
+  private dropSpam = 0;
+  /** what its player rode at the end of the last tick (getting off, it's put where the host has it) */
+  private riding: Entity | null = null;
+  /** its experience as the guest was last told */
+  private xp = '';
+  /** the entities other than players it sees (vanilla ChunkMap.TrackedEntity) */
+  readonly tracker = new EntityTracker(this);
   /** chunks the guest has, by Chunk.key (vanilla ChunkTrackingView) */
   readonly sent = new Set<number>();
   /** block changes in its chunks this tick: x, y, z, state */
@@ -167,6 +193,7 @@ export class ServerPlayerSession {
       case SB.KeepAlive:
         return;
       case SB.MovePlayer:
+        this.target = p[7] as number;
         return this.moved({ x: p[1] as number, y: p[2] as number, z: p[3] as number, yRot: p[4] as number, xRot: p[5] as number, flags: p[6] as number });
       case SB.AcceptTeleportation:
         if (p[1] === this.awaitingTeleport) this.awaitingTeleport = null;
@@ -174,6 +201,9 @@ export class ServerPlayerSession {
       case SB.PlayerAction:
         if (p[1] === Action.ATTACK) this.attackPressed = true;
         else if (p[1] === Action.USE) this.usePressed = true;
+        // (a tick's worth: a guest's drop key repeats no faster than a player's would)
+        else if ((p[1] === Action.DROP || p[1] === Action.DROP_ALL) && this.drops.length < 4) this.drops.push(p[1] === Action.DROP_ALL);
+        else if (p[1] === Action.RIDING_JUMP) this.ridingJump(p[2] as number);
         return;
       case SB.SetCarriedItem:
         pl.inventory.selected = p[1] as number;
@@ -214,12 +244,12 @@ export class ServerPlayerSession {
     const [x, y, z] = srv.hooks.spawnPoint();
     p.moveTo(x, y, z, 0, 0);
     p.remoteMove = () => this.applyMove();
-    // (no picking up: what it holds is the guest's creative inventory, which the host only mirrors in stage 1)
-    p.noPickup = true;
     level.addEntity(p);
     this.player = p;
     this.pos = { x, y, z };
-    this.interaction = srv.guestInteraction(this, p);
+    const it = (this.interaction = srv.guestInteraction(this, p));
+    // (what doesn't fit in its inventory, or it throws out, lands in the world: vanilla Player.drop)
+    p.dropHandler = (s) => it.throwItem(s);
     this.state = 'play';
     this.lastHeard = this.ticks;
     const info: LoginInfo = {
@@ -249,8 +279,18 @@ export class ServerPlayerSession {
   private moved(m: Move): void {
     this.attackHeld = !!(m.flags & PoseFlag.ATTACK_HELD);
     this.useHeld = !!(m.flags & PoseFlag.USE_HELD);
+    this.steer(m.flags);
     // (vanilla: moves before the guest has taken a teleport are the old place's, and don't count)
     if (this.awaitingTeleport !== null) return;
+    const p = this.player!;
+    if (p.vehicle) {
+      // (vanilla: a rider goes where what it rides takes it; the guest has a say only in where it looks, which the
+      // mount goes by before the rider's tick)
+      p.yaw = p.headYaw = m.yRot;
+      p.pitch = m.xRot;
+      this.move = m;
+      return;
+    }
     const d2 = (m.x - this.pos.x) ** 2 + (m.y - this.pos.y) ** 2 + (m.z - this.pos.z) ** 2;
     if (d2 > MAX_MOVE_PER_TICK * MAX_MOVE_PER_TICK) {
       // (vanilla "moved too quickly!")
@@ -268,11 +308,35 @@ export class ServerPlayerSession {
     this.move = m;
   }
 
+  /**
+   * vanilla handlePlayerInput: the movement keys the guest holds, as its player's own (what steers a mount or a boat,
+   * vanilla Player.rideTick and the mounts' getRiddenInput; the sneak key gets it off)
+   */
+  private steer(f: number): void {
+    const p = this.player!, i = p.input;
+    i.forward = !!(f & PoseFlag.FORWARD);
+    i.back = !!(f & PoseFlag.BACK);
+    i.left = !!(f & PoseFlag.LEFT);
+    i.right = !!(f & PoseFlag.RIGHT);
+    i.jump = !!(f & PoseFlag.JUMP);
+    i.sneak = !!(f & PoseFlag.SHIFT);
+    // (vanilla LivingEntity.aiStep's xxa and zza, as the guest's own tick makes them)
+    p.xxa = ((i.left ? 1 : 0) - (i.right ? 1 : 0)) * 0.98;
+    p.zza = ((i.forward ? 1 : 0) - (i.back ? 1 : 0)) * 0.98;
+  }
+
   /** (Player.remoteMove, in its tick) where the guest said it went, with the look and pose it said */
   private applyMove(): void {
     const p = this.player, m = this.move;
     if (!p || !m) return;
     this.move = null;
+    if (p.vehicle) {
+      // (riding: its look and pose; where it is is its seat)
+      applyPoseFlags(p, m.flags);
+      p.yaw = p.headYaw = m.yRot;
+      p.pitch = m.xRot;
+      return;
+    }
     p.dx = m.x - p.x;
     p.dy = m.y - p.y;
     p.dz = m.z - p.z;
@@ -311,6 +375,14 @@ export class ServerPlayerSession {
     if (p.gameMode !== 'creative') return;
     const s = creativeItem(v);
     if (s === 'bad') return this.disconnect('Invalid creative inventory action');
+    if (slot < 0) {
+      // (vanilla: slot -1 throws the item out, as many as a creative player likes, but not too many too fast)
+      if (s && this.dropSpam < DROP_SPAM_LIMIT) {
+        this.dropSpam += DROP_SPAM_STEP;
+        this.interaction!.throwItem(s);
+      }
+      return;
+    }
     const inv = p.inventory;
     if (slot < SLOT_ARMOR) inv.main[slot] = s;
     else if (slot < SLOT_OFFHAND) inv.armor[slot - SLOT_ARMOR] = s;
@@ -354,8 +426,20 @@ export class ServerPlayerSession {
     if (this.state !== 'play') return;
     if (this.ticks - this.lastHeard > TIMEOUT_TICKS) return this.disconnect('Timed out');
     if (this.ticks % KEEPALIVE_TICKS === 0) this.send([CB.KeepAlive, ++this.keepAliveId]);
+    if (this.dropSpam > 0) this.dropSpam--;
+    // (a rider is where its mount took it, round which its chunks are sent)
+    const p = this.player!;
+    if (p.vehicle && !p.removed) this.pos = { x: p.x, y: p.y, z: p.z };
     this.tickInteraction();
     this.tickChunks();
+  }
+
+  /** vanilla handlePlayerCommand START_RIDING_JUMP: the leap of the mount it steers, with the charge the guest let go at */
+  private ridingJump(power: number): void {
+    const mount = this.player!.jumpableVehicle();
+    if (!mount || mount.jumpCooldown() !== 0) return;
+    mount.onPlayerJump(power);
+    if (power > 0) mount.handleStartJump(power);
   }
 
   /** what Game.tick does with its own player's buttons, with this guest's (vanilla ServerPlayerGameMode) */
@@ -367,6 +451,9 @@ export class ServerPlayerSession {
     it.continueAttack(this.attackHeld && !p.isUsingItem());
     it.use(this.usePressed, this.useHeld);
     it.tickUsingItem();
+    // (vanilla handlePlayerAction DROP_ITEM: what's in hand, thrown, the guest's inventory told of it after)
+    for (const all of this.drops) if (p.gameMode !== 'spectator') it.drop(all);
+    this.drops = [];
     this.attackPressed = this.usePressed = false;
     // (vanilla ServerLevel.destroyBlockProgress: the crack it's making, for everyone round it to see)
     const stage = it.destroyStage;
@@ -378,12 +465,19 @@ export class ServerPlayerSession {
   }
 
   /**
-   * vanilla GameRenderer.pick from the guest's eyes, but for blocks only: what a guest can see of entities in stage 1
-   * is players, and clicking one does nothing yet (no fighting); it hides the block behind it
+   * vanilla GameRenderer.pick from the guest's eyes: the entity the guest says is under its crosshair, if it could be
+   * (vanilla handleInteract's checks), else the block it looks at. Players hide the block behind them; clicking one
+   * does nothing yet (no fighting between players)
    */
   private pick(): void {
     const p = this.player!, it = this.interaction!;
     const ex = p.x, ey = p.y + p.eyeHeight, ez = p.z;
+    const e = this.targetEntity(ex, ey, ez);
+    if (e) {
+      it.entityHit = e;
+      it.hit = null;
+      return;
+    }
     const pr = (p.pitch * Math.PI) / 180, yr = (p.yaw * Math.PI) / 180;
     const dx = -Math.sin(yr) * Math.cos(pr), dy = -Math.sin(pr), dz = Math.cos(yr) * Math.cos(pr);
     const reach = it.reach();
@@ -396,6 +490,20 @@ export class ServerPlayerSession {
     }
     it.entityHit = null;
     it.hit = bh && bh.dist < reach && bh.dist <= d ? bh : null;
+  }
+
+  /**
+   * the entity the guest says it looks at, if it may: one it's been shown and that's still here, that can be picked,
+   * isn't what it rides, and whose box is in its reach from its eyes (vanilla canInteractWithEntity, with its slack)
+   */
+  private targetEntity(ex: number, ey: number, ez: number): Entity | null {
+    if (this.target === NO_TARGET) return null;
+    const p = this.player!, e = this.tracker.byId(this.target);
+    if (!e || e.removed || !e.isPickable() || e.rootVehicle() === p.rootVehicle()) return null;
+    const b = e.bb.inflate(e.pickRadius());
+    const dx = Math.max(b.minX - ex, 0, ex - b.maxX), dy = Math.max(b.minY - ey, 0, ey - b.maxY), dz = Math.max(b.minZ - ez, 0, ez - b.maxZ);
+    const r = this.interaction!.entityReach() + ENTITY_REACH_SLACK;
+    return dx * dx + dy * dy + dz * dz < r * r ? e : null;
   }
 
   /** vanilla ChunkMap.updateChunkTracking: send the nearest missing chunks, forget the far ones */
@@ -469,8 +577,36 @@ export class ServerPlayerSession {
     if (this.state !== 'play') return this.sendOut();
     this.flushBlocks();
     this.trackPlayers();
+    this.tracker.tick(this.ticks);
+    this.dismounted();
     this.syncInventory();
+    this.syncExperience();
     this.sendOut();
+  }
+
+  /** whether the guest knows of `e` (itself, a player it sees, an entity it's been shown): who a rider can be to it */
+  knows(e: Entity): boolean {
+    return e === this.player || this.seen.has(e as Player) || this.tracker.has(e);
+  }
+
+  /**
+   * vanilla ServerPlayer.stopRiding → dismountTo: a guest's player that got off (the sneak key, its mount gone) is put
+   * where the host has it, after it's been told it's off (SetPassengers)
+   */
+  private dismounted(): void {
+    const p = this.player!, v = p.vehicle;
+    if (this.riding && !v && !p.removed) this.teleport(p.x, p.y, p.z, p.yaw, p.pitch);
+    this.riding = v;
+  }
+
+  /** vanilla ServerPlayer's lastSentExp: the experience bar */
+  private syncExperience(): void {
+    const p = this.player!;
+    const key = `${p.xpProgress},${p.xpLevel},${p.xpTotal}`;
+    if (key === this.xp) return;
+    this.xp = key;
+    const n = (v: number) => (Number.isFinite(v) ? Math.max(0, Math.min(0x7fffffff, Math.floor(v))) : 0);
+    this.send([CB.SetExperience, Number.isFinite(p.xpProgress) ? Math.max(0, Math.min(1, p.xpProgress)) : 0, n(p.xpLevel), n(p.xpTotal)]);
   }
 
   private sendOut(): void {
@@ -479,7 +615,7 @@ export class ServerPlayerSession {
     this.out = [];
     let bytes: Uint8Array;
     try {
-      bytes = encode(msg);
+      bytes = encodeBundle(msg, (p, e) => unsent(p, e));
     } catch (e) {
       console.error('multiplayer: a message to a guest', e);
       return;

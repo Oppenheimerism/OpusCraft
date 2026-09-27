@@ -186,6 +186,8 @@ export class EntityRenderDispatcher {
   rendered = 0;
   /** model matrix living renderers start from instead of identity (mobs drawn inside spawners) */
   private base: Float32Array | null = null;
+  /** (a guest) the kinds of entity that failed to draw, told once each */
+  private readonly unDrawn = new Set<string>();
   private readonly spawnerPose = new PoseStack();
   private whiteTex: WebGLTexture | null = null;
   private mainArm: 'left' | 'right' = 'right';
@@ -440,7 +442,18 @@ export class EntityRenderDispatcher {
       if (d2 >= maxD * maxD && !beam && !laser && !lead) continue;
       const hw = (bb.maxX - bb.minX) / 2 + 0.5, h = bb.maxY - bb.minY + 0.5;
       if (!beam && !laser && !lead && !(e instanceof EnderDragon) && !frustum.testBox(dx - hw, dy - 0.5, dz - hw, dx + hw, dy + h, dz + hw)) continue;
-      this.renderEntity(b, level, e, x, y, z, dx, dy, dz, partial, cam);
+      if (level.isClientSide) {
+        // (a guest's copy of the host's entity: one that won't draw is left out of the frame, not the frame with it)
+        try {
+          this.renderEntity(b, level, e, x, y, z, dx, dy, dz, partial, cam);
+        } catch (err) {
+          if (!this.unDrawn.has(e.type)) {
+            this.unDrawn.add(e.type);
+            console.error(`multiplayer: drawing a ${e.type}`, err);
+          }
+          continue;
+        }
+      } else this.renderEntity(b, level, e, x, y, z, dx, dy, dz, partial, cam);
       drawn++;
       if (opts.shadows && !(e instanceof LivingEntity && e.isInvisible())) {
         const r = shadowRadius(e);

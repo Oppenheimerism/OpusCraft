@@ -93,14 +93,14 @@ const bytes = (...parts) => new Uint8Array(parts.flat());
   attack('fields missing', (r) => r.send([[m.SB.MovePlayer, 0.5, 65]]), /^Bad data: packet \d+: 2 fields/);
   attack('a field too many', (r) => r.send([[m.SB.KeepAlive, 1, 2]]), /^Bad data: packet \d+: 2 fields/);
   // fields of the wrong type, or out of range
-  const move = (x, y, z, yRot = 0, xRot = 0, flags = 0) => [[m.SB.MovePlayer, x, y, z, yRot, xRot, flags]];
+  const move = (x, y, z, yRot = 0, xRot = 0, flags = 0) => [[m.SB.MovePlayer, x, y, z, yRot, xRot, flags, -1]];
   attack('a coordinate that\'s text', (r) => r.send(move('0', 65, 0.5)), /^Bad data: packet \d+: bad field 0/);
   attack('a coordinate off the world', (r) => r.send(move(m.WORLD_EDGE + 1, 65, 0.5)), /^Bad data: packet \d+: bad field 0/);
   attack('a height off the world', (r) => r.send(move(0.5, 3e7, 0.5)), /^Bad data: packet \d+: bad field 1/);
   attack('looking further up than straight up', (r) => r.send(move(0.5, 65, 0.5, 0, -91)), /^Bad data: packet \d+: bad field 4/);
   attack('pose flags that don\'t exist', (r) => r.send(move(0.5, 65, 0.5, 0, 0, 1 << 20)), /^Bad data: packet \d+: bad field 5/);
   attack('a hotbar slot past the ninth', (r) => r.send([[m.SB.SetCarriedItem, 9]]), /^Bad data: packet \d+: bad field 0/);
-  attack('an action that doesn\'t exist', (r) => r.send([[m.SB.PlayerAction, 2]]), /^Bad data: packet \d+: bad field 0/);
+  attack('an action that doesn\'t exist', (r) => r.send([[m.SB.PlayerAction, 5, 0]]), /^Bad data: packet \d+: bad field 0/);
   attack('an inventory slot that doesn\'t exist', (r) => r.send([[m.SB.SetCreativeModeSlot, m.SLOT_COUNT, null]]), /^Bad data: packet \d+: bad field 0/);
   attack('an item of the wrong shape', (r) => r.send([[m.SB.SetCreativeModeSlot, 0, ['stone', 1]]]), /^Bad data: packet \d+: bad field 1/);
   attack('a stack of none', (r) => r.send([[m.SB.SetCreativeModeSlot, 0, ['stone', 0, 0, null]]]), /^Bad data: packet \d+: bad field 1/);
@@ -134,7 +134,7 @@ const bytes = (...parts) => new Uint8Array(parts.flat());
     check('busy: 500 messages at once, within the limits: still in (40 handled a tick)', !r.gone && hostCopy(host, { name: 'Busy' }) !== null);
     // a flood of clicks is one click: the button counts as pressed once a tick (vanilla handlePlayerAction)
     // (away from the host's player, which stands at the spawn and would be in the way)
-    r.send([[m.SB.MovePlayer, 4.5, 65, 4.5, 0, 90, 0], ...Array.from({ length: 60 }, () => [m.SB.PlayerAction, m.Action.ATTACK])]);
+    r.send([[m.SB.MovePlayer, 4.5, 65, 4.5, 0, 90, 0, -1], ...Array.from({ length: 60 }, () => [m.SB.PlayerAction, m.Action.ATTACK, 0])]);
     step(host, 20);
     check('clicks: sixty in a tick break one block', host.world.getState(4, 63, 4) === 0 && host.world.getState(4, 62, 4) === m.S('stone'));
     check('clicks: (and it\'s still in)', !r.gone);

@@ -1,10 +1,10 @@
 // A guest's end of the connection (vanilla ClientPacketListener with the bits of Minecraft.tick and ClientLevel that
 // run for a world that's someone else's): it says hello, takes the world in as the host sends it (checked: it came
-// from another game), runs its own player and eases the others along, and tells the host each tick where its player
-// is and what its buttons did. The host decides everything else.
+// from another game), runs its own player and eases the others along, players and the rest, and tells the host each
+// tick where its player is, what it looks at and what its buttons and keys did. The host decides everything else.
 
 import type { Value } from '../codec';
-import { decode, encode, CodecError } from '../codec';
+import { decode, encodeBundle, CodecError } from '../codec';
 import { SB, CB, Action, PoseFlag, checkPacket, checkLogin, SLOT_ARMOR, SLOT_OFFHAND, SLOT_COUNT, ANIMATE_SWING_OFF_HAND, type LoginInfo } from '../protocol';
 import { PROTOCOL_VERSION, BUILD_ID, MAX_HOST_MESSAGE, MAX_HOST_BACKLOG, MAX_HOST_BACKLOG_BYTES, TIMEOUT_TICKS, MAX_CHAT } from '../config';
 import { HOST_PEER, type PeerId, type Transport } from '../transport/transport';
@@ -12,8 +12,14 @@ import { itemFromHost, itemToWire } from '../items';
 import { poseFlags, stackKey } from '../playerState';
 import { columnFromSections, biomesOk, savedBlockEntity, blockEntityFromHost } from '../chunkData';
 import { replayParticles } from '../effects';
+import { createFromPayload } from '../entityNet';
+import { applyData } from '../entityData';
 import { MirrorPlayer } from './mirrorPlayer';
+import { EntityMirror } from './entityMirror';
+import { BOAT_TYPES } from '../../entity/boat';
 import type { Level } from '../../game/level';
+import type { Entity } from '../../entity/entity';
+import { LivingEntity } from '../../entity/living';
 import type { Player } from '../../entity/player';
 import type { ItemStack } from '../../item/item';
 import type { SavedBlockEntity } from '../../world/blockEntity';
@@ -37,6 +43,22 @@ export interface ClientHooks {
   chat(text: string, overlay: boolean): void;
   /** the connection's over, not by our own leaving: `reason` is for the "Connection lost" screen */
   disconnected(reason: string): void;
+  /** something was picked up (`amount` of it, for an item): it flies to whoever took it (vanilla ItemPickupParticle) */
+  took?(e: Entity, taker: LivingEntity, amount: number): void;
+  /** our player got on something (vanilla's "Press Shift to Dismount") */
+  mounted?(vehicle: Entity): void;
+}
+
+/** the most fields waiting for an entity that hasn't come yet (a host that names more that never come is let be) */
+const MAX_WAITING = 4096;
+
+/** the kinds of packet that couldn't be sent to the host, told once each (a bug in whatever built them) */
+const unsentIds = new Set<Value>();
+function unsent(p: Value, e: CodecError): void {
+  const id = Array.isArray(p) ? p[0] : null;
+  if (unsentIds.has(id)) return;
+  unsentIds.add(id);
+  console.error(`multiplayer: a packet (${String(id)}) left out of a message to the host`, e);
 }
 
 export interface GuestIdentity {
@@ -62,6 +84,15 @@ export class ClientSession {
   private quiet = 0;
   /** the other players, by the host's ids */
   readonly mirrors = new Map<number, MirrorPlayer>();
+  /** the other entities the host shows us, by its ids (vanilla ClientLevel.entitiesById) */
+  readonly entities = new Map<number, EntityMirror>();
+  /** our copies of the host's entities, players aside */
+  private readonly copies = new WeakMap<Entity, EntityMirror>();
+  /** fields naming an entity that hasn't come yet, by its id: filled in when it does (a mob's target, a lead's holder) */
+  private readonly waiting = new Map<number, [Entity, string][]>();
+  private waitingCount = 0;
+  /** the kinds of entity that couldn't be shown, told once each */
+  private readonly unshown = new Set<string>();
   /** chunks being lit, with what the host changed in them meanwhile */
   private readonly pending = new Map<number, { updates: number[]; blockEntities: Map<string, SavedBlockEntity> }>();
   private rainTarget = 0;
@@ -71,6 +102,10 @@ export class ClientSession {
   private usePressed = false;
   private attackHeld = false;
   private useHeld = false;
+  /** the entity under our crosshair (what our clicks go to, the host deciding) */
+  private target: Entity | null = null;
+  /** this tick's drops and riding jumps, sent after where we are and what's in hand */
+  private actions: Value[][] = [];
   /** our inventory as the host last heard it, slot by slot, and our hotbar slot */
   private readonly slots: string[] = new Array(SLOT_COUNT).fill('');
   private invVersion = -1;
@@ -200,17 +235,51 @@ export class ClientSession {
         for (const eid of p[1] as number[]) {
           const m = this.mirrors.get(eid);
           if (m) {
-            m.remove();
+            dropCopy(m);
             this.mirrors.delete(eid);
           }
+          const c = this.entities.get(eid);
+          if (c) {
+            dropCopy(c.e);
+            this.entities.delete(eid);
+          }
+          this.forget(eid);
           level.destroyProgress.delete(eid);
         }
         return;
       case CB.MoveEntity: {
-        const m = this.mirrors.get(p[1] as number);
-        if (!m) return;
-        m.lerpTo(p[2] as number, p[3] as number, p[4] as number, p[5] as number, p[6] as number, p[7] as number, p[8] as number);
-        m.setPose(p[9] as number);
+        const [, eid, x, y, z, yRot, xRot, head, body, flags] = p as number[];
+        const m = this.mirrors.get(eid);
+        if (m) {
+          m.lerpTo(x, y, z, yRot, xRot, head, body);
+          m.setPose(flags);
+        } else this.entities.get(eid)?.lerpTo(x, y, z, yRot, xRot, head, body, flags);
+        return;
+      }
+      case CB.AddEntity:
+        return this.addEntity(p);
+      case CB.SetEntityData: {
+        const c = this.entities.get(p[1] as number);
+        if (!c) return;
+        const why = applyData(c.e, p[2], this.resolve);
+        if (why) return this.fail(why);
+        // (a size that changed: its box goes with it)
+        const d = p[2] as Record<string, Value>;
+        if ('width' in d || 'height' in d) c.e.setPos(c.e.x, c.e.y, c.e.z);
+        return;
+      }
+      case CB.SetPassengers:
+        return this.setPassengers(p[1] as number, p[2] as number[]);
+      case CB.TakeItemEntity: {
+        const e = this.byNetId(p[1] as number), taker = this.byNetId(p[2] as number);
+        if (e && taker instanceof LivingEntity) this.hooks.took?.(e, taker, p[3] as number);
+        return;
+      }
+      case CB.SetExperience: {
+        const pl = this.player!;
+        pl.xpProgress = p[1] as number;
+        pl.xpLevel = p[2] as number;
+        pl.xpTotal = p[3] as number;
         return;
       }
       case CB.Animate: {
@@ -231,7 +300,7 @@ export class ClientSession {
         }
         return;
       case CB.LevelParticles:
-        replayParticles(level.particles, p[1] as string, p[2] as Value[]);
+        replayParticles(level.particles, p[1] as string, p[2] as Value[], (eid) => this.byNetId(eid));
         return;
       case CB.SystemChat:
         return this.hooks.chat(p[1] as string, p[2] as boolean);
@@ -253,6 +322,10 @@ export class ClientSession {
     this.info = info;
     this.playerId = info.playerId;
     const { level, player, chunks } = this.hooks.login(info);
+    // (vanilla sendRidingJump: the charge let go on the mount we steer, which the host leaps)
+    player.onRidingJump = (power) => {
+      if (this.actions.length < 16) this.actions.push([SB.PlayerAction, Action.RIDING_JUMP, Math.max(0, Math.min(100, Math.floor(power) || 0))]);
+    };
     // (the clock runs as the host's does from the first tick, before its first SetTime)
     level.doDaylightCycle = info.gameRules.doDaylightCycle !== false;
     this.level = level;
@@ -311,8 +384,9 @@ export class ClientSession {
   /** vanilla handleAddEntity for a player (with its PlayerInfo): a mirror of it, where it is and in what it holds */
   private addPlayer(p: Value[]): void {
     const id = p[1] as number;
-    if (id === this.playerId) return;
-    this.mirrors.get(id)?.remove();
+    if (id === this.playerId || this.entities.has(id)) return;
+    const had = this.mirrors.get(id);
+    if (had) dropCopy(had);
     const m = new MirrorPlayer(this.level!, id);
     m.uuid = (p[2] as string).toLowerCase();
     m.profileName = (p[3] as string).replace(/[\u0000-\u001f\u007f§]/g, '');
@@ -321,17 +395,131 @@ export class ClientSession {
     (p[13] as Value[]).forEach((it, slot) => setEquipment(m, slot, itemFromHost(it)));
     this.mirrors.set(id, m);
     this.level!.addMirrorEntity(m);
+    this.arrived(id, m);
+  }
+
+  /**
+   * vanilla handleAddEntity: our copy of an entity, made from its record (or afresh, for the kinds that have none),
+   * where the host says, with all its fields. One this game can't make is left out (said once in the console)
+   */
+  private addEntity(p: Value[]): void {
+    const id = p[1] as number, type = p[2] as string;
+    if (id === this.playerId || this.mirrors.has(id)) return;
+    const had = this.entities.get(id);
+    if (had) {
+      dropCopy(had.e);
+      this.entities.delete(id);
+    }
+    const level = this.level!;
+    let e: Entity | null = null;
+    try {
+      e = createFromPayload(level, type, p[3]);
+    } catch (err) {
+      if (!this.unshown.has(type)) console.warn(`multiplayer: making a ${type}`, err);
+    }
+    if (!e) {
+      if (!this.unshown.has(type)) console.warn(`multiplayer: a ${type} from the host that can't be shown`);
+      this.unshown.add(type);
+      return;
+    }
+    const c = new EntityMirror(e, id);
+    const [x, y, z, yRot, xRot, head, body, flags] = p.slice(4, 12) as number[];
+    c.place(x, y, z, yRot, xRot, head, body, flags);
+    const why = applyData(e, p[12], this.resolve);
+    if (why) return this.fail(why);
+    e.setPos(e.x, e.y, e.z);
+    this.entities.set(id, c);
+    this.copies.set(e, c);
+    level.addMirrorEntity(e);
+    this.arrived(id, e);
+  }
+
+  /** our player, or our copy of a player or an entity, by the host's id */
+  private byNetId(id: number): Entity | null {
+    if (id === this.playerId) return this.player;
+    return this.mirrors.get(id) ?? this.entities.get(id)?.e ?? null;
+  }
+
+  /** (applyData) an entity a field names: our copy of it, or, if it hasn't come yet, null till it does */
+  private readonly resolve = (id: number, e: Entity, field: string | null): Entity | null => {
+    const found = this.byNetId(id);
+    if (found || field === null || this.waitingCount >= MAX_WAITING) return found;
+    let w = this.waiting.get(id);
+    if (!w) this.waiting.set(id, (w = []));
+    w.push([e, field]);
+    this.waitingCount++;
+    return null;
+  };
+
+  /** the entity the host calls `id` has come: the fields that named it before it did have it now (if they still name nothing) */
+  private arrived(id: number, e: Entity): void {
+    const w = this.waiting.get(id);
+    if (!w) return;
+    this.forget(id);
+    for (const [holder, field] of w) {
+      const rec = holder as unknown as Record<string, unknown>;
+      if (!holder.removed && rec[field] === null) rec[field] = e;
+    }
+  }
+
+  private forget(id: number): void {
+    const w = this.waiting.get(id);
+    if (!w) return;
+    this.waitingCount -= w.length;
+    this.waiting.delete(id);
+  }
+
+  /** vanilla handleSetEntityPassengersPacket: who rides `vid`, in its seats' order (those we don't know of aside) */
+  private setPassengers(vid: number, ids: number[]): void {
+    const v = this.byNetId(vid);
+    if (!v || v === this.player) return;
+    const riders: Entity[] = [];
+    for (const id of ids) {
+      const r = this.byNetId(id);
+      if (r && r !== v && !riders.includes(r)) riders.push(r);
+    }
+    // (getting off, a rider stays where it is till the host says where it went: a teleport for us, a move for the rest)
+    for (const r of [...v.passengers]) if (!riders.includes(r)) r.removeVehicle();
+    const me = this.player!, wasOn = me.vehicle === v;
+    for (const r of riders) {
+      if (r.vehicle === v) continue;
+      if (r.vehicle) r.removeVehicle();
+      r.startRiding(v, true);
+    }
+    const seats = v.passengers.filter((r) => riders.includes(r));
+    seats.sort((a, b) => riders.indexOf(a) - riders.indexOf(b));
+    v.passengers.length = 0;
+    v.passengers.push(...seats);
+    if (!wasOn && me.vehicle === v) {
+      // (vanilla: getting in a boat turns you its way)
+      if (BOAT_TYPES.includes(v.type)) me.yaw = me.yawO = me.headYaw = v.yaw;
+      this.hooks.mounted?.(v);
+    }
   }
 
   // -------------------------------------------------------------------------
   // the guest's own tick
 
-  /** this tick's attack and use buttons (Game.tick's clicks and held buttons, which the host acts on) */
-  input(attackPressed: boolean, attackHeld: boolean, usePressed: boolean, useHeld: boolean): void {
+  /**
+   * this tick's attack and use buttons (Game.tick's clicks and held buttons, which the host acts on), and the entity
+   * under the crosshair (what they go to, if the host agrees)
+   */
+  input(attackPressed: boolean, attackHeld: boolean, usePressed: boolean, useHeld: boolean, target: Entity | null = null): void {
     this.attackPressed ||= attackPressed;
     this.usePressed ||= usePressed;
     this.attackHeld = attackHeld;
     this.useHeld = useHeld;
+    this.target = target;
+  }
+
+  /** the drop key (with Ctrl, the whole stack): the host throws it, and tells us what's left (vanilla DROP_ITEM) */
+  drop(all: boolean): void {
+    if (this.state === 'play' && this.actions.length < 16) this.actions.push([SB.PlayerAction, all ? Action.DROP_ALL : Action.DROP, 0]);
+  }
+
+  /** (our player's dropHandler) an item thrown out of the creative inventory (vanilla handleCreativeModeItemDrop: slot -1) */
+  dropCreative(s: ItemStack): void {
+    if (this.state === 'play' && this.actions.length < 16) this.actions.push([SB.SetCreativeModeSlot, -1, itemToWire(s)]);
   }
 
   /**
@@ -349,20 +537,65 @@ export class ClientSession {
     level.thunder = this.thunderTarget;
     level.updateSkyBrightness();
     const p = this.player!;
-    if (!p.removed && level.world.isLoaded(Math.floor(p.x), Math.floor(p.z))) p.tick();
-    for (const m of this.mirrors.values()) if (!m.removed) m.tick();
+    // (vanilla ClientLevel.tickEntities: each thing that rides nothing, then its riders, each after what it rides)
+    for (const m of this.mirrors.values()) if (!m.removed && !m.vehicle) this.tickTree(m, 0);
+    for (const c of this.entities.values()) if (!c.e.removed && !c.e.vehicle) this.tickTree(c.e, 0);
+    if (!p.removed && !p.vehicle && level.world.isLoaded(Math.floor(p.x), Math.floor(p.z))) p.tick();
     level.pruneRemoved();
+  }
+
+  /** a copy, then its riders, each put in its seat (vanilla ClientLevel.tickPassenger); our own player rides as ever */
+  private tickTree(e: Entity, depth: number): void {
+    if (e !== this.player) this.tickCopy(e);
+    for (const r of [...e.passengers]) {
+      if (r.removed || r.vehicle !== e) continue;
+      if (r === this.player) {
+        if (this.level!.world.isLoaded(Math.floor(r.x), Math.floor(r.z))) r.rideTick();
+      } else if (this.tickCopy(r)) {
+        try {
+          e.positionRider(r);
+        } catch (err) {
+          this.broken(r, err);
+        }
+      }
+      if (r.passengers.length && depth < 8) this.tickTree(r, depth + 1);
+    }
+  }
+
+  /** one copy's tick (a player's or another entity's); one that fails is dropped from view (said once in the console) */
+  private tickCopy(e: Entity): boolean {
+    try {
+      if (e instanceof MirrorPlayer) e.tick();
+      else this.copies.get(e)?.tick();
+      return true;
+    } catch (err) {
+      this.broken(e, err);
+      return false;
+    }
+  }
+
+  private broken(e: Entity, err: unknown): void {
+    if (!this.unshown.has(e.type)) console.error(`multiplayer: a ${e.type} from the host`, err);
+    this.unshown.add(e.type);
+    dropCopy(e);
   }
 
   /** (end of the guest's tick) where our player is, what the buttons did, what's changed in the inventory: sent */
   sendTick(): void {
     if (this.state !== 'play') return this.flush();
-    const p = this.player!;
+    const p = this.player!, i = p.input;
     let flags = poseFlags(p);
     if (this.attackHeld) flags |= PoseFlag.ATTACK_HELD;
     if (this.useHeld) flags |= PoseFlag.USE_HELD;
+    if (i.forward) flags |= PoseFlag.FORWARD;
+    if (i.back) flags |= PoseFlag.BACK;
+    if (i.left) flags |= PoseFlag.LEFT;
+    if (i.right) flags |= PoseFlag.RIGHT;
+    if (i.jump) flags |= PoseFlag.JUMP;
+    const t = this.target;
+    const target = t && !t.removed ? (t instanceof MirrorPlayer ? t.netId : (this.copies.get(t)?.netId ?? -1)) : -1;
     // (the look first, so the host clicks where we looked)
-    this.send([SB.MovePlayer, p.x, p.y, p.z, p.yaw, p.pitch, flags]);
+    this.send([SB.MovePlayer, p.x, p.y, p.z, p.yaw, p.pitch, flags, target]);
     const inv = p.inventory;
     if (inv.selected !== this.selected) {
       this.selected = inv.selected;
@@ -377,9 +610,11 @@ export class ClientSession {
         this.send([SB.SetCreativeModeSlot, slot, itemToWire(s)]);
       }
     }
-    if (this.attackPressed) this.send([SB.PlayerAction, Action.ATTACK]);
-    if (this.usePressed) this.send([SB.PlayerAction, Action.USE]);
+    if (this.attackPressed) this.send([SB.PlayerAction, Action.ATTACK, 0]);
+    if (this.usePressed) this.send([SB.PlayerAction, Action.USE, 0]);
     this.attackPressed = this.usePressed = false;
+    for (const a of this.actions) this.send(a);
+    this.actions = [];
     this.flush();
   }
 
@@ -406,7 +641,7 @@ export class ClientSession {
     if (!this.out.length || this.state === 'closed') return;
     const msg = this.out;
     this.out = [];
-    this.transport.send(HOST_PEER, encode(msg));
+    this.transport.send(HOST_PEER, encodeBundle(msg, (p, e) => unsent(p, e)));
   }
 
   // -------------------------------------------------------------------------
@@ -454,4 +689,11 @@ function setEquipment(m: Player, slot: number, s: ItemStack | null): void {
   if (slot === 0) inv.main[inv.selected] = s;
   else if (slot === 1) inv.offhand = s;
   else inv.armor[slot - 2] = s;
+}
+
+/** a copy the host no longer shows: gone, off what it rode, its riders off it (where they are, till the host says) */
+function dropCopy(e: Entity): void {
+  e.removed = true;
+  for (const r of [...e.passengers]) r.removeVehicle();
+  e.removeVehicle();
 }
