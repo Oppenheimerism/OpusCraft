@@ -4,7 +4,7 @@
 // tick where its player is, what it looks at and what its buttons and keys did. The host decides everything else.
 
 import type { Value } from '../codec';
-import { decode, encode, CodecError } from '../codec';
+import { decode, encodeBundle, CodecError } from '../codec';
 import { SB, CB, Action, PoseFlag, checkPacket, checkLogin, SLOT_ARMOR, SLOT_OFFHAND, SLOT_COUNT, ANIMATE_SWING_OFF_HAND, type LoginInfo } from '../protocol';
 import { PROTOCOL_VERSION, BUILD_ID, MAX_HOST_MESSAGE, MAX_HOST_BACKLOG, MAX_HOST_BACKLOG_BYTES, TIMEOUT_TICKS, MAX_CHAT } from '../config';
 import { HOST_PEER, type PeerId, type Transport } from '../transport/transport';
@@ -51,6 +51,15 @@ export interface ClientHooks {
 
 /** the most fields waiting for an entity that hasn't come yet (a host that names more that never come is let be) */
 const MAX_WAITING = 4096;
+
+/** the kinds of packet that couldn't be sent to the host, told once each (a bug in whatever built them) */
+const unsentIds = new Set<Value>();
+function unsent(p: Value, e: CodecError): void {
+  const id = Array.isArray(p) ? p[0] : null;
+  if (unsentIds.has(id)) return;
+  unsentIds.add(id);
+  console.error(`multiplayer: a packet (${String(id)}) left out of a message to the host`, e);
+}
 
 export interface GuestIdentity {
   name: string;
@@ -632,7 +641,7 @@ export class ClientSession {
     if (!this.out.length || this.state === 'closed') return;
     const msg = this.out;
     this.out = [];
-    this.transport.send(HOST_PEER, encode(msg));
+    this.transport.send(HOST_PEER, encodeBundle(msg, (p, e) => unsent(p, e)));
   }
 
   // -------------------------------------------------------------------------

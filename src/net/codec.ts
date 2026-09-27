@@ -94,6 +94,8 @@ function write(w: Writer, v: Value | undefined, depth: number): void {
     case 'boolean':
       return w.byte(v ? T_TRUE : T_FALSE);
     case 'number':
+      // (the other end refuses the whole message for one: whoever built it has a bug, and it stops here)
+      if (!Number.isFinite(v)) throw new CodecError('not a finite number');
       if (Number.isInteger(v) && v >= -0x80000000 && v <= 0x7fffffff) {
         w.byte(T_INT);
         return w.varuint(((v << 1) ^ (v >> 31)) >>> 0);
@@ -120,6 +122,7 @@ function write(w: Writer, v: Value | undefined, depth: number): void {
   }
   for (const [tag, C] of TYPED)
     if (v instanceof C) {
+      if (tag === T_F32 || tag === T_F64) for (let i = 0; i < v.length; i++) if (!Number.isFinite(v[i])) throw new CodecError('not a finite number');
       w.byte(tag);
       w.varuint(v.length);
       if (LITTLE_ENDIAN) return w.bytes(new Uint8Array(v.buffer, v.byteOffset, v.byteLength));
@@ -165,6 +168,41 @@ export function encode(v: Value): Uint8Array {
   const w = new Writer();
   write(w, v, 0);
   return w.buf.slice(0, w.n);
+}
+
+/** whether `v` can go on the wire, `depth` levels into a message: what encode takes */
+export function sendable(v: Value, depth = 0): boolean {
+  try {
+    write(new Writer(), v, depth);
+    return true;
+  } catch (e) {
+    if (e instanceof CodecError) return false;
+    throw e;
+  }
+}
+
+/**
+ * a tick's packets as one message; a packet that can't go (a bug in whoever built it) is left out, and handed to `bad`,
+ * rather than the whole tick's with it
+ */
+export function encodeBundle(packets: Value[], bad: (packet: Value, e: CodecError) => void): Uint8Array {
+  try {
+    return encode(packets);
+  } catch (e) {
+    if (!(e instanceof CodecError)) throw e;
+    return encode(
+      packets.filter((p) => {
+        try {
+          write(new Writer(), p, 1);
+          return true;
+        } catch (err) {
+          if (!(err instanceof CodecError)) throw err;
+          bad(p, err);
+          return false;
+        }
+      }),
+    );
+  }
 }
 
 class Reader {

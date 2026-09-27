@@ -3,7 +3,7 @@
 // own as the host does its own player's; the chunks it has been sent; and everything it's told, a tick at a time.
 
 import type { Value } from '../codec';
-import { decode, encode, CodecError } from '../codec';
+import { decode, encodeBundle, CodecError } from '../codec';
 import { SB, CB, Action, PoseFlag, checkPacket, isAllowedChat, SLOT_ARMOR, SLOT_OFFHAND, SLOT_COUNT, ANIMATE_SWING_MAIN_HAND, ANIMATE_SWING_OFF_HAND, type LoginInfo } from '../protocol';
 import { PROTOCOL_VERSION, BUILD_ID, MAX_GUEST_MESSAGE, MAX_GUEST_PACKETS, MESSAGES_PER_TICK, MAX_GUEST_BACKLOG, MAX_GUEST_BACKLOG_BYTES, MAX_LOGIN_BACKLOG, MAX_GUESTS, LOGIN_TICKS, KEEPALIVE_TICKS, TIMEOUT_TICKS, GUEST_VIEW_DISTANCE, CHUNKS_PER_TICK, MAX_MOVE_PER_TICK, CHAT_SPAM_STEP, CHAT_SPAM_LIMIT, NAME_PATTERN, DROP_SPAM_STEP, DROP_SPAM_LIMIT, ENTITY_REACH_SLACK } from '../config';
 import type { PeerId } from '../transport/transport';
@@ -41,6 +41,15 @@ interface Move {
 
 /** (MovePlayer's target) no entity under the crosshair */
 const NO_TARGET = -1;
+
+/** the kinds of packet that couldn't be sent to a guest, told once each (a bug in whatever built them) */
+const unsentIds = new Set<Value>();
+function unsent(p: Value, e: CodecError): void {
+  const id = Array.isArray(p) ? p[0] : null;
+  if (unsentIds.has(id)) return;
+  unsentIds.add(id);
+  console.error(`multiplayer: a packet (${String(id)}) left out of a message to a guest`, e);
+}
 
 export class ServerPlayerSession {
   state: 'login' | 'play' | 'gone' = 'login';
@@ -606,7 +615,7 @@ export class ServerPlayerSession {
     this.out = [];
     let bytes: Uint8Array;
     try {
-      bytes = encode(msg);
+      bytes = encodeBundle(msg, (p, e) => unsent(p, e));
     } catch (e) {
       console.error('multiplayer: a message to a guest', e);
       return;

@@ -176,7 +176,7 @@ type Check = (v: Value | undefined) => boolean;
 /** the world's edge (vanilla WorldBorder's largest: 29,999,984) */
 export const WORLD_EDGE = 30_000_000;
 /** vanilla Level.clampVertical */
-const WORLD_HEIGHT_EDGE = 20_000_000;
+export const WORLD_HEIGHT_EDGE = 20_000_000;
 
 const int = (min: number, max: number): Check => (v) => typeof v === 'number' && Number.isInteger(v) && v >= min && v <= max;
 const num = (min: number, max: number): Check => (v) => typeof v === 'number' && v >= min && v <= max;

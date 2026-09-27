@@ -4,8 +4,8 @@
 // it), changes (SetEntityData: the fields that changed), takes riders on or lets them off (SetPassengers), and goes out
 // of view or out of the world (RemoveEntities).
 
-import type { Value } from '../codec';
-import { CB, PoseFlag, WORLD_EDGE } from '../protocol';
+import { sendable, type Value } from '../codec';
+import { CB, PoseFlag, WORLD_EDGE, WORLD_HEIGHT_EDGE } from '../protocol';
 import { spawnPayload } from '../entityNet';
 import type { ServerPlayerSession } from './session';
 import type { Entity } from '../../entity/entity';
@@ -41,6 +41,9 @@ function rangeOf(e: Entity): number {
   if (r !== undefined) return r;
   return e instanceof Mob ? (RANGE_BY_CATEGORY[e.category] ?? 5) : 5;
 }
+
+/** the kinds of entity whose record couldn't go, told once each */
+const unsendable = new Set<string>();
 
 /** vanilla ServerEntity.updateInterval for what's alive (the rest go each tick): a mob's moves every third tick, eased into over three on the guest */
 export const LIVING_INTERVAL = 3;
@@ -111,7 +114,7 @@ export class EntityTracker {
 
   private inView(e: Entity, px: number, pz: number, cap: number, ride: Entity | null): boolean {
     // (what can't go on the wire isn't shown: a guest would take it for bad data)
-    if (!(Math.abs(e.x) <= WORLD_EDGE && Math.abs(e.z) <= WORLD_EDGE && Math.abs(e.y) <= WORLD_EDGE)) return false;
+    if (!(Math.abs(e.x) <= WORLD_EDGE && Math.abs(e.z) <= WORLD_EDGE && Math.abs(e.y) <= WORLD_HEIGHT_EDGE)) return false;
     // (what the guest rides, it sees, wherever its chunks have got to)
     if (ride && e.rootVehicle() === ride) return true;
     let r = rangeOf(e);
@@ -126,9 +129,18 @@ export class EntityTracker {
     const rec = spawnPayload(e);
     if (rec === undefined) return false;
     const m = moveOf(e);
+    const packet: Value[] = [CB.AddEntity, e.id, e.type, rec as unknown as Value, ...m, this.session.server.dataFull(e)];
+    // (a record the wire can't carry, a number that isn't one say, would be refused with all the guest's tick: not shown)
+    if (!sendable(packet, 1)) {
+      if (!unsendable.has(e.type)) {
+        unsendable.add(e.type);
+        console.error(`multiplayer: a ${e.type} can't be shown to guests`, rec);
+      }
+      return false;
+    }
     this.seen.set(e, { move: e.vehicle ? m.slice(3).join(',') : m.join(','), vehicle: e.vehicle, riders: '' });
     this.byIds.set(e.id, e);
-    this.session.send([CB.AddEntity, e.id, e.type, rec as unknown as Value, ...m, this.session.server.dataFull(e)]);
+    this.session.send(packet);
     return true;
   }
 
