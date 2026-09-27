@@ -269,6 +269,14 @@ export class HostServer {
   tick(): void {
     if (this.closed) return;
     this.ticks++;
+    // (stage 5: a guest still on its way to this dimension though the host is here and its level ticking again: it was
+    // left behind somehow, and comes in now, said in the console so it can be looked into)
+    if (!this.travelling)
+      for (const s of this.sessions.values())
+        if (s.travelling) {
+          console.warn(`multiplayer: ${s.player?.profileName ?? 'a guest'} was still on its way to ${this.level.world.dim.id} though the host is here: put in now`);
+          s.arrive();
+        }
     for (const s of [...this.sessions.values()]) s.tick();
     // (the host's own player's crack, which Game draws from its Interaction)
     const hb = this.hooks.hostBreaking();

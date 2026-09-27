@@ -87,6 +87,21 @@ export const MAX_PENDING_LOGINS = 8;
 /** vanilla ServerGamePacketListenerImpl: a move of more than 10 blocks in a tick isn't believed (100 blocks²) */
 export const MAX_MOVE_PER_TICK = 10;
 /**
+ * a guest's moves that come in between two of the host's ticks (a network holding some back, then letting them through
+ * together) are each taken in turn, as vanilla takes each move packet: a second's worth at most, and past that the
+ * latest stands in for the rest
+ */
+export const MOVES_KEPT_PER_TICK = 20;
+/**
+ * (stage 5) a guest still on its loading screen RESYNC_AFTER_TICKS after the host put it in place, or RESYNC_UNPLACED_TICKS
+ * after the host took it along without putting it anywhere yet, asks for the world again (SB.Resync), then every
+ * RESYNC_EVERY_TICKS while it's still waiting; the host takes one every RESYNC_MIN_TICKS at most from a guest
+ */
+export const RESYNC_AFTER_TICKS = 5 * 20;
+export const RESYNC_UNPLACED_TICKS = 15 * 20;
+export const RESYNC_EVERY_TICKS = 10 * 20;
+export const RESYNC_MIN_TICKS = 4 * 20;
+/**
  * vanilla ServerGamePacketListenerImpl.dropSpamThrottler: each item a creative guest throws out of its inventory adds
  * 20, a tick takes 1 away, and at 1480 more are refused
  */

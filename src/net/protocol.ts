@@ -57,6 +57,12 @@ export const SB = {
   EditBook: 18,
   /** [containerId, recipe (a recipe book id), all]: a recipe clicked in the recipe book, its ingredients to go in the grid (vanilla ServerboundPlaceRecipePacket) */
   PlaceRecipe: 19,
+  /**
+   * (stage 5) [missing, waited, placed]: still on the loading screen a while after it should have come in: the chunks it
+   * waits for that haven't come (cx, cz, cx, cz, ...), how long it's waited (ticks), and whether the host had put it in
+   * place. The host sends those again, or puts it in (net/server/session.ts resync); nothing like it in vanilla
+   */
+  Resync: 20,
 } as const;
 
 /** host → guest (vanilla Clientbound*Packet) */
@@ -335,6 +341,8 @@ SERVERBOUND[SB.EditBook] = [int(0, 40), arr(100, str(0, 1024)), orNull(str(1, 32
 // (a recipe book id: the longest is 75 characters, cracked_polished_blackstone_bricks_from_smelting_polished_blackstone_bricks)
 const RECIPE = str(1, 128);
 SERVERBOUND[SB.PlaceRecipe] = [CONTAINER, RECIPE, bool];
+// (the 5 by 5 a loading screen waits for, at most: net/chunkData.ts loadingChunks)
+SERVERBOUND[SB.Resync] = [(v) => arr(50, CHUNK)(v) && (v as Value[]).length % 2 === 0, int(0, 0x7fffffff), bool];
 
 const CLIENTBOUND: Check[][] = [];
 CLIENTBOUND[CB.Login] = [obj];

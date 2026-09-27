@@ -95,6 +95,7 @@ import { WebSocketHostTransport, WebSocketGuestTransport, CLOSE_HOST_TAKEN } fro
 import { CombinedTransport } from '../net/transport/combined';
 import { randomId, type Transport } from '../net/transport/transport';
 import { newJoinCode, showJoinCode } from '../net/joinCode';
+import { inView, LOADING_RADIUS } from '../net/chunkData';
 
 export type { GameOptions } from './options';
 /** vanilla ReceivingLevelScreen.Reason: what the loading screen shows while changing dimension (net/protocol.ts) */
@@ -193,6 +194,8 @@ export class Game {
   private lavaRideFrom: [number, number] | null = null;
   /** the tutorial hints start on first joining the world, not on every change of dimension */
   private joined = false;
+  /** (a guest) ticks on the loading screen so far */
+  private loadingTicks = 0;
   chatScreenFactory: ((initial: string) => Screen) | null = null;
   /** vanilla InBedChatScreen (chat + Leave Bed) */
   inBedScreenFactory: (() => Screen) | null = null;
@@ -628,6 +631,7 @@ export class Game {
       this.player.moveTo(this.spawnSearch.cx * 16 + 8, 120, this.spawnSearch.cz * 16 + 8, 0, 0);
     }
     this.spawned = false;
+    this.loadingTicks = 0;
     this.inWorld = true;
     this.chunks.setCenter(this.player.x, this.player.z);
     this.autosaveTimer = 0;
@@ -822,6 +826,7 @@ export class Game {
     this.inWorld = false;
     unwatchPageLeave();
     this.spawned = false;
+    this.loadingTicks = 0;
     this.pool?.terminate();
     this.pool = null;
     for (const k of [...this.renderer.world.meshes.keys()]) this.renderer.world.dispose(k);
@@ -983,6 +988,7 @@ export class Game {
     this.chunks.setCenter(p.x, p.z);
     this.arrival = place;
     this.spawned = false;
+    this.loadingTicks = 0;
     this.receivingPortal = null;
     this.setScreen(this.receivingScreenFactory ? this.receivingScreenFactory('other') : null);
   }
@@ -1051,6 +1057,7 @@ export class Game {
     this.chunks.setCenter(x, z);
     this.arrival = arrive;
     this.spawned = false;
+    this.loadingTicks = 0;
     this.receivingPortal = reason === 'other' ? null : reason;
     this.setScreen(this.receivingScreenFactory ? this.receivingScreenFactory(reason) : null);
   }
@@ -1275,7 +1282,9 @@ export class Game {
         if (this.findSpawn()) this.spawnSearch = null;
         else return;
       }
-      if (this.chunks.isReady(this.player.x, this.player.z, 2)) {
+      // (a guest: the chunks the host sends of those, at the view distance it said: net/chunkData.ts loadingChunks)
+      const vd = this.client?.info?.viewDistance;
+      if (this.chunks.isReady(this.player.x, this.player.z, LOADING_RADIUS, vd ? (dx, dz) => inView(dx, dz, vd) : undefined)) {
         if (this.arrival) {
           if (!this.arrival(this)) return;
           this.arrival = null;
@@ -1288,7 +1297,11 @@ export class Game {
         this.joined = true;
         if (this.screen) this.setScreen(null);
         this.input.lock();
-      } else return client?.sendTick();
+        this.loadingTicks = 0;
+      } else {
+        if (client) this.stillLoading(client, vd ?? 2);
+        return client?.sendTick();
+      }
     }
     const inp = this.input;
     const p = this.player;
@@ -2069,8 +2082,31 @@ export class Game {
         }
       : null;
     this.spawned = false;
+    this.loadingTicks = 0;
     this.receivingPortal = reason === 'other' ? null : reason;
     this.setScreen(this.receivingScreenFactory ? this.receivingScreenFactory(reason) : null);
+  }
+
+  /**
+   * (a guest on its loading screen, each tick) the session asks the host again for chunks that don't come; but once it
+   * has them all and they still aren't drawn after a while, what's holding it up is here: said in the console, once
+   */
+  private stillLoading(client: ClientSession, vd: number): void {
+    if (++this.loadingTicks !== 200 || client.stillLoading) return;
+    const cx = Math.floor(this.player.x) >> 4, cz = Math.floor(this.player.z) >> 4, notDrawn: string[] = [];
+    for (let dz = -LOADING_RADIUS; dz <= LOADING_RADIUS; dz++)
+      for (let dx = -LOADING_RADIUS; dx <= LOADING_RADIUS; dx++) {
+        if (!inView(dx, dz, vd)) continue;
+        const c = this.world.getChunk(cx + dx, cz + dz);
+        if (!c) notDrawn.push(`${cx + dx},${cz + dz}: not here`);
+        else if (c.dirty && dx * dx + dz * dz <= (LOADING_RADIUS - 1) ** 2) notDrawn.push(`${cx + dx},${cz + dz}: not drawn yet`);
+      }
+    console.warn('multiplayer: the host\'s chunks are all here, but the loading screen is still up after 10 s', {
+      dimension: this.world.dim.id,
+      at: [this.player.x, this.player.y, this.player.z].map((v) => Math.round(v * 100) / 100),
+      waiting: notDrawn,
+      hidden: document.hidden,
+    });
   }
 
   /** (a guest) leave the host's world, if in one: returns whether we were */
