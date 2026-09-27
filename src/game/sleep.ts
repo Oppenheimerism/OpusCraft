@@ -233,7 +233,8 @@ export function tickSleeping(level: Level): void {
     const j = level.dayTime + 24000;
     level.dayTime = j - (j % 24000);
   }
-  // (vanilla wakeUpAllPlayers)
+  // (vanilla wakeUpAllPlayers: its sleepStatus.removeAllSleepers first, so a world open to LAN doesn't announce it)
+  level.onWakeUpAll?.();
   for (const p of players) if (p.isSleeping()) p.stopSleepInBed(false);
   if (level.gameRules.doWeatherCycle && level.isRaining()) {
     level.rainTime = 0;

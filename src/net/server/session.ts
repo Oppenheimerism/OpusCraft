@@ -21,6 +21,7 @@ import { Interaction } from '../../game/interaction';
 import { deathMessage, dropDeathLoot, resetForRespawn, playerHurtSound, playerFallSound } from '../../game/playerDeath';
 import { useBed, findRespawn, MSG, type SleepHost } from '../../game/sleep';
 import { writeBook } from '../../game/books';
+import { PlayerRecipeBook } from '../../inventory/recipeBook';
 import { entityContainerMenu } from '../../game/openMenu';
 import { ChestBoat } from '../../entity/boat';
 import { AbstractHorse } from '../../entity/horse';
@@ -135,6 +136,11 @@ export class ServerPlayerSession {
   /** what its inventory held, slot by slot, as the guest last had it */
   private readonly slots: string[] = new Array(SLOT_COUNT).fill('');
   private invVersion = -1;
+  /**
+   * its recipe book (vanilla ServerRecipeBook): the recipes it has unlocked, from what it has held (vanilla's recipe
+   * advancements), told to the guest as they come; the recipe book's clicks count only for these
+   */
+  readonly recipes = new PlayerRecipeBook();
   /** when each plain message was last shown (so a held button doesn't repeat it every few ticks) */
   private readonly notices = new Map<string, number>();
 
@@ -322,7 +328,10 @@ export class ServerPlayerSession {
         this.slots[i] = '\u0000';
         this.invVersion = -1;
       },
+      knowsRecipe: (id) => this.recipes.known.has(id),
     });
+    // (vanilla ServerRecipeBook.sendInitialRecipeBook, then ClientboundRecipeBookAddPacket as more are unlocked)
+    this.recipes.onUnlock = (rs) => this.send([CB.RecipeBookAdd, rs.map((r) => r.id), false]);
     this.state = 'play';
     this.lastHeard = this.ticks;
     const info: LoginInfo = {
@@ -345,6 +354,7 @@ export class ServerPlayerSession {
     };
     this.send([CB.Login, info as unknown as Value]);
     this.send(srv.weatherPacket());
+    if (this.recipes.known.size) this.send([CB.RecipeBookAdd, [...this.recipes.known], true]);
     srv.joined(this);
   }
 
@@ -862,6 +872,8 @@ export class ServerPlayerSession {
     const inv = this.player!.inventory;
     if (inv.version === this.invVersion) return;
     this.invVersion = inv.version;
+    // (vanilla's recipe advancements, inventory_changed: what it holds now unlocks recipes, as the host's own does)
+    this.recipes.checkInventory([...inv.main, ...inv.armor, inv.offhand]);
     for (let slot = 0; slot < SLOT_COUNT; slot++) {
       const s = this.slotStack(slot), key = stackKey(s), had = this.slots[slot];
       this.slots[slot] = key;

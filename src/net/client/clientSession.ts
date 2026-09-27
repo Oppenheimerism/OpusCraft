@@ -28,6 +28,7 @@ import { resetForRespawn } from '../../game/playerDeath';
 import type { SavedBlockEntity } from '../../world/blockEntity';
 import type { ContainerMenu } from '../../inventory/container';
 import type { CraftingMenuBase, FurnaceMenu } from '../../inventory/menus';
+import { BOOK_BY_ID, type BookRecipe } from '../../inventory/recipeBook';
 import type { Hand } from '../../item/inventory';
 import { Chunk } from '../../world/chunk';
 import { MIN_Y, MAX_Y } from '../../world/constants';
@@ -65,6 +66,11 @@ export interface ClientHooks {
   openBook?(hand: Hand): void;
   /** a recipe clicked in menu `menu`'s recipe book that we lack the ingredients for: shown in outline */
   ghostRecipe?(menu: ContainerMenu, recipe: string): void;
+  /**
+   * recipes our player has unlocked (vanilla handleRecipeBookAdd): new ones (a toast), or all it knows, replacing what
+   * the recipe book had
+   */
+  recipes?(recipes: BookRecipe[], replace: boolean): void;
 }
 
 const GAME_MODES: readonly GameMode[] = ['survival', 'creative', 'adventure', 'spectator'];
@@ -437,6 +443,15 @@ export class ClientSession {
         return this.menus!.ghost(p[1] as number, p[2] as string);
       case CB.OpenBook:
         return this.hooks.openBook?.(p[1] === 1 ? 'off' : 'main');
+      case CB.RecipeBookAdd: {
+        const rs: BookRecipe[] = [];
+        for (const id of p[1] as string[]) {
+          const r = BOOK_BY_ID.get(id);
+          if (!r) return this.fail('a recipe that does not exist');
+          rs.push(r);
+        }
+        return this.hooks.recipes?.(rs, p[2] as boolean);
+      }
     }
   }
 

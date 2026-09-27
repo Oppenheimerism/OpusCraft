@@ -44,6 +44,8 @@ export interface MenuHost {
   send(p: Value[]): void;
   /** inventory slot `i` to be sent again at the end of the tick, whatever the guest was last told */
   resendSlot(i: number): void;
+  /** whether the guest's player has unlocked recipe `id` (its recipe book: vanilla ServerRecipeBook.contains) */
+  knowsRecipe(id: string): boolean;
 }
 
 export class ServerMenus {
@@ -202,12 +204,13 @@ export class ServerMenus {
   }
 
   /**
-   * vanilla handlePlaceRecipe (ServerPlaceRecipe): a recipe clicked in the recipe book, its ingredients moved from the
-   * inventory into the grid (or a furnace's input); without them, the guest is told to show it in outline
+   * vanilla handlePlaceRecipe (ServerPlaceRecipe): a recipe clicked in the recipe book, one the guest's player has
+   * unlocked, its ingredients moved from the inventory into the grid (or a furnace's input); without them, the guest is
+   * told to show it in outline
    */
   placeRecipe(id: number, recipe: string, all: boolean): void {
     const m = this.menu, p = this.host.player;
-    if (id !== this.containerId || p.gameMode === 'spectator' || p.health <= 0) return;
+    if (id !== this.containerId || p.gameMode === 'spectator' || p.health <= 0 || !this.host.knowsRecipe(recipe)) return;
     if (!(m instanceof CraftingMenuBase || m instanceof FurnaceMenu) || !m.stillValid(p)) return;
     const r = BOOK_BY_ID.get(recipe);
     const book = m instanceof FurnaceMenu ? m.furnace.id : 'crafting';

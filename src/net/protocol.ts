@@ -156,6 +156,11 @@ export const CB = {
   OpenBook: 42,
   /** [containerId, recipe]: a recipe clicked in the recipe book that the guest hasn't the ingredients for, shown in outline (vanilla ClientboundPlaceGhostRecipePacket) */
   PlaceGhostRecipe: 43,
+  /**
+   * [recipes (recipe book ids), replace]: recipes the guest's player has unlocked, newly (a toast, the tab bouncing) or,
+   * replacing what it knew, all of them (vanilla ClientboundRecipeBookAddPacket)
+   */
+  RecipeBookAdd: 44,
 } as const;
 
 /** SB.PlayerAction's actions (vanilla ServerboundPlayerActionPacket.Action / ServerboundUseItemPacket): what the host does with its own player's clicks */
@@ -313,7 +318,9 @@ SERVERBOUND[SB.PickItem] = [int(0, 35)];
 SERVERBOUND[SB.ClientCommand] = [int(0, 0)];
 // (vanilla WritableBookContent: 100 pages of 1024 characters; a title of 32)
 SERVERBOUND[SB.EditBook] = [int(0, 40), arr(100, str(0, 1024)), orNull(str(1, 32))];
-SERVERBOUND[SB.PlaceRecipe] = [CONTAINER, str(1, 64), bool];
+// (a recipe book id: the longest is 75 characters, cracked_polished_blackstone_bricks_from_smelting_polished_blackstone_bricks)
+const RECIPE = str(1, 128);
+SERVERBOUND[SB.PlaceRecipe] = [CONTAINER, RECIPE, bool];
 
 const CLIENTBOUND: Check[][] = [];
 CLIENTBOUND[CB.Login] = [obj];
@@ -364,7 +371,9 @@ const COUNT = int(0, 127), BIG = int(-0x80000000, 0x7fffffff);
 const OFFER: Check = (v) => Array.isArray(v) && v.length === 11 && str(1, 64)(v[0]) && COUNT(v[1]) && orNull(str(1, 64))(v[2]) && COUNT(v[3]) && v[4] !== null && ITEM(v[4]) && int(0, 0x7fffffff)(v[5]) && int(0, 0x7fffffff)(v[6]) && int(0, 0x7fffffff)(v[7]) && num(0, 1000)(v[8]) && BIG(v[9]) && BIG(v[10]);
 CLIENTBOUND[CB.MerchantOffers] = [int(1, 255), arr(64, OFFER), int(0, 5), int(0, 0x7fffffff), bool, bool];
 CLIENTBOUND[CB.OpenBook] = [int(0, 1)];
-CLIENTBOUND[CB.PlaceGhostRecipe] = [CONTAINER, str(1, 64)];
+CLIENTBOUND[CB.PlaceGhostRecipe] = [CONTAINER, RECIPE];
+// (every recipe in the book at most: inventory/recipeBook.ts has some 800)
+CLIENTBOUND[CB.RecipeBookAdd] = [arr(4096, RECIPE), bool];
 
 /**
  * the packet `p` if it's one `from` could send with fields of the right types and ranges, else a reason to drop whoever

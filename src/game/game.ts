@@ -1883,6 +1883,7 @@ export class Game {
         hostName: () => this.playerName,
         worldName: () => this.meta?.name ?? '',
         chat: (text) => this.chat(text),
+        overlay: (text) => this.hud.setOverlayMessage(text),
         setTicket: (name, t) => this.chunks.setTicket(name, t),
         hostBreaking: () => {
           const it = this.interaction, stage = it.destroyStage;
@@ -1988,6 +1989,12 @@ export class Game {
       ghostRecipe: (menu, recipe) => {
         const sc = this.screen as { menu?: unknown; ghostRecipe?(id: string): void } | null;
         if (sc?.menu === menu) sc.ghostRecipe?.(recipe);
+      },
+      // (our recipe book is the host's to fill, as our player unlocks recipes there: new ones with their toast)
+      recipes: (rs, replace) => {
+        if (!replace) return this.recipeBook.add(rs);
+        this.recipeBook.known.clear();
+        for (const r of rs) this.recipeBook.known.add(r.id);
       },
     }, me);
   }

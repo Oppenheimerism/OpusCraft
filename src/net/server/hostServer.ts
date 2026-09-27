@@ -32,6 +32,8 @@ export interface HostHooks {
   worldName(): string;
   /** a line in the host's own chat */
   chat(text: string): void;
+  /** a line over the host's own hotbar (vanilla displayClientMessage with its overlay flag: the action bar) */
+  overlay?(text: string): void;
   /** keep the chunks round a guest loaded (vanilla TicketType.PLAYER: ChunkManager.setTicket); null lets them go */
   setTicket(name: string, t: [number, number, number] | null): void;
   /** the crack the host's own player is making, if any (its Interaction's, which isn't in level.destroyProgress) */
@@ -53,6 +55,8 @@ export class HostServer {
   private clock = '';
   private weather = '';
   private hostCrack = '';
+  /** vanilla SleepStatus: the players not spectating, and how many of them are asleep, as last counted */
+  private sleepStatus = { active: 0, sleeping: 0 };
   /** the guest whose player is ticking (what that sets off, its own game shows it: not sent back to it) */
   actor: ServerPlayerSession | null = null;
   /** (runLocal) sounds and particles stay on the host */
@@ -114,11 +118,18 @@ export class HostServer {
       }
       this.took(e, taker, amount);
     };
+    // (vanilla wakeUpAllPlayers → SleepStatus.removeAllSleepers: the morning's waking isn't announced)
+    const wake = level.onWakeUpAll;
+    level.onWakeUpAll = () => {
+      wake?.();
+      this.sleepStatus.sleeping = 0;
+    };
     this.undo.push(() => {
       world.onBlockChanged = blockChanged;
       world.onBlockEntityChanged = beChanged;
       level.onDestroyBlockProgress = progress;
       level.onTake = take;
+      level.onWakeUpAll = wake;
     });
     this.undo.push(
       broadcastEffects(level, {
@@ -198,6 +209,7 @@ export class HostServer {
       this.weather = wk;
       this.broadcast(w);
     }
+    this.announceSleepStatus();
     // (the block changes first: a guest's copy of a new block makes its block entity afresh, which the data then fills)
     for (const s of this.sessions.values()) s.flushBlocks();
     this.flushBlockEntities();
@@ -207,6 +219,29 @@ export class HostServer {
     }
     for (const [e, w] of this.watchers) if (w.seen !== this.ticks || e.removed) this.watchers.delete(e);
     if (this.announcer && this.ticks % ANNOUNCE_TICKS === 0) this.announcer.announce();
+  }
+
+  /**
+   * vanilla ServerLevel.updateSleepingPlayerList → announceSleepStatus, as for a world open to LAN: when the players not
+   * spectating, or how many of them are asleep, change while one sleeps or just did (one got into bed or out, came,
+   * went or changed its game mode), everyone's action bar says how many are asleep of how many it takes, or that the
+   * night is being slept through
+   */
+  private announceSleepStatus(): void {
+    let active = 0, sleeping = 0;
+    for (const p of this.level.players()) {
+      if (p.removed || p.gameMode === 'spectator') continue;
+      active++;
+      if (p.isSleeping()) sleeping++;
+    }
+    const was = this.sleepStatus;
+    this.sleepStatus = { active, sleeping };
+    if (!(was.sleeping > 0 || sleeping > 0) || (was.active === active && was.sleeping === sleeping)) return;
+    // (playersSleepingPercentage isn't heeded, as the host's own nights don't heed it: it takes all of them, game/sleep.ts)
+    const needed = Math.max(1, active);
+    const text = sleeping >= needed ? 'Sleeping through this night' : `${sleeping}/${needed} players sleeping`;
+    this.hooks.overlay?.(text);
+    this.broadcast([CB.SystemChat, text, true]);
   }
 
   /** (the trackers) every field of `e`, for a guest that's to see it now (of a player, what's told of one) */
