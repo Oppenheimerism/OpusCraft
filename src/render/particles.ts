@@ -1137,7 +1137,7 @@ export class ParticleEngine {
       default:
         // (foxes) the crumbs of any other item (whatever food a fox eats)
         if (kind.startsWith('item_')) this.breakingItem(kind, x, y, z, xd, yd, zd);
-        // (the deep dark's own kinds: sculk_charge_pop, sculk_soul)
+        // (the deep dark's own kinds: sculk_charge_pop, sculk_soul; and Soul Speed's soul)
         else this.sculk.spawn(kind, x, y, z, xd, yd, zd);
         break;
     }

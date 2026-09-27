@@ -146,6 +146,27 @@ export function ice(): TexImage {
   return t;
 }
 
+/**
+ * (Frost Walker) vanilla frosted_ice_0..3: ice a Frost Walker boot froze, the same cracks in it each age and more of
+ * them showing, whiter, as it gets ready to melt
+ */
+export function frostedIce(age: number): TexImage {
+  const t = ice();
+  const r = rng('frosted_ice');
+  const shown = 3 + age * 3;
+  for (let k = 0; k < 12; k++) {
+    let x = r.nextInt(N), y = r.nextInt(N);
+    const len = 3 + r.nextInt(4);
+    const dx = r.nextBool() ? 1 : -1, dy = r.nextBool() ? 1 : 0;
+    for (let i = 0; i < len; i++) {
+      if (k < shown) setPx(t, (x + 16) % 16, (y + 16) % 16, i === 0 || i === len - 1 ? 0xd4e4fb : 0xf1f7ff, 200 + age * 10);
+      x += dx;
+      y += dy || (r.nextInt(3) === 0 ? 1 : 0);
+    }
+  }
+  return t;
+}
+
 export function packedIce(seed: string, pal: number[], crack: number): TexImage {
   const r = rng(seed);
   const f = fbm(r, [[8, 8, 0.45], [4, 4, 0.35], [2, 2, 0.2]], 0.2);

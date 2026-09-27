@@ -1,6 +1,7 @@
 // The deep dark's particles: the vibration flying to a sculk sensor (vanilla VibrationSignalParticle), the rings a
 // shrieker sends up (ShriekParticle), the glow of a charge creeping over sculk and its pop as it's spent
-// (SculkChargeParticle, SculkChargePopParticle), the souls over a blooming catalyst (SoulParticle, sculk_soul) and
+// (SculkChargeParticle, SculkChargePopParticle), the souls over a blooming catalyst (SoulParticle, sculk_soul; and
+// the unlit soul that Soul Speed boots shake out of soul sand) and
 // the specks an active sensor gives off, sculk teal turning redstone red (DustColorTransitionParticle), and (M4) the
 // rings of a warden's sonic boom (SonicBoomParticle). All but the specks glow in the dark; they and the booms are
 // drawn opaque, the rest translucent; the vibration and the rings are quads turned in the world rather than toward
@@ -16,7 +17,7 @@ import { AABB, collideWithBoxes } from '../core/aabb';
 type Vec3 = [number, number, number];
 
 interface SculkParticle {
-  kind: 'vibration' | 'shriek' | 'sculk_charge' | 'sculk_charge_pop' | 'sculk_soul' | 'dust_color_transition' | 'sonic_boom';
+  kind: 'vibration' | 'shriek' | 'sculk_charge' | 'sculk_charge_pop' | 'sculk_soul' | 'soul' | 'dust_color_transition' | 'sonic_boom';
   x: number; y: number; z: number;
   xo: number; yo: number; zo: number;
   dx: number; dy: number; dz: number;
@@ -51,6 +52,8 @@ interface SculkParticle {
 const CHARGE = Array.from({ length: 7 }, (_, i) => `sculk_charge_${i}`);
 const CHARGE_POP = Array.from({ length: 4 }, (_, i) => `sculk_charge_pop_${i}`);
 const SOUL = Array.from({ length: 11 }, (_, i) => `sculk_soul_${i}`);
+/** (Soul Speed) vanilla particles/soul.json */
+const SOUL_ESCAPE = Array.from({ length: 11 }, (_, i) => `soul_${i}`);
 /** vanilla particles/dust_color_transition.json: the dust's frames (here the generic puffs, largest first) */
 const DUST = Array.from({ length: 8 }, (_, i) => `generic_${i}`);
 /** (M4: the warden) vanilla particles/sonic_boom.json */
@@ -193,8 +196,9 @@ export class SculkParticles {
       this.add(p);
       return true;
     }
-    if (kind === 'sculk_soul') {
-      // vanilla SoulParticle.EmissiveProvider (a RisingParticle): barely drifting, glowing, half as big again
+    if (kind === 'sculk_soul' || kind === 'soul') {
+      // vanilla SoulParticle.EmissiveProvider (a RisingParticle): barely drifting, glowing, half as big again;
+      // (Soul Speed) the plain soul, SoulParticle.Provider, the same but lit by where it is
       const p = this.base(kind, x, y, z);
       this.withSpeed(p, xd, yd, zd);
       p.friction = 0.96;
@@ -206,7 +210,8 @@ export class SculkParticles {
       p.z = p.zo = z + (Math.random() - Math.random()) * 0.05;
       p.lifetime = Math.floor(8 / (Math.random() * 0.8 + 0.2)) + 4;
       p.size *= 1.5;
-      p.frames = SOUL;
+      p.frames = kind === 'soul' ? SOUL_ESCAPE : SOUL;
+      if (kind === 'soul') p.fullBright = false;
       this.add(p);
       return true;
     }

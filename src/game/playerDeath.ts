@@ -61,6 +61,9 @@ export function deathMessage(source: string, victim: LivingEntity, n: string): s
       return `${n} went up in flames`;
     case 'onFire':
       return `${n} burned to death`;
+    // (Frost Walker) a magma block's hot floor
+    case 'hotFloor':
+      return `${n} discovered the floor was lava`;
     case 'lightningBolt':
       return `${n} was struck by lightning`;
     case 'inWall':
@@ -175,7 +178,7 @@ export function resetForRespawn(p: Player, keepInventory: boolean): void {
  */
 export function playerHurtSound(sound: SoundSink, p: Player, source: string): void {
   if (source === 'fall' || source === 'stalagmite') return;
-  const name = source === 'onFire' || source === 'inFire' || source === 'campfire' || source === 'lava' ? 'entity.player.hurt_on_fire' : source === 'drown' ? 'entity.player.hurt_drown' : source === 'freeze' ? 'entity.player.hurt_freeze' : source === 'sweetBerryBush' ? 'entity.player.hurt_sweet_berry_bush' : 'entity.player.hurt';
+  const name = source === 'onFire' || source === 'inFire' || source === 'campfire' || source === 'lava' || source === 'hotFloor' ? 'entity.player.hurt_on_fire' : source === 'drown' ? 'entity.player.hurt_drown' : source === 'freeze' ? 'entity.player.hurt_freeze' : source === 'sweetBerryBush' ? 'entity.player.hurt_sweet_berry_bush' : 'entity.player.hurt';
   sound.play(name, p.x, p.y, p.z, 1, (Math.random() - Math.random()) * 0.2 + 1);
 }
 

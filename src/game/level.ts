@@ -83,6 +83,8 @@ import './trialChambers';
 import './jukebox';
 // (powder snow)
 import './powderSnow';
+// (Frost Walker) frosted ice, and the magma block's hot floor
+import './frostWalker';
 // (the lodestone compass)
 import './lodestoneCompass';
 

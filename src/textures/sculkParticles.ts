@@ -94,10 +94,9 @@ const SOUL_FACE = [
  * vanilla sculk_soul_i: the soul gathering out of a wisp (0-2), whole (3-6), then thinning away from the top as it
  * goes (7-10)
  */
-function sculkSoul(i: number): TexImage {
+function sculkSoul(i: number, inks: Record<string, number> = { d: DEEP, c: TEAL, p: CYAN, W: PALE }, glow = GLOW, seed = 0x50a1): TexImage {
   const t = img(16, 16);
-  const r = new Rand(0x50a1 + i);
-  const inks: Record<string, number> = { d: DEEP, c: TEAL, p: CYAN, W: PALE };
+  const r = new Rand(seed + i);
   // gathering: only the lower part of it yet, rising
   const top = i < 3 ? 12 - i * 4 : 0;
   // fading: more of it gone, the lighter shades first
@@ -108,10 +107,19 @@ function sculkSoul(i: number): TexImage {
       if (ch === '.' || y < top) continue;
       if (gone && r.nextFloat() < gone + (y < 8 ? 0.1 : 0)) continue;
       let c = inks[ch];
-      if (i === 5 && ch === 'W') c = GLOW;
+      if (i === 5 && ch === 'W') c = glow;
       plot(t, x, y, c);
     }
   return t;
+}
+
+/**
+ * (Soul Speed) vanilla soul_i, the soul that escapes soul sand under Soul Speed boots: the same soul in soul fire's
+ * paler, greyer blue, and not glowing
+ */
+const SOUL_INKS: Record<string, number> = { d: 0x2c5f66, c: 0x4f9ea6, p: 0x93d8dc, W: 0xd8f6f4 };
+function soul(i: number): TexImage {
+  return sculkSoul(i, SOUL_INKS, 0xf2fffd, 0x5011);
 }
 
 /**
@@ -140,6 +148,7 @@ export function sculkParticleTextures(): Record<string, () => TexImage> {
   for (let i = 0; i < 7; i++) out[`sculk_charge_${i}`] = () => sculkCharge(i);
   for (let i = 0; i < 4; i++) out[`sculk_charge_pop_${i}`] = () => sculkChargePop(i);
   for (let i = 0; i < 11; i++) out[`sculk_soul_${i}`] = () => sculkSoul(i);
+  for (let i = 0; i < 11; i++) out[`soul_${i}`] = () => soul(i);
   for (let i = 0; i < 16; i++) out[`sonic_boom_${i}`] = () => sonicBoom(i);
   return out;
 }

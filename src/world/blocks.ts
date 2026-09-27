@@ -409,6 +409,12 @@ registerBlock('ice', {
   hardness: 0.5, sound: 'glass', tool: 'pickaxe', friction: 0.98, layer: Layer.TRANSLUCENT, opaque: false, cullSame: true, opacity: 1,
   randomTicks: true, model: one(cubeAll('ice')),
 });
+// (Frost Walker) vanilla FrostedIceBlock: ice a Frost Walker boot freezes over water, ageing 0..3 as it melts back
+// (game/frostWalker.ts); no item, and nothing drops
+registerBlock('frosted_ice', {
+  props: [P.age3], hardness: 0.5, sound: 'glass', friction: 0.98, layer: Layer.TRANSLUCENT, opaque: false, cullSame: true, opacity: 1,
+  randomTicks: true, item: false, noDrop: true, model: (s) => ({ model: cubeAll(`frosted_ice_${s.get('age') as number}`) }),
+});
 registerBlock('packed_ice', { hardness: 0.5, sound: 'glass', tool: 'pickaxe', friction: 0.98, model: one(cubeAll('packed_ice')) });
 registerBlock('blue_ice', { hardness: 2.8, sound: 'glass', tool: 'pickaxe', friction: 0.989, model: one(cubeAll('blue_ice')) });
 
