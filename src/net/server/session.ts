@@ -273,7 +273,9 @@ export class ServerPlayerSession {
     const id = p[0] as number;
     if (this.state === 'login') {
       if (id !== SB.Hello) return this.disconnect('Say hello first');
-      return this.hello(p[1] as number, p[2] as string, p[3] as string, (p[4] as string).toLowerCase(), p[5] as number);
+      // (another version's hello is looked at no further than its version)
+      if (p[1] !== PROTOCOL_VERSION) return this.disconnect((p[1] as number) < PROTOCOL_VERSION ? 'Outdated game! This world is open in a newer one.' : 'Outdated host! This world is open in an older one.');
+      return this.hello(p[2] as string, p[3] as string, (p[4] as string).toLowerCase(), p[5] as number, p[6] as string);
     }
     const pl = this.player!;
     switch (id) {
@@ -365,14 +367,17 @@ export class ServerPlayerSession {
    * vanilla ServerLoginPacketListenerImpl: who it is, checked; then its player as the world last kept it is read (vanilla
    * PlayerList.load), and it's let in at the first tick after (placeNewPlayer)
    */
-  private hello(protocol: number, build: string, name: string, uuid: string, viewDistance: number): void {
-    if (protocol !== PROTOCOL_VERSION) return this.disconnect(protocol < PROTOCOL_VERSION ? 'Outdated game! This world is open in a newer one.' : 'Outdated host! This world is open in an older one.');
+  private hello(build: string, name: string, uuid: string, viewDistance: number, code: string): void {
     if (build !== BUILD_ID) return this.disconnect('This world is open in a different version of the game. Reload both windows so they run the same one.');
+    const srv = this.server;
+    // (the join code, before anything is said of who's here: net/joinCode.ts, where it's given from waiting after too many wrong ones)
+    const verdict = srv.checkJoinCode(this.peer, code);
+    if (verdict === 'wrong') return this.disconnect("That join code isn't right. Ask the host for the one on their screen.");
+    if (verdict !== 'ok') return this.disconnect(`Too many wrong join codes from here: try again in ${Math.max(1, Math.ceil(verdict / 20))} seconds.`);
     if (!NAME_PATTERN.test(name)) return this.disconnect('That name can only have letters, digits and _ (3 to 16 of them).');
     // (vanilla offline mode: a player is its name, its uuid made from the name, the host's to work out; a guest giving
     // another's, which would be another's player kept with the world, is refused)
     if (uuid !== offlinePlayerUuid(name)) return this.disconnect("Bad data: that uuid isn't the name's");
-    const srv = this.server;
     // (the guests in, and those let in whose players are still being read)
     const others = [...srv.sessions.values()].filter((s) => s !== this && (s.state === 'play' || s.loggingIn));
     if (others.length >= MAX_GUESTS) return this.disconnect('The world is full.');

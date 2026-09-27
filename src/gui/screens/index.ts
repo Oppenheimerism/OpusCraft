@@ -32,7 +32,7 @@ import { CrafterMenu } from '../../inventory/crafterMenu';
 import { CrafterScreen } from './crafter';
 import { HorseInventoryMenu } from '../../inventory/horseMenu';
 import { HorseInventoryScreen } from './horse';
-import { ConnectScreen, DisconnectedScreen } from './multiplayer';
+import { ConnectScreen, DisconnectedScreen, JoinMultiplayerScreen } from './multiplayer';
 
 export function installScreens(game: Game): void {
   game.titleScreenFactory = () => new TitleScreen(game, false);
@@ -47,7 +47,8 @@ export function installScreens(game: Game): void {
   game.inBedScreenFactory = () => new InBedChatScreen(game);
   game.advancementsScreenFactory = () => new AdvancementsScreen(game);
   game.connectingScreenFactory = (cancel) => new ConnectScreen(game, cancel);
-  game.disconnectedScreenFactory = (title, reason) => new DisconnectedScreen(game, title, reason);
+  game.disconnectedScreenFactory = (title, reason, back) => new DisconnectedScreen(game, title, reason, back);
+  game.serverListScreenFactory = (code) => new JoinMultiplayerScreen(game, new TitleScreen(game, false), code);
   game.onCommand = (cmd) => executeCommand(game, cmd);
   game.inventoryScreenFactory = () => {
     const p = game.player;

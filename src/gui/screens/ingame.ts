@@ -8,8 +8,14 @@ import { ConfirmScreen, GenericMessageScreen } from './menus';
 import { suggestCommand } from '../../game/commands';
 import { ShareToLanScreen, JoinMultiplayerScreen } from './multiplayer';
 import { MULTIPLAYER_ENABLED } from '../../net/config';
+import { showJoinCode } from '../../net/joinCode';
+import { lanLink } from '../../game/game';
 
 export class PauseScreen extends Screen {
+  /** (hosting) where the join code and the link to send friends go */
+  private shareY = 0;
+  private copied = 0;
+
   constructor(game: Game) {
     super(game, 'Game Menu');
   }
@@ -29,8 +35,16 @@ export class PauseScreen extends Screen {
     this.add(new Button(col(0), row(2), 98, 20, 'Give Feedback', () => {})).active = false;
     this.add(new Button(col(1), row(2), 98, 20, 'Report Bugs', () => {})).active = false;
     this.add(new Button(col(0), row(3), 98, 20, 'Options...', () => g.setScreen(new OptionsScreen(g, this))));
-    // (vanilla: a world of our own can be opened to LAN, once; multiplayer/ switched off, the button stays greyed out)
-    this.add(new Button(col(1), row(3), 98, 20, 'Open to LAN', () => g.setScreen(new ShareToLanScreen(g, this)))).active = MULTIPLAYER_ENABLED && g.mode === 'single';
+    // (vanilla: a world of our own can be opened to LAN, once; multiplayer/ switched off, the button stays greyed out.
+    // Once it's open, the link to send friends can be copied from here, where the page may use the clipboard)
+    const share = g.mode === 'host' ? g.lanShare : null;
+    const link = share ? lanLink(share.code, share.relay) : null;
+    if (link && navigator.clipboard) {
+      const copy = this.add(new Button(col(1), row(3), 98, 20, 'Copy Join Link', () => {
+        void navigator.clipboard.writeText(link).then(() => (this.copied = 40), () => (copy.active = false));
+      }));
+    } else this.add(new Button(col(1), row(3), 98, 20, 'Open to LAN', () => g.setScreen(new ShareToLanScreen(g, this)))).active = MULTIPLAYER_ENABLED && g.mode === 'single';
+    this.shareY = row(4) + 28;
     // (vanilla: a guest disconnects, back to the Multiplayer screen, with nothing to save)
     const guest = g.mode === 'client';
     const quit = this.add(
@@ -44,6 +58,22 @@ export class PauseScreen extends Screen {
 
   override titleY(): number {
     return 40;
+  }
+
+  override tick(): void {
+    if (this.copied > 0) this.copied--;
+  }
+
+  override render(g: GuiGraphics, mx: number, my: number, partial: number): void {
+    super.render(g, mx, my, partial);
+    // (hosting: the join code, and how friends join, under the buttons)
+    const share = this.game.mode === 'host' ? this.game.lanShare : null;
+    if (!share) return;
+    const cx = Math.floor(this.width / 2);
+    const link = lanLink(share.code, share.relay);
+    g.centered(`Join code: ${showJoinCode(share.code)}`, cx, this.shareY, 0xffffff, true);
+    const lines = link ? [this.copied > 0 ? 'Copied!' : `Friends on your network: ${link}`] : g.wrap(share.relay?.tunnel ? `Friends join through your tunnel: its https address, then /?join=${share.code}` : share.relay ? 'Waiting for the LAN server...' : share.why, this.width - 40);
+    lines.slice(0, 3).forEach((l, i) => g.centered(l, cx, this.shareY + 12 + i * 10, 0xa0a0a0, true));
   }
 }
 

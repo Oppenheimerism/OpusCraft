@@ -96,6 +96,8 @@ export interface GuestIdentity {
   name: string;
   uuid: string;
   viewDistance: number;
+  /** (stage 5) the world's join code, as the host told it (net/joinCode.ts) */
+  code: string;
 }
 
 export class ClientSession {
@@ -111,6 +113,8 @@ export class ClientSession {
   private flooded = false;
   /** the connection went: once what came before is read, it's lost */
   private hostGone = false;
+  /** why, if the transport said */
+  private goneReason: string | null = null;
   private out: Value[] = [];
   private quiet = 0;
   /** the other players, by the host's ids */
@@ -147,15 +151,19 @@ export class ClientSession {
   endReason = '';
 
   constructor(readonly transport: Transport, readonly hooks: ClientHooks, readonly me: GuestIdentity) {
-    transport.onPeer((peer, joined) => {
+    transport.onPeer((peer, joined, reason) => {
       if (peer !== HOST_PEER || this.state === 'closed') return;
       if (joined) {
         this.state = 'login';
-        this.send([SB.Hello, PROTOCOL_VERSION, BUILD_ID, me.name, me.uuid, me.viewDistance]);
+        this.send([SB.Hello, PROTOCOL_VERSION, BUILD_ID, me.name, me.uuid, me.viewDistance, me.code]);
         this.flush();
-      } else if (this.state === 'connecting') this.lost("Couldn't connect: nobody answered");
-      // (what the host said before it went is read first, at the next tick: its Disconnect says why)
-      else this.hostGone = true;
+      } else if (this.state === 'connecting') this.lost(reason ?? "Couldn't connect: nobody answered");
+      // (what the host said before it went is read first, at the next tick: its Disconnect says why; else the
+      // transport's word, if it has one: the relay's that the host's page went away)
+      else {
+        this.hostGone = true;
+        this.goneReason = reason ?? null;
+      }
     });
     transport.onMessage((peer: PeerId, data) => {
       if (peer !== HOST_PEER || this.state === 'closed' || this.flooded) return;
@@ -202,7 +210,7 @@ export class ClientSession {
         if (this.isClosed) return;
       }
     }
-    if (this.hostGone) this.lost('Connection lost');
+    if (this.hostGone) this.lost(this.goneReason ?? 'Connection lost');
   }
 
   private get isClosed(): boolean {

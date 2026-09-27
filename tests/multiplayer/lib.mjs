@@ -10,7 +10,7 @@ export const NET_MODULES = [
   '/src/net/codec.ts', '/src/net/protocol.ts', '/src/net/config.ts', '/src/net/items.ts', '/src/net/chunkData.ts', '/src/net/playerState.ts', '/src/net/playerStatus.ts',
   '/src/net/transport/memory.ts', '/src/net/transport/transport.ts', '/src/net/server/hostServer.ts', '/src/net/server/session.ts',
   '/src/net/client/clientSession.ts', '/src/net/client/mirrorPlayer.ts', '/src/world/dimension.ts', '/src/item/item.ts',
-  '/src/world/blockEntity.ts', '/src/game/interaction.ts', '/src/net/offlineUuid.ts',
+  '/src/world/blockEntity.ts', '/src/game/interaction.ts', '/src/net/offlineUuid.ts', '/src/net/joinCode.ts',
 ];
 
 /** (stage 2) the entities' side of it: the registry, the fields, the trackers and copies, and the kinds the tests make */
@@ -34,6 +34,9 @@ function recordingLevel(level) {
   level.particleCalls = particles;
   return level;
 }
+
+/** (stage 5) the test hosts' join code */
+export const TEST_JOIN_CODE = '7E57C0DE';
 
 /**
  * a host: `world`/`level` from genLevel or flatLevel (chunks made on demand by `makeChunk(cx, cz)` when a guest's
@@ -70,15 +73,17 @@ export function makeHost(m, { world, level }, { makeChunk, x = 0.5, y = 65, z = 
   // (the pop of something picked up, as the game's own level plays it: Game.setUpWorld's onTake)
   level.onTake = (e) => level.sound.play(e.type === 'experience_orb' ? 'entity.experience_orb.pickup' : 'entity.item.pickup', e.x, e.y, e.z, 0.2, 1);
   // (stage 3) the guests' game mode, as the LAN screen picks it; creative if the test doesn't say, as before
-  const server = new m.HostServer(level, transport ?? net.host, hooks, { lanId: 'test-world-0000', announce: false, guestGameMode });
+  // (stage 5: its join code, which the harness's guests give unless a test says otherwise)
+  const server = new m.HostServer(level, transport ?? net.host, hooks, { lanId: 'test-world-0000', joinCode: TEST_JOIN_CODE, announce: false, guestGameMode });
   return { m, world, level, player: p, net, server, chat, overlays, tickets, guests: [], makeChunk, setBreaking: (b) => (breaking = b) };
 }
 
 /**
  * a guest connecting to `host` as `name` (it says hello once `step` delivers the connection), over `transport` if given;
- * its uuid its name's (stage 4: vanilla's offline uuid, which the host holds it to), unless a test gives another
+ * its uuid its name's (stage 4: vanilla's offline uuid, which the host holds it to), unless a test gives another; with
+ * the host's join code (stage 5), unless a test gives another
  */
-export function makeGuest(host, name = 'Guest', { viewDistance = 3, uuid, transport = host.net.connect() } = {}) {
+export function makeGuest(host, name = 'Guest', { viewDistance = 3, uuid, code, transport = host.net.connect() } = {}) {
   const { m } = host;
   const g = { name, transport, chat: [], overlays: [], disconnected: null, world: null, level: null, player: null, session: null, chunkAdds: 0, took: [], mounted: [], died: [], respawned: 0, recipes: new Set(), toasts: [], dims: [] };
   const hooks = {
@@ -137,7 +142,7 @@ export function makeGuest(host, name = 'Guest', { viewDistance = 3, uuid, transp
       g.player.fallDistance = 0;
     },
   };
-  g.session = new m.ClientSession(transport, hooks, { name, uuid: uuid ?? m.offlinePlayerUuid(name), viewDistance });
+  g.session = new m.ClientSession(transport, hooks, { name, uuid: uuid ?? m.offlinePlayerUuid(name), viewDistance, code: code ?? host.server?.joinCode ?? '' });
   host.guests.push(g);
   return g;
 }
@@ -166,8 +171,8 @@ export function rawGuest(host) {
     reason() {
       return r.packets(m.CB.Disconnect)[0]?.[1] ?? null;
     },
-    hello(name = 'Raw', { protocol = m.PROTOCOL_VERSION, build = m.BUILD_ID, uuid = m.offlinePlayerUuid(name), viewDistance = 2 } = {}) {
-      r.send([[m.SB.Hello, protocol, build, name, uuid, viewDistance]]);
+    hello(name = 'Raw', { protocol = m.PROTOCOL_VERSION, build = m.BUILD_ID, uuid = m.offlinePlayerUuid(name), viewDistance = 2, code = host.server.joinCode } = {}) {
+      r.send([[m.SB.Hello, protocol, build, name, uuid, viewDistance, code]]);
     },
   };
   t.onMessage((_peer, data) => r.got.push(m.decode(data, m.MAX_HOST_MESSAGE)));

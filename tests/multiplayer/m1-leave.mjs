@@ -142,8 +142,11 @@ function counting(g, id) {
       meta = mt;
     },
     level: {}, player: {}, chunks: { addRemote() {}, removeRemote() {} }, hud: { setOverlayMessage() {} }, chat() {}, connectionLost() {},
+    // (stage 5: the background clock a joined page keeps ticking by)
+    clock: { start() {}, stop() {} },
   };
-  await G.joinWorld.call(game, '0123456789abcdef', { name: 'Alex', uuid: m.randomId(), viewDistance: 3 });
+  // (stage 5: another window's world is joined by its id on the LAN, and with its join code)
+  await G.joinWorld.call(game, { via: 'browser', lanId: '0123456789abcdef' }, { name: 'Alex', uuid: m.randomId(), viewDistance: 3, code: '' });
   const LOGIN = {
     playerId: 7, worldName: 'Hosted', dimension: 'overworld', gameMode: 'creative', difficulty: 'normal', hardcore: false, gameRules: { doDaylightCycle: true },
     gameTime: 100, dayTime: 100, raining: false, thundering: false, rainLevel: 0, thunderLevel: 0, x: 0.5, y: 65, z: 0.5, yRot: 0, xRot: 0, viewDistance: 3, hostName: 'Host',

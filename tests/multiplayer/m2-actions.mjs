@@ -77,7 +77,7 @@ function click(gg, button, e, copy = e ? copyOf(gg, e) : null) {
   const h3 = pig.health;
   const r = rawGuest(host);
   step(host, 1);
-  r.send([[m.SB.Hello, m.PROTOCOL_VERSION, m.BUILD_ID, 'Sneaky', m.offlinePlayerUuid('Sneaky'), 2], [m.SB.MovePlayer, 0.5, 65, 0.5, -90, 0, 0, pig.id], [m.SB.PlayerAction, m.Action.ATTACK, 0]]);
+  r.send([[m.SB.Hello, m.PROTOCOL_VERSION, m.BUILD_ID, 'Sneaky', m.offlinePlayerUuid('Sneaky'), 2, host.server.joinCode], [m.SB.MovePlayer, 0.5, 65, 0.5, -90, 0, 0, pig.id], [m.SB.PlayerAction, m.Action.ATTACK, 0]]);
   step(host, 3);
   r.send([[m.SB.MovePlayer, 0.5, 65, 0.5, -90, 0, 0, 999999], [m.SB.PlayerAction, m.Action.ATTACK, 0], [m.SB.PlayerAction, m.Action.USE, 0]]);
   step(host, 3);

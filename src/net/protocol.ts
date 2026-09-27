@@ -4,7 +4,7 @@
 // block state that exists, a move that isn't too far) is the receiver's to check on top.
 
 import type { Value } from './codec';
-import { MAX_CHAT } from './config';
+import { MAX_CHAT, PROTOCOL_VERSION } from './config';
 import { SECTIONS, CAVE_BIOME_LEVELS } from '../world/constants';
 
 /** guest → host (vanilla Serverbound*Packet) */
@@ -307,8 +307,8 @@ export const ITEM: Check = orNull((v) => Array.isArray(v) && v.length === 4 && s
 const SECTION = (v: Value | undefined) => v === null || (v instanceof Uint16Array && v.length === 4096);
 
 const SERVERBOUND: Check[][] = [];
-// (a name that isn't one is turned away with a word on what a name is: ServerPlayerSession.hello)
-SERVERBOUND[SB.Hello] = [int(0, 0x7fffffff), str(1, 64), str(0, 64), UUID, int(2, 32)];
+// (a name that isn't one is turned away with a word on what a name is: ServerPlayerSession.hello; the join code, as typed)
+SERVERBOUND[SB.Hello] = [int(0, 0x7fffffff), str(1, 64), str(0, 64), UUID, int(2, 32), str(0, 32)];
 SERVERBOUND[SB.KeepAlive] = [ID];
 SERVERBOUND[SB.MovePlayer] = [X, Y, X, ANGLE, PITCH, FLAGS, int(-1, 0x7fffffff)];
 SERVERBOUND[SB.AcceptTeleportation] = [ID];
@@ -401,6 +401,8 @@ export function checkPacket(p: Value, from: 'guest' | 'host'): string | null {
   const table = from === 'guest' ? SERVERBOUND : CLIENTBOUND;
   const fields = typeof id === 'number' && Number.isInteger(id) ? table[id] : undefined;
   if (!fields) return `unknown packet ${String(id).slice(0, 16)}`;
+  // (a hello from another version of the game, whose hello may differ, is checked as far as its version: it's told which is the older)
+  if (from === 'guest' && id === SB.Hello && p[1] !== PROTOCOL_VERSION && fields[0](p[1])) return null;
   if (p.length !== fields.length + 1) return `packet ${id}: ${p.length - 1} fields`;
   for (let i = 0; i < fields.length; i++) if (!fields[i](p[i + 1])) return `packet ${id}: bad field ${i}`;
   return null;

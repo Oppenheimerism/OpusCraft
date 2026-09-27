@@ -8,6 +8,7 @@ import { CB, type ReceivingReason } from '../protocol';
 import { ANNOUNCE_TICKS, PROTOCOL_VERSION, BUILD_ID, MAX_GUESTS, MAX_PENDING_LOGINS } from '../config';
 import type { PeerId, Transport } from '../transport/transport';
 import { LanAnnouncer, type LanWorld } from '../transport/lan';
+import { JoinCodeGuard } from '../joinCode';
 import { broadcastEffects, soundRange, PARTICLE_RANGE } from '../effects';
 import { visibleBlockEntity } from '../chunkData';
 import { DataWatcher, PLAYER_FIELDS, type EntityData } from '../entityData';
@@ -54,6 +55,8 @@ export interface HostHooks {
    * host in another): it waits there for that dimension to be loaded again (the Game's PortalArrivals)
    */
   leaveInDimension?(dim: string, e: SavedEntity): void;
+  /** (stage 5) the world as the Multiplayer screens of other computers show it (the relay's; never the join code): now and then, and when it changes */
+  announce?(world: LanWorld): void;
 }
 
 export class HostServer {
@@ -62,6 +65,9 @@ export class HostServer {
   readonly guestGameMode: GameMode;
   /** this world's name on the LAN */
   readonly lanId: string;
+  /** (stage 5) the code a guest's hello must carry, and the check of what they give (net/joinCode.ts) */
+  readonly joinCode: string;
+  private readonly joinGuard: JoinCodeGuard;
   private announcer: LanAnnouncer | null = null;
   private readonly undo: (() => void)[] = [];
   private ticks = 0;
@@ -88,8 +94,10 @@ export class HostServer {
   private readonly watchers = new Map<Entity, { data: DataWatcher; seen: number; changes: EntityData | null; changed: number }>();
   closed = false;
 
-  constructor(readonly level: Level, readonly transport: Transport, readonly hooks: HostHooks, opts: { lanId: string; announce?: boolean; guestGameMode?: GameMode }) {
+  constructor(readonly level: Level, readonly transport: Transport, readonly hooks: HostHooks, opts: { lanId: string; joinCode: string; announce?: boolean; guestGameMode?: GameMode }) {
     this.lanId = opts.lanId;
+    this.joinCode = opts.joinCode;
+    this.joinGuard = new JoinCodeGuard(opts.joinCode);
     this.guestGameMode = opts.guestGameMode ?? 'creative';
     transport.onPeer((peer, joined) => {
       if (this.closed) return;
@@ -155,9 +163,21 @@ export class HostServer {
       }),
     );
     if (opts.announce !== false) {
-      this.announcer = new LanAnnouncer(() => this.lanInfo());
-      this.announcer.announce();
+      // (the other windows of this browser hear the join code too: they're this player's own)
+      this.announcer = new LanAnnouncer(() => ({ ...this.lanInfo(), code: this.joinCode }));
+      this.announce();
     }
+  }
+
+  /** the world said to be open, to the other windows and to other computers (hooks.announce) */
+  private announce(): void {
+    this.announcer?.announce();
+    this.hooks.announce?.(this.lanInfo());
+  }
+
+  /** (the session) `given`, a guest's join code, checked against where it connects from (net/joinCode.ts) */
+  checkJoinCode(peer: PeerId, given: string): 'ok' | 'wrong' | number {
+    return this.joinGuard.check(this.transport.address?.(peer) ?? peer, given, this.ticks);
   }
 
   /** what the Multiplayer screens of other windows hear about this world */
@@ -226,7 +246,7 @@ export class HostServer {
       s.idleTick();
       if (s.state === 'gone') this.sessions.delete(s.peer);
     }
-    if (this.announcer && this.ticks % ANNOUNCE_TICKS === 0) this.announcer.announce();
+    if (this.ticks % ANNOUNCE_TICKS === 0) this.announce();
   }
 
   /** (Game.tick, before the level's tick) what the guests said since the last tick */
@@ -275,7 +295,7 @@ export class HostServer {
       if (s.state === 'gone') this.sessions.delete(s.peer);
     }
     for (const [e, w] of this.watchers) if (w.seen !== this.ticks || e.removed) this.watchers.delete(e);
-    if (this.announcer && this.ticks % ANNOUNCE_TICKS === 0) this.announcer.announce();
+    if (this.ticks % ANNOUNCE_TICKS === 0) this.announce();
   }
 
   /**
@@ -487,7 +507,7 @@ export class HostServer {
   joined(s: ServerPlayerSession): void {
     this.broadcastChat(`§e${s.name} joined the game`);
     this.hooks.onGuestsChanged?.(this.guestCount());
-    this.announcer?.announce();
+    this.announce();
   }
 
   /** (the session) a guest is gone */
@@ -497,7 +517,7 @@ export class HostServer {
       if (reason !== 'Left the game') console.info(`multiplayer: ${s.name} was dropped: ${reason}`);
     }
     this.hooks.onGuestsChanged?.(this.guestCount());
-    if (!this.closed) this.announcer?.announce();
+    if (!this.closed) this.announce();
   }
 
   /** the world closes to guests: every one is told why and let go (vanilla PlayerList.removeAll on shutdown) */
