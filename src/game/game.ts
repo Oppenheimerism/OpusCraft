@@ -18,7 +18,7 @@ import { BLOCKS, STATE_BLOCK, FLAGS, F_WATER, F_LAVA, F_OPAQUE, F_COLLIDE } from
 import { FLUID_WATER, FLUID_LAVA, fluidHeight } from '../world/fluids';
 import { BIOMES } from '../world/gen/biomes';
 import { biomeTemperature } from '../world/gen/temperature';
-import { ItemStack, ITEMS, saveStack, loadStack } from '../item/item';
+import { ItemStack, ITEMS } from '../item/item';
 import { hasShapeUpdates, updateShape } from './shapeUpdates';
 import { MIN_Y, MAX_Y } from '../world/constants';
 import { Overlay } from '../render/overlay';
@@ -83,6 +83,7 @@ import { gatewayTravel } from './gatewayTravel';
 import { setDialViewer } from '../item/compass';
 import { respawnArrival, worldSpawnOf, InitialSpawn, WAIT, adjustSpawnLocation } from './respawnLogic';
 import { SaveQueue, watchPageLeave, unwatchPageLeave } from './saveOnLeave';
+import { savePlayer, loadPlayer } from './playerData';
 // (multiplayer)
 import { MULTIPLAYER_ENABLED } from '../net/config';
 import { HostServer } from '../net/server/hostServer';
@@ -592,37 +593,7 @@ export class Game {
     this.advancements.load(pd?.advancements);
     this.recipeBook.load(pd?.recipeBook);
     if (pd) {
-      this.player.moveTo(pd.x, pd.y, pd.z, pd.yaw, pd.pitch);
-      // effects before health so health boost holds (a player who died comes back without them)
-      if (!pd.dead && pd.health > 0) this.player.loadEffects(pd.effects);
-      this.player.health = pd.health;
-      this.player.food.level = pd.food;
-      this.player.food.saturation = pd.saturation;
-      this.player.food.exhaustion = pd.exhaustion;
-      this.player.xpLevel = pd.xpLevel;
-      this.player.xpProgress = pd.xpProgress;
-      this.player.xpTotal = pd.xpTotal;
-      this.player.enchantmentSeed = pd.xpSeed ?? 0;
-      if (pd.uuid) this.player.uuid = pd.uuid;
-      this.player.setGameMode(pd.gameMode as GameMode);
-      this.player.flying = pd.flying && this.player.mayFly;
-      this.player.inventory.selected = pd.selected;
-      pd.inventory.forEach((s, i) => {
-        this.player.inventory.main[i] = loadStack(s);
-      });
-      pd.armor.forEach((s, i) => {
-        this.player.inventory.armor[i] = loadStack(s);
-      });
-      [this.player.spawnX, this.player.spawnY, this.player.spawnZ] = pd.spawn;
-      if (pd.respawn) {
-        this.player.respawnPos = [pd.respawn[0], pd.respawn[1], pd.respawn[2]];
-        this.player.respawnForced = pd.respawn[3] === 1;
-      }
-      this.player.seenCredits = !!pd.seenCredits;
-      this.player.lastDeathLocation = pd.lastDeath ? { dim: pd.lastDeath.dim, pos: [...pd.lastDeath.pos] } : null;
-      this.player.shoulderLeft = pd.shoulderLeft ?? null;
-      this.player.shoulderRight = pd.shoulderRight ?? null;
-      this.player.wardenSpawnTracker.load(pd.wardenSpawnTracker);
+      loadPlayer(this.player, pd);
       this.spawnSearch = null;
       // vanilla RootVehicle: back in the minecart you left the game in
       const v = pd.vehicle && !pd.dead ? loadEntity(pd.vehicle, this.level) : null;
@@ -690,27 +661,7 @@ export class Game {
     m.clearWeatherTime = this.level.clearWeatherTime;
     m.gameRules = { ...this.level.gameRules };
     if (this.worldSpawn) m.worldSpawn = this.worldSpawn;
-    const st = (s: ItemStack | null) => (s ? saveStack(s) : null);
-    m.player = {
-      x: p.x, y: p.y, z: p.z, yaw: p.yaw, pitch: p.pitch,
-      health: p.health, food: p.food.level, saturation: p.food.saturation, exhaustion: p.food.exhaustion,
-      xpLevel: p.xpLevel, xpProgress: p.xpProgress, xpTotal: p.xpTotal, xpSeed: p.enchantmentSeed, uuid: p.uuid,
-      gameMode: p.gameMode, flying: p.flying, selected: p.inventory.selected,
-      inventory: p.inventory.main.map(st), armor: p.inventory.armor.map(st),
-      spawn: [p.spawnX, p.spawnY, p.spawnZ],
-      respawn: p.respawnPos ? [...p.respawnPos, p.respawnForced ? 1 : 0] : null,
-      advancements: this.advancements.save(),
-      recipeBook: this.recipeBook.save(),
-      dead: p.health <= 0,
-      effects: p.saveEffects(),
-      vehicle: p.vehicle ? saveEntity(p.vehicle) : null,
-      dimension: this.world.dim.id,
-      seenCredits: p.seenCredits || undefined,
-      lastDeath: p.lastDeathLocation ?? undefined,
-      shoulderLeft: p.shoulderLeft ?? undefined,
-      shoulderRight: p.shoulderRight ?? undefined,
-      wardenSpawnTracker: p.wardenSpawnTracker.save(),
-    };
+    m.player = savePlayer(p, this.world.dim.id, { advancements: this.advancements.save(), recipeBook: this.recipeBook.save() });
     m.portals = this.portalPoi.save();
     m.arrivals = this.arrivals.save();
     if (this.level.dragonFight) m.dragonFight = this.level.dragonFight.save();
