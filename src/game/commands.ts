@@ -396,6 +396,8 @@ function snbtStack(e: string): ItemStack | null {
 /** the plain values at the top of an SNBT compound: numbers (their b/s/L/f/d dropped), strings, true and false */
 export function snbtScalars(nbt: string): Record<string, number | string | boolean> {
   const out: Record<string, number | string | boolean> = {};
+  // (each key its own entry, "__proto__" too: set as it is, it would change what `out` inherits instead)
+  const put = (k: string, v: number | string | boolean) => Object.defineProperty(out, k, { value: v, enumerable: true, writable: true, configurable: true });
   const s = nbt.trim(), n = s.length;
   if (s[0] !== '{') return out;
   let i = 1;
@@ -422,7 +424,7 @@ export function snbtScalars(nbt: string): Record<string, number | string | boole
     if (s[i] !== ':') break;
     i++;
     ws();
-    if (s[i] === '"' || s[i] === "'") out[key] = quoted();
+    if (s[i] === '"' || s[i] === "'") put(key, quoted());
     else if (s[i] === '{' || s[i] === '[') {
       // (a compound or a list: passed over)
       let depth = 0, q = '';
@@ -442,7 +444,7 @@ export function snbtScalars(nbt: string): Record<string, number | string | boole
       let v = '';
       while (i < n && !/[,}\s]/.test(s[i])) v += s[i++];
       const num = /^([-+]?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?)[bslfd]?$/i.exec(v);
-      out[key] = num ? Number(num[1]) : v === 'true' ? true : v === 'false' ? false : v;
+      put(key, num ? Number(num[1]) : v === 'true' ? true : v === 'false' ? false : v);
     }
     ws();
     if (s[i] === ',') i++;
@@ -502,6 +504,14 @@ function customNameIn(nbt: string): string | null {
 }
 
 const coordSuggest = (i: number) => ['~', '~ ~', '~ ~ ~'].slice(0, 3 - (i % 3));
+
+/**
+ * `table[key]` if it's one of the table's own entries: a name typed in a command ("constructor", "toString",
+ * "__proto__") must not find what every object has
+ */
+function own<T>(table: Record<string, T>, key: string): T | undefined {
+  return Object.hasOwn(table, key) ? table[key] : undefined;
+}
 
 export const COMMANDS: Record<string, CommandDef> = {
   clear: {
@@ -630,17 +640,17 @@ export const COMMANDS: Record<string, CommandDef> = {
   },
   gamerule: {
     usage: ['/gamerule <rule> [<value>]'],
-    suggest: (_g, prev, i) => (i === 0 ? Object.keys(GAME_RULES).sort() : i === 1 && typeof GAME_RULES[prev[0]] === 'boolean' ? ['false', 'true'] : []),
+    suggest: (_g, prev, i) => (i === 0 ? Object.keys(GAME_RULES).sort() : i === 1 && typeof own(GAME_RULES, prev[0]) === 'boolean' ? ['false', 'true'] : []),
     run: (c) => {
       const rule = needArg(c, 0);
-      if (!(rule in GAME_RULES)) throw new CommandError('Unknown or incomplete command, see below for error', c.args[0].pos);
+      if (!Object.hasOwn(GAME_RULES, rule)) throw new CommandError('Unknown or incomplete command, see below for error', c.args[0].pos);
       const rules = c.game.level.gameRules;
       if (!c.args[1]) {
         c.ok(`Gamerule ${rule} is currently set to: ${rules[rule]}`);
         return;
       }
       const v = c.args[1].s;
-      if (typeof GAME_RULES[rule] === 'boolean') {
+      if (typeof own(GAME_RULES, rule) === 'boolean') {
         if (v !== 'true' && v !== 'false') throw new CommandError(`Invalid boolean, expected 'true' or 'false' but found '${v}'`, c.args[1].pos);
         rules[rule] = v === 'true';
       } else {
@@ -687,7 +697,7 @@ export const COMMANDS: Record<string, CommandDef> = {
       const cheats = !!c.game.meta?.allowCommands;
       const names = c.args[0] ? [c.args[0].s] : Object.keys(COMMANDS).sort();
       for (const n of names) {
-        const d = COMMANDS[n];
+        const d = own(COMMANDS, n);
         if (!d || (!cheats && !PUBLIC.has(n))) {
           if (c.args[0]) throw new CommandError('Unknown or incomplete command, see below for error', c.args[0].pos);
           continue;
@@ -942,7 +952,7 @@ export const COMMANDS: Record<string, CommandDef> = {
       if (sub === 'set') {
         const named: Record<string, number> = { day: 1000, noon: 6000, night: 13000, midnight: 18000 };
         const s = needArg(c, 1);
-        const t = s in named ? named[s] : parseTime(c, 1);
+        const t = Object.hasOwn(named, s) ? named[s] : parseTime(c, 1);
         lvl.dayTime = t;
         c.ok(`Set the time to ${t % 24000}`);
       } else if (sub === 'add') {
@@ -1054,7 +1064,7 @@ function executeSubcommand(c: Ctx): void {
     const k = needArg(c, i);
     if (k === 'in') {
       const id = needArg(c, i + 1).replace(/^minecraft:/, '');
-      dim = DIMENSIONS[id as keyof typeof DIMENSIONS];
+      dim = own(DIMENSIONS, id) as DimensionType;
       if (!dim) throw new CommandError(`Unknown dimension 'minecraft:${id}'`, c.args[i + 1].pos);
       i += 2;
     } else if (k === 'run') {
@@ -1063,7 +1073,7 @@ function executeSubcommand(c: Ctx): void {
     } else badArg(c, i);
   }
   const name = needArg(c, i).replace(/^minecraft:/, '');
-  const def = COMMANDS[name];
+  const def = own(COMMANDS, name);
   if (!def) badArg(c, i, 'Unknown or incomplete command, see below for error');
   def.run({ ...c, args: c.args.slice(i + 1), dim });
 }
@@ -1086,7 +1096,7 @@ export function executeCommand(game: Game, line: string): void {
     return;
   }
   const name = cmd.s.replace(/^minecraft:/, '');
-  const def = COMMANDS[name];
+  const def = own(COMMANDS, name);
   if (!def || (!cheats && !PUBLIC.has(name))) {
     err('Unknown or incomplete command, see below for error', 0);
     return;
@@ -1124,7 +1134,7 @@ export function suggestCommand(game: Game, text: string): { start: number; list:
     const names = Object.keys(COMMANDS).filter((n) => cheats || PUBLIC.has(n)).sort();
     return { start, list: match(names) };
   }
-  const def = COMMANDS[toks[0].s.replace(/^minecraft:/, '')];
+  const def = own(COMMANDS, toks[0].s.replace(/^minecraft:/, ''));
   if (!def?.suggest || (!cheats && !PUBLIC.has(toks[0].s))) return { start, list: [] };
   const prev = toks.slice(1, idx).map((t) => t.s);
   return { start, list: match(def.suggest(game, prev, idx - 1)) };
