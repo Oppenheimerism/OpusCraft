@@ -58,6 +58,8 @@ import { wardenSounds } from './gen/warden';
 import { DISC_MUSIC_POOLS as DISC5_MUSIC_POOLS, renderDiscMusic as renderDisc5Music } from './gen/disc5';
 // (bastions) music disc Pigstep's song
 import { PIGSTEP_MUSIC_POOLS, renderPigstepMusic } from './gen/discPigstep';
+// (the eleven discs) the songs of the rest of C418's discs and Relic
+import { DISC_SONG_POOLS, renderDiscSong } from './gen/discSongs';
 // (trial chambers)
 import { copperTuffSounds } from './gen/copperTuff';
 import { trialChamberSounds } from './gen/trialChambers';
@@ -165,7 +167,10 @@ export function generateMenuMusic(index: number, sampleRate: number): Float32Arr
 
 /** Situational music pools (vanilla music.nether.<biome>, music.end): event name -> number of tracks in it. */
 export const MUSIC_POOLS: Record<string, number> = Object.fromEntries(
-  [...Object.entries(NETHER_MUSIC_POOLS), ...Object.entries(END_MUSIC_POOLS), ...Object.entries(DISC_MUSIC_POOLS), ...Object.entries(DISC5_MUSIC_POOLS), ...Object.entries(PIGSTEP_MUSIC_POOLS)].map(([k, v]) => [k, v.length]),
+  [
+    ...Object.entries(NETHER_MUSIC_POOLS), ...Object.entries(END_MUSIC_POOLS), ...Object.entries(DISC_MUSIC_POOLS), ...Object.entries(DISC5_MUSIC_POOLS),
+    ...Object.entries(PIGSTEP_MUSIC_POOLS), ...Object.entries(DISC_SONG_POOLS),
+  ].map(([k, v]) => [k, v.length]),
 );
 
 /**
@@ -179,6 +184,8 @@ export function generatePoolMusic(pool: string, index: number, sampleRate: numbe
   if (pool in PIGSTEP_MUSIC_POOLS) return renderPigstepMusic(pool, sampleRate);
   // (trial chambers) a music disc's song (vanilla music_disc.*), a pool of one
   if (pool in DISC_MUSIC_POOLS) return renderDiscMusic(pool, sampleRate);
+  // (the eleven discs) and the rest of the discs' songs
+  if (pool in DISC_SONG_POOLS) return renderDiscSong(pool, sampleRate);
   return pool in END_MUSIC_POOLS ? renderEndMusic(pool, index, sampleRate) : renderNetherMusic(pool, index, sampleRate);
 }
 

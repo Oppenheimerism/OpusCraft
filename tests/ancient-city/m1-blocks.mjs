@@ -227,7 +227,7 @@ function useOn(sc, s, sneaking = false) {
   const it = (id) => m.ITEMS.get(id);
   check('items: echo shard (uncommon), recovery compass (uncommon, tools), disc fragment 5 (uncommon)', it('echo_shard')?.rarity === 'uncommon' && it('recovery_compass')?.rarity === 'uncommon' && it('recovery_compass').creativeTab === 'tools' && it('disc_fragment_5')?.rarity === 'uncommon');
   check('items: the disc fragment is "Disc Fragment", "Music Disc - 5" under it', it('disc_fragment_5').name === 'Disc Fragment' && it('disc_fragment_5').lore?.join() === 'Music Disc - 5');
-  check('items: music disc 5, one to a stack, rare, "Samuel Åberg - 5"', it('music_disc_5')?.maxStack === 1 && it('music_disc_5').rarity === 'rare' && it('music_disc_5').name === 'Music Disc' && it('music_disc_5').lore?.join() === 'Samuel Åberg - 5');
+  check('items: music disc 5, one to a stack, uncommon (1.21.2, as the other discs but Pigstep, otherside and Creator), "Samuel Åberg - 5"', it('music_disc_5')?.maxStack === 1 && it('music_disc_5').rarity === 'uncommon' && it('music_disc_5').name === 'Music Disc' && it('music_disc_5').lore?.join() === 'Samuel Åberg - 5');
   const song = m.JUKEBOX_SONGS.music_disc_5;
   check('song: 5 plays 178 seconds, a comparator reads 15', song.lengthSeconds === 178 && song.comparatorOutput === 15 && song.sound === 'music_disc.5');
   check('items: honeycomb', !!it('honeycomb'));
@@ -235,7 +235,7 @@ function useOn(sc, s, sneaking = false) {
   check('tabs: sculk and its kin natural, candles coloured', ['sculk', 'sculk_vein', 'sculk_catalyst', 'sculk_sensor', 'sculk_shrieker'].every((n) => it(n).creativeTab === 'natural') && CANDLES.every((n) => it(n).creativeTab === 'colored'));
   const order = m.ITEM_LIST.map((x) => x.id);
   const after = (a, b) => order.indexOf(a) === order.indexOf(b) + 1;
-  check('tabs: in vanilla\'s order among the rest', after('recovery_compass', 'compass') && after('music_disc_5', 'music_disc_otherside') && after('honeycomb', 'rabbit_hide') && after('cracked_deepslate_bricks', 'deepslate_bricks') && after('cracked_deepslate_tiles', 'deepslate_tiles') && after('reinforced_deepslate', 'deepslate_tile_wall') && after('chiseled_deepslate', 'cobbled_deepslate') && order.indexOf('disc_fragment_5') === order.indexOf('white_dye') - 1 && order.indexOf('sculk_sensor') === order.indexOf('cobweb') - 1);
+  check('tabs: in vanilla\'s order among the rest', after('recovery_compass', 'compass') && after('music_disc_relic', 'music_disc_otherside') && after('music_disc_5', 'music_disc_relic') && after('honeycomb', 'rabbit_hide') && after('cracked_deepslate_bricks', 'deepslate_bricks') && after('cracked_deepslate_tiles', 'deepslate_tiles') && after('reinforced_deepslate', 'deepslate_tile_wall') && after('chiseled_deepslate', 'cobbled_deepslate') && order.indexOf('disc_fragment_5') === order.indexOf('white_dye') - 1 && order.indexOf('sculk_sensor') === order.indexOf('cobweb') - 1);
   // recipes
   const grid = (slots) => Array.from({ length: 9 }, (_, i) => (slots[i] ? stack(slots[i]) : null));
   const craft = (g, w = 3) => {

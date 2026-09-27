@@ -378,8 +378,17 @@ for (const [id, rarity] of [['flower', 'common'], ['creeper', 'uncommon'], ['sku
   reg({ id: `${id}_banner_pattern`, name: 'Banner Pattern', texture: 'banner_pattern', maxStack: 1, rarity });
 }
 for (const m of ['leather', 'iron', 'golden', 'diamond']) reg({ id: `${m}_horse_armor`, texture: `${m}_horse_armor`, maxStack: 1, creativeTab: 'combat' });
-// vanilla 1.21 jukebox songs: disc name + "C418 - title" description
-for (const [id, desc, rarity] of [['music_disc_13', 'C418 - 13', 'uncommon'], ['music_disc_cat', 'C418 - cat', 'uncommon'], ['music_disc_otherside', 'Lena Raine - otherside', 'rare']] as [string, string, Rarity][]) {
+// vanilla 1.21 Items.MUSIC_DISC_*: "Music Disc", its song's description under it (item/jukeboxSongs.ts), one to a
+// stack; C418's twelve, otherside and Relic in CreativeModeTabs.TOOLS_AND_UTILITIES' order (the trial chambers' three,
+// 5 and Pigstep slot in among them where it lists them). Their rarities are vanilla's since 1.21.2, otherside rare and
+// the rest uncommon (1.21 itself had every disc rare)
+for (const [id, desc, rarity] of [
+  ['music_disc_13', 'C418 - 13', 'uncommon'], ['music_disc_cat', 'C418 - cat', 'uncommon'], ['music_disc_blocks', 'C418 - blocks', 'uncommon'],
+  ['music_disc_chirp', 'C418 - chirp', 'uncommon'], ['music_disc_far', 'C418 - far', 'uncommon'], ['music_disc_mall', 'C418 - mall', 'uncommon'],
+  ['music_disc_mellohi', 'C418 - mellohi', 'uncommon'], ['music_disc_stal', 'C418 - stal', 'uncommon'], ['music_disc_strad', 'C418 - strad', 'uncommon'],
+  ['music_disc_ward', 'C418 - ward', 'uncommon'], ['music_disc_11', 'C418 - 11', 'uncommon'], ['music_disc_wait', 'C418 - wait', 'uncommon'],
+  ['music_disc_otherside', 'Lena Raine - otherside', 'rare'], ['music_disc_relic', 'Aaron Cherof - Relic', 'uncommon'],
+] as [string, string, Rarity][]) {
   reg({ id, name: 'Music Disc', texture: id, maxStack: 1, creativeTab: 'tools', rarity, lore: [desc] });
 }
 for (const c of ['white', 'orange', 'magenta', 'light_blue', 'yellow', 'lime', 'pink', 'gray', 'light_gray', 'cyan', 'purple', 'blue', 'brown', 'green', 'red', 'black']) {
@@ -557,8 +566,8 @@ for (const [id, tex] of [['redstone_torch', 'block:redstone_torch'], ['repeater'
   ITEM_LIST.splice(dyes, 0, ...ITEM_LIST.splice(ITEM_LIST.length - 2, 2));
   reg({ id: 'recovery_compass', texture: 'recovery_compass', creativeTab: 'tools', rarity: 'uncommon' });
   after('recovery_compass', 'compass');
-  reg({ id: 'music_disc_5', name: 'Music Disc', texture: 'music_disc_5', maxStack: 1, creativeTab: 'tools', rarity: 'rare', lore: ['Samuel Åberg - 5'] });
-  after('music_disc_5', 'music_disc_otherside');
+  reg({ id: 'music_disc_5', name: 'Music Disc', texture: 'music_disc_5', maxStack: 1, creativeTab: 'tools', rarity: 'uncommon', lore: ['Samuel Åberg - 5'] });
+  after('music_disc_5', 'music_disc_relic');
   // (honeycomb, the candles' wax, is the trial chambers' item: it waxes copper too; item/itemsTrialChambers.ts)
   // the building blocks: chiseled deepslate after the cobbled, the cracked bricks and tiles after theirs, reinforced
   // deepslate after the tiles' wall
