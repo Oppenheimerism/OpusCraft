@@ -47,13 +47,15 @@ export function makeHost(m, { world, level }, { makeChunk, x = 0.5, y = 65, z = 
   level.player = p;
   level.addEntity(p);
   const net = new m.MemoryNetwork();
-  const chat = [], tickets = new Map();
+  const chat = [], overlays = [], tickets = new Map();
   let breaking = null;
   const hooks = {
     spawnPoint: () => spawn,
     hostName: () => hostName,
     worldName: () => 'Test World',
     chat: (t) => chat.push(t),
+    // (stage 3) the host's own action bar
+    overlay: (t) => overlays.push(t),
     setTicket(name, t) {
       if (!t) return void tickets.delete(name);
       tickets.set(name, t);
@@ -67,13 +69,13 @@ export function makeHost(m, { world, level }, { makeChunk, x = 0.5, y = 65, z = 
   level.onTake = (e) => level.sound.play(e.type === 'experience_orb' ? 'entity.experience_orb.pickup' : 'entity.item.pickup', e.x, e.y, e.z, 0.2, 1);
   // (stage 3) the guests' game mode, as the LAN screen picks it; creative if the test doesn't say, as before
   const server = new m.HostServer(level, transport ?? net.host, hooks, { lanId: 'test-world-0000', announce: false, guestGameMode });
-  return { m, world, level, player: p, net, server, chat, tickets, guests: [], setBreaking: (b) => (breaking = b) };
+  return { m, world, level, player: p, net, server, chat, overlays, tickets, guests: [], setBreaking: (b) => (breaking = b) };
 }
 
 /** a guest connecting to `host` as `name` (it says hello once `step` delivers the connection), over `transport` if given */
 export function makeGuest(host, name = 'Guest', { viewDistance = 3, uuid, transport = host.net.connect() } = {}) {
   const { m } = host;
-  const g = { name, transport, chat: [], disconnected: null, world: null, level: null, player: null, session: null, chunkAdds: 0, took: [], mounted: [], died: [], respawned: 0 };
+  const g = { name, transport, chat: [], overlays: [], disconnected: null, world: null, level: null, player: null, session: null, chunkAdds: 0, took: [], mounted: [], died: [], respawned: 0, recipes: new Set(), toasts: [] };
   const hooks = {
     login(info) {
       const world = new m.World();
@@ -102,13 +104,22 @@ export function makeGuest(host, name = 'Guest', { viewDistance = 3, uuid, transp
       };
       return { level, player: p, chunks };
     },
-    chat: (t) => g.chat.push(t),
+    chat: (t, overlay) => {
+      g.chat.push(t);
+      if (overlay) g.overlays.push(t);
+    },
     disconnected: (r) => (g.disconnected = r),
     took: (e, taker, amount) => g.took.push({ e, taker, amount }),
     mounted: (v) => g.mounted.push(v),
     // (stage 3) the death screen, and back
     died: (msg) => g.died.push(msg),
     respawned: () => g.respawned++,
+    // (its recipe book, as the host fills it: new recipes with their toasts, or all it knows)
+    recipes: (rs, replace) => {
+      if (replace) g.recipes.clear();
+      else g.toasts.push(...rs.map((r) => r.id));
+      for (const r of rs) g.recipes.add(r.id);
+    },
   };
   g.session = new m.ClientSession(transport, hooks, { name, uuid: uuid ?? m.randomId(), viewDistance });
   host.guests.push(g);

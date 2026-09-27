@@ -13,7 +13,7 @@ import { loadNet, ENTITY_MODULES, flatHost, makeGuest, rawGuest, hostCopy, step,
 const { m, close } = await loadNet([
   ...ENTITY_MODULES, '/src/game/openMenu.ts', '/src/net/menus.ts', '/src/net/client/clientMenus.ts', '/src/net/server/menuSync.ts',
   '/src/inventory/container.ts', '/src/inventory/menus.ts', '/src/inventory/enchantMenus.ts', '/src/inventory/merchantMenu.ts',
-  '/src/inventory/crafterMenu.ts', '/src/entity/villager.ts', '/src/entity/trading.ts', '/src/game/books.ts', '/src/game/crafter.ts',
+  '/src/inventory/crafterMenu.ts', '/src/inventory/recipeBook.ts', '/src/entity/villager.ts', '/src/entity/trading.ts', '/src/game/books.ts', '/src/game/crafter.ts',
 ]);
 const S = (id, n = 1) => m.ItemStack.of(id, n);
 const key = (s) => m.stackKey(s);
@@ -60,7 +60,8 @@ const key = (s) => m.stackKey(s);
   attack('a trade past 255', [[m.SB.SelectTrade, 256]], /^Bad data: packet \d+: bad field 0/);
   attack('a crafter slot past 8', [[m.SB.SlotStateChanged, 1, 9, true]], /^Bad data: packet \d+: bad field 1/);
   attack('a recipe with no name', [[m.SB.PlaceRecipe, 0, '', false]], /^Bad data: packet \d+: bad field 1/);
-  attack('a recipe name of 65 characters', [[m.SB.PlaceRecipe, 0, 'x'.repeat(65), false]], /^Bad data: packet \d+: bad field 1/);
+  // (128 at most: the book's longest is 75, cracked_polished_blackstone_bricks_from_smelting_polished_blackstone_bricks)
+  attack('a recipe name of 129 characters', [[m.SB.PlaceRecipe, 0, 'x'.repeat(129), false]], /^Bad data: packet \d+: bad field 1/);
   attack('a book in slot 41', [[m.SB.EditBook, 41, ['a'], null]], /^Bad data: packet \d+: bad field 0/);
   attack('a book of 101 pages', [[m.SB.EditBook, 0, Array.from({ length: 101 }, () => 'a'), null]], /^Bad data: packet \d+: bad field 1/);
   attack('a page of 1025 characters', [[m.SB.EditBook, 0, ['x'.repeat(1025)], null]], /^Bad data: packet \d+: bad field 1/);
@@ -130,11 +131,27 @@ const key = (s) => m.stackKey(s);
   send([[m.SB.ContainerButtonClick, 0, 0], [m.SB.ContainerButtonClick, 3, 1], [m.SB.RenameItem, 'Shiny'], [m.SB.SelectTrade, 3], [m.SB.SlotStateChanged, 0, 3, false], [m.SB.PlaceRecipe, 5, 'torch', true], [m.SB.ContainerClose, 42]]);
   check('buttons, a name, a trade, a switch, a recipe and a close with nothing open for them: nothing', ha.inventory.main[0]?.count === 5 && sess().menus.containerId === 0);
   alive('nothing open');
-  // the recipe book in the inventory's own grid: a recipe that isn't one, a furnace's, one too big for a 2x2 grid
+  // the recipe book in the inventory's own grid: a recipe that isn't one, a furnace's, one too big for a 2x2 grid (each
+  // one the guest has unlocked, holding what it's made of, so only that stops it)
   give(1, S('coal', 4));
   give(2, S('stick', 4));
+  give(3, S('cobblestone', 8));
+  give(6, S('raw_iron', 2));
+  const known = sess().recipes.known;
+  check('recipe book: (holding them, it has unlocked the torch, the furnace and smelting raw iron)', known.has('torch') && known.has('furnace') && known.has('iron_ingot_from_smelting_raw_iron'));
   send([[m.SB.PlaceRecipe, 0, 'no_such_recipe', false], [m.SB.PlaceRecipe, 0, 'iron_ingot_from_smelting_raw_iron', false], [m.SB.PlaceRecipe, 0, 'furnace', false]]);
   check('recipe book: an unknown recipe, a furnace\'s, one too big for the 2x2 grid: the grid stays empty', !sess().menus.inventory.craft.items.some(Boolean));
+  // (the book's longest name: no bad data; a furnace's recipe, so nothing in the grid)
+  const longest = 'cracked_polished_blackstone_bricks_from_smelting_polished_blackstone_bricks';
+  send([[m.SB.PlaceRecipe, 0, longest, false]]);
+  check(`recipe book: a recipe named in ${longest.length} characters, the book's longest, taken`, !sess().menus.inventory.craft.items.some(Boolean) && m.BOOK_BY_ID.has(longest));
+  alive('the longest recipe name');
+  // (vanilla ServerRecipeBook.contains: a recipe it hasn't unlocked isn't placed, nor shown in outline)
+  const ghosts = [];
+  a.session.hooks.ghostRecipe = (_menu, r) => ghosts.push(r);
+  send([[m.SB.PlaceRecipe, 0, 'tnt', false]]);
+  check('recipe book: TNT, never having held gunpowder or sand: not unlocked, nothing placed, not shown in outline', !known.has('tnt') && !sess().menus.inventory.craft.items.some(Boolean) && ghosts.length === 0);
+  give(6, null);
   send([[m.SB.PlaceRecipe, 0, 'torch', false]]);
   check('recipe book: (a torch does fit)', sess().menus.inventory.craft.items.filter(Boolean).length === 2);
   send([[m.SB.ContainerClose, 0]]);
@@ -300,6 +317,9 @@ const key = (s) => m.stackKey(s);
   badHost('a menu numbered 0 opened', [[m.CB.OpenScreen, 0, 'chest', '', {}]], /^Bad data from the host: packet \d+: bad field 0$/);
   badHost('a use of an item for 100000 ticks', [[m.CB.SetUsingItem, 0, 100000, 5]], /^Bad data from the host: packet \d+: bad field 1$/);
   badHost('a book opened in a third hand', [[m.CB.OpenBook, 2]], /^Bad data from the host: packet \d+: bad field 0$/);
+  badHost('a recipe unlocked that isn\'t one', [[m.CB.RecipeBookAdd, ['torch', 'no_such_recipe'], false]], /^Bad data from the host: a recipe that does not exist$/);
+  badHost('a recipe named in 129 characters', [[m.CB.RecipeBookAdd, ['x'.repeat(129)], false]], /^Bad data from the host: packet \d+: bad field 0$/);
+  badHost('4097 recipes unlocked at once', [[m.CB.RecipeBookAdd, Array.from({ length: 4097 }, () => 'torch'), false]], /^Bad data from the host: packet \d+: bad field 0$/);
   check('prototype: nothing reached Object.prototype', ({}).polluted === undefined);
 
   fineHost('a chest titled with formatting and control characters: plain text', [open('chest', '§4Red\u0007 Chest')], (g) => g.session.menus.open?.menu.title === '4Red Chest' && g.shown.length === 1);
@@ -310,6 +330,7 @@ const key = (s) => m.stackKey(s);
   fineHost('a lectern turned to page -5 (the first)', [open('lectern'), [m.CB.ContainerSetData, 1, 0, -5]], (g) => g.session.menus.open.menu.lectern.page === 0);
   fineHost('a book opened in the offhand', [[m.CB.OpenBook, 1]], (g) => g.books.length === 1 && g.books[0] === 'off');
   fineHost('the use of an item it doesn\'t hold (nothing in hand: nothing used)', [[m.CB.SetUsingItem, 0, 32, 10]], (g) => g.player.useItem === null && !g.player.isUsingItem());
+  fineHost('recipes unlocked (with their toasts), then all it knows replaced (without)', [[m.CB.RecipeBookAdd, ['torch', 'stick'], false], [m.CB.RecipeBookAdd, ['furnace', 'torch'], true]], (g) => g.toasts.join() === 'torch,stick' && [...g.recipes].sort().join() === 'furnace,torch');
   fineHost('a crafter\'s switches and its lit value', [open('crafter'), [m.CB.ContainerSetData, 1, 4, 1], [m.CB.ContainerSetData, 1, 9, 1]], (g) => g.session.menus.open.menu.crafter.isSlotDisabled(4) && g.session.menus.open.menu.crafter.triggered);
 }
 

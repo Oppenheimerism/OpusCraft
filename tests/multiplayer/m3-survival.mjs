@@ -351,6 +351,8 @@ function heal(g) {
   check('bed: its respawn point is set, and it\'s told', ha.respawnPos?.join() === `${bx},64,${bz + 1}` && a.chat.some((t) => t === 'Respawn point set'));
   check('bed: the bed is occupied, for everyone', m.BLOCKS[m.STATE_BLOCK[lvl.world.getState(bx, 64, bz + 1)]].get(lvl.world.getState(bx, 64, bz + 1), 'occupied') === true && a.world.getState(bx, 64, bz + 1) === lvl.world.getState(bx, 64, bz + 1));
   check('bed: the other guest sees it asleep', mirrorOf(b, ha).sleepingPos?.join() === `${bx},64,${bz + 1}`);
+  // (vanilla announceSleepStatus, as for a world open to LAN: over everyone's hotbar)
+  check('bed: "1/3 players sleeping" over everyone\'s hotbar, the host\'s too', [host.overlays, a.overlays, b.overlays].every((o) => o.at(-1) === '1/3 players sleeping'), `${host.overlays.at(-1)} | ${a.overlays.at(-1)} | ${b.overlays.at(-1)}`);
   const lying = [ha.x, ha.y, ha.z].join();
   a.player.moveTo(bx + 3, 64, bz, 0, 0);
   step(host, 2);
@@ -360,6 +362,7 @@ function heal(g) {
   step(host, 3);
   check('bed: Leave Bed gets it up, beside the bed, here and on the host', !ha.isSleeping() && !a.player.isSleeping() && Math.abs(a.player.x - ha.x) < 1e-9 && Math.abs(a.player.z - ha.z) < 1e-9 && Math.hypot(ha.x - (bx + 0.5), ha.z - (bz + 1.5)) < 2.5, `${ha.x},${ha.z}`);
   check('bed: and the bed is free again', m.BLOCKS[m.STATE_BLOCK[lvl.world.getState(bx, 64, bz + 1)]].get(lvl.world.getState(bx, 64, bz + 1), 'occupied') === false);
+  check('bed: getting up is told too: "0/3 players sleeping"', [host.overlays, a.overlays, b.overlays].every((o) => o.at(-1) === '0/3 players sleeping'));
   // everyone asleep: the host's player and Steve out of it as spectators
   host.player.setGameMode('spectator');
   hb.setGameMode('spectator');
@@ -372,11 +375,14 @@ function heal(g) {
   a.session.input(false, false, false, false, null);
   step(host, 2);
   check('bed: (asleep again)', ha.isSleeping());
+  const told = [host.overlays.length, a.overlays.length, b.overlays.length];
+  check('bed: the others spectating, nothing was said until it slept; then "Sleeping through this night", to the spectators too', told.every((n, i) => n > 0 && [host.overlays, a.overlays, b.overlays][i].at(-1) === 'Sleeping through this night' && [host.overlays, a.overlays, b.overlays][i].at(-2) === '0/3 players sleeping'));
   const day = Math.floor(lvl.dayTime / 24000);
   for (let i = 0; i < 130 && ha.isSleeping(); i++) step(host, 1);
   step(host, 3);
   check('bed: with everyone else spectating, its sleep brings the morning', Math.floor(lvl.dayTime / 24000) === day + 1 && lvl.dayTime % 24000 < 200, `${lvl.dayTime}`);
   check('bed: and it wakes, here too, the clock with it', !ha.isSleeping() && !a.player.isSleeping() && Math.abs(a.level.dayTime - lvl.dayTime) <= 1, `${a.level.dayTime} ${lvl.dayTime}`);
+  check('bed: the morning\'s waking isn\'t told as "0/1 players sleeping" (vanilla removeAllSleepers)', host.overlays.length === told[0] && a.overlays.length === told[1] && b.overlays.length === told[2], `${host.overlays.slice(told[0])}`);
   host.player.setGameMode('survival');
   hb.setGameMode('survival');
   // respawning at the bed, then (its bed broken) at the world spawn

@@ -417,6 +417,17 @@ walkTo(b, 0.5, 3.5);
   click(a, gm, 0, 0, 'quick_move');
   check('crafting table: the sticks shift-clicked out', count('stick') === 4 && !hm.craft.items[0] && !hm.craft.items[3] && count('oak_planks') === 2, inv());
   same(a, 'crafting table: crafted');
+  // the recipe book: what the guest holds unlocks recipes on the host (vanilla's recipe advancements), its game told
+  // with a toast for each; the recipe book's clicks count only for those (m3-security.mjs)
+  const before = new Set(sess(a).recipes.known);
+  const spare = ha.inventory.main.findIndex((s, i) => i >= 9 && !s);
+  give(a, spare, S('gunpowder'));
+  const fresh = [...sess(a).recipes.known].filter((id) => !before.has(id));
+  check('recipe book: gunpowder held unlocks TNT and the rest it makes, on the host', !before.has('tnt') && fresh.includes('tnt'), fresh.join(','));
+  check('recipe book: the guest\'s game told, with their toasts', fresh.every((id) => a.recipes.has(id) && a.toasts.includes(id)));
+  check('recipe book: the guest\'s is the host\'s, recipe for recipe', a.recipes.size === sess(a).recipes.known.size && [...a.recipes].every((id) => sess(a).recipes.known.has(id)), `${a.recipes.size} ${sess(a).recipes.known.size}`);
+  check('recipe book: the other guest, who never held gunpowder, hasn\'t TNT', !sess(b).recipes.known.has('tnt') && !b.recipes.has('tnt'));
+  give(a, spare, null);
   // the recipe book: torches, without coal (shown in outline), then with it
   a.session.placeRecipe(gm, 'torch', false);
   step(host, 3);
@@ -885,8 +896,8 @@ walkTo(b, 0.5, 3.5);
 // ---------------------------------------------------------------------------
 // using an item over time (vanilla LivingEntity.startUsingItem on the server, its DATA_LIVING_ENTITY_FLAGS for the
 // others): the guest eats as the host has it, slowed as it eats, heard munching by the others, who see it eat; the
-// bread gone and the food bar up at the end; a bow drawn and let go, the arrow the host's; a shield raised in the
-// offhand, blocking as the others see it
+// bread gone and the food bar up at the end; a bow drawn and let go, the arrow the host's; a crossbow; a trident
+// thrown; a shield raised in the offhand, blocking as the others see it
 {
   clear(a);
   const mirror = (g, p) => g.session.mirrors.get(p.id);
@@ -954,6 +965,19 @@ walkTo(b, 0.5, 3.5);
   use(a);
   check('crossbow: a click fires it, the host\'s bolt', arrows().length === 1 && !m.isCharged(ha.inventory.main[0]) && !m.isCharged(a.player.inventory.main[0]));
   for (const e of arrows()) e.remove();
+  // a trident: held back, then thrown by the host, gone from the hand (it's in the air)
+  clear(a);
+  give(a, 0, S('trident'));
+  step(host, 2);
+  const tridents = () => lvl.entities.filter((e) => e.type === 'trident' && !e.removed);
+  hold(a, true);
+  step(host, 15);
+  check('trident: held back, as the host has it and the others see it', ha.useItem?.item.id === 'trident' && a.player.useItem?.item.id === 'trident' && mirror(b, ha)?.useItem?.item.id === 'trident');
+  hold(a, false);
+  step(host, 3);
+  check('trident: let go, the host throws it, and it\'s gone from the hand on both sides', tridents().length === 1 && tridents()[0].owner === ha && !ha.inventory.main[0] && !a.player.inventory.main[0] && !a.player.isUsingItem(), `${tridents().length} ${key(ha.inventory.main[0])} ${key(a.player.inventory.main[0])}`);
+  check('trident: the guest sees it fly', !!copyOf(a, tridents()[0]));
+  for (const e of tridents()) e.remove();
   // a shield in the offhand
   clear(a);
   give(a, 40, S('shield'));
