@@ -708,6 +708,20 @@ export class ServerPlayerSession {
     this.send([CB.PlayerPosition, x, y, z, yRot, xRot, this.teleportId]);
   }
 
+  /**
+   * vanilla ServerPlayer.teleportTo, by a command: out of bed and off what it rides, its fall and its speed gone, and
+   * the guest told where it is (the chunks round there follow, as they do wherever it goes)
+   */
+  teleportTo(x: number, y: number, z: number, yRot: number, xRot: number): void {
+    const p = this.player;
+    if (!p || p.removed || p.health <= 0) return;
+    if (p.isSleeping()) p.stopSleepInBed(true);
+    p.removeVehicle();
+    p.dx = p.dy = p.dz = 0;
+    p.fallDistance = 0;
+    this.teleport(x, y, z, yRot, xRot);
+  }
+
   /** vanilla handleSetCreativeModeSlot: a real item, rebuilt from the host's creative list */
   private creativeSlot(slot: number, v: Value): void {
     const p = this.player!;

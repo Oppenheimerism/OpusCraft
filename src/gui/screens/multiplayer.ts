@@ -69,6 +69,8 @@ export class ShareToLanScreen extends Screen {
   private failed = false;
   /** what the guests play in (vanilla: Survival to begin with) */
   private mode: GameMode = 'survival';
+  /** Allow Cheats (vanilla: off to begin with) */
+  private cheats = false;
 
   constructor(game: Game, parent: Screen) {
     super(game, 'LAN World');
@@ -78,13 +80,12 @@ export class ShareToLanScreen extends Screen {
   init(): void {
     const cx = Math.floor(this.width / 2);
     this.add(new CycleButton(cx - 155, 100, 150, 20, 'Game Mode', GUEST_MODES, this.mode, (m) => MODE_NAMES[m], (m) => (this.mode = m)));
-    // (in this version only the host runs commands: the button says so, greyed out)
-    const cheats = this.add(new CycleButton(cx + 5, 100, 150, 20, 'Allow Cheats', [false], false, () => 'OFF', () => {}));
-    cheats.active = false;
-    cheats.tooltip = 'Only the host can use commands in this version';
+    // (vanilla: commands for everyone while the world is open; in this version only the host runs commands)
+    const cheats = this.add(new CycleButton(cx + 5, 100, 150, 20, 'Allow Cheats', [false, true], this.cheats, (v) => (v ? 'ON' : 'OFF'), (v) => (this.cheats = v)));
+    cheats.tooltip = 'Commands (/gamemode, /tp, /kick...) for you while the world is open, even if it was made without cheats. Your guests can\'t use commands in this version.';
     this.add(new Button(cx - 155, this.height - 28, 150, 20, 'Start LAN World', () => {
       // (vanilla: back to the game, "Local game hosted" in the chat)
-      if (this.game.openToLan(this.mode)) this.game.setScreen(null);
+      if (this.game.openToLan(this.mode, this.cheats)) this.game.setScreen(null);
       else this.failed = true;
     }));
     this.add(new Button(cx + 5, this.height - 28, 150, 20, 'Cancel', () => this.onClose()));

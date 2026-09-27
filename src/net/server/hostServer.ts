@@ -205,6 +205,24 @@ export class HostServer {
     return null;
   }
 
+  /** (commands) a line in one guest's chat (vanilla ServerPlayer.sendSystemMessage) */
+  tell(p: Player, text: string): void {
+    this.sessionOf(p)?.systemChat(text);
+  }
+
+  /** (commands: /tp) a guest's player put somewhere by the host (vanilla TeleportCommand.performTeleport), and told */
+  teleportGuest(p: Player, x: number, y: number, z: number, yRot: number, xRot: number): void {
+    this.sessionOf(p)?.teleportTo(x, y, z, yRot, xRot);
+  }
+
+  /** (commands: /kick) a guest let go, told why: whether there was one to let go */
+  kick(p: Player, reason: string): boolean {
+    const s = this.sessionOf(p);
+    if (!s) return false;
+    s.disconnect(reason);
+    return true;
+  }
+
   /** a player's name, as the others see it */
   nameOf(p: Player): string {
     return p === this.level.player ? this.hooks.hostName() : (p.profileName ?? 'Player');

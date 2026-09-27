@@ -225,6 +225,11 @@ export class Game {
   connectingScreenFactory: ((cancel: () => void) => Screen) | null = null;
   /** vanilla DisconnectedScreen: a title, why, and back to the title screen (or to `back`'s, the server list's) */
   disconnectedScreenFactory: ((title: string, reason: string, back: (() => Screen) | null) => Screen) | null = null;
+  /**
+   * (hosting) vanilla ShareToLanScreen's Allow Cheats: commands for this player while the world is open, whatever the
+   * world's own setting (vanilla PlayerList.allowCommandsForAllPlayers; the guests' own commands aren't here yet)
+   */
+  lanCheats = false;
   /** (a guest) the join code it joined with */
   private joinedWith = '';
   /** (hosting) the players of the guests this world has had, kept with it (vanilla PlayerDataStorage) */
@@ -1877,7 +1882,7 @@ export class Game {
    * vanilla IntegratedServer.publishServer ("Start LAN World"): other windows can join from Multiplayer from now on,
    * playing in `guestMode`
    */
-  openToLan(guestMode: GameMode = 'survival'): boolean {
+  openToLan(guestMode: GameMode = 'survival', cheats = false): boolean {
     if (!MULTIPLAYER_ENABLED || this.mode !== 'single' || !this.inWorld || !this.meta) return false;
     const lanId = randomId();
     // (stage 5: a new code each time; the other windows of this browser are told it, other computers must be)
@@ -1915,6 +1920,7 @@ export class Game {
       { lanId, guestGameMode: guestMode, joinCode: code },
     );
     this.mode = 'host';
+    this.lanCheats = cheats;
     this.lanShare = { code, relay, why: why ?? '' };
     this.clock.start(() => this.beat());
     // (vanilla Player.getDisplayName: the others know the host's player by its name, "slain by" it too)
@@ -1950,6 +1956,7 @@ export class Game {
     if (!srv) return;
     this.server = null;
     this.lanShare = null;
+    this.lanCheats = false;
     this.mode = 'single';
     this.clock.stop();
     this.player.profileName = null;
