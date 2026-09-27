@@ -131,6 +131,9 @@ const pig = still('pig', 4, 4);
 const cow = still('cow', 6, 4);
 const sheep = still('sheep', 8, 4);
 const zombie = still('zombie', 4, 8);
+// (kept out of the sun: burning, it's hurt once a second, and a hit landing in the half second after one doesn't flash
+// it red again, so the fields' hurt check below would miss its flash about one time in twelve)
+zombie.isSunBurnTick = () => false;
 const horse = still('horse', 8, 8);
 const creeper = still('creeper', 6, 10);
 const item = new m.ItemEntity(lvl, m.ItemStack.of('diamond', 3));
