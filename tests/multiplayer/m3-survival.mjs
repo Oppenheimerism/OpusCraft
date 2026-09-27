@@ -4,7 +4,8 @@
 // guests, knocked back, burnt, fed and starved as the host's own player would be, and sees its hearts, food, air and
 // effects as the host has them; it falls and lands hard; it dies, drops what it carries, reads how on its death screen
 // and respawns at its bed or the world spawn; it sleeps, and a night passes when everyone does; its hands swap, its
-// pick-block and its cooldowns are the host's. The other players see it hurt, burning, dying and asleep.
+// pick-block and its cooldowns are the host's; a magma block burns it unless it sneaks. The other players see it hurt,
+// burning, dying and asleep.
 
 import { loadNet, ENTITY_MODULES, flatHost, makeGuest, rawGuest, hostCopy, step, check, exitWithStatus } from './lib.mjs';
 
@@ -460,6 +461,40 @@ function heal(g) {
   check('glide: into a wall at a block and a half a tick, it\'s hurt for twelve', hg.health === 8 && hg.lastDamageSource === 'flyIntoWall', `${hg.health} ${hg.lastDamageSource}`);
   r.send([[m.SB.Disconnect, 'bye']]);
   step(host, 2);
+}
+
+// ---------------------------------------------------------------------------
+// a magma block's hot floor (main's Frost Walker change): the host burns a guest standing on it, heard as a burn by
+// the others, but not a sneaking one or one in Frost Walker boots; dying of it is "discovered the floor was lava"
+{
+  heal(a);
+  lvl.setBlock(0, 63, -6, m.S('magma_block'));
+  step(host, 2);
+  walkTo(a, 0.5, -5.5);
+  a.player.input.sneak = true;
+  step(host, 25);
+  check('magma: sneaking on it, the guest isn\'t burnt', ha.health === 20 && a.player.health === 20, `${ha.health}`);
+  const burnt = heard(b, 'entity.player.hurt_on_fire');
+  a.player.input.sneak = false;
+  step(host, 12);
+  check('magma: standing on it, the host burns it, the guest\'s hearts say so', ha.health < 20 && ha.lastDamageSource === 'hotFloor' && a.player.health === ha.health, `${ha.health} ${ha.lastDamageSource} ${a.player.health}`);
+  check('magma: heard as a burn by the others', heard(b, 'entity.player.hurt_on_fire') > burnt);
+  heal(a);
+  const boots = m.ItemStack.of('leather_boots');
+  boots.tag = { enchantments: { frost_walker: 1 } };
+  ha.inventory.armor[0] = boots;
+  ha.inventory.version++;
+  step(host, 25);
+  check('magma: in Frost Walker boots, not burnt', ha.health === 20, `${ha.health}`);
+  ha.inventory.armor[0] = null;
+  ha.inventory.version++;
+  ha.health = 1;
+  step(host, 25);
+  check('magma: burnt to death, "discovered the floor was lava", for everyone', ha.health <= 0 && b.chat.includes('Alex discovered the floor was lava') && a.died.at(-1) === 'Alex discovered the floor was lava', `${a.died.at(-1)}`);
+  a.session.respawn();
+  step(host, 4);
+  lvl.setBlock(0, 63, -6, m.S('stone'));
+  heal(a);
 }
 
 check('at the end: both guests are still in', !a.disconnected && !b.disconnected && host.server.guestCount() === 2, `${a.disconnected} ${b.disconnected}`);
