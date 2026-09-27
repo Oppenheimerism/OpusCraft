@@ -13,6 +13,7 @@ import { playerStatus, effectList, effectsChanged, effectsSent } from '../player
 import { claimMatches } from '../menus';
 import { ServerMenus } from './menuSync';
 import { levelChunkPacket } from '../chunkData';
+import { offlinePlayerUuid } from '../offlineUuid';
 import type { HostServer } from './hostServer';
 import { EntityTracker } from './entityTracker';
 import type { Entity } from '../../entity/entity';
@@ -368,6 +369,9 @@ export class ServerPlayerSession {
     if (protocol !== PROTOCOL_VERSION) return this.disconnect(protocol < PROTOCOL_VERSION ? 'Outdated game! This world is open in a newer one.' : 'Outdated host! This world is open in an older one.');
     if (build !== BUILD_ID) return this.disconnect('This world is open in a different version of the game. Reload both windows so they run the same one.');
     if (!NAME_PATTERN.test(name)) return this.disconnect('That name can only have letters, digits and _ (3 to 16 of them).');
+    // (vanilla offline mode: a player is its name, its uuid made from the name, the host's to work out; a guest giving
+    // another's, which would be another's player kept with the world, is refused)
+    if (uuid !== offlinePlayerUuid(name)) return this.disconnect("Bad data: that uuid isn't the name's");
     const srv = this.server;
     // (the guests in, and those let in whose players are still being read)
     const others = [...srv.sessions.values()].filter((s) => s !== this && (s.state === 'play' || s.loggingIn));
