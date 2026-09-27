@@ -10,7 +10,7 @@ export const NET_MODULES = [
   '/src/net/codec.ts', '/src/net/protocol.ts', '/src/net/config.ts', '/src/net/items.ts', '/src/net/chunkData.ts', '/src/net/playerState.ts', '/src/net/playerStatus.ts',
   '/src/net/transport/memory.ts', '/src/net/transport/transport.ts', '/src/net/server/hostServer.ts', '/src/net/server/session.ts',
   '/src/net/client/clientSession.ts', '/src/net/client/mirrorPlayer.ts', '/src/world/dimension.ts', '/src/item/item.ts',
-  '/src/world/blockEntity.ts', '/src/game/interaction.ts',
+  '/src/world/blockEntity.ts', '/src/game/interaction.ts', '/src/net/offlineUuid.ts',
 ];
 
 /** (stage 2) the entities' side of it: the registry, the fields, the trackers and copies, and the kinds the tests make */
@@ -74,7 +74,10 @@ export function makeHost(m, { world, level }, { makeChunk, x = 0.5, y = 65, z = 
   return { m, world, level, player: p, net, server, chat, overlays, tickets, guests: [], makeChunk, setBreaking: (b) => (breaking = b) };
 }
 
-/** a guest connecting to `host` as `name` (it says hello once `step` delivers the connection), over `transport` if given */
+/**
+ * a guest connecting to `host` as `name` (it says hello once `step` delivers the connection), over `transport` if given;
+ * its uuid its name's (stage 4: vanilla's offline uuid, which the host holds it to), unless a test gives another
+ */
 export function makeGuest(host, name = 'Guest', { viewDistance = 3, uuid, transport = host.net.connect() } = {}) {
   const { m } = host;
   const g = { name, transport, chat: [], overlays: [], disconnected: null, world: null, level: null, player: null, session: null, chunkAdds: 0, took: [], mounted: [], died: [], respawned: 0, recipes: new Set(), toasts: [], dims: [] };
@@ -134,7 +137,7 @@ export function makeGuest(host, name = 'Guest', { viewDistance = 3, uuid, transp
       g.player.fallDistance = 0;
     },
   };
-  g.session = new m.ClientSession(transport, hooks, { name, uuid: uuid ?? m.randomId(), viewDistance });
+  g.session = new m.ClientSession(transport, hooks, { name, uuid: uuid ?? m.offlinePlayerUuid(name), viewDistance });
   host.guests.push(g);
   return g;
 }
@@ -163,7 +166,7 @@ export function rawGuest(host) {
     reason() {
       return r.packets(m.CB.Disconnect)[0]?.[1] ?? null;
     },
-    hello(name = 'Raw', { protocol = m.PROTOCOL_VERSION, build = m.BUILD_ID, uuid = m.randomId(), viewDistance = 2 } = {}) {
+    hello(name = 'Raw', { protocol = m.PROTOCOL_VERSION, build = m.BUILD_ID, uuid = m.offlinePlayerUuid(name), viewDistance = 2 } = {}) {
       r.send([[m.SB.Hello, protocol, build, name, uuid, viewDistance]]);
     },
   };

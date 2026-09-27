@@ -1,4 +1,6 @@
-// Stage 4's packets, checked. On the host, while it's on its way to another dimension (its level standing still,
+// Stage 4's packets, checked. On the host, at a guest's hello: its uuid must be its name's (vanilla's offline uuid,
+// which names the player the world keeps for it), not another's, nor its name's in another case, nor one made up (its
+// own in capitals is its own). While the host is on its way to another dimension (its level standing still,
 // ServerPlayerSession.idleTick): what a guest sends is checked as ever, and whoever sends anything wrong (bytes that
 // aren't data, a packet that fails its checks, one only a host sends, a second hello, too much too fast, chat spam, or
 // nothing at all for 30 seconds) is let go with a reason, the host's tick doesn't throw, and the other guests go on
@@ -71,6 +73,33 @@ const { m, close } = await loadNet(ENTITY_MODULES);
     ['a chat line that isn\'t allowed', (r) => r.send([[m.SB.Chat, 'a\u0007b']]), /^Illegal characters in chat$/],
     ['nothing at all for 30 seconds (the host still waiting)', () => {}, /^Timed out$/],
   ], m.TIMEOUT_TICKS + 5);
+}
+
+// ---------------------------------------------------------------------------
+// the host, at a guest's hello: a guest is its name, its uuid the one vanilla makes from the name, which names the
+// player the world keeps for it; any other uuid is refused (another's, its name's in another case, one made up, one
+// without its dashes). Its own in capitals is its own (a uuid's letters are any case), kept in small letters as ever
+{
+  const host = flatHost(m, 3);
+  const a = makeGuest(host, 'Alex');
+  step(host, 3);
+  const hello = (name, uuid) => {
+    const r = rawGuest(host);
+    step(host, 1);
+    r.hello(name, { uuid });
+    step(host, 2);
+    return r;
+  };
+  const refused = (label, r, name) => check(`hello: ${label}: refused, saying why`, r.gone && r.reason() === "Bad data: that uuid isn't the name's" && hostCopy(host, { name }) === null, `${r.reason()}`);
+  refused('another\'s uuid (Alex\'s) under another name', hello('Bob', m.offlinePlayerUuid('Alex')), 'Bob');
+  refused('another\'s uuid (Dave\'s, who isn\'t here) under another name', hello('Carol', m.offlinePlayerUuid('Dave')), 'Carol');
+  refused('its name\'s uuid with another case of the name (case counts, as in vanilla)', hello('Bob', m.offlinePlayerUuid('bob')), 'Bob');
+  refused('a uuid made up', hello('Bob', m.randomId()), 'Bob');
+  refused('the uuid without its dashes', hello('Bob', m.offlinePlayerUuid('Bob').replace(/-/g, '')), 'Bob');
+  const r = hello('Bob', m.offlinePlayerUuid('Bob'));
+  check('hello: its own name\'s uuid: let in', !r.gone && r.reason() === null && hostCopy(host, { name: 'Bob' })?.uuid === m.offlinePlayerUuid('Bob') && hostCopy(host, a) !== null);
+  const e = hello('Eve', m.offlinePlayerUuid('Eve').toUpperCase());
+  check('hello: its own name\'s uuid in capitals: let in as itself, going by the uuid in small letters', !e.gone && e.reason() === null && hostCopy(host, { name: 'Eve' })?.uuid === m.offlinePlayerUuid('Eve'), `${e.reason()}`);
 }
 
 // ---------------------------------------------------------------------------
