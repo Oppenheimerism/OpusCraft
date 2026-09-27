@@ -13,15 +13,17 @@ import { poseFlags, stackKey } from '../playerState';
 import { columnFromSections, biomesOk, savedBlockEntity, blockEntityFromHost } from '../chunkData';
 import { replayParticles } from '../effects';
 import { createFromPayload } from '../entityNet';
-import { applyData } from '../entityData';
+import { applyData, PLAYER_FIELDS } from '../entityData';
+import { applyPlayerStatus, applyEffectList } from '../playerStatus';
 import { MirrorPlayer } from './mirrorPlayer';
 import { EntityMirror } from './entityMirror';
 import { BOAT_TYPES } from '../../entity/boat';
 import type { Level } from '../../game/level';
 import type { Entity } from '../../entity/entity';
 import { LivingEntity } from '../../entity/living';
-import type { Player } from '../../entity/player';
-import type { ItemStack } from '../../item/item';
+import type { Player, GameMode } from '../../entity/player';
+import { ITEMS, type ItemStack } from '../../item/item';
+import { resetForRespawn } from '../../game/playerDeath';
 import type { SavedBlockEntity } from '../../world/blockEntity';
 import { Chunk } from '../../world/chunk';
 import { MIN_Y, MAX_Y } from '../../world/constants';
@@ -47,7 +49,13 @@ export interface ClientHooks {
   took?(e: Entity, taker: LivingEntity, amount: number): void;
   /** our player got on something (vanilla's "Press Shift to Dismount") */
   mounted?(vehicle: Entity): void;
+  /** our player died (vanilla ClientboundPlayerCombatKillPacket): the death screen, saying how */
+  died?(message: string): void;
+  /** back alive (vanilla ClientboundRespawnPacket): the death screen goes */
+  respawned?(): void;
 }
+
+const GAME_MODES: readonly GameMode[] = ['survival', 'creative', 'adventure', 'spectator'];
 
 /** the most fields waiting for an entity that hasn't come yet (a host that names more that never come is let be) */
 const MAX_WAITING = 4096;
@@ -259,6 +267,12 @@ export class ClientSession {
       case CB.AddEntity:
         return this.addEntity(p);
       case CB.SetEntityData: {
+        const m = this.mirrors.get(p[1] as number);
+        if (m) {
+          // (another player: how it's hurt, dying, burning, asleep, and what it's using)
+          const why = applyData(m, p[2], this.resolve, PLAYER_FIELDS);
+          return why ? this.fail(why) : undefined;
+        }
         const c = this.entities.get(p[1] as number);
         if (!c) return;
         const why = applyData(c.e, p[2], this.resolve);
@@ -313,6 +327,56 @@ export class ClientSession {
         inv.version++;
         // (the host has this already: not to be sent back)
         this.slots[slot] = stackKey(s);
+        return;
+      }
+      case CB.PlayerStatus:
+        return applyPlayerStatus(this.player!, p.slice(1));
+      case CB.SetEntityMotion: {
+        // (vanilla handleSetEntityMotion for our own player: knocked or blown, from how it was going to this)
+        const pl = this.player!;
+        pl.dx = p[1] as number;
+        pl.dy = p[2] as number;
+        pl.dz = p[3] as number;
+        return;
+      }
+      case CB.PlayerCombatKill: {
+        const pl = this.player!;
+        pl.health = 0;
+        pl.dead = true;
+        return this.hooks.died?.(p[1] as string);
+      }
+      case CB.Respawn:
+        // (a fresh start: its health, food, effects and the rest come after, as the host has them)
+        resetForRespawn(this.player!, true);
+        return this.hooks.respawned?.();
+      case CB.GameMode: {
+        const mode = p[1] as GameMode;
+        if (!GAME_MODES.includes(mode)) return this.fail('a game mode that does not exist');
+        return this.player!.setGameMode(mode);
+      }
+      case CB.SetCarriedItem: {
+        const inv = this.player!.inventory;
+        inv.selected = this.selected = p[1] as number;
+        inv.version++;
+        return;
+      }
+      case CB.SetCooldown: {
+        const pl = this.player!, item = p[1] as string, left = p[2] as number, total = p[3] as number;
+        if (!ITEMS.has(item)) return this.fail('an item that does not exist');
+        if (left > 0) pl.cooldowns.set(item, left);
+        else pl.cooldowns.delete(item);
+        if (left > 0 && total > 0) pl.cooldownTotals.set(item, total);
+        else pl.cooldownTotals.delete(item);
+        return;
+      }
+      case CB.UpdateEffects:
+        if (!applyEffectList(this.player!, p[1] as Value[])) return this.fail('an effect that does not exist');
+        return;
+      case CB.SetSleeping: {
+        // (in the bed the host says, or up out of it; where it stands up, the host's teleport says)
+        const pl = this.player!, pos = p[1] as number[] | null;
+        if (pos) pl.startSleeping(pos[0], pos[1], pos[2]);
+        else if (pl.isSleeping()) pl.stopSleepInBed(false);
         return;
       }
     }
@@ -517,6 +581,30 @@ export class ClientSession {
     if (this.state === 'play' && this.actions.length < 16) this.actions.push([SB.PlayerAction, all ? Action.DROP_ALL : Action.DROP, 0]);
   }
 
+  /** the death screen's Respawn (vanilla ClientboundClientCommandPacket PERFORM_RESPAWN) */
+  respawn(): void {
+    this.action([SB.ClientCommand, 0]);
+  }
+
+  /** the in-bed screen's Leave Bed (vanilla sendWakeUp: STOP_SLEEPING) */
+  stopSleeping(): void {
+    this.action([SB.PlayerAction, Action.STOP_SLEEPING, 0]);
+  }
+
+  /** the swap key: the host swaps our hands, and tells us (vanilla SWAP_ITEM_WITH_OFFHAND) */
+  swapHands(): void {
+    this.action([SB.PlayerAction, Action.SWAP_HANDS, 0]);
+  }
+
+  /** survival's pick-block: the stack in `slot` (past the hotbar) into our hand, which the host does (vanilla ServerboundPickItemPacket) */
+  pickSlot(slot: number): void {
+    if (slot >= 9 && slot < 36) this.action([SB.PickItem, slot]);
+  }
+
+  private action(a: Value[]): void {
+    if (this.state === 'play' && this.actions.length < 16) this.actions.push(a);
+  }
+
   /** (our player's dropHandler) an item thrown out of the creative inventory (vanilla handleCreativeModeItemDrop: slot -1) */
   dropCreative(s: ItemStack): void {
     if (this.state === 'play' && this.actions.length < 16) this.actions.push([SB.SetCreativeModeSlot, -1, itemToWire(s)]);
@@ -592,6 +680,7 @@ export class ClientSession {
     if (i.left) flags |= PoseFlag.LEFT;
     if (i.right) flags |= PoseFlag.RIGHT;
     if (i.jump) flags |= PoseFlag.JUMP;
+    if (p.horizontalCollision) flags |= PoseFlag.HORIZONTAL_COLLISION;
     const t = this.target;
     const target = t && !t.removed ? (t instanceof MirrorPlayer ? t.netId : (this.copies.get(t)?.netId ?? -1)) : -1;
     // (the look first, so the host clicks where we looked)
@@ -601,7 +690,8 @@ export class ClientSession {
       this.selected = inv.selected;
       this.send([SB.SetCarriedItem, inv.selected]);
     }
-    if (inv.version !== this.invVersion) {
+    // (a creative inventory is ours to fill; anything else in it is the host's doing, which it tells us)
+    if (inv.version !== this.invVersion && p.gameMode === 'creative') {
       this.invVersion = inv.version;
       for (let slot = 0; slot < SLOT_COUNT; slot++) {
         const s = slotStack(p, slot), key = stackKey(s);

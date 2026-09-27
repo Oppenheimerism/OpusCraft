@@ -3,13 +3,17 @@
 import { Game } from './game/game';
 import { installScreens } from './gui/screens';
 import { TitleScreen, newWorldMeta } from './gui/screens/menus';
-import { openToLanOnceSpawned, joinFirstLanWorld } from './gui/screens/multiplayer';
+import { openToLanOnceSpawned, joinFirstLanWorld, guestModeParam } from './gui/screens/multiplayer';
 import { MULTIPLAYER_ENABLED } from './net/config';
 import { getWorldMeta } from './storage/worldStore';
 
 const params = new URLSearchParams(location.search);
-/** ?mp=host (with &world=<id>, or a quick-start world) opens the world to LAN once it's in; ?mp=join joins one */
+/**
+ * ?mp=host (with &world=<id>, or a quick-start world) opens the world to LAN once it's in, its guests playing in
+ * &guests=survival (the default), creative, adventure or spectator; ?mp=join joins one
+ */
 const mp = MULTIPLAYER_ENABLED ? params.get('mp') : null;
+const guests = guestModeParam(params.get('guests'));
 
 async function main(): Promise<void> {
   const canvas = document.getElementById('gl') as HTMLCanvasElement;
@@ -26,7 +30,7 @@ async function main(): Promise<void> {
     if (params.has('t')) meta.dayTime = +params.get('t')!;
     if (params.has('rd')) game.opts.renderDistance = +params.get('rd')!;
     await game.startWorld(meta);
-    if (mp === 'host') openToLanOnceSpawned(game);
+    if (mp === 'host') openToLanOnceSpawned(game, guests);
     if (params.has('t')) game.freezeTime = true;
     if (params.has('x')) {
       const wait = setInterval(() => {
@@ -41,7 +45,7 @@ async function main(): Promise<void> {
     const meta = await getWorldMeta(params.get('world')!);
     if (meta) {
       await game.startWorld(meta);
-      openToLanOnceSpawned(game);
+      openToLanOnceSpawned(game, guests);
     } else game.setScreen(new TitleScreen(game, true));
   } else if (mp === 'join') {
     game.setScreen(new TitleScreen(game, false));

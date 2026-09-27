@@ -1,7 +1,7 @@
 // A player's death and coming back (vanilla ServerPlayer.die and PlayerList.respawn, less where they go): the words
 // everyone reads, what's dropped, and the fresh start. The game's own player's and a host's guests' alike.
 
-import type { Level } from './level';
+import type { Level, SoundSink } from './level';
 import type { LivingEntity } from '../entity/living';
 import type { Player } from '../entity/player';
 import type { ItemStack } from '../item/item';
@@ -167,4 +167,20 @@ export function resetForRespawn(p: Player, keepInventory: boolean): void {
   p.portal = null;
   p.portalCooldown = 0;
   p.spinningEffectIntensity = p.oSpinningEffectIntensity = 0;
+}
+
+/**
+ * vanilla Player.getHurtSound: a player hurt by `source` (fire's, drowning's, freezing's and a berry bush's own), none
+ * for a landing's, whose fall sound says it (playerFallSound)
+ */
+export function playerHurtSound(sound: SoundSink, p: Player, source: string): void {
+  if (source === 'fall' || source === 'stalagmite') return;
+  const name = source === 'onFire' || source === 'inFire' || source === 'campfire' || source === 'lava' ? 'entity.player.hurt_on_fire' : source === 'drown' ? 'entity.player.hurt_drown' : source === 'freeze' ? 'entity.player.hurt_freeze' : source === 'sweetBerryBush' ? 'entity.player.hurt_sweet_berry_bush' : 'entity.player.hurt';
+  sound.play(name, p.x, p.y, p.z, 1, (Math.random() - Math.random()) * 0.2 + 1);
+}
+
+/** vanilla LivingEntity.playBlockFallSound and getFallDamageSound: a landing from `dist` blocks that hurt */
+export function playerFallSound(sound: SoundSink, p: Player, dist: number): void {
+  sound.play(dist > 4 + 3 ? 'entity.player.big_fall' : 'entity.player.small_fall', p.x, p.y, p.z, 1, 1);
+  sound.play('entity.player.hurt', p.x, p.y, p.z, 1, (Math.random() - Math.random()) * 0.2 + 1);
 }

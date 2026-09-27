@@ -54,7 +54,7 @@ export function damageAfterArmor(damage: number, armor: number, toughness: numbe
 export abstract class LivingEntity extends Entity {
   health = 20;
   /** MAX_HEALTH base value; `maxHealth` adds health boost */
-  private baseMaxHealth = 20;
+  baseMaxHealth = 20;
   hurtTime = 0;
   hurtDuration = 10;
   deathTime = 0;
@@ -304,6 +304,11 @@ export abstract class LivingEntity extends Entity {
   }
 
   protected onEffectAdded(_inst: MobEffectInstance): void {
+    this.effectsDirty = true;
+  }
+
+  /** (a guest's own player, its effects set as the host says) the swirls to be worked out again */
+  markEffectsChanged(): void {
     this.effectsDirty = true;
   }
 
@@ -1135,6 +1140,7 @@ export abstract class LivingEntity extends Entity {
     this.dx = this.dx / 2 - kx;
     this.dz = this.dz / 2 - kz;
     this.dy = this.onGround ? Math.min(0.4, this.dy / 2 + strength) : this.dy;
+    this.hurtMarked = true;
   }
 
   die(source: string, attacker: Entity | null = null): void {
@@ -1145,6 +1151,8 @@ export abstract class LivingEntity extends Entity {
   }
 
   heal(amount: number): void {
+    // (a guest's copies, and its own player, are as healthy as the host says)
+    if (this.level.isClientSide) return;
     if (this.health > 0) this.health = Math.min(this.maxHealth, this.health + amount);
   }
 

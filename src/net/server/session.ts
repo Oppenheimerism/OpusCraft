@@ -5,19 +5,21 @@
 import type { Value } from '../codec';
 import { decode, encodeBundle, CodecError } from '../codec';
 import { SB, CB, Action, PoseFlag, checkPacket, isAllowedChat, SLOT_ARMOR, SLOT_OFFHAND, SLOT_COUNT, ANIMATE_SWING_MAIN_HAND, ANIMATE_SWING_OFF_HAND, type LoginInfo } from '../protocol';
-import { PROTOCOL_VERSION, BUILD_ID, MAX_GUEST_MESSAGE, MAX_GUEST_PACKETS, MESSAGES_PER_TICK, MAX_GUEST_BACKLOG, MAX_GUEST_BACKLOG_BYTES, MAX_LOGIN_BACKLOG, MAX_GUESTS, LOGIN_TICKS, KEEPALIVE_TICKS, TIMEOUT_TICKS, GUEST_VIEW_DISTANCE, CHUNKS_PER_TICK, MAX_MOVE_PER_TICK, CHAT_SPAM_STEP, CHAT_SPAM_LIMIT, NAME_PATTERN, DROP_SPAM_STEP, DROP_SPAM_LIMIT, ENTITY_REACH_SLACK } from '../config';
+import { PROTOCOL_VERSION, BUILD_ID, MAX_GUEST_MESSAGE, MAX_GUEST_PACKETS, MESSAGES_PER_TICK, MAX_GUEST_BACKLOG, MAX_GUEST_BACKLOG_BYTES, MAX_LOGIN_BACKLOG, MAX_GUESTS, LOGIN_TICKS, KEEPALIVE_TICKS, TIMEOUT_TICKS, GUEST_VIEW_DISTANCE, CHUNKS_PER_TICK, MAX_MOVE_PER_TICK, CHAT_SPAM_STEP, CHAT_SPAM_LIMIT, NAME_PATTERN, DROP_SPAM_STEP, DROP_SPAM_LIMIT, ENTITY_REACH_SLACK, MAX_MOTION } from '../config';
 import type { PeerId } from '../transport/transport';
 import { creativeItem, itemToWire } from '../items';
 import { applyPoseFlags, equipment, poseFlags, stackKey } from '../playerState';
+import { playerStatus, effectList, effectsChanged, effectsSent } from '../playerStatus';
 import { levelChunkPacket } from '../chunkData';
 import type { HostServer } from './hostServer';
 import { EntityTracker } from './entityTracker';
 import type { Entity } from '../../entity/entity';
 import { Player } from '../../entity/player';
 import { Interaction } from '../../game/interaction';
+import { deathMessage, dropDeathLoot, resetForRespawn, playerHurtSound, playerFallSound } from '../../game/playerDeath';
+import { useBed, findRespawn, MSG, type SleepHost } from '../../game/sleep';
 import { raycast } from '../../game/raycast';
 import { Chunk } from '../../world/chunk';
-import { MIN_Y } from '../../world/constants';
 import type { ItemStack } from '../../item/item';
 import type { Level } from '../../game/level';
 
@@ -90,6 +92,20 @@ export class ServerPlayerSession {
   private riding: Entity | null = null;
   /** its experience as the guest was last told */
   private xp = '';
+  /** its health, food, air and the rest as the guest was last told (PlayerStatus) */
+  private status = '';
+  /** its effects as the guest was last told, and when (UpdateEffects) */
+  private fxSent = new Map<string, [number, number, number, string]>();
+  /** the bed it's asleep in as the guest was last told ('' awake) */
+  private sleeping = '';
+  /** its game mode as the guest has it */
+  private gameMode = '';
+  /** the hotbar slot the guest has in hand */
+  private selected = 0;
+  /** its items' cooldowns as the guest was last told: ticks left, and when */
+  private readonly cooldowns = new Map<string, [number, number]>();
+  /** how fast it was going sideways by the last move (a glide into a wall hurts by the speed it loses) */
+  private lastSpeed = 0;
   /** the entities other than players it sees (vanilla ChunkMap.TrackedEntity) */
   readonly tracker = new EntityTracker(this);
   /** chunks the guest has, by Chunk.key (vanilla ChunkTrackingView) */
@@ -204,9 +220,15 @@ export class ServerPlayerSession {
         // (a tick's worth: a guest's drop key repeats no faster than a player's would)
         else if ((p[1] === Action.DROP || p[1] === Action.DROP_ALL) && this.drops.length < 4) this.drops.push(p[1] === Action.DROP_ALL);
         else if (p[1] === Action.RIDING_JUMP) this.ridingJump(p[2] as number);
+        // (vanilla SWAP_ITEM_WITH_OFFHAND: the host swaps, and tells the guest what its hands have)
+        else if (p[1] === Action.SWAP_HANDS) {
+          if (pl.health > 0 && !pl.isSleeping()) this.interaction!.swapHands();
+        }
+        // (vanilla handlePlayerCommand STOP_SLEEPING: Leave Bed)
+        else if (p[1] === Action.STOP_SLEEPING && pl.isSleeping()) pl.stopSleepInBed(false);
         return;
       case SB.SetCarriedItem:
-        pl.inventory.selected = p[1] as number;
+        pl.inventory.selected = this.selected = p[1] as number;
         pl.inventory.version++;
         return;
       case SB.SetCreativeModeSlot:
@@ -219,6 +241,10 @@ export class ServerPlayerSession {
         return this.systemChat('§cOnly the host can use commands.');
       case SB.Disconnect:
         return this.gone('left');
+      case SB.ClientCommand:
+        return this.respawn();
+      case SB.PickItem:
+        return this.pickSlot(p[1] as number);
     }
   }
 
@@ -241,6 +267,14 @@ export class ServerPlayerSession {
     p.remote = true;
     p.profileName = name;
     p.setGameMode(srv.guestGameMode);
+    this.gameMode = p.gameMode;
+    p.food.difficulty = level.difficulty;
+    p.food.naturalRegen = !!level.gameRules.naturalRegeneration;
+    // (vanilla ServerPlayer: its hurts and its death are heard by everyone near, itself too; a landing's by the others,
+    // its own game having played it)
+    p.onHurtSound = (pl, src) => srv.heardByAll(() => playerHurtSound(level.sound, pl, src));
+    p.onFall = (pl, _dmg, dist) => playerFallSound(level.sound, pl, dist);
+    p.onDeath = (_pl, src) => this.died(src);
     const [x, y, z] = srv.hooks.spawnPoint();
     p.moveTo(x, y, z, 0, 0);
     p.remoteMove = () => this.applyMove();
@@ -277,12 +311,22 @@ export class ServerPlayerSession {
 
   /** vanilla handleMovePlayer: believed if it's not too far from the last, else the guest is put back */
   private moved(m: Move): void {
+    const p = this.player!;
+    // (vanilla: the dead and the sleeping stay put; a sleeper looks about)
+    if (p.health <= 0 || p.isSleeping()) {
+      this.attackHeld = this.useHeld = false;
+      this.steer(0);
+      if (p.isSleeping()) {
+        p.yaw = p.headYaw = m.yRot;
+        p.pitch = m.xRot;
+      }
+      return;
+    }
     this.attackHeld = !!(m.flags & PoseFlag.ATTACK_HELD);
     this.useHeld = !!(m.flags & PoseFlag.USE_HELD);
     this.steer(m.flags);
     // (vanilla: moves before the guest has taken a teleport are the old place's, and don't count)
     if (this.awaitingTeleport !== null) return;
-    const p = this.player!;
     if (p.vehicle) {
       // (vanilla: a rider goes where what it rides takes it; the guest has a say only in where it looks, which the
       // mount goes by before the rider's tick)
@@ -297,13 +341,7 @@ export class ServerPlayerSession {
       this.teleport(this.pos.x, this.pos.y, this.pos.z, m.yRot, m.xRot);
       return;
     }
-    if (m.y < this.level.world.dim.minY - 64) {
-      // (below the world: a guest can't die yet, so it's put back at the spawn)
-      const [x, y, z] = this.server.hooks.spawnPoint();
-      this.teleport(x, y, z, m.yRot, m.xRot);
-      this.systemChat('You fell out of the world, and are back at the spawn.');
-      return;
-    }
+    // (below the world, the void has it as it would the host's player: Entity.checkBelowWorld on the host)
     this.pos = { x: m.x, y: m.y, z: m.z };
     this.move = m;
   }
@@ -325,36 +363,61 @@ export class ServerPlayerSession {
     p.zza = ((i.forward ? 1 : 0) - (i.back ? 1 : 0)) * 0.98;
   }
 
-  /** (Player.remoteMove, in its tick) where the guest said it went, with the look and pose it said */
+  /**
+   * (Player.remoteMove, in its tick) where the guest said it went, with the look and pose it said, and what that did:
+   * a fall's damage when it lands, the hunger a jump costs, a glide into a wall (vanilla handleMovePlayer and
+   * ServerPlayer.doCheckFallDamage)
+   */
   private applyMove(): void {
     const p = this.player, m = this.move;
     if (!p || !m) return;
     this.move = null;
+    if (p.health <= 0 || p.isSleeping()) return;
     if (p.vehicle) {
       // (riding: its look and pose; where it is is its seat)
       applyPoseFlags(p, m.flags);
       p.yaw = p.headYaw = m.yRot;
       p.pitch = m.xRot;
+      this.lastSpeed = 0;
       return;
     }
-    p.dx = m.x - p.x;
-    p.dy = m.y - p.y;
-    p.dz = m.z - p.z;
+    const dx = m.x - p.x, dy = m.y - p.y, dz = m.z - p.z;
+    // (knocked or blown about this tick, before its move came in: that motion stands, for the guest to be told)
+    if (!p.hurtMarked) {
+      p.dx = dx;
+      p.dy = dy;
+      p.dz = dz;
+    }
+    const wasOnGround = p.onGround, wasGliding = p.fallFlying;
     applyPoseFlags(p, m.flags);
     p.setPos(m.x, m.y, m.z);
     p.yaw = m.yRot;
     p.pitch = m.xRot;
     p.headYaw = m.yRot;
-    if (p.flying || p.onGround) p.fallDistance = 0;
+    // (vanilla handleMovePlayer: off the ground going up is a jump, and costs what the host's own jumps do)
+    if (wasOnGround && !p.onGround && dy > 0) p.food.addExhaustion(p.sprinting ? 0.2 : 0.05);
+    // (what the guest's own travel does to its fall, which the host's copy doesn't run: a ladder or vine held, a slow
+    // glide; flying, and slow falling or levitation, keep it at nothing, as the player's tick does too)
+    if (p.onClimbable()) p.fallDistance = 0;
+    if (p.fallFlying && dy > -0.5 && p.fallDistance > 1) p.fallDistance = 1;
+    // (vanilla handleFallFlyingCollisions, from the speed it had before and after the wall the guest says it hit)
+    const speed = Math.sqrt(dx * dx + dz * dz);
+    if (wasGliding && p.fallFlying && m.flags & PoseFlag.HORIZONTAL_COLLISION) {
+      const o = Math.fround((this.lastSpeed - speed) * 10 - 3);
+      if (o > 0) {
+        this.level.sound.play(`entity.player.${Math.trunc(o) > 4 ? 'big' : 'small'}_fall`, p.x, p.y, p.z, 1, 1);
+        p.hurt(o, 'flyIntoWall');
+      }
+    }
+    this.lastSpeed = speed;
+    if (p.health <= 0) return;
     // (pressure plates, tripwires, portals: vanilla ServerPlayer.doCheckFallDamage / checkInsideBlocks. What the
     // blocks do about it, a plate's click, is the world's doing, not the player's own: the guest hears it too)
-    const srv = this.server, actor = srv.actor;
-    srv.actor = null;
-    try {
-      p.checkInsideBlocks();
-    } finally {
-      srv.actor = actor;
-    }
+    p.doCheckFallDamage(dy, p.onGround);
+    // (vanilla ServerPlayer.move: a turtle egg or a sculk shrieker underfoot hears it; the world's doing, heard by all)
+    if (p.onGround && p.health > 0) this.server.heardByAll(() => p.stepOnFloor());
+    if (p.health > 0) this.server.heardByAll(() => p.checkInsideBlocks());
+    if (p.flying || p.hasEffect('slow_falling') || p.hasEffect('levitation')) p.fallDistance = 0;
   }
 
   /** vanilla ServerGamePacketListenerImpl.teleport: the guest's player goes there, and the host waits to hear it did */
@@ -365,6 +428,7 @@ export class ServerPlayerSession {
     this.awaitingTeleport = this.teleportId;
     this.pos = { x, y, z };
     this.move = null;
+    this.lastSpeed = 0;
     p.moveTo(x, y, z, yRot, xRot);
     this.send([CB.PlayerPosition, x, y, z, yRot, xRot, this.teleportId]);
   }
@@ -430,6 +494,9 @@ export class ServerPlayerSession {
     // (a rider is where its mount took it, round which its chunks are sent)
     const p = this.player!;
     if (p.vehicle && !p.removed) this.pos = { x: p.x, y: p.y, z: p.z };
+    // (Game.applyGameRules and the difficulty, for the host's own player: its hunger as the host's)
+    p.food.difficulty = this.level.difficulty;
+    p.food.naturalRegen = !!this.level.gameRules.naturalRegeneration;
     this.tickInteraction();
     this.tickChunks();
   }
@@ -445,7 +512,12 @@ export class ServerPlayerSession {
   /** what Game.tick does with its own player's buttons, with this guest's (vanilla ServerPlayerGameMode) */
   private tickInteraction(): void {
     const p = this.player!, it = this.interaction!;
-    if (p.removed) return;
+    if (p.removed || p.health <= 0) {
+      this.drops = [];
+      this.attackPressed = this.usePressed = false;
+      it.continueAttack(false);
+      return;
+    }
     this.pick();
     if (this.attackPressed) it.startAttack();
     it.continueAttack(this.attackHeld && !p.isUsingItem());
@@ -465,9 +537,9 @@ export class ServerPlayerSession {
   }
 
   /**
-   * vanilla GameRenderer.pick from the guest's eyes: the entity the guest says is under its crosshair, if it could be
-   * (vanilla handleInteract's checks), else the block it looks at. Players hide the block behind them; clicking one
-   * does nothing yet (no fighting between players)
+   * vanilla GameRenderer.pick from the guest's eyes: the entity the guest says is under its crosshair (another player
+   * too: players fight), if it could be (vanilla handleInteract's checks), else the block it looks at. A player it
+   * doesn't say it looks at hides the block behind it
    */
   private pick(): void {
     const p = this.player!, it = this.interaction!;
@@ -498,12 +570,18 @@ export class ServerPlayerSession {
    */
   private targetEntity(ex: number, ey: number, ez: number): Entity | null {
     if (this.target === NO_TARGET) return null;
-    const p = this.player!, e = this.tracker.byId(this.target);
+    const p = this.player!, e = this.tracker.byId(this.target) ?? this.seenPlayer(this.target);
     if (!e || e.removed || !e.isPickable() || e.rootVehicle() === p.rootVehicle()) return null;
     const b = e.bb.inflate(e.pickRadius());
     const dx = Math.max(b.minX - ex, 0, ex - b.maxX), dy = Math.max(b.minY - ey, 0, ey - b.maxY), dz = Math.max(b.minZ - ez, 0, ez - b.maxZ);
     const r = this.interaction!.entityReach() + ENTITY_REACH_SLACK;
     return dx * dx + dy * dy + dz * dz < r * r ? e : null;
+  }
+
+  /** a player it's been shown (a guest's or the host's), by id */
+  private seenPlayer(id: number): Player | null {
+    for (const o of this.seen.keys()) if (o.id === id) return o.gameMode === 'spectator' ? null : o;
+    return null;
   }
 
   /** vanilla ChunkMap.updateChunkTracking: send the nearest missing chunks, forget the far ones */
@@ -581,6 +659,7 @@ export class ServerPlayerSession {
     this.dismounted();
     this.syncInventory();
     this.syncExperience();
+    this.syncStatus();
     this.sendOut();
   }
 
@@ -597,6 +676,58 @@ export class ServerPlayerSession {
     const p = this.player!, v = p.vehicle;
     if (this.riding && !v && !p.removed) this.teleport(p.x, p.y, p.z, p.yaw, p.pitch);
     this.riding = v;
+  }
+
+  /**
+   * vanilla ServerPlayer.doTick's lastSent* and its synched data, for its own player: its health, food and air
+   * (PlayerStatus), a knock or a blast (SetEntityMotion), its effects, its bed, its game mode, the hotbar slot the host
+   * put in its hand and its items' cooldowns, each when it changed
+   */
+  private syncStatus(): void {
+    const p = this.player!;
+    if (p.hurtMarked) {
+      p.hurtMarked = false;
+      const v = (d: number) => (Number.isFinite(d) ? Math.max(-MAX_MOTION, Math.min(MAX_MOTION, d)) : 0);
+      this.send([CB.SetEntityMotion, v(p.dx), v(p.dy), v(p.dz)]);
+    }
+    const status = playerStatus(p), key = status.join(',');
+    if (key !== this.status) {
+      this.status = key;
+      this.send([CB.PlayerStatus, ...status]);
+    }
+    if (effectsChanged(p, this.fxSent, this.ticks)) {
+      this.fxSent = effectsSent(p, this.ticks);
+      this.send([CB.UpdateEffects, effectList(p)]);
+    }
+    const bed = p.sleepingPos ? p.sleepingPos.join(',') : '';
+    if (bed !== this.sleeping) {
+      this.sleeping = bed;
+      this.send([CB.SetSleeping, p.sleepingPos ? [...p.sleepingPos] : null]);
+      // (up, beside the bed: vanilla stopSleeping's teleport)
+      if (!p.sleepingPos && p.health > 0) this.teleport(p.x, p.y, p.z, p.yaw, p.pitch);
+    }
+    if (p.gameMode !== this.gameMode) {
+      this.gameMode = p.gameMode;
+      this.send([CB.GameMode, p.gameMode]);
+    }
+    const inv = p.inventory;
+    if (inv.selected !== this.selected) {
+      this.selected = inv.selected;
+      this.send([CB.SetCarriedItem, inv.selected]);
+    }
+    // (vanilla ItemCooldowns.onCooldownStarted / onCooldownEnded: when one starts or is cut short, not each tick of it)
+    for (const [id, left] of p.cooldowns) {
+      const had = this.cooldowns.get(id);
+      if (had && Math.abs(had[0] - (this.ticks - had[1]) - left) <= 1) continue;
+      this.cooldowns.set(id, [left, this.ticks]);
+      const t = (n: number | undefined) => (n !== undefined && Number.isFinite(n) ? Math.max(0, Math.min(72000, Math.round(n))) : 0);
+      this.send([CB.SetCooldown, id, t(left), t(p.cooldownTotals.get(id))]);
+    }
+    for (const [id, [left, at]] of this.cooldowns)
+      if (!p.cooldowns.has(id)) {
+        this.cooldowns.delete(id);
+        if (left - (this.ticks - at) > 1) this.send([CB.SetCooldown, id, 0, 0]);
+      }
   }
 
   /** vanilla ServerPlayer's lastSentExp: the experience bar */
@@ -641,8 +772,11 @@ export class ServerPlayerSession {
         s = { move: key, equip, swinging: o.swinging, swingTime: o.swingTime };
         this.seen.set(o, s);
         this.send([CB.AddPlayer, o.id, o.uuid, this.server.nameOf(o), ...move.slice(0, 7), move[7], o.gameMode, equipment(o).map(itemToWire)]);
+        this.send([CB.SetEntityData, o.id, this.server.dataFull(o)]);
         continue;
       }
+      const data = this.server.dataChanges(o);
+      if (data) this.send([CB.SetEntityData, o.id, data]);
       if (key !== s.move) {
         s.move = key;
         this.send([CB.MoveEntity, o.id, ...move]);
@@ -684,6 +818,62 @@ export class ServerPlayerSession {
       this.slots[slot] = key;
       this.send([CB.ContainerSetSlot, slot, itemToWire(s)]);
     }
+  }
+
+  // -------------------------------------------------------------------------
+  // dying, sleeping
+
+  /**
+   * vanilla ServerPlayer.die: heard by everyone near, told to everyone (showDeathMessages), what it carried dropped,
+   * and the guest's death screen (or, with doImmediateRespawn, straight back)
+   */
+  private died(source: string): void {
+    const p = this.player!, level = this.level, srv = this.server;
+    srv.heardByAll(() => level.sound.play('entity.player.death', p.x, p.y, p.z, 1, 1));
+    const msg = deathMessage(source, p, this.name).slice(0, 1024);
+    if (level.gameRules.showDeathMessages) srv.broadcastChat(msg);
+    dropDeathLoot(level, p);
+    p.removeVehicle();
+    this.send([CB.PlayerCombatKill, msg]);
+    if (level.gameRules.doImmediateRespawn) this.respawn();
+  }
+
+  /**
+   * vanilla handleClientCommand PERFORM_RESPAWN → PlayerList.respawn: back alive, at its bed (facing it) if that's still
+   * there and clear, else by the world spawn (the bed forgotten, and the guest told so)
+   */
+  private respawn(): void {
+    const p = this.player!, level = this.level;
+    if (p.health > 0 && !p.dead) return;
+    resetForRespawn(p, !!level.gameRules.keepInventory);
+    const bed = findRespawn(level, p);
+    if (!bed && p.respawnPos) {
+      this.systemChat(MSG.noRespawnBlock);
+      p.respawnPos = null;
+    }
+    const [x, y, z] = bed ? [bed.x, bed.y, bed.z] : this.server.hooks.spawnPoint();
+    this.send([CB.Respawn]);
+    this.teleport(x, y, z, bed ? bed.yaw : 0, 0);
+    p.dx = p.dy = p.dz = 0;
+  }
+
+  /** (its Interaction) a bed it used: to sleep in, or set its spawn by (game/sleep.ts, as the host's own player does) */
+  useBed(x: number, y: number, z: number): void {
+    const host: SleepHost = { level: this.level, player: this.player!, overlay: (m) => this.systemChat(m, true), chat: (m) => this.systemChat(m) };
+    useBed(host, x, y, z);
+  }
+
+  /**
+   * vanilla handlePickItem: survival's pick-block, the stack in `slot` of the inventory (past the hotbar) swapped into
+   * the hand (as Interaction.pickBlock does for the host's own player)
+   */
+  private pickSlot(slot: number): void {
+    const p = this.player!, inv = p.inventory;
+    if (slot < 9 || p.gameMode === 'creative' || p.gameMode === 'spectator' || p.health <= 0) return;
+    const tmp = inv.main[inv.selected];
+    inv.main[inv.selected] = inv.main[slot];
+    inv.main[slot] = tmp;
+    inv.version++;
   }
 
   // -------------------------------------------------------------------------
@@ -731,11 +921,6 @@ class GuestPlayer extends Player {
     } finally {
       srv.actor = null;
     }
-  }
-
-  /** (stage 1) nothing hurts a guest's player, not even /kill or the void: a guest has no dying yet */
-  override isInvulnerableTo(_source: string): boolean {
-    return true;
   }
 }
 

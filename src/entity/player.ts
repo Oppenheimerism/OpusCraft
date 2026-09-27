@@ -947,6 +947,14 @@ export class Player extends LivingEntity {
     super.causeFallDamage(dist);
   }
 
+  /**
+   * vanilla ServerPlayer.doCheckFallDamage: a move another game made (a host's guest's), `dy` of it down or up, landing
+   * or not, counted toward a fall and its damage as the player's own moves are
+   */
+  doCheckFallDamage(dy: number, onGround: boolean): void {
+    this.checkFallDamage(dy, onGround);
+  }
+
   override die(source: string, attacker: Entity | null = null): void {
     if (this.dead) return;
     // (vanilla ServerPlayer.die: first the game event, a sculk catalyst taking the experience)
@@ -981,8 +989,9 @@ export class Player extends LivingEntity {
 
   protected override tickDeath(): void {
     this.deathTime++;
-    // players are not removed; death screen handles respawn (vanilla removes the body 20 ticks on: its effects' last word)
-    if (this.deathTime === 20) this.triggerOnDeathMobEffects();
+    // players are not removed; death screen handles respawn (vanilla removes the body 20 ticks on: its effects' last
+    // word, which a guest's own game leaves to the host's)
+    if (this.deathTime === 20 && !this.level.isClientSide) this.triggerOnDeathMobEffects();
   }
 
   /** vanilla Player.drop: `thrown` flings it like the drop key, otherwise it falls at the feet */

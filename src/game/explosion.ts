@@ -110,6 +110,7 @@ export function explode(level: Level, source: Entity | null, x: number, y: numbe
     e.dx += dx * k;
     e.dy += dy * k;
     e.dz += dz * k;
+    e.hurtMarked = true;
   }
   // 3) effects
   level.sound.play('entity.generic.explode', x, y, z, 4, (1 + (rand.nextFloat() - rand.nextFloat()) * 0.2) * 0.7);
@@ -192,6 +193,7 @@ export function windBurst(level: Level, source: Entity | null, x: number, y: num
     e.dx += dx * k;
     e.dy += dy * k;
     e.dz += dz * k;
+    e.hurtMarked = true;
   }
   // (vanilla GUST_EMITTER_LARGE for a blast of 2 or more that touches blocks)
   for (let i = 0; i < 7; i++) level.particles.spawn?.('gust', x + (level.random.nextFloat() - level.random.nextFloat()) * radius, y + (level.random.nextFloat() - level.random.nextFloat()) * radius, z + (level.random.nextFloat() - level.random.nextFloat()) * radius, 0, 0, 0);

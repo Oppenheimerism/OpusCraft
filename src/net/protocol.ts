@@ -33,6 +33,27 @@ export const SB = {
   ChatCommand: 8,
   /** [reason]: the guest is leaving */
   Disconnect: 9,
+  /**
+   * [containerId, stateId, slot, button, type (CLICK_TYPES), changed [[slot, item]...], carried]: a click in the menu
+   * it has open, with what the guest's game made of it (vanilla ServerboundContainerClickPacket)
+   */
+  ContainerClick: 10,
+  /** [containerId, button]: an enchanting offer, a stonecutter's recipe, a loom's pattern, a lectern's page (vanilla ServerboundContainerButtonClickPacket) */
+  ContainerButtonClick: 11,
+  /** [containerId]: the guest closed its menu (vanilla ServerboundContainerClosePacket) */
+  ContainerClose: 12,
+  /** [name]: what's typed in the anvil's box (vanilla ServerboundRenameItemPacket) */
+  RenameItem: 13,
+  /** [index]: the trade picked in a villager's list (vanilla ServerboundSelectTradePacket) */
+  SelectTrade: 14,
+  /** [containerId, slot, enabled]: a crafter's grid slot switched on or off (vanilla ServerboundContainerSlotStateChangedPacket) */
+  SlotStateChanged: 15,
+  /** [slot]: survival's pick-block, a slot of the inventory brought to hand (vanilla ServerboundPickItemPacket) */
+  PickItem: 16,
+  /** [action]: 0 respawn (vanilla ServerboundClientCommandPacket PERFORM_RESPAWN) */
+  ClientCommand: 17,
+  /** [slot, pages, title or null]: a book and quill written in, or signed with the title (vanilla ServerboundEditBookPacket) */
+  EditBook: 18,
 } as const;
 
 /** host → guest (vanilla Clientbound*Packet) */
@@ -90,6 +111,46 @@ export const CB = {
   TakeItemEntity: 23,
   /** [progress 0-1, level, total]: the guest's own experience (vanilla ClientboundSetExperiencePacket) */
   SetExperience: 24,
+  /**
+   * [health, max health, absorption, food, saturation, air, on fire, ticks frozen, hurt time, hurt direction, death
+   * time, invulnerable time]: the guest's own player as the host has it (vanilla ClientboundSetHealthPacket, with
+   * what SetEntityData and the hurt animation tell a player of itself)
+   */
+  PlayerStatus: 25,
+  /** [dx, dy, dz]: the guest's player knocked or blown about (vanilla ClientboundSetEntityMotionPacket for its own player) */
+  SetEntityMotion: 26,
+  /** [message]: the guest's player died (vanilla ClientboundPlayerCombatKillPacket: the death screen) */
+  PlayerCombatKill: 27,
+  /** []: back alive (vanilla ClientboundRespawnPacket; where comes in a PlayerPosition) */
+  Respawn: 28,
+  /** [game mode] (vanilla ClientboundGameEventPacket CHANGE_GAME_MODE) */
+  GameMode: 29,
+  /** [slot 0-8]: the hotbar slot the host put in its hand (vanilla ClientboundSetCarriedItemPacket) */
+  SetCarriedItem: 30,
+  /** [item id, ticks left, of how many (0: not said)]: an item cooling down, or done if 0 are left (vanilla ClientboundCooldownPacket) */
+  SetCooldown: 31,
+  /** [effects: [id, amplifier, duration, ambient, visible, icon]...]: the guest's own player's effects (vanilla UpdateMobEffect / RemoveMobEffect) */
+  UpdateEffects: 32,
+  /** [sleeping at [x, y, z] or null]: the guest's player in bed or out (vanilla's sleeping pose and ClientboundGameEvent) */
+  SetSleeping: 33,
+  /** [hand (0 main, 1 off) or -1, duration, left]: the item the guest's player is using, if any (vanilla DATA_LIVING_ENTITY_FLAGS) */
+  SetUsingItem: 34,
+  /** [containerId, kind (MENU_KINDS), title, extra]: a menu opened for the guest (vanilla ClientboundOpenScreenPacket) */
+  OpenScreen: 35,
+  /** [containerId, stateId, items (every slot), carried]: everything in the menu (vanilla ClientboundContainerSetContentPacket) */
+  ContainerSetContent: 36,
+  /** [containerId, stateId, slot, item]: a slot of the menu that isn't the inventory's (vanilla ClientboundContainerSetSlotPacket) */
+  MenuSetSlot: 37,
+  /** [containerId, stateId, item]: what's on the guest's cursor (vanilla ClientboundContainerSetSlotPacket, slot -1) */
+  SetCarried: 38,
+  /** [containerId, index, value]: a furnace's flame, a brewing stand's bubbles, an enchanting table's offers (vanilla ClientboundContainerSetDataPacket) */
+  ContainerSetData: 39,
+  /** [containerId]: the host closed the guest's menu (vanilla ClientboundContainerClosePacket) */
+  ContainerClose: 40,
+  /** [containerId, offers, level, xp, show progress, can restock]: a trader's offers (vanilla ClientboundMerchantOffersPacket) */
+  MerchantOffers: 41,
+  /** [hand 0 or 1]: a signed book used, to be read (vanilla ClientboundOpenBookPacket) */
+  OpenBook: 42,
 } as const;
 
 /** SB.PlayerAction's actions (vanilla ServerboundPlayerActionPacket.Action / ServerboundUseItemPacket): what the host does with its own player's clicks */
@@ -104,7 +165,25 @@ export const Action = {
   DROP_ALL: 3,
   /** a jump charged on the mount being steered: the argument is its power, 0-100 (vanilla ServerboundPlayerCommandPacket START_RIDING_JUMP) */
   RIDING_JUMP: 4,
+  /** the swap key: hand and offhand trade (vanilla SWAP_ITEM_WITH_OFFHAND) */
+  SWAP_HANDS: 5,
+  /** Leave Bed (vanilla ServerboundPlayerCommandPacket STOP_SLEEPING) */
+  STOP_SLEEPING: 6,
 } as const;
+
+/** SB.ContainerClick's click types, in vanilla ClickType's order */
+export const CLICK_TYPES = ['pickup', 'quick_move', 'swap', 'clone', 'throw', 'quick_craft', 'pickup_all'] as const;
+
+/** the menus a host opens for a guest (CB.OpenScreen's kind: vanilla MenuType) */
+export const MENU_KINDS = [
+  'crafting', 'furnace', 'smoker', 'blast_furnace', 'chest', 'shulker_box', 'brewing_stand', 'enchantment', 'anvil', 'grindstone',
+  'merchant', 'stonecutter', 'smithing', 'loom', 'cartography', 'lectern', 'dispenser', 'hopper', 'crafter', 'horse',
+] as const;
+export type MenuKind = (typeof MENU_KINDS)[number];
+/** the most slots a menu has (a chest's 27 or a horse's 17, and the inventory's 36) */
+export const MAX_MENU_SLOTS = 64;
+/** the id of the menu a player always has (vanilla InventoryMenu's containerId 0) */
+export const INVENTORY_MENU = 0;
 
 /** a player's pose and state, as bits (vanilla Entity.DATA_SHARED_FLAGS_ID and DATA_POSE) */
 export const PoseFlag = {
@@ -131,8 +210,10 @@ export const PoseFlag = {
   LEFT: 16384,
   RIGHT: 32768,
   JUMP: 65536,
+  /** (guest → host only) it ran into a wall this tick (vanilla ServerboundMovePlayerPacket's horizontalCollision: a glide into one hurts) */
+  HORIZONTAL_COLLISION: 131072,
 } as const;
-const ALL_FLAGS = 131071;
+const ALL_FLAGS = 262143;
 
 /** CB.Animate's actions (vanilla ClientboundAnimatePacket) */
 export const ANIMATE_SWING_MAIN_HAND = 0;
@@ -205,12 +286,25 @@ SERVERBOUND[SB.Hello] = [int(0, 0x7fffffff), str(1, 64), str(0, 64), UUID, int(2
 SERVERBOUND[SB.KeepAlive] = [ID];
 SERVERBOUND[SB.MovePlayer] = [X, Y, X, ANGLE, PITCH, FLAGS, int(-1, 0x7fffffff)];
 SERVERBOUND[SB.AcceptTeleportation] = [ID];
-SERVERBOUND[SB.PlayerAction] = [int(0, 4), int(0, 100)];
+SERVERBOUND[SB.PlayerAction] = [int(0, 6), int(0, 100)];
 SERVERBOUND[SB.SetCarriedItem] = [int(0, 8)];
 SERVERBOUND[SB.SetCreativeModeSlot] = [int(-1, SLOT_COUNT - 1), ITEM];
 SERVERBOUND[SB.Chat] = [str(1, MAX_CHAT)];
 SERVERBOUND[SB.ChatCommand] = [str(0, MAX_CHAT)];
 SERVERBOUND[SB.Disconnect] = [TEXT(256)];
+const CONTAINER = int(0, 255), STATE = int(0, 0x7fff), SLOT = int(0, MAX_MENU_SLOTS - 1);
+// (a slot -999 is outside the window; buttons as vanilla's click types use them, a drag's up to 10, a swap's key 0-8 or 40)
+SERVERBOUND[SB.ContainerClick] = [CONTAINER, STATE, int(-999, MAX_MENU_SLOTS - 1), int(0, 40), int(0, CLICK_TYPES.length - 1), arr(MAX_MENU_SLOTS, (v) => Array.isArray(v) && v.length === 2 && SLOT(v[0]) && ITEM(v[1])), ITEM];
+SERVERBOUND[SB.ContainerButtonClick] = [CONTAINER, int(0, 4095)];
+SERVERBOUND[SB.ContainerClose] = [CONTAINER];
+// (vanilla AnvilMenu.MAX_NAME_LENGTH)
+SERVERBOUND[SB.RenameItem] = [str(0, 50)];
+SERVERBOUND[SB.SelectTrade] = [int(0, 255)];
+SERVERBOUND[SB.SlotStateChanged] = [CONTAINER, int(0, 8), bool];
+SERVERBOUND[SB.PickItem] = [int(0, 35)];
+SERVERBOUND[SB.ClientCommand] = [int(0, 0)];
+// (vanilla WritableBookContent: 100 pages of 1024 characters; a title of 32)
+SERVERBOUND[SB.EditBook] = [int(0, 40), arr(100, str(0, 1024)), orNull(str(1, 32))];
 
 const CLIENTBOUND: Check[][] = [];
 CLIENTBOUND[CB.Login] = [obj];
@@ -239,6 +333,25 @@ CLIENTBOUND[CB.SetEntityData] = [ID, obj];
 CLIENTBOUND[CB.SetPassengers] = [ID, arr(64, ID)];
 CLIENTBOUND[CB.TakeItemEntity] = [ID, ID, int(0, 127)];
 CLIENTBOUND[CB.SetExperience] = [num(0, 1), int(0, 0x7fffffff), int(0, 0x7fffffff)];
+const HEALTH = num(0, 4096);
+CLIENTBOUND[CB.PlayerStatus] = [HEALTH, num(1, 4096), HEALTH, int(0, 20), num(0, 20), int(-20, 4096), bool, int(0, 0x7fffffff), int(0, 1000), ANGLE, int(0, 0x7fffffff), int(0, 1000)];
+CLIENTBOUND[CB.SetEntityMotion] = [num(-10, 10), num(-10, 10), num(-10, 10)];
+CLIENTBOUND[CB.PlayerCombatKill] = [TEXT(1024)];
+CLIENTBOUND[CB.Respawn] = [];
+CLIENTBOUND[CB.GameMode] = [str(1, 16)];
+CLIENTBOUND[CB.SetCarriedItem] = [int(0, 8)];
+CLIENTBOUND[CB.SetCooldown] = [str(1, 64), int(0, 72000), int(0, 72000)];
+CLIENTBOUND[CB.UpdateEffects] = [arr(64, (v) => Array.isArray(v) && v.length === 6 && str(1, 64)(v[0]) && int(0, 255)(v[1]) && int(-1, 0x7fffffff)(v[2]) && bool(v[3]) && bool(v[4]) && bool(v[5]))];
+CLIENTBOUND[CB.SetSleeping] = [orNull((v) => Array.isArray(v) && v.length === 3 && BX(v[0]) && BY(v[1]) && BX(v[2]))];
+CLIENTBOUND[CB.SetUsingItem] = [int(-1, 1), int(0, 72000), int(-72000, 72000)];
+CLIENTBOUND[CB.OpenScreen] = [int(1, 255), str(1, 32), TEXT(256), obj];
+CLIENTBOUND[CB.ContainerSetContent] = [CONTAINER, STATE, arr(MAX_MENU_SLOTS, ITEM), ITEM];
+CLIENTBOUND[CB.MenuSetSlot] = [CONTAINER, STATE, SLOT, ITEM];
+CLIENTBOUND[CB.SetCarried] = [CONTAINER, STATE, ITEM];
+CLIENTBOUND[CB.ContainerSetData] = [CONTAINER, int(0, 31), int(-0x80000000, 0x7fffffff)];
+CLIENTBOUND[CB.ContainerClose] = [CONTAINER];
+CLIENTBOUND[CB.MerchantOffers] = [int(1, 255), arr(64, obj), int(0, 5), int(0, 0x7fffffff), bool, bool];
+CLIENTBOUND[CB.OpenBook] = [int(0, 1)];
 
 /**
  * the packet `p` if it's one `from` could send with fields of the right types and ranges, else a reason to drop whoever

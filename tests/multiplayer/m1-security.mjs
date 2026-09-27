@@ -100,7 +100,8 @@ const bytes = (...parts) => new Uint8Array(parts.flat());
   attack('looking further up than straight up', (r) => r.send(move(0.5, 65, 0.5, 0, -91)), /^Bad data: packet \d+: bad field 4/);
   attack('pose flags that don\'t exist', (r) => r.send(move(0.5, 65, 0.5, 0, 0, 1 << 20)), /^Bad data: packet \d+: bad field 5/);
   attack('a hotbar slot past the ninth', (r) => r.send([[m.SB.SetCarriedItem, 9]]), /^Bad data: packet \d+: bad field 0/);
-  attack('an action that doesn\'t exist', (r) => r.send([[m.SB.PlayerAction, 5, 0]]), /^Bad data: packet \d+: bad field 0/);
+  // (the first past the last there is: stage 3 added the swap key's and Leave Bed's)
+  attack('an action that doesn\'t exist', (r) => r.send([[m.SB.PlayerAction, Math.max(...Object.values(m.Action)) + 1, 0]]), /^Bad data: packet \d+: bad field 0/);
   attack('an inventory slot that doesn\'t exist', (r) => r.send([[m.SB.SetCreativeModeSlot, m.SLOT_COUNT, null]]), /^Bad data: packet \d+: bad field 0/);
   attack('an item of the wrong shape', (r) => r.send([[m.SB.SetCreativeModeSlot, 0, ['stone', 1]]]), /^Bad data: packet \d+: bad field 1/);
   attack('a stack of none', (r) => r.send([[m.SB.SetCreativeModeSlot, 0, ['stone', 0, 0, null]]]), /^Bad data: packet \d+: bad field 1/);
@@ -113,7 +114,7 @@ const bytes = (...parts) => new Uint8Array(parts.flat());
   attack('damage past breaking', (r) => r.send([[m.SB.SetCreativeModeSlot, 0, ['diamond_sword', 1, m.getItem('diamond_sword').maxDamage + 1, null]]]), /^Invalid creative inventory action$/);
   attack('damage on stone', (r) => r.send([[m.SB.SetCreativeModeSlot, 0, ['stone', 1, 1, null]]]), /^Invalid creative inventory action$/);
   // sizes and floods
-  attack('a message past 64 KB', (r) => r.sendBytes(new Uint8Array(m.MAX_GUEST_MESSAGE + 1)), /^Bad data: a message too big$/);
+  attack(`a message past ${m.MAX_GUEST_MESSAGE / 1024} KB`, (r) => r.sendBytes(new Uint8Array(m.MAX_GUEST_MESSAGE + 1)), /^Bad data: a message too big$/);
   attack('a chat line of a megabyte', (r) => r.send([[m.SB.Chat, 'x'.repeat(1 << 20)]]), /^Bad data: a message too big$/);
   attack(`more than ${m.MAX_GUEST_BACKLOG} messages before a tick`, (r) => {
     for (let i = 0; i <= m.MAX_GUEST_BACKLOG; i++) r.send([[m.SB.KeepAlive, 1]]);

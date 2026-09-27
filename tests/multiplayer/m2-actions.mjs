@@ -4,8 +4,8 @@
 // ClientboundTakeItemEntityPacket and ClientboundSetExperiencePacket): its clicks go to the entity under its
 // crosshair if it could reach it; it gets in a boat or on a horse and steers it with its keys, a horse leaping as far
 // as it charged, and gets off where the host says; it picks up items and orbs, which fly to it; it drops what it
-// holds. And what it can't do (hit what it can't reach or wasn't shown, fight another player, throw out too much)
-// does nothing.
+// holds. And what it can't do (hit what it can't reach or wasn't shown, hurt a creative player, throw out too much)
+// does nothing (survival players fighting: m3-survival.mjs).
 
 import { loadNet, ENTITY_MODULES, flatHost, makeGuest, rawGuest, hostCopy, copyOf, step, check, exitWithStatus } from './lib.mjs';
 
@@ -84,7 +84,8 @@ function click(gg, button, e, copy = e ? copyOf(gg, e) : null) {
   check('hitting: an entity the guest wasn\'t shown, or an id nothing has, isn\'t hit (and it\'s not dropped for it)', pig.health === h3 && !r.gone && hostCopy(host, { name: 'Sneaky' }) !== null, `${pig.health}/${h3} ${r.reason()}`);
   r.send([[m.SB.Disconnect, 'bye']]);
   step(host, 2);
-  // a player: no fighting between players yet; and the block behind isn't hit either
+  // a player: a creative one can't be hurt (vanilla: invulnerable), survival ones fight (m3-survival.mjs); and the block
+  // behind isn't hit either
   walkTo(g, 0.5, 0.5);
   hs.moveTo(2.5, 64, 0.5);
   s.player.moveTo(2.5, 64, 0.5);
@@ -93,7 +94,7 @@ function click(gg, button, e, copy = e ? copyOf(gg, e) : null) {
   g.player.pitch = 30;
   const steveHealth = hs.health;
   click(g, 'attack', null, g.session.mirrors.get(hs.id));
-  check('hitting: a player under the crosshair isn\'t hurt (no fighting yet)', hs.health === steveHealth && hs.hurtTime === 0);
+  check('hitting: a creative player under the crosshair isn\'t hurt', hs.gameMode === 'creative' && hs.health === steveHealth && hs.hurtTime === 0);
   g.player.pitch = 0;
   walkTo(s, -6.5, 6.5);
 }

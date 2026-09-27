@@ -10,7 +10,7 @@ import type { PeerId, Transport } from '../transport/transport';
 import { LanAnnouncer, type LanWorld } from '../transport/lan';
 import { broadcastEffects, soundRange, PARTICLE_RANGE } from '../effects';
 import { visibleBlockEntity } from '../chunkData';
-import { DataWatcher, type EntityData } from '../entityData';
+import { DataWatcher, PLAYER_FIELDS, type EntityData } from '../entityData';
 import { ServerPlayerSession } from './session';
 import type { Level } from '../../game/level';
 import type { Entity } from '../../entity/entity';
@@ -39,8 +39,8 @@ export interface HostHooks {
 
 export class HostServer {
   readonly sessions = new Map<PeerId, ServerPlayerSession>();
-  /** what the guests play in (stage 1: creative, whatever the host picked) */
-  readonly guestGameMode: GameMode = 'creative';
+  /** what the guests play in (vanilla ShareToLanScreen's game mode; creative if the host didn't say, as before guests could be hurt) */
+  readonly guestGameMode: GameMode;
   /** this world's name on the LAN */
   readonly lanId: string;
   private announcer: LanAnnouncer | null = null;
@@ -65,8 +65,9 @@ export class HostServer {
   private readonly watchers = new Map<Entity, { data: DataWatcher; seen: number; changes: EntityData | null; changed: number }>();
   closed = false;
 
-  constructor(readonly level: Level, readonly transport: Transport, readonly hooks: HostHooks, opts: { lanId: string; announce?: boolean }) {
+  constructor(readonly level: Level, readonly transport: Transport, readonly hooks: HostHooks, opts: { lanId: string; announce?: boolean; guestGameMode?: GameMode }) {
     this.lanId = opts.lanId;
+    this.guestGameMode = opts.guestGameMode ?? 'creative';
     transport.onPeer((peer, joined) => {
       if (this.closed) return;
       if (joined) {
@@ -205,11 +206,11 @@ export class HostServer {
     if (this.announcer && this.ticks % ANNOUNCE_TICKS === 0) this.announcer.announce();
   }
 
-  /** (the trackers) every field of `e`, for a guest that's to see it now */
+  /** (the trackers) every field of `e`, for a guest that's to see it now (of a player, what's told of one) */
   dataFull(e: Entity): EntityData {
     const w = this.watchers.get(e);
     if (!w) {
-      const data = new DataWatcher();
+      const data = new DataWatcher(e.type === 'player' ? PLAYER_FIELDS : null);
       this.watchers.set(e, { data, seen: this.ticks, changes: null, changed: this.ticks });
       return data.full(e);
     }
@@ -250,6 +251,20 @@ export class HostServer {
     for (const s of this.sessions.values()) {
       const pl = s.player;
       if (s !== except && s.state === 'play' && pl && (pl.x - x) ** 2 + (pl.y - y) ** 2 + (pl.z - z) ** 2 < r * r) s.send(p);
+    }
+  }
+
+  /**
+   * `fn`'s sounds and particles are for every guest near, the one whose player is ticking too (a guest's player hurt,
+   * dying, or a plate clicking under it: what its own game doesn't make for itself)
+   */
+  heardByAll(fn: () => void): void {
+    const actor = this.actor;
+    this.actor = null;
+    try {
+      fn();
+    } finally {
+      this.actor = actor;
     }
   }
 
@@ -334,13 +349,16 @@ export class HostServer {
   // -------------------------------------------------------------------------
   // coming and going
 
-  /** a guest's Interaction: the host's own kind, with what would open a screen here turned into a word to the guest */
+  /**
+   * a guest's Interaction: the host's own kind, its bed the guest's to sleep in, and what would open a screen here
+   * turned into a word to the guest
+   */
   guestInteraction(s: ServerPlayerSession, p: Player): Interaction {
     const it = new Interaction(this.level, p);
     const cant = (what: string) => () => s.notice(`${what} can't be used by guests yet.`);
     it.onOpenContainer = cant('That');
     it.onOpenEntityContainer = cant('That');
-    it.onUseBed = cant('Beds');
+    it.onUseBed = (x, y, z) => s.useBed(x, y, z);
     return it;
   }
 

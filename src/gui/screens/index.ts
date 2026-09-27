@@ -37,7 +37,7 @@ import { ConnectScreen, DisconnectedScreen } from './multiplayer';
 export function installScreens(game: Game): void {
   game.titleScreenFactory = () => new TitleScreen(game, false);
   game.pauseScreenFactory = () => new PauseScreen(game);
-  game.deathScreenFactory = () => new DeathScreen(game, game.deathMessage(game.player.lastDamageSource), !!game.meta?.hardcore);
+  game.deathScreenFactory = () => new DeathScreen(game, game.deathCause(), !!game.meta?.hardcore);
   game.loadingScreenFactory = () => new LevelLoadingScreen(game);
   game.resumeScreenFactory = () => new ClickToResumeScreen(game);
   game.messageScreenFactory = (title) => new GenericMessageScreen(game, title);

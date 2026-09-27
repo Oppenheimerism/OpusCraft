@@ -96,6 +96,11 @@ export abstract class Entity {
   /** a piston is moving it (vanilla MoverType.PISTON, game/redstone/piston.ts): it doesn't back off an edge meanwhile */
   pistonMoving = false;
   removed = false;
+  /**
+   * vanilla Entity.hurtMarked: knocked or blown about this tick. Nothing in single-player reads it; a host tells a
+   * guest whose player it is how it's moving now (net/server: vanilla ClientboundSetEntityMotionPacket)
+   */
+  hurtMarked = false;
   tickCount = 0;
   stepHeight = 0;
   /** walk distance accumulators (sounds/bobbing) */
@@ -636,10 +641,7 @@ export abstract class Entity {
     if (colZ) this.dz = 0;
     if (my !== ry) this.onLand();
     // (Stage 5: ocean) vanilla Block.stepOn: what holds it up hears it (a turtle egg underfoot)
-    if (this.onGround && !this.removed) {
-      const f = floorWithHook(this, 'stepOn');
-      if (f) behaviorOf(f[3])!.stepOn!(this.level, f[0], f[1], f[2], f[3], this);
-    }
+    if (this.onGround && !this.removed) this.stepOnFloor();
     if (!this.noPhysics && !this.vehicle) {
       // vanilla walkDist/moveDist accounting (step & swim sounds, view bobbing); riders don't walk
       const onX = Math.floor(this.x), onY = Math.floor(this.y - 0.2), onZ = Math.floor(this.z);
@@ -842,6 +844,15 @@ export abstract class Entity {
       else mz += 0.05;
     }
     return [mx, mz];
+  }
+
+  /**
+   * vanilla Block.stepOn, as a move on the ground ends: the block holding it up hears it (a turtle egg underfoot, a
+   * sculk shrieker). A host's guest's moves, made by its own game, come here too
+   */
+  stepOnFloor(): void {
+    const f = floorWithHook(this, 'stepOn');
+    if (f) behaviorOf(f[3])!.stepOn!(this.level, f[0], f[1], f[2], f[3], this);
   }
 
   protected checkFallDamage(dy: number, onGround: boolean): void {

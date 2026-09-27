@@ -87,8 +87,13 @@ const mirrorOf = (g, id) => g.session.mirrors.get(id) ?? null;
 }
 
 // ---------------------------------------------------------------------------
-// out of the world: back at the spawn (a guest can't die yet)
+// out of the world: the void has a guest as it would the host's player, creative or not (vanilla Entity.checkBelowWorld,
+// its damage past invulnerability); stage 1 put it back at the spawn, before a guest could die. Respawning, it's back at
+// the spawn, whole
 {
+  const died = [];
+  const hooks = a.session.hooks, was = hooks.died;
+  hooks.died = (msg) => died.push(msg);
   a.player.moveTo(a.player.x, -100, a.player.z, 0, 0);
   // (down in steps of under 10 blocks, as a fall would go)
   for (let y = 60; y > m.MIN_Y - 70; y -= 9) {
@@ -96,10 +101,20 @@ const mirrorOf = (g, id) => g.session.mirrors.get(id) ?? null;
     a.player.dy = 0;
     step(host, 1);
   }
+  // (4 at a time, each half second: dead within five)
+  for (let i = 0; i < 80 && ha.health > 0; i++) {
+    a.player.dy = 0;
+    step(host, 1);
+  }
   step(host, 2);
-  check('the void: a guest that falls out of the world is put back at the spawn', Math.abs(a.player.x - 0.5) < 1e-9 && Math.abs(a.player.y - 65) < 1.5 && Math.abs(ha.x - 0.5) < 1e-9 && Math.abs(ha.y - 65) < 1.5, `${a.player.x},${a.player.y} ${ha.x},${ha.y}`);
-  check('the void: and told so', a.chat.some((t) => t.includes('fell out of the world')));
-  check('the void: nothing hurt it on the host', ha.health === ha.maxHealth);
+  check('the void: a guest that falls out of the world dies of it on the host', ha.health === 0 && ha.dead && ha.lastDamageSource === 'void', `${ha.health} ${ha.lastDamageSource}`);
+  check('the void: its game shows the death screen, saying how', died.length === 1 && died[0] === 'Alex fell out of the world' && a.player.health === 0, died.join('; '));
+  check('the void: everyone is told', a.chat.includes('Alex fell out of the world') && b.chat.includes('Alex fell out of the world') && host.chat.includes('Alex fell out of the world'));
+  a.session.respawn();
+  step(host, 3);
+  check('the void: respawning, it is back at the spawn', Math.abs(a.player.x - 0.5) < 1e-9 && Math.abs(a.player.y - 65) < 1.5 && Math.abs(ha.x - 0.5) < 1e-9 && Math.abs(ha.y - 65) < 1.5, `${a.player.x},${a.player.y} ${ha.x},${ha.y}`);
+  check('the void: whole again, here and on the host', ha.health === ha.maxHealth && !ha.dead && a.player.health === a.player.maxHealth && !a.player.dead);
+  hooks.died = was;
 }
 
 // ---------------------------------------------------------------------------

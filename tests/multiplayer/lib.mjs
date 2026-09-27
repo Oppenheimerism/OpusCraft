@@ -7,7 +7,7 @@ import { load, check, exitWithStatus, genLevel, flatLevel } from '../fixes/lib.m
 export { check, exitWithStatus };
 
 export const NET_MODULES = [
-  '/src/net/codec.ts', '/src/net/protocol.ts', '/src/net/config.ts', '/src/net/items.ts', '/src/net/chunkData.ts', '/src/net/playerState.ts',
+  '/src/net/codec.ts', '/src/net/protocol.ts', '/src/net/config.ts', '/src/net/items.ts', '/src/net/chunkData.ts', '/src/net/playerState.ts', '/src/net/playerStatus.ts',
   '/src/net/transport/memory.ts', '/src/net/transport/transport.ts', '/src/net/server/hostServer.ts', '/src/net/server/session.ts',
   '/src/net/client/clientSession.ts', '/src/net/client/mirrorPlayer.ts', '/src/world/dimension.ts', '/src/item/item.ts',
   '/src/world/blockEntity.ts', '/src/game/interaction.ts',
@@ -39,7 +39,7 @@ function recordingLevel(level) {
  * a host: `world`/`level` from genLevel or flatLevel (chunks made on demand by `makeChunk(cx, cz)` when a guest's
  * ticket asks), its own player at (x, y, z)
  */
-export function makeHost(m, { world, level }, { makeChunk, x = 0.5, y = 65, z = 0.5, spawn = [0.5, 65, 0.5], hostName = 'Host', gameMode = 'creative', transport } = {}) {
+export function makeHost(m, { world, level }, { makeChunk, x = 0.5, y = 65, z = 0.5, spawn = [0.5, 65, 0.5], hostName = 'Host', gameMode = 'creative', guestGameMode, transport } = {}) {
   recordingLevel(level);
   const p = new m.Player(level);
   p.setGameMode(gameMode);
@@ -65,14 +65,15 @@ export function makeHost(m, { world, level }, { makeChunk, x = 0.5, y = 65, z = 
   };
   // (the pop of something picked up, as the game's own level plays it: Game.setUpWorld's onTake)
   level.onTake = (e) => level.sound.play(e.type === 'experience_orb' ? 'entity.experience_orb.pickup' : 'entity.item.pickup', e.x, e.y, e.z, 0.2, 1);
-  const server = new m.HostServer(level, transport ?? net.host, hooks, { lanId: 'test-world-0000', announce: false });
+  // (stage 3) the guests' game mode, as the LAN screen picks it; creative if the test doesn't say, as before
+  const server = new m.HostServer(level, transport ?? net.host, hooks, { lanId: 'test-world-0000', announce: false, guestGameMode });
   return { m, world, level, player: p, net, server, chat, tickets, guests: [], setBreaking: (b) => (breaking = b) };
 }
 
 /** a guest connecting to `host` as `name` (it says hello once `step` delivers the connection), over `transport` if given */
 export function makeGuest(host, name = 'Guest', { viewDistance = 3, uuid, transport = host.net.connect() } = {}) {
   const { m } = host;
-  const g = { name, transport, chat: [], disconnected: null, world: null, level: null, player: null, session: null, chunkAdds: 0, took: [], mounted: [] };
+  const g = { name, transport, chat: [], disconnected: null, world: null, level: null, player: null, session: null, chunkAdds: 0, took: [], mounted: [], died: [], respawned: 0 };
   const hooks = {
     login(info) {
       const world = new m.World();
@@ -105,6 +106,9 @@ export function makeGuest(host, name = 'Guest', { viewDistance = 3, uuid, transp
     disconnected: (r) => (g.disconnected = r),
     took: (e, taker, amount) => g.took.push({ e, taker, amount }),
     mounted: (v) => g.mounted.push(v),
+    // (stage 3) the death screen, and back
+    died: (msg) => g.died.push(msg),
+    respawned: () => g.respawned++,
   };
   g.session = new m.ClientSession(transport, hooks, { name, uuid: uuid ?? m.randomId(), viewDistance });
   host.guests.push(g);

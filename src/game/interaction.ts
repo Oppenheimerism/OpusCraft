@@ -1177,6 +1177,7 @@ export class Interaction {
     y *= f / l;
     z *= f / l;
     p.push(x, y, z);
+    p.hurtMarked = true;
     p.startAutoSpinAttack(20, 8, s);
     if (p.onGround) p.move(0, 1.1999999, 0);
     this.level.sound.play(sound, p.x, p.y, p.z, 1, 1);
@@ -1191,6 +1192,12 @@ export class Interaction {
     if (isArrow(main)) return main;
     return inv.main.find(isArrow) ?? null;
   }
+
+  /**
+   * (a guest) survival's pick-block brings a stack from past the hotbar into the hand: the host's to do (vanilla
+   * ServerboundPickItemPacket), not this game's
+   */
+  onPickSlot: ((slot: number) => void) | null = null;
 
   /** Middle click: pick block (creative puts it in the hotbar; there an entity gives its item, vanilla getPickResult). */
   pickBlock(): void {
@@ -1215,6 +1222,7 @@ export class Interaction {
     }
     if (p.gameMode !== 'creative') {
       const slot = inv.findSlot((s) => matches(s));
+      if (slot >= 9 && this.onPickSlot) return this.onPickSlot(slot);
       if (slot >= 9) {
         const tmp = inv.main[inv.selected];
         inv.main[inv.selected] = inv.main[slot];

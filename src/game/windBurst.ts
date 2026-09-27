@@ -102,6 +102,7 @@ export function windBurstAt(level: Level, source: Entity | null, x: number, y: n
       e.dx += (dx /= d10) * k;
       e.dy += (dy /= d10) * k;
       e.dz += (dz /= d10) * k;
+      e.hurtMarked = true;
     }
     // vanilla Entity.onExplosionHit (ServerPlayer's: the impulse)
     if (e.type === 'player') onExplosionHit(e as Player, source);

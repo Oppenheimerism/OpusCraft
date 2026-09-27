@@ -74,7 +74,7 @@ import { setGenerateLootListener } from './archaeology';
 import { setPotCraftedListener } from './decoratedPot';
 import { setNowPlayingListener } from './jukebox';
 import { blockMenu, entityContainerMenu, installMenuHooks, setShowMenu, showMenu, type MenuEvents } from './openMenu';
-import { deathMessage, dropDeathLoot, resetForRespawn } from './playerDeath';
+import { deathMessage, dropDeathLoot, resetForRespawn, playerHurtSound, playerFallSound } from './playerDeath';
 import { endPortalTravel, PortalArrivals } from './endTravel';
 import { EndDragonFight, ARENA_TICKET_LEVEL } from './endDragonFight';
 import { gatewayTravel } from './gatewayTravel';
@@ -526,6 +526,8 @@ export class Game {
     };
     // (a guest's drops are the host's to throw: vanilla handleCreativeModeItemDrop)
     this.player.dropHandler = login ? (s) => this.client?.dropCreative(s) : (s) => this.interaction.throwItem(s);
+    // (and survival's pick-block from past the hotbar: vanilla ServerboundPickItemPacket)
+    if (login) this.interaction.onPickSlot = (slot) => this.client?.pickSlot(slot);
     this.applyGameRules();
     const world = this.world;
     const particles = new ParticleEngine(this.atlas, world, (x, _y, z, st) => {
@@ -871,20 +873,17 @@ export class Game {
       this.sound.play(`block.${b.sound}.step`, pl.x, pl.y, pl.z, 0.15, 1);
     };
     p.onSwimSound = (pl) => this.sound.play('entity.player.swim', pl.x, pl.y, pl.z, Math.min(1, Math.hypot(pl.dx * 0.44, pl.dy, pl.dz * 0.44) * 0.35), 1 + (Math.random() - Math.random()) * 0.4);
-    p.onHurtSound = (pl, src) => {
-      if (src === 'fall' || src === 'stalagmite') return;
-      // vanilla Player.getHurtSound: fire / drowning / freezing variants
-      const name = src === 'onFire' || src === 'inFire' || src === 'campfire' || src === 'lava' ? 'entity.player.hurt_on_fire' : src === 'drown' ? 'entity.player.hurt_drown' : src === 'freeze' ? 'entity.player.hurt_freeze' : src === 'sweetBerryBush' ? 'entity.player.hurt_sweet_berry_bush' : 'entity.player.hurt';
-      this.sound.play(name, pl.x, pl.y, pl.z, 1, (Math.random() - Math.random()) * 0.2 + 1);
-    };
-    p.onFall = (pl, _dmg, dist) => {
-      this.sound.play(dist > 4 + 3 ? 'entity.player.big_fall' : 'entity.player.small_fall', pl.x, pl.y, pl.z, 1, 1);
-      this.sound.play('entity.player.hurt', pl.x, pl.y, pl.z, 1, (Math.random() - Math.random()) * 0.2 + 1);
-    };
+    // (the level's sounds: a host's guests hear its player hurt, land and die, as it hears theirs)
+    p.onHurtSound = (pl, src) => playerHurtSound(lvl.sound, pl, src);
+    p.onFall = (pl, _dmg, dist) => playerFallSound(lvl.sound, pl, dist);
     p.onDeath = (_pl, source) => {
-      this.sound.play('entity.player.death', p.x, p.y, p.z, 1, 1);
+      lvl.sound.play('entity.player.death', p.x, p.y, p.z, 1, 1);
       const rules = this.level.gameRules;
-      if (rules.showDeathMessages) this.chat(this.deathMessage(source));
+      if (rules.showDeathMessages) {
+        const msg = this.deathMessage(source);
+        this.chat(msg);
+        this.server?.hostChatted(msg);
+      }
       dropDeathLoot(this.level, p);
       if (rules.doImmediateRespawn) {
         setTimeout(() => this.inWorld && this.respawn(), 0);
@@ -965,6 +964,14 @@ export class Game {
     return deathMessage(source, victim, n);
   }
 
+  /** (a guest) how our player died, as the host said */
+  private hostDeathMessage = '';
+
+  /** what the death screen says: how the player died (a guest's, as the host said) */
+  deathCause(): string {
+    return this.client ? this.hostDeathMessage : this.deathMessage(this.player.lastDamageSource);
+  }
+
   applyGameRules(): void {
     const r = this.level.gameRules;
     this.level.doDaylightCycle = !!r.doDaylightCycle;
@@ -973,6 +980,8 @@ export class Game {
   }
 
   respawn(): void {
+    // (a guest asks the host, which says where: vanilla ClientCommand PERFORM_RESPAWN)
+    if (this.client) return this.client.respawn();
     const p = this.player;
     resetForRespawn(p, !!this.level.gameRules.keepInventory);
     // vanilla PlayerList.respawn: at the bed (facing it) if it's still there and clear, else somewhere free near the
@@ -1291,7 +1300,11 @@ export class Game {
         if (client) client.drop(all);
         else this.interaction.drop(all);
       }
-      else if (code === KEYS.swapHands) this.interaction.swapHands();
+      // (a guest's hands are the host's to swap, which it tells us: vanilla SWAP_ITEM_WITH_OFFHAND)
+      else if (code === KEYS.swapHands) {
+        if (client) client.swapHands();
+        else this.interaction.swapHands();
+      }
       else {
         for (let d = 1; d <= 9; d++)
           if (code === KEYS[`hotbar${d}` as keyof typeof KEYS]) {
@@ -1797,9 +1810,10 @@ export class Game {
     };
   }
 
-  /** the in-bed screen's Leave Bed button / Escape (vanilla sendWakeUp) */
+  /** the in-bed screen's Leave Bed button / Escape (vanilla sendWakeUp: a guest asks the host) */
   leaveBed(): void {
-    if (this.player.isSleeping()) this.player.stopSleepInBed(false);
+    if (this.client) this.client.stopSleeping();
+    else if (this.player.isSleeping()) this.player.stopSleepInBed(false);
   }
 
   readonly chatHistory: string[] = [];
@@ -1833,8 +1847,11 @@ export class Game {
   // -------------------------------------------------------------------------
   // multiplayer (net/): this world open to the other windows of this browser, or another window's world joined
 
-  /** vanilla IntegratedServer.publishServer ("Start LAN World"): other windows can join from Multiplayer from now on */
-  openToLan(): boolean {
+  /**
+   * vanilla IntegratedServer.publishServer ("Start LAN World"): other windows can join from Multiplayer from now on,
+   * playing in `guestMode`
+   */
+  openToLan(guestMode: GameMode = 'survival'): boolean {
     if (!MULTIPLAYER_ENABLED || this.mode !== 'single' || !this.inWorld || !this.meta) return false;
     const lanId = randomId();
     const transport = new BroadcastHostTransport(lanId);
@@ -1853,9 +1870,11 @@ export class Game {
           return stage >= 0 ? { x: it.dX, y: it.dY, z: it.dZ, stage } : null;
         },
       },
-      { lanId },
+      { lanId, guestGameMode: guestMode },
     );
     this.mode = 'host';
+    // (vanilla Player.getDisplayName: the others know the host's player by its name, "slain by" it too)
+    this.player.profileName = this.playerName;
     window.addEventListener('pagehide', this.onPageHide);
     this.chat('Local game hosted: other windows of this browser can join it from Multiplayer');
     return true;
@@ -1867,6 +1886,7 @@ export class Game {
     if (!srv) return;
     this.server = null;
     this.mode = 'single';
+    this.player.profileName = null;
     window.removeEventListener('pagehide', this.onPageHide);
     srv.close(reason);
   }
@@ -1928,6 +1948,13 @@ export class Game {
         this.renderer.entities.addPickup(shown, taker);
       },
       mounted: () => this.hud.setOverlayMessage(`Press ${keyDisplayName(KEYS.sneak)} to Dismount`),
+      died: (message) => {
+        this.hostDeathMessage = message;
+        if (this.deathScreenFactory && this.inWorld) this.setScreen(this.deathScreenFactory());
+      },
+      respawned: () => {
+        if (this.screen && this.player.health > 0) this.setScreen(null);
+      },
     }, me);
   }
 
