@@ -3,7 +3,8 @@
 Branch `claude/confident-bell-kdzc4i` (from `main` at 2902baa). Stage 1 is done: R0.1–R0.3 and M1. R0.4 and R0.5
 were left for the stages that need them (§2). Stage 2 wasn't started.
 
-(Stage 2 has been done since, on the same branch: its report is `REPORT-stage2.md`, next to this one.)
+(Stages 2 and 3 have been done since, on the same branch: their reports are `REPORT-stage2.md` and
+`REPORT-stage3.md`, next to this one.)
 
 ## Progress
 
