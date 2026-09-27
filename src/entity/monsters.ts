@@ -17,6 +17,7 @@ import type { Player } from './player';
 import type { Entity } from './entity';
 import { MobEffectInstance, MOB_EFFECTS } from './effects';
 import { ItemStack, ITEMS } from '../item/item';
+import { CREEPER_DROP_MUSIC_DISCS } from '../item/jukeboxSongs';
 import { BLOCKS, STATE_BLOCK, FLAGS, F_OPAQUE, F_FULL_COLLISION, F_AIR, F_COLLIDE, F_WATER, F_LEAVES } from '../world/block';
 import { Arrow } from './arrow';
 import { explode } from '../game/explosion';
@@ -31,6 +32,9 @@ import { reducedTickDelay } from './ai/goal';
 import { ZombieAttackTurtleEggGoal, babyTurtleOnLand } from './turtlePredators';
 
 export const DIFFICULTY_ID: Record<string, number> = { peaceful: 0, easy: 1, normal: 2, hard: 3 };
+
+/** vanilla #skeletons (the skeleton horse isn't in the game yet) */
+export const SKELETONS: ReadonlySet<string> = new Set(['skeleton', 'stray', 'wither_skeleton', 'skeleton_horse', 'bogged']);
 
 /**
  * how a zombie's villager rises as a zombie villager (set by zombieVillager.ts, which needs the villager, which
@@ -1070,6 +1074,18 @@ export class Creeper extends Monster {
   }
   override lootTable(): LootEntry[] {
     return [{ item: 'gunpowder', min: 0, max: 2 }];
+  }
+  /**
+   * vanilla loot table entities/creeper's second pool, drawn after the gunpowder and before the equipment
+   * (LivingEntity.dropAllDeathLoot): killed by one of #skeletons (the attacker: for an arrow, whoever shot it), one
+   * disc of #creeper_drop_music_discs
+   */
+  protected override dropCustomDeathLoot(attacker: Entity | null, recentlyHit: boolean, looting: number): void {
+    if (attacker && SKELETONS.has(attacker.type)) {
+      const disc = CREEPER_DROP_MUSIC_DISCS[this.random.nextInt(CREEPER_DROP_MUSIC_DISCS.length)];
+      if (ITEMS.has(disc)) this.spawnAtLocation(ItemStack.of(disc));
+    }
+    super.dropCustomDeathLoot(attacker, recentlyHit, looting);
   }
   protected override saveData(): Record<string, number | string | boolean> {
     return { ...super.saveData(), powered: this.powered, ignited: this.ignited };
