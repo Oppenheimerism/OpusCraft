@@ -7,7 +7,7 @@ import { wrapDegrees } from '../core/math';
 import { FLAGS, F_AIR, F_OPAQUE, F_FULL_COLLISION, BLOCKS, STATE_BLOCK } from '../world/block';
 import { clipBlocks } from '../game/raycast';
 import { MobEffectInstance, SavedEffect, saveEffect, loadEffect } from './effects';
-import { burningTimeFactor, damageAfterProtection, damageProtection, waterMovementEfficiency } from '../item/enchantHelper';
+import { burningTimeFactor, damageAfterProtection, damageProtection, levelOf, waterMovementEfficiency } from '../item/enchantHelper';
 import { AABB } from '../core/aabb';
 import { HEAD_DISGUISES } from '../world/blocksSkulls';
 import type { ItemStack } from '../item/item';
@@ -36,6 +36,12 @@ const DAMAGES_HELMET = new Set(['anvil', 'fallingBlock', 'fallingStalactite']);
 export const FIRE_SOURCES = new Set(['onFire', 'inFire', 'campfire', 'lava', 'hotFloor', 'fireball']);
 /** vanilla Player.getDestroySpeed: mining fatigue multiplier per amplifier (capped at IV) */
 const FATIGUE_DIG = [0.3, 0.09, 0.0027, 8.1e-4];
+/** (Frost Walker) vanilla #burn_from_stepping: what Frost Walker boots are proof against */
+const BURN_FROM_STEPPING = new Set(['hotFloor', 'campfire']);
+/** (Frost Walker) game/frostWalker.ts's freezing of the water around a Frost Walker's feet */
+export const FEET_HOOKS: { frostWalk?: (e: LivingEntity, level: number) => void } = {};
+/** (Soul Speed) vanilla #soul_speed_blocks */
+const SOUL_SPEED_BLOCKS = new Set(['soul_sand', 'soul_soil']);
 
 /**
  * (trial chambers) vanilla EnchantmentHelper.modifyArmorEffectiveness: what the weapon of the blow being struck does to
@@ -152,7 +158,74 @@ export abstract class LivingEntity extends Entity {
 
   /** effective movement speed (sprint modifier +30%, speed / slowness) */
   movementSpeed(): number {
-    return Math.max(0, (this.speed + this.frostSpeed) * (this.sprinting ? 1.3 : 1) * this.speedEffectFactor());
+    return Math.max(0, (this.speed + this.frostSpeed + this.soulSpeed) * (this.sprinting ? 1.3 : 1) * this.speedEffectFactor());
+  }
+
+  /**
+   * (Soul Speed) vanilla enchantment.soul_speed's movement_speed modifier while it holds: 0.0405 for level I and
+   * 0.0105 more a level after (an ADD_VALUE modifier, like the frost's); 0 when it doesn't
+   */
+  soulSpeed = 0;
+  /** (Soul Speed) the block it stood in and the Soul Speed it wore when last it checked (NaN: not yet) */
+  private soulX = NaN;
+  private soulY = NaN;
+  private soulZ = NaN;
+  private soulLevel = 0;
+  private frostLevel = 0;
+
+  /** (Soul Speed) the sand or soil underfoot is one of #soul_speed_blocks (vanilla location_check, offsetY -0.5) */
+  private onSoulSpeedBlock(): boolean {
+    const st = this.level.world.getState(Math.floor(this.x), Math.floor(this.y - 0.5), Math.floor(this.z));
+    return SOUL_SPEED_BLOCKS.has(BLOCKS[STATE_BLOCK[st]].name);
+  }
+
+  /** (Soul Speed) vanilla EntityFlagsPredicate is_flying: gliding on an elytra, or a player flying */
+  private flyingForSoulSpeed(): boolean {
+    return this.fallFlying || !!(this as { flying?: boolean }).flying;
+  }
+
+  /**
+   * (Soul Speed) vanilla enchantment.soul_speed, run as LivingEntity.baseTick runs it. When it moves to another block
+   * (or its boots change): on the ground on soul sand or soul soil, not riding or flying, the speed starts; it keeps
+   * on while it's on them or off the ground, and stops once it stands on anything else (or rides, or flies); and a
+   * step on to another block of them wears the boots 1 in 25 times. Every fifth tick, running over them, a soul
+   * escapes from under its feet, sighing about a third of the time. (Frost Walker) And at the same moments, on the
+   * ground and not riding, Frost Walker boots freeze the still water around it (game/frostWalker.ts).
+   */
+  protected tickFeetEnchantments(): void {
+    // (vanilla getEnchantmentLevel over its slots: only the feet's for Soul Speed)
+    const feet = this.armorSlots()[0];
+    const lvl = feet && feet.count > 0 ? levelOf(feet, 'soul_speed') : 0;
+    const frost = feet && feet.count > 0 ? levelOf(feet, 'frost_walker') : 0;
+    const bx = Math.floor(this.x), by = Math.floor(this.y), bz = Math.floor(this.z);
+    const moved = bx !== this.soulX || by !== this.soulY || bz !== this.soulZ;
+    if (moved || lvl !== this.soulLevel || frost !== this.frostLevel) {
+      this.soulX = bx;
+      this.soulY = by;
+      this.soulZ = bz;
+      this.soulLevel = lvl;
+      this.frostLevel = frost;
+      if (frost > 0 && this.onGround && !this.vehicle && !this.level.isClientSide) FEET_HOOKS.frostWalk?.(this, frost);
+      const onSoul = lvl > 0 && this.onSoulSpeedBlock();
+      const flying = this.flyingForSoulSpeed();
+      const on = lvl > 0 && !this.vehicle && !flying && (this.soulSpeed > 0 ? onSoul || !this.onGround : onSoul && this.onGround);
+      this.soulSpeed = on ? 0.0405 + 0.0105 * (lvl - 1) : 0;
+      // vanilla damage_item, 4% a step on to another soul block (not in creative: hurtAndBreak's infinite materials)
+      if (moved && onSoul && this.onGround && !this.level.isClientSide && Math.random() < 0.04) {
+        (this as { damageArmorSlot?: (i: number, amount: number) => void }).damageArmorSlot?.(0, 1);
+      }
+    }
+    if (lvl <= 0 || this.tickCount % 5 !== 0 || this.level.isClientSide) return;
+    if (!this.onGround || this.flyingForSoulSpeed() || this.dx * this.dx + this.dz * this.dz < 1e-10 || !this.onSoulSpeedBlock()) return;
+    // vanilla spawn_particles soul: somewhere in its width, just over its feet, flung back from its going and up
+    const w = this.width;
+    this.level.particles.spawn?.('soul', this.x + (Math.random() - 0.5) * w, this.y + 0.1, this.z + (Math.random() - 0.5) * w, this.dx * -0.2, 0.1, this.dz * -0.2);
+    if (Math.random() * 0.4 + Math.random() > 0.9) this.level.sound.play('particle.soul_escape', this.x, this.y, this.z, 0.6, 0.6 + Math.random() * 0.4);
+  }
+
+  /** (Soul Speed) vanilla movement_efficiency 1 while it holds: soul sand (or anything) no longer slows it */
+  override blockSpeedFactor(): number {
+    return this.soulSpeed > 0 ? 1 : super.blockSpeedFactor();
   }
 
   /**
@@ -617,6 +690,8 @@ export abstract class LivingEntity extends Entity {
 
   aiStep(): void {
     if (this.noJumpDelay > 0) this.noJumpDelay--;
+    // (Soul Speed, Frost Walker) as the tick starts, where the last move left it
+    this.tickFeetEnchantments();
     if (this.movedElsewhere()) {
       this.moveFromElsewhere();
       // (powder snow)
@@ -993,6 +1068,8 @@ export abstract class LivingEntity extends Entity {
     if (this.level.isClientSide) return false;
     if (this.isInvulnerableTo(source) || this.removed || this.health <= 0) return false;
     if (this.shrugsOffFire(source, attacker, direct)) return false;
+    // (Frost Walker) vanilla damage_immunity: its boots are proof against #burn_from_stepping (magma, campfires)
+    if (BURN_FROM_STEPPING.has(source) && levelOf(this.armorSlots()[0], 'frost_walker') > 0) return false;
     this.noActionTime = 0;
     if (amount < 0) amount = 0;
     // (Stage 4: shields) vanilla isDamageSourceBlocked: a raised shield takes the hit, which goes on at 0 (entity/shield.ts)

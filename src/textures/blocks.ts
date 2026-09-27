@@ -273,6 +273,7 @@ T['lava_flow'] = () => FL.lava(true);
 // Ice / glass
 
 T['ice'] = () => FL.ice();
+for (let a = 0; a < 4; a++) T[`frosted_ice_${a}`] = () => FL.frostedIce(a);
 T['packed_ice'] = () => FL.packedIce('packed_ice', [0x7898d2, 0x83a3da, 0x8daee2, 0x97b7e8, 0xa1c0ed, 0xadcaf1, 0xc2dafa], 1);
 T['blue_ice'] = () => FL.packedIce('blue_ice', [0x4f86d8, 0x5b91e0, 0x679ce7, 0x72a6ec, 0x7eb0f1, 0x8dbcf5, 0xa8d0fb], 1);
 T['glass'] = () => FL.glass();

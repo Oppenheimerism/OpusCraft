@@ -27,7 +27,8 @@ export function buildParticleAtlas(gl: GL): { texture: WebGLTexture; rects: Reco
   Object.assign(src, glitterTextures());
   // a firework's flash (vanilla particle/flash)
   Object.assign(src, fireworkParticleTextures());
-  // the deep dark's: vibration, shriek, sculk_charge_0..6, sculk_charge_pop_0..3, sculk_soul_0..10 (and M4's sonic_boom_0..15)
+  // the deep dark's: vibration, shriek, sculk_charge_0..6, sculk_charge_pop_0..3, sculk_soul_0..10 (and M4's sonic_boom_0..15;
+  // Soul Speed's soul_0..10)
   Object.assign(src, sculkParticleTextures());
   // (trial chambers) the trial spawner's detection wisps, Trial Omen's curl, the ominous and vault sparks
   Object.assign(src, trialChamberParticleTextures());

@@ -877,7 +877,7 @@ export class Game {
     p.onHurtSound = (pl, src) => {
       if (src === 'fall' || src === 'stalagmite') return;
       // vanilla Player.getHurtSound: fire / drowning / freezing variants
-      const name = src === 'onFire' || src === 'inFire' || src === 'campfire' || src === 'lava' ? 'entity.player.hurt_on_fire' : src === 'drown' ? 'entity.player.hurt_drown' : src === 'freeze' ? 'entity.player.hurt_freeze' : src === 'sweetBerryBush' ? 'entity.player.hurt_sweet_berry_bush' : 'entity.player.hurt';
+      const name = src === 'onFire' || src === 'inFire' || src === 'campfire' || src === 'lava' || src === 'hotFloor' ? 'entity.player.hurt_on_fire' : src === 'drown' ? 'entity.player.hurt_drown' : src === 'freeze' ? 'entity.player.hurt_freeze' : src === 'sweetBerryBush' ? 'entity.player.hurt_sweet_berry_bush' : 'entity.player.hurt';
       this.sound.play(name, pl.x, pl.y, pl.z, 1, (Math.random() - Math.random()) * 0.2 + 1);
     };
     p.onFall = (pl, _dmg, dist) => {
@@ -1064,6 +1064,9 @@ export class Game {
         return `${n} went up in flames`;
       case 'onFire':
         return `${n} burned to death`;
+      // (Frost Walker) a magma block's hot floor
+      case 'hotFloor':
+        return `${n} discovered the floor was lava`;
       case 'lightningBolt':
         return `${n} was struck by lightning`;
       case 'inWall':
