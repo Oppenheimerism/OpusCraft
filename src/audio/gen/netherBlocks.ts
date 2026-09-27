@@ -1,14 +1,14 @@
 // Nether block sound types (vanilla 1.16+ SoundTypes): netherrack and its ores, nylium, soul sand
 // and soul soil, basalt, wart blocks, ancient debris, nether bricks, bone blocks, shroomlight, the
 // nether plants (fungus, roots, sprouts, weeping vines), stems and nether wood, netherite,
-// lodestone and gilded blackstone.
+// lodestone and gilded blackstone; and the compass locking onto a lodestone.
 //
 // Same conventions as blocks.ts: `place` reuses the break takes, `hit` is the step take at
 // pitch 0.5 and `fall` the step take at pitch 0.75 (vanilla plays a SoundType's fall sound — its
 // step files — at pitch * 0.75); break and place are designed for vanilla's playback pitch 0.8.
 
 import type { SoundGen } from '../synth';
-import { type Rng, alloc, envBump, layer, lowpass } from './dsp';
+import { type Rng, addMode, addOsc, alloc, envBump, layer, lowpass } from './dsp';
 import { type Ctx, pitched, sound } from './registry';
 import { bubble, burst, impact, phisem, sweep, thump, ticks, twoBump } from './texture';
 import { voice } from './voice';
@@ -781,6 +781,32 @@ function lodestoneBreak(c: Ctx): Float32Array {
   return out;
 }
 
+/**
+ * vanilla item.lodestone_compass.lock: the needle caught by the lodestone's pull, a swell that snaps shut on a small
+ * metal click, and the lodestone's core left ringing, two close tones beating as they die away
+ */
+function lodestoneLock(c: Ctx): Float32Array {
+  const { sr, rng } = c;
+  const out = alloc(1.8, sr);
+  const snap = rng.range(0.15, 0.19);
+  // (the pull: a whoosh sweeping up to the snap, a tone gliding up with it)
+  layer(out, 0.3, (b) => sweep(b, sr, rng, { dur: snap + 0.015, f: (t) => 450 * Math.pow(7, Math.min(1, t / snap)), q: 5, amp: (t) => Math.min(1, t / snap) ** 2, color: 'pink' }));
+  const f0 = rng.range(290, 330);
+  layer(out, 0.2, (b) => addOsc(b, sr, 0, snap, (t) => f0 * (1 + 1.6 * (t / snap) ** 2), (t) => Math.min(1, t / snap) ** 1.5));
+  // (the needle's click as it locks)
+  const k = rng.range(2500, 2900);
+  layer(out, 0.9, (b) => impact(b, sr, rng, { t: snap, modes: [k, 1, 0.05, k * 2.76, 0.55, 0.03, k * 5.4, 0.3, 0.018], jitter: 0.01, noise: 1.2, noiseTau: 0.0018, noiseBp: [5200, 0.8] }));
+  // (the core's ring: a pair of tones a beat apart, with the bar's overtones)
+  const h = rng.range(430, 480), s = Math.round(snap * sr);
+  layer(out, 0.7, (b) => {
+    addMode(b, s, sr, h, 1, 1.5);
+    addMode(b, s, sr, h * rng.range(1.008, 1.014), 0.8, 1.35);
+    addMode(b, s, sr, h * 2.76, 0.3, 0.7);
+    addMode(b, s, sr, h * 5.4, 0.12, 0.35);
+  });
+  return out;
+}
+
 /** Gilded blackstone: blackstone's stone knock with a sprinkle of gold flecks ringing. */
 function gildedStep(c: Ctx): Float32Array {
   const { sr, rng } = c;
@@ -994,6 +1020,8 @@ export function netherBlockSounds(): Record<string, SoundGen> {
   mk('lodestone', lodestoneBreak, lodestoneStep, 4, 5);
   mk('gilded_blackstone', gildedBreak, gildedStep, 5, 6);
   // the nether wart crop (vanilla SoundType.NETHER_WART: its own break and plant sounds, stone steps)
+  // the compass locking onto a lodestone
+  S['item.lodestone_compass.lock'] = sound('item.lodestone_compass.lock', 2, lodestoneLock);
   S['block.nether_wart.break'] = sound('block.nether_wart.break', 6, (c) => wartCrop(c, false));
   S['item.nether_wart.plant'] = sound('item.nether_wart.plant', 6, (c) => wartCrop(c, true));
   return S;

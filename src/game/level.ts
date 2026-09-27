@@ -83,6 +83,8 @@ import './trialChambers';
 import './jukebox';
 // (powder snow)
 import './powderSnow';
+// (the lodestone compass)
+import './lodestoneCompass';
 
 export interface SoundSink {
   play(name: string, x: number, y: number, z: number, volume?: number, pitch?: number): void;

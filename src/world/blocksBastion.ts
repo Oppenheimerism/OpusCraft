@@ -1,9 +1,9 @@
 // (bastions) The blocks that came with the bastion remnants (1.16) and weren't in the game yet: polished basalt
 // (vanilla RotatedPillarBlock, Blocks.POLISHED_BASALT: basalt's properties, its columns cut square), the block of
 // netherite (vanilla Blocks.NETHERITE_BLOCK: 50 hardness, 1200 blast resistance, a diamond pickaxe to mine) and the
-// lodestone (vanilla LodestoneBlock: 3.5, any pickaxe; a compass
-// used on it points to it, when the game's compasses know lodestones: item/compass.ts). What a bastion's bridge chest
-// always holds, what its treasure room's netherite comes to, and the pillars and trims of its walls.
+// lodestone (vanilla LodestoneBlock: 3.5, any pickaxe; a compass used on it points to it: game/lodestoneCompass.ts).
+// What a bastion's bridge chest always holds, what its treasure room's netherite comes to, and the pillars and trims of
+// its walls.
 
 import { registerBlock, P, type StateView } from './block';
 import { cubeAll, cubeColumn, type ModelChoice, type ModelDef } from './models';
