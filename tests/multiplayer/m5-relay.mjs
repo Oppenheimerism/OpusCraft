@@ -11,7 +11,7 @@ import http from 'node:http';
 import { networkInterfaces } from 'node:os';
 import { loadConfigFromFile } from 'vite';
 import { WebSocket } from 'ws';
-import { attachRelay, CLOSE, OP } from '../../scripts/relay.mjs';
+import { attachRelay, CLOSE, OP, RELAY_KEY } from '../../scripts/relay.mjs';
 import { load, check, exitWithStatus } from '../fixes/lib.mjs';
 
 const { m, close } = await load(['/src/net/config.ts']);
@@ -446,6 +446,25 @@ const until = async (f, ms = 2000) => {
   check('frames: and the host hears the guest went', frames(hh).some((f) => f[0] === OP.LEAVE));
   hh.ws.close();
   await s2.stop();
+}
+
+// ---------------------------------------------------------------------------
+// the relay stopping (npm run lan stopped, with Ctrl+C): its server keeps it where whoever stops the server finds it,
+// to stop it first; every page is told it stopped, rather than cut off with the server's sockets
+{
+  const srv = await relayServer();
+  const h = await openHost(srv);
+  const g = await connect(srv, 'guest').ready;
+  const l = await connect(srv, 'list').ready;
+  g.ws.send(Buffer.from([0]));
+  await until(() => frames(h).some((f) => f[0] === OP.DATA));
+  check('stopping: the server has its relay, to stop first (RELAY_KEY)', srv.server[RELAY_KEY] === srv.relay);
+  srv.server[RELAY_KEY].close();
+  await Promise.race([Promise.all([h.closed, g.closed, l.closed]), sleep(2000)]);
+  check('stopping: the host, a guest and a Multiplayer screen each hear the relay stopped ("shutdown")', [h, g, l].every((c) => c.code === CLOSE.SHUTDOWN && c.reason === 'shutdown'), [h, g, l].map((c) => `${c.code} ${c.reason}`).join(' | '));
+  const late = await connect(srv, 'list').ready;
+  check('stopping: and takes no one after', !late.opened, `${late.status}`);
+  await srv.stop();
 }
 
 // ---------------------------------------------------------------------------
