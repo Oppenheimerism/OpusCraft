@@ -10,8 +10,11 @@ import type { PeerId, Transport } from '../transport/transport';
 import { LanAnnouncer, type LanWorld } from '../transport/lan';
 import { broadcastEffects, soundRange, PARTICLE_RANGE } from '../effects';
 import { visibleBlockEntity } from '../chunkData';
+import { DataWatcher, type EntityData } from '../entityData';
 import { ServerPlayerSession } from './session';
 import type { Level } from '../../game/level';
+import type { Entity } from '../../entity/entity';
+import type { LivingEntity } from '../../entity/living';
 import type { Player, GameMode } from '../../entity/player';
 import { Interaction } from '../../game/interaction';
 import { Chunk } from '../../world/chunk';
@@ -55,6 +58,11 @@ export class HostServer {
   private readonly dirtyBlockEntities = new Set<string>();
   /** this tick's look of block entities (worked out once for all the guests) */
   private readonly beJson = new Map<BlockEntity, string>();
+  /**
+   * the entities some guest sees: their fields as last sent (vanilla SynchedEntityData), and this tick's changes,
+   * worked out once for all the guests (`seen`: the tick one last looked; left behind, it's let go)
+   */
+  private readonly watchers = new Map<Entity, { data: DataWatcher; seen: number; changes: EntityData | null; changed: number }>();
   closed = false;
 
   constructor(readonly level: Level, readonly transport: Transport, readonly hooks: HostHooks, opts: { lanId: string; announce?: boolean }) {
@@ -89,10 +97,24 @@ export class HostServer {
       progress?.(id, x, y, z, stage);
       this.broadcastNear([CB.BlockDestruction, id, x, y, z, stage], x + 0.5, y + 0.5, z + 0.5, 32);
     };
+    // (vanilla LivingEntity.take → ClientboundTakeItemEntityPacket, to whoever sees what was taken)
+    const take = level.onTake;
+    level.onTake = (e, taker, amount) => {
+      // (the pop is the world's, heard by the taker too: a guest's own game doesn't pick things up)
+      const actor = this.actor;
+      this.actor = null;
+      try {
+        take?.(e, taker, amount);
+      } finally {
+        this.actor = actor;
+      }
+      this.took(e, taker, amount);
+    };
     this.undo.push(() => {
       world.onBlockChanged = blockChanged;
       world.onBlockEntityChanged = beChanged;
       level.onDestroyBlockProgress = progress;
+      level.onTake = take;
     });
     this.undo.push(
       broadcastEffects(level, {
@@ -179,7 +201,36 @@ export class HostServer {
       s.flush();
       if (s.state === 'gone') this.sessions.delete(s.peer);
     }
+    for (const [e, w] of this.watchers) if (w.seen !== this.ticks || e.removed) this.watchers.delete(e);
     if (this.announcer && this.ticks % ANNOUNCE_TICKS === 0) this.announcer.announce();
+  }
+
+  /** (the trackers) every field of `e`, for a guest that's to see it now */
+  dataFull(e: Entity): EntityData {
+    const w = this.watchers.get(e);
+    if (!w) {
+      const data = new DataWatcher();
+      this.watchers.set(e, { data, seen: this.ticks, changes: null, changed: this.ticks });
+      return data.full(e);
+    }
+    // (this tick's changes are taken first, for the guests that see it already)
+    this.dataChanges(e);
+    return w.data.full(e);
+  }
+
+  /** (the trackers) the fields of `e` that changed this tick, if any (vanilla ServerEntity.sendDirtyEntityData) */
+  dataChanges(e: Entity): EntityData | null {
+    const w = this.watchers.get(e);
+    if (!w) {
+      this.dataFull(e);
+      return null;
+    }
+    w.seen = this.ticks;
+    if (w.changed !== this.ticks) {
+      w.changed = this.ticks;
+      w.changes = w.data.changes(e);
+    }
+    return w.changes;
   }
 
   weatherPacket(): Value[] {
@@ -210,6 +261,12 @@ export class HostServer {
     } finally {
       this.muted--;
     }
+  }
+
+  /** something was picked up: the guests that see it watch it fly to whoever took it */
+  private took(e: Entity, taker: LivingEntity, amount: number): void {
+    const p: Value[] = [CB.TakeItemEntity, e.id, taker.id, Math.max(0, Math.min(127, Math.floor(amount) || 0))];
+    for (const s of this.sessions.values()) if (s.state === 'play' && s.tracker.has(e)) s.send(p);
   }
 
   /** a chat line for everyone: the host's chat and every guest's */

@@ -13,6 +13,14 @@ export const NET_MODULES = [
   '/src/world/blockEntity.ts', '/src/game/interaction.ts',
 ];
 
+/** (stage 2) the entities' side of it: the registry, the fields, the trackers and copies, and the kinds the tests make */
+export const ENTITY_MODULES = [
+  '/src/net/entityNet.ts', '/src/net/entityData.ts', '/src/net/effects.ts', '/src/net/server/entityTracker.ts', '/src/net/client/entityMirror.ts',
+  '/src/game/spawner.ts', '/src/entity/itemEntity.ts', '/src/entity/xpOrb.ts', '/src/entity/boat.ts', '/src/entity/minecart.ts', '/src/entity/arrow.ts',
+  '/src/entity/thrownTrident.ts', '/src/entity/endCrystal.ts', '/src/entity/itemFrame.ts', '/src/entity/fireworkRocket.ts', '/src/entity/leash.ts',
+  '/src/entity/effects.ts', '/src/entity/living.ts', '/src/entity/mob.ts', '/src/entity/horse.ts', '/src/entity/throwable.ts', '/src/entity/tnt.ts',
+];
+
 export async function loadNet(extra = []) {
   return load([...NET_MODULES, ...extra]);
 }
@@ -55,6 +63,8 @@ export function makeHost(m, { world, level }, { makeChunk, x = 0.5, y = 65, z = 
     },
     hostBreaking: () => breaking,
   };
+  // (the pop of something picked up, as the game's own level plays it: Game.setUpWorld's onTake)
+  level.onTake = (e) => level.sound.play(e.type === 'experience_orb' ? 'entity.experience_orb.pickup' : 'entity.item.pickup', e.x, e.y, e.z, 0.2, 1);
   const server = new m.HostServer(level, transport ?? net.host, hooks, { lanId: 'test-world-0000', announce: false });
   return { m, world, level, player: p, net, server, chat, tickets, guests: [], setBreaking: (b) => (breaking = b) };
 }
@@ -62,7 +72,7 @@ export function makeHost(m, { world, level }, { makeChunk, x = 0.5, y = 65, z = 
 /** a guest connecting to `host` as `name` (it says hello once `step` delivers the connection), over `transport` if given */
 export function makeGuest(host, name = 'Guest', { viewDistance = 3, uuid, transport = host.net.connect() } = {}) {
   const { m } = host;
-  const g = { name, transport, chat: [], disconnected: null, world: null, level: null, player: null, session: null, chunkAdds: 0 };
+  const g = { name, transport, chat: [], disconnected: null, world: null, level: null, player: null, session: null, chunkAdds: 0, took: [], mounted: [] };
   const hooks = {
     login(info) {
       const world = new m.World();
@@ -93,6 +103,8 @@ export function makeGuest(host, name = 'Guest', { viewDistance = 3, uuid, transp
     },
     chat: (t) => g.chat.push(t),
     disconnected: (r) => (g.disconnected = r),
+    took: (e, taker, amount) => g.took.push({ e, taker, amount }),
+    mounted: (v) => g.mounted.push(v),
   };
   g.session = new m.ClientSession(transport, hooks, { name, uuid: uuid ?? m.randomId(), viewDistance });
   host.guests.push(g);
@@ -137,6 +149,11 @@ export function rawGuest(host) {
 /** the guest's player as the host has it */
 export function hostCopy(host, g) {
   return host.level.players().find((p) => p.profileName === g.name) ?? null;
+}
+
+/** (stage 2) `g`'s copy of the host's entity `e` (or null) */
+export function copyOf(g, e) {
+  return g.session.entities.get(e.id)?.e ?? null;
 }
 
 /** host tick → deliver → each guest's tick → deliver, `n` times */

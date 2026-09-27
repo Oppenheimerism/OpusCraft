@@ -909,6 +909,14 @@ export abstract class LivingEntity extends Entity {
     this.headYaw = this.yaw;
   }
 
+  /**
+   * (a guest's copy of the host's entity: net/client) what its own tick works out from how it moved, which the host
+   * doesn't send: its walk
+   */
+  animateMirror(): void {
+    this.updateWalkAnimation();
+  }
+
   protected updateWalkAnimation(): void {
     const dx = this.x - this.xo, dz = this.z - this.zo;
     const dist = Math.sqrt(dx * dx + dz * dz);

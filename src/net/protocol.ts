@@ -13,15 +13,19 @@ export const SB = {
   Hello: 0,
   /** [id]: the answer to the host's KeepAlive */
   KeepAlive: 1,
-  /** [x, y, z, yRot, xRot, flags (PoseFlag, and the attack and use buttons held)]: where the guest's player is, each tick */
+  /**
+   * [x, y, z, yRot, xRot, flags (PoseFlag: the pose, the buttons held, the movement keys), target]: where the guest's
+   * player is, each tick, and the entity under its crosshair (its id, or -1): what its clicks go to (vanilla
+   * ServerboundMovePlayerPacket with ServerboundPlayerInputPacket, and ServerboundInteractPacket's entity)
+   */
   MovePlayer: 2,
   /** [teleportId]: the guest's player is where the host put it */
   AcceptTeleportation: 3,
-  /** [action (Action)]: a button pressed this tick; the host does with it what it would with its own player's */
+  /** [action (Action), argument]: a button pressed this tick; the host does with it what it would with its own player's */
   PlayerAction: 4,
   /** [slot 0-8]: the hotbar slot in hand */
   SetCarriedItem: 5,
-  /** [slot (SLOT_*), item or null]: what the guest's creative inventory now has in a slot */
+  /** [slot (SLOT_*), item or null]: what the guest's creative inventory now has in a slot; slot -1 throws the item out */
   SetCreativeModeSlot: 6,
   /** [text] */
   Chat: 7,
@@ -59,7 +63,7 @@ export const CB = {
   AddPlayer: 11,
   /** [ids] */
   RemoveEntities: 12,
-  /** [id, x, y, z, yRot, xRot, yHeadRot, yBodyRot, flags]: another player, as it is this tick */
+  /** [id, x, y, z, yRot, xRot, yHeadRot, yBodyRot, flags]: another player or an entity, as it is this tick (flags: a player's PoseFlag; an entity's ON_GROUND) */
   MoveEntity: 13,
   /** [id, action (ANIMATE_*)] */
   Animate: 14,
@@ -73,6 +77,19 @@ export const CB = {
   SystemChat: 18,
   /** [slot (SLOT_*), item or null]: what the host did to the guest's own inventory (vanilla ClientboundContainerSetSlotPacket) */
   ContainerSetSlot: 19,
+  /**
+   * [id, type, record or null, x, y, z, yRot, xRot, yHeadRot, yBodyRot, flags, data]: an entity comes into view, made
+   * from its record (net/entityNet.ts), then given its fields (net/entityData.ts)
+   */
+  AddEntity: 20,
+  /** [id, data]: an entity's fields that changed (vanilla ClientboundSetEntityDataPacket) */
+  SetEntityData: 21,
+  /** [vehicle id, rider ids]: who rides it, in its seats' order (vanilla ClientboundSetPassengersPacket) */
+  SetPassengers: 22,
+  /** [taken id, taker id, amount]: something picked up (vanilla ClientboundTakeItemEntityPacket) */
+  TakeItemEntity: 23,
+  /** [progress 0-1, level, total]: the guest's own experience (vanilla ClientboundSetExperiencePacket) */
+  SetExperience: 24,
 } as const;
 
 /** SB.PlayerAction's actions (vanilla ServerboundPlayerActionPacket.Action / ServerboundUseItemPacket): what the host does with its own player's clicks */
@@ -81,6 +98,12 @@ export const Action = {
   ATTACK: 0,
   /** the use button went down: vanilla UseItemOn, Interact or UseItem, whichever the look finds */
   USE: 1,
+  /** the drop key: one of what's in hand (vanilla DROP_ITEM) */
+  DROP: 2,
+  /** the drop key with Ctrl: the whole stack (vanilla DROP_ALL_ITEMS) */
+  DROP_ALL: 3,
+  /** a jump charged on the mount being steered: the argument is its power, 0-100 (vanilla ServerboundPlayerCommandPacket START_RIDING_JUMP) */
+  RIDING_JUMP: 4,
 } as const;
 
 /** a player's pose and state, as bits (vanilla Entity.DATA_SHARED_FLAGS_ID and DATA_POSE) */
@@ -102,8 +125,14 @@ export const PoseFlag = {
   ATTACK_HELD: 1024,
   /** (guest → host only) the use button is held */
   USE_HELD: 2048,
+  /** (guest → host only) the movement keys (vanilla ServerboundPlayerInputPacket: what a mount or a boat is steered by) */
+  FORWARD: 4096,
+  BACK: 8192,
+  LEFT: 16384,
+  RIGHT: 32768,
+  JUMP: 65536,
 } as const;
-const ALL_FLAGS = 4095;
+const ALL_FLAGS = 131071;
 
 /** CB.Animate's actions (vanilla ClientboundAnimatePacket) */
 export const ANIMATE_SWING_MAIN_HAND = 0;
@@ -174,11 +203,11 @@ const SERVERBOUND: Check[][] = [];
 // (a name that isn't one is turned away with a word on what a name is: ServerPlayerSession.hello)
 SERVERBOUND[SB.Hello] = [int(0, 0x7fffffff), str(1, 64), str(0, 64), UUID, int(2, 32)];
 SERVERBOUND[SB.KeepAlive] = [ID];
-SERVERBOUND[SB.MovePlayer] = [X, Y, X, ANGLE, PITCH, FLAGS];
+SERVERBOUND[SB.MovePlayer] = [X, Y, X, ANGLE, PITCH, FLAGS, int(-1, 0x7fffffff)];
 SERVERBOUND[SB.AcceptTeleportation] = [ID];
-SERVERBOUND[SB.PlayerAction] = [int(0, 1)];
+SERVERBOUND[SB.PlayerAction] = [int(0, 4), int(0, 100)];
 SERVERBOUND[SB.SetCarriedItem] = [int(0, 8)];
-SERVERBOUND[SB.SetCreativeModeSlot] = [int(0, SLOT_COUNT - 1), ITEM];
+SERVERBOUND[SB.SetCreativeModeSlot] = [int(-1, SLOT_COUNT - 1), ITEM];
 SERVERBOUND[SB.Chat] = [str(1, MAX_CHAT)];
 SERVERBOUND[SB.ChatCommand] = [str(0, MAX_CHAT)];
 SERVERBOUND[SB.Disconnect] = [TEXT(256)];
@@ -197,13 +226,19 @@ CLIENTBOUND[CB.Weather] = [bool, bool, num(0, 1), num(0, 1)];
 CLIENTBOUND[CB.PlayerPosition] = [X, Y, X, ANGLE, PITCH, ID];
 CLIENTBOUND[CB.AddPlayer] = [ID, UUID, str(1, 16), X, Y, X, ANGLE, PITCH, ANGLE, ANGLE, FLAGS, str(1, 16), (v) => Array.isArray(v) && v.length === 6 && v.every(ITEM)];
 CLIENTBOUND[CB.RemoveEntities] = [arr(4096, ID)];
-CLIENTBOUND[CB.MoveEntity] = [ID, X, Y, X, ANGLE, PITCH, ANGLE, ANGLE, FLAGS];
+CLIENTBOUND[CB.MoveEntity] = [ID, X, Y, X, ANGLE, ANGLE, ANGLE, ANGLE, FLAGS];
 CLIENTBOUND[CB.Animate] = [ID, int(0, 5)];
 CLIENTBOUND[CB.SetEquipment] = [ID, int(0, 5), ITEM];
 CLIENTBOUND[CB.Sound] = [str(1, 128), X, Y, X, num(0, 1024), num(0, 16)];
-CLIENTBOUND[CB.LevelParticles] = [str(1, 32), arr(16, (v) => typeof v === 'number' || str(0, 64)(v))];
+// (a rocket's stars go as a list, which net/effects.ts checks)
+CLIENTBOUND[CB.LevelParticles] = [str(1, 32), arr(16, (v) => typeof v === 'number' || str(0, 64)(v) || Array.isArray(v))];
 CLIENTBOUND[CB.SystemChat] = [TEXT(4096), bool];
 CLIENTBOUND[CB.ContainerSetSlot] = [int(0, SLOT_COUNT - 1), ITEM];
+CLIENTBOUND[CB.AddEntity] = [ID, str(1, 32, /^[a-z_]+$/), orNull(obj), X, Y, X, ANGLE, ANGLE, ANGLE, ANGLE, FLAGS, obj];
+CLIENTBOUND[CB.SetEntityData] = [ID, obj];
+CLIENTBOUND[CB.SetPassengers] = [ID, arr(64, ID)];
+CLIENTBOUND[CB.TakeItemEntity] = [ID, ID, int(0, 127)];
+CLIENTBOUND[CB.SetExperience] = [num(0, 1), int(0, 0x7fffffff), int(0, 0x7fffffff)];
 
 /**
  * the packet `p` if it's one `from` could send with fields of the right types and ranges, else a reason to drop whoever

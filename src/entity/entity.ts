@@ -380,6 +380,8 @@ export abstract class Entity {
     // (vanilla Entity.addPassenger: the vehicle's game event, by the rider)
     this.level.gameEvent?.('entity_mount', vehicle.x, vehicle.y, vehicle.z, { entity: this });
     // (M8: goats) vanilla: CriteriaTriggers.START_RIDING_TRIGGER for every player aboard the vehicle (or aboard its riders)
+    // (the server's to trigger: a guest's copy of a ride, which the host sets, triggers nothing there)
+    if (this.level.isClientSide) return true;
     const aboard = [...vehicle.passengers];
     for (let i = 0; i < aboard.length; i++) {
       const p = aboard[i];

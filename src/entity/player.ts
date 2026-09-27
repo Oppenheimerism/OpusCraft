@@ -168,8 +168,10 @@ export class Player extends LivingEntity {
   remoteMove: ((p: Player) => void) | null = null;
   /** vanilla GameProfile.getName: who it is, over its head (null in single-player, where nobody else sees it) */
   profileName: string | null = null;
-  /** picks nothing up off the ground (a guest's player on the host in stage 1: its inventory is the guest's own) */
+  /** picks nothing up off the ground (a guest's copies of the other players: the host picks up for them) */
   noPickup = false;
+  /** (a guest's own player) a jump charged on the mount it steers, let go with this power (0-100): the host leaps it */
+  onRidingJump: ((power: number) => void) | null = null;
   override lastDamageSource = '';
 
   constructor(level: Level) {
@@ -424,7 +426,8 @@ export class Player extends LivingEntity {
 
   /** vanilla Player.rideTick: the sneak key gets you off; riders don't bob */
   override rideTick(): void {
-    if (this.isShiftKeyDown() && this.vehicle) {
+    // (a guest's player gets off when the host says: the host hears the sneak key in its moves)
+    if (this.isShiftKeyDown() && this.vehicle && !this.level.isClientSide) {
       this.stopRiding();
       return;
     }
@@ -543,8 +546,8 @@ export class Player extends LivingEntity {
       if (v <= 1) this.cooldowns.delete(k);
       else this.cooldowns.set(k, v - 1);
     }
-    // vanilla Player.aiStep touch(): orbs and arrows within the inflated box
-    if (this.health > 0 && this.gameMode !== 'spectator') {
+    // vanilla Player.aiStep touch(): orbs and arrows within the inflated box (a guest's are the host's to touch)
+    if (this.health > 0 && this.gameMode !== 'spectator' && !this.level.isClientSide) {
       for (const e of this.level.getEntities(this.bb.inflate(1, 0.5, 1), undefined, this)) {
         const touch = (e as { touchPlayer?: (p: Player) => void }).touchPlayer;
         if (touch) touch.call(e, this);
@@ -565,11 +568,6 @@ export class Player extends LivingEntity {
 
   protected override movedElsewhere(): boolean {
     return this.remote;
-  }
-
-  /** (a guest's player can't ride yet in stage 1: its own game would have to steer the vehicle) */
-  protected override canRide(vehicle: Entity): boolean {
-    return !this.remote && super.canRide(vehicle);
   }
 
   protected override moveFromElsewhere(): void {
@@ -812,9 +810,13 @@ export class Player extends LivingEntity {
     if (this.wasJump && !jump) {
       this.jumpRidingTicks = -10;
       const power = Math.floor(this.jumpRidingScale * 100);
-      mount.onPlayerJump(power);
-      // (vanilla sendRidingJump: and the server starts the leap)
-      if (power > 0) mount.handleStartJump(power);
+      // (a guest's mount is the host's: the leap goes to it, vanilla sendRidingJump)
+      if (this.level.isClientSide) this.onRidingJump?.(power);
+      else {
+        mount.onPlayerJump(power);
+        // (vanilla sendRidingJump: and the server starts the leap)
+        if (power > 0) mount.handleStartJump(power);
+      }
     } else if (!this.wasJump && jump) {
       this.jumpRidingTicks = 0;
       this.jumpRidingScale = 0;
