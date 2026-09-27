@@ -256,6 +256,11 @@ export abstract class AbstractContainerScreen<M extends ContainerMenu> extends S
     return mx < this.leftPos || my < this.topPos || mx >= this.leftPos + this.imageWidth || my >= this.topPos + this.imageHeight;
   }
 
+  /** (a guest) the host says the recipe clicked in the recipe book is to be shown in outline */
+  ghostRecipe(id: string): void {
+    this.book?.ghostRecipe(id);
+  }
+
   protected slotClicked(slot: Slot | null, slotId: number, button: number, type: ClickType): void {
     if (slot) slotId = slot.index;
     this.menu.clicked(slotId, button, type);

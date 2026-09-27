@@ -43,7 +43,7 @@ export function equipment(p: Player): (ItemStack | null)[] {
   return [inv.main[inv.selected], inv.offhand, inv.armor[0], inv.armor[1], inv.armor[2], inv.armor[3]];
 }
 
-/** a stack's identity for "has it changed": item, count, damage and data */
+/** a stack's identity for "has it changed": item, count, damage and data (none for an empty one, as on the wire) */
 export function stackKey(s: ItemStack | null): string {
-  return s ? `${s.item.id}|${s.count}|${s.damage}|${s.tag ? JSON.stringify(s.tag) : ''}` : '';
+  return s && s.count > 0 ? `${s.item.id}|${s.count}|${s.damage}|${s.tag ? JSON.stringify(s.tag) : ''}` : '';
 }

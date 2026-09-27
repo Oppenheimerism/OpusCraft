@@ -52,7 +52,8 @@ export function installScreens(game: Game): void {
   game.inventoryScreenFactory = () => {
     const p = game.player;
     if (p.gameMode === 'creative') return new CreativeInventoryScreen(game);
-    return new InventoryScreen(game, new InventoryMenu(p));
+    // (a guest's inventory menu is the one the host keeps in step with its own: net/client/clientMenus.ts)
+    return new InventoryScreen(game, game.client?.menus?.inventory ?? new InventoryMenu(p));
   };
   game.containerScreenFactory = (menu) => {
     if (menu instanceof CraftingMenu) return new CraftingScreen(game, menu);

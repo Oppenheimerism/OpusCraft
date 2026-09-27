@@ -29,6 +29,7 @@ import { GuiGraphics, SpriteSheet, BitmapFont, autoGuiScale } from '../gui/guiGr
 import { ItemIcons } from '../gui/itemIcons';
 import { Hud } from '../gui/hud';
 import type { Screen } from '../gui/screen';
+import type { Hand } from '../item/inventory';
 import { setClickSound } from '../gui/screen';
 import type { FontData } from '../textures/font';
 import { WorldMeta, saveWorldMeta, serializeChunk, saveChunks, savedChunkKeys, chunkKey, loadChunk, deserializeChunk, entityChunkKeys, saveEntityChunks, loadEntityChunk, SavedEntityChunk } from '../storage/worldStore';
@@ -342,7 +343,9 @@ export class Game {
         if (e.code === KEYS.inventory && !e.repeat) {
           // vanilla isServerControlledInventory: in a chest boat the key opens its chest
           const v = this.player.vehicle;
-          if (v instanceof ChestBoat) this.openEntityContainer(v);
+          // (a guest's: the host opens it, as it rides the host's)
+          if (this.client && (v instanceof ChestBoat || (v && 'openInventory' in v))) this.client.openVehicleInventory();
+          else if (v instanceof ChestBoat) this.openEntityContainer(v);
           // (vanilla HasCustomInventoryScreen: on a horse, its inventory, or nothing if it won't have you)
           else if (v && 'openInventory' in v) (v as Entity & { openInventory(p: Player): void }).openInventory(this.player);
           else {
@@ -482,7 +485,12 @@ export class Game {
     else this.level.addEntity(this.player);
     this.interaction = new Interaction(this.level, this.player);
     this.interaction.onOpenContainer = (kind, x, y, z) => this.openContainer(kind, x, y, z);
-    setVillageMenuHook((kind, x, y, z, p) => (p === this.player ? this.openContainer(kind, x, y, z) : this.refuseGuestMenu(p)));
+    setVillageMenuHook((kind, x, y, z, p) => {
+      if (p === this.player) return this.openContainer(kind, x, y, z);
+      // (a guest's player: its menu, made as the host's own is, and shown to it)
+      const m = blockMenu(this.level, p, kind, x, y, z);
+      if (m) this.showMenu(p, m);
+    });
     // (game/openMenu.ts: the menus of the blocks and entities that aren't opened by name, a shulker box's too)
     setShowMenu((p, menu) => this.showMenu(p, menu));
     installMenuHooks();
@@ -895,6 +903,8 @@ export class Game {
 
   /** the screen for a menu opened for the game's own player (gui/screens: each kind of menu's own) */
   containerScreenFactory: ((menu: ContainerMenu) => Screen) | null = null;
+  /** a book's screen, to write in (a book and quill) or read (a written book), or null for anything else (gui/screens) */
+  bookScreenFactory: ((p: Player, stack: ItemStack, hand: Hand) => Screen | null) | null = null;
 
   /** what opening a menu earns the game's own player (its advancements: game/openMenu.ts) */
   private readonly menuEvents: MenuEvents = {
@@ -911,20 +921,29 @@ export class Game {
   }
 
   /**
-   * (game/openMenu.ts) a menu opened for `p`, a block's or an entity's: the game's own player sees its screen; a
-   * guest's player is told it can't use that yet
+   * (game/openMenu.ts) a menu opened for `p`, a block's or an entity's: the game's own player sees its screen; a guest's
+   * player's is shown to its guest (net/server); anyone else's is closed again
    */
   private showMenu(p: Player, menu: ContainerMenu): boolean {
-    if (p !== this.player) return this.refuseGuestMenu(p);
+    if (p !== this.player) {
+      if (this.server) return this.server.showMenu(p, menu);
+      menu.removed();
+      return false;
+    }
     if (this.containerScreenFactory) this.setScreen(this.containerScreenFactory(menu));
     return true;
   }
 
   /** a villager started trading with the player (vanilla Merchant.openTradingScreen) */
   openMerchant(v: Merchant, p: Player): void {
-    if (p !== this.player || !this.containerScreenFactory) {
+    // (a guest's player trades on its guest's screen; its trades earn the host's own player nothing)
+    if (p !== this.player) {
+      if (this.server) this.server.showMenu(p, new MerchantMenu(p, v));
+      else v.stopTrading();
+      return;
+    }
+    if (!this.containerScreenFactory) {
       v.stopTrading();
-      if (p !== this.player) this.refuseGuestMenu(p);
       return;
     }
     const m = new MerchantMenu(p, v);
@@ -1955,6 +1974,21 @@ export class Game {
       respawned: () => {
         if (this.screen && this.player.health > 0) this.setScreen(null);
       },
+      openMenu: (menu) => {
+        if (this.containerScreenFactory && this.inWorld) this.setScreen(this.containerScreenFactory(menu));
+      },
+      closeMenu: (menu) => {
+        if ((this.screen as { menu?: unknown } | null)?.menu === menu) this.setScreen(null);
+      },
+      openBook: (hand) => {
+        const inv = this.player.inventory, s = hand === 'off' ? inv.offhand : inv.main[inv.selected];
+        const screen = s && this.bookScreenFactory ? this.bookScreenFactory(this.player, s, hand) : null;
+        if (screen) this.setScreen(screen);
+      },
+      ghostRecipe: (menu, recipe) => {
+        const sc = this.screen as { menu?: unknown; ghostRecipe?(id: string): void } | null;
+        if (sc?.menu === menu) sc.ghostRecipe?.(recipe);
+      },
     }, me);
   }
 
@@ -1990,11 +2024,6 @@ export class Game {
     this.stopHosting('The host closed the world.');
   };
 
-  /** a guest's player tried to open a menu (a job site's, a shulker box's, a villager's): not in stage 1 */
-  refuseGuestMenu(p: Player): false {
-    this.server?.refuse(p, "That can't be used by guests yet.");
-    return false;
-  }
 }
 
 function lookVec(yaw: number, pitch: number): [number, number, number] {

@@ -58,7 +58,7 @@ const CLAMPED: Record<string, number> = { deathTime: 20 };
  * and its effects' looks (glowing, invisible)
  */
 export const PLAYER_FIELDS: ReadonlySet<string> = new Set([
-  'health', 'dead', 'hurtTime', 'deathTime', 'remainingFireTicks', 'ticksFrozen', 'sleepingPos', 'useHand', 'useItemRemaining', 'useDuration', '$effects',
+  'health', 'dead', 'hurtTime', 'deathTime', 'remainingFireTicks', 'ticksFrozen', 'sleepingPos', 'useItem', 'useHand', 'useItemRemaining', 'useDuration', '$effects',
 ]);
 
 /** containers a guest sees the first slots of (vanilla: a horse's saddle and armour, a llama's carpet) */

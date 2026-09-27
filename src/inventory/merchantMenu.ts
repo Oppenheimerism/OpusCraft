@@ -237,8 +237,7 @@ export class MerchantMenu extends ContainerMenu {
       const s = this.trade.items[k];
       this.trade.items[k] = null;
       if (isEmpty(s)) continue;
-      const left = this.player.inventory.add(s);
-      if (left > 0) this.player.dropItem(s.copyWithCount(left), false);
+      this.giveBack(s);
     }
     this.trade.items[2] = null;
   }

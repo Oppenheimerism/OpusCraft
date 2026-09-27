@@ -7,11 +7,11 @@ import type { GuiGraphics } from './guiGraphics';
 import { EditBox, playClick } from './screen';
 import { itemTooltip } from './screens/container';
 import type { Slot } from '../inventory/container';
-import { CraftingMenuBase, FurnaceMenu } from '../inventory/menus';
+import { CraftingMenuBase, FurnaceMenu, recipeTarget } from '../inventory/menus';
 import { ItemStack, ITEMS } from '../item/item';
 import { fuelTime } from '../inventory/recipes';
 import {
-  BookType, BookCategory, BookRecipe, RecipeCollection, BOOK_TABS, collections, fits, countItems, assign, placeRecipe, gridCells, PlaceTarget,
+  BookType, BookCategory, BookRecipe, RecipeCollection, BOOK_TABS, BOOK_BY_ID, collections, fits, countItems, assign, placeRecipe, gridCells,
 } from '../inventory/recipeBook';
 
 /** vanilla gui.recipebook.toggleRecipes.* */
@@ -476,47 +476,25 @@ export class RecipeBookComponent {
     };
   }
 
-  private target(): PlaceTarget {
-    const p = this.game.player;
-    const inv = p.inventory;
-    const m = this.menu;
-    const base = {
-      inventory: inv.main,
-      setInventory: (i: number, s: ItemStack | null) => inv.setSlot(i, s),
-      giveBack: (s: ItemStack) => {
-        const left = inv.add(s);
-        if (left > 0) p.dropItem(s.copyWithCount(left), false);
-      },
-      creative: p.gameMode === 'creative',
-    };
-    if (m instanceof CraftingMenuBase) {
-      return {
-        ...base,
-        gridW: m.gridW,
-        gridH: m.gridW,
-        getCell: (i) => m.craft.items[i],
-        setCell: (i, s) => m.craft.set(i, s),
-        matches: (r) => !!r.source && m.recipe === r.source,
-      };
-    }
-    const c = m.furnace.container;
-    return {
-      ...base,
-      gridW: 1,
-      gridH: 1,
-      getCell: () => c.get(0),
-      setCell: (_i, s) => c.set(0, s),
-      matches: (r) => !!c.get(0) && r.slots[0]!.has(c.get(0)!.item.id),
-    };
-  }
-
   /** vanilla handlePlaceRecipe → ServerPlaceRecipe (ghost recipe when you lack the items) */
   private place(r: BookRecipe): void {
     const shift = this.game.input.isDown('ShiftLeft') || this.game.input.isDown('ShiftRight');
     this.ghost = null;
-    const res = placeRecipe(this.target(), r, shift);
+    // (a guest's grid is the host's to fill: it does, and says if the recipe's to be shown in outline)
+    if (this.game.client) {
+      this.game.client.placeRecipe(this.menu, r.id, shift);
+      this.invVersion = -1;
+      return;
+    }
+    const res = placeRecipe(recipeTarget(this.game.player, this.menu), r, shift);
     if (!res.placed && res.ghost) this.setupGhost(r);
     this.invVersion = -1;
+  }
+
+  /** (a guest) vanilla handlePlaceGhostRecipe: the host says the recipe clicked is to be shown in outline */
+  ghostRecipe(id: string): void {
+    const r = BOOK_BY_ID.get(id);
+    if (r) this.setupGhost(r);
   }
 
   /** vanilla setupGhostRecipe */

@@ -13,6 +13,7 @@ import { applyDyes, dyeColorName, isDyeable } from '../item/dyedColor';
 import { customRecipeFor, type CustomRecipe } from './customRecipes';
 import { craftedBy } from '../game/itemBehavior';
 import { equipEvent } from '../game/vibrations';
+import type { PlaceTarget } from './recipeBook';
 
 const ARMOR_ICONS = ['slot_boots', 'slot_leggings', 'slot_chestplate', 'slot_helmet'];
 const ARMOR_SLOT_OF: Record<string, number> = { feet: 0, legs: 1, chest: 2, head: 3 };
@@ -422,6 +423,42 @@ export class BrewingStandMenu extends ContainerMenu {
     slot.onTake(p, before);
     return before;
   }
+}
+
+/**
+ * what a recipe clicked in the recipe book fills (vanilla ServerPlaceRecipe's menu and inventory): the crafting grid, or
+ * a furnace's input as a 1x1 grid, from `p`'s inventory
+ */
+export function recipeTarget(p: Player, m: CraftingMenuBase | FurnaceMenu): PlaceTarget {
+  const inv = p.inventory;
+  const base = {
+    inventory: inv.main,
+    setInventory: (i: number, s: ItemStack | null) => inv.setSlot(i, s),
+    giveBack: (s: ItemStack) => {
+      const left = inv.add(s);
+      if (left > 0) p.dropItem(s.copyWithCount(left), false);
+    },
+    creative: p.gameMode === 'creative',
+  };
+  if (m instanceof CraftingMenuBase) {
+    return {
+      ...base,
+      gridW: m.gridW,
+      gridH: m.gridW,
+      getCell: (i) => m.craft.items[i],
+      setCell: (i, s) => m.craft.set(i, s),
+      matches: (r) => !!r.source && m.recipe === r.source,
+    };
+  }
+  const c = m.furnace.container;
+  return {
+    ...base,
+    gridW: 1,
+    gridH: 1,
+    getCell: () => c.get(0),
+    setCell: (_i, s) => c.set(0, s),
+    matches: (r) => !!c.get(0) && r.slots[0]!.has(c.get(0)!.item.id),
+  };
 }
 
 /** a container that isn't a block (vanilla ContainerEntity: chest minecarts) */

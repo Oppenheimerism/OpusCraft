@@ -432,8 +432,7 @@ export abstract class ContainerMenu {
   /** menu closed: carried stack goes back to the inventory (or is dropped) */
   removed(): void {
     if (this.carried) {
-      const left = this.player.inventory.add(this.carried);
-      if (left > 0) this.player.dropItem(this.carried.copyWithCount(left), false);
+      this.giveBack(this.carried);
       this.carried = null;
     }
   }
@@ -443,10 +442,19 @@ export abstract class ContainerMenu {
     for (let i = 0; i < c.size; i++) {
       const s = c.get(i);
       if (!s) continue;
-      const left = this.player.inventory.add(s);
-      if (left > 0) this.player.dropItem(s.copyWithCount(left), false);
+      this.giveBack(s);
       c.set(i, null);
     }
+  }
+
+  /**
+   * vanilla dropOrPlaceInInventory: a stack the closed menu held, back in the inventory (what won't fit dropped); all
+   * of it dropped for a host's guest that has left or died (the game's own player's goes back, as it always has)
+   */
+  protected giveBack(s: ItemStack): void {
+    const p = this.player;
+    const left = p.disconnected || (p.remote && p.health <= 0) ? s.count : p.inventory.add(s);
+    if (left > 0) p.dropItem(s.copyWithCount(left), false);
   }
 }
 

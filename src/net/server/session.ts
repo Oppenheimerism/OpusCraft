@@ -4,12 +4,14 @@
 
 import type { Value } from '../codec';
 import { decode, encodeBundle, CodecError } from '../codec';
-import { SB, CB, Action, PoseFlag, checkPacket, isAllowedChat, SLOT_ARMOR, SLOT_OFFHAND, SLOT_COUNT, ANIMATE_SWING_MAIN_HAND, ANIMATE_SWING_OFF_HAND, type LoginInfo } from '../protocol';
+import { SB, CB, Action, PoseFlag, CLICK_TYPES, checkPacket, isAllowedChat, SLOT_ARMOR, SLOT_OFFHAND, SLOT_COUNT, ANIMATE_SWING_MAIN_HAND, ANIMATE_SWING_OFF_HAND, type LoginInfo } from '../protocol';
 import { PROTOCOL_VERSION, BUILD_ID, MAX_GUEST_MESSAGE, MAX_GUEST_PACKETS, MESSAGES_PER_TICK, MAX_GUEST_BACKLOG, MAX_GUEST_BACKLOG_BYTES, MAX_LOGIN_BACKLOG, MAX_GUESTS, LOGIN_TICKS, KEEPALIVE_TICKS, TIMEOUT_TICKS, GUEST_VIEW_DISTANCE, CHUNKS_PER_TICK, MAX_MOVE_PER_TICK, CHAT_SPAM_STEP, CHAT_SPAM_LIMIT, NAME_PATTERN, DROP_SPAM_STEP, DROP_SPAM_LIMIT, ENTITY_REACH_SLACK, MAX_MOTION } from '../config';
 import type { PeerId } from '../transport/transport';
 import { creativeItem, itemToWire } from '../items';
 import { applyPoseFlags, equipment, poseFlags, stackKey } from '../playerState';
 import { playerStatus, effectList, effectsChanged, effectsSent } from '../playerStatus';
+import { claimMatches } from '../menus';
+import { ServerMenus } from './menuSync';
 import { levelChunkPacket } from '../chunkData';
 import type { HostServer } from './hostServer';
 import { EntityTracker } from './entityTracker';
@@ -18,9 +20,15 @@ import { Player } from '../../entity/player';
 import { Interaction } from '../../game/interaction';
 import { deathMessage, dropDeathLoot, resetForRespawn, playerHurtSound, playerFallSound } from '../../game/playerDeath';
 import { useBed, findRespawn, MSG, type SleepHost } from '../../game/sleep';
+import { writeBook } from '../../game/books';
+import { entityContainerMenu } from '../../game/openMenu';
+import { ChestBoat } from '../../entity/boat';
+import { AbstractHorse } from '../../entity/horse';
 import { raycast } from '../../game/raycast';
 import { Chunk } from '../../world/chunk';
 import type { ItemStack } from '../../item/item';
+import type { Hand } from '../../item/inventory';
+import type { ContainerMenu } from '../../inventory/container';
 import type { Level } from '../../game/level';
 
 /** a player another guest (or the host's player) sees, as last sent */
@@ -59,6 +67,8 @@ export class ServerPlayerSession {
   uuid = '';
   player: Player | null = null;
   interaction: Interaction | null = null;
+  /** its menus: the inventory's, and whatever a block or an entity opened for it */
+  menus: ServerMenus | null = null;
   /** messages as they came, handled at the start of the host's next ticks */
   private readonly inbox: Uint8Array[] = [];
   private inboxBytes = 0;
@@ -102,6 +112,8 @@ export class ServerPlayerSession {
   private gameMode = '';
   /** the hotbar slot the guest has in hand */
   private selected = 0;
+  /** the item it's using as the guest was last told: its hand, how long the use lasts, and when it began ('' none) */
+  private using = '';
   /** its items' cooldowns as the guest was last told: ticks left, and when */
   private readonly cooldowns = new Map<string, [number, number]>();
   /** how fast it was going sideways by the last move (a glide into a wall hurts by the speed it loses) */
@@ -226,6 +238,8 @@ export class ServerPlayerSession {
         }
         // (vanilla handlePlayerCommand STOP_SLEEPING: Leave Bed)
         else if (p[1] === Action.STOP_SLEEPING && pl.isSleeping()) pl.stopSleepInBed(false);
+        // (vanilla handlePlayerCommand OPEN_INVENTORY: what it rides has an inventory of its own)
+        else if (p[1] === Action.OPEN_INVENTORY && pl.health > 0) this.openVehicleInventory();
         return;
       case SB.SetCarriedItem:
         pl.inventory.selected = this.selected = p[1] as number;
@@ -245,6 +259,22 @@ export class ServerPlayerSession {
         return this.respawn();
       case SB.PickItem:
         return this.pickSlot(p[1] as number);
+      case SB.ContainerClick:
+        return this.menus!.click(p[1] as number, p[2] as number, p[3] as number, p[4] as number, CLICK_TYPES[p[5] as number], p[6] as [number, number][], p[7] as number);
+      case SB.ContainerButtonClick:
+        return this.menus!.button(p[1] as number, p[2] as number);
+      case SB.ContainerClose:
+        return this.menus!.guestClosed(p[1] as number);
+      case SB.RenameItem:
+        return this.menus!.rename(p[1] as string);
+      case SB.SelectTrade:
+        return this.menus!.selectTrade(p[1] as number);
+      case SB.SlotStateChanged:
+        return this.menus!.slotState(p[1] as number, p[2] as number, p[3] as boolean);
+      case SB.PlaceRecipe:
+        return this.menus!.placeRecipe(p[1] as number, p[2] as string, p[3] as boolean);
+      case SB.EditBook:
+        return this.editBook(p[1] as number, p[2] as string[], p[3] as string | null);
     }
   }
 
@@ -284,6 +314,15 @@ export class ServerPlayerSession {
     const it = (this.interaction = srv.guestInteraction(this, p));
     // (what doesn't fit in its inventory, or it throws out, lands in the world: vanilla Player.drop)
     p.dropHandler = (s) => it.throwItem(s);
+    this.menus = new ServerMenus({
+      player: p,
+      slots: this.slots,
+      send: (pk) => this.send(pk),
+      resendSlot: (i) => {
+        this.slots[i] = '\u0000';
+        this.invVersion = -1;
+      },
+    });
     this.state = 'play';
     this.lastHeard = this.ticks;
     const info: LoginInfo = {
@@ -498,6 +537,7 @@ export class ServerPlayerSession {
     p.food.difficulty = this.level.difficulty;
     p.food.naturalRegen = !!this.level.gameRules.naturalRegeneration;
     this.tickInteraction();
+    this.menus!.tick();
     this.tickChunks();
   }
 
@@ -657,6 +697,8 @@ export class ServerPlayerSession {
     this.trackPlayers();
     this.tracker.tick(this.ticks);
     this.dismounted();
+    // (the open menu's slots first: the inventory's that it shows go with its state number; the rest after)
+    this.menus!.broadcast();
     this.syncInventory();
     this.syncExperience();
     this.syncStatus();
@@ -709,6 +751,14 @@ export class ServerPlayerSession {
     if (p.gameMode !== this.gameMode) {
       this.gameMode = p.gameMode;
       this.send([CB.GameMode, p.gameMode]);
+    }
+    // (vanilla DATA_LIVING_ENTITY_FLAGS for its own player: eating, drinking, a bow drawn, a shield up; the guest counts
+    // the use on from there, as the host does)
+    const using = p.useItem ? `${p.useHand},${p.useDuration},${this.ticks - p.ticksUsingItem()}` : '';
+    if (using !== this.using) {
+      this.using = using;
+      const t = (n: number, lo: number) => (Number.isFinite(n) ? Math.max(lo, Math.min(72000, Math.round(n))) : 0);
+      this.send([CB.SetUsingItem, p.useItem ? (p.useHand === 'off' ? 1 : 0) : -1, t(p.useDuration, 0), t(p.useItemRemaining, -72000)]);
     }
     const inv = p.inventory;
     if (inv.selected !== this.selected) {
@@ -813,10 +863,9 @@ export class ServerPlayerSession {
     if (inv.version === this.invVersion) return;
     this.invVersion = inv.version;
     for (let slot = 0; slot < SLOT_COUNT; slot++) {
-      const s = this.slotStack(slot), key = stackKey(s);
-      if (key === this.slots[slot]) continue;
+      const s = this.slotStack(slot), key = stackKey(s), had = this.slots[slot];
       this.slots[slot] = key;
-      this.send([CB.ContainerSetSlot, slot, itemToWire(s)]);
+      if (!claimMatches(had, key)) this.send([CB.ContainerSetSlot, slot, itemToWire(s)]);
     }
   }
 
@@ -829,6 +878,8 @@ export class ServerPlayerSession {
    */
   private died(source: string): void {
     const p = this.player!, level = this.level, srv = this.server;
+    // (what its menus held, a crafting grid's or its cursor's, is dropped where it died, keepInventory or not)
+    this.menus!.closeAll(true);
     srv.heardByAll(() => level.sound.play('entity.player.death', p.x, p.y, p.z, 1, 1));
     const msg = deathMessage(source, p, this.name).slice(0, 1024);
     if (level.gameRules.showDeathMessages) srv.broadcastChat(msg);
@@ -877,6 +928,50 @@ export class ServerPlayerSession {
   }
 
   // -------------------------------------------------------------------------
+  // menus and books
+
+  /** (HostServer.showMenu) vanilla ServerPlayer.openMenu: `m`, made for its player, shown to the guest */
+  showMenu(m: ContainerMenu): boolean {
+    if (this.state !== 'play' || !this.menus || this.player!.health <= 0) {
+      m.removed();
+      return false;
+    }
+    return this.menus.open(m);
+  }
+
+  /**
+   * vanilla HasCustomInventoryScreen.openCustomInventoryScreen: the inventory key while riding a chest boat opens its
+   * chest; on a horse, its inventory (if the horse will have it)
+   */
+  private openVehicleInventory(): void {
+    const p = this.player!, v = p.vehicle;
+    if (v instanceof ChestBoat) this.showMenu(entityContainerMenu(this.level, p, v));
+    else if (v instanceof AbstractHorse) v.openInventory(p);
+  }
+
+  /** (HostServer.openBook) a book it used, in `hand`: its screen, to read or write in (vanilla ClientboundOpenBookPacket) */
+  openBook(hand: Hand): void {
+    this.send([CB.OpenBook, hand === 'off' ? 1 : 0]);
+  }
+
+  /**
+   * vanilla handleEditBook: what the guest wrote in the book and quill in its hotbar slot or offhand (40), or signed
+   * it as: plain text, no control characters but new lines, no formatting sign; a title of 1 to 32 characters
+   */
+  private editBook(slot: number, pages: string[], title: string | null): void {
+    const p = this.player!;
+    if ((slot > 8 && slot !== 40) || p.health <= 0) return;
+    const text = pages.map((s) => s.replace(/[\u0000-\u0009\u000b-\u001f\u007f§]/g, ''));
+    let sign: { title: string; author: string } | null = null;
+    if (title !== null) {
+      const t = title.replace(/[\u0000-\u001f\u007f§]/g, '').trim();
+      if (!t) return;
+      sign = { title: t, author: this.name };
+    }
+    writeBook(p, slot, text, sign);
+  }
+
+  // -------------------------------------------------------------------------
   // leaving
 
   /** vanilla ServerGamePacketListenerImpl.disconnect: tell the guest why, then let it go */
@@ -897,6 +992,9 @@ export class ServerPlayerSession {
     const p = this.player;
     if (p) {
       if (this.crack) this.level.destroyBlockProgress(p.id, 0, 0, 0, -1);
+      // (vanilla Player.remove: the open menu closed, a chest's lid shut, what the menus held dropped where it stood)
+      p.disconnected = true;
+      this.menus?.closeAll(false);
       p.remove();
       this.server.hooks.setTicket(`player:${p.id}`, null);
     }

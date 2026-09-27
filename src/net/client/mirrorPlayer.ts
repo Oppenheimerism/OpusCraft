@@ -77,6 +77,11 @@ export class MirrorPlayer extends Player {
       this.bodyYaw += wrapDegrees(this.lBody - this.bodyYaw) / k;
     } else this.dx = this.dy = this.dz = 0;
     this.fallFlyTicks = this.fallFlying ? this.fallFlyTicks + 1 : 0;
+    // (the item it's using is the stack in that hand, as its model draws it: a bow drawn, a crossbow loading)
+    if (this.useItem) {
+      const held = this.inventory.inHand(this.useHand);
+      if (held && held.item === this.useItem.item) this.useItem = held;
+    }
     this.updateWalkAnimation();
     this.updateSwing();
   }

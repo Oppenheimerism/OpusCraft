@@ -17,6 +17,9 @@ import type { Entity } from '../../entity/entity';
 import type { LivingEntity } from '../../entity/living';
 import type { Player, GameMode } from '../../entity/player';
 import { Interaction } from '../../game/interaction';
+import { blockMenu, entityContainerMenu } from '../../game/openMenu';
+import type { ContainerMenu } from '../../inventory/container';
+import type { Hand } from '../../item/inventory';
 import { Chunk } from '../../world/chunk';
 import { blockEntityKey, type BlockEntity } from '../../world/blockEntity';
 import { STATE_BLOCK } from '../../world/block';
@@ -350,16 +353,34 @@ export class HostServer {
   // coming and going
 
   /**
-   * a guest's Interaction: the host's own kind, its bed the guest's to sleep in, and what would open a screen here
-   * turned into a word to the guest
+   * a guest's Interaction: the host's own kind, its bed the guest's to sleep in, and the menus of the blocks and
+   * entities it uses made for its player (game/openMenu.ts, as for the host's own) and shown to it
    */
   guestInteraction(s: ServerPlayerSession, p: Player): Interaction {
     const it = new Interaction(this.level, p);
-    const cant = (what: string) => () => s.notice(`${what} can't be used by guests yet.`);
-    it.onOpenContainer = cant('That');
-    it.onOpenEntityContainer = cant('That');
+    it.onOpenContainer = (kind, x, y, z) => {
+      const m = blockMenu(this.level, p, kind, x, y, z);
+      if (m) s.showMenu(m);
+    };
+    it.onOpenEntityContainer = (e) => void s.showMenu(entityContainerMenu(this.level, p, e));
     it.onUseBed = (x, y, z) => s.useBed(x, y, z);
     return it;
+  }
+
+  /**
+   * (game/openMenu.ts's ShowMenu, for a guest's player) vanilla ServerPlayer.openMenu: `m`, made for `p`, shown to its
+   * guest; false (and `m` closed again) if `p` is no guest's
+   */
+  showMenu(p: Player, m: ContainerMenu): boolean {
+    const s = this.sessionOf(p);
+    if (s) return s.showMenu(m);
+    m.removed();
+    return false;
+  }
+
+  /** a book a guest's player used, in `hand`: opened on the guest's screen */
+  openBook(p: Player, hand: Hand): void {
+    this.sessionOf(p)?.openBook(hand);
   }
 
   /** something `p` tried that guests can't do yet (a menu, a portal): a word to the guest, nothing else happens */

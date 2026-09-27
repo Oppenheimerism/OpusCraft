@@ -166,6 +166,11 @@ export class Player extends LivingEntity {
   remote = false;
   /** (remote) puts it where its game last said it is, in its tick (the host's session sets this) */
   remoteMove: ((p: Player) => void) | null = null;
+  /**
+   * (remote) vanilla ServerPlayer.hasDisconnected: its guest has left, so what its menus still held (the cursor, a
+   * crafting grid) is dropped where it stood rather than put back in its inventory (as it is when it dies)
+   */
+  disconnected = false;
   /** vanilla GameProfile.getName: who it is, over its head (null in single-player, where nobody else sees it) */
   profileName: string | null = null;
   /** picks nothing up off the ground (a guest's copies of the other players: the host picks up for them) */

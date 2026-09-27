@@ -2,7 +2,7 @@
 // (Player.openItemGui, through the game's screens), a signed book's tooltip names its author and how far it is from
 // the original, and a crafting table copies it into books and quills.
 
-import { ItemStack } from '../item/item';
+import { ItemStack, ITEMS, cloneTag } from '../item/item';
 import type { Player } from '../entity/player';
 import type { Hand } from '../item/inventory';
 import { registerItemBehavior } from './itemBehavior';
@@ -25,6 +25,28 @@ for (const id of ['writable_book', 'written_book']) {
       return 'success';
     },
   });
+}
+
+/**
+ * vanilla ServerGamePacketListenerImpl.updateBookContents / signBook: `pages` written into the book and quill in `p`'s
+ * inventory slot `slot` (a hotbar slot, or 40 for the offhand); signed, it becomes a written book by `author` with
+ * everything else it had (transmuteCopy). False if there's no book and quill there
+ */
+export function writeBook(p: Player, slot: number, pages: string[], sign: { title: string; author: string } | null): boolean {
+  const inv = p.inventory;
+  const held = slot === 40 ? inv.offhand : inv.main[slot];
+  if (!held || held.item.id !== 'writable_book') return false;
+  if (!sign) held.tag = { ...(held.tag ?? {}), pages: [...pages] };
+  else {
+    const tag = cloneTag(held.tag) ?? {};
+    delete tag.pages;
+    tag.book = { title: sign.title, author: sign.author, generation: 0, pages: [...pages] };
+    const signed = new ItemStack(ITEMS.get('written_book')!, held.count, 0, tag);
+    if (slot === 40) inv.offhand = signed;
+    else inv.main[slot] = signed;
+  }
+  inv.version++;
+  return true;
 }
 
 /** vanilla book.generation.* */
