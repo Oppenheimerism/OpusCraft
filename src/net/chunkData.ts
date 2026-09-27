@@ -10,6 +10,28 @@ import { MIN_Y, MAX_Y, SECTIONS, NO_CAVE_BIOME } from '../world/constants';
 import { stateCount } from '../world/block';
 import { BIOMES } from '../world/gen/biomes';
 
+/**
+ * whether the chunk `dx`, `dz` chunks from a guest's is one the host sends it, at view distance `r` (vanilla
+ * ChunkTrackingView, near enough): a disc a little fuller than a circle, so at 2 the corners of the 5 by 5 aren't
+ */
+export function inView(dx: number, dz: number, r: number): boolean {
+  return dx * dx + dz * dz <= r * r + r;
+}
+
+/** how far round a player's chunk a loading screen waits for the world (Game.tick: ChunkManager.isReady's radius) */
+export const LOADING_RADIUS = 2;
+
+/**
+ * the chunks a guest's loading screen waits for, round (`x`, `z`), at view distance `r`: those within LOADING_RADIUS
+ * that the host sends (all of them from 3 on)
+ */
+export function loadingChunks(x: number, z: number, r: number): [number, number][] {
+  const cx = Math.floor(x) >> 4, cz = Math.floor(z) >> 4, out: [number, number][] = [];
+  for (let dz = -LOADING_RADIUS; dz <= LOADING_RADIUS; dz++)
+    for (let dx = -LOADING_RADIUS; dx <= LOADING_RADIUS; dx++) if (inView(dx, dz, r)) out.push([cx + dx, cz + dz]);
+  return out;
+}
+
 /** block entities whose contents don't show (vanilla sends a chest's items only to whoever opens it) */
 const HIDDEN_CONTENTS = /(^|_)(chest|barrel|shulker_box|furnace|smoker|hopper|dispenser|dropper|brewing_stand|crafter)$/;
 

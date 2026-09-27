@@ -340,11 +340,15 @@ export class ChunkManager {
     for (const c of this.world.chunks.values()) c.dirty = (1 << SECTIONS) - 1;
   }
 
-  /** Is the area around (x,z) generated and meshed (for spawning)? */
-  isReady(x: number, z: number, radius: number): boolean {
+  /**
+   * Is the area around (x,z) generated and meshed (for spawning)? (`counts`: which of its chunks count, by how far each
+   * is from (x,z)'s: a guest's, only those the host sends it)
+   */
+  isReady(x: number, z: number, radius: number, counts?: (dx: number, dz: number) => boolean): boolean {
     const cx = Math.floor(x) >> 4, cz = Math.floor(z) >> 4;
     for (let dz = -radius; dz <= radius; dz++)
       for (let dx = -radius; dx <= radius; dx++) {
+        if (counts && !counts(dx, dz)) continue;
         const c = this.world.getChunk(cx + dx, cz + dz);
         if (!c) return false;
         if (dx * dx + dz * dz <= (radius - 1) * (radius - 1) && c.dirty) return false;

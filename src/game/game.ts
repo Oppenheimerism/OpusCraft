@@ -83,6 +83,7 @@ import { gatewayTravel } from './gatewayTravel';
 import { setDialViewer } from '../item/compass';
 import { respawnArrival, worldSpawnOf, InitialSpawn, WAIT, adjustSpawnLocation } from './respawnLogic';
 import { SaveQueue, watchPageLeave, unwatchPageLeave } from './saveOnLeave';
+import { BackgroundClock } from './backgroundClock';
 import { savePlayer, loadPlayer, PlayerDataStore } from './playerData';
 // (multiplayer)
 import { MULTIPLAYER_ENABLED } from '../net/config';
@@ -90,7 +91,11 @@ import { HostServer } from '../net/server/hostServer';
 import { ClientSession, type GuestIdentity } from '../net/client/clientSession';
 import type { LoginInfo, ReceivingReason } from '../net/protocol';
 import { BroadcastHostTransport, BroadcastGuestTransport } from '../net/transport/broadcastChannel';
-import { randomId } from '../net/transport/transport';
+import { WebSocketHostTransport, WebSocketGuestTransport, CLOSE_HOST_TAKEN } from '../net/transport/webSocket';
+import { CombinedTransport } from '../net/transport/combined';
+import { randomId, type Transport } from '../net/transport/transport';
+import { newJoinCode, showJoinCode } from '../net/joinCode';
+import { inView, LOADING_RADIUS } from '../net/chunkData';
 
 export type { GameOptions } from './options';
 /** vanilla ReceivingLevelScreen.Reason: what the loading screen shows while changing dimension (net/protocol.ts) */
@@ -139,6 +144,9 @@ export class Game {
   ticks = 0;
   private acc = 0;
   private last = 0;
+  /** (multiplayer) a frame for the background clock's beat, while the page is hidden (run() sets it) */
+  private beat: () => void = () => {};
+  private readonly clock = new BackgroundClock();
   fps = 0;
   private frames = 0;
   private fpsTime = 0;
@@ -186,6 +194,8 @@ export class Game {
   private lavaRideFrom: [number, number] | null = null;
   /** the tutorial hints start on first joining the world, not on every change of dimension */
   private joined = false;
+  /** (a guest) ticks on the loading screen so far */
+  private loadingTicks = 0;
   chatScreenFactory: ((initial: string) => Screen) | null = null;
   /** vanilla InBedChatScreen (chat + Leave Bed) */
   inBedScreenFactory: (() => Screen) | null = null;
@@ -202,10 +212,21 @@ export class Game {
   mode: 'single' | 'host' | 'client' = 'single';
   server: HostServer | null = null;
   client: ClientSession | null = null;
+  /**
+   * (hosting, stage 5) how others join: the join code, and the page's connection to the relay on the game's own server
+   * (null if this page can't host through it: see why), through which other computers come
+   */
+  lanShare: { code: string; relay: WebSocketHostTransport | null; why: string } | null = null;
+  /** (testing multiplayer: ?mplag=20-200) what arrives from the relay is held back that long, at random, in order */
+  netLag: { min: number; max: number } | null = null;
+  /** vanilla JoinMultiplayerScreen, back to after failing to join (the code tried kept in its box) */
+  serverListScreenFactory: ((code: string) => Screen) | null = null;
   /** vanilla ConnectScreen ("Connecting to the server...", with a Cancel) */
   connectingScreenFactory: ((cancel: () => void) => Screen) | null = null;
-  /** vanilla DisconnectedScreen: a title, why, and back to the title screen */
-  disconnectedScreenFactory: ((title: string, reason: string) => Screen) | null = null;
+  /** vanilla DisconnectedScreen: a title, why, and back to the title screen (or to `back`'s, the server list's) */
+  disconnectedScreenFactory: ((title: string, reason: string, back: (() => Screen) | null) => Screen) | null = null;
+  /** (a guest) the join code it joined with */
+  private joinedWith = '';
   /** (hosting) the players of the guests this world has had, kept with it (vanilla PlayerDataStorage) */
   private playerData: PlayerDataStore | null = null;
   /** chunks with a saved entity record / with entities not yet saved / with a record load in flight */
@@ -610,6 +631,7 @@ export class Game {
       this.player.moveTo(this.spawnSearch.cx * 16 + 8, 120, this.spawnSearch.cz * 16 + 8, 0, 0);
     }
     this.spawned = false;
+    this.loadingTicks = 0;
     this.inWorld = true;
     this.chunks.setCenter(this.player.x, this.player.z);
     this.autosaveTimer = 0;
@@ -804,6 +826,7 @@ export class Game {
     this.inWorld = false;
     unwatchPageLeave();
     this.spawned = false;
+    this.loadingTicks = 0;
     this.pool?.terminate();
     this.pool = null;
     for (const k of [...this.renderer.world.meshes.keys()]) this.renderer.world.dispose(k);
@@ -965,6 +988,7 @@ export class Game {
     this.chunks.setCenter(p.x, p.z);
     this.arrival = place;
     this.spawned = false;
+    this.loadingTicks = 0;
     this.receivingPortal = null;
     this.setScreen(this.receivingScreenFactory ? this.receivingScreenFactory('other') : null);
   }
@@ -1033,6 +1057,7 @@ export class Game {
     this.chunks.setCenter(x, z);
     this.arrival = arrive;
     this.spawned = false;
+    this.loadingTicks = 0;
     this.receivingPortal = reason === 'other' ? null : reason;
     this.setScreen(this.receivingScreenFactory ? this.receivingScreenFactory(reason) : null);
   }
@@ -1142,6 +1167,14 @@ export class Game {
   run(): void {
     this.last = performance.now();
     let lastFrame = performance.now();
+    // (multiplayer: while the page is hidden, the background clock's beats run the frames, at the game's pace, and
+    // nothing is drawn; while it's shown, a beat stands in only for frames that stopped coming, as the timer below does)
+    this.beat = () => {
+      const now = performance.now();
+      if (this.mode === 'single' || !(document.hidden || now - lastFrame > 250)) return;
+      lastFrame = now;
+      this.frame(now);
+    };
     let lastDrawn = 0;
     const frame = (now: number) => {
       lastFrame = performance.now();
@@ -1192,7 +1225,8 @@ export class Game {
       this.chunks.setCenter(this.player.x, this.player.z);
       this.chunks.update();
     }
-    this.render(partial);
+    // (multiplayer, the page hidden: the world goes on, and nothing is drawn that nobody sees)
+    if (!document.hidden || this.mode === 'single') this.render(partial);
     this.frames++;
     if (now - this.fpsTime > 1000) {
       this.fps = this.frames;
@@ -1248,7 +1282,9 @@ export class Game {
         if (this.findSpawn()) this.spawnSearch = null;
         else return;
       }
-      if (this.chunks.isReady(this.player.x, this.player.z, 2)) {
+      // (a guest: the chunks the host sends of those, at the view distance it said: net/chunkData.ts loadingChunks)
+      const vd = this.client?.info?.viewDistance;
+      if (this.chunks.isReady(this.player.x, this.player.z, LOADING_RADIUS, vd ? (dx, dz) => inView(dx, dz, vd) : undefined)) {
         if (this.arrival) {
           if (!this.arrival(this)) return;
           this.arrival = null;
@@ -1261,7 +1297,11 @@ export class Game {
         this.joined = true;
         if (this.screen) this.setScreen(null);
         this.input.lock();
-      } else return client?.sendTick();
+        this.loadingTicks = 0;
+      } else {
+        if (client) this.stillLoading(client, vd ?? 2);
+        return client?.sendTick();
+      }
     }
     const inp = this.input;
     const p = this.player;
@@ -1840,8 +1880,17 @@ export class Game {
   openToLan(guestMode: GameMode = 'survival'): boolean {
     if (!MULTIPLAYER_ENABLED || this.mode !== 'single' || !this.inWorld || !this.meta) return false;
     const lanId = randomId();
-    const transport = new BroadcastHostTransport(lanId);
-    if (!transport.available) return false;
+    // (stage 5: a new code each time; the other windows of this browser are told it, other computers must be)
+    const code = newJoinCode();
+    const windows = new BroadcastHostTransport(lanId);
+    // (other computers come through the relay on the game's own server, which lets only a page opened at localhost host)
+    const why = relayHostable();
+    const relay = why ? null : new WebSocketHostTransport({ latency: this.netLag ?? undefined });
+    const ways: [string, Transport][] = [];
+    if (windows.available) ways.push(['b', windows]);
+    if (relay) ways.push(['w', relay]);
+    if (!ways.length) return false;
+    const transport = new CombinedTransport(ways);
     this.server = new HostServer(
       this.level,
       transport,
@@ -1860,15 +1909,39 @@ export class Game {
         loadGuest: (uuid) => this.playerData?.load(uuid) ?? Promise.resolve(null),
         saveGuest: (uuid, d) => this.playerData?.put(uuid, d),
         leaveInDimension: (dim, e) => this.arrivals.add(dimensionById(dim), { entity: e }),
+        // (what other computers' Multiplayer screens show, through the relay: never the code)
+        announce: (w) => relay?.announce(w),
       },
-      { lanId, guestGameMode: guestMode },
+      { lanId, guestGameMode: guestMode, joinCode: code },
     );
     this.mode = 'host';
+    this.lanShare = { code, relay, why: why ?? '' };
+    this.clock.start(() => this.beat());
     // (vanilla Player.getDisplayName: the others know the host's player by its name, "slain by" it too)
     this.player.profileName = this.playerName;
     window.addEventListener('pagehide', this.onPageHide);
-    this.chat('Local game hosted: other windows of this browser can join it from Multiplayer');
+    this.chat(`Local game hosted. Join code: ${showJoinCode(code)}`);
+    if (relay) relay.onRelay = () => this.relayChanged(relay);
+    else this.chat(why!);
     return true;
+  }
+
+  /** (hosting) the relay said where friends can open the game, or went: the host hears how others can join now */
+  private relayChanged(relay: WebSocketHostTransport): void {
+    const share = this.lanShare;
+    if (!share || share.relay !== relay) return;
+    const link = lanLink(share.code, relay);
+    if (relay.state === 'closed') {
+      share.relay = null;
+      share.why = relay.endCode === CLOSE_HOST_TAKEN
+        ? 'Only windows of this browser can join: another page on this computer has a world open to LAN already.'
+        : relay.wasOpen
+          ? 'The LAN server stopped: only windows of this browser can join now.'
+          : "Only windows of this browser can join: the game's LAN server isn't running (start the game with npm run lan to let other computers in).";
+      this.chat(share.why);
+    } else if (link) this.chat(`Friends on your network can join at ${link}`);
+    else if (relay.tunnel) this.chat(`Friends can join through your tunnel: its https address, then /?join=${share.code}`);
+    else this.chat('Only this computer can join from other browsers: start the game with npm run lan to let your network in.');
   }
 
   /** the world closes to guests (the host leaving it): each is told why */
@@ -1876,7 +1949,9 @@ export class Game {
     const srv = this.server;
     if (!srv) return;
     this.server = null;
+    this.lanShare = null;
     this.mode = 'single';
+    this.clock.stop();
     this.player.profileName = null;
     window.removeEventListener('pagehide', this.onPageHide);
     srv.close(reason);
@@ -1894,8 +1969,11 @@ export class Game {
     return [px + 0.5, py, pz + 0.5];
   }
 
-  /** (vanilla ConnectScreen.startConnecting) join the world that another window has open to LAN, as `me` */
-  async joinWorld(lanId: string, me: GuestIdentity): Promise<void> {
+  /**
+   * (vanilla ConnectScreen.startConnecting) join a world open to LAN, as `me`: another window's of this browser (by its
+   * id on the LAN), or the one open on the computer this page came from (through the relay)
+   */
+  async joinWorld(target: JoinTarget, me: GuestIdentity): Promise<void> {
     if (!MULTIPLAYER_ENABLED || this.inWorld || this.client) return;
     let cancelled = false;
     const toTitle = () => this.setScreen(this.titleScreenFactory ? this.titleScreenFactory() : null);
@@ -1907,8 +1985,11 @@ export class Game {
     await this.startWorkers('guest');
     if (cancelled) return;
     this.mode = 'client';
+    this.joinedWith = me.code;
+    this.clock.start(() => this.beat());
     window.addEventListener('pagehide', this.onPageHide);
-    this.client = new ClientSession(new BroadcastGuestTransport(lanId), {
+    const transport = target.via === 'browser' ? new BroadcastGuestTransport(target.lanId) : new WebSocketGuestTransport({ latency: this.netLag ?? undefined });
+    this.client = new ClientSession(transport, {
       login: (info) => {
         const now = Date.now();
         const meta: WorldMeta = {
@@ -2001,8 +2082,31 @@ export class Game {
         }
       : null;
     this.spawned = false;
+    this.loadingTicks = 0;
     this.receivingPortal = reason === 'other' ? null : reason;
     this.setScreen(this.receivingScreenFactory ? this.receivingScreenFactory(reason) : null);
+  }
+
+  /**
+   * (a guest on its loading screen, each tick) the session asks the host again for chunks that don't come; but once it
+   * has them all and they still aren't drawn after a while, what's holding it up is here: said in the console, once
+   */
+  private stillLoading(client: ClientSession, vd: number): void {
+    if (++this.loadingTicks !== 200 || client.stillLoading) return;
+    const cx = Math.floor(this.player.x) >> 4, cz = Math.floor(this.player.z) >> 4, notDrawn: string[] = [];
+    for (let dz = -LOADING_RADIUS; dz <= LOADING_RADIUS; dz++)
+      for (let dx = -LOADING_RADIUS; dx <= LOADING_RADIUS; dx++) {
+        if (!inView(dx, dz, vd)) continue;
+        const c = this.world.getChunk(cx + dx, cz + dz);
+        if (!c) notDrawn.push(`${cx + dx},${cz + dz}: not here`);
+        else if (c.dirty && dx * dx + dz * dz <= (LOADING_RADIUS - 1) ** 2) notDrawn.push(`${cx + dx},${cz + dz}: not drawn yet`);
+      }
+    console.warn('multiplayer: the host\'s chunks are all here, but the loading screen is still up after 10 s', {
+      dimension: this.world.dim.id,
+      at: [this.player.x, this.player.y, this.player.z].map((v) => Math.round(v * 100) / 100),
+      waiting: notDrawn,
+      hidden: document.hidden,
+    });
   }
 
   /** (a guest) leave the host's world, if in one: returns whether we were */
@@ -2011,18 +2115,25 @@ export class Game {
     if (!c) return false;
     this.client = null;
     this.mode = 'single';
+    this.clock.stop();
     window.removeEventListener('pagehide', this.onPageHide);
     c.leave();
     return true;
   }
 
-  /** (a guest) the host went, or let us go (vanilla DisconnectedScreen): out of its world, nothing saved */
+  /**
+   * (a guest) the host went, or let us go (vanilla DisconnectedScreen): out of its world, nothing saved; back to the
+   * server list if we never got in (a wrong join code, say: the one tried is still there to fix)
+   */
   private connectionLost(reason: string): void {
     const wasIn = this.inWorld;
     this.client = null;
     this.mode = 'single';
+    this.clock.stop();
     window.removeEventListener('pagehide', this.onPageHide);
-    const screen = this.disconnectedScreenFactory ? this.disconnectedScreenFactory(wasIn ? 'Connection Lost' : 'Failed to connect to the server', reason) : null;
+    const code = this.joinedWith;
+    const back = wasIn || !this.serverListScreenFactory ? null : () => this.serverListScreenFactory!(code);
+    const screen = this.disconnectedScreenFactory ? this.disconnectedScreenFactory(wasIn ? 'Connection Lost' : 'Failed to connect to the server', reason, back) : null;
     if (wasIn) void this.leaveWorld(screen);
     else {
       this.pool?.terminate();
@@ -2037,6 +2148,27 @@ export class Game {
     this.stopHosting('The host closed the world.');
   };
 
+}
+
+/** (multiplayer) a world to join: another window's of this browser, or the one on the computer this page came from */
+export type JoinTarget = { via: 'browser'; lanId: string } | { via: 'relay' };
+
+/**
+ * why this page can't host through the relay, if it can't: the relay lets only a page opened at localhost host (not one
+ * opened by the computer's address, or come in through a tunnel), and there's none on a page opened from a file
+ */
+function relayHostable(): string | null {
+  if (typeof WebSocket !== 'function' || (location.protocol !== 'http:' && location.protocol !== 'https:')) return 'Only windows of this browser can join this world.';
+  const h = location.hostname;
+  if (h === 'localhost' || h.endsWith('.localhost') || h === '[::1]' || /^127\./.test(h)) return null;
+  // (a page come through a tunnel has no port of the server's to say)
+  const local = location.port ? `http://localhost:${location.port}` : 'localhost';
+  return `Only windows of this browser can join: to let other computers join, open the game at ${local} on the computer running it.`;
+}
+
+/** (hosting) the link to send a friend on this network: where the relay says the game can be opened, with the join code */
+export function lanLink(code: string, relay: WebSocketHostTransport | null): string | null {
+  return relay && relay.state === 'open' && relay.lan.length ? `${relay.lan[0]}/?join=${code}` : null;
 }
 
 function lookVec(yaw: number, pitch: number): [number, number, number] {

@@ -8,7 +8,7 @@
 // that isn't one, a wrong number of fields, or coming before the login has it leave, saying why; a good one, twice
 // over, takes it along.
 
-import { loadNet, ENTITY_MODULES, flatHost, makeGuest, rawGuest, hostCopy, step, stepIdle, hostChangeDimension, check, exitWithStatus } from './lib.mjs';
+import { loadNet, ENTITY_MODULES, flatHost, makeGuest, rawGuest, hostCopy, step, SETTLE, stepIdle, hostChangeDimension, check, exitWithStatus } from './lib.mjs';
 setTimeout(() => { console.log('TIMEOUT'); process.exit(2); }, 300000).unref();
 
 const { m, close } = await loadNet(ENTITY_MODULES);
@@ -117,8 +117,9 @@ const { m, close } = await loadNet(ENTITY_MODULES);
     });
     net.host.onMessage((_peer, data) => f.got.push(...m.decode(data, m.MAX_GUEST_MESSAGE)));
     f.send = (packets) => net.host.send(f.peer, m.encode(packets));
+    // (with MP_LAG, SETTLE more, as step() does)
     f.tick = (k = 1) => {
-      for (let i = 0; i < k; i++) {
+      for (let i = 0; i < k + SETTLE; i++) {
         net.deliver();
         for (const g of f.guests) g.session.tick();
         net.deliver();

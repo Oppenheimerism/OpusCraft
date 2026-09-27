@@ -3,17 +3,21 @@
 import { Game } from './game/game';
 import { installScreens } from './gui/screens';
 import { TitleScreen, newWorldMeta } from './gui/screens/menus';
-import { openToLanOnceSpawned, joinFirstLanWorld, guestModeParam } from './gui/screens/multiplayer';
+import { openToLanOnceSpawned, joinFirstLanWorld, guestModeParam, JoinMultiplayerScreen } from './gui/screens/multiplayer';
 import { MULTIPLAYER_ENABLED } from './net/config';
 import { getWorldMeta } from './storage/worldStore';
 
 const params = new URLSearchParams(location.search);
 /**
  * ?mp=host (with &world=<id>, or a quick-start world) opens the world to LAN once it's in, its guests playing in
- * &guests=survival (the default), creative, adventure or spectator; ?mp=join joins one
+ * &guests=survival (the default), creative, adventure or spectator; ?mp=join joins one (&code=, the join code, for one
+ * on another computer). ?join=<code> (the link a host sends friends) opens Multiplayer with the code filled in.
+ * ?mplag=20-200 (testing) holds back what comes through the relay 20 to 200 ms, at random, in order
  */
 const mp = MULTIPLAYER_ENABLED ? params.get('mp') : null;
 const guests = guestModeParam(params.get('guests'));
+const joinCode = MULTIPLAYER_ENABLED ? params.get('join') : null;
+const lag = /^(\d{1,4})-(\d{1,4})$/.exec(params.get('mplag') ?? '');
 
 async function main(): Promise<void> {
   const canvas = document.getElementById('gl') as HTMLCanvasElement;
@@ -22,6 +26,7 @@ async function main(): Promise<void> {
   await game.init();
   installScreens(game);
   (window as unknown as Record<string, unknown>).__game = game;
+  if (lag) game.netLag = { min: +lag[1], max: Math.max(+lag[1], +lag[2]) };
   if (params.has('seed') || params.has('quick')) {
     // developer quick-start: throwaway world that is never saved
     const mode = params.get('mode') ?? 'survival';
@@ -49,7 +54,9 @@ async function main(): Promise<void> {
     } else game.setScreen(new TitleScreen(game, true));
   } else if (mp === 'join') {
     game.setScreen(new TitleScreen(game, false));
-    joinFirstLanWorld(game);
+    joinFirstLanWorld(game, params.get('code') ?? '');
+  } else if (joinCode !== null) {
+    game.setScreen(new JoinMultiplayerScreen(game, new TitleScreen(game, false), joinCode));
   } else {
     game.setScreen(new TitleScreen(game, true));
   }

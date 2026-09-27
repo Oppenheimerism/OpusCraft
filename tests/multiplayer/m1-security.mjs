@@ -8,7 +8,7 @@
 // that isn't one, too much) has it leave, saying why, rather than trip. And what other windows say about their open
 // worlds is shown only as plain text.
 
-import { loadNet, flatHost, makeGuest, rawGuest, hostCopy, step, assertMirrorEquals, check, exitWithStatus } from './lib.mjs';
+import { loadNet, flatHost, makeGuest, rawGuest, hostCopy, step, SETTLE, assertMirrorEquals, check, exitWithStatus } from './lib.mjs';
 
 const { m, close } = await loadNet(['/src/item/creativeStacks.ts', '/src/net/transport/lan.ts']);
 
@@ -185,8 +185,9 @@ const bytes = (...parts) => new Uint8Array(parts.flat());
     net.host.onMessage((_peer, data) => f.got.push(...m.decode(data, m.MAX_GUEST_MESSAGE)));
     f.send = (packets) => net.host.send(f.peer, m.encode(packets));
     f.sendBytes = (b) => net.host.send(f.peer, b);
+    // (with MP_LAG, SETTLE more, as step() does)
     f.tick = (k = 1) => {
-      for (let i = 0; i < k; i++) {
+      for (let i = 0; i < k + SETTLE; i++) {
         net.deliver();
         for (const g of f.guests) g.session.tick();
         net.deliver();

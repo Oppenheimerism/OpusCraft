@@ -86,6 +86,11 @@ export class BroadcastHostTransport implements Transport {
     for (const p of [...this.peers.keys()]) this.drop(p, true);
     this.door?.close();
   }
+
+  /** (the join code's cooldown) every window of this browser is one place */
+  address(_peer: PeerId): string {
+    return 'this browser';
+  }
 }
 
 /** a guest's end: knocks on the world's channel, and hears 'host' join once let in (or leave, if nobody answers) */

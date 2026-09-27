@@ -5,14 +5,14 @@
 import type { Value } from '../codec';
 import { decode, encodeBundle, CodecError } from '../codec';
 import { SB, CB, Action, PoseFlag, CLICK_TYPES, checkPacket, isAllowedChat, SLOT_ARMOR, SLOT_OFFHAND, SLOT_COUNT, ANIMATE_SWING_MAIN_HAND, ANIMATE_SWING_OFF_HAND, type LoginInfo, type ReceivingReason } from '../protocol';
-import { PROTOCOL_VERSION, BUILD_ID, MAX_GUEST_MESSAGE, MAX_GUEST_PACKETS, MESSAGES_PER_TICK, MAX_GUEST_BACKLOG, MAX_GUEST_BACKLOG_BYTES, MAX_LOGIN_BACKLOG, MAX_GUESTS, LOGIN_TICKS, KEEPALIVE_TICKS, TIMEOUT_TICKS, GUEST_VIEW_DISTANCE, CHUNKS_PER_TICK, MAX_MOVE_PER_TICK, CHAT_SPAM_STEP, CHAT_SPAM_LIMIT, NAME_PATTERN, DROP_SPAM_STEP, DROP_SPAM_LIMIT, ENTITY_REACH_SLACK, MAX_MOTION, RESPAWN_BED_WAIT_TICKS } from '../config';
+import { PROTOCOL_VERSION, BUILD_ID, MAX_GUEST_MESSAGE, MAX_GUEST_PACKETS, MESSAGES_PER_TICK, MAX_GUEST_BACKLOG, MAX_GUEST_BACKLOG_BYTES, MAX_LOGIN_BACKLOG, MAX_GUESTS, LOGIN_TICKS, KEEPALIVE_TICKS, TIMEOUT_TICKS, GUEST_VIEW_DISTANCE, CHUNKS_PER_TICK, MAX_MOVE_PER_TICK, MOVES_KEPT_PER_TICK, RESYNC_MIN_TICKS, CHAT_SPAM_STEP, CHAT_SPAM_LIMIT, NAME_PATTERN, DROP_SPAM_STEP, DROP_SPAM_LIMIT, ENTITY_REACH_SLACK, MAX_MOTION, RESPAWN_BED_WAIT_TICKS } from '../config';
 import type { PeerId } from '../transport/transport';
 import { creativeItem, itemToWire } from '../items';
 import { applyPoseFlags, equipment, poseFlags, stackKey } from '../playerState';
 import { playerStatus, effectList, effectsChanged, effectsSent } from '../playerStatus';
 import { claimMatches } from '../menus';
 import { ServerMenus } from './menuSync';
-import { levelChunkPacket } from '../chunkData';
+import { levelChunkPacket, inView } from '../chunkData';
 import { offlinePlayerUuid } from '../offlineUuid';
 import type { HostServer } from './hostServer';
 import { EntityTracker } from './entityTracker';
@@ -92,7 +92,8 @@ export class ServerPlayerSession {
   private pos = { x: 0, y: 0, z: 0 };
   /** where its player was last put, by a move of its own or a teleport: anywhere else, and the host has moved it since */
   private placed = { x: 0, y: 0, z: 0 };
-  private move: Move | null = null;
+  /** the moves come in since its player's last tick, to be taken in turn in the next (MOVES_KEPT_PER_TICK at most) */
+  private moves: Move[] = [];
   private teleportId = 0;
   private awaitingTeleport: number | null = null;
   private attackPressed = false;
@@ -158,6 +159,8 @@ export class ServerPlayerSession {
   /** (respawning at a bed whose chunks aren't in) ticks left to wait for them, and whether they've been asked for */
   private respawnWait = 0;
   private respawnTicket = false;
+  /** (stage 5) when it last asked for the world again from its loading screen (resync), in its ticks */
+  private lastResync = -Infinity;
 
   constructor(readonly server: HostServer, readonly peer: PeerId) {}
 
@@ -273,7 +276,9 @@ export class ServerPlayerSession {
     const id = p[0] as number;
     if (this.state === 'login') {
       if (id !== SB.Hello) return this.disconnect('Say hello first');
-      return this.hello(p[1] as number, p[2] as string, p[3] as string, (p[4] as string).toLowerCase(), p[5] as number);
+      // (another version's hello is looked at no further than its version)
+      if (p[1] !== PROTOCOL_VERSION) return this.disconnect((p[1] as number) < PROTOCOL_VERSION ? 'Outdated game! This world is open in a newer one.' : 'Outdated host! This world is open in an older one.');
+      return this.hello(p[2] as string, p[3] as string, (p[4] as string).toLowerCase(), p[5] as number, p[6] as string);
     }
     const pl = this.player!;
     switch (id) {
@@ -336,6 +341,8 @@ export class ServerPlayerSession {
         return this.menus!.placeRecipe(p[1] as number, p[2] as string, p[3] as boolean);
       case SB.EditBook:
         return this.editBook(p[1] as number, p[2] as string[], p[3] as string | null);
+      case SB.Resync:
+        return this.resync(p[1] as number[], p[2] as number, p[3] as boolean);
     }
   }
 
@@ -358,21 +365,70 @@ export class ServerPlayerSession {
         return this.systemChat('§cOnly the host can use commands.');
       case SB.Disconnect:
         return this.gone('left');
+      case SB.Resync:
+        // (on its way with the host, which isn't there itself yet: it's put in when the host is, as ever)
+        return this.resync(p[1] as number[], p[2] as number, p[3] as boolean);
     }
+  }
+
+  /**
+   * (stage 5) the guest is still on its loading screen a while after it should have come in (ClientSession.checkLoading),
+   * and says which of the chunks it waits for haven't come. Taken along to another dimension and never put in, though
+   * the host is there: it's put in now. Otherwise it's put where its player is again, and every chunk in its view is sent
+   * again, the nearest first (what it waits for having gone missing, so may others). What the host has of it goes to the
+   * console, with what the guest said, to find out why if it happens again. One every RESYNC_MIN_TICKS at most: the rest
+   * are let be
+   */
+  private resync(missing: number[], waited: number, placed: boolean): void {
+    if (this.ticks - this.lastResync < RESYNC_MIN_TICKS) return;
+    this.lastResync = this.ticks;
+    const p = this.player!, world = this.level.world;
+    const chunks: string[] = [];
+    for (let i = 0; i + 1 < missing.length; i += 2) {
+      const key = Chunk.key(missing[i], missing[i + 1]), c = world.chunks.get(key);
+      chunks.push(`${missing[i]},${missing[i + 1]}: ${this.sent.has(key) ? 'sent' : 'not sent'}, ${!c ? 'not loaded here' : c.lightMerged ? 'loaded here' : 'being lit here'}`);
+    }
+    const hostThere = !this.server.travelling;
+    console.warn(`multiplayer: ${p.profileName ?? 'a guest'} is still on its loading screen after ${(waited / 20).toFixed(1)} s, and asks for the world again`, {
+      guestSays: { placed, missing: chunks },
+      host: { dimension: world.dim.id, onItsWay: !hostThere, ticks: this.ticks },
+      guest: {
+        travelling: this.travelling,
+        travelFrom: this.travelling ? this.travelFrom : null,
+        at: [p.x, p.y, p.z].map((v) => Math.round(v * 100) / 100),
+        pos: [this.pos.x, this.pos.y, this.pos.z].map((v) => Math.round(v * 100) / 100),
+        awaitingTeleport: this.awaitingTeleport,
+        viewDistance: this.viewDistance,
+        chunksSent: this.sent.size,
+        state: this.state,
+      },
+    });
+    if (this.travelling) {
+      // (forgotten on the way: the host has been there a while)
+      if (hostThere) this.arrive();
+      return;
+    }
+    // (put where its player is again: a teleport it takes, the chunks round there sent afresh, and their block entities)
+    this.teleport(p.x, p.y, p.z, p.yaw, p.pitch);
+    this.sent.clear();
+    this.blockEntities.clear();
   }
 
   /**
    * vanilla ServerLoginPacketListenerImpl: who it is, checked; then its player as the world last kept it is read (vanilla
    * PlayerList.load), and it's let in at the first tick after (placeNewPlayer)
    */
-  private hello(protocol: number, build: string, name: string, uuid: string, viewDistance: number): void {
-    if (protocol !== PROTOCOL_VERSION) return this.disconnect(protocol < PROTOCOL_VERSION ? 'Outdated game! This world is open in a newer one.' : 'Outdated host! This world is open in an older one.');
+  private hello(build: string, name: string, uuid: string, viewDistance: number, code: string): void {
     if (build !== BUILD_ID) return this.disconnect('This world is open in a different version of the game. Reload both windows so they run the same one.');
+    const srv = this.server;
+    // (the join code, before anything is said of who's here: net/joinCode.ts, where it's given from waiting after too many wrong ones)
+    const verdict = srv.checkJoinCode(this.peer, code);
+    if (verdict === 'wrong') return this.disconnect("That join code isn't right. Ask the host for the one on their screen.");
+    if (verdict !== 'ok') return this.disconnect(`Too many wrong join codes from here: try again in ${Math.max(1, Math.ceil(verdict / 20))} seconds.`);
     if (!NAME_PATTERN.test(name)) return this.disconnect('That name can only have letters, digits and _ (3 to 16 of them).');
     // (vanilla offline mode: a player is its name, its uuid made from the name, the host's to work out; a guest giving
     // another's, which would be another's player kept with the world, is refused)
     if (uuid !== offlinePlayerUuid(name)) return this.disconnect("Bad data: that uuid isn't the name's");
-    const srv = this.server;
     // (the guests in, and those let in whose players are still being read)
     const others = [...srv.sessions.values()].filter((s) => s !== this && (s.state === 'play' || s.loggingIn));
     if (others.length >= MAX_GUESTS) return this.disconnect('The world is full.');
@@ -517,7 +573,7 @@ export class ServerPlayerSession {
       // mount goes by before the rider's tick)
       p.yaw = p.headYaw = m.yRot;
       p.pitch = m.xRot;
-      this.move = m;
+      this.keepMove(m);
       return;
     }
     const d2 = (m.x - this.pos.x) ** 2 + (m.y - this.pos.y) ** 2 + (m.z - this.pos.z) ** 2;
@@ -528,7 +584,18 @@ export class ServerPlayerSession {
     }
     // (below the world, the void has it as it would the host's player: Entity.checkBelowWorld on the host)
     this.pos = { x: m.x, y: m.y, z: m.z };
-    this.move = m;
+    this.keepMove(m);
+  }
+
+  /**
+   * a move, for its player's next tick. A guest's moves come a tick apart, but a network can hold some back and let them
+   * through together: each is taken in turn (vanilla handles each move packet as it comes), so a landing between two
+   * hops is still a landing, and a fall adds up only while it falls. Past MOVES_KEPT_PER_TICK, the latest stands in for
+   * the ones after the last kept
+   */
+  private keepMove(m: Move): void {
+    if (this.moves.length < MOVES_KEPT_PER_TICK) this.moves.push(m);
+    else this.moves[this.moves.length - 1] = m;
   }
 
   /**
@@ -562,27 +629,32 @@ export class ServerPlayerSession {
     if (p.health > 0 && !p.vehicle && !p.isSleeping()) this.server.heardByAll(() => p.checkInsideBlocks());
   }
 
-  /**
-   * the guest's move this tick, if one came in: where it went, with the look and pose it said, and what that did: a
-   * fall's damage when it lands, the hunger a jump costs, a glide into a wall (vanilla handleMovePlayer and
-   * ServerPlayer.doCheckFallDamage)
-   */
+  /** the guest's moves come in since its player's last tick, each in turn (takeOneMove), if any did */
   private takeMove(p: Player): void {
-    const m = this.move;
-    if (!m) return;
-    this.move = null;
-    if (p.health <= 0 || p.isSleeping()) return;
+    if (!this.moves.length) return;
+    const moves = this.moves;
+    this.moves = [];
+    for (const m of moves) if (!this.takeOneMove(p, m)) return;
+  }
+
+  /**
+   * one of the guest's moves: where it went, with the look and pose it said, and what that did: a fall's damage when it
+   * lands, the hunger a jump costs, a glide into a wall (vanilla handleMovePlayer and ServerPlayer.doCheckFallDamage).
+   * False if the moves after it don't count either (its player dead, asleep, or put elsewhere by the host)
+   */
+  private takeOneMove(p: Player, m: Move): boolean {
+    if (p.health <= 0 || p.isSleeping()) return false;
     if (p.vehicle) {
       // (riding: its look and pose; where it is is its seat)
       applyPoseFlags(p, m.flags);
       p.yaw = p.headYaw = m.yRot;
       p.pitch = m.xRot;
       this.lastSpeed = 0;
-      return;
+      return true;
     }
     // (put somewhere else by the host since, earlier this tick: an ender pearl landing, an end gateway letting it out,
     // a piston. The move is from before that, and the guest is told where it is instead: placedByHost's teleport)
-    if (moved(p, this.placed)) return;
+    if (moved(p, this.placed)) return false;
     const dx = m.x - p.x, dy = m.y - p.y, dz = m.z - p.z;
     // (knocked or blown about this tick, before its move came in: that motion stands, for the guest to be told)
     if (!p.hurtMarked) {
@@ -613,12 +685,13 @@ export class ServerPlayerSession {
       }
     }
     this.lastSpeed = speed;
-    if (p.health <= 0) return;
+    if (p.health <= 0) return false;
     // (vanilla ServerPlayer.doCheckFallDamage)
     p.doCheckFallDamage(dy, p.onGround);
     // (vanilla ServerPlayer.move: a turtle egg or a sculk shrieker underfoot hears it; the world's doing, heard by all)
     if (p.onGround && p.health > 0) this.server.heardByAll(() => p.stepOnFloor());
     if (p.flying || p.hasEffect('slow_falling') || p.hasEffect('levitation')) p.fallDistance = 0;
+    return true;
   }
 
   /** vanilla ServerGamePacketListenerImpl.teleport: the guest's player goes there, and the host waits to hear it did */
@@ -628,7 +701,7 @@ export class ServerPlayerSession {
     this.teleportId = (this.teleportId + 1) & 0x7fffffff;
     this.awaitingTeleport = this.teleportId;
     this.pos = { x, y, z };
-    this.move = null;
+    this.moves = [];
     this.lastSpeed = 0;
     p.moveTo(x, y, z, yRot, xRot);
     this.placed = { x: p.x, y: p.y, z: p.z };
@@ -708,7 +781,7 @@ export class ServerPlayerSession {
     this.blockUpdates = [];
     this.tracker.clear();
     this.seen.clear();
-    this.move = null;
+    this.moves = [];
     this.target = NO_TARGET;
     this.attackPressed = this.usePressed = this.attackHeld = this.useHeld = false;
     this.drops = [];
@@ -854,7 +927,7 @@ export class ServerPlayerSession {
     const world = this.level.world;
     const cx = Math.floor(this.pos.x) >> 4, cz = Math.floor(this.pos.z) >> 4, vd = this.viewDistance;
     this.server.hooks.setTicket(`player:${this.player!.id}`, [cx, cz, vd]);
-    const near = (x: number, z: number, r: number) => (x - cx) ** 2 + (z - cz) ** 2 <= r * r + r;
+    const near = (x: number, z: number, r: number) => inView(x - cx, z - cz, r);
     for (const key of this.sent) {
       const c = world.chunks.get(key);
       const kx = Math.floor(key / 65536) - 32768, kz = (key % 65536) - 32768;

@@ -1,13 +1,16 @@
 // The multiplayer screens (vanilla ShareToLanScreen, JoinMultiplayerScreen, ConnectScreen, DisconnectedScreen): a world
-// opened to the other windows of this browser from the pause menu, and joined from the title screen's Multiplayer.
-// Whatever another window says (a world's name, a host's, a reason) is only ever drawn as text, never as markup.
+// opened to LAN from the pause menu, and joined from the title screen's Multiplayer: by the other windows of this
+// browser, and (stage 5) by other computers' pages through the relay on the game's own server, with the join code.
+// Whatever another page says (a world's name, a host's, a reason) is only ever drawn as text, never as markup.
 
 import type { Game } from '../../game/game';
 import { Screen, Button, CycleButton, EditBox } from '../screen';
 import { ScrollList } from '../list';
 import type { GuiGraphics } from '../guiGraphics';
 import { LanWorldList, type LanWorld } from '../../net/transport/lan';
+import { RelayWorldList } from '../../net/transport/webSocket';
 import { offlinePlayerUuid } from '../../net/offlineUuid';
+import { normalizeJoinCode, showJoinCode, JOIN_CODE_LENGTH } from '../../net/joinCode';
 import type { GuestIdentity } from '../../net/client/clientSession';
 import type { GameMode } from '../../entity/player';
 import { NAME_PATTERN, PROTOCOL_VERSION, BUILD_ID, GUEST_VIEW_DISTANCE } from '../../net/config';
@@ -42,11 +45,11 @@ export function guestName(): string {
 
 /**
  * who this window joins as: `name`, the uuid a LAN world knows that name by (vanilla's offline uuid, made from the name:
- * the host keeps its player under it), and how far round it wants chunks
+ * the host keeps its player under it), how far round it wants chunks, and the world's join code
  */
-export function guestIdentity(game: Game, name: string): GuestIdentity {
+export function guestIdentity(game: Game, name: string, code: string): GuestIdentity {
   store(NAME_KEY, name);
-  return { name, uuid: offlinePlayerUuid(name), viewDistance: Math.max(2, Math.min(GUEST_VIEW_DISTANCE, game.opts.renderDistance)) };
+  return { name, uuid: offlinePlayerUuid(name), viewDistance: Math.max(2, Math.min(GUEST_VIEW_DISTANCE, game.opts.renderDistance)), code: normalizeJoinCode(code) };
 }
 
 /** whether this game can join `w` (vanilla ServerData.isCompatible: the same protocol, and here the same build) */
@@ -94,8 +97,8 @@ export class ShareToLanScreen extends Screen {
     g.centered(this.title, cx, 50, 0xffffff, true);
     g.centered('Settings for Other Players', cx, 82, 0xffffff, true);
     g.centered('Only you can use commands, for now.', cx, 132, 0xa0a0a0, true);
-    g.centered('Other windows of this browser can join from Multiplayer.', cx, 144, 0xa0a0a0, true);
-    if (this.failed) g.centered("This browser can't open a world to its other windows.", cx, 164, 0xff5555, true);
+    g.centered('Others join from Multiplayer, with the join code you get.', cx, 144, 0xa0a0a0, true);
+    if (this.failed) g.centered("This browser can't open a world to LAN.", cx, 164, 0xff5555, true);
     this.renderTooltip(g, mx, my);
     void partial;
   }
@@ -104,7 +107,9 @@ export class ShareToLanScreen extends Screen {
 // ---------------------------------------------------------------------------
 // Multiplayer
 
-type Row = { world: LanWorld } | { scanning: true };
+/** a world heard of: from another window of this browser, or through the relay (open on the computer this page came from) */
+type Heard = { world: LanWorld; via: 'browser' | 'relay' };
+type Row = Heard | { scanning: true };
 
 /** vanilla LoadingDotsText */
 function loadingDots(ms: number): string {
@@ -122,7 +127,7 @@ class LanList extends ScrollList<Row> {
     if ('scanning' in e) {
       // (vanilla ServerSelectionList.LANHeader)
       const y = top + Math.floor(height / 2) - 4, cx = Math.floor(this.w / 2);
-      const text = this.screen.canHear ? 'Scanning for games on your local network' : "This browser can't hear its other windows";
+      const text = this.screen.canHear ? 'Scanning for games on your local network' : "This browser can't hear of any open worlds";
       g.centered(text, cx, y - 4, 0xffffff, true);
       if (this.screen.canHear) g.centered(loadingDots(performance.now()), cx, y + 5, 0x808080, true);
       return;
@@ -132,8 +137,9 @@ class LanList extends ScrollList<Row> {
     const x = left + 32 + 3;
     g.text('LAN World', x, top + 1, 0xffffff, true);
     g.text(fit(g, `${w.host} - ${w.name}`, width - 35), x, top + 12, 0x808080, true);
-    if (compatible(w)) g.text(`Another window of this browser, ${w.players}/${w.max} players`, x, top + 23, 0x808080, true);
-    else g.text('Incompatible version! Reload both windows.', x, top + 23, 0xff5555, true);
+    const where = e.via === 'browser' ? 'Another window of this browser' : `At ${location.host}`;
+    if (compatible(w)) g.text(fit(g, `${where}, ${w.players}/${w.max} players`, width - 35), x, top + 23, 0x808080, true);
+    else g.text(e.via === 'browser' ? 'Incompatible version! Reload both windows.' : 'Incompatible version! Reload this page.', x, top + 23, 0xff5555, true);
     if (hovered && compatible(w)) {
       g.fill(left, top, left + 32, top + 32, 0xa0909090);
       g.sprite(mx - left < 32 ? 'join_highlighted' : 'join', left, top, 32, 32);
@@ -147,7 +153,7 @@ class LanList extends ScrollList<Row> {
       return true;
     }
     this.screen.updateButtons();
-    if (mx - this.rowLeft() <= 32 || dbl) this.screen.join(e.world);
+    if (mx - this.rowLeft() <= 32 || dbl) this.screen.join(e);
     return true;
   }
 }
@@ -159,46 +165,63 @@ function fit(g: GuiGraphics, s: string, maxW: number): string {
   return s + '...';
 }
 
-/** vanilla JoinMultiplayerScreen ("Play Multiplayer"): the worlds other windows have open to LAN, and a name to join as */
+/**
+ * vanilla JoinMultiplayerScreen ("Play Multiplayer"): the worlds open to LAN that this page can hear of (other windows'
+ * of this browser, and the one on the computer it came from, through the relay), a name to join as, and the join code
+ * (the other windows tell theirs; a world on another computer needs the one its host gave)
+ */
 export class JoinMultiplayerScreen extends Screen {
   private lan: LanWorldList | null = null;
-  private seen = -1;
+  private relay: RelayWorldList | null = null;
+  private seen = '';
   private list!: LanList;
   private nameBox!: EditBox;
+  private codeBox!: EditBox;
   private name: string;
+  private code: string;
   private joinBtn!: Button;
 
-  constructor(game: Game, parent: Screen | null) {
+  /** `code`: a join code to begin with (the link's ?join=, or one tried before) */
+  constructor(game: Game, parent: Screen | null, code = '') {
     super(game, 'Play Multiplayer');
     this.parent = parent;
     this.name = guestName();
+    const c = normalizeJoinCode(code);
+    this.code = c ? showJoinCode(c) : '';
   }
 
   get canHear(): boolean {
-    return this.lan?.available ?? false;
+    return (this.lan?.available ?? false) || (this.relay?.connected ?? false);
   }
 
   init(): void {
     const cx = Math.floor(this.width / 2);
     this.lan ??= new LanWorldList();
+    this.relay ??= new RelayWorldList();
     const prev = this.list?.selected ?? null;
-    this.nameBox = this.add(new EditBox(cx - 100, 22, 254, 20, this.name));
+    this.nameBox = this.add(new EditBox(cx - 120, 22, 114, 20, this.name));
     this.nameBox.maxLength = 16;
     this.nameBox.hint = 'Your name';
     this.nameBox.onChange = (v) => {
       this.name = v;
       this.updateButtons();
     };
+    this.codeBox = this.add(new EditBox(cx + 36, 22, 118, 20, this.code));
+    this.codeBox.maxLength = 12;
+    this.codeBox.hint = 'Join code';
+    this.codeBox.onChange = (v) => {
+      this.code = v;
+      this.updateButtons();
+    };
     this.list = this.add(new LanList(this, this.width, 48, this.height - 112));
-    this.seen = -1;
+    this.seen = '';
     this.refreshList(prev);
     this.joinBtn = this.add(new Button(cx - 154, this.height - 52, 150, 20, 'Join Server', () => {
       const s = this.list.selected;
-      if (s && 'world' in s) this.join(s.world);
+      if (s && 'world' in s) this.join(s);
     }));
     this.add(new Button(cx + 4, this.height - 52, 150, 20, 'Refresh', () => {
-      this.lan?.close();
-      this.lan = null;
+      this.closeLists();
       this.game.setScreen(this);
     }));
     this.add(new Button(cx - 100, this.height - 28, 200, 20, 'Back', () => this.onClose()));
@@ -209,25 +232,36 @@ export class JoinMultiplayerScreen extends Screen {
     return NAME_PATTERN.test(this.name);
   }
 
-  /** the worlds heard of, the "Scanning..." row first, the selection kept */
+  private codeOk(): boolean {
+    return normalizeJoinCode(this.code).length === JOIN_CODE_LENGTH;
+  }
+
+  /** the worlds heard of, the "Scanning..." row first, the selection kept (a world through the relay chosen for a code given) */
   private refreshList(prev: Row | null): void {
-    const worlds = this.lan?.worlds() ?? [];
-    if (this.lan && this.lan.version === this.seen) return;
-    this.seen = this.lan?.version ?? -1;
+    const mine = this.lan?.worlds() ?? [];
+    const theirs = (this.relay?.worlds() ?? []).filter((w) => !mine.some((m) => m.id === w.id));
+    const key = `${this.lan?.version ?? -1},${this.relay?.version ?? -1},${mine.length},${theirs.length}`;
+    if (key === this.seen) return;
+    this.seen = key;
+    const heard: Heard[] = [...mine.map((world) => ({ world, via: 'browser' as const })), ...theirs.map((world) => ({ world, via: 'relay' as const }))];
     const selId = prev && 'world' in prev ? prev.world.id : null;
-    this.list.entries = [{ scanning: true }, ...worlds.map((world) => ({ world }))];
+    this.list.entries = [{ scanning: true }, ...heard];
     this.list.selected = this.list.entries.find((r) => 'world' in r && r.world.id === selId) ?? null;
+    if (!this.list.selected && this.codeOk()) this.list.selected = this.list.entries.find((r) => 'world' in r && r.via === 'relay' && compatible(r.world)) ?? null;
     this.updateButtons();
   }
 
   updateButtons(): void {
     const s = this.list?.selected;
-    if (this.joinBtn) this.joinBtn.active = !!s && 'world' in s && compatible(s.world) && this.nameOk();
+    if (this.joinBtn) this.joinBtn.active = !!s && 'world' in s && compatible(s.world) && this.nameOk() && (s.via === 'browser' || this.codeOk());
   }
 
-  join(w: LanWorld): void {
-    if (!compatible(w) || !this.nameOk()) return;
-    void this.game.joinWorld(w.id, guestIdentity(this.game, this.name));
+  join(h: Heard): void {
+    if (!compatible(h.world) || !this.nameOk()) return;
+    // (another window of this browser told its code; a world on another computer needs the one its host gave)
+    const code = h.via === 'browser' ? (h.world.code ?? '') : this.code;
+    if (h.via === 'relay' && !this.codeOk()) return;
+    void this.game.joinWorld(h.via === 'browser' ? { via: 'browser', lanId: h.world.id } : { via: 'relay' }, guestIdentity(this.game, this.name, code));
   }
 
   override tick(): void {
@@ -240,14 +274,23 @@ export class JoinMultiplayerScreen extends Screen {
     const cx = Math.floor(this.width / 2);
     g.centered(this.title, cx, 8, 0xffffff, true);
     g.text('Name:', cx - 154, 28, 0xa0a0a0, true);
+    g.text('Code:', cx + 4, 28, 0xa0a0a0, true);
+    const s = this.list.selected;
     if (!this.nameOk()) g.centered('A name is 3 to 16 letters, digits or _', cx, this.height - 63, 0xff5555, true);
+    else if (s && 'world' in s && s.via === 'relay' && !this.codeOk()) g.centered("Type the join code from the host's screen", cx, this.height - 63, 0xff5555, true);
     this.renderTooltip(g, mx, my);
     void partial;
   }
 
-  override removed(): void {
+  private closeLists(): void {
     this.lan?.close();
     this.lan = null;
+    this.relay?.close();
+    this.relay = null;
+  }
+
+  override removed(): void {
+    this.closeLists();
   }
 }
 
@@ -282,12 +325,12 @@ export class ConnectScreen extends Screen {
   }
 }
 
-/** vanilla DisconnectedScreen: a title, why, and back to the title screen */
+/** vanilla DisconnectedScreen: a title, why, and back to the title screen (or to the server list, `back`'s) */
 export class DisconnectedScreen extends Screen {
   private lines: string[] = [];
   private top = 0;
 
-  constructor(game: Game, title: string, private readonly reason: string) {
+  constructor(game: Game, title: string, private readonly reason: string, private readonly back: (() => Screen) | null = null) {
     super(game, title);
   }
 
@@ -296,7 +339,8 @@ export class DisconnectedScreen extends Screen {
     this.lines = this.game.gui.wrap(this.reason, this.width - 50);
     const h = 9 + 8 + this.lines.length * 9 + 8 + 20;
     this.top = Math.floor((this.height - h) / 2);
-    this.add(new Button(Math.floor(this.width / 2) - 100, this.top + h - 20, 200, 20, 'Back to Title Screen', () => this.game.setScreen(null)));
+    const back = this.back;
+    this.add(new Button(Math.floor(this.width / 2) - 100, this.top + h - 20, 200, 20, back ? 'Back to Server List' : 'Back to Title Screen', () => this.game.setScreen(back ? back() : null)));
   }
 
   override isPauseScreen(): boolean {
@@ -335,17 +379,24 @@ export function guestModeParam(v: string | null): GameMode {
   return GUEST_MODES.includes(v as GameMode) ? (v as GameMode) : 'survival';
 }
 
-/** ?mp=join: the first world heard of on the LAN is joined; if none is heard within a few seconds, the list shows */
-export function joinFirstLanWorld(game: Game): void {
+/**
+ * ?mp=join: the first world heard of is joined, another window's of this browser before the one through the relay (with
+ * `code`, ?code='s); if none is heard within a few seconds, the list shows
+ */
+export function joinFirstLanWorld(game: Game, code = ''): void {
   const lan = new LanWorldList();
+  const relay = new RelayWorldList();
   const started = Date.now();
   const wait = setInterval(() => {
-    const w = lan.worlds().find(compatible);
-    if (!w && Date.now() - started < 5000) return;
+    const mine = lan.worlds().find(compatible);
+    const theirs = mine ? undefined : relay.worlds().find(compatible);
+    if (!mine && !theirs && Date.now() - started < 5000) return;
     clearInterval(wait);
     lan.close();
+    relay.close();
     if (game.inWorld || game.client) return;
-    if (w) void game.joinWorld(w.id, guestIdentity(game, guestName()));
-    else game.setScreen(new JoinMultiplayerScreen(game, game.titleScreenFactory?.() ?? null));
+    if (mine) void game.joinWorld({ via: 'browser', lanId: mine.id }, guestIdentity(game, guestName(), mine.code ?? ''));
+    else if (theirs) void game.joinWorld({ via: 'relay' }, guestIdentity(game, guestName(), code));
+    else game.setScreen(new JoinMultiplayerScreen(game, game.titleScreenFactory?.() ?? null, code));
   }, 100);
 }

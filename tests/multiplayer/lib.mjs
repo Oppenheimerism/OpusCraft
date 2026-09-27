@@ -4,13 +4,22 @@
 // runs host tick → deliver → guest ticks → deliver; `mirrorDiff()` compares what a guest has with the host's world.
 
 import { load, check, exitWithStatus, genLevel, flatLevel } from '../fixes/lib.mjs';
+import { WsNetwork, closeWsNetworks, lagSeed } from './net/wsNetwork.mjs';
 export { check, exitWithStatus };
+
+/**
+ * (stage 5) MP_NET=ws: every network a test makes (m.MemoryNetwork's) goes through the relay over WebSockets instead
+ * (net/wsNetwork.mjs), carried by the game's WebSocket transports; MP_LAG=20-200 holds each message back 20 to 200 ms
+ * of the tests' time as well, in order (MP_LAG_SEED=n: the same lags again)
+ */
+export const NET_MODE = process.env.MP_NET === 'ws' ? 'ws' : 'memory';
+const LAG = /^(\d+)-(\d+)$/.exec(process.env.MP_LAG ?? '');
 
 export const NET_MODULES = [
   '/src/net/codec.ts', '/src/net/protocol.ts', '/src/net/config.ts', '/src/net/items.ts', '/src/net/chunkData.ts', '/src/net/playerState.ts', '/src/net/playerStatus.ts',
   '/src/net/transport/memory.ts', '/src/net/transport/transport.ts', '/src/net/server/hostServer.ts', '/src/net/server/session.ts',
   '/src/net/client/clientSession.ts', '/src/net/client/mirrorPlayer.ts', '/src/world/dimension.ts', '/src/item/item.ts',
-  '/src/world/blockEntity.ts', '/src/game/interaction.ts', '/src/net/offlineUuid.ts',
+  '/src/world/blockEntity.ts', '/src/game/interaction.ts', '/src/net/offlineUuid.ts', '/src/net/joinCode.ts',
 ];
 
 /** (stage 2) the entities' side of it: the registry, the fields, the trackers and copies, and the kinds the tests make */
@@ -22,7 +31,25 @@ export const ENTITY_MODULES = [
 ];
 
 export async function loadNet(extra = []) {
-  return load([...NET_MODULES, ...extra]);
+  const r = await load([...NET_MODULES, ...extra]);
+  if (NET_MODE !== 'ws') return r;
+  const m = r.m;
+  const lag = LAG ? { min: +LAG[1], max: Math.max(+LAG[1], +LAG[2]) } : null;
+  const Original = m.MemoryNetwork;
+  m.MemoryNetwork = class extends WsNetwork {
+    /** (ownNetworks) the network it stands in for */
+    static Original = Original;
+    constructor() {
+      super(m, lag);
+    }
+  };
+  const close = r.close;
+  r.close = async () => {
+    await closeWsNetworks();
+    await close();
+  };
+  console.log(`(the networks go through the relay over WebSockets${lag ? `, with ${lag.min} to ${lag.max} ms of lag (MP_LAG_SEED=${lagSeed})` : ''})`);
+  return r;
 }
 
 /** sounds and particles, written down */
@@ -34,6 +61,9 @@ function recordingLevel(level) {
   level.particleCalls = particles;
   return level;
 }
+
+/** (stage 5) the test hosts' join code */
+export const TEST_JOIN_CODE = '7E57C0DE';
 
 /**
  * a host: `world`/`level` from genLevel or flatLevel (chunks made on demand by `makeChunk(cx, cz)` when a guest's
@@ -70,15 +100,17 @@ export function makeHost(m, { world, level }, { makeChunk, x = 0.5, y = 65, z = 
   // (the pop of something picked up, as the game's own level plays it: Game.setUpWorld's onTake)
   level.onTake = (e) => level.sound.play(e.type === 'experience_orb' ? 'entity.experience_orb.pickup' : 'entity.item.pickup', e.x, e.y, e.z, 0.2, 1);
   // (stage 3) the guests' game mode, as the LAN screen picks it; creative if the test doesn't say, as before
-  const server = new m.HostServer(level, transport ?? net.host, hooks, { lanId: 'test-world-0000', announce: false, guestGameMode });
+  // (stage 5: its join code, which the harness's guests give unless a test says otherwise)
+  const server = new m.HostServer(level, transport ?? net.host, hooks, { lanId: 'test-world-0000', joinCode: TEST_JOIN_CODE, announce: false, guestGameMode });
   return { m, world, level, player: p, net, server, chat, overlays, tickets, guests: [], makeChunk, setBreaking: (b) => (breaking = b) };
 }
 
 /**
  * a guest connecting to `host` as `name` (it says hello once `step` delivers the connection), over `transport` if given;
- * its uuid its name's (stage 4: vanilla's offline uuid, which the host holds it to), unless a test gives another
+ * its uuid its name's (stage 4: vanilla's offline uuid, which the host holds it to), unless a test gives another; with
+ * the host's join code (stage 5), unless a test gives another
  */
-export function makeGuest(host, name = 'Guest', { viewDistance = 3, uuid, transport = host.net.connect() } = {}) {
+export function makeGuest(host, name = 'Guest', { viewDistance = 3, uuid, code, transport = host.net.connect() } = {}) {
   const { m } = host;
   const g = { name, transport, chat: [], overlays: [], disconnected: null, world: null, level: null, player: null, session: null, chunkAdds: 0, took: [], mounted: [], died: [], respawned: 0, recipes: new Set(), toasts: [], dims: [] };
   const hooks = {
@@ -137,7 +169,7 @@ export function makeGuest(host, name = 'Guest', { viewDistance = 3, uuid, transp
       g.player.fallDistance = 0;
     },
   };
-  g.session = new m.ClientSession(transport, hooks, { name, uuid: uuid ?? m.offlinePlayerUuid(name), viewDistance });
+  g.session = new m.ClientSession(transport, hooks, { name, uuid: uuid ?? m.offlinePlayerUuid(name), viewDistance, code: code ?? host.server?.joinCode ?? '' });
   host.guests.push(g);
   return g;
 }
@@ -153,6 +185,8 @@ export function rawGuest(host) {
     t,
     got: [],
     gone: false,
+    /** (stage 5) why its connection ended, if the transport said (the relay's word, over WebSockets) */
+    goneReason: null,
     send(packets) {
       t.send(m.HOST_PEER, m.encode(packets));
     },
@@ -163,16 +197,19 @@ export function rawGuest(host) {
     packets(id) {
       return r.got.flat().filter((p) => p[0] === id);
     },
+    /** why it was let go: the host's Disconnect, or else (stage 5) its transport's word */
     reason() {
-      return r.packets(m.CB.Disconnect)[0]?.[1] ?? null;
+      return r.packets(m.CB.Disconnect)[0]?.[1] ?? r.goneReason;
     },
-    hello(name = 'Raw', { protocol = m.PROTOCOL_VERSION, build = m.BUILD_ID, uuid = m.offlinePlayerUuid(name), viewDistance = 2 } = {}) {
-      r.send([[m.SB.Hello, protocol, build, name, uuid, viewDistance]]);
+    hello(name = 'Raw', { protocol = m.PROTOCOL_VERSION, build = m.BUILD_ID, uuid = m.offlinePlayerUuid(name), viewDistance = 2, code = host.server.joinCode } = {}) {
+      r.send([[m.SB.Hello, protocol, build, name, uuid, viewDistance, code]]);
     },
   };
   t.onMessage((_peer, data) => r.got.push(m.decode(data, m.MAX_HOST_MESSAGE)));
-  t.onPeer((_peer, joined) => {
-    if (!joined) r.gone = true;
+  t.onPeer((_peer, joined, reason) => {
+    if (joined) return;
+    r.gone = true;
+    r.goneReason = reason ?? null;
   });
   return r;
 }
@@ -187,9 +224,26 @@ export function copyOf(g, e) {
   return g.session.entities.get(e.id)?.e ?? null;
 }
 
-/** host tick → deliver → each guest's tick → deliver, `n` times */
+/**
+ * (stage 5, MP_LAG) the ticks each step() and stepIdle() goes on for after those asked for: long enough for what was
+ * sent in them to arrive, be answered and the answer arrive, at the most lag (the tests' ticks were written for a
+ * network that answers within the tick)
+ */
+export const SETTLE = LAG ? Math.ceil((2 * Math.max(+LAG[1], +LAG[2])) / 50) + 1 : 0;
+let settle = SETTLE;
+
+/**
+ * (stage 5) for a suite that makes its own networks, slow ones among them (m5-latency): MP_NET and MP_LAG leave it be,
+ * its networks in memory unless it says otherwise, and step() and stepIdle() go on for no more ticks than asked
+ */
+export function ownNetworks(m) {
+  if (m.MemoryNetwork.Original) m.MemoryNetwork = m.MemoryNetwork.Original;
+  settle = 0;
+}
+
+/** host tick → deliver → each guest's tick → deliver, `n` times (and, with MP_LAG, SETTLE more) */
 export function step(host, n = 1) {
-  for (let i = 0; i < n; i++) {
+  for (let i = 0; i < n + settle; i++) {
     host.server.receive();
     host.level.tick();
     host.server.tick();
@@ -199,9 +253,9 @@ export function step(host, n = 1) {
   }
 }
 
-/** (stage 4) the host on a loading screen, its level standing still (Game.tick before it's spawned), `n` times */
+/** (stage 4) the host on a loading screen, its level standing still (Game.tick before it's spawned), `n` times (and, with MP_LAG, SETTLE more) */
 export function stepIdle(host, n = 1) {
-  for (let i = 0; i < n; i++) {
+  for (let i = 0; i < n + settle; i++) {
     host.server.idleTick();
     host.net.deliver();
     for (const g of host.guests) g.session.tick();

@@ -7,7 +7,7 @@
 export const MULTIPLAYER_ENABLED = true;
 
 /** bumped whenever a packet changes; host and guest must agree (vanilla SharedConstants.getProtocolVersion) */
-export const PROTOCOL_VERSION = 5;
+export const PROTOCOL_VERSION = 6;
 
 /** (vite.config.ts: a hash of src/ in a build) */
 declare const __BUILD_ID__: string | undefined;
@@ -70,12 +70,37 @@ export const MAX_HOST_BACKLOG_BYTES = 128 * 1024 * 1024;
 export const RESPAWN_BED_WAIT_TICKS = 100;
 /** the most guests a host takes (vanilla's LAN server: 8 players) */
 export const MAX_GUESTS = 7;
+/**
+ * the join code (net/joinCode.ts): a place that gives a wrong one this many times in a row waits this long before it
+ * may try again (5 s), twice as long after each further wrong one, up to 5 minutes; and from everywhere together, at
+ * most this many wrong ones a minute before everyone waits
+ */
+export const JOIN_CODE_FREE_TRIES = 3;
+export const JOIN_CODE_WAIT_TICKS = 5 * 20;
+export const JOIN_CODE_MAX_WAIT_TICKS = 5 * 60 * 20;
+export const JOIN_CODE_WRONG_WINDOW_TICKS = 60 * 20;
+export const JOIN_CODE_MAX_WRONG = 20;
 /** a guest that hasn't said who it is by then is let go (vanilla ServerLoginPacketListenerImpl: 600 ticks) */
 export const LOGIN_TICKS = 600;
 /** the most connections a host keeps waiting to say who they are: more are turned away at once */
 export const MAX_PENDING_LOGINS = 8;
 /** vanilla ServerGamePacketListenerImpl: a move of more than 10 blocks in a tick isn't believed (100 blocks²) */
 export const MAX_MOVE_PER_TICK = 10;
+/**
+ * a guest's moves that come in between two of the host's ticks (a network holding some back, then letting them through
+ * together) are each taken in turn, as vanilla takes each move packet: a second's worth at most, and past that the
+ * latest stands in for the rest
+ */
+export const MOVES_KEPT_PER_TICK = 20;
+/**
+ * (stage 5) a guest still on its loading screen RESYNC_AFTER_TICKS after the host put it in place, or RESYNC_UNPLACED_TICKS
+ * after the host took it along without putting it anywhere yet, asks for the world again (SB.Resync), then every
+ * RESYNC_EVERY_TICKS while it's still waiting; the host takes one every RESYNC_MIN_TICKS at most from a guest
+ */
+export const RESYNC_AFTER_TICKS = 5 * 20;
+export const RESYNC_UNPLACED_TICKS = 15 * 20;
+export const RESYNC_EVERY_TICKS = 10 * 20;
+export const RESYNC_MIN_TICKS = 4 * 20;
 /**
  * vanilla ServerGamePacketListenerImpl.dropSpamThrottler: each item a creative guest throws out of its inventory adds
  * 20, a tick takes 1 away, and at 1480 more are refused
@@ -96,3 +121,33 @@ export const MAX_STATE_ID = 0x7fff;
 export const MAX_MOTION = 10;
 /** the most clicks in a guest's menu the host takes in a tick (a drag across every slot is 66: start, 64 slots, end) */
 export const MAX_CLICKS_PER_TICK = 80;
+
+// ---------------------------------------------------------------------------
+// the relay (scripts/relay.mjs, at /__mp on the game's own server; vite.config.ts hands it these): where a host's page
+// and its guests' pages meet when they aren't windows of one browser
+
+/** the most connections it keeps at once, of every kind; and from one address (a friend's windows, or one tunnel's far end) */
+export const RELAY_MAX_CONNECTIONS = 64;
+export const RELAY_MAX_PER_ADDRESS = 8;
+/** the most guests connected at once: the world's, and as many again logging in (the host's game turns the rest away) */
+export const RELAY_MAX_GUESTS = MAX_GUESTS + MAX_PENDING_LOGINS;
+/** the most Multiplayer screens listening for the world at once */
+export const RELAY_MAX_LISTENERS = 32;
+/**
+ * a guest's messages through it: as many a second as the host's game takes (MESSAGES_PER_TICK a tick), in bursts of up
+ * to what the game lets wait (MAX_GUEST_BACKLOG, MAX_GUEST_BACKLOG_BYTES); a guest sending more is let go
+ */
+export const RELAY_GUEST_MESSAGES_PER_SECOND = MESSAGES_PER_TICK * 20;
+export const RELAY_GUEST_BURST = MAX_GUEST_BACKLOG;
+export const RELAY_GUEST_BYTES_PER_SECOND = MAX_GUEST_BACKLOG_BYTES;
+export const RELAY_GUEST_BURST_BYTES = MAX_GUEST_BACKLOG_BYTES;
+/** a guest whose connection doesn't take what the host sends it fast enough, with this much waiting, is let go */
+export const RELAY_MAX_GUEST_BUFFER = 2 * MAX_HOST_MESSAGE;
+/** what a host says of its world for the Multiplayer screens (net/transport/lan.ts's LanWorld, as JSON), at most */
+export const RELAY_MAX_WORLD_INFO = 2048;
+/** a connection that hasn't said anything by then (a host its world, a guest its hello) is let go */
+export const RELAY_HANDSHAKE_MS = 10_000;
+/** one not heard from at all (not even its answer to a ping) for this long is gone: vanilla's read timeout, 30 s */
+export const RELAY_IDLE_MS = TIMEOUT_TICKS * 50;
+/** how often it pings */
+export const RELAY_PING_MS = 10_000;

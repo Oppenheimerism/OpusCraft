@@ -6,11 +6,11 @@
 import type { Value } from '../codec';
 import { decode, encodeBundle, CodecError } from '../codec';
 import { SB, CB, Action, PoseFlag, checkPacket, checkLogin, SLOT_ARMOR, SLOT_OFFHAND, SLOT_COUNT, ANIMATE_SWING_OFF_HAND, type LoginInfo, type ReceivingReason } from '../protocol';
-import { PROTOCOL_VERSION, BUILD_ID, MAX_HOST_MESSAGE, MAX_HOST_BACKLOG, MAX_HOST_BACKLOG_BYTES, TIMEOUT_TICKS, MAX_CHAT, MAX_GUEST_MESSAGE, MAX_GUEST_PACKETS } from '../config';
+import { PROTOCOL_VERSION, BUILD_ID, MAX_HOST_MESSAGE, MAX_HOST_BACKLOG, MAX_HOST_BACKLOG_BYTES, TIMEOUT_TICKS, MAX_CHAT, MAX_GUEST_MESSAGE, MAX_GUEST_PACKETS, RESYNC_AFTER_TICKS, RESYNC_UNPLACED_TICKS, RESYNC_EVERY_TICKS } from '../config';
 import { HOST_PEER, type PeerId, type Transport } from '../transport/transport';
 import { itemFromHost, itemToWire } from '../items';
 import { poseFlags, stackKey } from '../playerState';
-import { columnFromSections, biomesOk, savedBlockEntity, blockEntityFromHost } from '../chunkData';
+import { columnFromSections, biomesOk, savedBlockEntity, blockEntityFromHost, loadingChunks } from '../chunkData';
 import { replayParticles } from '../effects';
 import { createFromPayload } from '../entityNet';
 import { applyData, PLAYER_FIELDS } from '../entityData';
@@ -83,6 +83,11 @@ const GAME_MODES: readonly GameMode[] = ['survival', 'creative', 'adventure', 's
 /** the most fields waiting for an entity that hasn't come yet (a host that names more that never come is let be) */
 const MAX_WAITING = 4096;
 
+/** (a stuck loading screen's report) the host's packets by name */
+const CB_NAMES = new Map<number, string>(Object.entries(CB).map(([k, v]) => [v as number, k]));
+/** (a stuck loading screen's report) how many of the host's latest packets it lists */
+const LATELY = 48;
+
 /** the kinds of packet that couldn't be sent to the host, told once each (a bug in whatever built them) */
 const unsentIds = new Set<Value>();
 function unsent(p: Value, e: CodecError): void {
@@ -96,6 +101,8 @@ export interface GuestIdentity {
   name: string;
   uuid: string;
   viewDistance: number;
+  /** (stage 5) the world's join code, as the host told it (net/joinCode.ts) */
+  code: string;
 }
 
 export class ClientSession {
@@ -111,6 +118,8 @@ export class ClientSession {
   private flooded = false;
   /** the connection went: once what came before is read, it's lost */
   private hostGone = false;
+  /** why, if the transport said */
+  private goneReason: string | null = null;
   private out: Value[] = [];
   private quiet = 0;
   /** the other players, by the host's ids */
@@ -145,17 +154,32 @@ export class ClientSession {
   private selected = -1;
   /** why it ended, if it has */
   endReason = '';
+  /** our ticks (receive() counts them) */
+  private ticks = 0;
+  /**
+   * (stage 5) on the loading screen, after the login or taken along to another dimension, till the chunks it waits for
+   * are in: since when (our ticks), when the host put us in place (-1: not yet), when we last asked for them again (-1:
+   * never), and the chunks that came meanwhile, and when the last did
+   */
+  private loading: { since: number; placed: number; asked: number; chunks: number; lastChunk: number } | null = null;
+  /** (a stuck loading screen's report) the host's latest packets: their ids, and the ticks they came in */
+  private readonly latelyIds: number[] = [];
+  private readonly latelyAt: number[] = [];
 
   constructor(readonly transport: Transport, readonly hooks: ClientHooks, readonly me: GuestIdentity) {
-    transport.onPeer((peer, joined) => {
+    transport.onPeer((peer, joined, reason) => {
       if (peer !== HOST_PEER || this.state === 'closed') return;
       if (joined) {
         this.state = 'login';
-        this.send([SB.Hello, PROTOCOL_VERSION, BUILD_ID, me.name, me.uuid, me.viewDistance]);
+        this.send([SB.Hello, PROTOCOL_VERSION, BUILD_ID, me.name, me.uuid, me.viewDistance, me.code]);
         this.flush();
-      } else if (this.state === 'connecting') this.lost("Couldn't connect: nobody answered");
-      // (what the host said before it went is read first, at the next tick: its Disconnect says why)
-      else this.hostGone = true;
+      } else if (this.state === 'connecting') this.lost(reason ?? "Couldn't connect: nobody answered");
+      // (what the host said before it went is read first, at the next tick: its Disconnect says why; else the
+      // transport's word, if it has one: the relay's that the host's page went away)
+      else {
+        this.hostGone = true;
+        this.goneReason = reason ?? null;
+      }
     });
     transport.onMessage((peer: PeerId, data) => {
       if (peer !== HOST_PEER || this.state === 'closed' || this.flooded) return;
@@ -177,6 +201,7 @@ export class ClientSession {
   /** what the host said since the last tick (at the start of the guest's tick) */
   receive(): void {
     if (this.state === 'closed') return;
+    this.ticks++;
     if (this.flooded) return this.fail('too much, too fast');
     const inbox = this.inbox.splice(0, this.inbox.length);
     this.inboxBytes = 0;
@@ -193,6 +218,7 @@ export class ClientSession {
       for (const p of msg) {
         const bad = checkPacket(p, 'host');
         if (bad) return this.fail(bad);
+        this.heard((p as Value[])[0] as number);
         try {
           this.handle(p as Value[]);
         } catch (e) {
@@ -202,11 +228,21 @@ export class ClientSession {
         if (this.isClosed) return;
       }
     }
-    if (this.hostGone) this.lost('Connection lost');
+    if (this.hostGone) this.lost(this.goneReason ?? 'Connection lost');
   }
 
   private get isClosed(): boolean {
     return this.state === 'closed';
+  }
+
+  /** (a stuck loading screen's report) a packet heard from the host */
+  private heard(id: number): void {
+    if (this.latelyIds.length >= LATELY) {
+      this.latelyIds.shift();
+      this.latelyAt.shift();
+    }
+    this.latelyIds.push(id);
+    this.latelyAt.push(this.ticks);
   }
 
   private handle(p: Value[]): void {
@@ -256,6 +292,7 @@ export class ClientSession {
         this.thunderTarget = world.dim.hasSkyLight ? (p[4] as number) : 0;
         return;
       case CB.PlayerPosition: {
+        if (this.loading) this.loading.placed = this.ticks;
         const pl = this.player!;
         pl.moveTo(p[1] as number, p[2] as number, p[3] as number, p[4] as number, p[5] as number);
         pl.dx = pl.dy = pl.dz = 0;
@@ -490,6 +527,8 @@ export class ClientSession {
     this.rainTarget = info.rainLevel;
     this.thunderTarget = info.thunderLevel;
     this.state = 'play';
+    // (the login puts us in place: the loading screen waits for the chunks round us)
+    this.loading = { since: this.ticks, placed: this.ticks, asked: -1, chunks: 0, lastChunk: -1 };
   }
 
   /**
@@ -511,7 +550,67 @@ export class ClientSession {
     this.level!.destroyProgress.clear();
     this.player!.removeVehicle();
     this.rainTarget = this.thunderTarget = 0;
+    // (the loading screen, till the host is there and puts us in place: a teleport; then the chunks round us)
+    this.loading = { since: this.ticks, placed: -1, asked: -1, chunks: 0, lastChunk: -1 };
     this.hooks.changeDimension?.(dim, reason);
+  }
+
+  /**
+   * (stage 5) whether we're still waiting on our loading screen for the host's chunks round us (after the login, or
+   * taken along to another dimension): as far as what the host sends goes (Game.tick waits for them to be drawn, too)
+   */
+  get stillLoading(): boolean {
+    return this.loading !== null;
+  }
+
+  /**
+   * (stage 5, each tick) on the loading screen: in, once the chunks it waits for have come; else, long enough after the
+   * host put us in place (or took us along and hasn't put us anywhere), we ask for them again (SB.Resync), every so often
+   * while it lasts, saying in the console what we have and haven't, and what came lately: to find out why, if it does
+   */
+  private checkLoading(): void {
+    const l = this.loading;
+    if (!l) return;
+    const missing = this.missingChunks();
+    if (!missing.length && l.placed >= 0) {
+      this.loading = null;
+      return;
+    }
+    const waited = this.ticks - l.since;
+    const due = l.asked >= 0 ? this.ticks - l.asked >= RESYNC_EVERY_TICKS : l.placed >= 0 ? this.ticks - l.placed >= RESYNC_AFTER_TICKS : waited >= RESYNC_UNPLACED_TICKS;
+    if (!due) return;
+    l.asked = this.ticks;
+    this.send([SB.Resync, missing.flat(), Math.min(waited, 0x7fffffff), l.placed >= 0]);
+    console.warn(`multiplayer: still on the loading screen after ${(waited / 20).toFixed(1)} s: asked the host for the world again`, this.loadingReport(missing));
+  }
+
+  /** (the loading screen) the chunks it waits for round our player (net/chunkData.ts loadingChunks) that aren't in yet */
+  private missingChunks(): [number, number][] {
+    const p = this.player!, world = this.level!.world, out: [number, number][] = [];
+    for (const [cx, cz] of loadingChunks(p.x, p.z, this.info!.viewDistance)) {
+      const key = Chunk.key(cx, cz);
+      if (!world.chunks.has(key) || this.pending.has(key)) out.push([cx, cz]);
+    }
+    return out;
+  }
+
+  /** (a stuck loading screen) what we have of the world and what came lately, for the console */
+  private loadingReport(missing: [number, number][]): Record<string, unknown> {
+    const l = this.loading!, p = this.player!, world = this.level!.world, now = this.ticks;
+    return {
+      dimension: world.dim.id,
+      at: [p.x, p.y, p.z].map((v) => Math.round(v * 100) / 100),
+      chunk: [Math.floor(p.x) >> 4, Math.floor(p.z) >> 4],
+      viewDistance: this.info!.viewDistance,
+      waitedTicks: now - l.since,
+      placedTicksAgo: l.placed >= 0 ? now - l.placed : null,
+      missing: missing.map(([cx, cz]) => `${cx},${cz}${this.pending.has(Chunk.key(cx, cz)) ? ' (being lit)' : ''}`),
+      chunksInWorld: world.chunks.size,
+      chunksBeingLit: this.pending.size,
+      chunksSince: l.chunks,
+      lastChunkTicksAgo: l.lastChunk >= 0 ? now - l.lastChunk : null,
+      lately: this.latelyIds.map((id, i) => `${CB_NAMES.get(id) ?? id}@-${now - this.latelyAt[i]}`).join(' '),
+    };
   }
 
   /** vanilla ClientPacketListener.handleLevelChunkWithLight: checked, then lit and put in the world (replacing any) */
@@ -526,6 +625,10 @@ export class ClientSession {
       list.push(d);
     }
     const key = Chunk.key(cx, cz);
+    if (this.loading) {
+      this.loading.chunks++;
+      this.loading.lastChunk = this.ticks;
+    }
     if (this.level!.world.chunks.has(key) || this.pending.has(key)) this.sink!.remove(cx, cz);
     this.pending.set(key, { updates: [], blockEntities: new Map() });
     this.sink!.add(cx, cz, blocks, biomes, cave, list);
@@ -815,6 +918,7 @@ export class ClientSession {
   /** (end of the guest's tick) where our player is, what the buttons did, what's changed in the inventory: sent */
   sendTick(): void {
     if (this.state !== 'play') return this.flush();
+    this.checkLoading();
     const p = this.player!, i = p.input;
     let flags = poseFlags(p);
     if (this.attackHeld) flags |= PoseFlag.ATTACK_HELD;

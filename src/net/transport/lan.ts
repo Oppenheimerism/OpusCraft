@@ -17,6 +17,8 @@ export interface LanWorld {
   max: number;
   protocol: number;
   build: string;
+  /** (stage 5) the join code, told only to the other windows of the host's browser (they're its player's own) */
+  code?: string;
 }
 
 const ID = /^[0-9a-f-]{8,64}$/;
@@ -27,10 +29,12 @@ export function plainText(v: unknown, max: number): string {
   return typeof v === 'string' ? v.replace(/§[\s\S]?/g, '').replace(/[\u0000-\u001f\u007f]/g, '').slice(0, max) : '';
 }
 
-function parse(m: Record<string, unknown>): LanWorld | null {
+/** what another page says of its world, checked (null if it doesn't say it right) */
+export function parseLanWorld(m: Record<string, unknown>): LanWorld | null {
   if (typeof m.id !== 'string' || !ID.test(m.id)) return null;
   const n = (v: unknown, max: number) => (typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= max ? v : -1);
   const w: LanWorld = { id: m.id, name: plainText(m.name, 64), host: plainText(m.host, 16), players: n(m.players, 1000), max: n(m.max, 1000), protocol: n(m.protocol, 0x7fffffff), build: plainText(m.build, 64) };
+  if (typeof m.code === 'string' && /^[0-9A-Z]{1,32}$/.test(m.code)) w.code = m.code;
   return w.players < 0 || w.max < 0 || w.protocol < 0 ? null : w;
 }
 
@@ -76,7 +80,7 @@ export class LanWorldList {
       const m = ev.data as Record<string, unknown> | null;
       if (!m || typeof m !== 'object') return;
       if (m.t === 'world') {
-        const w = parse(m);
+        const w = parseLanWorld(m);
         if (!w) return;
         const had = this.heard.get(w.id);
         if (!had && this.heard.size >= MAX_WORLDS && this.worlds().length >= MAX_WORLDS) return;
