@@ -318,6 +318,38 @@ check('standing in the portal they came out of, nobody is taken back or told off
 }
 
 // ---------------------------------------------------------------------------
+// a guest standing still in a nether portal, its moves reaching the host every other tick only (two windows' ticks
+// aren't in step): its time there still adds up a tick at a time, as the host's own player's does, and once it's up
+// the guest is told the portal isn't its to take
+
+{
+  lvl.world.setState(4, 64, 4, m.S('nether_portal', { axis: 'x' }));
+  lvl.world.setState(4, 65, 4, m.S('nether_portal', { axis: 'x' }));
+  walkTo(a, 4.5, 4.5);
+  const before = hostTravels.length, told = a.overlays.length, wait = ha.portalWaitTime();
+  /** the host's tick, `n` times; Alex's game ticks (hearing the host, its move sent) every other one */
+  const unevenly = (n) => {
+    for (let i = 0; i < n; i++) {
+      host.server.receive();
+      lvl.tick();
+      host.server.tick();
+      host.net.deliver();
+      for (const g of host.guests) if (g !== a || i % 2) g.session.tick();
+      host.net.deliver();
+    }
+  };
+  unevenly(wait + 10);
+  step(host, 1);
+  check(`a guest standing still in a nether portal, its moves reaching the host every other tick: once its ${wait} ticks there are up, it's told the portal isn't its to take, and isn't taken`, near(ha, 4.5, 4.5) && a.overlays.length === told + 1 && a.overlays.at(-1) === REFUSED && hostTravels.length === before && lvl.world.dim.id === 'overworld', `${a.overlays.length - told} told, ${ha.portal?.time ?? '-'} ticks`);
+  unevenly(wait * 2);
+  step(host, 1);
+  check('...and isn\'t told again while it stands there', a.overlays.length === told + 1 && hostTravels.length === before);
+  walkTo(a, 0.5, 0.5);
+  lvl.world.setState(4, 64, 4, 0);
+  lvl.world.setState(4, 65, 4, 0);
+}
+
+// ---------------------------------------------------------------------------
 // the portals themselves (Game.portalEntered): a guest's nether portal is refused, the host's own still taken
 
 {
