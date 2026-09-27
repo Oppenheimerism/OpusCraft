@@ -8,6 +8,7 @@
 
 import { build, preview, createLogger } from 'vite';
 import { networkInterfaces } from 'node:os';
+import { RELAY_KEY } from './relay.mjs';
 
 const PORT = 4173;
 const tunnel = process.argv.includes('--tunnel');
@@ -76,6 +77,13 @@ if (tunnel) {
 lines.push('', '  Friends joining show up below, with where they connect from.', '  Keep this window open while you play. Ctrl+C stops the server.', '');
 console.log(lines.join('\n'));
 
-process.on('SIGINT', () => {
-  void server.close().finally(() => process.exit(0));
-});
+// (stopping, with Ctrl+C or the window closed: the relay first, so each page hears the server stopped and says so, rather
+// than "Connection lost"; then the server, which ends whatever is still open)
+let stopping = false;
+function stop() {
+  if (stopping) return;
+  stopping = true;
+  server.httpServer?.[RELAY_KEY]?.close();
+  setTimeout(() => void server.close().finally(() => process.exit(0)), 300);
+}
+for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(signal, stop);

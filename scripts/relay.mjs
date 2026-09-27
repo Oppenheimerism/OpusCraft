@@ -23,6 +23,12 @@ import { networkInterfaces } from 'node:os';
 
 export const RELAY_PATH = '/__mp';
 
+/**
+ * where a server keeps its relay (`server[RELAY_KEY]`: what attachRelay returns), for whoever stops the server to stop
+ * the relay first, each page told why (npm run lan; Vite's servers end every connection at once when they stop)
+ */
+export const RELAY_KEY = Symbol.for('minecraft.mp-relay');
+
 /** the host's frames */
 export const OP = { JOIN: 1, DATA: 2, LEAVE: 3, KICK: 4 };
 
@@ -413,8 +419,10 @@ export function attachRelay(server, options = {}) {
 
   server.on('upgrade', onUpgrade);
   server.once('close', close);
-  return {
+  const relay = {
     close,
     stats: () => ({ connections: conns.size, guests: guests.size, hosting: !!host, world }),
   };
+  server[RELAY_KEY] = relay;
+  return relay;
 }
