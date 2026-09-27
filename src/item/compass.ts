@@ -42,10 +42,10 @@ class CompassAngle {
   private readonly wobble = new Wobble(0.8);
   private readonly wobbleRandom = new Wobble(0.8);
 
-  constructor(private readonly target: (p: Player) => Target | null) {}
+  constructor(private readonly target: (p: Player, stack: ItemStack) => Target | null) {}
 
-  angle(p: Player, seed: number): number {
-    const t = this.target(p);
+  angle(p: Player, stack: ItemStack, seed: number): number {
+    const t = this.target(p, stack);
     const tick = p.level.gameTime;
     // (isValidCompassTargetPos: in this dimension, and not right on it)
     if (!t || t.dim !== p.level.dim.id || (t.pos[0] + 0.5 - p.x) ** 2 + (t.pos[1] + 0.5 - p.y) ** 2 + (t.pos[2] + 0.5 - p.z) ** 2 < 1e-5) {
@@ -68,9 +68,14 @@ export function setDialViewer(player: Player, spawn: readonly [number, number, n
   viewer = { player, spawn };
 }
 
-// vanilla ItemProperties: the compass points to the world spawn in a natural dimension (a lodestone's when the game
-// has them), the recovery compass to where its holder last died
-const COMPASS = new CompassAngle((p) => (p.level.dim.natural && viewer ? { dim: p.level.dim.id, pos: viewer.spawn } : null));
+// vanilla ItemProperties: the compass points to its lodestone if it was used on one (nowhere once that's known to be
+// gone, and nowhere outside the lodestone's dimension: game/lodestoneCompass.ts), else to the world spawn in a natural
+// dimension; the recovery compass to where its holder last died
+const COMPASS = new CompassAngle((p, s) => {
+  const t = s.tag?.lodestoneTracker;
+  if (t) return t.target ?? null;
+  return p.level.dim.natural && viewer ? { dim: p.level.dim.id, pos: viewer.spawn } : null;
+});
 const RECOVERY = new CompassAngle((p) => p.lastDeathLocation);
 
 // the clock's "time": the sun's angle in a natural dimension, spinning anywhere else (its wobble damps less)
@@ -90,5 +95,5 @@ export function dialTexture(stack: ItemStack, seed = 0): string | undefined {
   if (!viewer || (id !== 'compass' && id !== 'recovery_compass' && id !== 'clock')) return undefined;
   const p = viewer.player;
   if (id === 'clock') return frame('clock', clockTime(p), 64);
-  return frame(id, (id === 'compass' ? COMPASS : RECOVERY).angle(p, seed), 32);
+  return frame(id, (id === 'compass' ? COMPASS : RECOVERY).angle(p, stack, seed), 32);
 }

@@ -53,6 +53,8 @@ function categoryOf(name: string): Category {
   if (name === 'block.end_portal.spawn') return 'hostile';
   // vanilla ChorusFruitItem plays its teleport as SoundSource.PLAYERS
   if (name === 'item.chorus_fruit.teleport') return 'players';
+  // vanilla CompassItem.useOn: the lock onto a lodestone, SoundSource.PLAYERS
+  if (name === 'item.lodestone_compass.lock') return 'players';
   // vanilla Shulker and ShulkerBullet.getSoundSource: HOSTILE
   if (name.startsWith('entity.shulker')) return 'hostile';
   // vanilla ElytraOnPlayerSoundInstance: SoundSource.PLAYERS

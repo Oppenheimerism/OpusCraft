@@ -53,6 +53,8 @@ export interface Item {
   lore?: string[];
   /** vanilla Item.getName(stack): a name that depends on the stack (potions by their contents) */
   stackName?: (s: ItemStack) => string;
+  /** vanilla Item.isFoil(stack): a glint that depends on the stack (a lodestone compass's) */
+  foil?: (s: ItemStack) => boolean;
   /** vanilla Item.appendHoverText: tooltip lines after the name (a potion's effects) */
   hoverText?: (s: ItemStack, lines: string[]) => void;
   /** the stacks the creative tabs list for it (vanilla generatePotionEffectTypes: one per potion) */
@@ -675,6 +677,17 @@ export interface ItemTag {
   fireworkExplosion?: FireworkExplosion;
   /** (M8: goats) minecraft:instrument: a goat horn's call (game/goatHorn.ts) */
   instrument?: string;
+  /** minecraft:lodestone_tracker: the lodestone a compass points to (game/lodestoneCompass.ts) */
+  lodestoneTracker?: LodestoneTracker;
+}
+
+/**
+ * vanilla LodestoneTracker: the lodestone a compass was used on, in its dimension (none once it's known to be gone),
+ * and whether the compass looks for it to be still there (always, but for one made to point somewhere by command)
+ */
+export interface LodestoneTracker {
+  target?: { dim: string; pos: [number, number, number] };
+  tracked: boolean;
 }
 
 /** one filled slot of minecraft:container (vanilla ItemContainerContents.Slot) */
@@ -762,6 +775,11 @@ export function cloneTag(t: ItemTag | null): ItemTag | null {
   if (t.fireworkExplosion) o.fireworkExplosion = cloneExplosionData(t.fireworkExplosion);
   // (M8: goats)
   if (t.instrument !== undefined) o.instrument = t.instrument;
+  // (the lodestone compass: its fields in their order, compared as JSON)
+  if (t.lodestoneTracker) {
+    const tg = t.lodestoneTracker.target;
+    o.lodestoneTracker = tg ? { target: { dim: tg.dim, pos: [tg.pos[0], tg.pos[1], tg.pos[2]] }, tracked: t.lodestoneTracker.tracked } : { tracked: t.lodestoneTracker.tracked };
+  }
   return o;
 }
 
@@ -788,7 +806,9 @@ export function sameTag(a: ItemTag | null | undefined, b: ItemTag | null | undef
     // (fireworks)
     sameData(a?.fireworks, b?.fireworks) && sameData(a?.fireworkExplosion, b?.fireworkExplosion) &&
     // (M8: goats)
-    a?.instrument === b?.instrument
+    a?.instrument === b?.instrument &&
+    // (the lodestone compass)
+    sameData(a?.lodestoneTracker, b?.lodestoneTracker)
   );
 }
 
@@ -853,7 +873,7 @@ export class ItemStack {
   }
   /** vanilla ItemStack.hasFoil */
   hasGlint(): boolean {
-    return !!this.item.glint || this.isEnchanted();
+    return !!this.item.glint || this.isEnchanted() || !!this.item.foil?.(this);
   }
   /** vanilla ItemStack.getRarity: enchanting bumps common/uncommon to rare and rare to epic */
   rarity(): Rarity {

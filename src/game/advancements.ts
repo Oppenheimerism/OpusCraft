@@ -237,7 +237,7 @@ const A: AdvancementDef[] = [
   { id: 'nether/uneasy_alliance', parent: 'nether/return_to_sender', title: 'Uneasy Alliance', description: 'Rescue a Ghast from the Nether, bring it safely home to the Overworld... and then kill it', icon: 'ghast_tear', frame: 'challenge', criteria: one(never) },
   // (bastions) vanilla: any of the four bastion chests' loot tables rolled for the player
   { id: 'nether/loot_bastion', parent: 'nether/find_bastion', title: 'War Pigs', description: 'Loot a Chest in a Bastion Remnant', icon: 'chest', frame: 'task', criteria: each(LOOT_BASTION, (n) => ({ t: 'container_loot', table: `chests/${n.slice(5)}` })), requirements: [LOOT_BASTION] },
-  { id: 'nether/use_lodestone', parent: 'nether/obtain_ancient_debris', title: 'Country Lode, Take Me Home', description: 'Use a Compass on a Lodestone', icon: 'lodestone', frame: 'task', criteria: one(never) },
+  { id: 'nether/use_lodestone', parent: 'nether/obtain_ancient_debris', title: 'Country Lode, Take Me Home', description: 'Use a Compass on a Lodestone', icon: 'lodestone', frame: 'task', criteria: { use_lodestone: { t: 'item_used_on_block', items: ['compass'], blocks: ['lodestone'] } } },
   {
     id: 'nether/netherite_armor', parent: 'nether/obtain_ancient_debris', title: 'Cover Me in Debris', description: 'Get a full suit of Netherite armor', icon: 'netherite_chestplate', frame: 'challenge',
     criteria: { helmet: inv('netherite_helmet'), chestplate: inv('netherite_chestplate'), leggings: inv('netherite_leggings'), boots: inv('netherite_boots') },
