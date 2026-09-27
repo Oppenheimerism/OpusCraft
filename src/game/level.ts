@@ -1017,7 +1017,8 @@ export class Level {
         continue;
       }
       if (hasShapeUpdates(ns)) {
-        const nu = updateShape(this.world, nx, ny, nz, ns);
+        // (which way the change was, and what's there now: vanilla updateShape's direction and neighborState)
+        const nu = updateShape(this.world, nx, ny, nz, ns, dx ? 0 : dy ? 1 : 2, this.world.getState(x, y, z));
         if (nu === 0) {
           // vanilla Level.destroyBlock: fire goes out without break effects
           this.destroyBlock(nx, ny, nz, true, null, STATE_BLOCK[ns] !== fireId());

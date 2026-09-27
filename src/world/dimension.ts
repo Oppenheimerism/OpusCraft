@@ -123,8 +123,10 @@ export const THE_END: DimensionType = {
 
 export const DIMENSIONS: Record<DimensionId, DimensionType> = { overworld: OVERWORLD, the_nether: THE_NETHER, the_end: THE_END };
 
+/** the dimension called `id` (the Overworld for none, or for a name that isn't one: "constructor" and the like too) */
 export function dimensionById(id: string | undefined | null): DimensionType {
-  return DIMENSIONS[(id ?? 'overworld') as DimensionId] ?? OVERWORLD;
+  const k = id ?? 'overworld';
+  return Object.hasOwn(DIMENSIONS, k) ? DIMENSIONS[k as DimensionId] : OVERWORLD;
 }
 
 /** vanilla DimensionType.getTeleportationScale */
