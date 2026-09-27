@@ -447,6 +447,56 @@ function heal(g) {
 }
 
 // ---------------------------------------------------------------------------
+// put somewhere by the host (vanilla ServerPlayer.teleportTo): an ender pearl's landing, a chorus fruit's jump; the
+// guest goes there too, and its moves go on from there
+{
+  heal(a);
+  walkTo(a, 0.5, 0.5);
+  const inv = ha.inventory;
+  inv.selected = 0;
+  inv.main[0] = m.ItemStack.of('ender_pearl', 2);
+  inv.version++;
+  a.player.yaw = 0;
+  a.player.pitch = -20;
+  step(host, 3);
+  const pearls = () => lvl.entities.filter((e) => e.type === 'ender_pearl' && !e.removed);
+  a.session.input(false, false, true, false, null);
+  step(host, 1);
+  a.session.input(false, false, false, false, null);
+  step(host, 1);
+  check('pearl: thrown by the host for the guest', pearls().length === 1 && pearls()[0].owner === ha);
+  let landed = null;
+  for (let i = 0; i < 80 && pearls().length; i++) {
+    const e = pearls()[0];
+    landed = [e.x, e.y, e.z];
+    step(host, 1);
+  }
+  step(host, 3);
+  const far = Math.hypot(ha.x - 0.5, ha.z - 0.5);
+  check('pearl: where it landed, the host has the guest\'s player, hurt for five', !pearls().length && far > 5 && landed && Math.hypot(ha.x - landed[0], ha.z - landed[2]) < 2 && ha.health === 15, `${far.toFixed(1)} ${ha.health} ${landed?.map((v) => v.toFixed(1))} ${ha.x.toFixed(1)},${ha.z.toFixed(1)}`);
+  // (its own game drops it the rest of the way to the ground, the host a tick behind)
+  check('pearl: and the guest is there too, told as a teleport', Math.abs(a.player.x - ha.x) < 1e-9 && Math.abs(a.player.z - ha.z) < 1e-9 && Math.abs(a.player.y - ha.y) < 1, `${a.player.x},${a.player.y},${a.player.z} vs ${ha.x},${ha.y},${ha.z}`);
+  const x0 = ha.x, z0 = ha.z;
+  a.player.moveTo(x0 + 1, a.player.y, z0, a.player.yaw, a.player.pitch);
+  step(host, 3);
+  check('pearl: its moves go on from there', Math.abs(ha.x - (x0 + 1)) < 1e-9 && Math.abs(ha.z - z0) < 1e-9);
+  // a chorus fruit, eaten: somewhere within eight blocks
+  heal(a);
+  inv.main[0] = m.ItemStack.of('chorus_fruit', 1);
+  inv.version++;
+  step(host, 3);
+  const before = [ha.x, ha.z];
+  a.session.input(false, false, true, true, null);
+  for (let i = 0; i < 40 && inv.main[0]; i++) step(host, 1);
+  a.session.input(false, false, false, false, null);
+  step(host, 3);
+  const jumped = Math.hypot(ha.x - before[0], ha.z - before[1]);
+  check('chorus fruit: eaten, the host has the guest somewhere else', !inv.main[0] && jumped > 0.5 && jumped < 12, `${jumped.toFixed(2)} ${inv.main[0]?.item.id}`);
+  check('chorus fruit: and so does the guest', Math.abs(a.player.x - ha.x) < 1e-9 && Math.abs(a.player.z - ha.z) < 1e-9 && Math.abs(a.player.y - ha.y) < 1e-9);
+  heal(a);
+}
+
+// ---------------------------------------------------------------------------
 // a glide into a wall: the speed the guest says it lost hurts (vanilla handleFallFlyingCollisions, the move's
 // horizontalCollision), from a raw guest's moves
 {
