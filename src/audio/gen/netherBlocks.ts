@@ -1,7 +1,8 @@
 // Nether block sound types (vanilla 1.16+ SoundTypes): netherrack and its ores, nylium, soul sand
 // and soul soil, basalt, wart blocks, ancient debris, nether bricks, bone blocks, shroomlight, the
 // nether plants (fungus, roots, sprouts, weeping vines), stems and nether wood, netherite,
-// lodestone and gilded blackstone; and the compass locking onto a lodestone.
+// lodestone and gilded blackstone; the compass locking onto a lodestone; and (Soul Speed) a soul escaping the
+// sand.
 //
 // Same conventions as blocks.ts: `place` reuses the break takes, `hit` is the step take at
 // pitch 0.5 and `fall` the step take at pitch 0.75 (vanilla plays a SoundType's fall sound — its
@@ -226,6 +227,42 @@ function soulSand(c: Ctx, brk: boolean): Float32Array {
     }),
   );
   layer(out, 0.3, (b) => burst(b, sr, rng, { dur: 0.14, attack: 0.008, tau: 0.035, lp: 450 }));
+  return out;
+}
+
+/**
+ * vanilla particle.soul_escape: a soul slipping out of the sand under Soul Speed boots, a short breathy wail that
+ * rises and sinks away, a thin howl whistling inside it
+ */
+function soulEscape(c: Ctx): Float32Array {
+  const { sr, rng } = c;
+  const d = rng.range(0.7, 1.1);
+  const out = alloc(d + 0.05, sr);
+  const peak = rng.range(0.25, 0.4);
+  const fs = rng.range(0.85, 1.15);
+  // (the breath of it: vowel-shaped, opening from "oo" towards "ah" and closing again)
+  layer(out, 0.8, (b) =>
+    voice(b, sr, rng, {
+      dur: d,
+      f0: 120,
+      voiced: 0,
+      breath: 1,
+      amp: (t) => envBump(t, d * peak, d * (1 - peak)),
+      formants: [
+        { f: 380 * fs, bw: 110, g: 1 },
+        { f: 760 * fs, bw: 150, g: 0.55 },
+        { f: 2300 * fs, bw: 320, g: 0.15 },
+      ],
+    }),
+  );
+  // (the wail: a narrow band climbing to its height and falling away lower than it began)
+  const f0 = rng.range(420, 560), up = rng.range(1.4, 1.8), down = rng.range(0.6, 0.8);
+  const f = (t: number): number => {
+    const k = t / d;
+    return k < peak ? f0 * Math.pow(up, k / peak) : f0 * up * Math.pow(down / up, (k - peak) / (1 - peak));
+  };
+  layer(out, 0.55, (b) => sweep(b, sr, rng, { dur: d, f, q: 16, amp: (t) => envBump(t, d * peak * 1.1, d * (1 - peak * 1.1)), color: 'pink' }));
+  lowpass(out, 3200, sr);
   return out;
 }
 
@@ -1022,6 +1059,8 @@ export function netherBlockSounds(): Record<string, SoundGen> {
   // the nether wart crop (vanilla SoundType.NETHER_WART: its own break and plant sounds, stone steps)
   // the compass locking onto a lodestone
   S['item.lodestone_compass.lock'] = sound('item.lodestone_compass.lock', 2, lodestoneLock);
+  // (Soul Speed) a soul escaping the sand
+  S['particle.soul_escape'] = sound('particle.soul_escape', 6, soulEscape);
   S['block.nether_wart.break'] = sound('block.nether_wart.break', 6, (c) => wartCrop(c, false));
   S['item.nether_wart.plant'] = sound('item.nether_wart.plant', 6, (c) => wartCrop(c, true));
   return S;

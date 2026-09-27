@@ -55,6 +55,8 @@ function categoryOf(name: string): Category {
   if (name === 'item.chorus_fruit.teleport') return 'players';
   // vanilla CompassItem.useOn: the lock onto a lodestone, SoundSource.PLAYERS
   if (name === 'item.lodestone_compass.lock') return 'players';
+  // (Soul Speed) the enchantment's play_sound at the wearer's getSoundSource: PLAYERS, as a player's boots are the ones heard
+  if (name === 'particle.soul_escape') return 'players';
   // vanilla Shulker and ShulkerBullet.getSoundSource: HOSTILE
   if (name.startsWith('entity.shulker')) return 'hostile';
   // vanilla ElytraOnPlayerSoundInstance: SoundSource.PLAYERS
