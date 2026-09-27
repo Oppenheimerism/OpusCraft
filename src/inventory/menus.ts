@@ -433,6 +433,11 @@ export interface ContainerEntity {
 
 export class ChestMenu extends ContainerMenu {
   readonly rows: number;
+  /**
+   * what closing it does to what it's the menu of (vanilla Container.stopOpen: a chest's or barrel's lid shuts, a
+   * shulker box's; a chest minecart's or boat's CONTAINER_CLOSE), set by whoever opened it (game/openMenu.ts)
+   */
+  onClosed: (() => void) | null = null;
   /** `title` is the container's display name (vanilla MenuProvider.getDisplayName) */
   constructor(player: Player, readonly chest: ChestBlockEntity | ContainerEntity, readonly title = 'Chest') {
     super(player);
@@ -446,6 +451,12 @@ export class ChestMenu extends ContainerMenu {
     const c = this.chest;
     if ('containerStillValid' in c) return c.containerStillValid(p);
     return !c.removed && p.distanceToSqr(c.x + 0.5, c.y + 0.5, c.z + 0.5) <= 64;
+  }
+  override removed(): void {
+    super.removed();
+    const closed = this.onClosed;
+    this.onClosed = null;
+    closed?.();
   }
   quickMoveStack(_p: Player, index: number): ItemStack | null {
     const slot = this.slots[index];

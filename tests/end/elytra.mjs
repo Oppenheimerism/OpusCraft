@@ -306,7 +306,7 @@ player.setGameMode('survival');
   }
   check('flying into a wall fast: hurt by the speed lost (1.5 a tick: 12)', hit && near(20 - player.health, 12, 1.01), `${20 - player.health}`);
   check('with the big fall sound', heard('entity.player.big_fall') === 1);
-  check('the death message: experienced kinetic energy', readFileSync('src/game/game.ts', 'utf8').includes("case 'flyIntoWall':\n        return `${n} experienced kinetic energy`"));
+  check('the death message: experienced kinetic energy', readFileSync('src/game/playerDeath.ts', 'utf8').includes("case 'flyIntoWall':\n      return `${n} experienced kinetic energy`"));
 }
 
 // --- a dispenser puts it on

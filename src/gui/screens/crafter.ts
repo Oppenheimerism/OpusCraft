@@ -8,7 +8,6 @@ import type { GuiGraphics } from '../guiGraphics';
 import type { Slot, ClickType } from '../../inventory/container';
 import { AbstractContainerScreen } from './container';
 import { CrafterMenu, CrafterSlot } from '../../inventory/crafterMenu';
-import { setCrafterMenuHook } from '../../game/crafter';
 import '../../textures/crafterGui';
 
 const LABEL = 0x404040;
@@ -82,12 +81,4 @@ export class CrafterScreen extends AbstractContainerScreen<CrafterMenu> {
     super.tick();
     this.menu.refreshRecipeResult();
   }
-}
-
-/** a crafter used (game/crafter.ts) opens this screen on it */
-export function installCrafterScreen(game: Game): void {
-  setCrafterMenuHook((be, p) => {
-    if (p === game.player) game.setScreen(new CrafterScreen(game, new CrafterMenu(p, be)));
-    else game.refuseGuestMenu(p);
-  });
 }

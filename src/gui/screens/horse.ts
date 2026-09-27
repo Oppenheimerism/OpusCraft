@@ -5,8 +5,7 @@
 import type { Game } from '../../game/game';
 import type { GuiGraphics } from '../guiGraphics';
 import { AbstractContainerScreen } from './container';
-import { HorseInventoryMenu } from '../../inventory/horseMenu';
-import { horseHooks } from '../../entity/horse';
+import type { HorseInventoryMenu } from '../../inventory/horseMenu';
 import { isLlama } from '../../entity/llama';
 import { entityDisplayName } from '../../game/spawner';
 import '../../textures/horseGui';
@@ -26,12 +25,4 @@ export class HorseInventoryScreen extends AbstractContainerScreen<HorseInventory
     if (h.canWearArmor()) g.sprite(isLlama(h) ? 'llama_armor_slot' : 'horse_armor_slot', i + 7, j + 35, 18, 18);
     this.game.renderEntityInInventory(g, i + 26, j + 18, i + 78, j + 70, 17, 0.25, mx, my, h);
   }
-}
-
-/** a horse's inventory opened (entity/horse.ts) shows this screen */
-export function installHorseScreen(game: Game): void {
-  horseHooks.openInventory = (h, p) => {
-    if (p === game.player) game.setScreen(new HorseInventoryScreen(game, new HorseInventoryMenu(p, h)));
-    else game.refuseGuestMenu(p);
-  };
 }

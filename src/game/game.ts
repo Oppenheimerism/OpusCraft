@@ -46,13 +46,9 @@ import { ItemEntity } from '../entity/itemEntity';
 import { ExperienceOrb } from '../entity/xpOrb';
 import { GuiEntityRenderer } from '../render/guiEntity';
 import type { SkinParts } from '../render/entityRenderers';
-import { InventoryMenu, CraftingMenu, FurnaceMenu, ChestMenu, BrewingStandMenu } from '../inventory/menus';
-import { EnchantmentMenu, AnvilMenu, GrindstoneMenu } from '../inventory/enchantMenus';
+import type { ContainerMenu } from '../inventory/container';
 import { MerchantMenu } from '../inventory/merchantMenu';
 import type { Merchant } from '../entity/trading';
-import { hasVanishing } from '../item/enchantHelper';
-import { ChestBlockEntity, FurnaceBlockEntity, BarrelBlockEntity, BrewingStandBlockEntity } from '../world/blockEntity';
-import { catSittingOn } from '../entity/cat';
 import { useBed, BED_YROT, SleepHost } from './sleep';
 import { AmbientTicker } from './animateTick';
 import { ToastComponent, AdvancementToast, RecipeToast } from '../gui/toasts';
@@ -77,7 +73,8 @@ import { tickBastionProgress } from './bastions';
 import { setGenerateLootListener } from './archaeology';
 import { setPotCraftedListener } from './decoratedPot';
 import { setNowPlayingListener } from './jukebox';
-import { openJobSite } from './jobSites';
+import { blockMenu, entityContainerMenu, installMenuHooks, setShowMenu, showMenu, type MenuEvents } from './openMenu';
+import { deathMessage, dropDeathLoot, resetForRespawn } from './playerDeath';
 import { endPortalTravel, PortalArrivals } from './endTravel';
 import { EndDragonFight, ARENA_TICKET_LEVEL } from './endDragonFight';
 import { gatewayTravel } from './gatewayTravel';
@@ -486,10 +483,10 @@ export class Game {
     this.interaction = new Interaction(this.level, this.player);
     this.interaction.onOpenContainer = (kind, x, y, z) => this.openContainer(kind, x, y, z);
     setVillageMenuHook((kind, x, y, z, p) => (p === this.player ? this.openContainer(kind, x, y, z) : this.refuseGuestMenu(p)));
-    setShulkerBoxMenuHook((menu) => {
-      if (menu.player !== this.player) return this.refuseGuestMenu(menu.player);
-      if (this.containerScreenFactory) this.setScreen(this.containerScreenFactory(menu));
-    });
+    // (game/openMenu.ts: the menus of the blocks and entities that aren't opened by name, a shulker box's too)
+    setShowMenu((p, menu) => this.showMenu(p, menu));
+    installMenuHooks();
+    setShulkerBoxMenuHook((menu) => showMenu(menu.player, menu));
     // (the archaeology advancements: a suspicious block's loot rolled for the player, a pot made of four sherds)
     setGenerateLootListener((p, table) => {
       if (p === this.player) this.advancements.trigger('container_loot', { lootTable: table });
@@ -888,14 +885,7 @@ export class Game {
       this.sound.play('entity.player.death', p.x, p.y, p.z, 1, 1);
       const rules = this.level.gameRules;
       if (rules.showDeathMessages) this.chat(this.deathMessage(source));
-      if (!rules.keepInventory) {
-        this.dropAllItems();
-        // vanilla LivingEntity.dropExperience: a player always drops some (Player.getBaseExperienceReward: 7 a level, at
-        // most 100), unless a sculk catalyst took it
-        if (!p.skipDropExperience && p.gameMode !== 'spectator') this.level.awardExperience?.(p.x, p.y, p.z, Math.min(100, p.xpLevel * 7));
-        p.xpLevel = 0;
-        p.xpProgress = 0;
-      }
+      dropDeathLoot(this.level, p);
       if (rules.doImmediateRespawn) {
         setTimeout(() => this.inWorld && this.respawn(), 0);
         return;
@@ -904,60 +894,31 @@ export class Game {
     };
   }
 
-  containerScreenFactory: ((menu: InventoryMenu | CraftingMenu | FurnaceMenu | ChestMenu | BrewingStandMenu | EnchantmentMenu | AnvilMenu | GrindstoneMenu | MerchantMenu) => Screen) | null = null;
+  /** the screen for a menu opened for the game's own player (gui/screens: each kind of menu's own) */
+  containerScreenFactory: ((menu: ContainerMenu) => Screen) | null = null;
 
-  /** right-clicked a block with a menu */
-  /**
-   * (bastions) vanilla RandomizableContainer.unpackLootTable(player): a container's loot rolled as the player opens
-   * it, and the player_generates_container_loot trigger for its table (War Pigs)
-   */
-  private unpackLootFor(be: { lootTable?: string | null; unpackLoot(): void }): void {
-    const table = be.lootTable ?? null;
-    be.unpackLoot();
-    if (table) this.advancements.trigger('container_loot', { lootTable: table });
-  }
+  /** what opening a menu earns the game's own player (its advancements: game/openMenu.ts) */
+  private readonly menuEvents: MenuEvents = {
+    loot: (table) => this.advancements.trigger('container_loot', { lootTable: table }),
+    brewed: (potion) => this.advancements.trigger('brewed_potion', { potion }),
+    enchanted: () => this.advancements.trigger('enchanted_item'),
+  };
 
+  /** right-clicked a block with a menu (game/openMenu.ts makes it) */
   openContainer(kind: string, x: number, y: number, z: number): void {
     if (!this.containerScreenFactory) return;
-    const p = this.player;
-    if (kind === 'crafting_table') this.setScreen(this.containerScreenFactory(new CraftingMenu(p, [x, y, z])));
-    else if (kind === 'furnace' || kind === 'smoker' || kind === 'blast_furnace') {
-      const be = this.world.getBlockEntity(x, y, z);
-      if (be instanceof FurnaceBlockEntity) this.setScreen(this.containerScreenFactory(new FurnaceMenu(p, be)));
-    } else if (kind === 'chest') {
-      const be = this.world.getBlockEntity(x, y, z);
-      if (!(be instanceof ChestBlockEntity)) return;
-      // a solid block above keeps the lid shut, and so does a cat sitting on it (vanilla ChestBlock.isChestBlockedAt)
-      if (FLAGS[this.world.getState(x, y + 1, z)] & F_OPAQUE || catSittingOn(this.level, x, y, z)) return;
-      this.unpackLootFor(be);
-      this.setScreen(this.containerScreenFactory(new ChestMenu(p, be)));
-      if (be.openCount++ === 0) {
-        this.sound.play('block.chest.open', x + 0.5, y + 0.5, z + 0.5, 0.5, Math.random() * 0.1 + 0.9);
-        // (vanilla ContainerOpenersCounter.incrementOpeners: CONTAINER_OPEN)
-        this.level.gameEvent('container_open', x + 0.5, y + 0.5, z + 0.5, { entity: p });
-      }
-    } else if (kind === 'barrel') {
-      // vanilla BarrelBlock.useWithoutItem: a chest's menu, titled Barrel; the lid opens
-      const be = this.world.getBlockEntity(x, y, z);
-      if (!(be instanceof BarrelBlockEntity)) return;
-      this.unpackLootFor(be);
-      this.setScreen(this.containerScreenFactory(new ChestMenu(p, be, 'Barrel')));
-      be.startOpen(this.level, p);
-    } else if (kind === 'brewing_stand') {
-      const be = this.world.getBlockEntity(x, y, z);
-      if (!(be instanceof BrewingStandBlockEntity)) return;
-      const m = new BrewingStandMenu(p, be);
-      m.onBrewed = (potion) => this.advancements.trigger('brewed_potion', { potion });
-      this.setScreen(this.containerScreenFactory(m));
-    } else if (kind === 'enchanting_table') {
-      const m = new EnchantmentMenu(p, [x, y, z]);
-      m.onEnchanted = () => this.advancements.trigger('enchanted_item');
-      this.setScreen(this.containerScreenFactory(m));
-    } else if (kind.endsWith('anvil')) this.setScreen(this.containerScreenFactory(new AnvilMenu(p, [x, y, z])));
-    else if (kind === 'grindstone') this.setScreen(this.containerScreenFactory(new GrindstoneMenu(p, [x, y, z])));
-    // the job sites' menus, from game/villageBlocks: stonecutter, smithing table, loom, cartography table, a lectern's
-    // book (game/jobSites; the brewing stand's is still to come)
-    else openJobSite(this, kind, x, y, z);
+    const m = blockMenu(this.level, this.player, kind, x, y, z, this.menuEvents);
+    if (m) this.setScreen(this.containerScreenFactory(m));
+  }
+
+  /**
+   * (game/openMenu.ts) a menu opened for `p`, a block's or an entity's: the game's own player sees its screen; a
+   * guest's player is told it can't use that yet
+   */
+  private showMenu(p: Player, menu: ContainerMenu): boolean {
+    if (p !== this.player) return this.refuseGuestMenu(p);
+    if (this.containerScreenFactory) this.setScreen(this.containerScreenFactory(menu));
+    return true;
   }
 
   /** a villager started trading with the player (vanilla Merchant.openTradingScreen) */
@@ -975,20 +936,7 @@ export class Game {
   /** right-clicked a chest minecart or chest boat (vanilla ContainerEntity.interactWithContainerVehicle: no sound, no lid) */
   openEntityContainer(e: MinecartChest | ChestBoat): void {
     if (!this.containerScreenFactory) return;
-    e.unpackLoot();
-    this.setScreen(this.containerScreenFactory(new ChestMenu(this.player, e, entityDisplayName(e))));
-    // (vanilla ContainerEntity.interactWithContainerVehicle: CONTAINER_OPEN, where the vehicle is)
-    this.level.gameEvent('container_open', e.x, e.y, e.z, { entity: this.player });
-  }
-
-  /** chest closed (called by the chest screen) */
-  chestClosed(be: ChestBlockEntity): void {
-    if (be instanceof BarrelBlockEntity) return be.stopOpen(this.level, this.player);
-    be.openCount = Math.max(0, be.openCount - 1);
-    if (be.openCount !== 0) return;
-    this.sound.play('block.chest.close', be.x + 0.5, be.y + 0.5, be.z + 0.5, 0.5, Math.random() * 0.1 + 0.9);
-    // (vanilla decrementOpeners: CONTAINER_CLOSE)
-    this.level.gameEvent('container_close', be.x + 0.5, be.y + 0.5, be.z + 0.5, { entity: this.player });
+    this.setScreen(this.containerScreenFactory(entityContainerMenu(this.level, this.player, e)));
   }
 
   private guiEntity: GuiEntityRenderer | null = null;
@@ -1012,119 +960,9 @@ export class Game {
     ctx.restore();
   }
 
-  /** vanilla combat tracker death messages (the player's, or a tame animal's for its owner) */
+  /** vanilla combat tracker death messages (the player's, or a tame animal's for its owner): game/playerDeath.ts */
   deathMessage(source: string, victim: LivingEntity = this.player, n = this.playerName): string {
-    const k = victim.killer;
-    const kn = k ? entityDisplayName(k) : '';
-    switch (source) {
-      case 'mob':
-      // (M8: goats) vanilla mob_attack_no_aggro's message is mob's: a goat's ram
-      case 'mobAttackNoAggro':
-      // (vanilla mob_projectile's message is mob's: a shulker's bullet)
-      case 'mobProjectile':
-      // (trial chambers) and wind_charge's: whoever sent it, else the charge itself
-      case 'windCharge':
-        return `${n} was slain by ${kn}`;
-      case 'player':
-        return `${n} was slain by ${kn}`;
-      // (trial chambers) vanilla death.attack.mace_smash
-      case 'maceSmash':
-        return `${n} was smashed by ${kn}`;
-      case 'arrow':
-        return k && k !== victim && k.type !== 'arrow' ? `${n} was shot by ${kn}` : `${n} was shot by Arrow`;
-      case 'trident':
-        return k && k !== victim && k.type !== 'trident' ? `${n} was impaled by ${kn}` : `${n} was impaled by Trident`;
-      case 'explosion':
-        return `${n} blew up`;
-      case 'badRespawnPoint':
-        return `${n} was killed by [Intentional Game Design]`;
-      case 'playerExplosion':
-        return k === victim || !k ? `${n} blew up` : `${n} was blown up by ${kn}`;
-      case 'fall':
-        return `${n} fell from a high place`;
-      // (powder snow) vanilla death.attack.freeze (and .player, killed fleeing someone)
-      case 'freeze':
-        return k && k !== victim ? `${n} was frozen to death by ${kn}` : `${n} froze to death`;
-      // (Stage 4: the outer End) an elytra into a wall
-      case 'flyIntoWall':
-        return `${n} experienced kinetic energy`;
-      // (fireworks: vanilla death.attack.fireworks, the rocket being the direct cause)
-      case 'fireworks':
-        return `${n} went off with a bang`;
-      case 'drown':
-        return `${n} drowned`;
-      case 'starve':
-        return `${n} starved to death`;
-      case 'void':
-        return `${n} fell out of the world`;
-      case 'lava':
-        return `${n} tried to swim in lava`;
-      case 'inFire':
-      case 'campfire':
-        return `${n} went up in flames`;
-      case 'onFire':
-        return `${n} burned to death`;
-      case 'lightningBolt':
-        return `${n} was struck by lightning`;
-      case 'inWall':
-        return `${n} suffocated in a wall`;
-      case 'cactus':
-        return `${n} was pricked to death`;
-      case 'sweetBerryBush':
-        return `${n} was poked to death by a sweet berry bush`;
-      case 'genericKill':
-        return `${n} was killed`;
-      case 'magic':
-        return `${n} was killed by magic`;
-      case 'indirectMagic':
-        // (vanilla death.attack.indirectMagic: whoever's cloud or potion it was, else the cloud or potion itself)
-        return k ? `${n} was killed by ${kn} using magic` : `${n} was killed by magic`;
-      case 'wither':
-        return `${n} withered away`;
-      case 'stalagmite':
-        return `${n} was impaled on a stalagmite`;
-      case 'fallingStalactite':
-        return `${n} was skewered by a falling stalactite`;
-      case 'anvil':
-        return `${n} was squashed by a falling anvil`;
-      case 'fallingBlock':
-        return `${n} was squashed by a falling block`;
-      case 'thorns':
-        return `${n} was killed while trying to hurt ${kn}`;
-      // (M4: the warden) vanilla death.attack.sonic_boom
-      case 'sonicBoom':
-        return `${n} was obliterated by a sonically-charged shriek`;
-      default:
-        return `${n} died`;
-    }
-  }
-
-  /** vanilla Player.dropEquipment: curse of vanishing items are destroyed, then Inventory.dropAll flings every stack */
-  private dropAllItems(): void {
-    const p = this.player;
-    const inv = p.inventory;
-    const drop = (s: ItemStack | null) => {
-      if (!s || hasVanishing(s)) return;
-      const e = new ItemEntity(this.level, s);
-      e.moveTo(p.x, p.y + p.eyeHeight - 0.3, p.z);
-      e.pickupDelay = 40;
-      const f = Math.random() * 0.5, a = Math.random() * Math.PI * 2;
-      e.dx = -Math.sin(a) * f;
-      e.dy = 0.2;
-      e.dz = Math.cos(a) * f;
-      this.level.addEntity(e);
-    };
-    for (let i = 0; i < inv.main.length; i++) {
-      drop(inv.main[i]);
-      inv.main[i] = null;
-    }
-    for (let i = 0; i < inv.armor.length; i++) {
-      drop(inv.armor[i]);
-      inv.armor[i] = null;
-    }
-    drop(inv.offhand);
-    inv.offhand = null;
-    inv.version++;
+    return deathMessage(source, victim, n);
   }
 
   applyGameRules(): void {
@@ -1136,34 +974,7 @@ export class Game {
 
   respawn(): void {
     const p = this.player;
-    // vanilla respawns a fresh player: no effects carry over
-    p.removeAllEffects();
-    p.health = p.maxHealth;
-    p.deathTime = 0;
-    p.hurtTime = 0;
-    p.dead = false;
-    p.killer = null;
-    p.lastHurtByMob = null;
-    p.remainingFireTicks = 0;
-    p.stopUsingItem();
-    p.food.level = 20;
-    p.food.saturation = 5;
-    p.food.exhaustion = 0;
-    p.air = 300;
-    p.fallDistance = 0;
-    p.removed = false;
-    // vanilla ServerPlayer.restoreFrom: keepInventory (or spectating) keeps the levels and the score as well
-    if (!this.level.gameRules.keepInventory && p.gameMode !== 'spectator') {
-      p.xpLevel = 0;
-      p.xpProgress = 0;
-      p.xpTotal = 0;
-    }
-    p.sleepingPos = null;
-    p.sleepCounter = 0;
-    p.setSize(0.6, 1.8);
-    p.portal = null;
-    p.portalCooldown = 0;
-    p.spinningEffectIntensity = p.oSpinningEffectIntensity = 0;
+    resetForRespawn(p, !!this.level.gameRules.keepInventory);
     // vanilla PlayerList.respawn: at the bed (facing it) if it's still there and clear, else somewhere free near the
     // world spawn (game/respawnLogic), decided once the chunks there are in
     const place = respawnArrival();
