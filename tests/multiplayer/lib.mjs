@@ -71,13 +71,13 @@ export function makeHost(m, { world, level }, { makeChunk, x = 0.5, y = 65, z = 
   level.onTake = (e) => level.sound.play(e.type === 'experience_orb' ? 'entity.experience_orb.pickup' : 'entity.item.pickup', e.x, e.y, e.z, 0.2, 1);
   // (stage 3) the guests' game mode, as the LAN screen picks it; creative if the test doesn't say, as before
   const server = new m.HostServer(level, transport ?? net.host, hooks, { lanId: 'test-world-0000', announce: false, guestGameMode });
-  return { m, world, level, player: p, net, server, chat, overlays, tickets, guests: [], setBreaking: (b) => (breaking = b) };
+  return { m, world, level, player: p, net, server, chat, overlays, tickets, guests: [], makeChunk, setBreaking: (b) => (breaking = b) };
 }
 
 /** a guest connecting to `host` as `name` (it says hello once `step` delivers the connection), over `transport` if given */
 export function makeGuest(host, name = 'Guest', { viewDistance = 3, uuid, transport = host.net.connect() } = {}) {
   const { m } = host;
-  const g = { name, transport, chat: [], overlays: [], disconnected: null, world: null, level: null, player: null, session: null, chunkAdds: 0, took: [], mounted: [], died: [], respawned: 0, recipes: new Set(), toasts: [] };
+  const g = { name, transport, chat: [], overlays: [], disconnected: null, world: null, level: null, player: null, session: null, chunkAdds: 0, took: [], mounted: [], died: [], respawned: 0, recipes: new Set(), toasts: [], dims: [] };
   const hooks = {
     login(info) {
       const world = new m.World();
@@ -123,6 +123,15 @@ export function makeGuest(host, name = 'Guest', { viewDistance = 3, uuid, transp
       if (replace) g.recipes.clear();
       else g.toasts.push(...rs.map((r) => r.id));
       for (const r of rs) g.recipes.add(r.id);
+    },
+    // (stage 4) taken along to the host's next dimension: its world let go, as Game.guestChangedDimension does
+    changeDimension: (dim, reason) => {
+      g.dims.push([dim, reason]);
+      for (const c of [...g.world.chunks.values()]) g.world.removeChunk(c.cx, c.cz);
+      g.world.reset(m.dimensionById(dim));
+      g.level.resetForDimension();
+      g.player.dx = g.player.dy = g.player.dz = 0;
+      g.player.fallDistance = 0;
     },
   };
   g.session = new m.ClientSession(transport, hooks, { name, uuid: uuid ?? m.randomId(), viewDistance });
@@ -187,6 +196,35 @@ export function step(host, n = 1) {
   }
 }
 
+/** (stage 4) the host on a loading screen, its level standing still (Game.tick before it's spawned), `n` times */
+export function stepIdle(host, n = 1) {
+  for (let i = 0; i < n; i++) {
+    host.server.idleTick();
+    host.net.deliver();
+    for (const g of host.guests) g.session.tick();
+    host.net.deliver();
+  }
+}
+
+/**
+ * (stage 4) the host's player off to dimension `dim`, to wait at (x, y, z) till it's loaded, as Game.changeDimension
+ * does it: its guests told first (`told()` then run, the old dimension still there), then this dimension let go.
+ * `host.server.hostArrived()` once it's there
+ */
+export function hostChangeDimension(host, dim, x, y, z, reason = 'other', told = null) {
+  const { m, world, level, server, player: p } = host;
+  server.hostLeavingDimension(dim, reason);
+  told?.();
+  if (p.isSleeping()) p.stopSleepInBed(true);
+  p.removeVehicle();
+  for (const c of [...world.chunks.values()]) world.removeChunk(c.cx, c.cz);
+  world.reset(m.dimensionById(dim));
+  level.resetForDimension();
+  p.moveTo(x, y, z, p.yaw, p.pitch);
+  p.dx = p.dy = p.dz = 0;
+  p.fallDistance = 0;
+}
+
 /** a flat host world of chunks in [-r, r]², made on demand beyond that */
 export function flatHost(m, r = 4, opts = {}) {
   const { world, level } = flatLevel(m, -r, -r, r, r, 64, 'stone');
@@ -194,7 +232,8 @@ export function flatHost(m, r = 4, opts = {}) {
     const blocks = new Uint16Array(m.COLUMN_VOLUME);
     const S = m.S('stone');
     for (let y = m.MIN_Y; y < 64; y++) for (let lz = 0; lz < 16; lz++) for (let lx = 0; lx < 16; lx++) blocks[m.colIndex(lx, y, lz)] = S;
-    world.addChunk({ cx, cz, blocks, light: m.computeChunkLight(blocks), biomes: new Uint8Array(256).fill(m.B.plains), pending: [] });
+    // (stage 4: lit as its dimension is, the Nether's and the End's without the sky)
+    world.addChunk({ cx, cz, blocks, light: m.computeChunkLight(blocks, world.dim.hasSkyLight), biomes: new Uint8Array(256).fill(m.B.plains), pending: [] });
   };
   return makeHost(m, { world, level }, { makeChunk, ...opts });
 }
