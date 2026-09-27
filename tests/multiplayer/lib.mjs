@@ -35,7 +35,10 @@ export async function loadNet(extra = []) {
   if (NET_MODE !== 'ws') return r;
   const m = r.m;
   const lag = LAG ? { min: +LAG[1], max: Math.max(+LAG[1], +LAG[2]) } : null;
+  const Original = m.MemoryNetwork;
   m.MemoryNetwork = class extends WsNetwork {
+    /** (ownNetworks) the network it stands in for */
+    static Original = Original;
     constructor() {
       super(m, lag);
     }
@@ -227,10 +230,20 @@ export function copyOf(g, e) {
  * network that answers within the tick)
  */
 export const SETTLE = LAG ? Math.ceil((2 * Math.max(+LAG[1], +LAG[2])) / 50) + 1 : 0;
+let settle = SETTLE;
+
+/**
+ * (stage 5) for a suite that makes its own networks, slow ones among them (m5-latency): MP_NET and MP_LAG leave it be,
+ * its networks in memory unless it says otherwise, and step() and stepIdle() go on for no more ticks than asked
+ */
+export function ownNetworks(m) {
+  if (m.MemoryNetwork.Original) m.MemoryNetwork = m.MemoryNetwork.Original;
+  settle = 0;
+}
 
 /** host tick → deliver → each guest's tick → deliver, `n` times (and, with MP_LAG, SETTLE more) */
 export function step(host, n = 1) {
-  for (let i = 0; i < n + SETTLE; i++) {
+  for (let i = 0; i < n + settle; i++) {
     host.server.receive();
     host.level.tick();
     host.server.tick();
@@ -242,7 +255,7 @@ export function step(host, n = 1) {
 
 /** (stage 4) the host on a loading screen, its level standing still (Game.tick before it's spawned), `n` times (and, with MP_LAG, SETTLE more) */
 export function stepIdle(host, n = 1) {
-  for (let i = 0; i < n + SETTLE; i++) {
+  for (let i = 0; i < n + settle; i++) {
     host.server.idleTick();
     host.net.deliver();
     for (const g of host.guests) g.session.tick();

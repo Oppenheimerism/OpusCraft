@@ -5,15 +5,17 @@
 // the guest never put in) asks the host for the world again, which sends it, both saying in the console what they had.
 // And the host and two guests over the relay with 20 to 200 ms of lag each way, as over a slow Wi-Fi: coming in,
 // walking, building, a chest, a zombie's blow, keeping alive for over a minute, following the host to the Nether and
-// back, and the host closing the world, each waited for as a player would.
+// back, and the host closing the world, each waited for as a player would. (It makes its own networks: MP_NET and
+// MP_LAG leave it be.)
 
-import { loadNet, ENTITY_MODULES, flatHost, makeGuest, rawGuest, hostCopy, step, stepIdle, hostChangeDimension, check, exitWithStatus } from './lib.mjs';
+import { loadNet, ownNetworks, ENTITY_MODULES, flatHost, makeGuest, rawGuest, hostCopy, step, stepIdle, hostChangeDimension, check, exitWithStatus } from './lib.mjs';
 import { WsNetwork, closeWsNetworks } from './net/wsNetwork.mjs';
 
 const { m, close } = await loadNet([
   ...ENTITY_MODULES, '/src/game/combat.ts', '/src/game/sleep.ts', '/src/game/playerDeath.ts', '/src/world/chunkManager.ts',
   '/src/game/openMenu.ts', '/src/net/menus.ts', '/src/net/client/clientMenus.ts', '/src/net/server/menuSync.ts', '/src/inventory/container.ts', '/src/inventory/menus.ts',
 ]);
+ownNetworks(m);
 
 // (what the host and the guests say in the console: this suite's to read)
 const said = [];
