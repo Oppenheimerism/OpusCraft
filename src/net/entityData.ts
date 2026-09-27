@@ -34,7 +34,7 @@ const NOT_SENT = new Set([
   'horizontalCollision', 'verticalCollision', 'verticalCollisionBelow', 'crystalSoundIntensity', 'lastCrystalSoundTick', 'stuckSpeed',
   'boardingCooldown', 'fluidHeightWater', 'fluidHeightLava', 'wasInWater', 'wasInPowderSnow', 'pistonMoving',
   'lastHurtByMob', 'lastHurtByMobTimestamp', 'lastHurtByPlayer', 'lastHurtByPlayerTime', 'lastHurtMob', 'lastHurtMobTimestamp',
-  'lastDamageStamp', 'effectsDirty', 'goalsReady', 'targetChangeTime', 'sensorTime', 'sensorTimers', 'nearestLiving', 'visibleLiving',
+  'lastDamageStamp', 'hurtMarked', 'effectsDirty', 'goalsReady', 'targetChangeTime', 'sensorTime', 'sensorTimers', 'nearestLiving', 'visibleLiving',
 ]);
 
 /** never sent for these kinds, besides NOT_SENT: what's the guest's own to count (an item's bobbing age) */
@@ -48,6 +48,18 @@ const NOT_SENT_BY_TYPE: Record<string, readonly string[]> = {
  * piglin shaking as it turns, an evoker casting), sent as -1, 0 or 1 rather than every tick of the count
  */
 const SIGN_ONLY = new Set(['age', 'remainingFireTicks', 'timeInOverworld', 'angerTime', 'spellCastingTickCount', 'conversionTime']);
+
+/** sent no higher than this: a count whose only use off the host is its start (a body's 20-tick fall as it dies) */
+const CLAMPED: Record<string, number> = { deathTime: 20 };
+
+/**
+ * what a guest is sent of another player, which has its place, pose and hands from the players' own packets (vanilla
+ * Player's and LivingEntity's synched data): how it's hurt or dying, burning or frozen, asleep, and what it's using,
+ * and its effects' looks (glowing, invisible)
+ */
+export const PLAYER_FIELDS: ReadonlySet<string> = new Set([
+  'health', 'dead', 'hurtTime', 'deathTime', 'remainingFireTicks', 'ticksFrozen', 'sleepingPos', 'useItem', 'useHand', 'useItemRemaining', 'useDuration', '$effects',
+]);
 
 /** containers a guest sees the first slots of (vanilla: a horse's saddle and armour, a llama's carpet) */
 const SHOWN_SLOTS: Record<string, number> = { horse: 2, donkey: 2, mule: 2, llama: 2, trader_llama: 2 };
@@ -109,6 +121,7 @@ function wireOne(v: unknown): Value {
 /** a field's change key, or NO when it doesn't go */
 function keyField(e: Entity, name: string, v: unknown): unknown {
   if (SIGN_ONLY.has(name) && typeof v === 'number') return Number.isFinite(v) ? Math.sign(v) : NO;
+  if (name in CLAMPED && typeof v === 'number') return Number.isFinite(v) ? Math.min(v, CLAMPED[name]) : NO;
   if (SHOWN_PARTS.has(name) && typeof v === 'object' && v !== null && kindOf(v) === null) {
     let key = 'o';
     partFields(v, (k, x) => {
@@ -143,6 +156,7 @@ function keyField(e: Entity, name: string, v: unknown): unknown {
 /** a field for the wire (one keyField took) */
 function wireField(e: Entity, name: string, v: unknown): Value {
   if (SIGN_ONLY.has(name) && typeof v === 'number') return Math.sign(v);
+  if (name in CLAMPED && typeof v === 'number') return Math.min(v, CLAMPED[name]);
   if (SHOWN_PARTS.has(name) && typeof v === 'object' && v !== null && kindOf(v) === null) {
     const o: Record<string, Value> = {};
     partFields(v, (k, x) => {
@@ -155,12 +169,12 @@ function wireField(e: Entity, name: string, v: unknown): Value {
   return wireOne(v);
 }
 
-/** the fields of `e` that go, each with its change key and a way to put it on the wire (the host's side) */
-function fieldsOf(e: Entity, each: (name: string, key: unknown, wire: () => Value) => void): void {
+/** the fields of `e` that go (of `only`, if given), each with its change key and a way to put it on the wire (the host's side) */
+function fieldsOf(e: Entity, each: (name: string, key: unknown, wire: () => Value) => void, only: ReadonlySet<string> | null): void {
   const skip = NOT_SENT_BY_TYPE[e.type];
   const rec = e as unknown as Record<string, unknown>;
   for (const name of Object.keys(e)) {
-    if (NOT_SENT.has(name) || (skip && skip.includes(name))) continue;
+    if (NOT_SENT.has(name) || (skip && skip.includes(name)) || (only && !only.has(name))) continue;
     const v = rec[name];
     if (typeof v === 'function' || v === undefined) continue;
     const key = keyField(e, name, v);
@@ -168,7 +182,7 @@ function fieldsOf(e: Entity, each: (name: string, key: unknown, wire: () => Valu
   }
   // (vanilla DATA_EFFECT_PARTICLES and the invisible flag: which effects it has, not how long they've left)
   const fx = (e as { activeEffects?: unknown }).activeEffects;
-  if (fx instanceof Map) {
+  if (fx instanceof Map && (!only || only.has('$effects'))) {
     let key = 'fx';
     const list: [string, number][] = [];
     for (const inst of fx.values()) if (inst instanceof MobEffectInstance) list.push([inst.id, inst.amplifier]);
@@ -185,13 +199,16 @@ function fieldsOf(e: Entity, each: (name: string, key: unknown, wire: () => Valu
 export class DataWatcher {
   private readonly last = new Map<string, unknown>();
 
+  /** (`only`: just these fields, a player's PLAYER_FIELDS) */
+  constructor(private readonly only: ReadonlySet<string> | null = null) {}
+
   /** every field (for a guest seeing it for the first time), remembered as sent */
   full(e: Entity): EntityData {
     const out: EntityData = {};
     fieldsOf(e, (name, key, wire) => {
       out[name] = wire();
       this.last.set(name, key);
-    });
+    }, this.only);
     return out;
   }
 
@@ -202,7 +219,7 @@ export class DataWatcher {
       if (this.last.get(name) === key && this.last.has(name)) return;
       this.last.set(name, key);
       (out ??= {})[name] = wire();
-    });
+    }, this.only);
     return out;
   }
 }
@@ -222,13 +239,15 @@ const UNKNOWN = Symbol('unknown');
  * nothing is). Returns why not, if the data isn't the host's to send (a name that can't be a field's, an effect that
  * doesn't exist); a field the copy doesn't have is left alone
  */
-export function applyData(e: Entity, data: Value, resolve: Resolve): string | null {
+export function applyData(e: Entity, data: Value, resolve: Resolve, only: ReadonlySet<string> | null = null): string | null {
   if (typeof data !== 'object' || data === null || Array.isArray(data) || ArrayBuffer.isView(data)) return 'bad entity data';
   const rec = e as unknown as Record<string, unknown>;
   const skip = NOT_SENT_BY_TYPE[e.type];
   for (const [name, wire] of Object.entries(data)) {
     if (wire === undefined) continue;
     if (!NAME.test(name)) return 'bad entity field';
+    // (another player: only what a host tells of one)
+    if (only && !only.has(name)) continue;
     if (name === '$effects') {
       if (!applyEffects(e, wire)) return 'bad effects';
       continue;

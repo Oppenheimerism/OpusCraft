@@ -287,6 +287,9 @@ Object.assign(ENTITY_NAMES, { guardian: 'Guardian', elder_guardian: 'Elder Guard
 /** vanilla Entity.getDisplayName (death messages, commands, screens): its custom name, else its kind's */
 export function entityDisplayName(e: Entity | string): string {
   if (typeof e !== 'string' && e.customName !== null) return e.customName;
+  // (vanilla Player.getDisplayName: a player goes by its name, a host's guests and the host itself)
+  const named = typeof e !== 'string' && e.type === 'player' ? (e as { profileName?: string | null }).profileName : null;
+  if (named) return named;
   if (e instanceof Boat) return e.displayName();
   // vanilla Villager.getTypeName: a villager with a job goes by it
   if (e instanceof Villager && e.profession !== 'none') return e.profession[0].toUpperCase() + e.profession.slice(1);

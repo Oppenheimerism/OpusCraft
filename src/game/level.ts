@@ -588,6 +588,8 @@ export class Level {
   onThrownItemPickedUp: ((stack: ItemStack, by: Entity) => void) | null = null;
   /** a villager or a wandering trader opened its trading screen for a player (vanilla Merchant.openTradingScreen) */
   onOpenMerchant: ((v: Merchant, p: Player) => void) | null = null;
+  /** the night slept through: everyone is about to be woken (vanilla ServerLevel.wakeUpAllPlayers, game/sleep.ts) */
+  onWakeUpAll: (() => void) | null = null;
   /** a crossbow arrow player `p` shot killed something: all it has killed so far (vanilla killed_by_crossbow) */
   onPlayerCrossbowKill: ((killed: Entity[], p: Player) => void) | null = null;
   /** an entity's time in a portal came up (the portal block it was in, and which kind) */

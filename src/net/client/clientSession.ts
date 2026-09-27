@@ -6,23 +6,30 @@
 import type { Value } from '../codec';
 import { decode, encodeBundle, CodecError } from '../codec';
 import { SB, CB, Action, PoseFlag, checkPacket, checkLogin, SLOT_ARMOR, SLOT_OFFHAND, SLOT_COUNT, ANIMATE_SWING_OFF_HAND, type LoginInfo } from '../protocol';
-import { PROTOCOL_VERSION, BUILD_ID, MAX_HOST_MESSAGE, MAX_HOST_BACKLOG, MAX_HOST_BACKLOG_BYTES, TIMEOUT_TICKS, MAX_CHAT } from '../config';
+import { PROTOCOL_VERSION, BUILD_ID, MAX_HOST_MESSAGE, MAX_HOST_BACKLOG, MAX_HOST_BACKLOG_BYTES, TIMEOUT_TICKS, MAX_CHAT, MAX_GUEST_MESSAGE, MAX_GUEST_PACKETS } from '../config';
 import { HOST_PEER, type PeerId, type Transport } from '../transport/transport';
 import { itemFromHost, itemToWire } from '../items';
 import { poseFlags, stackKey } from '../playerState';
 import { columnFromSections, biomesOk, savedBlockEntity, blockEntityFromHost } from '../chunkData';
 import { replayParticles } from '../effects';
 import { createFromPayload } from '../entityNet';
-import { applyData } from '../entityData';
+import { applyData, PLAYER_FIELDS } from '../entityData';
+import { applyPlayerStatus, applyEffectList } from '../playerStatus';
 import { MirrorPlayer } from './mirrorPlayer';
+import { ClientMenus } from './clientMenus';
 import { EntityMirror } from './entityMirror';
 import { BOAT_TYPES } from '../../entity/boat';
 import type { Level } from '../../game/level';
 import type { Entity } from '../../entity/entity';
 import { LivingEntity } from '../../entity/living';
-import type { Player } from '../../entity/player';
-import type { ItemStack } from '../../item/item';
+import type { Player, GameMode } from '../../entity/player';
+import { ITEMS, type ItemStack } from '../../item/item';
+import { resetForRespawn } from '../../game/playerDeath';
 import type { SavedBlockEntity } from '../../world/blockEntity';
+import type { ContainerMenu } from '../../inventory/container';
+import type { CraftingMenuBase, FurnaceMenu } from '../../inventory/menus';
+import { BOOK_BY_ID, type BookRecipe } from '../../inventory/recipeBook';
+import type { Hand } from '../../item/inventory';
 import { Chunk } from '../../world/chunk';
 import { MIN_Y, MAX_Y } from '../../world/constants';
 import { stateCount } from '../../world/block';
@@ -47,7 +54,26 @@ export interface ClientHooks {
   took?(e: Entity, taker: LivingEntity, amount: number): void;
   /** our player got on something (vanilla's "Press Shift to Dismount") */
   mounted?(vehicle: Entity): void;
+  /** our player died (vanilla ClientboundPlayerCombatKillPacket): the death screen, saying how */
+  died?(message: string): void;
+  /** back alive (vanilla ClientboundRespawnPacket): the death screen goes */
+  respawned?(): void;
+  /** a menu the host opened for us (vanilla handleOpenScreen): its screen */
+  openMenu?(menu: ContainerMenu): void;
+  /** a menu the host closed (vanilla handleContainerClose): its screen goes, if it's showing */
+  closeMenu?(menu: ContainerMenu): void;
+  /** a book our player used, in `hand` (vanilla handleOpenBook, and the book and quill's screen) */
+  openBook?(hand: Hand): void;
+  /** a recipe clicked in menu `menu`'s recipe book that we lack the ingredients for: shown in outline */
+  ghostRecipe?(menu: ContainerMenu, recipe: string): void;
+  /**
+   * recipes our player has unlocked (vanilla handleRecipeBookAdd): new ones (a toast), or all it knows, replacing what
+   * the recipe book had
+   */
+  recipes?(recipes: BookRecipe[], replace: boolean): void;
 }
+
+const GAME_MODES: readonly GameMode[] = ['survival', 'creative', 'adventure', 'spectator'];
 
 /** the most fields waiting for an entity that hasn't come yet (a host that names more that never come is let be) */
 const MAX_WAITING = 4096;
@@ -106,6 +132,8 @@ export class ClientSession {
   private target: Entity | null = null;
   /** this tick's drops and riding jumps, sent after where we are and what's in hand */
   private actions: Value[][] = [];
+  /** our menus: the inventory's, and one the host opened */
+  menus: ClientMenus | null = null;
   /** our inventory as the host last heard it, slot by slot, and our hotbar slot */
   private readonly slots: string[] = new Array(SLOT_COUNT).fill('');
   private invVersion = -1;
@@ -259,6 +287,12 @@ export class ClientSession {
       case CB.AddEntity:
         return this.addEntity(p);
       case CB.SetEntityData: {
+        const m = this.mirrors.get(p[1] as number);
+        if (m) {
+          // (another player: how it's hurt, dying, burning, asleep, and what it's using)
+          const why = applyData(m, p[2], this.resolve, PLAYER_FIELDS);
+          return why ? this.fail(why) : undefined;
+        }
         const c = this.entities.get(p[1] as number);
         if (!c) return;
         const why = applyData(c.e, p[2], this.resolve);
@@ -315,6 +349,109 @@ export class ClientSession {
         this.slots[slot] = stackKey(s);
         return;
       }
+      case CB.PlayerStatus:
+        return applyPlayerStatus(this.player!, p.slice(1));
+      case CB.SetEntityMotion: {
+        // (vanilla handleSetEntityMotion for our own player: knocked or blown, from how it was going to this)
+        const pl = this.player!;
+        pl.dx = p[1] as number;
+        pl.dy = p[2] as number;
+        pl.dz = p[3] as number;
+        return;
+      }
+      case CB.PlayerCombatKill: {
+        const pl = this.player!;
+        pl.health = 0;
+        pl.dead = true;
+        return this.hooks.died?.(p[1] as string);
+      }
+      case CB.Respawn:
+        // (a fresh start: its health, food, effects and the rest come after, as the host has them)
+        resetForRespawn(this.player!, true);
+        return this.hooks.respawned?.();
+      case CB.GameMode: {
+        const mode = p[1] as GameMode;
+        if (!GAME_MODES.includes(mode)) return this.fail('a game mode that does not exist');
+        return this.player!.setGameMode(mode);
+      }
+      case CB.SetCarriedItem: {
+        const inv = this.player!.inventory;
+        inv.selected = this.selected = p[1] as number;
+        inv.version++;
+        return;
+      }
+      case CB.SetCooldown: {
+        const pl = this.player!, item = p[1] as string, left = p[2] as number, total = p[3] as number;
+        if (!ITEMS.has(item)) return this.fail('an item that does not exist');
+        if (left > 0) pl.cooldowns.set(item, left);
+        else pl.cooldowns.delete(item);
+        if (left > 0 && total > 0) pl.cooldownTotals.set(item, total);
+        else pl.cooldownTotals.delete(item);
+        return;
+      }
+      case CB.UpdateEffects:
+        if (!applyEffectList(this.player!, p[1] as Value[])) return this.fail('an effect that does not exist');
+        return;
+      case CB.SetSleeping: {
+        // (in the bed the host says, or up out of it; where it stands up, the host's teleport says)
+        const pl = this.player!, pos = p[1] as number[] | null;
+        if (pos) pl.startSleeping(pos[0], pos[1], pos[2]);
+        else if (pl.isSleeping()) pl.stopSleepInBed(false);
+        return;
+      }
+      case CB.SetUsingItem: {
+        // (vanilla: our player's use of the item in that hand, as the host has it; counted on here till it says otherwise)
+        const pl = this.player!, hand = p[1] as number;
+        if (hand < 0) {
+          pl.useItem = null;
+          pl.useItemRemaining = 0;
+          pl.usingItemTicks = 0;
+          return;
+        }
+        pl.useHand = hand === 1 ? 'off' : 'main';
+        pl.useItem = pl.inventory.inHand(pl.useHand);
+        pl.useDuration = p[2] as number;
+        pl.useItemRemaining = p[3] as number;
+        pl.usingItemTicks = pl.useItem ? pl.ticksUsingItem() + 1 : 0;
+        return;
+      }
+      case CB.OpenScreen: {
+        const why = this.menus!.openScreen(p[1] as number, p[2] as string, p[3] as string, p[4] as Record<string, Value>);
+        return why ? this.fail(why) : undefined;
+      }
+      case CB.ContainerSetContent: {
+        const why = this.menus!.setContent(p[1] as number, p[2] as number, p[3] as Value[], p[4]);
+        return why ? this.fail(why) : undefined;
+      }
+      case CB.MenuSetSlot: {
+        const why = this.menus!.setSlot(p[1] as number, p[2] as number, p[3] as number, p[4]);
+        return why ? this.fail(why) : undefined;
+      }
+      case CB.SetCarried:
+        return this.menus!.setCarried(p[1] as number, p[2] as number, p[3]);
+      case CB.ContainerSetData: {
+        const why = this.menus!.setData(p[1] as number, p[2] as number, p[3] as number);
+        return why ? this.fail(why) : undefined;
+      }
+      case CB.ContainerClose:
+        return this.menus!.close(p[1] as number);
+      case CB.MerchantOffers: {
+        const why = this.menus!.offers(p[1] as number, p[2] as Value[], p[3] as number, p[4] as number, p[5] as boolean, p[6] as boolean);
+        return why ? this.fail(why) : undefined;
+      }
+      case CB.PlaceGhostRecipe:
+        return this.menus!.ghost(p[1] as number, p[2] as string);
+      case CB.OpenBook:
+        return this.hooks.openBook?.(p[1] === 1 ? 'off' : 'main');
+      case CB.RecipeBookAdd: {
+        const rs: BookRecipe[] = [];
+        for (const id of p[1] as string[]) {
+          const r = BOOK_BY_ID.get(id);
+          if (!r) return this.fail('a recipe that does not exist');
+          rs.push(r);
+        }
+        return this.hooks.recipes?.(rs, p[2] as boolean);
+      }
     }
   }
 
@@ -331,6 +468,18 @@ export class ClientSession {
     this.level = level;
     this.player = player;
     this.sink = chunks;
+    this.menus = new ClientMenus(player, {
+      send: (pk) => this.send(pk),
+      entity: (id) => this.byNetId(id),
+      show: (m) => this.hooks.openMenu?.(m),
+      hide: (m) => this.hooks.closeMenu?.(m),
+      beforeClick: () => this.sendCreative(),
+      afterClick: () => this.inventorySent(),
+      inventorySlot: (i) => {
+        this.slots[i] = stackKey(slotStack(player, i));
+      },
+      ghostRecipe: (m, recipe) => this.hooks.ghostRecipe?.(m, recipe),
+    });
     this.rainTarget = info.rainLevel;
     this.thunderTarget = info.thunderLevel;
     this.state = 'play';
@@ -517,9 +666,55 @@ export class ClientSession {
     if (this.state === 'play' && this.actions.length < 16) this.actions.push([SB.PlayerAction, all ? Action.DROP_ALL : Action.DROP, 0]);
   }
 
+  /** the death screen's Respawn (vanilla ClientboundClientCommandPacket PERFORM_RESPAWN) */
+  respawn(): void {
+    this.action([SB.ClientCommand, 0]);
+  }
+
+  /** the in-bed screen's Leave Bed (vanilla sendWakeUp: STOP_SLEEPING) */
+  stopSleeping(): void {
+    this.action([SB.PlayerAction, Action.STOP_SLEEPING, 0]);
+  }
+
+  /** the swap key: the host swaps our hands, and tells us (vanilla SWAP_ITEM_WITH_OFFHAND) */
+  swapHands(): void {
+    this.action([SB.PlayerAction, Action.SWAP_HANDS, 0]);
+  }
+
+  /** the inventory key while riding a horse or a chest boat: the host opens its inventory (vanilla OPEN_INVENTORY) */
+  openVehicleInventory(): void {
+    this.action([SB.PlayerAction, Action.OPEN_INVENTORY, 0]);
+  }
+
+  /** survival's pick-block: the stack in `slot` (past the hotbar) into our hand, which the host does (vanilla ServerboundPickItemPacket) */
+  pickSlot(slot: number): void {
+    if (slot >= 9 && slot < 36) this.action([SB.PickItem, slot]);
+  }
+
+  private action(a: Value[]): void {
+    if (this.state === 'play' && this.actions.length < 16) this.actions.push(a);
+  }
+
   /** (our player's dropHandler) an item thrown out of the creative inventory (vanilla handleCreativeModeItemDrop: slot -1) */
   dropCreative(s: ItemStack): void {
     if (this.state === 'play' && this.actions.length < 16) this.actions.push([SB.SetCreativeModeSlot, -1, itemToWire(s)]);
+  }
+
+  /**
+   * the book and quill's Done and Sign (vanilla ServerboundEditBookPacket): what's written in the book in inventory
+   * slot `slot` (a hotbar slot, or 40 for the offhand), or its title as it's signed; the host writes it in
+   */
+  editBook(slot: number, pages: string[], title: string | null): void {
+    if (this.state !== 'play' || (slot > 8 && slot !== 40)) return;
+    const text = pages.slice(0, 100).map((s) => s.slice(0, 1024));
+    const t = title === null ? null : title.slice(0, 32);
+    if (t === '') return;
+    this.send([SB.EditBook, slot, text, t]);
+  }
+
+  /** (the recipe book) a recipe clicked in menu `m`: the host fills its grid from our inventory (vanilla ServerboundPlaceRecipePacket) */
+  placeRecipe(m: CraftingMenuBase | FurnaceMenu, recipe: string, all: boolean): void {
+    if (this.state === 'play') this.menus?.placeRecipe(m, recipe, all);
   }
 
   /**
@@ -537,6 +732,14 @@ export class ClientSession {
     level.thunder = this.thunderTarget;
     level.updateSkyBrightness();
     const p = this.player!;
+    // (vanilla LivingEntity.updatingUsingItem: the item in use, the stack in that hand whatever the host last sent of
+    // it, counted on as the host counts it)
+    if (p.useItem) {
+      const held = p.inventory.inHand(p.useHand);
+      if (held && held.item === p.useItem.item) p.useItem = held;
+      p.useItemRemaining--;
+      p.usingItemTicks = p.ticksUsingItem() + 1;
+    }
     // (vanilla ClientLevel.tickEntities: each thing that rides nothing, then its riders, each after what it rides)
     for (const m of this.mirrors.values()) if (!m.removed && !m.vehicle) this.tickTree(m, 0);
     for (const c of this.entities.values()) if (!c.e.removed && !c.e.vehicle) this.tickTree(c.e, 0);
@@ -592,6 +795,7 @@ export class ClientSession {
     if (i.left) flags |= PoseFlag.LEFT;
     if (i.right) flags |= PoseFlag.RIGHT;
     if (i.jump) flags |= PoseFlag.JUMP;
+    if (p.horizontalCollision) flags |= PoseFlag.HORIZONTAL_COLLISION;
     const t = this.target;
     const target = t && !t.removed ? (t instanceof MirrorPlayer ? t.netId : (this.copies.get(t)?.netId ?? -1)) : -1;
     // (the look first, so the host clicks where we looked)
@@ -601,21 +805,34 @@ export class ClientSession {
       this.selected = inv.selected;
       this.send([SB.SetCarriedItem, inv.selected]);
     }
-    if (inv.version !== this.invVersion) {
-      this.invVersion = inv.version;
-      for (let slot = 0; slot < SLOT_COUNT; slot++) {
-        const s = slotStack(p, slot), key = stackKey(s);
-        if (key === this.slots[slot]) continue;
-        this.slots[slot] = key;
-        this.send([SB.SetCreativeModeSlot, slot, itemToWire(s)]);
-      }
-    }
+    this.sendCreative();
     if (this.attackPressed) this.send([SB.PlayerAction, Action.ATTACK, 0]);
     if (this.usePressed) this.send([SB.PlayerAction, Action.USE, 0]);
     this.attackPressed = this.usePressed = false;
     for (const a of this.actions) this.send(a);
     this.actions = [];
     this.flush();
+  }
+
+  /** (a creative inventory is ours to fill; anything else in it is the host's doing, which it tells us) what we changed in it */
+  private sendCreative(): void {
+    const p = this.player, inv = p?.inventory;
+    if (!p || !inv || inv.version === this.invVersion || p.gameMode !== 'creative') return;
+    this.invVersion = inv.version;
+    for (let slot = 0; slot < SLOT_COUNT; slot++) {
+      const s = slotStack(p, slot), key = stackKey(s);
+      if (key === this.slots[slot]) continue;
+      this.slots[slot] = key;
+      this.send([SB.SetCreativeModeSlot, slot, itemToWire(s)]);
+    }
+  }
+
+  /** (after a click in a menu) our inventory as it is now is what the host will make of the click: not ours to send */
+  private inventorySent(): void {
+    const p = this.player;
+    if (!p) return;
+    for (let slot = 0; slot < SLOT_COUNT; slot++) this.slots[slot] = stackKey(slotStack(p, slot));
+    this.invVersion = p.inventory.version;
   }
 
   /** receive, tick and send, in the order the game does them (for the tests; the game calls them between its own steps) */
@@ -637,11 +854,24 @@ export class ClientSession {
     if (this.state !== 'closed') this.out.push(p);
   }
 
+  /**
+   * what's waiting, to the host: as one message, or, for a busy tick (a drag across a chest's slots, a book signed with
+   * the rest), as several within the host's limits on a message's packets and bytes
+   */
   private flush(): void {
     if (!this.out.length || this.state === 'closed') return;
     const msg = this.out;
     this.out = [];
-    this.transport.send(HOST_PEER, encodeBundle(msg, (p, e) => unsent(p, e)));
+    for (let i = 0; i < msg.length; i += MAX_GUEST_PACKETS) this.sendPart(msg.slice(i, i + MAX_GUEST_PACKETS));
+  }
+
+  private sendPart(part: Value[]): void {
+    const bytes = encodeBundle(part, (p, e) => unsent(p, e));
+    if (bytes.length <= MAX_GUEST_MESSAGE) return this.transport.send(HOST_PEER, bytes);
+    if (part.length === 1) return unsent(part[0], new CodecError('too big to send'));
+    const half = part.length >> 1;
+    this.sendPart(part.slice(0, half));
+    this.sendPart(part.slice(half));
   }
 
   // -------------------------------------------------------------------------

@@ -4,10 +4,8 @@
 import type { Game } from '../../game/game';
 import type { GuiGraphics } from '../guiGraphics';
 import { AbstractContainerScreen } from './container';
-import { DispenserMenu } from '../../inventory/dispenserMenu';
-import { HopperMenu } from '../../inventory/hopperMenu';
-import { setDispenserMenuHook } from '../../game/redstone/dispenser';
-import { setHopperMenuHook } from '../../game/redstone/hopper';
+import type { DispenserMenu } from '../../inventory/dispenserMenu';
+import type { HopperMenu } from '../../inventory/hopperMenu';
 import '../../textures/redstoneGui';
 
 const LABEL = 0x404040;
@@ -38,16 +36,4 @@ export class HopperScreen extends AbstractContainerScreen<HopperMenu> {
   renderBg(g: GuiGraphics): void {
     g.sprite('container_hopper', this.leftPos, this.topPos, 176, 133);
   }
-}
-
-/** a dispenser, dropper or hopper used (game/redstone/dispenser.ts, hopper.ts) opens its screen on it */
-export function installDispenserScreen(game: Game): void {
-  setDispenserMenuHook((be, p) => {
-    if (p === game.player) game.setScreen(new DispenserScreen(game, new DispenserMenu(p, be)));
-    else game.refuseGuestMenu(p);
-  });
-  setHopperMenuHook((be, p) => {
-    if (p === game.player) game.setScreen(new HopperScreen(game, new HopperMenu(p, be)));
-    else game.refuseGuestMenu(p);
-  });
 }

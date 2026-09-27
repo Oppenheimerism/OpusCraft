@@ -5,7 +5,8 @@
 import type { Game } from '../../game/game';
 import type { GuiGraphics, BitmapFont } from '../guiGraphics';
 import { Screen, Button } from '../screen';
-import { ItemStack, ITEMS, cloneTag } from '../../item/item';
+import type { ItemStack } from '../../item/item';
+import { writeBook } from '../../game/books';
 import type { Player } from '../../entity/player';
 import type { Hand } from '../../item/inventory';
 import { LecternMenu, mayBuild, BUTTON_PREV_PAGE, BUTTON_NEXT_PAGE, BUTTON_TAKE_BOOK, BUTTON_PAGE_JUMP_RANGE_START } from '../../inventory/lecternMenu';
@@ -627,23 +628,12 @@ export class BookEditScreen extends Screen {
     if (!this.isModified) return;
     this.eraseEmptyTrailingPages();
     this.updateLocalCopy();
-    const inv = this.owner.inventory;
     const pages = this.pages.slice(0, MAX_PAGES);
-    const held = this.hand === 'off' ? inv.offhand : inv.main[inv.selected];
-    if (!held || held.item.id !== 'writable_book') return;
-    if (!publish) {
-      held.tag = { ...(held.tag ?? {}), pages: [...pages] };
-      inv.version++;
-      return;
-    }
-    // signBook: the book and quill becomes a written book with everything else it had (transmuteCopy)
-    const tag = cloneTag(held.tag) ?? {};
-    delete tag.pages;
-    tag.book = { title: this.bookTitle.trim(), author: this.game.playerName, generation: 0, pages: [...pages] };
-    const signed = new ItemStack(ITEMS.get('written_book')!, held.count, 0, tag);
-    if (this.hand === 'off') inv.offhand = signed;
-    else inv.main[inv.selected] = signed;
-    inv.version++;
+    const slot = this.hand === 'off' ? 40 : this.owner.inventory.selected;
+    const title = publish ? this.bookTitle.trim() : null;
+    // (a guest's book is the host's to write in: it does, and the book in hand follows)
+    if (this.game.client) return this.game.client.editBook(slot, pages, title);
+    writeBook(this.owner, slot, pages, title === null ? null : { title, author: this.game.playerName });
   }
 
   private updateLocalCopy(): void {

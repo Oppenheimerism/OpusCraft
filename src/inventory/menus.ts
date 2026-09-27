@@ -13,6 +13,7 @@ import { applyDyes, dyeColorName, isDyeable } from '../item/dyedColor';
 import { customRecipeFor, type CustomRecipe } from './customRecipes';
 import { craftedBy } from '../game/itemBehavior';
 import { equipEvent } from '../game/vibrations';
+import type { PlaceTarget } from './recipeBook';
 
 const ARMOR_ICONS = ['slot_boots', 'slot_leggings', 'slot_chestplate', 'slot_helmet'];
 const ARMOR_SLOT_OF: Record<string, number> = { feet: 0, legs: 1, chest: 2, head: 3 };
@@ -424,6 +425,42 @@ export class BrewingStandMenu extends ContainerMenu {
   }
 }
 
+/**
+ * what a recipe clicked in the recipe book fills (vanilla ServerPlaceRecipe's menu and inventory): the crafting grid, or
+ * a furnace's input as a 1x1 grid, from `p`'s inventory
+ */
+export function recipeTarget(p: Player, m: CraftingMenuBase | FurnaceMenu): PlaceTarget {
+  const inv = p.inventory;
+  const base = {
+    inventory: inv.main,
+    setInventory: (i: number, s: ItemStack | null) => inv.setSlot(i, s),
+    giveBack: (s: ItemStack) => {
+      const left = inv.add(s);
+      if (left > 0) p.dropItem(s.copyWithCount(left), false);
+    },
+    creative: p.gameMode === 'creative',
+  };
+  if (m instanceof CraftingMenuBase) {
+    return {
+      ...base,
+      gridW: m.gridW,
+      gridH: m.gridW,
+      getCell: (i) => m.craft.items[i],
+      setCell: (i, s) => m.craft.set(i, s),
+      matches: (r) => !!r.source && m.recipe === r.source,
+    };
+  }
+  const c = m.furnace.container;
+  return {
+    ...base,
+    gridW: 1,
+    gridH: 1,
+    getCell: () => c.get(0),
+    setCell: (_i, s) => c.set(0, s),
+    matches: (r) => !!c.get(0) && r.slots[0]!.has(c.get(0)!.item.id),
+  };
+}
+
 /** a container that isn't a block (vanilla ContainerEntity: chest minecarts) */
 export interface ContainerEntity {
   readonly container: SimpleContainer;
@@ -433,6 +470,11 @@ export interface ContainerEntity {
 
 export class ChestMenu extends ContainerMenu {
   readonly rows: number;
+  /**
+   * what closing it does to what it's the menu of (vanilla Container.stopOpen: a chest's or barrel's lid shuts, a
+   * shulker box's; a chest minecart's or boat's CONTAINER_CLOSE), set by whoever opened it (game/openMenu.ts)
+   */
+  onClosed: (() => void) | null = null;
   /** `title` is the container's display name (vanilla MenuProvider.getDisplayName) */
   constructor(player: Player, readonly chest: ChestBlockEntity | ContainerEntity, readonly title = 'Chest') {
     super(player);
@@ -446,6 +488,12 @@ export class ChestMenu extends ContainerMenu {
     const c = this.chest;
     if ('containerStillValid' in c) return c.containerStillValid(p);
     return !c.removed && p.distanceToSqr(c.x + 0.5, c.y + 0.5, c.z + 0.5) <= 64;
+  }
+  override removed(): void {
+    super.removed();
+    const closed = this.onClosed;
+    this.onClosed = null;
+    closed?.();
   }
   quickMoveStack(_p: Player, index: number): ItemStack | null {
     const slot = this.slots[index];

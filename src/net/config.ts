@@ -7,7 +7,7 @@
 export const MULTIPLAYER_ENABLED = true;
 
 /** bumped whenever a packet changes; host and guest must agree (vanilla SharedConstants.getProtocolVersion) */
-export const PROTOCOL_VERSION = 2;
+export const PROTOCOL_VERSION = 3;
 
 /** (vite.config.ts: a hash of src/ in a build) */
 declare const __BUILD_ID__: string | undefined;
@@ -17,8 +17,11 @@ declare const __BUILD_ID__: string | undefined;
  */
 export const BUILD_ID: string = typeof __BUILD_ID__ === 'string' ? __BUILD_ID__ : 'dev';
 
-/** the biggest message a guest may send the host (vanilla caps serverbound packets at 32 KB; ours bundle a tick's) */
-export const MAX_GUEST_MESSAGE = 64 * 1024;
+/**
+ * the biggest message a guest may send the host (a tick's packets bundled; a book of 100 pages of 1024 characters, as
+ * vanilla's ServerboundEditBookPacket allows, is the biggest single one)
+ */
+export const MAX_GUEST_MESSAGE = 320 * 1024;
 /** the biggest message the host may send a guest (a tick's worth of chunks) */
 export const MAX_HOST_MESSAGE = 16 * 1024 * 1024;
 /** the most packets in one guest message (a tick's worth; more is someone flooding) */
@@ -79,3 +82,12 @@ export const DROP_SPAM_LIMIT = 1480;
  * blocks more (what it sees of a moving mob is a tick or three behind the host's)
  */
 export const ENTITY_REACH_SLACK = 3;
+
+/** vanilla ServerPlayer's containerCounter: menus are numbered 1 to 100, round again */
+export const MAX_CONTAINER_ID = 100;
+/** vanilla AbstractContainerMenu.incrementStateId: a menu's state number, round again past 32767 */
+export const MAX_STATE_ID = 0x7fff;
+/** a knockback or a blast sent to a guest is at most this fast, blocks a tick each way (vanilla SetEntityMotion's 3.9, and room for an explosion's) */
+export const MAX_MOTION = 10;
+/** the most clicks in a guest's menu the host takes in a tick (a drag across every slot is 66: start, 64 slots, end) */
+export const MAX_CLICKS_PER_TICK = 80;

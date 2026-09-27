@@ -42,5 +42,7 @@ export function itemBehaviorOf(id: string): ItemBehavior | undefined {
 
 /** vanilla ItemStack.onCraftedBy */
 export function craftedBy(p: Player, stack: ItemStack): void {
+  // (a guest's copy of a crafting menu leaves this to the host: a map made anew, an advancement)
+  if (p.level.isClientSide) return;
   ITEM_BEHAVIORS.get(stack.item.id)?.onCraftedBy?.(p.level, p, stack);
 }

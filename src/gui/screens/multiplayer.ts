@@ -9,6 +9,7 @@ import type { GuiGraphics } from '../guiGraphics';
 import { LanWorldList, type LanWorld } from '../../net/transport/lan';
 import { randomId } from '../../net/transport/transport';
 import type { GuestIdentity } from '../../net/client/clientSession';
+import type { GameMode } from '../../entity/player';
 import { NAME_PATTERN, PROTOCOL_VERSION, BUILD_ID, GUEST_VIEW_DISTANCE } from '../../net/config';
 
 // ---------------------------------------------------------------------------
@@ -60,8 +61,14 @@ export function compatible(w: LanWorld): boolean {
 // Open to LAN
 
 /** vanilla ShareToLanScreen: what the guests play in, and "Start LAN World" */
+/** vanilla ShareToLanScreen's game modes, in its order, by GameType.getShortDisplayName */
+const GUEST_MODES: GameMode[] = ['survival', 'spectator', 'creative', 'adventure'];
+const MODE_NAMES: Record<GameMode, string> = { survival: 'Survival', spectator: 'Spectator', creative: 'Creative', adventure: 'Adventure' };
+
 export class ShareToLanScreen extends Screen {
   private failed = false;
+  /** what the guests play in (vanilla: Survival to begin with) */
+  private mode: GameMode = 'survival';
 
   constructor(game: Game, parent: Screen) {
     super(game, 'LAN World');
@@ -70,16 +77,14 @@ export class ShareToLanScreen extends Screen {
 
   init(): void {
     const cx = Math.floor(this.width / 2);
-    // (in this version guests play in Creative, without commands: the buttons say so, greyed out)
-    const mode = this.add(new CycleButton(cx - 155, 100, 150, 20, 'Game Mode', ['creative'], 'creative', () => 'Creative', () => {}));
-    mode.active = false;
-    mode.tooltip = 'Guests play in Creative in this version';
+    this.add(new CycleButton(cx - 155, 100, 150, 20, 'Game Mode', GUEST_MODES, this.mode, (m) => MODE_NAMES[m], (m) => (this.mode = m)));
+    // (in this version only the host runs commands: the button says so, greyed out)
     const cheats = this.add(new CycleButton(cx + 5, 100, 150, 20, 'Allow Cheats', [false], false, () => 'OFF', () => {}));
     cheats.active = false;
     cheats.tooltip = 'Only the host can use commands in this version';
     this.add(new Button(cx - 155, this.height - 28, 150, 20, 'Start LAN World', () => {
       // (vanilla: back to the game, "Local game hosted" in the chat)
-      if (this.game.openToLan()) this.game.setScreen(null);
+      if (this.game.openToLan(this.mode)) this.game.setScreen(null);
       else this.failed = true;
     }));
     this.add(new Button(cx + 5, this.height - 28, 150, 20, 'Cancel', () => this.onClose()));
@@ -91,7 +96,7 @@ export class ShareToLanScreen extends Screen {
     const cx = Math.floor(this.width / 2);
     g.centered(this.title, cx, 50, 0xffffff, true);
     g.centered('Settings for Other Players', cx, 82, 0xffffff, true);
-    g.centered('Guests play in Creative, and only you can use commands, for now.', cx, 132, 0xa0a0a0, true);
+    g.centered('Only you can use commands, for now.', cx, 132, 0xa0a0a0, true);
     g.centered('Other windows of this browser can join from Multiplayer.', cx, 144, 0xa0a0a0, true);
     if (this.failed) g.centered("This browser can't open a world to its other windows.", cx, 164, 0xff5555, true);
     this.renderTooltip(g, mx, my);
@@ -319,13 +324,18 @@ export class DisconnectedScreen extends Screen {
 // the URL's ?mp= flags (main.ts)
 
 /** ?mp=host: once the world is in, it's opened to LAN */
-export function openToLanOnceSpawned(game: Game): void {
+export function openToLanOnceSpawned(game: Game, guestMode: GameMode = 'survival'): void {
   const wait = setInterval(() => {
     if (!game.inWorld) return clearInterval(wait);
     if (!game.spawned) return;
     clearInterval(wait);
-    game.openToLan();
+    game.openToLan(guestMode);
   }, 100);
+}
+
+/** ?guests=: what the guests of a ?mp=host world play in (Survival if it says nothing it knows) */
+export function guestModeParam(v: string | null): GameMode {
+  return GUEST_MODES.includes(v as GameMode) ? (v as GameMode) : 'survival';
 }
 
 /** ?mp=join: the first world heard of on the LAN is joined; if none is heard within a few seconds, the list shows */

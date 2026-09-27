@@ -40,7 +40,8 @@ const { m, close } = await loadNet(ENTITY_MODULES);
   attack('a move without the crosshair\'s entity (a stage 1 guest)', [[m.SB.MovePlayer, 0.5, 65, 0.5, 0, 0, 0]], /^Bad data: packet \d+: 6 fields/);
   attack('a riding jump past 100', [[m.SB.PlayerAction, m.Action.RIDING_JUMP, 101]], /^Bad data: packet \d+: bad field 1/);
   attack('an action without its argument', [[m.SB.PlayerAction, m.Action.DROP]], /^Bad data: packet \d+: 1 fields/);
-  attack('movement keys that don\'t exist', [[m.SB.MovePlayer, 0.5, 65, 0.5, 0, 0, 1 << 17, -1]], /^Bad data: packet \d+: bad field 5/);
+  // (the bit past the last there is: stage 3 added the wall a glide runs into)
+  attack('movement keys that don\'t exist', [[m.SB.MovePlayer, 0.5, 65, 0.5, 0, 0, Math.max(...Object.values(m.PoseFlag)) * 2, -1]], /^Bad data: packet \d+: bad field 5/);
   attack('a slot below -1', [[m.SB.SetCreativeModeSlot, -2, null]], /^Bad data: packet \d+: bad field 0/);
   attack('throwing out two swords at once', [[m.SB.SetCreativeModeSlot, -1, ['diamond_sword', 2, 0, null]]], /^Invalid creative inventory action$/);
   // (fine, and doing nothing: a riding jump on nothing, throwing out nothing)

@@ -97,7 +97,10 @@ for (const [name] of SHULKER_BOXES) {
       if (p.gameMode === 'spectator') return 'consume';
       if (canOpen(level, x, y, z, st, be)) {
         be.unpackLoot();
-        if (openMenu?.(new ShulkerBoxMenu(p, be, be.displayName())) === false) return true;
+        const menu = new ShulkerBoxMenu(p, be, be.displayName());
+        // (vanilla ShulkerBoxBlockEntity.stopOpen: the last to leave shuts the lid)
+        menu.onClosed = () => be.stopOpen(level, p);
+        if (openMenu?.(menu) === false) return true;
         be.startOpen(level, p);
         Piglin.angerNearbyPiglins(p, true);
       }

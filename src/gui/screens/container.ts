@@ -256,6 +256,11 @@ export abstract class AbstractContainerScreen<M extends ContainerMenu> extends S
     return mx < this.leftPos || my < this.topPos || mx >= this.leftPos + this.imageWidth || my >= this.topPos + this.imageHeight;
   }
 
+  /** (a guest) the host says the recipe clicked in the recipe book is to be shown in outline */
+  ghostRecipe(id: string): void {
+    this.book?.ghostRecipe(id);
+  }
+
   protected slotClicked(slot: Slot | null, slotId: number, button: number, type: ClickType): void {
     if (slot) slotId = slot.index;
     this.menu.clicked(slotId, button, type);
@@ -531,16 +536,6 @@ export class ChestScreen extends AbstractContainerScreen<ChestMenu> {
   constructor(game: Game, menu: ChestMenu) {
     super(game, menu, menu.title);
     this.imageHeight = 114 + menu.rows * 18;
-  }
-  override removed(): void {
-    super.removed();
-    const c = this.menu.chest;
-    if (!('containerStillValid' in c)) this.game.chestClosed(c);
-    // (vanilla AbstractMinecartContainer.stopOpen / ChestBoat.stopOpen: CONTAINER_CLOSE, where the vehicle is)
-    else {
-      const e = c as unknown as { x: number; y: number; z: number };
-      this.game.level.gameEvent('container_close', e.x, e.y, e.z, { entity: this.game.player });
-    }
   }
   renderBg(g: GuiGraphics): void {
     const L = this.leftPos, T = this.topPos, rows = this.menu.rows;

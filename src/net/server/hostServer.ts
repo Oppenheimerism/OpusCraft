@@ -10,13 +10,16 @@ import type { PeerId, Transport } from '../transport/transport';
 import { LanAnnouncer, type LanWorld } from '../transport/lan';
 import { broadcastEffects, soundRange, PARTICLE_RANGE } from '../effects';
 import { visibleBlockEntity } from '../chunkData';
-import { DataWatcher, type EntityData } from '../entityData';
+import { DataWatcher, PLAYER_FIELDS, type EntityData } from '../entityData';
 import { ServerPlayerSession } from './session';
 import type { Level } from '../../game/level';
 import type { Entity } from '../../entity/entity';
 import type { LivingEntity } from '../../entity/living';
 import type { Player, GameMode } from '../../entity/player';
 import { Interaction } from '../../game/interaction';
+import { blockMenu, entityContainerMenu } from '../../game/openMenu';
+import type { ContainerMenu } from '../../inventory/container';
+import type { Hand } from '../../item/inventory';
 import { Chunk } from '../../world/chunk';
 import { blockEntityKey, type BlockEntity } from '../../world/blockEntity';
 import { STATE_BLOCK } from '../../world/block';
@@ -29,6 +32,8 @@ export interface HostHooks {
   worldName(): string;
   /** a line in the host's own chat */
   chat(text: string): void;
+  /** a line over the host's own hotbar (vanilla displayClientMessage with its overlay flag: the action bar) */
+  overlay?(text: string): void;
   /** keep the chunks round a guest loaded (vanilla TicketType.PLAYER: ChunkManager.setTicket); null lets them go */
   setTicket(name: string, t: [number, number, number] | null): void;
   /** the crack the host's own player is making, if any (its Interaction's, which isn't in level.destroyProgress) */
@@ -39,8 +44,8 @@ export interface HostHooks {
 
 export class HostServer {
   readonly sessions = new Map<PeerId, ServerPlayerSession>();
-  /** what the guests play in (stage 1: creative, whatever the host picked) */
-  readonly guestGameMode: GameMode = 'creative';
+  /** what the guests play in (vanilla ShareToLanScreen's game mode; creative if the host didn't say, as before guests could be hurt) */
+  readonly guestGameMode: GameMode;
   /** this world's name on the LAN */
   readonly lanId: string;
   private announcer: LanAnnouncer | null = null;
@@ -50,6 +55,8 @@ export class HostServer {
   private clock = '';
   private weather = '';
   private hostCrack = '';
+  /** vanilla SleepStatus: the players not spectating, and how many of them are asleep, as last counted */
+  private sleepStatus = { active: 0, sleeping: 0 };
   /** the guest whose player is ticking (what that sets off, its own game shows it: not sent back to it) */
   actor: ServerPlayerSession | null = null;
   /** (runLocal) sounds and particles stay on the host */
@@ -65,8 +72,9 @@ export class HostServer {
   private readonly watchers = new Map<Entity, { data: DataWatcher; seen: number; changes: EntityData | null; changed: number }>();
   closed = false;
 
-  constructor(readonly level: Level, readonly transport: Transport, readonly hooks: HostHooks, opts: { lanId: string; announce?: boolean }) {
+  constructor(readonly level: Level, readonly transport: Transport, readonly hooks: HostHooks, opts: { lanId: string; announce?: boolean; guestGameMode?: GameMode }) {
     this.lanId = opts.lanId;
+    this.guestGameMode = opts.guestGameMode ?? 'creative';
     transport.onPeer((peer, joined) => {
       if (this.closed) return;
       if (joined) {
@@ -110,11 +118,18 @@ export class HostServer {
       }
       this.took(e, taker, amount);
     };
+    // (vanilla wakeUpAllPlayers → SleepStatus.removeAllSleepers: the morning's waking isn't announced)
+    const wake = level.onWakeUpAll;
+    level.onWakeUpAll = () => {
+      wake?.();
+      this.sleepStatus.sleeping = 0;
+    };
     this.undo.push(() => {
       world.onBlockChanged = blockChanged;
       world.onBlockEntityChanged = beChanged;
       level.onDestroyBlockProgress = progress;
       level.onTake = take;
+      level.onWakeUpAll = wake;
     });
     this.undo.push(
       broadcastEffects(level, {
@@ -194,6 +209,7 @@ export class HostServer {
       this.weather = wk;
       this.broadcast(w);
     }
+    this.announceSleepStatus();
     // (the block changes first: a guest's copy of a new block makes its block entity afresh, which the data then fills)
     for (const s of this.sessions.values()) s.flushBlocks();
     this.flushBlockEntities();
@@ -205,11 +221,34 @@ export class HostServer {
     if (this.announcer && this.ticks % ANNOUNCE_TICKS === 0) this.announcer.announce();
   }
 
-  /** (the trackers) every field of `e`, for a guest that's to see it now */
+  /**
+   * vanilla ServerLevel.updateSleepingPlayerList → announceSleepStatus, as for a world open to LAN: when the players not
+   * spectating, or how many of them are asleep, change while one sleeps or just did (one got into bed or out, came,
+   * went or changed its game mode), everyone's action bar says how many are asleep of how many it takes, or that the
+   * night is being slept through
+   */
+  private announceSleepStatus(): void {
+    let active = 0, sleeping = 0;
+    for (const p of this.level.players()) {
+      if (p.removed || p.gameMode === 'spectator') continue;
+      active++;
+      if (p.isSleeping()) sleeping++;
+    }
+    const was = this.sleepStatus;
+    this.sleepStatus = { active, sleeping };
+    if (!(was.sleeping > 0 || sleeping > 0) || (was.active === active && was.sleeping === sleeping)) return;
+    // (playersSleepingPercentage isn't heeded, as the host's own nights don't heed it: it takes all of them, game/sleep.ts)
+    const needed = Math.max(1, active);
+    const text = sleeping >= needed ? 'Sleeping through this night' : `${sleeping}/${needed} players sleeping`;
+    this.hooks.overlay?.(text);
+    this.broadcast([CB.SystemChat, text, true]);
+  }
+
+  /** (the trackers) every field of `e`, for a guest that's to see it now (of a player, what's told of one) */
   dataFull(e: Entity): EntityData {
     const w = this.watchers.get(e);
     if (!w) {
-      const data = new DataWatcher();
+      const data = new DataWatcher(e.type === 'player' ? PLAYER_FIELDS : null);
       this.watchers.set(e, { data, seen: this.ticks, changes: null, changed: this.ticks });
       return data.full(e);
     }
@@ -250,6 +289,20 @@ export class HostServer {
     for (const s of this.sessions.values()) {
       const pl = s.player;
       if (s !== except && s.state === 'play' && pl && (pl.x - x) ** 2 + (pl.y - y) ** 2 + (pl.z - z) ** 2 < r * r) s.send(p);
+    }
+  }
+
+  /**
+   * `fn`'s sounds and particles are for every guest near, the one whose player is ticking too (a guest's player hurt,
+   * dying, or a plate clicking under it: what its own game doesn't make for itself)
+   */
+  heardByAll(fn: () => void): void {
+    const actor = this.actor;
+    this.actor = null;
+    try {
+      fn();
+    } finally {
+      this.actor = actor;
     }
   }
 
@@ -334,14 +387,35 @@ export class HostServer {
   // -------------------------------------------------------------------------
   // coming and going
 
-  /** a guest's Interaction: the host's own kind, with what would open a screen here turned into a word to the guest */
+  /**
+   * a guest's Interaction: the host's own kind, its bed the guest's to sleep in, and the menus of the blocks and
+   * entities it uses made for its player (game/openMenu.ts, as for the host's own) and shown to it
+   */
   guestInteraction(s: ServerPlayerSession, p: Player): Interaction {
     const it = new Interaction(this.level, p);
-    const cant = (what: string) => () => s.notice(`${what} can't be used by guests yet.`);
-    it.onOpenContainer = cant('That');
-    it.onOpenEntityContainer = cant('That');
-    it.onUseBed = cant('Beds');
+    it.onOpenContainer = (kind, x, y, z) => {
+      const m = blockMenu(this.level, p, kind, x, y, z);
+      if (m) s.showMenu(m);
+    };
+    it.onOpenEntityContainer = (e) => void s.showMenu(entityContainerMenu(this.level, p, e));
+    it.onUseBed = (x, y, z) => s.useBed(x, y, z);
     return it;
+  }
+
+  /**
+   * (game/openMenu.ts's ShowMenu, for a guest's player) vanilla ServerPlayer.openMenu: `m`, made for `p`, shown to its
+   * guest; false (and `m` closed again) if `p` is no guest's
+   */
+  showMenu(p: Player, m: ContainerMenu): boolean {
+    const s = this.sessionOf(p);
+    if (s) return s.showMenu(m);
+    m.removed();
+    return false;
+  }
+
+  /** a book a guest's player used, in `hand`: opened on the guest's screen */
+  openBook(p: Player, hand: Hand): void {
+    this.sessionOf(p)?.openBook(hand);
   }
 
   /** something `p` tried that guests can't do yet (a menu, a portal): a word to the guest, nothing else happens */

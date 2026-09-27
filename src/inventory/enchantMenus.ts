@@ -429,7 +429,8 @@ export class AnvilMenu extends ContainerMenu {
     const [x, y, z] = this.pos;
     const lvl = p.level;
     let destroyed = false;
-    if (!creative && ANVILS.includes(lvl.getBlockName(x, y, z)) && Math.random() < 0.12) {
+    // (vanilla ContainerLevelAccess: a guest's copy of the menu leaves the anvil to the host)
+    if (!creative && !lvl.isClientSide && ANVILS.includes(lvl.getBlockName(x, y, z)) && Math.random() < 0.12) {
       const next = damagedAnvil(lvl.getState(x, y, z));
       lvl.setBlock(x, y, z, next ?? 0);
       destroyed = next === null;
@@ -551,7 +552,8 @@ export class GrindstoneMenu extends ContainerMenu {
   private onTake(p: Player): void {
     const [x, y, z] = this.pos;
     const xp = this.experienceAmount();
-    if (xp > 0) p.level.awardExperience(x + 0.5, y + 0.5, z + 0.5, xp);
+    // (vanilla ContainerLevelAccess: the orbs are the host's, not a guest's copy of the menu's)
+    if (xp > 0 && !p.level.isClientSide) p.level.awardExperience(x + 0.5, y + 0.5, z + 0.5, xp);
     // level event 1042
     p.level.sound.play('block.grindstone.use', x + 0.5, y + 0.5, z + 0.5, 1, p.level.random.nextFloat() * 0.1 + 0.9);
     this.repairSlots.items[0] = null;
