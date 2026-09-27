@@ -9,7 +9,7 @@ setTimeout(() => { console.log('TIMEOUT'); process.exit(2); }, 300000).unref();
 const { m, close } = await load([
   '/src/game/jukebox.ts', '/src/game/blockBehavior.ts', '/src/item/item.ts', '/src/entity/parrot.ts', '/src/entity/itemEntity.ts',
   '/src/world/blockEntity.ts', '/src/storage/worldStore.ts', '/src/item/jukeboxSongs.ts', '/src/audio/gen/discMusic.ts', '/src/audio/gen/discPigstep.ts',
-  '/src/gui/hud.ts',
+  '/src/audio/gen/discSongs.ts', '/src/gui/hud.ts',
 ]);
 
 const { world, level } = flatLevel(m, -1, -1, 1, 1, 64, 'stone', 'jukebox');
@@ -168,8 +168,8 @@ for (const id of ['music_disc_13', 'music_disc_cat', 'music_disc_otherside']) {
   const s = scores.find((x) => x.event === song.sound);
   check(`${song.sound} is written, and no longer than vanilla's ${song.lengthSeconds} s (${s?.seconds.toFixed(1)} s)`, !!s && s.seconds <= song.lengthSeconds && s.seconds > song.lengthSeconds - 25);
 }
-// (5 and Pigstep have songs of their own: audio/gen/disc5.ts, discPigstep.ts)
-check('every disc has a song the synth can play', Object.values(m.JUKEBOX_SONGS).every((s) => s.sound === 'music_disc.5' || s.sound in m.DISC_SONGS || s.sound in m.PIGSTEP_MUSIC_POOLS));
+// (5, Pigstep and the eleven discs have songs of their own: audio/gen/disc5.ts, discPigstep.ts, discSongs.ts)
+check('every disc has a song the synth can play', Object.values(m.JUKEBOX_SONGS).every((s) => s.sound === 'music_disc.5' || s.sound in m.DISC_SONGS || s.sound in m.PIGSTEP_MUSIC_POOLS || s.sound in m.DISC_SONG_POOLS));
 {
   const sr = 8000;
   const t0 = Date.now();

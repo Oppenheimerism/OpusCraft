@@ -206,6 +206,31 @@ const DISCS: Record<string, number> = {
 for (const [name, label] of Object.entries(DISCS))
   V[name] = () =>
     spr(DISC, { '#': 0x0c0c0c, d: 0x1e1e22, D: 0x3a3a44, L: label, l: mixC(label, 0xffffff, 0.35), k: 0x0c0c0c }, name);
+// music disc 11 is broken (vanilla item/music_disc_11): a crack right across it, through the label, from a chip
+// knocked out of its rim, the crack's far edge catching the light
+// prettier-ignore
+const DISC_11 = [
+  '................',
+  '................',
+  '.....####.......',
+  '....#dDdds##....',
+  '...#dDdddshd#...',
+  '..#dDddLsddDd#..',
+  '..#dDdLlsLdDd#..',
+  '..#ddLlkkLdDd#..',
+  '..#ddLskkLddd#..',
+  '..#dddsLLLddd#..',
+  '..#dDsdLLdddd#..',
+  '...#dsddddDd#...',
+  '....#sdddDd#....',
+  '.....######.....',
+  '................',
+  '................',
+];
+V['music_disc_11'] = () => {
+  const label = DISCS.music_disc_11;
+  return spr(DISC_11, { '#': 0x0c0c0c, d: 0x1e1e22, D: 0x3a3a44, L: label, l: mixC(label, 0xffffff, 0.35), k: 0x0c0c0c, s: 0x050506, h: 0x585864 }, 'music_disc_11');
+};
 
 // ---------------------------------------------------------------------------
 // Splash / lingering potions (water-coloured by default; tinted at runtime)

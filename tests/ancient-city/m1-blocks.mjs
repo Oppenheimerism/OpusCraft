@@ -235,7 +235,7 @@ function useOn(sc, s, sneaking = false) {
   check('tabs: sculk and its kin natural, candles coloured', ['sculk', 'sculk_vein', 'sculk_catalyst', 'sculk_sensor', 'sculk_shrieker'].every((n) => it(n).creativeTab === 'natural') && CANDLES.every((n) => it(n).creativeTab === 'colored'));
   const order = m.ITEM_LIST.map((x) => x.id);
   const after = (a, b) => order.indexOf(a) === order.indexOf(b) + 1;
-  check('tabs: in vanilla\'s order among the rest', after('recovery_compass', 'compass') && after('music_disc_5', 'music_disc_otherside') && after('honeycomb', 'rabbit_hide') && after('cracked_deepslate_bricks', 'deepslate_bricks') && after('cracked_deepslate_tiles', 'deepslate_tiles') && after('reinforced_deepslate', 'deepslate_tile_wall') && after('chiseled_deepslate', 'cobbled_deepslate') && order.indexOf('disc_fragment_5') === order.indexOf('white_dye') - 1 && order.indexOf('sculk_sensor') === order.indexOf('cobweb') - 1);
+  check('tabs: in vanilla\'s order among the rest', after('recovery_compass', 'compass') && after('music_disc_relic', 'music_disc_otherside') && after('music_disc_5', 'music_disc_relic') && after('honeycomb', 'rabbit_hide') && after('cracked_deepslate_bricks', 'deepslate_bricks') && after('cracked_deepslate_tiles', 'deepslate_tiles') && after('reinforced_deepslate', 'deepslate_tile_wall') && after('chiseled_deepslate', 'cobbled_deepslate') && order.indexOf('disc_fragment_5') === order.indexOf('white_dye') - 1 && order.indexOf('sculk_sensor') === order.indexOf('cobweb') - 1);
   // recipes
   const grid = (slots) => Array.from({ length: 9 }, (_, i) => (slots[i] ? stack(slots[i]) : null));
   const craft = (g, w = 3) => {
