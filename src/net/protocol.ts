@@ -257,6 +257,8 @@ export interface LoginInfo {
   z: number;
   yRot: number;
   xRot: number;
+  /** (stage 4) flying as it was when it left, if its game mode lets it (vanilla ClientboundPlayerAbilitiesPacket; absent: not) */
+  flying?: boolean;
   viewDistance: number;
   hostName: string;
 }
@@ -399,7 +401,7 @@ export function checkLogin(v: Value): LoginInfo | null {
     ID(o.playerId) && str(0, 64)(o.worldName) && str(1, 32)(o.dimension) && str(1, 16)(o.gameMode) && str(1, 16)(o.difficulty) && bool(o.hardcore) &&
     obj(rules) && Object.keys(rules as object).length <= 256 && Object.values(rules as object).every((r) => typeof r === 'boolean' || typeof r === 'number') &&
     num(0, Number.MAX_SAFE_INTEGER)(o.gameTime) && num(-Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER)(o.dayTime) && bool(o.raining) && bool(o.thundering) &&
-    num(0, 1)(o.rainLevel) && num(0, 1)(o.thunderLevel) && X(o.x) && Y(o.y) && X(o.z) && ANGLE(o.yRot) && PITCH(o.xRot) && int(2, 32)(o.viewDistance) && str(0, 16)(o.hostName);
+    num(0, 1)(o.rainLevel) && num(0, 1)(o.thunderLevel) && X(o.x) && Y(o.y) && X(o.z) && ANGLE(o.yRot) && PITCH(o.xRot) && (o.flying === undefined || bool(o.flying)) && int(2, 32)(o.viewDistance) && str(0, 16)(o.hostName);
   return ok ? (o as unknown as LoginInfo) : null;
 }
 

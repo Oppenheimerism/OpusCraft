@@ -22,6 +22,8 @@ import { deathMessage, dropDeathLoot, resetForRespawn, playerHurtSound, playerFa
 import { useBed, findRespawn, MSG, type SleepHost } from '../../game/sleep';
 import { writeBook } from '../../game/books';
 import { PlayerRecipeBook } from '../../inventory/recipeBook';
+import { savePlayer, loadPlayer, type SavedPlayer } from '../../game/playerData';
+import { carriesOnePlayer, loadEntity } from '../../game/spawner';
 import { entityContainerMenu } from '../../game/openMenu';
 import { ChestBoat } from '../../entity/boat';
 import { AbstractHorse } from '../../entity/horse';
@@ -143,6 +145,8 @@ export class ServerPlayerSession {
   readonly recipes = new PlayerRecipeBook();
   /** when each plain message was last shown (so a held button doesn't repeat it every few ticks) */
   private readonly notices = new Map<string, number>();
+  /** (logging in) its player as the world last kept it, being read: the guest is let in once it's here */
+  private reading: { done: boolean; failed: boolean; data: SavedPlayer | null } | null = null;
 
   constructor(readonly server: HostServer, readonly peer: PeerId) {}
 
@@ -153,6 +157,11 @@ export class ServerPlayerSession {
   /** (the state can change under a handler: a packet may drop the guest) */
   private get isGone(): boolean {
     return this.state === 'gone';
+  }
+
+  /** it said who it is and was let in, its player still being read: a seat, and its name and uuid, are taken */
+  get loggingIn(): boolean {
+    return this.reading !== null && this.state === 'login';
   }
 
   // -------------------------------------------------------------------------
@@ -188,6 +197,15 @@ export class ServerPlayerSession {
     this.chatSpam = Math.max(0, this.chatSpam - Math.max(1, (now - this.lastDecay) / 50));
     this.lastDecay = now;
     if (this.refused) return this.disconnect(this.refused);
+    // (its player being read: what it says waits till it's in)
+    const job = this.reading;
+    if (job) {
+      if (!job.done) return;
+      this.reading = null;
+      if (job.failed) return this.disconnect("Couldn't read your player from this world's save.");
+      this.placeNewPlayer(job.data);
+      if (this.isGone) return;
+    }
     const inbox = this.inbox.splice(0, MESSAGES_PER_TICK);
     for (const data of inbox) {
       if (this.isGone) return;
@@ -284,24 +302,55 @@ export class ServerPlayerSession {
     }
   }
 
-  /** vanilla ServerLoginPacketListenerImpl + PlayerList.placeNewPlayer */
+  /**
+   * vanilla ServerLoginPacketListenerImpl: who it is, checked; then its player as the world last kept it is read (vanilla
+   * PlayerList.load), and it's let in at the first tick after (placeNewPlayer)
+   */
   private hello(protocol: number, build: string, name: string, uuid: string, viewDistance: number): void {
     if (protocol !== PROTOCOL_VERSION) return this.disconnect(protocol < PROTOCOL_VERSION ? 'Outdated game! This world is open in a newer one.' : 'Outdated host! This world is open in an older one.');
     if (build !== BUILD_ID) return this.disconnect('This world is open in a different version of the game. Reload both windows so they run the same one.');
     if (!NAME_PATTERN.test(name)) return this.disconnect('That name can only have letters, digits and _ (3 to 16 of them).');
     const srv = this.server;
-    if (srv.guestCount() >= MAX_GUESTS) return this.disconnect('The world is full.');
+    // (the guests in, and those let in whose players are still being read)
+    const others = [...srv.sessions.values()].filter((s) => s !== this && (s.state === 'play' || s.loggingIn));
+    if (others.length >= MAX_GUESTS) return this.disconnect('The world is full.');
     const taken = (n: string) => n.toLowerCase() === name.toLowerCase();
-    if (taken(srv.hooks.hostName()) || [...srv.sessions.values()].some((s) => s !== this && s.state === 'play' && taken(s.name))) return this.disconnect(`Someone called ${name} is already playing here.`);
+    if (taken(srv.hooks.hostName()) || others.some((s) => taken(s.name))) return this.disconnect(`Someone called ${name} is already playing here.`);
     if (srv.level.playerByUuid(uuid) || [...srv.sessions.values()].some((s) => s !== this && s.uuid === uuid)) return this.disconnect('You are already in this world (in another window?).');
     this.name = name;
     this.uuid = uuid;
     this.viewDistance = Math.min(GUEST_VIEW_DISTANCE, viewDistance);
-    const level = srv.level;
+    const load = srv.hooks.loadGuest;
+    if (!load) return this.placeNewPlayer(null);
+    const job: { done: boolean; failed: boolean; data: SavedPlayer | null } = { done: false, failed: false, data: null };
+    this.reading = job;
+    void Promise.resolve()
+      .then(() => load(uuid))
+      .then(
+        (d) => {
+          job.data = d;
+          job.done = true;
+        },
+        (e) => {
+          console.error(`multiplayer: reading ${name}'s player`, e);
+          job.failed = job.done = true;
+        },
+      );
+  }
+
+  /**
+   * vanilla PlayerList.placeNewPlayer: its player in the level, as `pd` kept it if it's been here before (where it was,
+   * what it had, what it rode alone; dead if it left dead), else new by the world spawn; and the guest let in. In
+   * whatever game mode the world is open in, as vanilla's LAN world has everyone (IntegratedServer.getForcedGameType).
+   * A player kept in another dimension than the host's comes in by the host, what it rode left where it was
+   */
+  private placeNewPlayer(pd: SavedPlayer | null): void {
+    const srv = this.server, level = srv.level;
     const p = new GuestPlayer(level, this);
-    p.uuid = uuid;
+    if (pd) loadPlayer(p, pd);
+    p.uuid = this.uuid;
     p.remote = true;
-    p.profileName = name;
+    p.profileName = this.name;
     p.setGameMode(srv.guestGameMode);
     this.gameMode = p.gameMode;
     p.food.difficulty = level.difficulty;
@@ -311,12 +360,33 @@ export class ServerPlayerSession {
     p.onHurtSound = (pl, src) => srv.heardByAll(() => playerHurtSound(level.sound, pl, src));
     p.onFall = (pl, _dmg, dist) => playerFallSound(level.sound, pl, dist);
     p.onDeath = (_pl, src) => this.died(src);
-    const [x, y, z] = srv.hooks.spawnPoint();
-    p.moveTo(x, y, z, 0, 0);
+    const here = !!pd && (pd.dimension ?? 'overworld') === level.world.dim.id;
+    const dead = !!pd && (!!pd.dead || pd.health <= 0);
+    if (!here) {
+      const [x, y, z] = srv.hooks.spawnPoint();
+      p.moveTo(x, y, z, 0, 0);
+    }
+    // (it left dead: dead it comes back, on its death screen, respawning as ever)
+    if (dead) {
+      p.health = 0;
+      p.dead = true;
+    }
     p.remoteMove = () => this.applyMove();
     level.addEntity(p);
     this.player = p;
-    this.pos = { x, y, z };
+    this.pos = { x: p.x, y: p.y, z: p.z };
+    // vanilla RootVehicle: back on what it rode alone as it left
+    if (pd?.vehicle && !dead) {
+      if (!here) srv.hooks.leaveInDimension?.(pd.dimension ?? 'overworld', pd.vehicle);
+      else {
+        const v = loadEntity(pd.vehicle, level);
+        if (v) {
+          level.addEntity(v);
+          p.startRiding(v, true);
+        }
+      }
+    }
+    this.recipes.load(pd?.recipeBook);
     const it = (this.interaction = srv.guestInteraction(this, p));
     // (what doesn't fit in its inventory, or it throws out, lands in the world: vanilla Player.drop)
     p.dropHandler = (s) => it.throwItem(s);
@@ -348,13 +418,16 @@ export class ServerPlayerSession {
       thundering: level.thundering,
       rainLevel: level.rain,
       thunderLevel: level.thunder,
-      x, y, z, yRot: 0, xRot: 0,
+      x: p.x, y: p.y, z: p.z, yRot: p.yaw, xRot: p.pitch,
+      flying: p.flying,
       viewDistance: this.viewDistance,
       hostName: srv.hooks.hostName(),
     };
     this.send([CB.Login, info as unknown as Value]);
     this.send(srv.weatherPacket());
     if (this.recipes.known.size) this.send([CB.RecipeBookAdd, [...this.recipes.known], true]);
+    // (vanilla: a player that comes in dead is shown the death screen, with nothing on it of how it died)
+    if (dead) this.send([CB.PlayerCombatKill, '']);
     srv.joined(this);
   }
 
@@ -1007,18 +1080,40 @@ export class ServerPlayerSession {
     this.server.transport.disconnect(this.peer);
   }
 
-  /** it's gone (left, dropped, or the connection went): its player leaves the level */
+  /**
+   * vanilla PlayerList.saveAll / remove: its player kept with the world as it is now (with its recipe book, and what it
+   * rides alone), for when it comes back
+   */
+  save(): void {
+    const p = this.player;
+    if (this.state !== 'play' || !p) return;
+    this.server.hooks.saveGuest?.(this.uuid, savePlayer(p, this.level.world.dim.id, { recipeBook: this.recipes.save() }));
+  }
+
+  /**
+   * it's gone (left, dropped, or the connection went): its player out of bed (vanilla ServerPlayer.disconnect), kept
+   * for when it comes back, and out of the level, with what it rode alone (vanilla PlayerList.remove)
+   */
   gone(reason: string): void {
     if (this.state === 'gone') return;
     const was = this.state;
-    this.state = 'gone';
-    this.out = [];
     const p = this.player;
-    if (p) {
+    if (p && was === 'play') {
       if (this.crack) this.level.destroyBlockProgress(p.id, 0, 0, 0, -1);
       // (vanilla Player.remove: the open menu closed, a chest's lid shut, what the menus held dropped where it stood)
       p.disconnected = true;
+      if (p.isSleeping()) p.stopSleepInBed(true);
       this.menus?.closeAll(false);
+      this.save();
+      const v = p.vehicle;
+      if (v && carriesOnePlayer(v)) {
+        p.removeVehicle();
+        removeWithRiders(v);
+      }
+    }
+    this.state = 'gone';
+    this.out = [];
+    if (p) {
       p.remove();
       this.server.hooks.setTicket(`player:${p.id}`, null);
     }
@@ -1044,6 +1139,12 @@ class GuestPlayer extends Player {
       srv.actor = null;
     }
   }
+}
+
+/** vanilla UNLOADED_WITH_PLAYER: what a leaving guest rode alone goes with it, and whatever else rode that */
+function removeWithRiders(e: Entity): void {
+  for (const r of [...e.passengers]) if (r.type !== 'player') removeWithRiders(r);
+  e.remove();
 }
 
 /** a swing that started since last seen (LivingEntity.swing sets swingTime back to -1) */

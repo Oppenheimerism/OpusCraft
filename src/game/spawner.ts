@@ -262,9 +262,19 @@ function loadOne(d: SavedEntity, level: Level): Entity | null {
   return m;
 }
 
+/**
+ * vanilla Entity.hasExactlyOnePlayerPassenger: what carries one player, and one only, is saved with that player (its
+ * RootVehicle), not with its chunk; one carrying two (a host and a guest in a boat) stays with its chunk
+ */
+export function carriesOnePlayer(e: Entity): boolean {
+  let n = 0;
+  for (const p of e.passengers) if (p.type === 'player') n++;
+  return n === 1;
+}
+
 /** entities that belong to chunk storage (whatever carries the player is saved with the player: vanilla RootVehicle) */
 export function isChunkSaved(e: Entity): boolean {
-  if (e.passengers.some((p) => p.type === 'player')) return false;
+  if (carriesOnePlayer(e)) return false;
   if (e instanceof ItemFrame) return true;
   return e instanceof AbstractMinecart || e instanceof Boat || e instanceof Mob || e instanceof ItemEntity || e instanceof EndCrystal || e instanceof Arrow || e instanceof LeashKnot || e instanceof FireworkRocket;
 }

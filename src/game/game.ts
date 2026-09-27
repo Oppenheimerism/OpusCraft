@@ -83,7 +83,7 @@ import { gatewayTravel } from './gatewayTravel';
 import { setDialViewer } from '../item/compass';
 import { respawnArrival, worldSpawnOf, InitialSpawn, WAIT, adjustSpawnLocation } from './respawnLogic';
 import { SaveQueue, watchPageLeave, unwatchPageLeave } from './saveOnLeave';
-import { savePlayer, loadPlayer } from './playerData';
+import { savePlayer, loadPlayer, PlayerDataStore } from './playerData';
 // (multiplayer)
 import { MULTIPLAYER_ENABLED } from '../net/config';
 import { HostServer } from '../net/server/hostServer';
@@ -206,6 +206,8 @@ export class Game {
   connectingScreenFactory: ((cancel: () => void) => Screen) | null = null;
   /** vanilla DisconnectedScreen: a title, why, and back to the title screen */
   disconnectedScreenFactory: ((title: string, reason: string) => Screen) | null = null;
+  /** (hosting) the players of the guests this world has had, kept with it (vanilla PlayerDataStorage) */
+  private playerData: PlayerDataStore | null = null;
   /** chunks with a saved entity record / with entities not yet saved / with a record load in flight */
   private entityKeys = new Set<string>();
   private entityDirty = new Set<string>();
@@ -431,6 +433,8 @@ export class Game {
   private setUpWorld(meta: WorldMeta, login?: LoginInfo): void {
     this.entityDirty.clear();
     this.entityLoading.clear();
+    // (a guest's copy of the host's world keeps nobody's)
+    this.playerData = login ? null : new PlayerDataStore(meta.transient ? null : meta.id);
     this.world = new World();
     this.world.dim = dimensionById(login ? login.dimension : meta.player && !meta.player.dead ? meta.player.dimension : 'overworld');
     this.portalPoi.load(meta.portals);
@@ -661,6 +665,8 @@ export class Game {
     m.clearWeatherTime = this.level.clearWeatherTime;
     m.gameRules = { ...this.level.gameRules };
     if (this.worldSpawn) m.worldSpawn = this.worldSpawn;
+    // (the guests still here, kept as they are now: vanilla PlayerList.saveAll)
+    this.server?.saveAll();
     m.player = savePlayer(p, this.world.dim.id, { advancements: this.advancements.save(), recipeBook: this.recipeBook.save() });
     m.portals = this.portalPoi.save();
     m.arrivals = this.arrivals.save();
@@ -678,6 +684,7 @@ export class Game {
     }
     await saveChunks(list);
     await this.saveLoadedEntities();
+    await this.playerData?.save();
     await saveWorldMeta(m);
   }
 
@@ -1840,6 +1847,10 @@ export class Game {
           const it = this.interaction, stage = it.destroyStage;
           return stage >= 0 ? { x: it.dX, y: it.dY, z: it.dZ, stage } : null;
         },
+        // (the guests' players, kept with the world: vanilla PlayerDataStorage)
+        loadGuest: (uuid) => this.playerData?.load(uuid) ?? Promise.resolve(null),
+        saveGuest: (uuid, d) => this.playerData?.put(uuid, d),
+        leaveInDimension: (dim, e) => this.arrivals.add(dimensionById(dim), { entity: e }),
       },
       { lanId, guestGameMode: guestMode },
     );
@@ -1899,6 +1910,8 @@ export class Game {
         };
         this.meta = meta;
         this.setUpWorld(meta, info);
+        // (flying as it was when it left, if it's been here before: vanilla ClientboundPlayerAbilitiesPacket)
+        this.player.flying = !!info.flying && this.player.mayFly;
         this.level.rain = this.level.rainO = info.rainLevel;
         this.level.thunder = this.level.thunderO = info.thunderLevel;
         return {

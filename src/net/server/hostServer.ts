@@ -23,6 +23,8 @@ import type { Hand } from '../../item/inventory';
 import { Chunk } from '../../world/chunk';
 import { blockEntityKey, type BlockEntity } from '../../world/blockEntity';
 import { STATE_BLOCK } from '../../world/block';
+import type { SavedPlayer } from '../../game/playerData';
+import type { SavedEntity } from '../../entity/mob';
 
 export interface HostHooks {
   /** where a guest new to the world starts (vanilla: the world spawn; here in whatever dimension the host is in) */
@@ -40,6 +42,18 @@ export interface HostHooks {
   hostBreaking(): { x: number; y: number; z: number; stage: number } | null;
   /** guests came or went */
   onGuestsChanged?(guests: number): void;
+  /**
+   * the player of the guest with this uuid as this world last kept it, if it's been here before (vanilla PlayerList.load:
+   * the guest is let in once it's read). None: every guest comes new
+   */
+  loadGuest?(uuid: string): Promise<SavedPlayer | null>;
+  /** a guest's player, kept for when it comes back (vanilla PlayerDataStorage.save: written with the world) */
+  saveGuest?(uuid: string, data: SavedPlayer): void;
+  /**
+   * what a guest rode when it left, put back where it was in dimension `dim` (the guest having come back to find the
+   * host in another): it waits there for that dimension to be loaded again (the Game's PortalArrivals)
+   */
+  leaveInDimension?(dim: string, e: SavedEntity): void;
 }
 
 export class HostServer {
@@ -157,6 +171,11 @@ export class HostServer {
 
   get hasGuests(): boolean {
     return this.guestCount() > 0;
+  }
+
+  /** vanilla PlayerList.saveAll: every guest's player kept as it is now (the world is being saved) */
+  saveAll(): void {
+    for (const s of this.sessions.values()) s.save();
   }
 
   sessionOf(p: Player): ServerPlayerSession | null {

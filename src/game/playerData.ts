@@ -1,11 +1,11 @@
 // A player as it's kept with the world (vanilla Player.addAdditionalSaveData / readAdditionalSaveData, with
 // ServerPlayer's): where it is, its health, food and experience, its inventory, effects and spawn point. The game's own
-// player is kept in the world's meta.
+// player is kept in the world's meta; a host's guests each in a record of their own under the world (PlayerDataStore).
 
 import type { Player, GameMode } from '../entity/player';
 import { saveStack, loadStack, type ItemStack } from '../item/item';
-import { saveEntity } from './spawner';
-import type { WorldMeta } from '../storage/worldStore';
+import { saveEntity, carriesOnePlayer } from './spawner';
+import { loadWorldData, saveWorldData, worldDataKey, type WorldMeta } from '../storage/worldStore';
 
 export type SavedPlayer = NonNullable<WorldMeta['player']>;
 
@@ -15,7 +15,7 @@ export interface SavedBooks {
   recipeBook?: SavedPlayer['recipeBook'];
 }
 
-/** `p` as it's kept, in dimension `dimension` (what it rides with it: vanilla RootVehicle) */
+/** `p` as it's kept, in dimension `dimension` (what it rides alone with it: vanilla RootVehicle) */
 export function savePlayer(p: Player, dimension: string, books: SavedBooks = {}): SavedPlayer {
   const st = (s: ItemStack | null) => (s ? saveStack(s) : null);
   return {
@@ -30,7 +30,7 @@ export function savePlayer(p: Player, dimension: string, books: SavedBooks = {})
     recipeBook: books.recipeBook,
     dead: p.health <= 0,
     effects: p.saveEffects(),
-    vehicle: p.vehicle ? saveEntity(p.vehicle) : null,
+    vehicle: p.vehicle && carriesOnePlayer(p.vehicle) ? saveEntity(p.vehicle) : null,
     dimension,
     seenCredits: p.seenCredits || undefined,
     lastDeath: p.lastDeathLocation ?? undefined,
@@ -78,4 +78,44 @@ export function loadPlayer(p: Player, pd: SavedPlayer): void {
   p.shoulderLeft = pd.shoulderLeft ?? null;
   p.shoulderRight = pd.shoulderRight ?? null;
   p.wardenSpawnTracker.load(pd.wardenSpawnTracker);
+}
+
+/** a guest's record's name among its world's data (vanilla playerdata/<uuid>.dat) */
+export function playerDataName(uuid: string): string {
+  return `playerdata/${uuid}`;
+}
+
+/**
+ * the guests' players of a world open to LAN (vanilla PlayerDataStorage): each read from the world's save as its guest
+ * comes (vanilla PlayerList.load), kept as it leaves and whenever the world is saved with it still there (vanilla
+ * PlayerList.saveAll), and written with the world, under <world>/data/playerdata/<uuid>. A world that isn't saved (a
+ * quick test's) keeps them for as long as it's open.
+ */
+export class PlayerDataStore {
+  private readonly kept = new Map<string, SavedPlayer>();
+  private readonly unwritten = new Set<string>();
+
+  /** `worldId`: the save they're kept in (null: kept only while the world is open) */
+  constructor(readonly worldId: string | null) {}
+
+  /** the player of the guest with this uuid as it was last kept, if it's been here before (a copy of it) */
+  async load(uuid: string): Promise<SavedPlayer | null> {
+    const d = this.kept.get(uuid) ?? (this.worldId ? await loadWorldData<SavedPlayer>(this.worldId, playerDataName(uuid)) : undefined);
+    return d ? structuredClone(d) : null;
+  }
+
+  /** a guest's player as it is now, to be written with the world */
+  put(uuid: string, d: SavedPlayer): void {
+    this.kept.set(uuid, d);
+    this.unwritten.add(uuid);
+  }
+
+  /** (the world being saved) the players kept since it last was */
+  async save(): Promise<void> {
+    const id = this.worldId;
+    if (!id || !this.unwritten.size) return;
+    const list = [...this.unwritten].map((u) => ({ key: worldDataKey(id, playerDataName(u)), data: this.kept.get(u) }));
+    this.unwritten.clear();
+    await saveWorldData(list);
+  }
 }
