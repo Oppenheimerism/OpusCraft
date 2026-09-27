@@ -40,6 +40,8 @@ export interface WorldMeta {
     gameMode: string; flying: boolean; selected: number;
     inventory: (SavedStack | null)[];
     armor: (SavedStack | null)[];
+    /** vanilla Inventory slot 40, the offhand (saves from before it was kept have none) */
+    offhand?: SavedStack | null;
     spawn: [number, number, number];
     /** bed / spawnpoint: x, y, z, forced (1/0) */
     respawn?: [number, number, number, number] | null;

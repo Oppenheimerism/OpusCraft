@@ -23,7 +23,7 @@ export function savePlayer(p: Player, dimension: string, books: SavedBooks = {})
     health: p.health, food: p.food.level, saturation: p.food.saturation, exhaustion: p.food.exhaustion,
     xpLevel: p.xpLevel, xpProgress: p.xpProgress, xpTotal: p.xpTotal, xpSeed: p.enchantmentSeed, uuid: p.uuid,
     gameMode: p.gameMode, flying: p.flying, selected: p.inventory.selected,
-    inventory: p.inventory.main.map(st), armor: p.inventory.armor.map(st),
+    inventory: p.inventory.main.map(st), armor: p.inventory.armor.map(st), offhand: st(p.inventory.offhand),
     spawn: [p.spawnX, p.spawnY, p.spawnZ],
     respawn: p.respawnPos ? [...p.respawnPos, p.respawnForced ? 1 : 0] : null,
     advancements: books.advancements,
@@ -66,6 +66,8 @@ export function loadPlayer(p: Player, pd: SavedPlayer): void {
   pd.armor.forEach((s, i) => {
     p.inventory.armor[i] = loadStack(s);
   });
+  // (saves from before the offhand was kept have none)
+  p.inventory.offhand = loadStack(pd.offhand);
   [p.spawnX, p.spawnY, p.spawnZ] = pd.spawn;
   if (pd.respawn) {
     p.respawnPos = [pd.respawn[0], pd.respawn[1], pd.respawn[2]];
