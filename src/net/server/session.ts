@@ -712,7 +712,19 @@ export class ServerPlayerSession {
     this.syncInventory();
     this.syncExperience();
     this.syncStatus();
+    this.placedByHost();
     this.sendOut();
+  }
+
+  /**
+   * vanilla ServerPlayer.teleportTo: its player put somewhere by the host rather than by its own move (an ender
+   * pearl's landing, a chorus fruit, a piston's push), so the guest is told, as a teleport its later moves wait on
+   */
+  private placedByHost(): void {
+    const p = this.player!;
+    if (p.removed || p.vehicle || p.isSleeping() || p.health <= 0 || this.awaitingTeleport !== null) return;
+    const d2 = (p.x - this.pos.x) ** 2 + (p.y - this.pos.y) ** 2 + (p.z - this.pos.z) ** 2;
+    if (d2 > 1e-8) this.teleport(p.x, p.y, p.z, p.yaw, p.pitch);
   }
 
   /** whether the guest knows of `e` (itself, a player it sees, an entity it's been shown): who a rider can be to it */
