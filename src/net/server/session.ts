@@ -549,13 +549,27 @@ export class ServerPlayerSession {
   }
 
   /**
-   * (Player.remoteMove, in its tick) where the guest said it went, with the look and pose it said, and what that did:
-   * a fall's damage when it lands, the hunger a jump costs, a glide into a wall (vanilla handleMovePlayer and
-   * ServerPlayer.doCheckFallDamage)
+   * (Player.remoteMove, in its tick) where the guest said it went, if it said, and then, moved or not, what it's in:
+   * pressure plates, tripwires, portals (vanilla checkInsideBlocks, which a player's travel does every tick, standing
+   * still too). What the blocks do about it, a plate's click, is the world's doing, not the player's own: the guest hears
+   * it too. (A guest's moves don't reach the host one a tick, its game's ticks not the host's: one standing still in a
+   * nether portal is in it every tick all the same, its time there adding up as the host's own player's does)
    */
   private applyMove(): void {
-    const p = this.player, m = this.move;
-    if (!p || !m) return;
+    const p = this.player;
+    if (!p) return;
+    this.takeMove(p);
+    if (p.health > 0 && !p.vehicle && !p.isSleeping()) this.server.heardByAll(() => p.checkInsideBlocks());
+  }
+
+  /**
+   * the guest's move this tick, if one came in: where it went, with the look and pose it said, and what that did: a
+   * fall's damage when it lands, the hunger a jump costs, a glide into a wall (vanilla handleMovePlayer and
+   * ServerPlayer.doCheckFallDamage)
+   */
+  private takeMove(p: Player): void {
+    const m = this.move;
+    if (!m) return;
     this.move = null;
     if (p.health <= 0 || p.isSleeping()) return;
     if (p.vehicle) {
@@ -600,12 +614,10 @@ export class ServerPlayerSession {
     }
     this.lastSpeed = speed;
     if (p.health <= 0) return;
-    // (pressure plates, tripwires, portals: vanilla ServerPlayer.doCheckFallDamage / checkInsideBlocks. What the
-    // blocks do about it, a plate's click, is the world's doing, not the player's own: the guest hears it too)
+    // (vanilla ServerPlayer.doCheckFallDamage)
     p.doCheckFallDamage(dy, p.onGround);
     // (vanilla ServerPlayer.move: a turtle egg or a sculk shrieker underfoot hears it; the world's doing, heard by all)
     if (p.onGround && p.health > 0) this.server.heardByAll(() => p.stepOnFloor());
-    if (p.health > 0) this.server.heardByAll(() => p.checkInsideBlocks());
     if (p.flying || p.hasEffect('slow_falling') || p.hasEffect('levitation')) p.fallDistance = 0;
   }
 
