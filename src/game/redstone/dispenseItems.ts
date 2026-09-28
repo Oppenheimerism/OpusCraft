@@ -321,6 +321,8 @@ function minecart(type: string): DispenseBehavior {
     }
     const cart = createMinecart(type, level)!;
     cart.moveTo(x, y + dy, z, 0, 0);
+    // ((minecarts) vanilla EntityType.createDefaultStackConfig: a named item's name on the cart)
+    if (stack.tag?.customName !== undefined) cart.setCustomName(stack.tag.customName);
     level.addEntity(cart);
     stack.count--;
     return left(stack);
@@ -636,6 +638,8 @@ const BEHAVIORS: Record<string, DispenseBehavior> = {
   arrow, tipped_arrow: arrow, trident, egg: thrown('egg'), snowball: thrown('snowball'), splash_potion: potion, lingering_potion: potion,
   experience_bottle: experienceBottle, fire_charge: fireCharge, firework_rocket: fireworkRocket,
   tnt, minecart: minecart('minecart'), chest_minecart: minecart('chest_minecart'),
+  // (minecarts) and the hopper, TNT and furnace minecarts (vanilla MinecartItem's behaviour for every kind)
+  hopper_minecart: minecart('hopper_minecart'), tnt_minecart: minecart('tnt_minecart'), furnace_minecart: minecart('furnace_minecart'),
   water_bucket: fullBucket('water'), lava_bucket: fullBucket('lava'), bucket: emptyBucket,
   glass_bottle: glassBottle, potion: waterBottle,
   flint_and_steel: flintAndSteel, bone_meal: boneMeal, shears,

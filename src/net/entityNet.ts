@@ -65,6 +65,8 @@ const RECORDED = new Set(['item', 'arrow', 'trident', 'firework_rocket', 'end_cr
  * memories and a villager's dealings
  */
 const HIDDEN_DATA = ['items', 'Items', 'inventory', 'LootTable', 'LootTableSeed', 'Brain', 'listener', 'Offers', 'Gossips'];
+// ((minecarts) nor a container minecart's or chest boat's loot table, and its seed, not yet rolled)
+HIDDEN_DATA.push('lootTable', 'lootSeed');
 
 /** whether a guest can be shown this kind of entity (players aside: they go by AddPlayer) */
 export function isNetType(type: string): boolean {

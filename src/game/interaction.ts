@@ -40,7 +40,7 @@ import { SpawnerBlockEntity } from '../world/blockEntity';
 import { TrialSpawnerBlockEntity } from './trialSpawner';
 import { playerAttack } from './combat';
 import { canPlaceFire, fireStateAt, placeFire } from './fire';
-import { Minecart, MinecartChest, createMinecart } from '../entity/minecart';
+import { Minecart, AbstractMinecartContainer, createMinecart, MINECART_TYPES } from '../entity/minecart';
 import { Boat, ChestBoat, boatItemInfo, useBoatItem } from '../entity/boat';
 // (Stage 5: ocean)
 import { WaterAnimal } from '../entity/water';
@@ -419,13 +419,14 @@ export class Interaction {
         }
         if (r === 'consume') return 'fail';
       }
-      // vanilla Minecart.interact (climb in) / MinecartChest.interact (ContainerEntity.interactWithContainerVehicle)
+      // vanilla Minecart.interact (climb in) / MinecartChest.interact (ContainerEntity.interactWithContainerVehicle;
+      // (minecarts) a hopper minecart's too)
       if (e instanceof Minecart && e.interact(p)) {
         this.onMounted?.();
         p.swing();
         return 'success';
       }
-      if (e instanceof MinecartChest) {
+      if (e instanceof AbstractMinecartContainer) {
         this.onOpenEntityContainer?.(e);
         // vanilla ContainerEntity.interactWithContainerVehicle
         Piglin.angerNearbyPiglins(p, true);
@@ -740,10 +741,12 @@ export class Interaction {
       p.swing();
       return true;
     }
-    // vanilla MinecartItem.useOn: a cart on the clicked rail (half a block up on a slope)
-    if ((id === 'minecart' || id === 'chest_minecart') && isRail(st)) {
+    // vanilla MinecartItem.useOn: a cart on the clicked rail (half a block up on a slope; (minecarts) any kind of cart)
+    if (MINECART_TYPES.includes(id) && isRail(st)) {
       const cart = createMinecart(id, lvl)!;
       cart.moveTo(h.x + 0.5, h.y + 0.0625 + (isAscending(railShape(st)) ? 0.5 : 0), h.z + 0.5, 0, 0);
+      // ((minecarts) vanilla EntityType.createDefaultStackConfig: a named item's name on the cart)
+      if (stack.tag?.customName !== undefined) cart.setCustomName(stack.tag.customName);
       lvl.addEntity(cart);
       // (vanilla MinecartItem.useOn: ENTITY_PLACE on the rail, of what's under it)
       lvl.gameEvent('entity_place', h.x + 0.5, h.y + 0.5, h.z + 0.5, { entity: p, state: lvl.getState(h.x, h.y - 1, h.z) });
@@ -784,8 +787,8 @@ export class Interaction {
   onUseBed: ((x: number, y: number, z: number) => void) | null = null;
   /** the player climbed into a vehicle (vanilla "mount.onboard" hint) */
   onMounted: (() => void) | null = null;
-  /** right-clicked a container entity (a chest minecart or chest boat) */
-  onOpenEntityContainer: ((e: MinecartChest | ChestBoat) => void) | null = null;
+  /** right-clicked a container entity (a chest or (minecarts) hopper minecart, or a chest boat) */
+  onOpenEntityContainer: ((e: AbstractMinecartContainer | ChestBoat) => void) | null = null;
   /** a block was placed by the player (advancements: planted seeds) */
   onPlaced: ((name: string) => void) | null = null;
   /** an item the player holds wore down (vanilla item_durability_changed), with what they ride */

@@ -14,6 +14,8 @@ import { craftingEnchants } from '../../item/enchantHelper';
 import { KEYS } from '../../game/input';
 // (signs) every wood's sign and hanging sign, in vanilla's order
 import { SIGN_ITEM_ORDER } from '../../item/itemsSigns';
+// (minecarts) the rails and minecarts, in vanilla's order
+import { RAIL_AND_MINECART_ORDER } from '../../item/itemsMinecarts';
 
 interface Tab {
   id: string;
@@ -74,6 +76,9 @@ const REDSTONE_ALSO = new Set(['sculk_sensor', 'sculk_shrieker', 'amethyst_block
 // (jukebox) vanilla lists the jukebox (a signal source while it plays) with the redstone blocks too, after the crafter
 REDSTONE_ORDER.splice(REDSTONE_ORDER.indexOf('crafter') + 1, 0, 'jukebox');
 REDSTONE_ALSO.add('jukebox');
+// (minecarts) vanilla lists the rails and minecarts with the redstone blocks too, after the observer (and the tools)
+REDSTONE_ORDER.splice(REDSTONE_ORDER.indexOf('observer') + 1, 0, ...RAIL_AND_MINECART_ORDER);
+for (const id of RAIL_AND_MINECART_ORDER) REDSTONE_ALSO.add(id);
 const REDSTONE = new Set(REDSTONE_ORDER.filter((id) => !REDSTONE_ALSO.has(id)));
 const FUNCTIONAL = new Set(['oak_sign', 'painting', 'item_frame', 'red_bed', 'jack_o_lantern', 'carved_pumpkin']);
 const DYE_ORDER = ['white', 'light_gray', 'gray', 'black', 'brown', 'red', 'orange', 'yellow', 'lime', 'green', 'cyan', 'light_blue', 'blue', 'purple', 'magenta', 'pink'];

@@ -51,6 +51,8 @@ import { registerSignTextures } from './signs';
 import { registerEnderChestTextures } from './enderChest';
 // (cake)
 import { registerCakeTextures } from './cake';
+// (minecarts)
+import { registerRailTextures } from './railsPowered';
 
 type Gen = () => TexDef;
 export const BLOCK_TEXTURES: Record<string, Gen> = {};
@@ -589,6 +591,8 @@ registerSignTextures(T);
 registerEnderChestTextures(T);
 // (cake) the cake's top, sides, underside and cut face
 registerCakeTextures(T);
+// (minecarts) the powered, detector and activator rails, off and powered
+registerRailTextures(T);
 
 // Missing texture (vanilla's magenta/black checkerboard)
 T['missing'] = () => {

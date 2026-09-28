@@ -61,6 +61,8 @@ import { Rand } from '../core/rng';
 import { Squid } from '../entity/water';
 import { ThrownItem } from '../entity/throwable';
 import { AbstractMinecart } from '../entity/minecart';
+// (minecarts)
+import { renderMinecartContents } from './minecartContents';
 import { Boat } from '../entity/boat';
 import { EndCrystal } from '../entity/endCrystal';
 import { EyeOfEnder } from '../entity/eyeOfEnder';
@@ -1639,7 +1641,8 @@ export class EntityRenderDispatcher {
       pose.scale(0.75, 0.75, 0.75);
       pose.translate(-0.5, (e.displayOffset() - 8) / 16, 0.5);
       pose.rotY(90);
-      this.items.renderBlockState(b, pose, display);
+      // ((minecarts) a lit TNT minecart's TNT flashes and swells)
+      renderMinecartContents(b, pose, this.items, e, display, p);
       pose.pop();
     }
     pose.scale(-1, -1, 1);
@@ -1884,6 +1887,10 @@ function shadowRadius(e: Entity): number {
       break;
     case 'minecart':
     case 'chest_minecart':
+    // (minecarts)
+    case 'hopper_minecart':
+    case 'tnt_minecart':
+    case 'furnace_minecart':
       r = 0.7;
       break;
     case 'squid':

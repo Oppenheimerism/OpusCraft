@@ -9,11 +9,224 @@ next was started. No history rewritten, nothing pushed to `main`.
 | 2 | Ender chest | `4cba979` | done |
 | 3 | Cake and candle cakes | `76401ce` | done |
 | 4 | Spyglass | `c606cc6` | done |
-| 5 | Armour stand | see `git log` (the "Armour stand" commit) | done |
-| 6 | Minecarts and rails | | to do |
+| 5 | Armour stand | `1e4f0c9` | done |
+| 6 | Minecarts and rails | see `git log` (the "Minecarts and rails" commit) | done |
 
 Where nobody could be asked, the choice closest to vanilla 1.21 was made; each such choice is listed under the
 milestone's "Deviations and open points".
+
+---
+
+## M6: minecarts and rails
+
+The powered, detector and activator rails, and the hopper, TNT and furnace minecarts, built on vanilla 1.21.1's
+`PoweredRailBlock`, `DetectorRailBlock`, `AbstractMinecart` (default physics, not the 1.21.2+ experiment),
+`MinecartHopper`, `MinecartTNT` and `MinecartFurnace`. The plain rail, minecart and chest minecart were already in
+the game; they now share the new code.
+
+- **The three rails** (`src/world/blocksRails.ts`, `src/textures/railsPowered.ts`): they only run straight
+  (north-south, east-west, or sloping up towards one side), each is `powered` or not, and they can be waterlogged.
+  Strength 0.7, metal sounds, no collision. The outline is 2 px high, or 8 px on a slope. Models are the plain
+  rail's, flat or tilted. The textures are our own: gold rails with a line of redstone down the middle (powered),
+  iron rails with a stone plate and a redstone spot (detector), iron rails on dark sleepers with red bars between
+  them (activator). The redstone is dull when unpowered and bright when powered.
+- **Items, recipes, creative** (`src/item/itemsMinecarts.ts`): the rails are drawn flat in their block's texture, 64
+  to a stack. Minecart with Hopper, Minecart with TNT and Minecart with Furnace are one to a stack, with the existing
+  sprites. In Tools & Utilities they come after the boats in vanilla's order: rail, powered, detector and activator
+  rail, then minecart, hopper, chest, furnace and TNT minecart. All nine are also listed in Redstone Blocks, after the
+  observer (vanilla puts them after the cauldron, which that tab doesn't have here). Recipes: 6 powered rails from 6
+  gold ingots, a stick and redstone (`X X`, `X#X`, `XRX`); 6 detector rails from 6 iron ingots, a stone pressure
+  plate and redstone; 6 activator rails from 6 iron ingots, 2 sticks and a redstone torch (`XSX`, `X#X`, `XSX`). Each
+  cart is its block plus a minecart, shapeless (fits in the inventory's 2×2 grid). The recipe book shows the rails
+  once you hold a rail and the carts once you hold a minecart, under misc (vanilla's transportation).
+- **Laying them** (`src/game/blockRules.ts`, `src/game/rails.ts`): north-south or east-west by the way you face, then
+  joined to the rails around them like the plain rail, sloping up onto a rail one block higher. They never curve: at
+  a corner they stay as laid. A plain rail still curves onto them. They pop off as items without a rigid block below
+  (a hopper's rim counts), or without one under a slope's high end. They are waterlogged when placed in water.
+- **Power** (`src/game/poweredRails.ts`, vanilla `findPoweredRailSignal`): a powered or activator rail is powered by
+  any redstone next to it (a block, lever, torch, dust...). That power carries along up to 8 more rails of the same
+  kind in a straight line (9 in all), up and down slopes. It isn't carried across a line running the other way, nor
+  through a rail of the other kind, and it goes out the same way. When one changes, the blocks round the block under
+  it are told (and round the block over a slope's top), as in vanilla.
+- **Carts on powered rails** (`src/entity/minecart.ts`, vanilla `moveAlongTrack`): a powered one adds 0.06 a tick
+  the way the cart is going, up to the 8 m/s cap. A cart at rest on a flat powered rail is pushed off a solid block at
+  either end, away from it. An unpowered one halves a cart's speed each tick and stops it dead below 0.03, unless the
+  player riding it is walking it along. A player holding forward in a stopped cart nudges it slowly, and now a LAN
+  guest does too: its held keys and look count as its motion, since its movement is worked out on the guest's side.
+- **Detector rail** (vanilla `DetectorRailBlock`): powered while any minecart is on it (a box inset 0.2, 0.8 high),
+  and checked again every second until the cart has gone. It gives 15 to what's around it and strong power into the
+  block under it. It tells the rails it leads to, so a powered rail in line with it is powered and carries the power
+  on. A comparator behind it reads how full the first container minecart on it is (a chest's 27 slots, a hopper's
+  5), rolling an unopened loot table first. A plain cart reads 0. It makes no game events of its own, as in vanilla.
+  This game doesn't save scheduled ticks with the world, and drops them for a chunk that unloads. So a detector rail
+  saved within a second of a cart leaving would have stayed powered for good. It now gets random ticks, and one that
+  finds it powered with no check due looks again (the fix frogspawn already had).
+- **Activator rail** (vanilla `activateMinecart`): each tick a cart is on one, it's told whether the rail is
+  powered. A powered one throws a minecart's rider out and shakes the cart (a wobble and damage 50, which doesn't
+  break it), lights a TNT minecart, and switches a hopper minecart off. The hopper minecart comes back on only over an
+  unpowered activator rail.
+- **A plain rail's junction**: a T-junction picks its curve again when a signal source next to it changes, now
+  for any redstone power (it was only a redstone block before). With the power on, a T of rails north, south and east
+  curves north-east; with it off, south-east. As in vanilla, setting a redstone block down doesn't flip it (vanilla
+  tells the rail about the air that was replaced), but taking one away does.
+- **Hopper minecart** (`src/entity/minecartVariants.ts`, vanilla `MinecartHopper`): 5 slots, no cooldown. Each tick
+  it takes one item from the bottom of a container in the block above it. With no container there, it takes an item
+  lying in the two blocks above it, and failing that, one lying right beside it. A hopper under the rail empties it, a
+  hopper pointing at it fills it, and a dropper can fill it. Right-click opens a hopper's menu titled "Minecart with
+  Hopper" (CONTAINER_OPEN/CLOSE). Broken, its items spill and it drops as itself. It saves its items and whether it's
+  on (`Enabled`).
+- **TNT minecart** (vanilla `MinecartTNT`): a powered activator rail lights it with the TNT hiss. It smokes and goes
+  off 4 seconds later with power 4, plus up to 1.5 × its speed (at most 5) at random. Fire, lava or a blast light it
+  with a short fuse (under 2 s), and so does breaking it while it's moving. Broken at rest, it drops as itself. A
+  creative player's blow just removes it. A burning arrow sets it off at once, the blast credited to the shooter.
+  Landing from 3 blocks or more sets it off (harder the higher), and so does crashing into something fast. Head-on,
+  though, the crash has already stopped its speed that way, so it doesn't go off (as in vanilla). Once lit, its blast
+  leaves rails, and the blocks under rails, alone. It's drawn flashing white every quarter second while lit, and in
+  its last half second it swells to 1.3 times its size (`src/render/minecartContents.ts`). It saves its fuse
+  (`TNTFuse`).
+- **Furnace minecart** (vanilla `MinecartFurnace`): right-click with coal or charcoal to add 3 minutes (3600 ticks)
+  of fuel, up to 32000. One is used, none in creative. With fuel, any right-click pushes it away from you. It runs at
+  4 m/s (3 in water), its push turning with the track round bends. While fuelled its furnace is lit and it puffs large
+  smoke. When the fuel runs out it stops pushing and coasts to a stop. It saves `Fuel`, `PushX` and `PushZ`.
+- **Placing and dispensing**: every cart item (minecart, chest, hopper, TNT, furnace) sets its cart on a rail you
+  click, half a block up on a slope. One item is used (none in creative), with ENTITY_PLACE. A dispenser sets them on
+  the rail in front of it, or on a rail below an empty space in front. A renamed item names its cart, and a named cart
+  drops an item with its name (vanilla keeps both ways).
+- **Other**: arrows and tridents can hit minecarts (vanilla: anything that can be picked). Container minecarts are
+  hopper and dropper targets. Iron golems aren't scooped up by a rolling minecart (a vanilla rule that was missing).
+  The rolling and riding loops already covered every kind of cart.
+- **Multiplayer**: guests are sent each cart as its record (not its items or loot table), then its fields as they
+  change: a hopper minecart on or off, a TNT minecart's fuse (so it flashes on their side as on the host), and a
+  furnace minecart's lit state (not its fuel count, which vanilla doesn't send either). A guest rides a cart smoothly
+  and stays in its seat. On the guests' side a cart is now eased along over three ticks, as vanilla eases a cart
+  (before, it moved in one), so it runs a tick or two behind the host's. It moves just as evenly when the host's ticks
+  reach a guest unevenly (none in one tick, two in the next, as the two games' clocks drift), where before it stopped
+  and then jumped, and it stops where the host's does. Guests see rails and detector rails powered, feed furnace
+  minecarts, open hopper minecarts, set carts on rails, and hear the hiss and the blast.
+
+**New files**: `src/world/blocksRails.ts`, `src/textures/railsPowered.ts`, `src/game/poweredRails.ts`,
+`src/entity/minecartVariants.ts`, `src/item/itemsMinecarts.ts`, `src/render/minecartContents.ts`; tests
+`tests/survival-blocks/minecarts.mjs`, `tests/survival-blocks/minecarts-mp.mjs`.
+
+**Shared files touched** (marked `(minecarts)`): `src/entity/minecart.ts` (powered-rail boost and brake, the
+activator call, `AbstractMinecartContainer` split out of `MinecartChest`, `destroy`/`discard`/`shouldSourceDestroy`,
+the name kept, a guest rider's nudge, the carts made elsewhere, `redstoneSignal` exported), `src/game/rails.ts`
+(`railConnections` and `railSignalChanged` exported; a junction heeds any redstone), `src/game/blockRules.ts` (the
+new rails survive and are placed as the plain one), `src/game/explosion.ts` (an exploding entity's
+`explosionSpares`), `src/game/interaction.ts` (every cart item places its cart with its name; a hopper minecart
+opens), `src/game/game.ts`, `src/game/openMenu.ts`, `src/inventory/hopperMenu.ts`, `src/gui/screens/dispenser.ts`,
+`src/net/menus.ts`, `src/net/client/clientMenus.ts` (the hopper minecart's menu and its title),
+`src/game/redstone/dispenseItems.ts` (the new carts, named), `src/game/redstone/dispenser.ts` (any container minecart
+is a target), `src/entity/arrow.ts` (arrows hit minecarts), `src/game/level.ts` (imports), `src/game/spawner.ts`
+(names), `src/gui/screens/creative.ts` (the redstone tab), `src/inventory/recipes.ts` (six recipes),
+`src/item/item.ts`, `src/world/blocks.ts`, `src/textures/blocks.ts` (registration),
+`src/render/entityRenderers.ts` (the cart's contents drawn by `renderMinecartContents`; shadows),
+`src/net/entityData.ts` and `src/net/entityNet.ts` (a furnace minecart's fuel and push, and loot tables, not sent),
+`src/net/client/entityMirror.ts` (a minecart eased along over three ticks). No protocol change.
+
+**Hooks**: `explosionSpares(x, y, z, state)` on an explosion's source entity (the lit TNT minecart); in
+`minecart.ts`: `registerMinecartType(type, make)`, `activateMinecart(x, y, z, powered)`,
+`shouldSourceDestroy(source)`, `discard()`, `destroy(source)`, and the `AbstractMinecartContainer` base class;
+`HopperMenu`'s `title` and `onClosed`; the furnace minecart uses the existing duck-typed `playerInteract`.
+
+**Deviations and open points**
+- A hopper minecart looks for a container in the block a block and a half above it: a block's, or a container
+  entity's in that block. Vanilla's entity search is a 1-block box centred there instead.
+- A TNT minecart that goes off with nobody having lit it is its own blast's attacker (vanilla has none). A death by
+  it therefore names the cart.
+- A creative player's blow on a chest or hopper minecart now spills its contents (vanilla's `discard`), where the
+  chest minecart used to vanish with them.
+- `/summon` makes the new carts but reads no entity data for them (`TNTFuse`, `Fuel`, `Items`...).
+- There are no command-block or spawner minecarts in this game, so the detector rail has no command-block reading.
+  Snowballs, eggs and other thrown things still don't hit carts (only arrows and tridents do), and arrows still
+  don't hit boats; vanilla lets all of them. Those were left for the boats' and projectiles' own work.
+- A guest's nudge uses the air speed a riding player moves with (0.02 × 0.91), as vanilla gives it, worked out from
+  its keys on the host.
+- A detector rail gets random ticks, which vanilla's doesn't, to make up for its lost check (vanilla saves it
+  instead). A rail left powered like that goes off within about a minute on average rather than a second. Pressure
+  plates and buttons have the same gap (one saved while pressed stays pressed after loading). They were left as they
+  were, as the redstone switches' own work.
+- Vanilla eases a cart's moves over five ticks, because its server sends them every third tick. The host here sends
+  them every tick the cart moves, so three ticks are enough (the same as for mobs). A riding guest's view trails the
+  host's cart by up to 0.8 blocks at full speed (two ticks).
+- The plain rail's, minecart's and chest minecart's recipe book unlocks were left as they were. The textures are our
+  own drawings.
+- The visual check turned up a module-order bug that only the browser build shows: `dispenser.ts` loaded before
+  `hopper.ts`, which fills one of its lists as it loads. `minecartVariants.ts` now loads `hopper.ts` first.
+
+**Tests**: `tests/survival-blocks/minecarts.mjs` (154 checks): items, names, creative order (list and tab source),
+recipes (right and wrong ingredients, 3×3 and 2×2), the recipe book, textures (see-through, glowing when powered,
+gold against iron), block properties and drops. Laying: facing, joining, slopes, no curves at corners, plain rails
+curving onto them, waterlogged, popping off (below, under a slope's top end, `doTileDrops`). Power: 9 from a redstone
+block from either end, a lever on and off, not through the other kind, activator lines, up and down a slope, not
+across, the neighbour updates below and over a slope. Carts: the boost, starting off a block (and not without one),
+the brake (against the same cart on plain rails), the 0.4-a-tick cap. Detector: powered by a cart, a lamp lit, strong
+power below only, powered rails it leads to, a comparator reading 0 for a plain cart, 15/1/0 for a chest minecart and
+9 for a hopper minecart three slots full, a loot table rolled, off a second after the cart has gone, a cart rolling
+over it, no game events. A detector rail gets random ticks. With its check lost, as after a save and load, a random tick
+switches it off once the cart has gone, or keeps it on with its check due again while the cart is still there. Activator: rider thrown out with a shake, unpowered does nothing, a TNT minecart lit (fuse,
+hiss, smoke, blast on time, rails and blocks under them spared, others blown, a second TNT minecart lit by the blast
+and going off), a hopper minecart switched off and on again. A junction flipped by a lever, not by a redstone block
+set down; powered rails never curve. Hopper minecart: items above, beside, out of a chest above one a tick, beside
+with an empty chest above, emptied by a hopper under the rail, filled by one pointing in, its menu (title, slots,
+events, validity, the real right-click), saving, spilling (survival and creative). TNT minecart: dropped at rest, lit
+when broken moving, fire, lava, creative, a cold and a burning arrow (credit), a burning arrow in flight, falls of 5
+and 2, a diagonal crash and a head-on one, saving its fuse, game events. Furnace minecart: fuel from coal, charcoal,
+none from an apple, the cap, creative, the push and 0.2-a-tick cap, burning down, lit and smoking, running out and
+coasting to a stop, round a bend, the real right-click, saving, the drop. Placing each cart by item (slope, creative,
+not on the ground, a name kept both ways) and by dispenser. A chest minecart's creative blow and save. Drawing the lit
+TNT (flash, swell) and another cart's block.
+`tests/survival-blocks/minecarts-mp.mjs` (33 checks): both guests see each kind where the host has it, lit or on or
+not, but not what a hopper minecart holds, nor a furnace minecart's fuel count, nor a loot table; the furnace's smoke;
+a guest climbs in and rides over powered rails, its copy (and the other guest's) a tick or two behind the host's and
+moving every tick, sped up. The copy moves as evenly when a guest tick gets none of the host's ticks and the next gets
+two: every move is within a quarter of the host's speed, where the old one-tick easing went 0.4, 0, 0.8. Once the
+host's cart stops, the copy is just where the host's is. The guest is seated all the way, then gets out. Holding
+forward nudges a stopped cart east; a
+detector rail and its powered rails on and then off on the guests' side; a guest feeds a furnace minecart (one coal
+used on both sides) and it pushes away from them, lit for both; a guest opens a hopper minecart's menu and
+shift-clicks the apples out; a TNT minecart lit on an activator rail hisses for both guests, its fuse and flash
+matching the host's each tick, and goes off, gone for them with the rails left; a guest sets a hopper minecart on a
+rail; a guest who comes later sees a switched-off hopper minecart, a lit furnace minecart and a burning TNT one as
+they are, and the rail's power going off. Existing suites re-run after the last changes, all passing:
+`multiplayer/m2-entities.mjs` and `m2-actions.mjs` (the other carts and boats on the guests' side). `npm run typecheck`
+clean.
+Full regression (`node scripts/regress.mjs -j 2`), before the commit: 178 of 182 suites passed in 32.1 min. The run
+reads the working tree as it goes, and the last changes were made while it ran; every multiplayer suite ran after the
+guests' easing changed, and the minecart suites after the detector rail's random tick. The four failures:
+- `drowned/drowned.mjs`, "19% with looting III", and `illagers/illagers.mjs`, "evoker conjures fangs": both suites are
+  flaky on the previous commit too. The evoker's spell is picked at random, and that check failed 2 of 3 runs of
+  `1e4f0c9` (and 7 of 9 here).
+- `redstone2/hopper.mjs` crashed loading its modules in the same second that two rail files were saved. It passes on
+  its own.
+- `survival-blocks/armor-stand.mjs`, "alight: burnt down in five seconds, its gear dropped": flaky since M5 (5 of 12
+  runs of `1e4f0c9` fail). The player stands two blocks off and sometimes picks up the helmet the stand drops. The
+  fix is to the test, in the next commit.
+
+**Try it** (http://localhost:5173/?seed=12345):
+1. Creative → Tools & Utilities: after the boats, the rails and minecarts (also in Redstone Blocks, after the
+   observer). Survival: craft 6 powered rails (6 gold ingots, a stick, redstone), detector and activator rails, and a
+   minecart with a hopper, TNT or furnace (the block and a minecart).
+2. Lay a long line of powered rails and put a redstone block beside the first one: nine light up. Break the redstone
+   block: they go out. Put a lever beside a rail and flip it. Lay them up a slope: the power goes up it.
+3. Set a minecart on plain rails leading into powered ones, get in and push off (hold W): the powered rails fling you
+   along. Unpowered ones brake you to a stop. Put a solid block at the end of a powered rail and set a cart on it: it
+   starts off by itself.
+4. Put a detector rail in the line, with a redstone lamp beside it: the lamp lights while a cart is on it. Put a
+   comparator behind the detector rail and stop a chest minecart with items on it: the comparator reads its fill.
+5. Put a powered activator rail in the line: riding over it throws you out. A hopper minecart stops collecting there
+   until it passes an unpowered activator rail. A TNT minecart lights on it (hiss, smoke) and goes off 4 s later,
+   leaving the rails.
+6. Hopper minecart: drop items on the track ahead of it and it picks them up; put a chest over the rails and it
+   empties the chest as it passes; put a hopper under a rail and stop the cart over it: it's emptied. Right-click it:
+   "Minecart with Hopper".
+7. Furnace minecart: right-click it with coal. It pushes off away from you, smoking, and follows the track round
+   bends. Right-click it again from the other end to send it back.
+8. TNT minecart: break it while it's rolling (it lights) or shoot it with a flaming arrow (it goes off at once).
+9. In a world made from the title screen: save and quit with a lit furnace minecart, a hopper minecart with items
+   and a lit TNT minecart. Reopen: all as they were (the TNT minecart's fuse carries on).
+10. LAN: the guest rides a minecart over powered rails (smooth on their screen), feeds a furnace minecart, opens a
+    hopper minecart, and sees and hears a TNT minecart lit on an activator rail and going off; the host sees it all.
 
 ---
 

@@ -224,6 +224,13 @@ shaped('cake', 1, ['AAA', 'BEB', 'CCC'], { A: 'milk_bucket', B: 'sugar', C: 'whe
 shaped('spyglass', 1, ['#', 'X', 'X'], { '#': 'amethyst_shard', X: 'copper_ingot' });
 // (armour stand) six sticks round a smooth stone slab (vanilla recipes/armor_stand)
 shaped('armor_stand', 1, ['///', ' / ', '/_/'], { '/': 'stick', _: 'smooth_stone_slab' });
+// (minecarts) vanilla recipes/powered_rail, detector_rail, activator_rail; hopper_minecart, tnt_minecart, furnace_minecart
+shaped('powered_rail', 6, ['X X', 'X#X', 'XRX'], { X: 'gold_ingot', '#': 'stick', R: 'redstone' });
+shaped('detector_rail', 6, ['X X', 'X#X', 'XRX'], { X: 'iron_ingot', '#': 'stone_pressure_plate', R: 'redstone' });
+shaped('activator_rail', 6, ['XSX', 'X#X', 'XSX'], { X: 'iron_ingot', '#': 'redstone_torch', S: 'stick' });
+shapeless('hopper_minecart', 1, 'hopper', 'minecart');
+shapeless('tnt_minecart', 1, 'tnt', 'minecart');
+shapeless('furnace_minecart', 1, 'furnace', 'minecart');
 // vanilla copySmithingTemplate: a template copied with seven diamonds and the block it's made of
 shaped('netherite_upgrade_smithing_template', 2, ['#S#', '#C#', '###'], { '#': 'diamond', C: 'netherrack', S: 'netherite_upgrade_smithing_template' });
 

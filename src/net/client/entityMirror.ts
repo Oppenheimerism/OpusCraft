@@ -1,8 +1,8 @@
 // One of the host's entities as a guest shows it, players aside (vanilla ClientLevel's entities, which a client only
-// eases along as the server says): where the host says it is, eased into over three ticks for what's alive and in one
-// for the rest (vanilla LivingEntity.lerpTo; a jump of more than 8 blocks is taken at once), its walk worked out here
-// from that, and everything else as the host sends it (net/entityData.ts). Its own tick never runs here: nothing about
-// it is decided on a guest.
+// eases along as the server says): where the host says it is, eased into over three ticks for what's alive and for a
+// minecart and in one for the rest (vanilla LivingEntity.lerpTo; a jump of more than 8 blocks is taken at once), its
+// walk worked out here from that, and everything else as the host sends it (net/entityData.ts). Its own tick never
+// runs here: nothing about it is decided on a guest.
 
 import type { Entity } from '../../entity/entity';
 import { LivingEntity } from '../../entity/living';
@@ -13,6 +13,12 @@ import { wrapDegrees } from '../../core/math';
 
 /** vanilla's lerp steps for a mob's moves (which come every third tick); everything else's come each tick they happen */
 const LIVING_STEPS = 3;
+/**
+ * (minecarts) a minecart's, whose moves come each tick it moves: eased into all the same (vanilla lerps a cart over
+ * five steps), so that one of the host's ticks coming late and the next with it, as the two games' clocks drift, isn't
+ * a stop and a jump for whoever rides it
+ */
+const CART_STEPS = 3;
 /** a move farther than this is taken at once (vanilla: a teleport rather than a walk) */
 const SNAP = 8;
 
@@ -26,9 +32,12 @@ export class EntityMirror {
   private lHead = 0;
   private lBody = 0;
   private readonly living: LivingEntity | null;
+  /** the ticks a move is eased into */
+  private readonly lerpSteps: number;
 
   constructor(readonly e: Entity, readonly netId: number) {
     this.living = e instanceof LivingEntity ? e : null;
+    this.lerpSteps = this.living ? LIVING_STEPS : /(^|_)minecart$/.test(e.type) ? CART_STEPS : 1;
   }
 
   /** where it is from the first (no easing in) */
@@ -55,7 +64,7 @@ export class EntityMirror {
       e.zo = z;
     }
     this.target(x, y, z, yaw, pitch, head, body);
-    this.steps = this.living ? LIVING_STEPS : 1;
+    this.steps = this.lerpSteps;
   }
 
   private target(x: number, y: number, z: number, yaw: number, pitch: number, head: number, body: number): void {

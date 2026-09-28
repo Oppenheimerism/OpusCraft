@@ -20,7 +20,8 @@ import { HorseInventoryMenu } from '../inventory/horseMenu';
 import { ChestBlockEntity, FurnaceBlockEntity, BarrelBlockEntity, BrewingStandBlockEntity, LecternBlockEntity } from '../world/blockEntity';
 import { FLAGS, F_OPAQUE } from '../world/block';
 import { catSittingOn } from '../entity/cat';
-import type { MinecartChest } from '../entity/minecart';
+import { MinecartHopper } from '../entity/minecartVariants';
+import type { AbstractMinecartContainer } from '../entity/minecart';
 import type { ChestBoat } from '../entity/boat';
 import { horseHooks } from '../entity/horse';
 import { entityDisplayName } from './spawner';
@@ -153,10 +154,11 @@ export function chestClosed(level: Level, be: ChestBlockEntity, p: Player): void
 /**
  * the menu of a chest minecart or chest boat `p` right-clicked (vanilla ContainerEntity.interactWithContainerVehicle:
  * its loot rolled, no sound, no lid; CONTAINER_OPEN and, when it's closed, CONTAINER_CLOSE where the vehicle is)
+ * ((minecarts) a hopper minecart's is a hopper's menu)
  */
-export function entityContainerMenu(level: Level, p: Player, e: MinecartChest | ChestBoat): ChestMenu {
+export function entityContainerMenu(level: Level, p: Player, e: AbstractMinecartContainer | ChestBoat): ChestMenu | HopperMenu {
   e.unpackLoot();
-  const m = new ChestMenu(p, e, entityDisplayName(e));
+  const m = e instanceof MinecartHopper ? new HopperMenu(p, e, entityDisplayName(e)) : new ChestMenu(p, e, entityDisplayName(e));
   m.onClosed = () => level.gameEvent('container_close', e.x, e.y, e.z, { entity: p });
   level.gameEvent('container_open', e.x, e.y, e.z, { entity: p });
   return m;

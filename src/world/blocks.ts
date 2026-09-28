@@ -37,6 +37,8 @@ import { registerSignBlocks } from './blocksSigns';
 import { registerEnderChestBlock } from './blocksEnderChest';
 // (cake) the cake and the candle cakes
 import { registerCakeBlocks } from './blocksCake';
+// (minecarts) the powered, detector and activator rails
+import { registerRailBlocks } from './blocksRails';
 
 const px = (v: number) => v / 16;
 const bx = (x0: number, y0: number, z0: number, x1: number, y1: number, z1: number): Box => [px(x0), px(y0), px(z0), px(x1), px(y1), px(z1)];
@@ -685,6 +687,8 @@ registerSignBlocks();
 registerEnderChestBlock();
 // (cake) the cake and the seventeen candle cakes
 registerCakeBlocks();
+// (minecarts) the powered, detector and activator rails
+registerRailBlocks();
 
 finalizeBlocks();
 

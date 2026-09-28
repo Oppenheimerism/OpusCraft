@@ -327,6 +327,8 @@ Object.assign(ENTITY_NAMES, { piglin_brute: 'Piglin Brute' });
 Object.assign(ENTITY_NAMES, { shulker: 'Shulker', shulker_bullet: 'Shulker Bullet', item_frame: 'Item Frame', glow_item_frame: 'Glow Item Frame', firework_rocket: 'Firework Rocket' });
 // (armour stand)
 ENTITY_NAMES.armor_stand = 'Armor Stand';
+// (minecarts) vanilla's names for the hopper, TNT and furnace minecarts
+Object.assign(ENTITY_NAMES, { hopper_minecart: 'Minecart with Hopper', tnt_minecart: 'Minecart with TNT', furnace_minecart: 'Minecart with Furnace' });
 
 /** entity type ids accepted by /summon */
 export function summonableTypes(): string[] {

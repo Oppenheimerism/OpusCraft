@@ -3,6 +3,10 @@
 // slopes and curves (a corner is cut as a diagonal chord), slope pull, friction
 // and the 8 m/s cap, rolling off the end of the track, bumping into and pushing
 // entities and other carts, scooping up mobs, riding, the hurt wobble, breaking.
+// ((minecarts) a powered rail speeds a cart up, or brakes it to a stop when it's
+// off; an activator rail tells the cart on it whether it's powered (a rideable
+// cart throws out its rider, a TNT cart lights, a hopper cart stops collecting);
+// the hopper, TNT and furnace minecarts are entity/minecartVariants.ts's)
 
 import { Entity } from './entity';
 import { LivingEntity } from './living';
@@ -18,6 +22,8 @@ import { dirFromYaw, DX, DZ, OPPOSITE, NORTH, SOUTH, WEST, EAST } from '../world
 import { ItemStack, ITEMS, ItemTag, cloneTag } from '../item/item';
 import { SimpleContainer } from '../inventory/container';
 import { fillContainer } from '../game/loot';
+// (minecarts) a powered rail's push off a solid block
+import { isConductor } from '../game/redstone/signal';
 
 type Vec3i = [number, number, number];
 
@@ -136,8 +142,12 @@ export abstract class AbstractMinecart extends Entity {
     if (isRail(w.getState(bx, by - 1, bz))) by--;
     const st = w.getState(bx, by, bz);
     this.onRails = isRail(st);
-    if (this.onRails) this.moveAlongTrack(bx, by, bz, st);
-    else this.comeOffTrack();
+    if (this.onRails) {
+      this.moveAlongTrack(bx, by, bz, st);
+      // ((minecarts) vanilla: an activator rail tells the cart on it whether it's powered)
+      const rb = BLOCKS[STATE_BLOCK[st]];
+      if (rb.name === 'activator_rail') this.activateMinecart(bx, by, bz, !!rb.get(st, 'powered'));
+    } else this.comeOffTrack();
     this.checkInsideBlocks();
     if (this.removed) return;
     // yaw follows the direction of travel; a sudden reversal flips the cart instead of spinning it
@@ -157,7 +167,7 @@ export abstract class AbstractMinecart extends Entity {
     if (this.picksUpMobs() && this.dx * this.dx + this.dz * this.dz > 0.01) {
       // an empty cart rolling into a mob takes it along; anything else just gets shoved
       for (const e of this.level.getEntities(near, (e) => e.isPushable() && !e.noPhysics, this)) {
-        if (e.type !== 'player' && !(e instanceof AbstractMinecart) && !this.isVehicle() && !e.vehicle) e.startRiding(this);
+        if (e.type !== 'player' && e.type !== 'iron_golem' && !(e instanceof AbstractMinecart) && !this.isVehicle() && !e.vehicle) e.startRiding(this);
         else e.pushAgainst(this);
       }
     } else {
@@ -195,6 +205,13 @@ export abstract class AbstractMinecart extends Entity {
     let x = this.x, y = this.y, z = this.z;
     const before = this.getPos(x, y, z);
     y = by;
+    // ((minecarts) a powered rail: on, it speeds the cart up; off, it brakes it)
+    const rb = BLOCKS[STATE_BLOCK[st]];
+    let boost = false, brake = false;
+    if (rb.name === 'powered_rail') {
+      boost = !!rb.get(st, 'powered');
+      brake = !boost;
+    }
     // slopes pull the cart downhill (a fifth as hard in water)
     let slope = 0.0078125;
     if (this.inWater) slope *= 0.2;
@@ -231,11 +248,24 @@ export abstract class AbstractMinecart extends Entity {
     // a player sitting in a (nearly) stopped cart nudges it the way they walk
     const rider = this.passengers[0];
     if (rider && rider.type === 'player') {
-      const d9 = rider.dx * rider.dx + rider.dz * rider.dz;
+      const [rx, rz] = riderMotion(rider as Player);
+      const d9 = rx * rx + rz * rz;
       const d11 = this.dx * this.dx + this.dz * this.dz;
       if (d9 > 1e-4 && d11 < 0.01) {
-        this.dx += rider.dx * 0.1;
-        this.dz += rider.dz * 0.1;
+        this.dx += rx * 0.1;
+        this.dz += rz * 0.1;
+        brake = false;
+      }
+    }
+    // ((minecarts) vanilla: an unpowered powered rail halves the speed, and stops a slow cart dead)
+    if (brake) {
+      if (Math.sqrt(this.dx * this.dx + this.dz * this.dz) < 0.03) {
+        this.dx = 0;
+        this.dy = 0;
+        this.dz = 0;
+      } else {
+        this.dx *= 0.5;
+        this.dz *= 0.5;
       }
     }
     // snap onto the line between the rail's two ends
@@ -276,7 +306,31 @@ export abstract class AbstractMinecart extends Entity {
       this.dx = d26 * (j - bx);
       this.dz = d26 * (i - bz);
     }
+    // ((minecarts) vanilla: a powered powered rail adds 0.06 a tick the way the cart goes; a cart at rest on a flat
+    // one is pushed off a solid block at either end, away from it)
+    if (boost) {
+      const d27 = Math.sqrt(this.dx * this.dx + this.dz * this.dz);
+      if (d27 > 0.01) {
+        this.dx += (this.dx / d27) * 0.06;
+        this.dz += (this.dz / d27) * 0.06;
+      } else {
+        const w = this.level.world, solid = (x1: number, z1: number) => isConductor(w.getState(x1, by, z1));
+        if (shape === 'east_west') {
+          if (solid(bx - 1, bz)) this.dx = 0.02;
+          else if (solid(bx + 1, bz)) this.dx = -0.02;
+        } else if (shape === 'north_south') {
+          if (solid(bx, bz - 1)) this.dz = 0.02;
+          else if (solid(bx, bz + 1)) this.dz = -0.02;
+        }
+      }
+    }
   }
+
+  /**
+   * (minecarts) vanilla activateMinecart: the cart is on an activator rail, powered or not (a rideable cart throws
+   * out its rider, a TNT cart lights, a hopper cart stops collecting while it's powered)
+   */
+  activateMinecart(_x: number, _y: number, _z: number, _powered: boolean): void {}
 
   /** vanilla applyNaturalSlowdown: an empty cart loses 4% a tick, an occupied one 0.3% (5% more in water) */
   protected applyNaturalSlowdown(): void {
@@ -367,24 +421,40 @@ export abstract class AbstractMinecart extends Entity {
   /**
    * vanilla VehicleEntity.hurt: every hit wobbles the cart and adds ten times its damage (which wears
    * off a point a tick); past 40 it breaks. A creative player's hit removes it, dropping nothing.
+   * ((minecarts) and a blow that destroys it outright breaks it whatever its damage: a TNT cart's fire)
    */
-  override hurt(amount: number, _source: string, attacker?: Entity | null): boolean {
+  override hurt(amount: number, source: string, attacker?: Entity | null, _direct?: Entity | null): boolean {
     if (this.removed) return true;
     this.hurtDir = -this.hurtDir;
     this.hurtTime = 10;
     this.damage += amount * 10;
     this.level.gameEvent?.('entity_damage', this.x, this.y, this.z, { entity: attacker ?? null });
-    if (attacker?.type === 'player' && (attacker as Player).gameMode === 'creative') this.remove();
-    else if (this.damage > 40) this.destroy();
+    const creative = attacker?.type === 'player' && (attacker as Player).gameMode === 'creative';
+    if ((creative || !(this.damage > 40)) && !this.shouldSourceDestroy(source)) {
+      if (creative) this.discard();
+    } else this.destroy(source);
     return true;
   }
 
-  /** vanilla VehicleEntity.destroy: killed, dropping itself as an item */
-  destroy(): void {
+  /** (minecarts) vanilla VehicleEntity.shouldSourceDestroy: a kind of blow that breaks it at once (none, but a TNT cart's) */
+  protected shouldSourceDestroy(_source: string): boolean {
+    return false;
+  }
+
+  /** (minecarts) vanilla Entity.discard: gone without dying or dropping itself (a creative player's blow) */
+  discard(): void {
+    this.remove();
+  }
+
+  /** vanilla VehicleEntity.destroy: killed, dropping itself as an item ((minecarts) `source`: what broke it) */
+  destroy(_source?: string): void {
     this.kill();
     if (this.level.gameRules.doEntityDrops) {
+      // ((minecarts) vanilla VehicleEntity.destroy(Item): its name kept on the item)
+      const s = ItemStack.of(this.dropItem());
+      if (this.customName !== null) s.tag = { ...(s.tag ?? {}), customName: this.customName };
       // vanilla Entity.spawnAtLocation
-      const it = new ItemEntity(this.level, ItemStack.of(this.dropItem()));
+      const it = new ItemEntity(this.level, s);
       it.moveTo(this.x, this.y, this.z, Math.random() * 360, 0);
       it.dx = Math.random() * 0.2 - 0.1;
       it.dy = 0.2;
@@ -451,6 +521,25 @@ export abstract class AbstractMinecart extends Entity {
   protected loadData(_d: Record<string, number | string | boolean>): void {}
 }
 
+/**
+ * (minecarts) the way a player riding a cart is trying to go (vanilla: the rider's own deltaMovement, from its travel);
+ * a guest's player, whose travel is its game's own, as the keys it holds and its look make it (vanilla moveRelative
+ * with the air's 0.02, less the air's drag)
+ */
+function riderMotion(p: Player): [number, number] {
+  if (!p.remote) return [p.dx, p.dz];
+  let sx = p.xxa, sz = p.zza;
+  const l = sx * sx + sz * sz;
+  if (l < 1e-7) return [0, 0];
+  if (l > 1) {
+    const n = Math.sqrt(l);
+    sx /= n;
+    sz /= n;
+  }
+  const r = (p.yaw * Math.PI) / 180, s = Math.sin(r), c = Math.cos(r);
+  return [(sx * c - sz * s) * 0.02 * 0.91, (sz * c + sx * s) * 0.02 * 0.91];
+}
+
 /** vanilla getBlockFloorHeight over DismountHelper.nonClimbableShape: where to stand in this block space */
 function floorHeight(level: Level, x: number, y: number, z: number): number {
   const here = shapeTop(level.getState(x, y, z));
@@ -488,27 +577,32 @@ export class Minecart extends AbstractMinecart {
     if (p.isShiftKeyDown() || this.isVehicle()) return false;
     return p.startRiding(this);
   }
+
+  /** (minecarts) vanilla Minecart.activateMinecart: a powered activator rail throws out its rider, and shakes it */
+  override activateMinecart(_x: number, _y: number, _z: number, powered: boolean): void {
+    if (!powered) return;
+    if (this.isVehicle()) this.ejectPassengers();
+    if (this.hurtTime === 0) {
+      this.hurtDir = -this.hurtDir;
+      this.hurtTime = 10;
+      this.damage = 50;
+    }
+  }
 }
 
-/** vanilla MinecartChest (AbstractMinecartContainer + ContainerEntity): a 27-slot chest on rails */
-export class MinecartChest extends AbstractMinecart {
-  readonly type = 'chest_minecart';
-  readonly container = new SimpleContainer(27);
+/**
+ * vanilla AbstractMinecartContainer (+ ContainerEntity): a cart carrying a container ((minecarts) a chest's 27 slots,
+ * a hopper's 5), its loot table rolled when it's first got at
+ */
+export abstract class AbstractMinecartContainer extends AbstractMinecart {
+  readonly container: SimpleContainer;
   /** vanilla LootTable / LootTableSeed: rolled when first opened or broken */
   lootTable: string | null = null;
   lootSeed = 0;
 
-  dropItem(): string {
-    return 'chest_minecart';
-  }
-
-  /** vanilla MinecartChest.getDefaultDisplayBlockState: a chest facing north */
-  override displayState(): number {
-    return getBlock('chest').state({ facing: 'north' });
-  }
-
-  override displayOffset(): number {
-    return 8;
+  constructor(level: Level, size: number) {
+    super(level);
+    this.container = new SimpleContainer(size);
   }
 
   /** vanilla ContainerEntity.unpackChestVehicleLootTable (seed 0 = a random roll) */
@@ -530,10 +624,20 @@ export class MinecartChest extends AbstractMinecart {
 
   /** vanilla AbstractMinecartContainer.remove(KILLED): the contents spill out (Containers.dropContents) */
   override kill(): void {
+    this.spill();
+    super.kill();
+  }
+
+  /** ((minecarts) vanilla remove(DISCARDED), a creative player's blow: they spill out then too) */
+  override discard(): void {
+    this.spill();
+    super.discard();
+  }
+
+  private spill(): void {
     this.unpackLoot();
     const x = Math.floor(this.x), y = Math.floor(this.y), z = Math.floor(this.z);
     for (const s of this.container.removeAll()) this.level.dropStackAt(x, y, z, s);
-    super.kill();
   }
 
   /** vanilla AbstractMinecartContainer.applyNaturalSlowdown: the emptier the chest, the further it rolls */
@@ -570,19 +674,50 @@ export class MinecartChest extends AbstractMinecart {
   }
 }
 
-/** vanilla AbstractContainerMenu.getRedstoneSignalFromContainer: 0..15 by how full it is */
-function redstoneSignal(c: SimpleContainer): number {
+/** vanilla MinecartChest: a 27-slot chest on rails */
+export class MinecartChest extends AbstractMinecartContainer {
+  readonly type = 'chest_minecart';
+
+  constructor(level: Level) {
+    super(level, 27);
+  }
+
+  dropItem(): string {
+    return 'chest_minecart';
+  }
+
+  /** vanilla MinecartChest.getDefaultDisplayBlockState: a chest facing north */
+  override displayState(): number {
+    return getBlock('chest').state({ facing: 'north' });
+  }
+
+  override displayOffset(): number {
+    return 8;
+  }
+}
+
+/** vanilla AbstractContainerMenu.getRedstoneSignalFromContainer: 0..15 by how full it is ((minecarts) a detector rail's reading) */
+export function redstoneSignal(c: SimpleContainer): number {
   let f = 0;
   for (const s of c.items) if (s && s.count > 0) f += s.count / Math.min(99, s.maxStack);
   f /= c.size;
   return Math.floor(f * 14) + (f > 0 ? 1 : 0);
 }
 
-export const MINECART_TYPES = ['minecart', 'chest_minecart'];
+/** every kind of minecart ((minecarts) the hopper, TNT and furnace ones made by entity/minecartVariants.ts) */
+export const MINECART_TYPES = ['minecart', 'chest_minecart', 'hopper_minecart', 'tnt_minecart', 'furnace_minecart'];
+
+/** (minecarts) the kinds made elsewhere (entity/minecartVariants.ts), by type */
+const MADE_ELSEWHERE = new Map<string, (level: Level) => AbstractMinecart>();
+
+/** (minecarts) how a kind of minecart kept in another file is made */
+export function registerMinecartType(type: string, make: (level: Level) => AbstractMinecart): void {
+  MADE_ELSEWHERE.set(type, make);
+}
 
 /** vanilla AbstractMinecart.createMinecart */
 export function createMinecart(type: string, level: Level): AbstractMinecart | null {
   if (type === 'minecart') return new Minecart(level);
   if (type === 'chest_minecart') return new MinecartChest(level);
-  return null;
+  return MADE_ELSEWHERE.get(type)?.(level) ?? null;
 }

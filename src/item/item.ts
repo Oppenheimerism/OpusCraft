@@ -19,6 +19,8 @@ import { registerCakeItems } from './itemsCake';
 import { registerSpyglassItem } from './itemsSpyglass';
 // (armour stand)
 import { registerArmorStandItem } from './itemsArmorStand';
+// (minecarts)
+import { registerMinecartItems } from './itemsMinecarts';
 
 export interface ToolInfo {
   type: ToolType;
@@ -614,6 +616,8 @@ registerCakeItems(ITEMS, ITEM_LIST);
 registerSpyglassItem(reg, ITEM_LIST);
 // (armour stand) the armour stand: sixteen to a stack, with the functional blocks
 registerArmorStandItem(reg);
+// (minecarts) the hopper, TNT and furnace minecarts, the powered, detector and activator rails, after the boats
+registerMinecartItems(reg, ITEMS, ITEM_LIST);
 
 export function itemForBlock(name: string): Item | undefined {
   // (a block that is another's item's: a wall banner is its banner's)

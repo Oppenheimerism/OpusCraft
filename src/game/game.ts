@@ -60,7 +60,7 @@ import { keyDisplayName } from './input';
 import { LivingEntity } from '../entity/living';
 import { Monster } from '../entity/monsters';
 import { Piglin, isLovedItem } from '../entity/piglin';
-import type { MinecartChest } from '../entity/minecart';
+import type { AbstractMinecartContainer } from '../entity/minecart';
 import { ChestBoat } from '../entity/boat';
 import { nightVisionScale, blindnessFog, darknessVisuals, applyNausea } from '../render/effectVisuals';
 import { OVERWORLD, THE_NETHER, THE_END, dimensionById, teleportationScale, type DimensionType } from '../world/dimension';
@@ -926,8 +926,8 @@ export class Game {
     this.setScreen(this.containerScreenFactory(m));
   }
 
-  /** right-clicked a chest minecart or chest boat (vanilla ContainerEntity.interactWithContainerVehicle: no sound, no lid) */
-  openEntityContainer(e: MinecartChest | ChestBoat): void {
+  /** right-clicked a chest ((minecarts) or hopper) minecart or chest boat (vanilla ContainerEntity.interactWithContainerVehicle: no sound, no lid) */
+  openEntityContainer(e: AbstractMinecartContainer | ChestBoat): void {
     if (!this.containerScreenFactory) return;
     this.setScreen(this.containerScreenFactory(entityContainerMenu(this.level, this.player, e)));
   }
