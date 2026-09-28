@@ -1098,6 +1098,12 @@ export class Interaction {
     const s = p.useItem;
     const used = p.ticksUsingItem();
     p.stopUsingItem();
+    // (spyglass) an item's own release (vanilla Item.releaseUsing: the spyglass lowered)
+    const release = s && itemBehaviorOf(s.item.id)?.releaseUsing;
+    if (release) {
+      release(this.level, p, s, used);
+      return;
+    }
     if (s?.item.id === 'crossbow') {
       // fully drawn it loads from the offhand or inventory (in creative nothing is used up)
       const ammo = playerProjectile(p);

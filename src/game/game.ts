@@ -96,6 +96,9 @@ import { CombinedTransport } from '../net/transport/combined';
 import { randomId, type Transport } from '../net/transport/transport';
 import { newJoinCode, showJoinCode } from '../net/joinCode';
 import { inView, LOADING_RADIUS } from '../net/chunkData';
+// (spyglass) the zoom, the slower mouse, the sign glow while scoping
+import { scopedFov, scopeTurnFactor, isScoping } from './spyglass';
+import { setSignScopingHook } from '../render/signRenderer';
 
 export type { GameOptions } from './options';
 /** vanilla ReceivingLevelScreen.Reason: what the loading screen shows while changing dimension (net/protocol.ts) */
@@ -1211,8 +1214,10 @@ export class Game {
 
   private frame(now: number): void {
     const t0 = performance.now();
-    const dt = Math.min(0.25, (now - this.last) / 1000);
-    this.last = now;
+    // (a frame's stamp can be behind the last one's, the fallback timer's performance.now() against a requestAnimationFrame
+    // stamp taken before it: time doesn't go back, or the partial tick would go below 0 for a frame, tilting the view)
+    const dt = Math.min(0.25, Math.max(0, (now - this.last) / 1000));
+    this.last = Math.max(this.last, now);
     const paused = this.isPaused();
     if (!paused) this.acc += dt;
     if (this.inWorld) this.handleFrameInput();
@@ -1253,7 +1258,8 @@ export class Game {
     const [mx, my] = inp.consumeMouse();
     if (this.spawned && inp.locked && !this.screen) {
       const s = this.opts.sensitivity * 0.6 + 0.2;
-      const k = s * s * s * 8;
+      // (spyglass) scoping in first person, s³ rather than s³ × 8
+      const k = s * s * s * 8 * scopeTurnFactor(this.player, this.thirdPerson === 0);
       // vanilla Entity.turn: last tick's angles turn too (a rider's view lerps between ticks), and a
       // boat clamps how far its riders look round
       const p = this.player, dyaw = mx * k * 0.15, dpitch = my * k * 0.15 * (this.opts.invertMouse ? -1 : 1);
@@ -1373,7 +1379,8 @@ export class Game {
     }
     if (!client) this.interaction.tickUsingItem();
     this.fovModO = this.fovMod;
-    const target = clamp(1 + (p.fovModifier() - 1) * this.opts.fovEffects, 0.1, 1.5);
+    // (spyglass) scoping in first person: the spyglass's 0.1, not scaled by the FOV effects option
+    const target = scopedFov(p, this.thirdPerson === 0) ?? clamp(1 + (p.fovModifier() - 1) * this.opts.fovEffects, 0.1, 1.5);
     this.fovMod += (target - this.fovMod) * 0.5;
     if (client) client.tickLevel();
     else {
@@ -1784,6 +1791,8 @@ export class Game {
     this.interaction.onItemUsed = (hand) => this.renderer.hand.itemUsed(hand);
     this.interaction.onPlaced = (name) => this.advancements.trigger('place', { place: name });
     this.interaction.onConsumed = (id) => this.advancements.trigger('consume', { consume: id });
+    // (spyglass) the black sign text's glow outline shows at any distance while this player scopes
+    setSignScopingHook(() => isScoping(this.player));
     this.interaction.onItemDurability = (item, vehicle) => this.advancements.trigger('item_durability', { durability: { item, vehicle } });
     this.interaction.onDestroyProgress = (name, progress) => this.tutorial.onDestroyBlock(name, progress);
   }

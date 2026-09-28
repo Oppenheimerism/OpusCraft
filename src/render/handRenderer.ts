@@ -12,6 +12,8 @@ import type { ItemStack } from '../item/item';
 import type { Hand } from '../item/inventory';
 import { chargeDuration, crossbowTexture, isCharged } from '../item/crossbow';
 import { MapRenderer } from './mapRenderer';
+// (spyglass)
+import { isScoping } from '../game/spyglass';
 
 export class HandRenderer {
   private mainHandHeight = 0;
@@ -108,6 +110,8 @@ export class HandRenderer {
 
   /** vanilla renderArmWithItem: one hand, on the `arm` side (i = 1 right, -1 left: every sideways move and turn mirrors) */
   private renderArmWithItem(batch: EntityBatch, pose: PoseStack, p: Player, hand: Hand, arm: Arm, swing: number, item: ItemStack | null, equip: number, partial: number, pitch: number): void {
+    // (spyglass) vanilla: neither hand while scoping
+    if (isScoping(p)) return;
     const i = arm === 'right' ? 1 : -1;
     // vanilla: the bare arm only for an empty main hand, and not while invisible
     if (!item) {

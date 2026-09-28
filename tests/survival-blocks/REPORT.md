@@ -7,13 +7,109 @@ next was started. No history rewritten, nothing pushed to `main`.
 |---|-----------|--------|-------|
 | 1 | Signs and hanging signs (11 woods) | `89f4d4a` | done |
 | 2 | Ender chest | `4cba979` | done |
-| 3 | Cake and candle cakes | see `git log` (the "Cake and candle cakes" commit) | done |
-| 4 | Spyglass | | to do |
+| 3 | Cake and candle cakes | `76401ce` | done |
+| 4 | Spyglass | see `git log` (the "Spyglass" commit) | done |
 | 5 | Armour stand | | to do |
 | 6 | Minecarts and rails | | to do |
 
 Where nobody could be asked, the choice closest to vanilla 1.21 was made; each such choice is listed under the
 milestone's "Deviations and open points".
+
+---
+
+## M4: spyglass
+
+The spyglass item: raised to the eye, it zooms the view in; others see it held there.
+
+- **Item** (`src/item/itemsSpyglass.ts`, `src/game/spyglass.ts`, vanilla `SpyglassItem`): stacks to 1, no durability,
+  Tools & Utilities tab after the clock (before the map, as vanilla). Recipe: an amethyst shard over two copper ingots
+  in one column (vanilla's `" # ", " X ", " X "`, shrunk as vanilla's `ShapedRecipePattern` does: any column of a
+  crafting table, not the 2×2 grid); the recipe book finds it when you hold an amethyst shard (vanilla
+  `recipes/tools/spyglass`: not the copper).
+- **Using it**: right-click (either hand; not in spectator) raises it at once, no hand swing (vanilla
+  `startUsingInstantly`), `item.spyglass.use` heard round about, `item_interact_start`. It stays up while the button
+  is held, at most 1200 ticks (a minute), then it's lowered by itself (`item.spyglass.stop_using`) and, with the button
+  still held, raised again at once (vanilla `startUseItem` while the key is down). Let go (or a screen opens):
+  lowered, `stop_using`, `item_interact_finish`. Switching slots drops it without a sound (vanilla `stopUsingItem`).
+  Walking slows to a fifth and sprinting stops while it's up (the existing item-use rule). Nothing is used up;
+  finishing its minute isn't "eating" (no consume trigger).
+- **Scoping** (first person, vanilla `Player.isScoping`): the FOV goes to 0.1 (eased by half each tick; *not* scaled
+  by the FOV Effects option, as vanilla returns it as is), the mouse turns an eighth as fast (vanilla `d³` instead of
+  `d³ × 8`), neither hand is drawn, and the scope overlay covers the screen (`src/gui/spyglassOverlay.ts`, vanilla
+  `renderSpyglassOverlay`: a square the screen's shorter side across, growing from 0.5× to 1.125× as it comes up,
+  black around it, under the crosshair and hotbar, hidden with F1). Black glowing sign text shows its outline at any
+  distance while scoping (M1's `setSignScopingHook`, now wired in `game.ts`). In third person the view isn't zoomed.
+- **Seen by others** (`src/render/playerPose.ts`, `src/render/model.ts`, vanilla `HumanoidModel.ArmPose.SPYGLASS` and
+  `PlayerItemInHandLayer.renderArmWithSpyglass`): the using arm raised along the look (head pitch − 110°, 15° more
+  when crouching, clamped to −2.4…3.3 rad), turned 15° in across the face, no idle sway on that arm; the spyglass drawn
+  at the head, before the eye on that arm's side, pointing where the head looks (its pitch kept within 30° up, 90°
+  down); mid-swing it's drawn in the hand.
+- **Model** (`src/render/spyglassRenderer.ts`, `src/textures/spyglass.ts`): our own 3D model (a 2×2 eyepiece with a
+  leather grip into a 3×3 copper barrel, a pale-blue lens at its end, 13 px long) in the hands (first and third person)
+  and at the head; the existing flat sprite in the inventory, on the ground and in item frames (as vanilla's 2D model
+  in the GUI/GROUND/FIXED contexts).
+- **Advancements** (`src/game/advancements.ts`): "Is It a Bird?", "Is It a Balloon?" and "Is It a Plane?" were
+  `never`; now vanilla's `using_item` trigger fires every tick the spyglass is up with what the player looks at
+  (vanilla `PlayerPredicate.looking_at`: the nearest entity whose box the look meets within 100 blocks, any but a
+  spectator, then only if the eyes can see it): a parrot, a ghast, the ender dragon (any of its parts).
+- **Sounds** (`src/audio/gen/spyglass.ts`): `item.spyglass.use` (a brass tube sliding out, rising, and a bright clink)
+  and `item.spyglass.stop_using` (sliding shut, falling, and a duller knock); in the Players volume category (vanilla
+  plays them as the player's sounds).
+- **Saving**: a plain item; the use itself isn't saved (as vanilla).
+- **Multiplayer**: the guest's button acts on the host, which raises it and tells the guest (`SetUsingItem`), whose
+  own view then zooms, slows the mouse and shows the overlay; everyone near hears both sounds; other guests (and a
+  guest who joins while it's up) and the host see the raised arm and the spyglass at the eye. Advancements are the
+  host player's only (this game has none for guests).
+
+**New files**: `src/game/spyglass.ts`, `src/item/itemsSpyglass.ts`, `src/render/spyglassRenderer.ts`,
+`src/textures/spyglass.ts`, `src/textures/spyglassScope.ts`, `src/gui/spyglassOverlay.ts`,
+`src/audio/gen/spyglass.ts`; tests `tests/survival-blocks/spyglass.mjs`, `tests/survival-blocks/spyglass-mp.mjs`.
+
+**Shared files touched** (a few lines each, marked `(spyglass)`): `src/item/item.ts` (`registerSpyglassItem`),
+`src/inventory/recipes.ts` (the recipe), `src/game/level.ts` (`import './spyglass'`), `src/game/itemBehavior.ts` (a new
+optional `releaseUsing` hook) and `src/game/interaction.ts` (calls it when an item is let go), `src/game/advancements.ts`
+(the `using_item` criterion and its payload; the three spyglass advancements use it), `src/game/game.ts` (the scoped
+FOV, the mouse factor, `setSignScopingHook`), `src/gui/hud.ts` (draws the overlay first), `src/render/handRenderer.ts`
+(no hands while scoping), `src/render/model.ts` (the `spyglass` arm pose; no idle sway for that arm),
+`src/render/playerPose.ts` (the pose and the spyglass at the head), `src/render/entityRenderers.ts` (builds the
+`SpyglassRenderer`), `src/audio/synth.ts` (`spyglassSounds`), `src/audio/soundManager.ts` (the Players category).
+
+**Also fixed while checking it** (`src/game/game.ts`, the frame loop): a frame's time stamp could be behind the last
+one's (the fallback timer's `performance.now()` against a `requestAnimationFrame` stamp taken before it, after a
+stall), which made the partial tick negative for that frame: the view tilted as if hurt and hotbar icons squeezed for
+a frame. The frame time now never goes back.
+
+**Deviations and open points**
+- The in-hand model and its texture, the scope texture and both sounds are our own (vanilla's are assets).
+- No statistics in this game, so `used:spyglass` isn't counted.
+- The recipe is written as its one column (`#`, `X`, `X`) because this game's recipe matcher doesn't shrink patterns;
+  it matches exactly what vanilla's shrunk pattern does.
+
+**Tests**: `tests/survival-blocks/spyglass.mjs` (64 checks: item, tab order, recipe in each column, not upside down,
+not in the 2×2 grid, recipe-book unlock by the shard; use (sound at the player, event, no swing), scoped FOV and mouse
+factor (first person only), held, let go (sound, event, still in hand), the full minute (lowered by itself, heard
+once, raised again with the button held, not a consume), slot change (silent), offhand, spectator/creative/adventure,
+the walking pace (a fifth) and no sprinting; what it looks at (nearest along the look, through the spyglass only, not
+through a wall, not past 100 blocks, not a spectator) and all three advancements (parrot, ghast, dragon part); the arm
+pose (angles, crouch, clamp, left arm, the other arm's sway); the model in each hand context and at the head, the
+sprite elsewhere; drawn at the head only while in use and not mid-swing; the textures, the sounds, a save) and
+`tests/survival-blocks/spyglass-mp.mjs` (18 checks: a guest raises it on the host, its own view zooms and its mouse
+slows, heard by everyone, the other guest and the host see the pose and draw it at the eye, held 40 ticks in step, let
+go on both sides, heard, the arm down, a slot change drops it silently, a late joiner sees it up, the minute (lowered,
+heard, raised again with the button held), the host's own spyglass seen by the guests).
+
+**Try it** (http://localhost:5173/?seed=12345):
+1. Creative → Tools & Utilities: the spyglass after the clock. Survival: craft it (an amethyst shard over two copper
+   ingots, in a column of the crafting table).
+2. Hold right-click: it's raised with a slide and clink, the view zooms right in, the scope's round view grows to fill
+   the screen, the mouse turns slowly, the hand is gone, you walk slowly. Let go: lowered with its sound.
+3. F5 (third person): no zoom; look at yourself from the front (F5 twice): your arm is raised with the spyglass at
+   your eye; look up and down: it follows; crouch: the arm lifts a little more.
+4. Put a sign with black glowing text (glow ink sac) 30 blocks away: through the spyglass its light outline shows.
+5. Find a parrot (jungle) and look at it through the spyglass: "Is It a Bird?". A ghast in the Nether: "Is It a
+   Balloon?"; the ender dragon: "Is It a Plane?".
+6. LAN: the guest holds right-click with a spyglass: its view zooms; the host (and other guests) see its arm raised and
+   the spyglass at its eye, and hear it.
 
 ---
 

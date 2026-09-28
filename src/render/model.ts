@@ -208,7 +208,7 @@ export function animateCrossbowCharge(ra: ModelPart, la: ModelPart, charge: numb
 }
 
 /** vanilla HumanoidModel.ArmPose, as a player's arms take them (PlayerRenderer.getArmPose) */
-export type HumanoidArmPose = 'empty' | 'item' | 'block' | 'bow' | 'crossbow_charge' | 'crossbow_hold' | 'throw_spear' | 'brush' | 'toot_horn';
+export type HumanoidArmPose = 'empty' | 'item' | 'block' | 'bow' | 'crossbow_charge' | 'crossbow_hold' | 'throw_spear' | 'brush' | 'toot_horn' | 'spyglass';
 
 /** vanilla ArmPose.isTwoHanded */
 export function twoHanded(pose: HumanoidArmPose): boolean {
@@ -286,6 +286,12 @@ export function animateHumanoid(root: ModelPart, limbSwing: number, limbAmount: 
         arm.xRot = Math.max(-1.2, Math.min(1.2, head.xRot)) - 1.4835298;
         arm.yRot = head.yRot + (right ? -Math.PI / 6 : Math.PI / 6);
         break;
+      case 'spyglass':
+        // (spyglass) vanilla SPYGLASS: raised to the eye along the look (a little higher crouching, against the crouch's
+        // lowering), turned in across the face
+        arm.xRot = Math.max(-2.4, Math.min(3.3, head.xRot - 1.9198622 - (crouching ? 0.2617994 : 0)));
+        arm.yRot = head.yRot + (right ? -0.2617994 : 0.2617994);
+        break;
       default:
         arm.yRot = 0;
     }
@@ -337,9 +343,13 @@ export function animateHumanoid(root: ModelPart, limbSwing: number, limbAmount: 
     la.y = 5.2;
     ra.y = 5.2;
   }
-  // idle arm sway (AnimationUtils.bobModelPart)
-  ra.zRot += Math.cos(age * 0.09) * 0.05 + 0.05;
-  la.zRot -= Math.cos(age * 0.09) * 0.05 + 0.05;
-  ra.xRot += Math.sin(age * 0.067) * 0.05;
-  la.xRot -= Math.sin(age * 0.067) * 0.05;
+  // idle arm sway (AnimationUtils.bobModelPart), (spyglass) not for an arm holding a spyglass to the eye
+  if (arms.right !== 'spyglass') {
+    ra.zRot += Math.cos(age * 0.09) * 0.05 + 0.05;
+    ra.xRot += Math.sin(age * 0.067) * 0.05;
+  }
+  if (arms.left !== 'spyglass') {
+    la.zRot -= Math.cos(age * 0.09) * 0.05 + 0.05;
+    la.xRot -= Math.sin(age * 0.067) * 0.05;
+  }
 }

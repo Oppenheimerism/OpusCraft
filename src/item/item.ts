@@ -15,6 +15,8 @@ import { registerBastionItems } from './itemsBastion';
 import { registerSignItems } from './itemsSigns';
 // (cake)
 import { registerCakeItems } from './itemsCake';
+// (spyglass)
+import { registerSpyglassItem } from './itemsSpyglass';
 
 export interface ToolInfo {
   type: ToolType;
@@ -606,6 +608,8 @@ registerBastionItems(reg, ITEMS, ITEM_LIST);
 registerSignItems(reg, ITEMS, ITEM_LIST);
 // (cake) the cake: one to a stack, its sprite, with the food; milk crafted with leaves its bucket
 registerCakeItems(ITEMS, ITEM_LIST);
+// (spyglass) the spyglass: one to a stack, with the tools after the clock
+registerSpyglassItem(reg, ITEM_LIST);
 
 export function itemForBlock(name: string): Item | undefined {
   // (a block that is another's item's: a wall banner is its banner's)

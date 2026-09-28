@@ -12,6 +12,8 @@ import { BossHealthOverlay } from './bossOverlay';
 import { hsvToRgb } from '../core/math';
 // (Stage 4: totems)
 import { renderItemActivation, tickItemActivation } from './itemActivation';
+// (spyglass)
+import { renderSpyglassOverlay } from './spyglassOverlay';
 
 export class Hud {
   private tickCount = 0;
@@ -76,6 +78,8 @@ export class Hud {
   render(g: GuiGraphics, game: Game, partial: number, chatOpen: boolean): void {
     const p = game.player;
     const W = g.width, H = g.height;
+    // (spyglass) vanilla Gui.renderCameraOverlays: the scope's view while scoping, first
+    renderSpyglassOverlay(g, p, game.thirdPerson === 0);
     // (powder snow) vanilla Gui.renderCameraOverlays: frost round the screen's edges as the player freezes
     if (p.ticksFrozen > 0) g.sprite('powder_snow_outline', 0, 0, W, H, 0, 0, 256, 256, p.percentFrozen());
     // (Stage 4: totems) vanilla GameRenderer.renderItemActivation, drawn just before the HUD

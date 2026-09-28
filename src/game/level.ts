@@ -93,6 +93,8 @@ import './signs';
 import './enderChest';
 // (cake) eating it, candles in it, the candle cakes lit and put out
 import './cake';
+// (spyglass) raised to the eye and lowered, what it's looking at
+import './spyglass';
 
 export interface SoundSink {
   play(name: string, x: number, y: number, z: number, volume?: number, pitch?: number): void;

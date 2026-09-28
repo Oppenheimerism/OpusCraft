@@ -109,6 +109,8 @@ import { SkullRenderer } from './skullRenderer';
 import { SignRenderer } from './signRenderer';
 // (ender chests)
 import { EnderChestRenderer } from './enderChestRenderer';
+// (spyglass)
+import { SpyglassRenderer } from './spyglassRenderer';
 import { ElytraLayer } from './elytraLayer';
 import { FireworkRocket } from '../entity/fireworkRocket';
 import { renderFireworkRocket } from './fireworkRenderer';
@@ -221,6 +223,8 @@ export class EntityRenderDispatcher {
   private readonly skulls: SkullRenderer;
   private readonly signs: SignRenderer;
   private readonly enderChests: EnderChestRenderer;
+  /** (spyglass) the spyglass's model in the hands and at the eye */
+  private readonly spyglasses: SpyglassRenderer;
   /** worn elytra (and the broken one's torn look as an item) */
   private readonly elytra: ElytraLayer;
   /** (Stage 4: illagers) the pillager, vindicator, evoker, vex, ravager and the evoker's fangs */
@@ -256,6 +260,7 @@ export class EntityRenderDispatcher {
     this.skulls = new SkullRenderer(gl);
     this.signs = new SignRenderer(gl);
     this.enderChests = new EnderChestRenderer(gl);
+    this.spyglasses = new SpyglassRenderer(gl);
     this.elytra = new ElytraLayer(gl, items);
     this.archaeology = new ArchaeologyRenderers(gl);
     this.endCrystals = new EndCrystalRenderer(gl);
