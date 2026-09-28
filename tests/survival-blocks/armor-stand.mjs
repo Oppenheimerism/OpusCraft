@@ -410,6 +410,8 @@ const place = (hit, st = ItemStack.of('armor_stand')) => {
 // fire and falls
 {
   clearDrops();
+  // (the player out of reach of what burns: two blocks off, it would now and then pick up the gear a burnt stand drops)
+  p.moveTo(0.5, G, -8.5, 0, 0);
   const f = stand(0.5, 2.5);
   f.setItemSlot('head', ItemStack.of('leather_helmet'));
   f.igniteForSeconds(10);

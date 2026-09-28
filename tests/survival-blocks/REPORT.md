@@ -10,10 +10,22 @@ next was started. No history rewritten, nothing pushed to `main`.
 | 3 | Cake and candle cakes | `76401ce` | done |
 | 4 | Spyglass | `c606cc6` | done |
 | 5 | Armour stand | `1e4f0c9` | done |
-| 6 | Minecarts and rails | see `git log` (the "Minecarts and rails" commit) | done |
+| 6 | Minecarts and rails | `baebec4` | done |
 
 Where nobody could be asked, the choice closest to vanilla 1.21 was made; each such choice is listed under the
 milestone's "Deviations and open points".
+
+---
+
+## Self-review (after M6)
+
+After the last milestone, the spare time went on checking the milestones again: edge cases, saving and
+multiplayer. Each fix is its own commit after M6's.
+
+- **The armour stand's fire check** (`tests/survival-blocks/armor-stand.mjs`): "alight: burnt down in five seconds,
+  its gear dropped" failed about two runs in five. It did so on M5's own commit too (5 of 12 runs of `1e4f0c9`). The
+  player stood two blocks from the stand and now and then picked up the helmet the burnt stand dropped. The player
+  now stands well away for that part, and 15 of 15 runs pass. Nothing in the game changed.
 
 ---
 
