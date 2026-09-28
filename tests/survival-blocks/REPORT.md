@@ -43,6 +43,16 @@ multiplayer. Each fix is its own commit after M6's.
   cart's name. Re-run and passing: `minecarts-mp.mjs`, `multiplayer/m2-entities.mjs`, `m2-actions.mjs`,
   `m6-commands.mjs`, `commands/summon.mjs`, `commands/lookups.mjs`, `survival-blocks/armor-stand.mjs`,
   `saves/roundtrip.mjs`. `npm run typecheck` clean.
+- **The full regression before the last commit** (the code of `08c6c43`; only this report changed while it ran): 178
+  of 182 suites passed in 34.9 min. None of the four failures points at this work. Each passed when run again, or fails
+  the same way on `1e4f0c9`:
+  - `frog/frog.mjs` ("a small magma cube": the warm frog hadn't eaten its magma cube yet) and `leash/leash.mjs` ("a
+    knot is hit and gone": the sheep had wandered out of the fence's reach first). Run again, they passed 5 of 5 and 4
+    of 4 runs on both commits.
+  - `illagers/raids.mjs` ("a farmer throws the hero bread...": a farmer's or a child's gift not given in time) is
+    flaky on both commits. Over nine more runs each, it failed 3 here and 2 on `1e4f0c9`.
+  - `saves/roundtrip.mjs`'s 100 ms stall check read 136 ms while other suites were being re-run alongside. Alone, 3
+    of 3 runs pass.
 
 ---
 
