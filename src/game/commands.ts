@@ -1,7 +1,7 @@
 // Chat commands with vanilla 1.21 feedback strings and argument suggestions.
 
 import type { Game } from './game';
-import type { GameMode } from '../entity/player';
+import type { GameMode, Player } from '../entity/player';
 import { ITEMS, ItemStack } from '../item/item';
 import { BLOCK_BY_NAME, BLOCKS, STATE_BLOCK } from '../world/block';
 import { stateFromString } from '../storage/worldStore';
@@ -43,6 +43,7 @@ import { locateAncientCity } from './ancientCities';
 import { locateTrialChambers } from './trialChamberStructure';
 import { locateBastion } from './bastions';
 import { snbtEnd } from './snbt';
+import { MAX_GUESTS } from '../net/config';
 
 class CommandError extends Error {
   constructor(msg: string, readonly pos = -1) {
@@ -118,29 +119,65 @@ function parseIntArg(c: Ctx, i: number, min = -2147483648, max = 2147483647): nu
   return v;
 }
 
-/** single-player target selector: the player only */
-function target(c: Ctx, i: number, optional = true): string {
-  const a = c.args[i];
-  if (!a) {
-    if (optional) return c.game.playerName;
-    return needArg(c, i);
-  }
-  const s = a.s;
-  if (s === '@s' || s === '@p' || s === '@a' || s === '@r' || s === '@e' || s.startsWith('@s[') || s.startsWith('@p[') || s.startsWith('@a[')) return c.game.playerName;
-  if (s === c.game.playerName) return s;
-  throw new CommandError('No player was found', a.pos);
+/** whether commands can be used: the world's cheats, or (vanilla ShareToLanScreen's Allow Cheats) this LAN game's */
+function cheatsOn(g: Game): boolean {
+  return !!g.meta?.allowCommands || !!g.lanCheats;
 }
 
-/** vanilla EntitySelector subset: @s @p @a @r @e with [type=...] and [type=!...], or the player name */
+/** a player a command names, and its name */
+interface Named {
+  p: Player;
+  name: string;
+}
+
+/**
+ * the players a command can name (vanilla PlayerList.getPlayers): this one, and (hosting) each guest in the host's
+ * world; with `all`, those on their way to another dimension with the host too
+ */
+function onlinePlayers(g: Game, all = false): Named[] {
+  const out: Named[] = [{ p: g.player, name: g.playerName }];
+  for (const s of g.server?.sessions.values() ?? []) if (s.state === 'play' && s.player && (all || !s.travelling)) out.push({ p: s.player, name: s.name });
+  return out;
+}
+
+/** the players' names, for suggestions */
+function targetsOf(g: Game): string[] {
+  return [...TARGETS, ...onlinePlayers(g).slice(1).map((t) => t.name)];
+}
+
+/**
+ * vanilla EntityArgument.players: @s and @p (whoever runs the command: the host), @a, @r (their [conditions] not looked
+ * at), or a player's name (vanilla PlayerList.getPlayerByName: whatever its case); none given: whoever runs it
+ */
+function selectPlayers(c: Ctx, i: number, optional = true): Named[] {
+  const a = c.args[i];
+  const all = onlinePlayers(c.game);
+  if (!a) {
+    if (!optional) needArg(c, i);
+    return [all[0]];
+  }
+  const m = /^@([sprae])(?:\[.*\])?$/.exec(a.s);
+  if (m) return m[1] === 's' || m[1] === 'p' ? [all[0]] : m[1] === 'r' ? [all[Math.floor(Math.random() * all.length)]] : all;
+  const q = a.s.toLowerCase();
+  const found = all.find((t) => t.name.toLowerCase() === q);
+  if (!found) throw new CommandError('No player was found', a.pos);
+  return [found];
+}
+
+/** vanilla EntityArgument.player: the one player a selector names */
+function selectPlayer(c: Ctx, i: number): Named {
+  const list = selectPlayers(c, i, false);
+  if (list.length > 1) throw new CommandError('Only one player is allowed, but the provided selector allows more than one', c.args[i].pos);
+  return list[0];
+}
+
+/** vanilla EntitySelector subset: @s @p @a @r @e with [type=...] and [type=!...], or a player's name */
 function selectEntities(c: Ctx, i: number): Entity[] {
   const a = c.args[i];
   const g = c.game;
   if (!a) return [g.player];
-  const s = a.s;
-  if (s === g.playerName) return [g.player];
-  const m = /^@([spare])(?:\[(.*)\])?$/.exec(s);
-  if (!m) throw new CommandError('No player was found', a.pos);
-  if (m[1] !== 'e') return [g.player];
+  const m = /^@([spare])(?:\[(.*)\])?$/.exec(a.s);
+  if (!m || m[1] !== 'e') return selectPlayers(c, i).map((t) => t.p);
   let list: Entity[] = g.level.entities.filter((e) => !e.removed);
   for (const cond of (m[2] ?? '').split(',').filter(Boolean)) {
     const [k, v0] = cond.split('=');
@@ -204,8 +241,7 @@ function parseTime(c: Ctx, i: number): number {
   return Math.round(v * mul);
 }
 
-function giveXpPoints(game: Game, n: number): void {
-  const p = game.player;
+function giveXpPoints(p: Player, n: number): void {
   const need = (l: number) => (l >= 30 ? 112 + (l - 30) * 9 : l >= 15 ? 37 + (l - 15) * 5 : 7 + l * 2);
   p.xpTotal = Math.max(0, p.xpTotal + n);
   p.xpProgress += n / need(p.xpLevel);
@@ -226,8 +262,7 @@ function giveXpPoints(game: Game, n: number): void {
   }
 }
 
-function giveXpLevels(game: Game, n: number): void {
-  const p = game.player;
+function giveXpLevels(p: Player, n: number): void {
   p.xpLevel += n;
   if (p.xpLevel < 0) {
     p.xpLevel = 0;
@@ -263,7 +298,8 @@ function parseBool(c: Ctx, i: number): boolean {
 }
 
 function targetName(c: Ctx, e: Entity): string {
-  return e === c.game.player ? c.game.playerName : entityDisplayName(e);
+  if (e === c.game.player) return c.game.playerName;
+  return e.type === 'player' ? ((e as Player).profileName ?? 'Player') : entityDisplayName(e);
 }
 
 /** vanilla EffectCommands: give (instant effects default to 1 tick, others 30 s) and clear */
@@ -335,6 +371,7 @@ function enchantCommand(c: Ctx): void {
   }
   if (!n) throw new CommandError('Nothing changed. Targets either have no item in their hands or the enchantment could not be applied');
   c.game.player.inventory.version++;
+  for (const t of targets) if (t.type === 'player') (t as Player).inventory.version++;
   const l = enchantmentLine(id, level);
   const full = `${l.curse ? '§c' : '§7'}${l.text}§r`;
   c.ok(one ? `Applied enchantment ${full} to ${targetName(c, targets[0])}'s item` : `Applied enchantment ${full} to ${targets.length} entities`);
@@ -516,14 +553,13 @@ function own<T>(table: Record<string, T>, key: string): T | undefined {
 export const COMMANDS: Record<string, CommandDef> = {
   clear: {
     usage: ['/clear [<targets>] [<item>] [<maxCount>]'],
-    suggest: (_g, _p, i) => (i === 0 ? TARGETS : i === 1 ? itemIds() : []),
+    suggest: (g, _p, i) => (i === 0 ? targetsOf(g) : i === 1 ? itemIds() : []),
     run: (c) => {
-      const name = target(c, 0);
-      const inv = c.game.player.inventory;
+      const targets = selectPlayers(c, 0);
       const filter = c.args[1]?.s.replace(/^minecraft:/, '');
       if (filter && !ITEMS.has(filter)) throw new CommandError(`Unknown item 'minecraft:${filter}'`, c.args[1].pos);
       let max = c.args[2] ? parseIntArg(c, 2, 0) : -1;
-      let n = 0;
+      let n = 0, total = 0;
       const clr = (arr: (ItemStack | null)[]) => {
         for (let i = 0; i < arr.length; i++) {
           const s = arr[i];
@@ -535,12 +571,18 @@ export const COMMANDS: Record<string, CommandDef> = {
           if (s.count <= 0) arr[i] = null;
         }
       };
-      clr(inv.main);
-      clr(inv.armor);
-      inv.version++;
+      // (vanilla: up to maxCount from each)
+      for (const { p } of targets) {
+        n = 0;
+        clr(p.inventory.main);
+        clr(p.inventory.armor);
+        p.inventory.version++;
+        total += n;
+      }
       if (max === 0) max = -1;
-      if (n === 0) throw new CommandError(`No items were found on player ${name}`);
-      c.ok(`Removed ${n} item(s) from player ${name}`);
+      const one = targets.length === 1;
+      if (total === 0) throw new CommandError(one ? `No items were found on player ${targets[0].name}` : `No items were found on ${targets.length} players`);
+      c.ok(one ? `Removed ${total} item(s) from player ${targets[0].name}` : `Removed ${total} item(s) from ${targets.length} players`);
     },
   },
   defaultgamemode: {
@@ -579,18 +621,18 @@ export const COMMANDS: Record<string, CommandDef> = {
   },
   effect: {
     usage: ['/effect (clear|give) ...'],
-    suggest: (_g, prev, i) =>
-      i === 0 ? ['clear', 'give'] : i === 1 ? TARGETS : i === 2 ? effectIds() : prev[0] === 'give' && i === 3 ? ['infinite'] : prev[0] === 'give' && i === 5 ? ['false', 'true'] : [],
+    suggest: (g, prev, i) =>
+      i === 0 ? ['clear', 'give'] : i === 1 ? targetsOf(g) : i === 2 ? effectIds() : prev[0] === 'give' && i === 3 ? ['infinite'] : prev[0] === 'give' && i === 5 ? ['false', 'true'] : [],
     run: (c) => effectCommand(c),
   },
   enchant: {
     usage: ['/enchant <targets> <enchantment> [<level>]'],
-    suggest: (_g, _p, i) => (i === 0 ? TARGETS : i === 1 ? [...ENCHANTMENTS.keys()].sort().map((k) => 'minecraft:' + k) : []),
+    suggest: (g, _p, i) => (i === 0 ? targetsOf(g) : i === 1 ? [...ENCHANTMENTS.keys()].sort().map((k) => 'minecraft:' + k) : []),
     run: (c) => enchantCommand(c),
   },
   experience: {
     usage: ['/experience (add|query|set) ...'],
-    suggest: (_g, prev, i) => (i === 0 ? ['add', 'query', 'set'] : i === 1 ? TARGETS : i === 2 && prev[0] === 'query' ? ['levels', 'points'] : i === 3 ? ['levels', 'points'] : []),
+    suggest: (g, prev, i) => (i === 0 ? ['add', 'query', 'set'] : i === 1 ? targetsOf(g) : i === 2 && prev[0] === 'query' ? ['levels', 'points'] : i === 3 ? ['levels', 'points'] : []),
     run: (c) => xpCommand(c),
   },
   fill: {
@@ -627,15 +669,20 @@ export const COMMANDS: Record<string, CommandDef> = {
   },
   gamemode: {
     usage: ['/gamemode <gamemode> [<target>]'],
-    suggest: (_g, _p, i) => (i === 0 ? ['adventure', 'creative', 'spectator', 'survival'] : i === 1 ? TARGETS : []),
+    suggest: (g, _p, i) => (i === 0 ? ['adventure', 'creative', 'spectator', 'survival'] : i === 1 ? targetsOf(g) : []),
     run: (c) => {
       const m = needArg(c, 0);
       if (!GAME_MODES.includes(m as GameMode)) throw new CommandError(`Unknown game mode: ${m}`, c.args[0].pos);
-      target(c, 1);
-      const p = c.game.player;
-      if (p.gameMode === m) return;
-      p.setGameMode(m as GameMode);
-      c.ok(`Set own game mode to ${MODE_NAME[m]}`);
+      // (vanilla GameModeCommand.setMode: those already in it are left be; another player is told, and whoever ran it)
+      for (const { p, name } of selectPlayers(c, 1)) {
+        if (p.gameMode === m) continue;
+        p.setGameMode(m as GameMode);
+        if (p === c.game.player) c.ok(`Set own game mode to ${MODE_NAME[m]}`);
+        else {
+          if (c.game.level.gameRules.sendCommandFeedback !== false) c.game.server?.tell(p, `Your game mode has been updated to ${MODE_NAME[m]}`);
+          c.ok(`Set ${name}'s game mode to ${MODE_NAME[m]}`);
+        }
+      }
     },
   },
   gamerule: {
@@ -662,39 +709,41 @@ export const COMMANDS: Record<string, CommandDef> = {
   },
   give: {
     usage: ['/give <targets> <item> [<count>]'],
-    suggest: (_g, _p, i) => (i === 0 ? TARGETS : i === 1 ? itemIds() : []),
+    suggest: (g, _p, i) => (i === 0 ? targetsOf(g) : i === 1 ? itemIds() : []),
     run: (c) => {
-      const name = target(c, 0, false);
+      const targets = selectPlayers(c, 0, false);
       const id = needArg(c, 1).replace(/^minecraft:/, '').split('[')[0].split('{')[0];
       const item = ITEMS.get(id);
       if (!item) throw new CommandError(`Unknown item 'minecraft:${id}'`, c.args[1].pos);
       const count = c.args[2] ? parseIntArg(c, 2, 1) : 1;
       if (count > item.maxStack * 100) throw new CommandError(`Can't give more than ${item.maxStack * 100} of ${item.name}`);
-      const p = c.game.player;
-      let left = count;
-      while (left > 0) {
-        const n = Math.min(item.maxStack, left);
-        left -= n;
-        const stack = new ItemStack(item, n);
-        itemComponents(c.args[1].s, stack);
-        const rest = p.inventory.add(stack);
-        if (rest > 0) {
-          const e = new ItemEntity(c.game.level, stack.copyWithCount(rest));
-          e.moveTo(p.x, p.y + 0.5, p.z);
-          e.pickupDelay = 0;
-          c.game.level.addEntity(e);
+      for (const { p } of targets) {
+        let left = count;
+        while (left > 0) {
+          const n = Math.min(item.maxStack, left);
+          left -= n;
+          const stack = new ItemStack(item, n);
+          itemComponents(c.args[1].s, stack);
+          const rest = p.inventory.add(stack);
+          if (rest > 0) {
+            const e = new ItemEntity(c.game.level, stack.copyWithCount(rest));
+            e.moveTo(p.x, p.y + 0.5, p.z);
+            e.pickupDelay = 0;
+            c.game.level.addEntity(e);
+          }
         }
+        p.inventory.version++;
+        // (the level's sound: everyone near hears it, as in vanilla)
+        c.game.level.sound.play('entity.item.pickup', p.x, p.y, p.z, 0.2, ((Math.random() - Math.random()) * 0.7 + 1) * 2);
       }
-      p.inventory.version++;
-      c.game.sound.play('entity.item.pickup', p.x, p.y, p.z, 0.2, ((Math.random() - Math.random()) * 0.7 + 1) * 2);
-      c.ok(`Gave ${count} [${item.name}] to ${name}`);
+      c.ok(targets.length === 1 ? `Gave ${count} [${item.name}] to ${targets[0].name}` : `Gave ${count} [${item.name}] to ${targets.length} players`);
     },
   },
   help: {
     usage: ['/help [<command>]'],
     suggest: (_g, _p, i) => (i === 0 ? Object.keys(COMMANDS).sort() : []),
     run: (c) => {
-      const cheats = !!c.game.meta?.allowCommands;
+      const cheats = cheatsOn(c.game);
       const names = c.args[0] ? [c.args[0].s] : Object.keys(COMMANDS).sort();
       for (const n of names) {
         const d = own(COMMANDS, n);
@@ -706,15 +755,20 @@ export const COMMANDS: Record<string, CommandDef> = {
       }
     },
   },
+  kick: {
+    usage: ['/kick <targets> [<reason>]'],
+    suggest: (g, _p, i) => (i === 0 ? targetsOf(g) : []),
+    run: (c) => kickCommand(c),
+  },
   kill: {
     usage: ['/kill [<targets>]'],
-    suggest: (_g, _p, i) => (i === 0 ? [...TARGETS, '@e[type=!player]'] : []),
+    suggest: (g, _p, i) => (i === 0 ? [...targetsOf(g), '@e[type=!player]'] : []),
     run: (c) => {
       const list = selectEntities(c, 0);
       if (!list.length) throw new CommandError('No entity was found');
       for (const e of list) {
-        if (e === c.game.player) {
-          const p = c.game.player;
+        if (e.type === 'player') {
+          const p = e as Player;
           p.invulnerableTime = 0;
           p.hurt(Number.MAX_VALUE / 2, 'genericKill');
           if (p.health > 0) {
@@ -726,7 +780,7 @@ export const COMMANDS: Record<string, CommandDef> = {
           e.hurt(Number.MAX_VALUE / 2, 'genericKill');
         } else e.kill();
       }
-      c.ok(list.length === 1 ? `Killed ${list[0] === c.game.player ? c.game.playerName : entityDisplayName(list[0])}` : `Killed ${list.length} entities`);
+      c.ok(list.length === 1 ? `Killed ${targetName(c, list[0])}` : `Killed ${list.length} entities`);
     },
   },
   summon: {
@@ -790,7 +844,10 @@ export const COMMANDS: Record<string, CommandDef> = {
   },
   list: {
     usage: ['/list'],
-    run: (c) => c.ok(`There are 1 of a max of 8 players online: ${c.game.playerName}`),
+    run: (c) => {
+      const all = onlinePlayers(c.game, true);
+      c.ok(`There are ${all.length} of a max of ${MAX_GUESTS + 1} players online: ${all.map((t) => t.name).join(', ')}`);
+    },
   },
   locate: {
     usage: ['/locate structure <structure>', '/locate biome <biome>', '/locate poi <poi>'],
@@ -917,14 +974,16 @@ export const COMMANDS: Record<string, CommandDef> = {
   },
   spawnpoint: {
     usage: ['/spawnpoint [<targets>] [<pos>] [<angle>]'],
-    suggest: (_g, _p, i) => (i === 0 ? TARGETS : i < 4 ? coordSuggest(i - 1) : []),
+    suggest: (g, _p, i) => (i === 0 ? targetsOf(g) : i < 4 ? coordSuggest(i - 1) : []),
     run: (c) => {
-      const name = target(c, 0);
+      const targets = selectPlayers(c, 0);
       const p = c.game.player;
       const [x, y, z] = c.args[1] ? blockPos(c, 1) : [Math.floor(p.x), Math.floor(p.y), Math.floor(p.z)];
-      p.respawnPos = [x, y, z];
-      p.respawnForced = true;
-      c.ok(`Set spawn point to ${x}, ${y}, ${z} [0.0] in minecraft:overworld for ${name}`);
+      for (const t of targets) {
+        t.p.respawnPos = [x, y, z];
+        t.p.respawnForced = true;
+      }
+      c.ok(`Set spawn point to ${x}, ${y}, ${z} [0.0] in minecraft:overworld for ${targets.length === 1 ? targets[0].name : `${targets.length} players`}`);
     },
   },
   execute: {
@@ -940,7 +999,7 @@ export const COMMANDS: Record<string, CommandDef> = {
   },
   teleport: {
     usage: ['/teleport <location>', '/teleport <destination>', '/teleport <targets> <location>'],
-    suggest: (_g, _p, i) => (i < 3 ? ['~', '~ ~', '~ ~ ~', ...TARGETS].slice(0, 3 - i) : []),
+    suggest: (g, _p, i) => (i < 3 ? [...['~', '~ ~', '~ ~ ~'].slice(0, 3 - i), ...(i < 2 ? targetsOf(g) : [])] : []),
     run: (c) => tpCommand(c),
   },
   time: {
@@ -992,9 +1051,8 @@ COMMANDS.xp = COMMANDS.experience;
 
 function xpCommand(c: Ctx): void {
   const sub = needArg(c, 0);
-  const name = target(c, 1, false);
-  const p = c.game.player;
   if (sub === 'query') {
+    const { p, name } = selectPlayer(c, 1);
     const kind = c.args[2]?.s ?? 'points';
     if (kind === 'levels') c.ok(`${name} has ${p.xpLevel} experience levels`);
     else if (kind === 'points') {
@@ -1003,57 +1061,105 @@ function xpCommand(c: Ctx): void {
     } else badArg(c, 2);
     return;
   }
+  const targets = selectPlayers(c, 1, false);
   const n = parseIntArg(c, 2, sub === 'set' ? 0 : -2147483648);
   const kind = c.args[3]?.s ?? 'points';
   if (kind !== 'levels' && kind !== 'points') badArg(c, 3);
+  const who = targets.length === 1 ? targets[0].name : `${targets.length} players`;
   if (sub === 'add') {
-    if (kind === 'levels') giveXpLevels(c.game, n);
-    else giveXpPoints(c.game, n);
-    c.ok(`Gave ${n} experience ${kind} to ${name}`);
-  } else if (sub === 'set') {
-    if (kind === 'levels') {
-      p.xpLevel = n;
-    } else {
-      const need = p.xpLevel >= 30 ? 112 + (p.xpLevel - 30) * 9 : p.xpLevel >= 15 ? 37 + (p.xpLevel - 15) * 5 : 7 + p.xpLevel * 2;
-      if (n > need) throw new CommandError('Unable to set experience points above the maximum points for the player\'s current level');
-      p.xpProgress = n / need;
+    for (const { p } of targets) {
+      if (kind === 'levels') giveXpLevels(p, n);
+      else giveXpPoints(p, n);
     }
-    c.ok(`Set ${n} experience ${kind} on ${name}`);
+    c.ok(`Gave ${n} experience ${kind} to ${who}`);
+  } else if (sub === 'set') {
+    let done = 0;
+    for (const { p } of targets) {
+      if (kind === 'levels') p.xpLevel = n;
+      else {
+        const need = p.xpLevel >= 30 ? 112 + (p.xpLevel - 30) * 9 : p.xpLevel >= 15 ? 37 + (p.xpLevel - 15) * 5 : 7 + p.xpLevel * 2;
+        if (n > need) continue;
+        p.xpProgress = n / need;
+      }
+      done++;
+    }
+    if (!done) throw new CommandError('Unable to set experience points above the maximum points for the player\'s current level');
+    c.ok(`Set ${n} experience ${kind} on ${who}`);
   } else badArg(c, 0);
 }
 
+/**
+ * vanilla TeleportCommand: `/tp <destination>`, `/tp <targets> <destination>` (to a player), `/tp <location>`,
+ * `/tp <targets> <location> [<yaw> <pitch>]` (~ from where whoever runs it is). Players only: the host's own, and its
+ * guests, in the host's dimension (the only one there is: sent to another, the host goes and they come along)
+ */
 function tpCommand(c: Ctx): void {
-  const p = c.game.player;
+  const g = c.game, p = g.player;
   const n = c.args.length;
   if (n === 0) needArg(c, 0);
-  const first = c.args[0].s;
-  const isTarget = first.startsWith('@') || first === c.game.playerName;
-  if (n === 1 && isTarget) {
-    const name = target(c, 0);
-    c.ok(`Teleported ${name} to ${name}`);
+  const names = onlinePlayers(g).map((t) => t.name.toLowerCase());
+  const isTarget = (k: number) => c.args[k].s.startsWith('@') || names.includes(c.args[k].s.toLowerCase());
+  const self = onlinePlayers(g)[0];
+  if (n <= 2 && isTarget(n - 1) && (n === 1 || isTarget(0))) {
+    const dest = selectPlayer(c, n - 1);
+    const targets = n === 2 ? selectPlayers(c, 0) : [self];
+    for (const t of targets) if (t.p !== dest.p) put(c, t, dest.p.x, dest.p.y, dest.p.z, dest.p.yaw, dest.p.pitch);
+    c.ok(targets.length === 1 ? `Teleported ${targets[0].name} to ${dest.name}` : `Teleported ${targets.length} entities to ${dest.name}`);
     return;
   }
-  const off = isTarget ? 1 : 0;
-  if (isTarget) target(c, 0);
+  const off = isTarget(0) ? 1 : 0;
+  let targets = off ? selectPlayers(c, 0) : [self];
   const x = coord(c, off, p.x, true);
   const y = coord(c, off + 1, p.y, false);
   const z = coord(c, off + 2, p.z, true);
-  let yaw = p.yaw, pitch = p.pitch;
-  if (c.args[off + 3]) yaw = coord(c, off + 3, p.yaw, false);
-  if (c.args[off + 4]) pitch = Math.max(-90, Math.min(90, coord(c, off + 4, p.pitch, false)));
+  const yaw = c.args[off + 3] ? coord(c, off + 3, p.yaw, false) : null;
+  const pitch = c.args[off + 4] ? Math.max(-90, Math.min(90, coord(c, off + 4, p.pitch, false))) : null;
   if (y < -20000000 || y > 20000000 || Math.abs(x) > 30000000 || Math.abs(z) > 30000000) throw new CommandError('Invalid position for teleport');
-  if (c.dim && c.dim !== c.game.world.dim) {
+  if (c.dim && c.dim !== g.world.dim && targets.some((t) => t.p !== p)) {
+    // (to another dimension: the guests go wherever the host goes, and come in beside it)
+    if (!targets.some((t) => t.p === p)) throw new CommandError('Only the host can be sent to another dimension: its guests go wherever it goes');
+    targets = [self];
+  }
+  for (const t of targets) put(c, t, x, y, z, yaw, pitch);
+  c.ok(targets.length === 1 ? `Teleported ${targets[0].name} to ${f6(x)}, ${f6(y)}, ${f6(z)}` : `Teleported ${targets.length} entities to ${f6(x)}, ${f6(y)}, ${f6(z)}`);
+}
+
+/** (tpCommand) a player put at (x, y, z), turned to (yaw, pitch) or as it was */
+function put(c: Ctx, t: Named, x: number, y: number, z: number, yaw: number | null, pitch: number | null): void {
+  const g = c.game, p = g.player;
+  if (t.p !== p) {
+    g.server?.teleportGuest(t.p, x, y, z, yaw ?? t.p.yaw, pitch ?? t.p.pitch);
+    return;
+  }
+  if (c.dim && c.dim !== g.world.dim) {
     // to another dimension: the position as given (vanilla execute in doesn't scale it), and it counts as
     // changing dimension (vanilla ServerPlayer.teleportTo → triggerDimensionChangeTriggers)
-    p.yaw = yaw;
-    p.pitch = pitch;
-    const from = c.game.world.dim, to = c.dim;
-    c.game.changeDimension(to, x, y, z, (g) => {
-      g.onChangedDimension(from, to);
+    p.yaw = yaw ?? p.yaw;
+    p.pitch = pitch ?? p.pitch;
+    const from = g.world.dim, to = c.dim;
+    g.changeDimension(to, x, y, z, (gm) => {
+      gm.onChangedDimension(from, to);
       return true;
     }, true);
-  } else c.game.teleport(x, y, z, yaw, pitch);
-  c.ok(`Teleported ${c.game.playerName} to ${f6(x)}, ${f6(y)}, ${f6(z)}`);
+  } else g.teleport(x, y, z, yaw ?? p.yaw, pitch ?? p.pitch);
+}
+
+/**
+ * vanilla KickCommand: guests let go, each told why (none given: "Kicked by an operator"); never the host, and nobody
+ * in a world not open to LAN
+ */
+function kickCommand(c: Ctx): void {
+  const g = c.game;
+  const targets = selectPlayers(c, 0, false);
+  if (!g.server) throw new CommandError('Cannot kick in an offline singleplayer game');
+  const reason = c.args[1] ? c.line.slice(c.args[1].pos) : 'Kicked by an operator';
+  let n = 0;
+  for (const t of targets) {
+    if (t.p === g.player || !g.server.kick(t.p, reason)) continue;
+    c.ok(`Kicked ${t.name}: ${reason}`);
+    n++;
+  }
+  if (!n) throw new CommandError('Cannot kick server owner in LAN game');
 }
 
 /** vanilla ExecuteCommand, the `in` modifier only: `execute [in <dimension>]... run <command>` */
@@ -1082,7 +1188,7 @@ function executeSubcommand(c: Ctx): void {
 export function executeCommand(game: Game, line: string): void {
   const args = tokenize(line);
   const cmd = args.shift();
-  const cheats = !!game.meta?.allowCommands;
+  const cheats = cheatsOn(game);
   const err = (msg: string, pos: number) => {
     game.chat('§c' + msg);
     if (pos >= 0) {
@@ -1117,7 +1223,7 @@ export function executeCommand(game: Game, line: string): void {
 
 /** suggestions for the token at the end of `text` (text excludes the slash) */
 export function suggestCommand(game: Game, text: string): { start: number; list: string[] } {
-  const cheats = !!game.meta?.allowCommands;
+  const cheats = cheatsOn(game);
   const toks = tokenize(text);
   const endsWithSpace = text.length === 0 || /\s$/.test(text);
   const cur = endsWithSpace ? '' : toks[toks.length - 1]?.s ?? '';

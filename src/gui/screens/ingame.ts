@@ -45,12 +45,13 @@ export class PauseScreen extends Screen {
       }));
     } else this.add(new Button(col(1), row(3), 98, 20, 'Open to LAN', () => g.setScreen(new ShareToLanScreen(g, this)))).active = MULTIPLAYER_ENABLED && g.mode === 'single';
     this.shareY = row(4) + 28;
-    // (vanilla: a guest disconnects, back to the Multiplayer screen, with nothing to save)
+    // (vanilla: a guest disconnects, back to the Multiplayer screen, with nothing to save; the join code kept there, to
+    // join again as vanilla's server list keeps the server)
     const guest = g.mode === 'client';
     const quit = this.add(
       new Button(col(0), row(4), 204, 20, guest ? 'Disconnect' : 'Save and Quit to Title', () => {
         quit.active = false;
-        if (guest) void g.leaveWorld(new JoinMultiplayerScreen(g, g.titleScreenFactory?.() ?? null));
+        if (guest) void g.leaveWorld(new JoinMultiplayerScreen(g, g.titleScreenFactory?.() ?? null, g.joinedWith));
         else void g.quitToTitle(new GenericMessageScreen(g, 'Saving world'));
       }),
     );

@@ -36,6 +36,24 @@ uniform vec4 u_color;
 out vec4 o;
 void main() { o = u_color; }`;
 
+/**
+ * where the crack texture falls on a block model's quad, corner by corner (u, v for each of its four, 0 to 1): the quad
+ * projected onto its face's plane, in the block's own grid (vanilla SheetedDecalTextureGenerator), a whole face from 0
+ * to 1 (a quad reaching past its block measured from the whole block it starts in)
+ */
+export function decalUV(q: { pos: ArrayLike<number>; dir: number }): number[] {
+  const uv: number[] = [];
+  for (let k = 0; k < 4; k++) {
+    const px = q.pos[k * 3], py = q.pos[k * 3 + 1], pz = q.pos[k * 3 + 2];
+    if (q.dir <= 1) uv.push(px, pz);
+    else if (q.dir <= 3) uv.push(px, 1 - py);
+    else uv.push(pz, 1 - py);
+  }
+  const bu = Math.floor(Math.min(uv[0], uv[2], uv[4], uv[6]) + 1e-4), bv = Math.floor(Math.min(uv[1], uv[3], uv[5], uv[7]) + 1e-4);
+  for (let i = 0; i < 8; i++) uv[i] = Math.min(0.999, Math.max(0, uv[i] - (i % 2 ? bv : bu)));
+  return uv;
+}
+
 const CRACK_VS = `#version 300 es
 layout(location=0) in vec3 a_pos;
 layout(location=1) in vec2 a_uv;
@@ -261,19 +279,8 @@ export class Overlay {
     const u0 = stage / 10;
     for (const m of models.multipart ? models.variants : [models.variants[0]]) {
       for (const q of m.quads) {
-        // project world position onto the face plane for UVs (vanilla SheetedDecalTextureGenerator)
-        for (const k of [0, 1, 2, 0, 2, 3]) {
-          const px = q.pos[k * 3], py = q.pos[k * 3 + 1], pz = q.pos[k * 3 + 2];
-          let u: number, v: number;
-          switch (q.dir) {
-            case 0: case 1: u = px; v = pz; break;
-            case 2: case 3: u = px; v = 1 - py; break;
-            default: u = pz; v = 1 - py; break;
-          }
-          u = u - Math.floor(u - 1e-4);
-          v = v - Math.floor(v - 1e-4);
-          verts.push(x + px - cam.x, y + py - cam.y, z + pz - cam.z, u0 + Math.min(0.999, Math.max(0, u)) * 0.1, Math.min(0.999, Math.max(0, v)));
-        }
+        const uv = decalUV(q);
+        for (const k of [0, 1, 2, 0, 2, 3]) verts.push(x + q.pos[k * 3] - cam.x, y + q.pos[k * 3 + 1] - cam.y, z + q.pos[k * 3 + 2] - cam.z, u0 + uv[k * 2] * 0.1, uv[k * 2 + 1]);
       }
     }
     const s = this.crackShader.use();
