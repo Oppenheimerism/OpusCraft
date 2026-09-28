@@ -5,8 +5,8 @@ next was started. No history rewritten, nothing pushed to `main`.
 
 | # | Milestone | Commit | State |
 |---|-----------|--------|-------|
-| 1 | Signs and hanging signs (11 woods) | see `git log` (the "Signs and hanging signs" commit) | done |
-| 2 | Ender chest | | to do |
+| 1 | Signs and hanging signs (11 woods) | `89f4d4a` | done |
+| 2 | Ender chest | see `git log` (the "Ender chest" commit) | done |
 | 3 | Cake and candle cakes | | to do |
 | 4 | Spyglass | | to do |
 | 5 | Armour stand | | to do |
@@ -14,6 +14,97 @@ next was started. No history rewritten, nothing pushed to `main`.
 
 Where nobody could be asked, the choice closest to vanilla 1.21 was made; each such choice is listed under the
 milestone's "Deviations and open points".
+
+---
+
+## M2: ender chest
+
+The ender chest block and item, and each player's own 27 ender slots that every ender chest opens onto.
+
+- **Block** (`src/world/blocksEnderChest.ts`): `facing` (placed facing the player) and `waterlogged`; hardness 22.5,
+  blast resistance 600, a pickaxe needed (any tier), light 7, stone sounds and map colour, vanilla's 1..15 × 0..14 shape
+  for collision and outline, no comparator output. Drops 8 obsidian, or itself with silk touch (vanilla
+  `blocks/ender_chest`). Hoppers don't see it as a container (as in vanilla). Breaking it angers piglins that see it
+  (it was already in this game's `#guarded_by_piglins` list).
+- **Opening** (`src/game/enderChest.ts`, vanilla `EnderChestBlock.useWithoutItem`): not while a redstone conductor is on
+  top (glass, a slab, a chest are fine); opens a 3-row chest menu titled **Ender Chest** over the opener's own
+  `PlayerEnderChest` (27 slots); piglins that see it are angered (vanilla `angerNearbyPiglins(player, true)`). The menu
+  stays valid only while that chest exists and the player is within reach + 4 (vanilla `stillValidBlockEntity`).
+  Spectators can't open it (vanilla: no menu provider) and never count as openers.
+- **Lid, sounds, events** (`src/world/enderChestBlockEntity.ts`, vanilla `ContainerOpenersCounter` +
+  `ChestLidController`): the first opener plays `block.ender_chest.open` (volume 0.5, pitch 0.9–1.0) and fires
+  `container_open`; the last one out plays `block.ender_chest.close` and fires `container_close`; each change sends the
+  block event (1, count) that moves the lid 0.1 per tick, eased as vanilla (`1 − (1 − f)³`). Every 5 ticks while open
+  it drops openers removed from the level and re-sends the count (as vanilla's recheck). Portal motes: 3 per animate
+  tick from the corner columns (vanilla `animateTick`).
+- **Rendering** (`src/render/enderChestRenderer.ts`): vanilla `ChestModel` (bottom 14×10×14, lid 14×5×14 hinged at the
+  back, lock 2×4×1 sharing the lid's pivot) with a procedural 64×64 sheet (`src/textures/enderChest.ts`: obsidian with
+  pearl-green frames and a green gem latch), drawn in the block's light like the other block-entity renderers; the
+  item/GUI icon is a 3-box block model on the atlas (`ender_chest_*` faces).
+- **Item, recipe, creative**: stacks to 64, 8 obsidian around an eye of ender, Functional Blocks tab (between the
+  barrel and the respawn anchor, as vanilla); it's not a furnace fuel (it used to match the chest's fuel rule).
+- **Sounds** (`src/audio/gen/enderChest.ts`): open = stone lid grinding up, air drawn in, a hollow shimmering hum;
+  close = air out, heavy stone knock, the hum sinking.
+- **Saving**: the slots are kept with the player (`enderItems` in `savePlayer`/`loadPlayer`, `src/game/playerData.ts`):
+  the host's own player in the world's meta, each LAN guest in its `playerdata/<uuid>` record. Saves from before have
+  none (an empty ender chest). The block entity saves nothing but its position; the lid state is never saved.
+- **Dying**: the inventory drops, the ender slots don't; respawning keeps them (same player object).
+- **Multiplayer**: guests open it through the host (the host builds the menu over the guest's own slots, the guest's
+  game shows a copy titled Ender Chest); two guests at one chest each see only their own; the lid state (open/closed,
+  from, since which game tick) goes to guests in the block entity's update data only (not saved), so their copies
+  animate the lid on their own clock; sounds are heard by everyone near. A guest's slots persist through leaving and
+  rejoining, closing the tab (the host drops the session and saves the record at once), the host saving, quitting
+  and reopening the world, and death.
+
+**New files**: `src/world/blocksEnderChest.ts`, `src/world/enderChestBlockEntity.ts`, `src/game/enderChest.ts`,
+`src/render/enderChestRenderer.ts`, `src/textures/enderChest.ts`, `src/audio/gen/enderChest.ts`; tests
+`tests/survival-blocks/ender-chest.mjs`, `tests/survival-blocks/ender-chest-mp.mjs`.
+
+**Shared files touched** (a line or two each, marked `(ender chests)`): `src/world/blocks.ts`
+(`registerEnderChestBlock()`), `src/game/level.ts` (`import './enderChest'`), `src/game/playerData.ts` (`enderItems`
+saved and loaded), `src/storage/worldStore.ts` (the `enderItems` field's type), `src/textures/blocks.ts`
+(`registerEnderChestTextures`), `src/render/entityRenderers.ts` (calls `EnderChestRenderer`), `src/audio/synth.ts`
+(`enderChestSounds`), `src/inventory/recipes.ts` (the recipe), `src/item/item.ts` (Functional Blocks tab; excluded
+from the chest fuel rule), `src/net/chunkData.ts` (`visibleBlockEntity` merges a block entity's optional
+`visibleData()` — only the ender chest's lid uses it). No protocol change. The existing `tests/saves/player.mjs` lists the saved
+player record's fields exactly; `enderItems` was added to its list.
+
+**Deviations and open points**
+- Vanilla's `ChestModel` lock pivot: the lock turns about the lid's own hinge (0, 9, 1) so it stays on the lid.
+- The ender chest item icon is a static block model (vanilla draws the chest's block-entity model in the GUI); it looks
+  the same shut.
+- No statistics in this game, so `open_enderchest` isn't counted.
+- The sounds are generated (vanilla has recordings).
+
+**Tests**: `tests/survival-blocks/ender-chest.mjs` (80 checks: block properties, light, shape, drops by tool and silk
+touch, recipe, item/tab/fuel, sounds, texture sheet (every model face solid), item model, lid easing, placing and
+facing, waterlogging, opening, menu title/size/slots, openers and active chest, sounds and game events, lid timing,
+two players' separate slots, closing order, other chests opening onto the same slots, conductor above, reach, broken
+while open, the 5-tick recheck (a lost block event, a removed player), spectators, piglins, motes, the guest's copy of
+the lid, nothing saved on the block, save/load of the slots (and old saves), death and respawn) and
+`tests/survival-blocks/ender-chest-mp.mjs` (38 checks: a guest opens it by clicking; menu title and slots; lid heard
+by both guests and animated in their copies; shift-clicking in; two guests' slots separate; lid stays up while one is
+still in; blocked by stone above; closed out of reach; leave with it open (lid shuts, record kept) and rejoin; close
+the tab with it open and come back by the same name; death keeps it; the host's own player's slots; host saves and
+quits with guests in, reopens: all three players' slots back). Existing suites re-run after the change, all passing:
+`tests/saves/roundtrip.mjs`, `saves/player.mjs`, `multiplayer/m3-menus.mjs`, `m4-playerdata.mjs`, `m1-blocks.mjs`,
+`m1-chunks.mjs`, `m1-security.mjs`, `survival-blocks/signs.mjs`, `signs-mp.mjs`, `end/shulkerbox.mjs`, `end/blocks.mjs`,
+`menus/banners.mjs`, `bastions/m1a-blocks.mjs`, `ancient-city/m1-blocks.mjs`. `npm run typecheck` clean.
+(M1's full regression, run in the background meanwhile: 171 of 172 suites passed; the one failure was
+`saves/roundtrip.mjs`'s "never more than 100 ms without the page getting a turn" under the parallel run's load, which
+passes when run alone.)
+
+**Try it** (http://localhost:5173/?seed=12345):
+1. Creative → Functional Blocks: the ender chest after the barrel. Survival: craft it from 8 obsidian + eye of ender.
+2. Place it: it faces you, glows (light 7), purple motes drift about it. Right-click: "Ender Chest", the lid rises with
+   its sound. Put something in, close (the lid falls), place a second ender chest far away: the same things are in it.
+3. Put a stone block on top: it won't open; glass on top: it opens. Mine it with a pickaxe: 8 obsidian; with silk
+   touch: the chest. The things inside are still in any other ender chest.
+4. Die with things in it: they don't drop; they're there after respawning.
+5. LAN: open to LAN, join from a second tab. The guest opens the same chest: its own empty slots; the host sees the lid
+   up while the guest looks in. The guest puts something in, closes the tab, joins again with the same name: it's
+   still there. Save and quit the host world (a world made from the title screen), reopen, open to LAN, the guest
+   joins: still there.
 
 ---
 

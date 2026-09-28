@@ -64,6 +64,8 @@ export interface WorldMeta {
     shoulderRight?: SavedEntity | null;
     /** vanilla warden_spawn_tracker: the warning level sculk shriekers have raised */
     wardenSpawnTracker?: import('../game/wardenSpawnTracker').WardenSpawnTrackerData;
+    /** vanilla EnderItems: the player's own ender chest slots, a stack or null for each of the 27 */
+    enderItems?: (SavedStack | null)[];
   } | null;
   /** nether portal blocks per dimension (vanilla POI records), as x, y, z triples */
   portals?: Record<string, number[]>;

@@ -89,6 +89,8 @@ import './frostWalker';
 import './lodestoneCompass';
 // (signs) placing, editing, dyeing and waxing signs and hanging signs
 import './signs';
+// (ender chests) opening onto the player's own slots, its lid, its drops
+import './enderChest';
 
 export interface SoundSink {
   play(name: string, x: number, y: number, z: number, volume?: number, pitch?: number): void;

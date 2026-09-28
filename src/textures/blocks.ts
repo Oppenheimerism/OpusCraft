@@ -47,6 +47,8 @@ import { registerTrialChamberTextures } from './blocklib/trialChambers';
 import { registerBastionTextures } from './blocklib/bastion';
 // (signs) bamboo's planks and stripped block, for its signs' specks
 import { registerSignTextures } from './signs';
+// (ender chest) the shut chest's faces, for its item
+import { registerEnderChestTextures } from './enderChest';
 
 type Gen = () => TexDef;
 export const BLOCK_TEXTURES: Record<string, Gen> = {};
@@ -581,6 +583,8 @@ registerTrialChamberTextures(T);
 registerBastionTextures(T);
 // (signs) bamboo's planks and stripped block
 registerSignTextures(T);
+// (ender chest) its item's faces
+registerEnderChestTextures(T);
 
 // Missing texture (vanilla's magenta/black checkerboard)
 T['missing'] = () => {

@@ -82,7 +82,7 @@ const stored = (d) => structuredClone(d);
 {
   const d = m.savePlayer(kitted(), 'the_nether', { advancements: { 'story/root': ['crafting_table'] }, recipeBook: undefined });
   const keys = Object.keys(d).join(',');
-  const want = 'x,y,z,yaw,pitch,health,food,saturation,exhaustion,xpLevel,xpProgress,xpTotal,xpSeed,uuid,gameMode,flying,selected,inventory,armor,offhand,spawn,respawn,advancements,recipeBook,dead,effects,vehicle,dimension,seenCredits,lastDeath,shoulderLeft,shoulderRight,wardenSpawnTracker';
+  const want = 'x,y,z,yaw,pitch,health,food,saturation,exhaustion,xpLevel,xpProgress,xpTotal,xpSeed,uuid,gameMode,flying,selected,inventory,armor,offhand,spawn,respawn,advancements,recipeBook,dead,effects,vehicle,dimension,seenCredits,lastDeath,shoulderLeft,shoulderRight,wardenSpawnTracker,enderItems'; // (ender chests: the player's ender slots)
   check('the record has every field it had, and the offhand', keys === want, keys);
   check('...its dimension and books as given', d.dimension === 'the_nether' && d.advancements['story/root'][0] === 'crafting_table');
   check('...its inventory 36 slots and its armour 4', d.inventory.length === 36 && d.armor.length === 4);

@@ -165,7 +165,8 @@ export function getItem(id: string): Item {
 const BLOCK_TAB: [RegExp, string][] = [
   [/_(ore)$|^infested_|^(stone|granite|diorite|andesite|deepslate|tuff|calcite|dirt|coarse_dirt|podzol|mycelium|grass_block|sand|red_sand|gravel|clay|bedrock|obsidian|snow_block|ice|packed_ice|blue_ice|mud|rooted_dirt|moss_block|dripstone_block|magma_block|powder_snow|raw_.*_block|netherrack|soul_sand|soul_soil|basalt|blackstone|crimson_nylium|warped_nylium|nether_wart_block|warped_wart_block|ancient_debris|crimson_stem|warped_stem|crimson_fungus|warped_fungus|crimson_roots|warped_roots|nether_sprouts|weeping_vines|twisting_vines|shroomlight)$/, 'natural'],
   [/_log$|_wood$|_leaves$|_sapling$|^(short_grass|fern|dead_bush|tall_grass|large_fern|dandelion|poppy|blue_orchid|allium|azure_bluet|.*_tulip|oxeye_daisy|cornflower|lily_of_the_valley|sunflower|lilac|rose_bush|peony|brown_mushroom|red_mushroom|sugar_cane|cactus|pumpkin|melon|lily_pad|vine|seagrass|kelp|sweet_berry_bush|cobweb|carved_pumpkin|jack_o_lantern|hay_block|moss_carpet|azalea|flowering_azalea|hanging_roots|spore_blossom|big_dripleaf|small_dripleaf)$/, 'natural'],
-  [/^(crafting_table|furnace|chest|bookshelf|ladder|(soul_)?torch|glowstone|sea_lantern|spawner|tnt|sponge|(soul_)?lantern|chain|enchanting_table|grindstone|(chipped_|damaged_)?anvil|bell|barrel|composter|smoker|blast_furnace|cauldron|lectern|cartography_table|fletching_table|smithing_table|loom|stonecutter|brewing_stand|flower_pot|(soul_)?campfire)$|_bed$/, 'functional'],
+  // (ender chests: with the functional blocks, as vanilla's tab has it)
+  [/^(crafting_table|furnace|chest|bookshelf|ladder|(soul_)?torch|glowstone|sea_lantern|spawner|tnt|sponge|(soul_)?lantern|chain|enchanting_table|grindstone|(chipped_|damaged_)?anvil|bell|barrel|composter|smoker|blast_furnace|cauldron|lectern|cartography_table|fletching_table|smithing_table|loom|stonecutter|brewing_stand|flower_pot|(soul_)?campfire|ender_chest)$|_bed$/, 'functional'],
   [/_carpet$|_stained_glass$|_stained_glass_pane$/, 'colored'],
 ];
 
@@ -184,7 +185,8 @@ for (const b of BLOCKS) {
   if (itemName !== b.name) continue; // e.g. wall_torch → torch registered by torch
   if (b.name.startsWith('tall_seagrass') || b.name === 'kelp_plant' || b.name === 'farmland' || b.name === 'sweet_berry_bush' || b.name === 'wheat') continue;
   let fuel: number | undefined;
-  if (/_planks$|_log$|_wood$|crafting_table|bookshelf|chest|ladder|_stairs$|_slab$|_fence$|_fence_gate$|_trapdoor$|_door$/.test(b.name) && /oak|spruce|birch|jungle|acacia|dark_oak|mangrove|cherry|crafting|bookshelf|chest|ladder/.test(b.name)) fuel = b.name.endsWith('_slab') ? 150 : b.name.endsWith('_door') ? 200 : 300;
+  // (ender chests: not a fuel, whatever its name)
+  if (/_planks$|_log$|_wood$|crafting_table|bookshelf|chest|ladder|_stairs$|_slab$|_fence$|_fence_gate$|_trapdoor$|_door$/.test(b.name) && /oak|spruce|birch|jungle|acacia|dark_oak|mangrove|cherry|crafting|bookshelf|chest|ladder/.test(b.name) && b.name !== 'ender_chest') fuel = b.name.endsWith('_slab') ? 150 : b.name.endsWith('_door') ? 200 : 300;
   if (/_carpet$/.test(b.name)) fuel = 67;
   if (/_wool$/.test(b.name)) fuel = 100;
   if (b.name === 'coal_block') fuel = 16000;

@@ -6,6 +6,8 @@ import type { Player, GameMode } from '../entity/player';
 import { saveStack, loadStack, type ItemStack } from '../item/item';
 import { saveEntity, carriesOnePlayer } from './spawner';
 import { loadWorldData, saveWorldData, worldDataKey, type WorldMeta } from '../storage/worldStore';
+// (ender chests) the player's own ender chest slots
+import { enderChestOf } from './enderChest';
 
 export type SavedPlayer = NonNullable<WorldMeta['player']>;
 
@@ -37,6 +39,7 @@ export function savePlayer(p: Player, dimension: string, books: SavedBooks = {})
     shoulderLeft: p.shoulderLeft ?? undefined,
     shoulderRight: p.shoulderRight ?? undefined,
     wardenSpawnTracker: p.wardenSpawnTracker.save(),
+    enderItems: enderChestOf(p).save(),
   };
 }
 
@@ -78,6 +81,8 @@ export function loadPlayer(p: Player, pd: SavedPlayer): void {
   p.shoulderLeft = pd.shoulderLeft ?? null;
   p.shoulderRight = pd.shoulderRight ?? null;
   p.wardenSpawnTracker.load(pd.wardenSpawnTracker);
+  // (saves from before ender chests have none: an empty one)
+  enderChestOf(p).load(pd.enderItems);
 }
 
 /** a guest's record's name among its world's data (vanilla playerdata/<uuid>.dat) */
