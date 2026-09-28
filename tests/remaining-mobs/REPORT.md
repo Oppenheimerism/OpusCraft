@@ -9,8 +9,8 @@ Branch: `claude/optimistic-volta-xe2bah`, from main at 93288e7.
 
 | # | Milestone | State | Commit |
 |---|---|---|---|
-| 1 | Bee: bee nest, beehive, honey bottle, honeycomb, honey block, honeycomb block | done | the commit that adds this report ("Bees, …") |
-| 2 | Phantom and insomnia | not started | |
+| 1 | Bee: bee nest, beehive, honey bottle, honeycomb, honey block, honeycomb block | done | `295bada` "Bees. Bee nests hang from trees in meadows (every tree there), plains, sunflower plains, cherry groves and flower forests, …" |
+| 2 | Phantom and insomnia | done | the commit that adds this row ("Phantoms. …") |
 | 3 | Panda and bamboo | not started | |
 | 4 | Mooshroom and huge mushrooms | not started | |
 | 5 | Armadillo, scutes and wolf armour | not started | |
@@ -91,6 +91,38 @@ Each new line in a shared file is marked with a `(remaining mobs…)` comment. T
 - **No `PROTOCOL_VERSION` bump.** No packet changed. The bee's fields ride the existing entity-data sync, and
   `BUILD_ID` already tells builds apart.
 
+### Milestone 2: the phantom
+
+**New files**
+- `src/entity/phantom.ts`: the phantom, its move and look controls, and its four goals.
+- `src/game/phantomSpawner.ts`: insomnia (vanilla `PhantomSpawner`).
+- `src/render/phantomRenderer.ts`: the model, its animation and the glowing eyes.
+- `src/textures/phantom.ts`: the skin and the eyes.
+- `src/audio/gen/phantom.ts`: 23 sound takes.
+- `tests/remaining-mobs/phantom.mjs` and `phantom-mp.mjs`: the tests.
+
+**Registration lines**
+- `src/game/spawner.ts`: `phantom` in `MOB_TYPES` and `ENTITY_NAMES`; a `phantoms` field (a `PhantomSpawner`) on
+  `NaturalSpawner`, ticked first of the custom spawners (vanilla's order), with the same `spawnEnemies` as patrols.
+- `src/render/entityRenderers.ts`: `PhantomRenderers`, its shadow radius (0.75), and one line in the distance cull:
+  a phantom is drawn at any distance (vanilla `Phantom.shouldRenderAtSqrDistance`).
+- `src/textures/mobs.ts`: the spawn egg's colours in `EGGS`.
+- `src/item/itemsRemainingMobs.ts`: the spawn egg (the membrane item already existed).
+- `src/audio/synth.ts`: `Object.assign(SOUNDS, phantomSounds())`, before the parrot's, so a parrot imitates it.
+
+**Hooks and changed behaviour**
+- `src/entity/player.ts`: a new `timeSinceRest` field (vanilla statistic `minecraft:time_since_rest`). It counts up
+  once a tick on the host while the player isn't asleep. `startSleeping` (lying down in a bed) and `die` reset it.
+- `src/game/playerData.ts` and `src/storage/worldStore.ts`: `timeSinceRest` is saved with the player, the host's and
+  each guest's. A save from before loads as 0.
+- `src/entity/monsters.ts`: `Monster.aiStep`'s bright-light boredom moved into a new `updateNoActionTime()` so the
+  phantom can opt out (vanilla's phantom is a `FlyingMob`, not a `Monster`). Nothing changes for other monsters.
+- `src/entity/rabbit.ts`: rabbits don't count the phantom as a monster to flee (vanilla `Monster.class`).
+- `src/entity/cat.ts`: a comment only (`hiss` is now used).
+- `src/render/particles.ts`: the `mycelium` particle (vanilla `SuspendedTownParticle`), the specks off a phantom's
+  wingtips.
+- **No `PROTOCOL_VERSION` bump.** No packet changed; the phantom's size and wingbeat offset ride the entity-data sync.
+
 ## 3. Open points, deviations, uncertain values, hooks
 
 ### Milestone 1: the bee
@@ -127,6 +159,36 @@ Each new line in a shared file is marked with a `(remaining mobs…)` comment. T
 - **Piston-pushed honey.** A honey block drags the blocks stuck to it. Honey lying on the ground therefore drags the
   ground and usually can't be pushed (over 12 blocks). This is vanilla.
 
+### Milestone 2: the phantom
+
+**Deviations**
+- **The wingbeat's clock.** Vanilla counts a phantom's wingbeat from its own age, which each client counts for
+  itself, and plays the flap sound and the wingtip specks on the client. Here the beat comes from the world's time
+  plus the phantom's id × 3 (its `flapOffset`, sent to guests), and the host plays the flap and the specks and sends
+  them on. So the host and every guest see and hear the same beat. The pace and sounds are vanilla's.
+- **No statistics screen.** The game's Statistics button is disabled, so "Time Since Last Rest" isn't shown
+  anywhere. It is counted, reset and saved as in vanilla.
+- **Class.** The phantom extends the game's `Monster` class, as the ghast does, and overrides what vanilla's
+  `FlyingMob` does differently: it doesn't keep players from sleeping, it swims and splashes with the generic
+  sounds, bright light doesn't hasten its despawning, and rabbits don't flee it.
+
+**Values I'm not sure of**
+- **Sounds.** All 23 takes are synthesised to sound like vanilla's, not copied. I believe the counts match vanilla's
+  `sounds.json` (ambient 5, bite 2, death 3, flap 6, hurt 3, swoop 4); I am least sure of the flap's 6.
+- **The drawn pitch.** Vanilla `PhantomRenderer.setupRotations` turns the model by `getXRot()` as it stands this tick,
+  not blended between ticks. I kept that, so the pitch moves in tick steps, as in vanilla.
+
+**Choices where the brief was open** (the most vanilla-faithful option each time)
+- **What rest is.** Lying down in a bed resets insomnia even if the night isn't skipped (vanilla resets the statistic
+  as the player starts sleeping). Dying resets it too. Nothing else does.
+- **The swoop cadence.** The goals are ported as vanilla has them. The sweep goal lets go of the target after every
+  swoop, so the phantom climbs away, finds its player again about three seconds later and swoops half a second after
+  that. The strategy goal's 8–11 second timer rarely matters, as in vanilla.
+- **Guests.** A guest's insomnia is counted on the host (vanilla: server-side statistics) and kept in the guest's
+  saved player data. Phantoms come for guests exactly as for the host's player.
+- **Testing insomnia in the browser.** There is no `/tick sprint` or statistics command (vanilla has no command to
+  set the statistic either), so the checklist uses the browser console to set it.
+
 ## 4. Tests and results
 
 Run from the repository root with `node tests/remaining-mobs/<file>`. Each prints `ok`/`FAIL` lines and exits
@@ -136,6 +198,8 @@ non-zero on a failure.
 |---|---|---|
 | `bee.mjs` | See below. | all pass (92), about 15 s |
 | `bee-mp.mjs` | See below. | all pass (21), about 8 s |
+| `phantom.mjs` | See below. | all pass (63), about 8 s |
+| `phantom-mp.mjs` | See below. | all pass (13), about 8 s |
 
 **`bee.mjs`** covers:
 - **The bee:** health, speeds, attack, follow range, size, eyes, the baby, food, name, spawn egg, experience,
@@ -186,6 +250,41 @@ non-zero on a failure.
   it back. The guest's world doesn't know the bees inside (vanilla).
 - **The mirror check:** the two worlds stay identical throughout.
 
+**`phantom.mjs`** covers:
+- **The phantom:** health, experience, size 0.9 × 0.5 and eyes, the bite (6 + size), undead, the monster category,
+  its size from 0 to 64 (15% bigger a size), no fall damage, not keeping a player awake, its name, egg and sounds.
+- **Loot:** a membrane half the time to a player's kill, never more than one, none otherwise; up to four with
+  looting III.
+- **Time since rest:** it counts up a tick at a time; a bed resets it and it stays 0 while asleep; death resets it;
+  it's saved with the player, and an old save loads as 0.
+- **The spawner:**
+  - on hard, one to four phantoms together, 20 to 34 blocks over the player and at most 10 out; one to three and
+    less often on normal; each try one to two minutes after the last;
+  - none on peaceful, before three days, by day, under a roof, below sea level, for a spectator, with the
+    `doInsomnia` rule off, with mob spawning off, or where the spot isn't open air;
+  - four days awake is a quarter as likely as it can be; the natural spawner runs it.
+- **Flight:** circling its anchor 5 to 15 blocks out, leaving a creative player be; finding a survival player, the
+  swoop with its screech (volume 10), the anchor 20 to 39 blocks up, the bite (6 on normal) and its sound, pulling
+  away and letting go, looking again about three seconds later; the highest of two players first; a cat breaking
+  the swoop off with a hiss; a hurt breaking it off; burning by day and not by night.
+- **Wings:** a `flap` game event every 25 ticks, the flap sound once a beat (volume and pitch 0.95–1), two mycelium
+  specks a tick, the beat's clock.
+- **Saving and `/summon`:** size and anchor saved; `/summon` with `Size` and `AX`/`AY`/`AZ`; without data it's made
+  as a natural one (anchor 5 up); with data but no anchor it takes where it is.
+- **Advancements:** Monster Hunter and Monsters Hunted count it; a piercing crossbow arrow killing two gives Two
+  Birds, One Arrow.
+- **Assets:** the 23 sound takes and the parrot's imitation; the skin (every box painted, the wingtips ragged),
+  the eyes (only the eyes), the egg; the model's parts and wingbeat; the renderer (skin, then the eyes full bright
+  and added; the size scale and the pitch; shadow 0.75).
+
+**`phantom-mp.mjs`** (two players over the multiplayer harness) covers:
+- **A guest's copy of a phantom:** its size and hitbox, its pitch, its wingbeat in time with the host's; the guest
+  hears the flaps and sees the specks; the mirror check.
+- **A guest's insomnia:** phantoms come over the guest, the guest sees them, and one bites it (9 on hard), with the
+  hurt showing in the guest's game.
+- **Sleeping:** the guest lies down in a bed with phantoms about (they don't keep it awake), and its insomnia resets.
+- **Saved player data:** the guest's time since rest is kept when it leaves and is back when it rejoins.
+
 **Also run**
 - **`npm run typecheck`:** clean.
 - **`node scripts/audio-check.mjs "entity\.bee|block\.beehive|block\.honey_block|block\.coral_block"`:** only "slow"
@@ -195,6 +294,12 @@ non-zero on a failure.
   stripes, eyes that turn red when angry, pollen specks, pale wings, legs and stinger. The 13 block faces are the nest
   and hive, with and without honey, the honey block and the honeycomb block.
 - **Regression before this commit** (`node scripts/regress.mjs -j 2`): see the summary below.
+- **Milestone 2:** `node scripts/audio-check.mjs "^entity\.phantom"` flags only "slow" (21–35 ms) on the death and
+  swoop takes, which carry a reverb tail. The skin, eyes and egg were viewed with `scripts/preview-textures.mjs`: a
+  dark blue-grey body with a pale ridge, dusky wing membranes on pale bones, ragged trailing edges, and green eyes at
+  the face's corners. Also rerun: `cat.mjs`, `parrot.mjs`, `rabbit.mjs`, `multiplayer/m4-playerdata.mjs`,
+  `fixes/respawn.mjs`, `sounds/swim.mjs`, `bee.mjs` and `bee-mp.mjs` (all pass). The full regression runs before the
+  last commit.
 
 **Regression summary (milestone 1)**: `node scripts/regress.mjs -j 2` passed 169 of 172 suites in 19.3 min.
 - `tests/end/credits-music.mjs` crashed because the new bee buzz loop read `level.entities` from the test's stand-in
@@ -265,3 +370,27 @@ Start at `http://localhost:5173/?seed=12345` (`npm run dev`) in creative. For th
 
   The guest can bottle or shear a full hive, and the bees then chase the guest. In survival, the guest can break a
   nest with a silk-touch tool and place it back with its bees.
+
+### Milestone 2: the phantom
+
+- **Summoning** (`/time set night`, then `/gamemode survival`):
+  - `/summon minecraft:phantom ~ ~12 ~` makes a phantom. It circles high, then screeches and swoops at you, bites
+    and pulls away, and does it again a few seconds later.
+  - Check the long wings beat slowly with a leathery flap, the tail sways, grey specks trail from the wingtips,
+    the body tips nose-down as it dives, and the green eyes glow in the dark.
+  - `/summon minecraft:phantom ~ ~12 ~ {Size:20}` is a much bigger one (four times the size) with a harder bite.
+  - The spawn egg is in the spawn eggs tab (blue-grey with bright green spots).
+  - With a cat (`/summon minecraft:cat`) near you, a phantom gives up its swoop as the cat hisses.
+  - At sunrise (`/time set day`), phantoms under the open sky catch fire.
+  - Kill one in survival: it sometimes drops a phantom membrane.
+- **Insomnia** (the natural spawn): phantoms come after three in-game days without lying in a bed, which is an hour
+  of play. To test it quickly, in survival, at night, out under the open sky, open the browser console and enter
+  `__game.player.timeSinceRest = 200000; __game.spawner.phantoms.nextTick = 1`. The next tick is a try: on normal it
+  brings one to three phantoms 20 to 34 blocks overhead about one time in three (one to four, about half the time, on
+  hard). If none come, enter `__game.spawner.phantoms.nextTick = 1` again rather than waiting the one to two minutes
+  to the next try. Then lie in a bed (it can be slept in with phantoms about) and check that
+  `__game.player.timeSinceRest` is 0.
+- **Two Birds, One Arrow:** with a Piercing crossbow, shoot through two phantoms in a line.
+- **LAN guest:** open a second window, host with Esc → Open to LAN, and join from the other window's Multiplayer
+  screen. The guest should see phantoms with their size, wingbeat, specks and glowing eyes, and hear the flaps and
+  screeches. A survival guest is chased and bitten, and can sleep in a bed with phantoms about.

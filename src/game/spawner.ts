@@ -77,6 +77,8 @@ import { Shulker } from '../entity/shulker';
 import { ItemFrame } from '../entity/itemFrame';
 // (remaining mobs)
 import { Bee } from '../entity/bee';
+import { Phantom } from '../entity/phantom';
+import { PhantomSpawner } from './phantomSpawner';
 import { moonPhase } from '../render/environment';
 import { tickInhabitedTime } from './difficulty';
 import { BIOMES } from '../world/gen/biomes';
@@ -320,6 +322,9 @@ Object.assign(ENTITY_NAMES, { piglin_brute: 'Piglin Brute' });
 // (remaining mobs) the bee: only its nests and hives bring it (no natural spawns)
 Object.assign(MOB_TYPES, { bee: (l: Level) => new Bee(l) });
 Object.assign(ENTITY_NAMES, { bee: 'Bee' });
+// (remaining mobs) the phantom: only insomnia brings it (PhantomSpawner, below)
+Object.assign(MOB_TYPES, { phantom: (l: Level) => new Phantom(l) });
+Object.assign(ENTITY_NAMES, { phantom: 'Phantom' });
 
 // (Stage 4: the outer End)
 Object.assign(ENTITY_NAMES, { shulker: 'Shulker', shulker_bullet: 'Shulker Bullet', item_frame: 'Item Frame', glow_item_frame: 'Glow Item Frame', firework_rocket: 'Firework Rocket' });
@@ -551,6 +556,8 @@ export class NaturalSpawner {
   readonly cats = new CatSpawner();
   /** vanilla WanderingTraderSpawner (its wait and chance are saved with the world: game.ts) */
   readonly traders = new WanderingTraderSpawner();
+  /** (remaining mobs) vanilla PhantomSpawner: insomnia */
+  readonly phantoms = new PhantomSpawner();
 
   constructor(readonly level: Level, readonly worldSeed: number) {}
 
@@ -576,7 +583,8 @@ export class NaturalSpawner {
     // and water creatures every tick
     const spawnFriendlies = lvl.gameTime % 400 === 0;
     const spawnEnemies = lvl.difficulty !== 'peaceful';
-    // (Stage 4: patrols) vanilla ServerLevel.tickCustomSpawners
+    // (Stage 4: patrols) vanilla ServerLevel.tickCustomSpawners (the phantoms' first, as vanilla lists them)
+    this.phantoms.tick(lvl, spawnEnemies);
     this.patrols.tick(lvl, spawnEnemies);
     this.cats.tick(lvl);
     this.traders.tick(lvl);

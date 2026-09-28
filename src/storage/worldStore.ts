@@ -64,6 +64,8 @@ export interface WorldMeta {
     shoulderRight?: SavedEntity | null;
     /** vanilla warden_spawn_tracker: the warning level sculk shriekers have raised */
     wardenSpawnTracker?: import('../game/wardenSpawnTracker').WardenSpawnTrackerData;
+    /** (remaining mobs: the phantom) vanilla's minecraft:time_since_rest statistic: ticks awake (phantoms come after 72000) */
+    timeSinceRest?: number;
   } | null;
   /** nether portal blocks per dimension (vanilla POI records), as x, y, z triples */
   portals?: Record<string, number[]>;

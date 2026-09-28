@@ -3,7 +3,8 @@
 // and the honey block with the natural blocks after the hay bale (vanilla CreativeModeTabs.NATURAL_BLOCKS: hay, bee
 // nest, honeycomb block, slime block, honey block; an item here has one tab, so the nest's place among the natural
 // blocks and the honey block's among the redstone ones are gui/screens/creative.ts's). The honeycomb and the honey
-// bottle came with the trial chambers (itemsTrialChambers.ts); the bottle is its crafting remainder.
+// bottle came with the trial chambers (itemsTrialChambers.ts); the bottle is its crafting remainder. The phantom: its
+// spawn egg.
 
 import type { Item } from './item';
 
@@ -29,4 +30,7 @@ export function registerRemainingMobItems(reg: Reg, items: Map<string, Item>, li
   // vanilla Items.HONEY_BOTTLE: craftRemainder(GLASS_BOTTLE), the bottle left in the grid by the honey block's and the
   // sugar's recipes
   if (items.has('honey_bottle')) items.get('honey_bottle')!.remainder = 'glass_bottle';
+
+  // --- the phantom (its membrane was already here: a cat's morning gift, the slow falling brew, the elytra's repair on an anvil)
+  reg({ id: 'phantom_spawn_egg', texture: 'phantom_spawn_egg', creativeTab: 'spawn_eggs' });
 }

@@ -67,6 +67,7 @@ import { trialCombatSounds } from './gen/trialCombat';
 import { crafterSounds } from './gen/crafter';
 // (remaining mobs) the bee's, the beehive's, the honey block's and the coral block's (the honeycomb block's)
 import { beeSounds } from './gen/bee';
+import { phantomSounds } from './gen/phantom';
 
 export const SAMPLE_RATE = 44100;
 
@@ -139,6 +140,8 @@ Object.assign(SOUNDS, trialChamberSounds());
 Object.assign(SOUNDS, trialCombatSounds(), crafterSounds());
 // (remaining mobs: the bee) the bee's buzzing, its hive's and the honey block's
 Object.assign(SOUNDS, beeSounds());
+// (remaining mobs: the phantom) its screech, swoop, bite and wingbeats
+Object.assign(SOUNDS, phantomSounds());
 // (vanilla sounds.json: the snow golem's are the snow's breaking, the bow's and the shears')
 for (const [k, v] of Object.entries({ 'entity.snow_golem.hurt': 'block.snow.break', 'entity.snow_golem.death': 'block.snow.break', 'entity.snow_golem.shoot': 'entity.arrow.shoot', 'entity.snow_golem.shear': 'entity.sheep.shear' })) if (SOUNDS[v]) SOUNDS[k] = SOUNDS[v];
 // (vanilla sounds.json: any mob's swimming, and a monster's, is the player's splashing)

@@ -1164,6 +1164,26 @@ export class ParticleEngine {
         this.addSprite(p);
         break;
       }
+      case 'mycelium': {
+        // (remaining mobs: the phantom) vanilla SuspendedTownParticle.Provider: a grey speck that hangs where it's left
+        // (off a phantom's wingtips, over mycelium), barely drifting, for a second or so
+        const p = this.base(kind, x, y, z);
+        this.withSpeed(p, xd, yd, zd);
+        const f = Math.random() * 0.1 + 0.2;
+        p.r = p.g = p.b = f;
+        p.bbw = 0.02;
+        p.size *= Math.random() * 0.6 + 0.5;
+        p.dx *= 0.02;
+        p.dy *= 0.02;
+        p.dz *= 0.02;
+        p.lifetime = Math.floor(20 / (Math.random() * 0.8 + 0.2));
+        p.physics = false;
+        p.friction = 0.99;
+        p.frames = ['generic_0'];
+        p.frame = 0;
+        this.addSprite(p);
+        break;
+      }
       case 'happy_villager':
       case 'composter': {
         // vanilla SuspendedTownParticle (HappyVillagerProvider, ComposterFillProvider): hovers in place
@@ -1524,6 +1544,7 @@ export class ParticleEngine {
         p.dz *= 0.85;
         return fluidType(w.getState(Math.floor(p.x), Math.floor(p.y), Math.floor(p.z))) === FLUID_WATER;
       }
+      case 'mycelium':
       case 'happy_villager':
       case 'composter': {
         // vanilla SuspendedTownParticle.tick (moves without collision)

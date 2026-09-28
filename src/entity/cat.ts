@@ -255,7 +255,7 @@ export class Cat extends TamableAnimal {
   /** vanilla Cat.causeFallDamage: it always lands on its feet */
   protected override causeFallDamage(_dist: number): void {}
 
-  /** vanilla Cat.hiss (a phantom about to swoop takes fright at it — no phantoms yet) */
+  /** vanilla Cat.hiss (a phantom about to swoop takes fright at it: entity/phantom.ts) */
   hiss(): void {
     this.playSound('entity.cat.hiss', this.soundVolume(), this.voicePitch());
   }
