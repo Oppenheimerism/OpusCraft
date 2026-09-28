@@ -79,6 +79,7 @@ import { ItemFrame } from '../entity/itemFrame';
 import { Bee } from '../entity/bee';
 import { Phantom } from '../entity/phantom';
 import { Panda } from '../entity/panda';
+import { Mooshroom, mooshroomSpawnRulesOk } from '../entity/mooshroom';
 import { PhantomSpawner } from './phantomSpawner';
 import { moonPhase } from '../render/environment';
 import { tickInhabitedTime } from './difficulty';
@@ -329,6 +330,9 @@ Object.assign(ENTITY_NAMES, { phantom: 'Phantom' });
 // (remaining mobs) the panda: in the jungles (the bamboo jungle most), as any animal
 Object.assign(MOB_TYPES, { panda: (l: Level) => new Panda(l) });
 Object.assign(ENTITY_NAMES, { panda: 'Panda' });
+// (remaining mobs) the mooshroom: in herds on the mushroom fields
+Object.assign(MOB_TYPES, { mooshroom: (l: Level) => new Mooshroom(l) });
+Object.assign(ENTITY_NAMES, { mooshroom: 'Mooshroom' });
 
 // (Stage 4: the outer End)
 Object.assign(ENTITY_NAMES, { shulker: 'Shulker', shulker_bullet: 'Shulker Bullet', item_frame: 'Item Frame', glow_item_frame: 'Glow Item Frame', firework_rocket: 'Firework Rocket' });
@@ -448,7 +452,9 @@ function settingsFor(name: string): MobSettings {
 function settingsForLand(name: string): Omit<MobSettings, 'water' | 'ambient'> {
   const none = { creature: [], monster: monsters(), creatureProbability: 0.1 };
   switch (name) {
+    // (remaining mobs: the mooshroom) vanilla BiomeDefaultFeatures.mooshroomSpawns: herds of four to eight, and no monsters
     case 'mushroom_fields':
+      return { creature: [S_('mooshroom', 8, 4, 8)], monster: [], creatureProbability: 0.1 };
     case 'deep_dark':
       return { creature: [], monster: [], creatureProbability: 0.1 };
     // vanilla BiomeDefaultFeatures.plainsSpawns: herds of horses, and a few donkeys
@@ -861,6 +867,9 @@ export class NaturalSpawner {
       case 'hoglin':
         // vanilla Hoglin.checkHoglinSpawnRules: any light, just not on a nether wart block
         return BLOCKS[STATE_BLOCK[lvl.world.getState(x, y - 1, z)]].name !== 'nether_wart_block';
+      // (remaining mobs: vanilla SpawnPlacements MOOSHROOM, MushroomCow::checkMushroomSpawnRules)
+      case 'mooshroom':
+        return mooshroomSpawnRulesOk(lvl, x, y, z);
       case 'pig':
       case 'cow':
       case 'sheep':

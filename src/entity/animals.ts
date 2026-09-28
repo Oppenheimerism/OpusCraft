@@ -616,7 +616,8 @@ export class Pig extends Animal {
 }
 
 export class Cow extends Animal {
-  readonly type = 'cow';
+  // ((remaining mobs: the mooshroom) a string, for the mooshroom's own)
+  readonly type: string = 'cow';
   protected adultWidth = 0.9;
   protected adultHeight = 1.4;
   constructor(level: Level) {

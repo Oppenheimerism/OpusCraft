@@ -91,6 +91,9 @@ import './lodestoneCompass';
 import './beehive';
 // (remaining mobs: the panda) bamboo
 import './bamboo';
+// (remaining mobs: the mooshroom) mushrooms small and huge, and mycelium's spores; suspicious stew from flowers
+import './mushrooms';
+import './suspiciousStew';
 
 export interface SoundSink {
   play(name: string, x: number, y: number, z: number, volume?: number, pitch?: number): void;

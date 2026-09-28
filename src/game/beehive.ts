@@ -25,7 +25,7 @@ import { ItemEntity } from '../entity/itemEntity';
 import { AABB } from '../core/aabb';
 import { Bee } from '../entity/bee';
 import { MAX_HONEY_LEVELS } from '../world/blocksBees';
-import { hiveDispense } from './redstone/dispenseItems';
+import { hiveDispense } from './redstone/hiveDispense';
 
 const blk = (st: number): Block => BLOCKS[STATE_BLOCK[st]];
 

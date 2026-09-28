@@ -5,7 +5,9 @@
 // blocks and the honey block's among the redstone ones are gui/screens/creative.ts's). The honeycomb and the honey
 // bottle came with the trial chambers (itemsTrialChambers.ts); the bottle is its crafting remainder. The phantom: its
 // spawn egg. The panda: its spawn egg; bamboo (the stalk's block item, which plants a shoot on the ground) drawn flat,
-// with the natural blocks before sugar cane, burning for 50 ticks.
+// with the natural blocks before sugar cane, burning for 50 ticks. The mooshroom: its spawn egg; the huge mushrooms'
+// blocks with the natural blocks after the leaves; the suspicious stews (one of each flower's, game/suspiciousStew.ts)
+// with the food after the rabbit stew.
 
 import type { Item } from './item';
 
@@ -49,4 +51,18 @@ export function registerRemainingMobItems(reg: Reg, items: Map<string, Item>, li
     Object.assign(bamboo, { texture: 'bamboo', creativeTab: 'natural', fuel: 50 });
     before('bamboo', 'sugar_cane');
   }
+
+  // --- the mooshroom
+  reg({ id: 'mooshroom_spawn_egg', texture: 'mooshroom_spawn_egg', creativeTab: 'spawn_eggs' });
+  // vanilla CreativeModeTabs.NATURAL_BLOCKS: the brown mushroom block, the red one and the stem after the last of the
+  // leaves (the flowering azalea's)
+  let prev = 'flowering_azalea_leaves';
+  for (const id of ['brown_mushroom_block', 'red_mushroom_block', 'mushroom_stem']) {
+    if (!items.has(id)) continue;
+    items.get(id)!.creativeTab = 'natural';
+    after(id, prev);
+    prev = id;
+  }
+  // vanilla CreativeModeTabs.FOOD_AND_DRINKS: the mushroom stew, the beetroot soup, the rabbit stew, the suspicious stews
+  after('suspicious_stew', 'rabbit_stew');
 }

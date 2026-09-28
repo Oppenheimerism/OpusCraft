@@ -11,6 +11,8 @@ import { ITEM_LIST, ItemStack, Item } from '../../item/item';
 import { enchantmentLine, tooltipOrder } from '../../item/enchantments';
 import { enchantedBooks, stacksOf } from '../../item/creativeStacks';
 import { craftingEnchants } from '../../item/enchantHelper';
+// (remaining mobs: the mooshroom)
+import { tooltipFlag } from '../../item/hoverText';
 import { KEYS } from '../../game/input';
 
 interface Tab {
@@ -45,6 +47,8 @@ function searchText(s: ItemStack): string {
   let t = SEARCH_TEXT.get(s);
   if (t === undefined) {
     const ench = tooltipOrder(craftingEnchants(s)).map(([id, l]) => enchantmentLine(id, l).text);
+    // (remaining mobs: the mooshroom) vanilla SessionSearchTrees: the tooltips as creative mode shows them
+    tooltipFlag.creative = true;
     t = [...itemTooltip(s), ...ench].map((l) => l.replace(/§./g, '').trim().toLowerCase()).join('\n');
     SEARCH_TEXT.set(s, t);
   }
@@ -303,6 +307,8 @@ export class CreativeInventoryScreen extends AbstractContainerScreen<ContainerMe
     const h = this.hoveredSlot;
     if (!this.menu.carried && h?.hasItem()) {
       if (h === this.destroySlot) return;
+      // (remaining mobs: the mooshroom) vanilla TooltipFlag: creative mode's
+      tooltipFlag.creative = true;
       const lines = itemTooltip(h.item!);
       if (this.tab.type === 'search') lines.splice(1, 0, `§9${tabs().find((x) => x.id === tabOf(h.item!.item))?.name ?? ''}`);
       g.tooltip(lines, mx, my);

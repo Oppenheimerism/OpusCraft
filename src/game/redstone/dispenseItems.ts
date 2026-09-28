@@ -29,6 +29,10 @@ import { Pig, Sheep, DYE_COLORS } from '../../entity/animals';
 import { SnowGolem } from '../../entity/snowGolem';
 // (trial chambers)
 import { Bogged } from '../../entity/bogged';
+// (remaining mobs: the mooshroom)
+import { Mooshroom } from '../../entity/mooshroom';
+// (remaining mobs: the bee)
+import { hiveDispense } from './hiveDispense';
 import { Strider } from '../../entity/strider';
 import { AbstractHorse, AbstractChestedHorse } from '../../entity/horse';
 import { createBoat, boatItemInfo } from '../../entity/boat';
@@ -425,9 +429,10 @@ const emptyBucket = behavior((src, stack) => {
 
 /**
  * (remaining mobs: the bee) a full hive in front, sheared (vanilla ShearsDispenseItemBehavior.tryShearBeehive) or
- * bottled (the glass bottle's behaviour): true if it was (game/beehive.ts sets these)
+ * bottled (the glass bottle's behaviour): true if it was (game/beehive.ts sets these, in ./hiveDispense.ts: the
+ * hooks' own module, so the beehive can set them before this one has loaded)
  */
-export const hiveDispense: { shear: ((level: Level, x: number, y: number, z: number) => boolean) | null; bottle: ((level: Level, x: number, y: number, z: number) => boolean) | null } = { shear: null, bottle: null };
+export { hiveDispense };
 
 /** vanilla: a glass bottle fills from water in front (a water bottle takes its place, a free slot or goes out) */
 const glassBottle = optional((src, stack) => {
@@ -497,15 +502,18 @@ const boneMeal = optional((src, stack) => {
 
 /**
  * vanilla ShearsDispenseItemBehavior: a sheep or snow golem in front that can be shorn is (beehives, when the game has
- * them); (trial chambers) and a bogged
+ * them); (trial chambers) and a bogged; (remaining mobs) and a mooshroom
  */
 const shears = optional((src, stack) => {
   // (remaining mobs: the bee) a full hive in front first
   if (hiveDispense.shear?.(src.level, ...front(src))) return wear(stack);
   const s = src.level.getEntities(
     cell(front(src)),
-    (e) => (e instanceof Sheep && e.isAlive && !e.sheared && !e.isBaby()) || (e instanceof SnowGolem && e.readyForShearing()) || (e instanceof Bogged && e.readyForShearing()),
-  )[0] as Sheep | SnowGolem | Bogged | undefined;
+    (e) =>
+      (e instanceof Sheep && e.isAlive && !e.sheared && !e.isBaby()) || (e instanceof SnowGolem && e.readyForShearing()) || (e instanceof Bogged && e.readyForShearing()) ||
+      // (remaining mobs: the mooshroom)
+      (e instanceof Mooshroom && e.readyForShearing()),
+  )[0] as Sheep | SnowGolem | Bogged | Mooshroom | undefined;
   if (!s) {
     src.success = false;
     return stack;

@@ -11,8 +11,8 @@ Branch: `claude/optimistic-volta-xe2bah`, from main at 93288e7.
 |---|---|---|---|
 | 1 | Bee: bee nest, beehive, honey bottle, honeycomb, honey block, honeycomb block | done | `295bada` "Bees. Bee nests hang from trees in meadows (every tree there), plains, sunflower plains, cherry groves and flower forests, …" |
 | 2 | Phantom and insomnia | done | `4ee0b58` "Phantoms. Stay up three days without lying down in a bed and phantoms come for you at night: …" |
-| 3 | Panda and bamboo | done | the commit that adds this row ("Pandas and bamboo. …") |
-| 4 | Mooshroom and huge mushrooms | not started | |
+| 3 | Panda and bamboo | done | `76d00bc` "Pandas and bamboo. Bamboo jungles are thick with bamboo, with podzol round some of it, …" |
+| 4 | Mooshroom and huge mushrooms | done | the commit that adds this row ("Mooshrooms and huge mushrooms. …") |
 | 5 | Armadillo, scutes and wolf armour | not started | |
 | 6 | Camel | not started | |
 | 7 | Sniffer | not started | |
@@ -20,6 +20,17 @@ Branch: `claude/optimistic-volta-xe2bah`, from main at 93288e7.
 | 9 | Endermite | not started | |
 | 10 | Skeleton horse trap and zombie horse | not started | |
 | 11 | Wither (the beacon only if everything else is done) | not started | |
+
+**Important: in the pushed commits of milestones 1 to 3, the game didn't start in a browser.** It stopped on a black
+screen with "Cannot access 'hiveDispense' before initialization" in the console. The bee milestone put the
+dispenser's hive hooks in `game/redstone/dispenseItems.ts`, and `game/beehive.ts` set them as it loaded. But the
+dispenser's module imports the spawner, which imports the bee, which imports the beehive, so in the browser's module
+order the beehive ran before the hooks existed. The headless tests load their modules in other orders and never hit
+it. I found it in milestone 4, the first time I started the game in a headless browser. The fix is in the milestone 4
+commit: the hooks have a module of their own with no imports (`game/redstone/hiveDispense.ts`). A new test,
+`tests/remaining-mobs/load-order.mjs`, loads the modules in `main.ts`'s order, as a browser does. It fails on
+`76d00bc` (Node reports the same cycle as "Cannot set properties of undefined (setting 'shear')") and passes now. From milestone 4 on, each milestone is also checked in a real browser (headless Chromium):
+the dev server and the production build both start, and the new mob is summoned and screenshotted.
 
 ## 2. Shared files changed, and hooks
 
@@ -187,6 +198,62 @@ Each new line in a shared file is marked with a `(remaining mobs…)` comment. T
   sync; the sneeze cloud and the crumbs ride the existing particle relay; the new blocks' states are block states
   like any others (`BUILD_ID` already tells builds apart).
 
+### Milestone 4: the mooshroom and huge mushrooms
+
+**New files**
+- `src/entity/mooshroom.ts`: the mooshroom (vanilla `MushroomCow`, a `Cow`): its colour, lightning, shears, the
+  bowl, flowers, breeding, saving, `/summon` data and its spawn rule.
+- `src/render/mooshroomRenderer.ts`: the cow's model in the mooshroom's skin, with its three mushrooms (vanilla
+  `MushroomCowMushroomLayer`).
+- `src/textures/mooshroom.ts`: the red and brown skins.
+- `src/audio/gen/mooshroom.ts`: the mooshroom's own 9 sound takes (convert 2, eat 4, milk 3). The suspicious milk
+  shares the milk's takes, and the shears' snip is the sheep's, as in vanilla.
+- `src/game/suspiciousStew.ts`: what each small flower puts in a stew, the four-ingredient recipes, the creative
+  tabs' stews and the creative-mode tooltip.
+- `src/world/blocksMushrooms.ts`: the brown and red mushroom blocks and the mushroom stem (six sides each, 64
+  states), with their models.
+- `src/textures/blocklib/mushrooms.ts`: their faces (the brown cap, the red cap, the stem, the inside).
+- `src/world/gen/hugeMushroom.ts`: the huge brown and red mushrooms (vanilla `HugeBrownMushroomFeature`,
+  `HugeRedMushroomFeature`), one a chunk on the mushroom fields and now and then in a dark forest tree's place.
+- `src/game/mushrooms.ts`: the huge mushroom blocks closing their sides and dropping small mushrooms; small mushrooms
+  surviving, spreading and growing huge with bone meal; mycelium's spores.
+- `src/game/redstone/hiveDispense.ts`: the dispenser's hive hooks, moved here from `dispenseItems.ts` to fix the
+  browser start (section 1).
+- `tests/remaining-mobs/mooshroom.mjs`, `mooshroom-mp.mjs` and `load-order.mjs`: the tests.
+
+**Registration lines**
+- `src/world/blocks.ts`: `registerMushroomBlocks()`.
+- `src/textures/blocks.ts`: `registerMushroomTextures(T)`.
+- `src/textures/mobs.ts`: the spawn egg's colours in `EGGS`.
+- `src/item/itemsRemainingMobs.ts`: the spawn egg; the three mushroom blocks in the natural blocks tab, after the
+  flowering azalea leaves; the suspicious stew moved after the rabbit stew (vanilla's place in the tabs).
+- `src/audio/synth.ts`: `Object.assign(SOUNDS, mooshroomSounds())`, and `entity.mooshroom.shear` sharing
+  `entity.sheep.shear`.
+- `src/game/level.ts`: `import './mushrooms'` and `import './suspiciousStew'`.
+- `src/game/spawner.ts`: `mooshroom` in `MOB_TYPES` and `ENTITY_NAMES`; the mushroom fields' creatures (mooshrooms,
+  weight 8, four to eight; the biome had none); the mooshroom's spawn rule.
+- `src/render/entityRenderers.ts`: `MooshroomRenderers`, and its shadow radius (0.7, halved for a calf).
+- `src/world/gen/features.ts`: `mushroomIslandVegetation` runs before the other vegetation; the dark forest's trees
+  (a new `huge` flag on its `Deco`) ask `darkForestMushroom` first.
+
+**Hooks and changed behaviour**
+- `src/entity/animals.ts`: `Cow.type` is typed `string` instead of the literal `'cow'`, so the mooshroom can be a cow
+  with a type of its own. Nothing else about the cow changes.
+- `src/item/hoverText.ts`: `tooltipFlag` (vanilla `TooltipFlag.isCreative`). `src/gui/screens/container.ts` and
+  `creative.ts` set it as they draw a tooltip (and the creative search sets it as it indexes one), so a suspicious
+  stew names its effects only in creative mode, as in vanilla.
+- `src/game/redstone/dispenseItems.ts`: a dispenser's shears shear a mooshroom, as they do a sheep. The hive hooks
+  are imported from `./hiveDispense` and re-exported, so nothing that used them changes. `src/game/beehive.ts`
+  imports them from there.
+- Small mushrooms (`game/mushrooms.ts`, through the existing `canSurvive` hook): they now stay on mycelium, podzol or
+  nylium in any light, and elsewhere only in raw light under 13 on a solid block (vanilla `MushroomBlock`). Before,
+  the game kept them on any solid block. A mushroom in bright light elsewhere now breaks when a block next to it
+  changes, as in vanilla.
+- **No `PROTOCOL_VERSION` bump.** No packet changed. The mooshroom's colour rides the entity-data sync; the swirls,
+  smoke and puff ride the particle relay; the new blocks' states are block states like any others. What's in a
+  brown mooshroom (its stew effects) is a list of plain objects, which the sync doesn't send; guests don't need it,
+  as in vanilla (the client doesn't know it either).
+
 ## 3. Open points, deviations, uncertain values, hooks
 
 ### Milestone 1: the bee
@@ -295,6 +362,45 @@ Each new line in a shared file is marked with a `(remaining mobs…)` comment. T
 - **Guests.** A guest's bamboo feeds, breeds and tempts pandas, the host deciding, and a guest plants and cuts bamboo
   like anyone. No panda data is kept per player.
 
+### Milestone 4: the mooshroom and huge mushrooms
+
+**Deviations**
+- **Who sees the flower's swirls.** In vanilla, the four swirls (or the two wisps of smoke when the mooshroom already
+  holds a flower's effect) are shown only to the player who gave the flower, by that player's own client. Here the
+  host makes them and sends them on, so everyone nearby sees them. The munching sound is heard by everyone nearby in
+  both.
+- **The suspicious stew recipes aren't in the recipe book.** They work in any crafting grid, as special recipes, but
+  the recipe book doesn't list them. In vanilla they are ordinary shapeless recipes (`suspicious_stew_from_*`) and the
+  book shows them.
+- **Dark forests generated from now on.** A huge mushroom takes a tree's place, so the trees after it in that chunk
+  come out differently from before (they draw on the same random). Only chunks generated from now on are affected;
+  saved chunks keep what they have. The mushroom fields' huge mushrooms have a random of their own.
+- **Flowers the game lacks.** The flower list names the wither rose (wither, 7 s) and the torchflower (night vision,
+  5 s), which the game doesn't have yet. Their recipes and the wither stew in the creative tabs appear by themselves
+  when those flowers arrive. So the creative tabs show 8 stews now; vanilla shows 9.
+
+**Values I'm not sure of**
+- **Stew durations.** I used the 1.20.2-and-later values: saturation 7 ticks (dandelion, blue orchid), night vision
+  5 s (poppy, torchflower), fire resistance 3 s (allium), blindness 11 s (azure bluet), weakness 7 s (the tulips),
+  regeneration 7 s (oxeye daisy), jump boost 5 s (cornflower), poison 11 s (lily of the valley), wither 7 s (wither
+  rose). Older versions had some of these a second longer or shorter. I am fairly but not fully sure of this set.
+- **Sounds.** All takes are synthesised to sound like vanilla's, not copied. The counts I believe vanilla has:
+  convert 2, eat 4, milk 3 (the suspicious milk the same three).
+- **The spawn egg's colours** (0xa00f10 and 0xb7b7b7) are from memory of vanilla `SpawnEggItem`.
+
+**Choices where the brief was open** (the most vanilla-faithful option each time)
+- **Vanilla quirks kept:**
+  - lightning turns a mooshroom once per bolt, however many ticks the bolt flashes, and doesn't hurt it; the bolt
+    still lights fire round it, as in vanilla;
+  - a red huge mushroom's cap checks no room round its stem (vanilla's radius 0 for the red one), so it grows where a
+    brown one wouldn't;
+  - bone meal on a small mushroom is always used up, even when the huge mushroom fails (vanilla's
+    `isBonemealSuccess` is a 40% roll and `isValidBonemealTarget` is always true);
+  - small mushrooms in bright light away from mycelium, podzol or nylium break when a block next to them changes;
+  - a calf can take a flower (vanilla only checks the colour), though it can't be milked or sheared.
+- **Guests.** A guest's bowl, bucket, shears, flowers and wheat work on a mooshroom, the host deciding. What's in a
+  brown mooshroom stays on the host, as vanilla keeps it on the server. Nothing is kept per player.
+
 ## 4. Tests and results
 
 Run from the repository root with `node tests/remaining-mobs/<file>`. Each prints `ok`/`FAIL` lines and exits
@@ -308,6 +414,9 @@ non-zero on a failure.
 | `phantom-mp.mjs` | See below. | all pass (13), about 8 s |
 | `panda.mjs` | See below. | all pass (126), about 11 s |
 | `panda-mp.mjs` | See below. | all pass (27), about 8 s |
+| `mooshroom.mjs` | See below. | all pass (100), about 16 s |
+| `mooshroom-mp.mjs` | See below. | all pass (20), about 7 s |
+| `load-order.mjs` | See below. | all pass (3), about 9 s |
 
 **`bee.mjs`** covers:
 - **The bee:** health, speeds, attack, follow range, size, eyes, the baby, food, name, spawn egg, experience,
@@ -438,6 +547,67 @@ non-zero on a failure.
 - **A guest's planting and cutting:** a shoot on grass, stalk on the shoot, the guest seeing both; a sword cuts the
   stalk at a stroke and the block above falls.
 
+**`mooshroom.mjs`** covers:
+- **The huge mushroom blocks:**
+  - the brown and red caps and the stem: six sides each (64 states), all skin to begin with; hardness 0.2, wood's
+    sound, an axe's; their models (skin on the true sides, uvlocked; the inside on the false ones) and items (in the
+    natural blocks tab after the leaves);
+  - placed against another of their own kind, the side between them closes on both, never to open again; not against
+    another kind;
+  - broken: a cap drops no small mushroom seven times in nine, and one or two the rest; the stem nothing; silk touch
+    the block itself.
+- **Small mushrooms:** they live on mycelium or podzol in full daylight, on stone only in the dark (a lamp's light
+  counts), not on glass; they spread till five of a kind are about; bone meal grows a huge one four times in ten and
+  is used either way; no growth without room (a block where the brown cap goes stops the brown, not the red).
+- **Huge mushrooms:** the brown's flat cap 7 across with its corners cut and the red's dome of three rings with its
+  3 by 3 roof, each face its skin or inside as vanilla has it; the stem 4 to 6 tall, one time in 12 twice that; one
+  in every mushroom fields chunk (red or brown at even odds), none in the plains; in a dark forest, a brown one
+  instead of a tree one time in 40 and a red one one time in 20 of the rest, and no other trees asking.
+- **Mycelium's spores** (one tick in ten) and the four block textures.
+- **The mooshroom:**
+  - a cow's numbers (10 health, 0.2 speed, 0.9 by 1.4), a creature, red to begin with, its name, `/summon`, the spawn
+    egg in its tab; mycelium the best ground to wander to;
+  - the bowl (mushroom stew, the milking sound, the interaction game event; a stack of bowls; creative; not a calf);
+    the bucket (milk);
+  - shears: a cow in its place (health, name, turn, persistence kept), five mushrooms of its colour from the top of
+    its back, the snip, the puff, the shear game event, a point of wear, the shears breaking on their last use; not a
+    calf;
+  - flowers to a brown one: one taken, its effect in it, four swirls and the munch (2 loud); a second one before a
+    bowl goes up in smoke, not taken; then the bowl gives suspicious stew with that effect, with its own sound, and
+    the next bowl plain stew; a red one takes none; a brown calf does; what each flower puts in;
+  - lightning: red to brown once per bolt, whatever its flashes, unhurt and unburnt, with the shimmer (2 loud); the
+    next bolt back to red; a bolt beside it;
+  - breeding: wheat, a calf of their colour, the breeding trigger; a mooshroom and a cow don't mate; two of a colour
+    have a calf of the other one time in 1024, two of different colours either at even odds; a spawn egg on one gives
+    a calf of its colour; it counts for Two by Two;
+  - loot and experience (a cow's), its voice (the cow's);
+  - saving (`Type`, `stew_effects`); `/summon` with `Type`, with `stew_effects` (a missing duration is 160 ticks), an
+    effect that doesn't exist (none taken), an unknown `Type` (red);
+  - spawning: the mushroom fields' list (mooshrooms, weight 8, four to eight; no monsters; bats underground), the
+    spawn rule (mycelium, raw light over 8 day or night, not grass, not the dark), the other animals' rule as it
+    was (grass, not mycelium), herds in new chunks;
+  - a dispenser's shears.
+- **Suspicious stew:** the recipe in the 3 by 3 and 2 by 2 grids with a flower anywhere, nothing else allowed (the
+  three without a flower still mushroom stew); the creative tabs' 8 stews in vanilla's order after the rabbit stew;
+  the tooltip naming its effects only in creative mode; eating one (its effect, its food, the bowl back).
+- **Looks:** both skins (the cow's layout, every box painted), the egg; the renderer (its own skin, three mushrooms of
+  its colour where vanilla puts them, the head's one turning with the head, none on a calf or an invisible one, the
+  shadow 0.7).
+
+**`mooshroom-mp.mjs`** (two players over the multiplayer harness) covers:
+- **A guest's copy of a mooshroom:** red as the host's, turned brown by lightning with the shimmer heard, a calf's
+  size; gone when it is; the mirror check.
+- **A guest's bowl, flower and shears:** mushroom stew in the guest's hand (the host deciding) with the milking heard;
+  a flower taken into a brown one (the guest sees the swirls and hears the munch, but isn't told what's in it); the
+  next bowl suspicious stew with the effect; shears leave a cow and five mushrooms on both sides, the puff seen and
+  the snip heard, the shears worn.
+- **A guest's bone meal:** a huge mushroom grows (the host growing it), the guest seeing it, one bone meal a try.
+- **A guest in creative:** takes a suspicious stew from the creative tabs with its effect kept; a stew no tab has
+  comes out plain on the host.
+
+**`load-order.mjs`** loads the game's modules in `main.ts`'s order, as a browser does (section 1), and checks that
+the beehive's dispenser hooks are set and that every mob this branch adds can be made.
+
 **Also run**
 - **`npm run typecheck`:** clean.
 - **`node scripts/audio-check.mjs "entity\.bee|block\.beehive|block\.honey_block|block\.coral_block"`:** only "slow"
@@ -459,6 +629,13 @@ non-zero on a failure.
   and the brown panda's brown and tan. The regression was run for this milestone too (below): its first panda test
   run caught a slip in my change to `game/raycast.ts` (the block offset shadowed the ray's origin), fixed before this
   commit.
+- **Milestone 4:** `node scripts/audio-check.mjs "entity\.mooshroom"` gives no warnings. The skins and the four block
+  faces were viewed with `scripts/preview-textures.mjs`: a deep red hide dappled with pale grey spots, a grey muzzle
+  and stockings (the brown one warm brown with cream), and the caps, stem and inside tiling without seams. **In a
+  browser** (headless Chromium through Playwright, on the dev server and on `npm run build` plus `vite preview`), the
+  game starts and loads a world. At `?seed=12345`, `/summon mooshroom` and `/summon mooshroom ~ ~ ~ {Type:"brown"}`
+  showed red and brown mooshrooms with their three mushrooms (a calf with none). Bone meal's growth
+  (`growHugeMushroom`) made a huge brown and a huge red mushroom on mycelium. I checked the screenshots.
 
 **Regression summary (milestone 1)**: `node scripts/regress.mjs -j 2` passed 169 of 172 suites in 19.3 min.
 - `tests/end/credits-music.mjs` crashed because the new bee buzz loop read `level.entities` from the test's stand-in
@@ -480,6 +657,26 @@ non-zero on a failure.
 - I changed `game/interaction.ts` (the placement check) while the regression was running, so I reran every suite
   that drives `Interaction`, plus the shulker box, `saves/player.mjs` and the panda tests: 26 of 26 passed.
 - From now on I run the full regression for every milestone.
+
+**Regression summary (milestone 4)**: `node scripts/regress.mjs -j 2` passed 173 of 179 suites in 21.1 min.
+- **`tests/llama/llama.mjs` caught a real bug of mine**: "llamas come in windswept_hills" and "savanna_plateau" found
+  none. In the spawner's spawn-rule switch, I had put the mooshroom's `case` (with its `return`) just below the farm
+  animals' shared cases, so the pig, cow, sheep, chicken, horse, donkey, mule, llama and trader llama all fell into the
+  mooshroom's rule and could only spawn on mycelium. The mooshroom's case now stands on its own above them. A new
+  check in `mooshroom.mjs` ("the other animals' as they were") fails with the old order and passes now. The llama
+  suite passes.
+- `tests/drowned/drowned.mjs` ("at night it rises from the sea bed") and `tests/illagers/illagers.mjs` ("evoker
+  conjures fangs") are on the brief's known-flaky list. Both pass run alone.
+- `tests/ancient-city/m2-city.mjs` failed its timing check ("the city's chunks take at most half as long again as
+  without it": 63.5 vs 40.0 ms) with two suites running at once. It measures time on a busy machine, and it passes
+  run alone.
+- `tests/end/dragon.mjs` ("flaming: at 10 ticks a cloud of radius 5 on the ground in front of its head") and
+  `tests/end/silverfish.mjs` ("a fall doesn't wake them", where the silverfish merged into the stone) each failed once.
+  Both depend on the mob's own random, and both passed three more times on this branch and three times on main.
+- Rerun after the fix, with the final code: all nine remaining-mobs suites, and the suites that test spawning or the
+  animals near it (llama, polar bear, biome mobs, frog, fox, parrot, goat, rabbit, ocelot, horse, horse inventory,
+  wolf). All pass. `wolf.mjs` (known-flaky) failed once on "within ten blocks it stays put" and then passed four times
+  on the branch and four times on main.
 
 ## 5. Browser checklist
 
@@ -569,8 +766,8 @@ Start at `http://localhost:5173/?seed=12345` (`npm run dev`) in creative. For th
 ### Milestone 3: the panda and bamboo
 
 - **Finding them:** at seed 12345 the nearest large bamboo jungle is about 3,000 blocks north:
-  `/tp @s 790 90 -2930`. There is a small patch at `/tp @s 955 80 1800`. `/locate biome minecraft:bamboo_jungle`
-  finds one from anywhere. Check:
+  `/tp @s 790 90 -2930`. There is a small patch at `/tp @s 955 80 1800`. (Correction: an earlier version of this
+  report said `/locate biome` finds one. It doesn't: the game's `/locate` finds structures only.) Check:
   - thick bamboo stalks standing off-centre in their blocks, large leaves at the tops, and podzol round some clumps;
   - pandas among them (spawned with the chunks, and after that as any animal);
   - in an ordinary jungle, a lone stalk now and then.
@@ -618,3 +815,65 @@ Start at `http://localhost:5173/?seed=12345` (`npm run dev`) in creative. For th
   - rolling, lying on its back, sulking and a cub's sneeze.
 
   The guest can feed pandas bamboo (they fall in love, or sit and eat it), plant bamboo and cut it with a sword.
+
+### Milestone 4: the mooshroom and huge mushrooms
+
+- **Finding them:**
+  - At seed 12345 the nearest large mushroom island is about 8,000 blocks north: `/tp @s 1684 85 -8256` lands in
+    its middle, on mycelium. The island is about 250 blocks across. Check:
+    - huge mushrooms all over it (a huge brown one stands at 1638, 80, -8298 and a red one at 1641, 80, -8283);
+    - small mushrooms about, and grey spores drifting up off the mycelium;
+    - herds of red mooshrooms (spawned with one chunk in ten, four to eight together);
+    - no zombies or skeletons at night on the surface (`/time set night`).
+  - A dark forest west of spawn: `/tp @s -262 85 -45` looks over a huge brown mushroom at -268, 72, -52 and a huge
+    red one at -272, 67, -27, each standing where a tree would.
+  - There is no `/locate biome` in the game (see milestone 3's correction).
+- **Summoning:**
+  - `/summon minecraft:mooshroom ~ ~ ~3` is a red one; `{Type:"brown"}` a brown one; `{Age:-24000}` a calf, which
+    has no mushrooms.
+  - Check the two mushrooms on its back and the one on its head (turning with its head), the red or brown hide with
+    its pale spots, and that it walks and moos like a cow.
+  - The spawn egg is in the spawn eggs tab (dark red with grey spots).
+- **What a mooshroom gives** (`/gamemode survival` to see items used up):
+  1. A bowl on a grown one: mushroom stew, with a slurping milk sound. A bucket: milk.
+  2. Shears on a red one: a puff of smoke, and it's a plain cow, with five red mushrooms popping out of it. A name
+     tag's name stays on the cow.
+  3. A dispenser with shears in front of one does the same.
+- **Suspicious stew:**
+  1. `/summon minecraft:mooshroom ~ ~ ~3 {Type:"brown"}`, then use a small flower on it (for example an oxeye daisy).
+     It munches loudly and gives off swirls, and the flower is used.
+  2. Use a second flower: two wisps of smoke, and the flower isn't taken.
+  3. A bowl now gives suspicious stew. Eating it gives the flower's effect (the oxeye daisy: regeneration for
+     7 seconds). The next bowl is plain mushroom stew again.
+  4. Crafting: a bowl, a brown mushroom, a red mushroom and a flower, anywhere in the grid (the 2 by 2 too), make
+     suspicious stew.
+  5. The creative food tab has 8 suspicious stews after the rabbit stew. In creative mode their tooltips name the
+     effect and its length; in survival they don't.
+  6. `/summon minecraft:mooshroom ~ ~ ~3 {Type:"brown",stew_effects:[{id:"minecraft:night_vision",duration:200}]}`
+     gives a brown one whose next bowl is a 10-second night vision stew.
+- **Lightning:** `/summon minecraft:mooshroom ~ ~ ~6`, then `/summon minecraft:lightning_bolt ~ ~ ~7` (a bolt within
+  3 blocks of it). The red one turns brown with a rising shimmer and isn't hurt. Another bolt turns it back. Fire the
+  bolt starts can still burn it, as in vanilla.
+- **Breeding:** wheat on two red ones gives a red calf (about one in a thousand is brown). A red and a brown one
+  have a calf of either colour. A mooshroom counts for Two by Two.
+- **Huge mushrooms from bone meal:**
+  1. Put a red or brown mushroom on mycelium or podzol (or on stone somewhere dark) with room above it.
+  2. Bone meal it: about four times in ten it grows into a huge mushroom, 4 to 6 blocks tall (now and then twice
+     that). A brown one has a flat cap 7 across; a red one a dome hanging down round its stem.
+  3. A brown one needs clear room round its upper stem; a red one only its stem's column.
+- **The huge mushroom blocks:**
+  - A cap breaks quickly, fastest with an axe, and drops 0 to 2 small mushrooms (usually none); the stem drops
+    nothing; with silk touch each drops itself.
+  - Placed side by side, two caps (or two stems) close the face between them, showing the pale inside.
+  - The three blocks are in the natural blocks tab after the flowering azalea leaves.
+- **Small mushrooms:** in bright light they only live on mycelium, podzol or nylium. Placed on stone in daylight they
+  can't be placed; one on stone in a dark cave lives, and it breaks if a torch lights it up and a block next to it
+  changes. With `/gamerule randomTickSpeed 300` they spread slowly to spots near them, till five of a kind are about.
+- **LAN guest:** open a second window, host with Esc → Open to LAN, and join from the other window's Multiplayer
+  screen. The guest should see:
+  - red and brown mooshrooms with their mushrooms, and calves without;
+  - a mooshroom turning colour when struck by lightning, and hear the shimmer;
+  - the swirls, the smoke, the shearing puff and the cow left behind, and huge mushrooms grown by anyone.
+
+  The guest can milk a mooshroom with a bowl or a bucket, feed a brown one flowers and get suspicious stew, shear
+  one, breed them with wheat, and grow huge mushrooms with bone meal.

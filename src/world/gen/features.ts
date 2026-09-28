@@ -14,6 +14,8 @@ import { deepDarkFeatures } from './deepDark';
 import { biomeTemperature } from './temperature';
 // (remaining mobs: the panda)
 import { bambooVegetation } from './bambooFeature';
+// (remaining mobs: the mooshroom)
+import { mushroomIslandVegetation, darkForestMushroom } from './hugeMushroom';
 
 // ---------------------------------------------------------------------------
 // Ores
@@ -160,7 +162,8 @@ function adjacentAir(ctx: GenContext, x: number, y: number, z: number): boolean 
 
 interface Deco {
   /** `bees`: (remaining mobs: the bee) the chance of a bee nest on each (vanilla's trees with a BeehiveDecorator) */
-  trees?: { count: number; extra?: number; kinds: [TreeKind, number][]; grid?: boolean; bees?: number };
+  /** (remaining mobs: the mooshroom) `huge`: the dark forest's huge mushrooms, in a tree's place now and then */
+  trees?: { count: number; extra?: number; kinds: [TreeKind, number][]; grid?: boolean; bees?: number; huge?: boolean };
   grass?: number;
   grassNoise?: [number, number];
   tallGrass?: number;
@@ -193,7 +196,7 @@ const DECO: Partial<Record<number, Deco>> = {
   [B.flower_forest]: { trees: { count: 6, extra: 0.1, kinds: OAK_FOREST, bees: 0.02 }, grass: 2, flowers: { patches: 4, kinds: ['dandelion', 'poppy', 'allium', 'azure_bluet', 'red_tulip', 'orange_tulip', 'white_tulip', 'pink_tulip', 'oxeye_daisy', 'cornflower', 'lily_of_the_valley'] }, tallFlowers: { patches: 2, kinds: ['lilac', 'rose_bush', 'peony'] } },
   [B.birch_forest]: { trees: { count: 10, extra: 0.1, kinds: [['birch', 1]], bees: 0.002 }, grass: 2, flowers: { patches: 1, rarity: 3, kinds: DEFAULT_FLOWERS }, tallFlowers: { patches: 1, kinds: ['lilac', 'rose_bush', 'peony'] } },
   [B.old_growth_birch_forest]: { trees: { count: 10, extra: 0.1, kinds: [['tall_birch', 1]], bees: 0.002 }, grass: 2, flowers: { patches: 1, rarity: 3, kinds: DEFAULT_FLOWERS } },
-  [B.dark_forest]: { trees: { count: 16, kinds: [['dark_oak', 0.667], ['birch', 0.2], ['fancy_oak', 0.1], ['oak', 0.033]], grid: true }, grass: 2, mushrooms: 2, tallFlowers: { patches: 1, kinds: ['lilac', 'rose_bush', 'peony'] } },
+  [B.dark_forest]: { trees: { count: 16, kinds: [['dark_oak', 0.667], ['birch', 0.2], ['fancy_oak', 0.1], ['oak', 0.033]], grid: true, huge: true }, grass: 2, mushrooms: 2, tallFlowers: { patches: 1, kinds: ['lilac', 'rose_bush', 'peony'] } },
   [B.taiga]: { trees: { count: 10, extra: 0.1, kinds: [['pine', 0.33], ['spruce', 0.67]] }, grass: 1, fern: 0.8, berries: 32, mushrooms: 1, tallGrass: 1 },
   [B.snowy_taiga]: { trees: { count: 10, extra: 0.1, kinds: [['pine', 0.33], ['spruce', 0.67]] }, grass: 1, fern: 0.8, berries: 32 },
   [B.old_growth_pine_taiga]: { trees: { count: 10, extra: 0.1, kinds: [['mega_pine', 0.3], ['mega_spruce', 0.08], ['pine', 0.2], ['spruce', 0.42]] }, grass: 3, fern: 0.8, mushrooms: 3, berries: 32 },
@@ -331,6 +334,9 @@ export class Decorator {
     // --- (remaining mobs: the panda) the jungles' bamboo, before their trees (vanilla BAMBOO_LIGHT before TREES_JUNGLE,
     // BAMBOO before BAMBOO_VEGETATION); what grew stands in the heightmaps the rest go by
     if (bambooVegetation(ctx, this.seed)) ctx.computeHeightmaps();
+    // --- (remaining mobs: the mooshroom) the mushroom fields' huge mushroom (vanilla MUSHROOM_ISLAND_VEGETATION, first of
+    // their vegetation), on a random of its own
+    mushroomIslandVegetation(ctx, this.seed);
     // --- vegetation: pick sample biomes per quadrant so mixed chunks decorate with each biome
     for (let q = 0; q < 4; q++) {
       const qx = (q & 1) * 8, qz = (q >> 1) * 8;
@@ -645,6 +651,8 @@ export class Decorator {
         const y = ctx.heightOceanFloor(x, z);
         if (ctx.heightMotion(x, z) !== y) continue; // underwater
         const kind = pickWeighted(r, d.trees.kinds);
+        // (remaining mobs: the mooshroom) vanilla DARK_FOREST_VEGETATION: now and then a huge mushroom in the tree's place
+        if (d.trees.huge && darkForestMushroom(ctx, this.seed, x, y, z)) continue;
         // (the bees draw on a random of their own, so the trees stay as they were)
         placeTree(ctx, kind, x, y, z, r, d.trees.bees ? { chance: d.trees.bees, r: new Rand(hash2(x, z, this.seed ^ 0xbee5), y) } : undefined);
       }

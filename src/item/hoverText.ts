@@ -6,6 +6,12 @@ import type { ItemStack } from './item';
 type Lines = (s: ItemStack) => string[];
 
 const HOVER = new Map<string, Lines>();
+
+/**
+ * (remaining mobs: the mooshroom) vanilla TooltipFlag.isCreative: the player looking at the tooltip is in creative mode
+ * (a suspicious stew names its effects then); set by the screens as they draw a tooltip
+ */
+export const tooltipFlag = { creative: false };
 const BEFORE: Lines[] = [];
 const AFTER: Lines[] = [];
 

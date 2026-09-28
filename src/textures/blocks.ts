@@ -49,6 +49,8 @@ import { registerBastionTextures } from './blocklib/bastion';
 import { registerBeeTextures } from './blocklib/bees';
 // (remaining mobs: the panda)
 import { registerBambooTextures } from './blocklib/bamboo';
+// (remaining mobs: the mooshroom)
+import { registerMushroomTextures } from './blocklib/mushrooms';
 
 type Gen = () => TexDef;
 export const BLOCK_TEXTURES: Record<string, Gen> = {};
@@ -585,6 +587,8 @@ registerBastionTextures(T);
 registerBeeTextures(T);
 // (remaining mobs: the panda) bamboo's stalk, leaves, shoot and the potted one's leaf
 registerBambooTextures(T);
+// (remaining mobs: the mooshroom) the huge mushrooms': the brown and red caps' skins, the stem's, and the inside
+registerMushroomTextures(T);
 
 // Missing texture (vanilla's magenta/black checkerboard)
 T['missing'] = () => {

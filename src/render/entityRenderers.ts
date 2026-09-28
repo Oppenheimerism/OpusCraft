@@ -86,6 +86,8 @@ import { FrogRenderers, FROG_SHADOW_RADII } from './frogRenderer';
 import { BeeRenderers, BEE_SHADOW_RADII } from './beeRenderer';
 import { PhantomRenderers, PHANTOM_SHADOW_RADII } from './phantomRenderer';
 import { PandaRenderers, PANDA_SHADOW_RADII } from './pandaRenderer';
+// (remaining mobs: the mooshroom)
+import { MooshroomRenderers, MOOSHROOM_SHADOW_RADII } from './mooshroomRenderer';
 // (M4: the warden)
 import { WardenRenderer, WARDEN_SHADOW_RADIUS } from './wardenRenderer';
 import { LlamaSpit } from '../entity/llama';
@@ -246,6 +248,7 @@ export class EntityRenderDispatcher {
   private readonly phantoms: PhantomRenderers;
   /** (remaining mobs) the panda */
   private readonly pandas: PandaRenderers;
+  private readonly mooshrooms: MooshroomRenderers;
   /** names over mobs, drawn once every entity is down */
   private readonly nameTags: NameTagRenderer;
   /** this frame's options: names shown at all (not with the GUI hidden), and what the crosshair is on */
@@ -292,6 +295,7 @@ export class EntityRenderDispatcher {
     this.bees = new BeeRenderers(this.raiders.kit);
     this.phantoms = new PhantomRenderers(this.raiders.kit);
     this.pandas = new PandaRenderers(this.raiders.kit);
+    this.mooshrooms = new MooshroomRenderers(this.raiders.kit);
     // (trial chambers)
     this.breezes = new BreezeRenderers(gl, this.raiders.kit);
     this.nameTags = new NameTagRenderer(gl);
@@ -845,6 +849,7 @@ export class EntityRenderDispatcher {
     if (this.bees.render(b, e, dx, dy, dz, p)) return;
     if (this.phantoms.render(b, e, dx, dy, dz, p)) return;
     if (this.pandas.render(b, e, dx, dy, dz, p)) return;
+    if (this.mooshrooms.render(b, e, dx, dy, dz, p)) return;
     // (M4: the warden)
     if (this.wardens.render(b, e, dx, dy, dz, p)) return;
     // (trial chambers)
@@ -1856,6 +1861,7 @@ function shadowRadius(e: Entity): number {
   if (BEE_SHADOW_RADII[e.type] !== undefined) return BEE_SHADOW_RADII[e.type] * (e instanceof Mob && e.isBaby() ? 0.5 : 1);
   if (PHANTOM_SHADOW_RADII[e.type] !== undefined) return PHANTOM_SHADOW_RADII[e.type];
   if (PANDA_SHADOW_RADII[e.type] !== undefined) return PANDA_SHADOW_RADII[e.type] * (e instanceof Mob && e.isBaby() ? 0.5 : 1);
+  if (MOOSHROOM_SHADOW_RADII[e.type] !== undefined) return MOOSHROOM_SHADOW_RADII[e.type] * (e instanceof Mob && e.isBaby() ? 0.5 : 1);
   // (M4: the warden)
   if (e.type === 'warden') return WARDEN_SHADOW_RADIUS;
   // (trial chambers)
