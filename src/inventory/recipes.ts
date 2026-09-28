@@ -5,6 +5,8 @@ import { ITEMS, ItemStack } from '../item/item';
 import { registerTrialChamberRecipes } from './recipesTrialChambers';
 // (bastions)
 import { registerBastionRecipes } from './recipesBastion';
+// (signs)
+import { registerSignRecipes } from './recipesSigns';
 
 /** ingredient: item id, '#tag', or list of alternatives */
 type Ing = string | string[];
@@ -439,6 +441,8 @@ shaped('chiseled_deepslate', 1, ['#', '#'], { '#': 'cobbled_deepslate_slab' });
 registerTrialChamberRecipes(shaped, shapeless);
 // (bastions) polished basalt, the netherite block and ingot, the lodestone, the snout trim's template
 registerBastionRecipes(shaped, shapeless);
+// (signs) every wood's sign (the oak one's is above) and hanging sign
+registerSignRecipes(shaped);
 
 // drop recipes whose items don't exist in this game
 for (let i = RECIPES.length - 1; i >= 0; i--) {

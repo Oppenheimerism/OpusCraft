@@ -146,6 +146,8 @@ const COPPER_BLOCKS = ['', 'exposed_', 'weathered_', 'oxidized_'].flatMap((age) 
     .map((kind) => (kind === 'copper_block' && age ? `${age}copper` : age + kind)));
 const WAXED_COPPER_BLOCKS = COPPER_BLOCKS.map((n) => `waxed_${n}`);
 const AXES = ['wooden_axe', 'golden_axe', 'stone_axe', 'iron_axe', 'diamond_axe', 'netherite_axe'];
+// (signs) vanilla #all_signs: every wood's standing, wall, hanging and wall hanging sign
+const ALL_SIGNS = ['oak', 'spruce', 'birch', 'jungle', 'acacia', 'dark_oak', 'mangrove', 'cherry', 'bamboo', 'crimson', 'warped'].flatMap((w) => [`${w}_sign`, `${w}_wall_sign`, `${w}_hanging_sign`, `${w}_wall_hanging_sign`]);
 
 const HOSTILE = [
   'blaze', 'bogged', 'breeze', 'cave_spider', 'creeper', 'drowned', 'elder_guardian', 'ender_dragon', 'enderman', 'endermite', 'evoker',
@@ -329,7 +331,7 @@ const A: AdvancementDef[] = [
   // (M8: goats) vanilla: started_riding, the player's vehicle a boat with a goat aboard
   { id: 'husbandry/ride_a_boat_with_a_goat', parent: 'husbandry/root', title: 'Whatever Floats Your Goat!', description: 'Get in a Boat and float with a Goat', icon: 'oak_boat', frame: 'task', criteria: one({ t: 'started_riding', vehicle: 'boat', passenger: 'goat' }) },
   { id: 'husbandry/tame_an_animal', parent: 'husbandry/root', title: 'Best Friends Forever', description: 'Tame an animal', icon: 'lead', frame: 'task', criteria: one({ t: 'tame', type: '*' }) },
-  { id: 'husbandry/make_a_sign_glow', parent: 'husbandry/root', title: 'Glow and Behold!', description: 'Make the text of any kind of sign glow', icon: 'glow_ink_sac', frame: 'task', criteria: one(never) },
+  { id: 'husbandry/make_a_sign_glow', parent: 'husbandry/root', title: 'Glow and Behold!', description: 'Make the text of any kind of sign glow', icon: 'glow_ink_sac', frame: 'task', criteria: { make_a_sign_glow: { t: 'item_used_on_block', items: ['glow_ink_sac'], blocks: ALL_SIGNS } } },
   { id: 'husbandry/fishy_business', parent: 'husbandry/root', title: 'Fishy Business', description: 'Catch a fish', icon: 'fishing_rod', frame: 'task', criteria: one(never) },
   { id: 'husbandry/silk_touch_nest', parent: 'husbandry/root', title: 'Total Beelocation', description: 'Move a Bee Nest, with 3 Bees inside, using Silk Touch', icon: 'bee_nest', frame: 'task', criteria: one(never) },
   { id: 'husbandry/tadpole_in_a_bucket', parent: 'husbandry/root', title: 'Bukkit Bukkit', description: 'Catch a Tadpole in a Bucket', icon: 'tadpole_bucket', frame: 'task', criteria: one({ t: 'filled_bucket', items: ['tadpole_bucket'] }) },

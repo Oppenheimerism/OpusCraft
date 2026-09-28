@@ -14,6 +14,7 @@ import { MerchantMenu } from '../../inventory/merchantMenu';
 import { MerchantScreen } from './merchant';
 import { WinScreen } from './winScreen';
 import { installBookScreens } from './jobSites';
+import { installSignScreens } from './signEdit';
 import { DispenserScreen, HopperScreen } from './dispenser';
 import { StonecutterMenu } from '../../inventory/stonecutterMenu';
 import { StonecutterScreen } from './stonecutter';
@@ -78,4 +79,6 @@ export function installScreens(game: Game): void {
     return new InventoryScreen(game, menu as InventoryMenu);
   };
   installBookScreens(game);
+  // (signs) the sign editor, when a sign is placed or clicked
+  installSignScreens(game);
 }

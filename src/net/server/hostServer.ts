@@ -521,6 +521,18 @@ export class HostServer {
     this.sessionOf(p)?.openBook(hand);
   }
 
+  /**
+   * (signs) vanilla ServerPlayer.openTextEdit for a guest's player: the sign's block and text, then its editor, for
+   * the front or the back
+   */
+  openSignEditor(p: Player, be: BlockEntity, front: boolean): void {
+    const s = this.sessionOf(p);
+    if (!s || s.state !== 'play') return;
+    s.send([CB.BlockUpdates, new Int32Array([be.x, be.y, be.z, this.level.getState(be.x, be.y, be.z)])]);
+    s.send([CB.BlockEntityData, visibleBlockEntity(be)]);
+    s.send([CB.OpenSignEditor, be.x, be.y, be.z, front]);
+  }
+
   /** something `p` tried that guests can't do yet (a menu, a portal): a word to the guest, nothing else happens */
   refuse(p: Player, text: string): boolean {
     const s = this.sessionOf(p);

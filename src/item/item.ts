@@ -11,6 +11,8 @@ import type { Fireworks, FireworkExplosion } from './fireworks';
 import { registerTrialChamberItems } from './itemsTrialChambers';
 // (bastions)
 import { registerBastionItems } from './itemsBastion';
+// (signs)
+import { registerSignItems } from './itemsSigns';
 
 export interface ToolInfo {
   type: ToolType;
@@ -596,6 +598,8 @@ for (const [id, tex] of [['redstone_torch', 'block:redstone_torch'], ['repeater'
 }
 // (bastions) netherite scrap, the netherite block, polished basalt, the lodestone, Pigstep, the snout trim's template
 registerBastionItems(reg, ITEMS, ITEM_LIST);
+// (signs) every wood's sign and hanging sign: sixteen to a stack, their sprites, their fuel
+registerSignItems(reg, ITEMS, ITEM_LIST);
 
 export function itemForBlock(name: string): Item | undefined {
   // (a block that is another's item's: a wall banner is its banner's)

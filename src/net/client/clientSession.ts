@@ -33,6 +33,8 @@ import type { Hand } from '../../item/inventory';
 import { Chunk } from '../../world/chunk';
 import { MIN_Y, MAX_Y } from '../../world/constants';
 import { stateCount } from '../../world/block';
+// (signs)
+import { openSignEditorFromHost } from '../../game/signs';
 
 /** where the chunks the host sends go (the browser: lit on the workers, then into the world; tests: at once) */
 export interface ClientChunkSink {
@@ -485,6 +487,10 @@ export class ClientSession {
         return this.menus!.ghost(p[1] as number, p[2] as string);
       case CB.OpenBook:
         return this.hooks.openBook?.(p[1] === 1 ? 'off' : 'main');
+      case CB.OpenSignEditor:
+        // (signs) vanilla handleOpenSignEditor: ignored when there's no sign there
+        openSignEditorFromHost(level, this.player!, p[1] as number, p[2] as number, p[3] as number, p[4] as boolean);
+        return;
       case CB.ChangeDimension:
         return this.changeDimension(p[1] as string, p[2] as ReceivingReason);
       case CB.RecipeBookAdd: {
@@ -973,6 +979,13 @@ export class ClientSession {
     this.receive();
     this.tickLevel();
     this.sendTick();
+  }
+
+  /** (signs) a sign editor's Done (vanilla ServerboundSignUpdatePacket): the side's four lines, for the host to check and write */
+  signUpdate(x: number, y: number, z: number, front: boolean, lines: readonly string[]): void {
+    if (this.state !== 'play') return;
+    const l = [0, 1, 2, 3].map((i) => String(lines[i] ?? '').slice(0, 384));
+    this.send([SB.SignUpdate, x, y, z, front, l[0], l[1], l[2], l[3]]);
   }
 
   /** a line typed in chat (vanilla ClientPacketListener.sendChat / sendCommand) */

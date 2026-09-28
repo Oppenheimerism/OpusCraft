@@ -119,8 +119,8 @@ const WALL_TEST: Record<string, Rect> = {
   east: [7, 7, 16, 9],
 };
 const POST_TEST: Rect = [7, 7, 9, 9];
-/** vanilla BlockTags.WALL_POST_OVERRIDE */
-const POST_OVERRIDE = /^(torch|soul_torch|redstone_torch|.*_sign|.*_banner|.*_pressure_plate)$/;
+/** vanilla BlockTags.WALL_POST_OVERRIDE (#signs: the standing and wall signs, not the hanging ones) */
+const POST_OVERRIDE = /^(torch|soul_torch|redstone_torch|(?!.*_hanging_sign$).*_sign|.*_banner|.*_pressure_plate)$/;
 
 /** the part of a block's collision shape resting on its bottom face (x0, z0, x1, z1 in pixels) */
 function downFace(st: number): Rect[] {

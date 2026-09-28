@@ -31,6 +31,8 @@ import { registerCopperBlocks } from './blocksCopper';
 import { registerTrialChamberBlocks } from './blocksTrialChambers';
 // (bastions)
 import { registerBastionBlocks } from './blocksBastion';
+// (signs) the signs and hanging signs of every wood
+import { registerSignBlocks } from './blocksSigns';
 
 const px = (v: number) => v / 16;
 const bx = (x0: number, y0: number, z0: number, x1: number, y1: number, z1: number): Box => [px(x0), px(y0), px(z0), px(x1), px(y1), px(z1)];
@@ -673,6 +675,8 @@ registerCopperBlocks();
 registerTrialChamberBlocks();
 // (bastions) polished basalt, the block of netherite, the lodestone
 registerBastionBlocks();
+// (signs) standing, wall, hanging and wall hanging signs for every wood
+registerSignBlocks();
 
 finalizeBlocks();
 

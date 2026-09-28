@@ -105,6 +105,8 @@ import { ShulkerBullet } from '../entity/shulkerBullet';
 import { ItemFrame } from '../entity/itemFrame';
 import { ItemFrameRenderer } from './itemFrameRenderer';
 import { SkullRenderer } from './skullRenderer';
+// (signs)
+import { SignRenderer } from './signRenderer';
 import { ElytraLayer } from './elytraLayer';
 import { FireworkRocket } from '../entity/fireworkRocket';
 import { renderFireworkRocket } from './fireworkRenderer';
@@ -215,6 +217,7 @@ export class EntityRenderDispatcher {
   private readonly frames: ItemFrameRenderer;
   /** mob heads: placed, held, worn and in the inventory */
   private readonly skulls: SkullRenderer;
+  private readonly signs: SignRenderer;
   /** worn elytra (and the broken one's torn look as an item) */
   private readonly elytra: ElytraLayer;
   /** (Stage 4: illagers) the pillager, vindicator, evoker, vex, ravager and the evoker's fangs */
@@ -248,6 +251,7 @@ export class EntityRenderDispatcher {
     this.shulkers = new ShulkerRenderers(gl);
     this.frames = new ItemFrameRenderer(gl, items);
     this.skulls = new SkullRenderer(gl);
+    this.signs = new SignRenderer(gl);
     this.elytra = new ElytraLayer(gl, items);
     this.archaeology = new ArchaeologyRenderers(gl);
     this.endCrystals = new EndCrystalRenderer(gl);
@@ -481,6 +485,8 @@ export class EntityRenderDispatcher {
     this.village.renderCampfires(b, this.items, level, cam, frustum);
     this.shulkers.renderBlockEntities(b, level, cam, partial, frustum);
     this.skulls.renderBlockEntities(b, level, cam, partial, frustum);
+    // (signs) the boards and their text; the glow's outline is for the camera's entity near enough
+    this.signs.renderBlockEntities(b, level, cam, frustum, level.player, !opts.drawPlayer);
     this.pistons.render(b, this.items, level, cam, partial, frustum);
     this.archaeology.render(b, this.items, level, cam, partial, frustum);
     // (trial chambers) drawn in their cages as the spawner's mob is (vanilla SpawnerRenderer.renderEntityInSpawner)

@@ -12,6 +12,8 @@ import { enchantmentLine, tooltipOrder } from '../../item/enchantments';
 import { enchantedBooks, stacksOf } from '../../item/creativeStacks';
 import { craftingEnchants } from '../../item/enchantHelper';
 import { KEYS } from '../../game/input';
+// (signs) every wood's sign and hanging sign, in vanilla's order
+import { SIGN_ITEM_ORDER } from '../../item/itemsSigns';
 
 interface Tab {
   id: string;
@@ -83,7 +85,7 @@ const FUNCTIONAL_ORDER = [
   'blast_furnace', 'campfire', 'soul_campfire', 'anvil', 'chipped_anvil', 'damaged_anvil', 'composter', 'note_block', 'jukebox',
   'enchanting_table', 'end_crystal', 'brewing_stand', 'cauldron', 'bell', 'beacon', 'conduit', 'lodestone', 'ladder', 'scaffolding',
   'bee_nest', 'beehive', 'suspicious_sand', 'suspicious_gravel', 'lightning_rod', 'flower_pot', 'decorated_pot', 'armor_stand',
-  'item_frame', 'glow_item_frame', 'painting', 'bookshelf', 'chiseled_bookshelf', 'lectern', 'tinted_glass', 'oak_sign', 'chest', 'barrel',
+  'item_frame', 'glow_item_frame', 'painting', 'bookshelf', 'chiseled_bookshelf', 'lectern', 'tinted_glass', ...SIGN_ITEM_ORDER, 'chest', 'barrel',
   'ender_chest', 'respawn_anchor', ...DYE_ORDER.map((c) => `${c}_bed`),
 ];
 const BUILDING = new Set(['oak_door', 'iron_door']);

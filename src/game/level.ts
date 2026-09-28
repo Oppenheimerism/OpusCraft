@@ -87,6 +87,8 @@ import './powderSnow';
 import './frostWalker';
 // (the lodestone compass)
 import './lodestoneCompass';
+// (signs) placing, editing, dyeing and waxing signs and hanging signs
+import './signs';
 
 export interface SoundSink {
   play(name: string, x: number, y: number, z: number, volume?: number, pitch?: number): void;

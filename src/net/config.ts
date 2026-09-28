@@ -7,7 +7,7 @@
 export const MULTIPLAYER_ENABLED = true;
 
 /** bumped whenever a packet changes; host and guest must agree (vanilla SharedConstants.getProtocolVersion) */
-export const PROTOCOL_VERSION = 6;
+export const PROTOCOL_VERSION = 7;
 
 /** (vite.config.ts: a hash of src/ in a build) */
 declare const __BUILD_ID__: string | undefined;

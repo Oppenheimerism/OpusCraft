@@ -45,6 +45,8 @@ import { registerCopperTextures } from './blocklib/copper';
 import { registerTrialChamberTextures } from './blocklib/trialChambers';
 // (bastions)
 import { registerBastionTextures } from './blocklib/bastion';
+// (signs) bamboo's planks and stripped block, for its signs' specks
+import { registerSignTextures } from './signs';
 
 type Gen = () => TexDef;
 export const BLOCK_TEXTURES: Record<string, Gen> = {};
@@ -577,6 +579,8 @@ registerCopperTextures(T);
 registerTrialChamberTextures(T);
 // (bastions) polished basalt, the block of netherite, the lodestone
 registerBastionTextures(T);
+// (signs) bamboo's planks and stripped block
+registerSignTextures(T);
 
 // Missing texture (vanilla's magenta/black checkerboard)
 T['missing'] = () => {
