@@ -12,6 +12,12 @@
       "runtimeExecutable": "npx",
       "runtimeArgs": ["vite", "preview", "--outDir", "tmp/play", "--port", "4173", "--strictPort"],
       "port": 4173
+    },
+    {
+      "name": "lan",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "lan"],
+      "port": 4173
     }
   ]
 }
