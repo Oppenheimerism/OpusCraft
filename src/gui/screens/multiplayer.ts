@@ -16,31 +16,44 @@ import type { GameMode } from '../../entity/player';
 import { NAME_PATTERN, PROTOCOL_VERSION, BUILD_ID, GUEST_VIEW_DISTANCE } from '../../net/config';
 
 // ---------------------------------------------------------------------------
-// who a guest is (this window's name, kept while the tab is open: two windows are two players; the name is who it is
-// to the host's world, as vanilla's LAN worlds know their players, so coming back by the same name is coming back)
+// who a guest is: its name, which is who it is to the host's world (as vanilla's LAN worlds know their players), so
+// coming back by the same name is coming back to its things. This window's name first (kept while the tab is open: two
+// windows of one browser can be two players), else the one this browser last joined as (kept after the tab is closed,
+// as a vanilla player's account name always is), else none: the Name box is empty till one is typed, never a made-up
+// one that would come back as somebody new
 
 const NAME_KEY = 'mc-mp-name';
 
 function stored(key: string): string | null {
-  try {
-    return sessionStorage.getItem(key);
-  } catch {
-    return null;
+  for (const s of [() => sessionStorage, () => localStorage]) {
+    try {
+      const v = s().getItem(key);
+      if (v && NAME_PATTERN.test(v)) return v;
+    } catch {
+      // (no storage of that kind here)
+    }
   }
+  return null;
 }
 
 function store(key: string, v: string): void {
-  try {
-    sessionStorage.setItem(key, v);
-  } catch {
-    // (no storage: the name is asked again next time)
+  for (const s of [() => sessionStorage, () => localStorage]) {
+    try {
+      s().setItem(key, v);
+    } catch {
+      // (no storage: the name is asked again next time)
+    }
   }
 }
 
-/** this window's player name for joining: the last one used, or a new Player### */
+/** the name this window, or else this browser, last joined as ('' if none) */
+export function rememberedName(): string {
+  return stored(NAME_KEY) ?? '';
+}
+
+/** (joining without the Multiplayer screen: ?mp=join, for tests) the name remembered, or a new Player### */
 export function guestName(): string {
-  const n = stored(NAME_KEY);
-  return n && NAME_PATTERN.test(n) ? n : `Player${100 + Math.floor(Math.random() * 900)}`;
+  return rememberedName() || `Player${100 + Math.floor(Math.random() * 900)}`;
 }
 
 /**
@@ -186,7 +199,7 @@ export class JoinMultiplayerScreen extends Screen {
   constructor(game: Game, parent: Screen | null, code = '') {
     super(game, 'Play Multiplayer');
     this.parent = parent;
-    this.name = guestName();
+    this.name = rememberedName();
     const c = normalizeJoinCode(code);
     this.code = c ? showJoinCode(c) : '';
   }
@@ -277,7 +290,8 @@ export class JoinMultiplayerScreen extends Screen {
     g.text('Name:', cx - 154, 28, 0xa0a0a0, true);
     g.text('Code:', cx + 4, 28, 0xa0a0a0, true);
     const s = this.list.selected;
-    if (!this.nameOk()) g.centered('A name is 3 to 16 letters, digits or _', cx, this.height - 63, 0xff5555, true);
+    if (!this.name) g.centered('Type your name: use the same one each time to keep your things', cx, this.height - 63, 0xffff55, true);
+    else if (!this.nameOk()) g.centered('A name is 3 to 16 letters, digits or _', cx, this.height - 63, 0xff5555, true);
     else if (s && 'world' in s && s.via === 'relay' && !this.codeOk()) g.centered("Type the join code from the host's screen", cx, this.height - 63, 0xff5555, true);
     this.renderTooltip(g, mx, my);
     void partial;
