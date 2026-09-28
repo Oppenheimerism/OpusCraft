@@ -33,6 +33,9 @@ import { Bogged } from '../../entity/bogged';
 import { Mooshroom } from '../../entity/mooshroom';
 // (remaining mobs: the bee)
 import { hiveDispense } from './hiveDispense';
+// (remaining mobs: the armadillo)
+import { Armadillo } from '../../entity/armadillo';
+import { Wolf } from '../../entity/wolf';
 import { Strider } from '../../entity/strider';
 import { AbstractHorse, AbstractChestedHorse } from '../../entity/horse';
 import { createBoat, boatItemInfo } from '../../entity/boat';
@@ -694,3 +697,23 @@ const windCharge = behavior((src, stack) => {
   return left(stack);
 }, (src) => windChargeShootSound(src.level, src.x, src.y, src.z));
 Object.assign(BEHAVIORS, { wind_charge: windCharge });
+
+// (remaining mobs: the armadillo) vanilla DispenseItemBehavior's brush: the first armadillo in front (no spectators)
+// that sheds a scute to it is brushed, and the brush worn 16; else the failed click, the brush kept
+const brush = optional((src, stack) => {
+  for (const e of src.level.getEntities(cell(front(src)), (o) => o instanceof Armadillo && !isSpectator(o))) {
+    if ((e as Armadillo).brushOffScute()) return hurtAndBreak(stack, 16) ? null : stack;
+  }
+  src.success = false;
+  return stack;
+});
+// (remaining mobs: the armadillo) vanilla AnimalArmorItem's (ArmorItem.dispenseArmor) wolf armour, as the horse
+// armour's: onto a grown, tame wolf in front wearing none (it's then kept: persistence), else thrown out
+const wolfArmor = behavior((src, stack) => {
+  const w = src.level.getEntities(cell(front(src)), (o) => o instanceof Wolf && o.isAlive && o.isTame() && !o.isBaby() && !o.bodyArmor)[0] as Wolf | undefined;
+  if (!w) return dropOne(src, stack);
+  w.setBodyArmorItem(stack.split(1));
+  w.persistenceRequired = true;
+  return left(stack);
+});
+Object.assign(BEHAVIORS, { brush, wolf_armor: wolfArmor });

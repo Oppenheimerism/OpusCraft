@@ -510,6 +510,13 @@ function mobData(m: Mob, nbt: string): void {
       if (i < names.length && !Number.isNaN(v)) m.setDropChance(names[i], v);
     });
   }
+  // (remaining mobs: the armadillo) vanilla Mob's body_armor_item (a wolf's armour)
+  const body = /\bbody_armor_item\s*:\s*\{/.exec(nbt);
+  const setBody = (m as { setBodyArmorItem?: (s: ItemStack | null) => void }).setBodyArmorItem;
+  if (body && setBody) {
+    const start = body.index + body[0].length - 1;
+    setBody.call(m, snbtStack(nbt.slice(start, snbtEnd(nbt, start))));
+  }
   const flag = (k: string) => new RegExp(`\\b${k}\\s*:\\s*(1b|true)`).test(nbt);
   if (/\bCanPickUpLoot\s*:/.test(nbt)) m.canPickUpLoot = flag('CanPickUpLoot');
   if (flag('PersistenceRequired')) m.persistenceRequired = true;

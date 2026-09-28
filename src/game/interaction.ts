@@ -370,6 +370,9 @@ export class Interaction {
         }
       }
       if (e instanceof Animal && e.interact(p, stack)) {
+        // (remaining mobs: the armadillo) vanilla player_interacted_with_entity: the item as it was, if the click used
+        // it (a wolf told to sit or stand didn't: vanilla SUCCESS_NO_ITEM_USED)
+        this.onInteractedWithEntity?.((e as { interactUsedItem?: () => boolean }).interactUsedItem?.() === false ? null : heldBefore, e);
         if (p.vehicle === e) this.onMounted?.();
         p.swing();
         return 'success';

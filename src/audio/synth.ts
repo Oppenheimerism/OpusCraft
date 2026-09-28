@@ -71,6 +71,8 @@ import { phantomSounds } from './gen/phantom';
 import { pandaSounds } from './gen/panda';
 // (remaining mobs: the mooshroom)
 import { mooshroomSounds } from './gen/mooshroom';
+// (remaining mobs: the armadillo)
+import { armadilloSounds } from './gen/armadillo';
 
 export const SAMPLE_RATE = 44100;
 
@@ -151,6 +153,8 @@ Object.assign(SOUNDS, pandaSounds());
 // sheep's snip (vanilla sounds.json: mob/sheep/shear)
 Object.assign(SOUNDS, mooshroomSounds());
 if (SOUNDS['entity.sheep.shear']) SOUNDS['entity.mooshroom.shear'] = SOUNDS['entity.sheep.shear'];
+// (remaining mobs: the armadillo) its voice, its shell's clatter and knocks, its scutes; wolf armour's
+Object.assign(SOUNDS, armadilloSounds());
 // (vanilla sounds.json: the snow golem's are the snow's breaking, the bow's and the shears')
 for (const [k, v] of Object.entries({ 'entity.snow_golem.hurt': 'block.snow.break', 'entity.snow_golem.death': 'block.snow.break', 'entity.snow_golem.shoot': 'entity.arrow.shoot', 'entity.snow_golem.shear': 'entity.sheep.shear' })) if (SOUNDS[v]) SOUNDS[k] = SOUNDS[v];
 // (vanilla sounds.json: any mob's swimming, and a monster's, is the player's splashing)

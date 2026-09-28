@@ -317,6 +317,8 @@ export class ItemRenderer {
           if (!ls) return;
           const m = layered ? this.flatModel(name, ls.img, ls.u0, ls.v0, ls.u1, ls.v1) : model;
           const tint = !layered || li === layered.tinted ? colour : 0xffffff;
+          // (remaining mobs: the armadillo) an undyed wolf armour's overlay isn't drawn (vanilla alpha 0)
+          if (tint < 0) return;
           const tr = ((tint >> 16) & 255) / 255, tg = ((tint >> 8) & 255) / 255, tb = (tint & 255) / 255;
           for (const qd of m.quads) batch.quad(pose, Array.from(qd.subarray(0, 12)), Array.from(qd.subarray(12, 20)), qd[20], qd[21], qd[22], tr, tg, tb, 1);
         });

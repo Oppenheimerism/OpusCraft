@@ -442,7 +442,7 @@ registerTrialChamberRecipes(shaped, shapeless);
 // (bastions) polished basalt, the netherite block and ingot, the lodestone, the snout trim's template
 registerBastionRecipes(shaped, shapeless);
 // (remaining mobs) the bee's: the beehive, the honey block and back, sugar from honey, the honeycomb block; the
-// panda's: a stick from bamboo
+// panda's: a stick from bamboo; the armadillo's: wolf armour
 registerRemainingMobRecipes(shaped, shapeless);
 
 // drop recipes whose items don't exist in this game

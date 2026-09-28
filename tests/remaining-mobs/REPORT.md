@@ -12,14 +12,17 @@ Branch: `claude/optimistic-volta-xe2bah`, from main at 93288e7.
 | 1 | Bee: bee nest, beehive, honey bottle, honeycomb, honey block, honeycomb block | done | `295bada` "Bees. Bee nests hang from trees in meadows (every tree there), plains, sunflower plains, cherry groves and flower forests, …" |
 | 2 | Phantom and insomnia | done | `4ee0b58` "Phantoms. Stay up three days without lying down in a bed and phantoms come for you at night: …" |
 | 3 | Panda and bamboo | done | `76d00bc` "Pandas and bamboo. Bamboo jungles are thick with bamboo, with podzol round some of it, …" |
-| 4 | Mooshroom and huge mushrooms | done | the commit that adds this row ("Mooshrooms and huge mushrooms. …") |
-| 5 | Armadillo, scutes and wolf armour | not started | |
+| 4 | Mooshroom and huge mushrooms | done | `f024e35` "Mooshrooms and huge mushrooms. Mushroom islands now have herds of red mooshrooms and a huge mushroom in every chunk, …" |
+| 5 | Armadillo, scutes and wolf armour | done | the commit that adds this row ("Armadillos and wolf armour. …") |
 | 6 | Camel | not started | |
 | 7 | Sniffer | not started | |
 | 8 | Allay | not started | |
 | 9 | Endermite | not started | |
 | 10 | Skeleton horse trap and zombie horse | not started | |
 | 11 | Wither (the beacon only if everything else is done) | not started | |
+
+Work stopped after milestone 5, as the lead developer asked. Milestones 6 to 11 are not started: nothing of theirs is
+in the code yet.
 
 **Important: in the pushed commits of milestones 1 to 3, the game didn't start in a browser.** It stopped on a black
 screen with "Cannot access 'hiveDispense' before initialization" in the console. The bee milestone put the
@@ -254,6 +257,68 @@ Each new line in a shared file is marked with a `(remaining mobs…)` comment. T
   brown mooshroom (its stew effects) is a list of plain objects, which the sync doesn't send; guests don't need it,
   as in vanilla (the client doesn't know it either).
 
+### Milestone 5: the armadillo and wolf armour
+
+**New files**
+- `src/entity/armadillo.ts`: the armadillo (vanilla `Armadillo` and `ArmadilloAi`): its brain, its four states
+  (idle, rolling up, rolled up, unrolling), the scare sensor, peeking, the blows it takes, the scutes it sheds and
+  brushing, food and breeding, saving, `/summon` data and its spawn rule.
+- `src/entity/wolfArmor.ts`: wolf armour on a wolf (vanilla `Wolf`'s body armour code and `Crackiness.WOLF_ARMOR`):
+  putting it on, shears, mending with a scute, taking blows, cracking, breaking and dropping.
+- `src/render/armadilloRenderer.ts`: the model (vanilla `ArmadilloModel`), its walk, roll-up, peek and roll-out
+  animations, and the ball.
+- `src/render/wolfArmorLayer.ts`: the armour on a wolf (vanilla `WolfArmorLayer`): the armour, its dyed overlay and
+  its cracks.
+- `src/textures/armadillo.ts`: the armadillo's skin; wolf armour's texture, its dye overlay and its three levels of
+  cracks.
+- `src/audio/gen/armadillo.ts`: 64 sound takes, the armadillo's 47 and wolf armour's 17.
+- `tests/remaining-mobs/armadillo.mjs` and `armadillo-mp.mjs`: the tests.
+
+**Registration lines**
+- `src/textures/mobs.ts`: the spawn egg's colours in `EGGS`.
+- `src/item/itemsRemainingMobs.ts`: the spawn egg; the armadillo scute (ingredients tab, after the turtle scute); wolf
+  armour (combat tab, after the diamond horse armour; one to a stack, 64 uses).
+- `src/textures/itemlib/remainingMobs.ts`: the scute's and wolf armour's item sprites, and the armour's dye layer.
+- `src/inventory/recipesRemainingMobs.ts`: wolf armour from six scutes (and its line in the comment in
+  `recipes.ts`). `src/inventory/recipeBook.ts`: wolf armour in the book's equipment tab (vanilla
+  `RecipeCategory.COMBAT`).
+- `src/audio/synth.ts`: `Object.assign(SOUNDS, armadilloSounds())`.
+- `src/game/spawner.ts`: `armadillo` in `MOB_TYPES` and `ENTITY_NAMES`; the badlands' creatures (armadillos, weight
+  6, one or two, `creatureProbability` 0.03; before, the three badlands had no creatures); the savanna's comment (its
+  armadillo entry, weight 10, two or three, was already there and spawned nothing until now); the armadillo's spawn
+  rule.
+- `src/render/entityRenderers.ts`: `ArmadilloRenderers` and its shadow radius (0.4, halved for a baby); the
+  `WolfArmorLayer`, after the wolf's collar.
+- `src/render/particleAtlas.ts`: the scute's and wolf armour's sprites as item particles (the crack's chips and the
+  broken pieces).
+
+**Hooks and changed behaviour**
+- `src/entity/ai/brainBehaviors.ts`: `PANIC_ENVIRONMENTAL_CAUSES` (vanilla `#panic_environmental_causes`);
+  `randomLookAround` (vanilla `RandomLookAround`); a block tracker can carry the exact point looked at (vanilla
+  `BlockPosTracker(Vec3)`); `followTemptation`'s stopping distance can depend on the mob; `animalPanic` takes an
+  optional list of causes and a start hook (vanilla `AnimalPanic(speed, causes)` and `ArmadilloPanic`). The existing
+  callers pass nothing new and behave as before.
+- `src/entity/wolf.ts`: `bodyArmor` (saved as `body_armor_item`) and `setBodyArmorItem`; the armour's 11 points in
+  `armorValue`; `actuallyHurt` and `playHurtSound` hand blows to the armour; the armour drops when the wolf dies;
+  `interact` asks `wolfArmorInteract` before the tamable's own use; `interactUsedItem` (false after the wolf was told
+  to sit or stand).
+- `src/game/interaction.ts`: when an animal takes a click, `onInteractedWithEntity` now fires with the item as it was
+  (none when a wolf was only told to sit or stand). Before, only a lead, a name tag and a piglin's gold fired it.
+  Vanilla fires `player_interacted_with_entity` for any interaction that takes the click. The only advancements that
+  test it are the frog's lead one (unchanged) and the three below, so nothing else is newly awarded.
+- `src/game/game.ts`: the `player_interacted_with_entity` payload also carries the body armour the mob wears after the
+  click, and its wear. `src/game/advancements.ts`: that condition (`bodyArmor`); Isn't It Scute? (new, vanilla
+  1.20.5's `husbandry/brush_armadillo`); Shear Brilliance and Good as New, which were there with no way to get them,
+  now have vanilla's triggers.
+- `src/game/commands.ts`: `/summon`'s `body_armor_item` (a wolf's armour).
+- `src/game/redstone/dispenseItems.ts`: a dispenser's brush brushes an armadillo in front; its wolf armour goes onto a
+  tame, grown wolf in front, or is thrown out.
+- `src/item/dyedColor.ts`: wolf armour is dyeable. `src/item/itemColors.ts`: its dye layer takes the colour and isn't
+  drawn undyed (`NO_TINT`), which `gui/itemIcons.ts` and `render/itemRenderer.ts` skip.
+- `src/inventory/enchantMenus.ts`: scutes repair wolf armour on the anvil.
+- **No `PROTOCOL_VERSION` bump.** No packet changed. The armadillo's state and its peek count, and a wolf's armour
+  with its wear and dye, ride the entity-data sync; the chips and broken pieces ride the particle relay.
+
 ## 3. Open points, deviations, uncertain values, hooks
 
 ### Milestone 1: the bee
@@ -401,6 +466,51 @@ Each new line in a shared file is marked with a `(remaining mobs…)` comment. T
 - **Guests.** A guest's bowl, bucket, shears, flowers and wheat work on a mooshroom, the host deciding. What's in a
   brown mooshroom stays on the host, as vanilla keeps it on the server. Nothing is kept per player.
 
+### Milestone 5: the armadillo and wolf armour
+
+**Deviations**
+- **The armadillo's moves.** The model follows vanilla's layout (`ArmadilloModel`: the body and shell, the head with
+  its ears, the legs, the tail, and the ball), but its walk, rolling up, peeking and rolling out are my own keyframes.
+  Vanilla's (`ArmadilloAnimation`) weren't to hand. Their lengths are vanilla's (0.5 s, 2.5 s and 1.5 s), and so is
+  when the ball shows (`shouldHideInShell`).
+- **Looks.** The armadillo's skin and wolf armour's textures use vanilla's layouts (64×64, and the wolf's 64×32), but
+  the pixels are my own: a dusty rose shell with darker bands over pale pink skin, and scute plates over the wolf's
+  back, sides, chest and the tops of its legs. The ball shows a seam where its two halves meet.
+- **Guests' advancements.** Isn't It Scute?, Shear Brilliance and Good as New go to the host's player only: guests have
+  no advancements in the game yet (as in the earlier milestones).
+
+**Values I'm not sure of**
+- **What gets past wolf armour** (vanilla `#bypasses_wolf_armor`). From memory: the void and `/kill`, cramming,
+  drowning, drying out, freezing, suffocating in a wall, magic and indirect magic, the world border, starving, thorns
+  and the wither. Everything else wears the armour instead of hurting the wolf, including falls, fire, lava, cactus and
+  lightning. My first version had fire, lava, falls, cactus and lightning getting through. I changed it before this
+  commit, from a clearer memory of the tag, but I couldn't check the tag itself.
+- **The dispenser.** It puts wolf armour only on a grown, tame wolf wearing none, as the owner's hand does. I believe
+  vanilla's `ArmorItem.dispenseArmor` checks the same, but I'm not sure it requires the wolf to be tame.
+- **Enchanting.** Wolf armour can't be enchanted at the table or the anvil (vanilla 1.21 puts it in no `#enchantable`
+  tag, as far as I remember). A curse given by `/give` or `/summon` data still works: binding keeps it on outside
+  creative mode, and vanishing stops the drop.
+- **Numbers from memory:** the spawn weights (savanna 10, two or three; badlands 6, one or two) and the badlands' 0.03
+  at world generation (vanilla `OverworldBiomes`); rolling up for at most 5 minutes at a time (`ArmadilloBallUp`,
+  6000 ticks); a scute every 5 to 10 minutes; the brush's 16 wear; the repair's eighth; the armour's 11 points and 64
+  uses; the cracks at 95%, 69% and 32%.
+- **Sounds.** All takes are synthesised to sound like vanilla's, not copied. The counts I believe vanilla has: ambient
+  6, brush 3, death 2, eat 4, hurt 4, hurt_reduced 4, land 3, peek 3, roll 4, scute_drop 3, step 5, unroll_finish 3,
+  unroll_start 3; wolf armour's break 2, crack 3, damage 4, repair 3; its equip 3 and unequip 2.
+- **The spawn egg's colours** (0xad716d and 0x824848) are from memory of vanilla `SpawnEggItem`.
+
+**Choices where the brief was open** (the most vanilla-faithful option each time)
+- **Vanilla quirks kept:**
+  - the blow that rolls an armadillo up is heard as the shell's knock (`hurt_reduced`), not its squeak: vanilla picks
+    the hurt sound after the blow has already rolled it up;
+  - a brush gets a scute off it even while it's rolled up (vanilla checks the brush before the fear);
+  - `/summon armadillo ~ ~ ~ {state:"scared"}` makes one rolled up, and with no danger remembered it unrolls at once;
+  - a scute mends worn wolf armour even in creative mode and is used up (vanilla `shrink`, not `consume`);
+  - shears take off armour cursed with binding only in creative mode.
+- **Guests.** A guest's brush, spider eyes, wolf armour, scutes and shears work, the host deciding, and only on the
+  guest's own wolf (as for the host). What guests see (the state, the peeks, the armour's wear and dye) comes with the
+  entity data. Nothing is kept per player.
+
 ## 4. Tests and results
 
 Run from the repository root with `node tests/remaining-mobs/<file>`. Each prints `ok`/`FAIL` lines and exits
@@ -416,6 +526,8 @@ non-zero on a failure.
 | `panda-mp.mjs` | See below. | all pass (27), about 8 s |
 | `mooshroom.mjs` | See below. | all pass (100), about 16 s |
 | `mooshroom-mp.mjs` | See below. | all pass (20), about 7 s |
+| `armadillo.mjs` | See below. | all pass (115), about 20 s |
+| `armadillo-mp.mjs` | See below. | all pass (20), about 10 s |
 | `load-order.mjs` | See below. | all pass (3), about 9 s |
 
 **`bee.mjs`** covers:
@@ -605,6 +717,57 @@ non-zero on a failure.
 - **A guest in creative:** takes a suspicious stew from the creative tabs with its effect kept; a stew no tab has
   comes out plain on the host.
 
+**`armadillo.mjs`** covers:
+- **The armadillo:** 12 health, speed 0.14, 0.7 by 0.65 (a baby 0.6 of that), its eyes, no loot and 1 to 3
+  experience, its head turning 32 degrees from its body at most; the spawn egg, the scute and wolf armour in their
+  tabs.
+- **Spawning:** the savannas (weight 10, two or three) and the badlands (6, one or two, 0.03 at world generation),
+  nowhere else; the spawn rule (grass, red sand, coarse dirt, the badlands' terracotta; light over 8); the other
+  animals' rule unchanged; new savanna chunks come with armadillos.
+- **Fear:**
+  - a walking player doesn't scare it; a player sprinting or riding, a zombie, or whatever hurt it, within 7 blocks
+    across and 2 up or down, does; a spectator doesn't, nor anything out of that reach;
+  - rolling up (stopping, its sound, a vibration), landing 11 ticks on with its thump, drawn as a ball when vanilla's
+    `shouldHideInShell` says so, not moving or turning;
+  - peeking out every 7.5 to 22.5 s while the danger's about; unrolling 2.5 s after it's gone and out 1.5 s later,
+    each with its sound; rolling up again if the danger comes back.
+- **Blows:** a fall hurts it (its squeak) without rolling it up; a blow from a pig rolls it up (heard as the shell's
+  knock) and is remembered; rolled up, a blow of 5 does 2; lava brings it out to run; on a lead or in water it doesn't
+  roll up.
+- **Scutes:** the brush (a scute, its sound and a vibration, 16 wear; unworn in creative; not on a baby; still when
+  it's rolled up; the brush breaking); Isn't It Scute?; shedding every 5 to 10 minutes, with its sound (not a baby).
+- **Food and breeding:** spider eyes (in love, a baby with the breeding trigger, a baby growing); none taken while
+  rolled up; following a player who holds one, to 2 blocks off.
+- **Saving and `/summon`:** `state` and `scute_time`, an unknown state as idle, `Age`.
+- **Wolf armour:**
+  - the recipe (mirrored too; not from five scutes), dyeing in the grid, the item's layers, the anvil with scutes,
+    washing in a cauldron;
+  - putting it on: only the owner, only a grown tame wolf, one at a time; the stack spent unless in creative; its
+    sound and a vibration; 11 points of armour;
+  - a scute mends it (only while the wolf sits; an eighth; the scute spent even in creative; Good as New once it's as
+    good as new); shears take it off (only the owner's; dropped as it was; the shears worn; Shear Brilliance; binding
+    keeps it on outside creative); telling the wolf to sit doesn't count as using what's in hand;
+  - blows: the armour takes them (rounded up) and knocks instead of the wolf's yelp; cracks under 95%, 69% and 32%, with
+    a crack and 20 scute chips; lava wears it too; drowning gets past it to the wolf, and thorns less the armour's 11
+    points; breaking (its sound, five pieces, the wolf unhurt);
+  - saving (`body_armor_item`, with its wear and dye), the drop when the wolf dies, `/summon` with `body_armor_item`;
+  - dispensers: wolf armour onto a tame wolf only (else thrown out); the brush on an armadillo (else the failed click).
+- **Assets:** the sounds (every name; no ambient sound while rolled up; the knock when hurt rolled up); the skin and
+  the armour's textures, and the scute's and the armour's sprites in the particle atlas; the renderer (its skin, out
+  and rolled up, the head's turn, a baby's size, the shadow, the animations' lengths); the wolf armour layer (nothing without armour; the armour alone when undyed and unworn; dyed
+  and worn: the overlay in the dye's colour and the cracks see-through).
+
+**`armadillo-mp.mjs`** (two players over the multiplayer harness) covers:
+- **A guest's copy of an armadillo:** out of its shell, a baby's size; rolling up when a zombie comes by on the host
+  (the roll and the landing heard, the animations played), peeking (seen and heard), unrolling (heard) when the zombie
+  is gone; the mirror check.
+- **A guest's brush and spider eye:** a scute comes off on the host (the brush worn 16 for both, the sound heard, the
+  scute seen); in love, one eye eaten.
+- **A guest's wolf:** the guest's wolf armour isn't taken by the host's wolf; it goes on the guest's own (the copy
+  wearing it, dyed, the sound heard); a blow on the host wears the copy's too (its cracks and chips seen, the knock and
+  crack heard); the guest's empty hand sits the wolf, and a scute mends the armour; shears take it off (dropped, still
+  dyed; the shears worn); the mirror check.
+
 **`load-order.mjs`** loads the game's modules in `main.ts`'s order, as a browser does (section 1), and checks that
 the beehive's dispenser hooks are set and that every mob this branch adds can be made.
 
@@ -636,6 +799,20 @@ the beehive's dispenser hooks are set and that every mob this branch adds can be
   game starts and loads a world. At `?seed=12345`, `/summon mooshroom` and `/summon mooshroom ~ ~ ~ {Type:"brown"}`
   showed red and brown mooshrooms with their three mushrooms (a calf with none). Bone meal's growth
   (`growHugeMushroom`) made a huge brown and a huge red mushroom on mycelium. I checked the screenshots.
+- **Milestone 5:** `node scripts/audio-check.mjs "entity\.armadillo|item\.wolf_armor|item\.armor\.(un)?equip_wolf"`
+  (19 sounds, 64 takes) first flagged 17 takes with a late onset: 40 to 195 ms of near silence before the sound, as
+  the roll-up's clatter built up from nothing. Those takes now start on a plate's first click. The only flag left is
+  "slow" on the first death take (26 ms to generate). The skin and the armour's textures were viewed with
+  `scripts/preview-textures.mjs`: the banded rose shell over pale pink skin, the ears, the ball; the armour's plates
+  and grooves, its dye overlay on the plates only, and the three levels of cracks. **In a browser** (headless Chromium,
+  on the dev server and on `npm run build` plus `vite preview`), the game starts and loads a world. At `?seed=12345`,
+  `/summon` made armadillos walking, rolled up, peeking and a baby, and three tame wolves in wolf armour: undyed, dyed
+  red and half worn, and dyed blue and badly worn. I checked the screenshots: the shell and the ball, the armour's
+  plates over the wolves' backs with their heads and tails bare, the dyes, and the cracks. In the savanna nearest spawn,
+  the chunks' making had put 11 armadillos within about 150 blocks of 1326, 1915; a screenshot at 1311, 66, 1790
+  shows two in the tall grass. With the final code, the production build started again, and `/summon` typed into the
+  chat there made armadillos and an armoured wolf, drawn as in the dev build. (The one error in the browser's console
+  is a 404 for `favicon.ico`.)
 
 **Regression summary (milestone 1)**: `node scripts/regress.mjs -j 2` passed 169 of 172 suites in 19.3 min.
 - `tests/end/credits-music.mjs` crashed because the new bee buzz loop read `level.entities` from the test's stand-in
@@ -677,6 +854,23 @@ the beehive's dispenser hooks are set and that every mob this branch adds can be
   animals near it (llama, polar bear, biome mobs, frog, fox, parrot, goat, rabbit, ocelot, horse, horse inventory,
   wolf). All pass. `wolf.mjs` (known-flaky) failed once on "within ten blocks it stays put" and then passed four times
   on the branch and four times on main.
+
+**Regression summary (milestone 5)**: `node scripts/regress.mjs -j 2` passed 174 of 181 suites in 21.8 min.
+- **`tests/remaining-mobs/panda.mjs` caught a slip of mine.** Its check that the particle atlas holds bamboo and cake
+  reads the source, and I had added the scute and wolf armour to that same list. They now have a line of their own
+  (additive, as the brief asks), `armadillo.mjs` checks that line, and the panda suite passes.
+- Five more pass run alone, three times each, on this branch: `tests/bastions/m2b-generation.mjs` (its timing check,
+  6.6 ms a chunk with two suites at once), `tests/bastions/m3a-brute.mjs` ("keeps near it after": a brute's wandering
+  round its post, from its own random), `tests/golem/golem.mjs` (the golem came on the 101st tick, not the 100th; it also
+  passed 3 of 3 on main), `tests/trial-chambers/m4b-breeze.mjs` (on the brief's known-flaky list) and
+  `tests/trial-chambers/m5a-crafter.mjs` (the crafter's smoke and clunk).
+- `tests/illagers/illagers.mjs` ("evoker conjures fangs") is on the known-flaky list. Run alone, it failed 2 of 3 times
+  on this branch and 1 of 3 on main (93288e7).
+- I changed four files while the regression ran: wolf armour's damage list, the new sounds' starts, the particle atlas
+  line and the armadillo test. So afterwards I reran, with the final code, all 11 remaining-mobs suites and the 18
+  suites nearest the changes: wolves, leads, llamas, foxes, rabbits, cats, frogs, goats, the horse inventory,
+  multiplayer entities, ocean m6, the mace, the trial chambers' advancements, dispensers, archaeology, the End's
+  redstone hooks, equipping armour, and swimming sounds. All 29 pass. `npm run typecheck` is clean.
 
 ## 5. Browser checklist
 
@@ -877,3 +1071,60 @@ Start at `http://localhost:5173/?seed=12345` (`npm run dev`) in creative. For th
 
   The guest can milk a mooshroom with a bowl or a bucket, feed a brown one flowers and get suspicious stew, shear
   one, breed them with wheat, and grow huge mushrooms with bone meal.
+
+### Milestone 5: the armadillo and wolf armour
+
+- **Finding them:**
+  - At seed 12345 the nearest savanna is about 2,300 blocks south-east: `/tp @s 1326 72 1915` lands in it, on grass.
+    Its chunks come with armadillos: in the headless browser I counted 11 within about 150 blocks of there. Four were
+    near `/tp @s 1311 66 1790`, round 1305, 64, 1797. They wander, so look about in the tall grass.
+  - The badlands are about 5,000 blocks out: `/tp @s 3072 73 4088` (badlands) or `/tp @s 2889 72 4045` (wooded
+    badlands). Armadillos are the only animals there. Few come with the world's making, and more come later, as any
+    animal does.
+- **Summoning:**
+  - `/summon minecraft:armadillo ~ ~ ~3` makes one; add `{Age:-24000}` for a baby. The spawn egg is in the spawn eggs
+    tab (rose with dark red spots).
+  - Check the banded rose shell over pale pink skin, the long ears and the little tail. As it walks, its legs and tail
+    swing and its head turns to look about.
+- **Rolling up** (`/gamemode survival`):
+  1. Sprint past it within about 7 blocks, ride a horse by, or `/summon minecraft:zombie ~ ~ ~5`. It stops, curls up
+     into a ball with a clatter, and lands with a thump.
+  2. While the danger's still about, it peeks out now and then (its face shows at the front of the ball), with a
+     sniff.
+  3. Walk away, or stop sprinting. About 4 seconds later it starts to unroll with a rattle, and it's out a second and a
+     half after that, with a snort.
+  4. Hit it: it rolls up at once. Hitting it again while it's rolled up does much less damage, and sounds like a knock
+     on the shell rather than its squeak.
+  5. On a lead or in water it doesn't roll up. Fire or lava brings it out, and it runs.
+- **Scutes:**
+  1. `/give @s minecraft:brush`, then use it on a grown armadillo. A scute pops off with a scratching sound, the
+     brush loses 16 durability, and Isn't It Scute? is awarded. It works on a rolled-up one too, but not on a baby.
+  2. Every 5 to 10 minutes a grown armadillo drops a scute by itself.
+  3. A dispenser with a brush facing an armadillo brushes it when powered.
+- **Breeding:** spider eyes. Holding one makes armadillos follow you. Two fed ones have a baby, and a fed baby grows
+  faster. A rolled-up one won't take one.
+- **Wolf armour:**
+  1. Craft it from six scutes: the left column, the middle row and the bottom right (`X··` / `XXX` / `X·X`). It's in
+     the combat tab after the diamond horse armour.
+  2. Tame a wolf (`/summon minecraft:wolf ~ ~ ~3`, then feed it bones) and use the armour on it. It wears it, with a
+     strap-and-buckle sound. The plates cover its back, sides, chest and the tops of its legs; its head and tail stay
+     bare.
+  3. Dye it: the armour and a dye in the crafting grid. The plates take the colour. A water cauldron washes it off.
+  4. Hit the wolf (in survival). The armour takes the blow with a knock and the wolf loses no health. So do falls,
+     fire and lava. Drowning, suffocating, freezing, starving, magic and the wither get past it.
+  5. As it wears, cracks show in three stages, each with a cracking sound and a spray of chips. When it's worn
+     through, it breaks.
+  6. Tell the wolf to sit (an empty hand on it), then use a scute on it: an eighth of the armour is mended. Mended
+     back to new: Good as New.
+  7. Use shears on it: the armour comes off and drops (Shear Brilliance). A dispenser with wolf armour puts it on a
+     tame wolf in front of it.
+  8. `/summon minecraft:wolf ~ ~ ~3 {body_armor_item:{id:"minecraft:wolf_armor",count:1}}` makes a wolf already
+     wearing it.
+- **LAN guest:** open a second window, host with Esc → Open to LAN, and join from the other window's Multiplayer
+  screen. The guest should see:
+  - armadillos rolling up, peeking and unrolling, and hear it;
+  - a baby's size;
+  - a wolf's armour with its dye and cracks, and the chips as it cracks.
+
+  The guest can brush armadillos and feed them spider eyes. On its own wolf, the guest can put on armour, mend it with
+  scutes while the wolf sits, and shear it off.

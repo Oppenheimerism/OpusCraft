@@ -17,8 +17,15 @@ export interface ItemLayers {
 
 const POTIONS = new Set(['potion', 'splash_potion', 'lingering_potion']);
 
+/**
+ * (remaining mobs: the armadillo) vanilla ItemColors for wolf armour: its overlay (layer1) takes the dye, and undyed
+ * (DyedItemColor.getOrDefault(stack, 0): alpha 0) isn't drawn — a tint below 0 here
+ */
+export const NO_TINT = -1;
+
 /** the item's layers when it has a tinted one, else null (a single untinted sprite) */
 export function itemLayers(it: Item): ItemLayers | null {
+  if (it.id === 'wolf_armor') return { layers: ['wolf_armor', 'wolf_armor_dyed'], tinted: 1, defaultTint: NO_TINT };
   if (isDyeable(it)) return { layers: [it.texture!, `${it.texture}_overlay`], tinted: 0, defaultTint: DEFAULT_LEATHER_COLOR };
   if (POTIONS.has(it.id)) return { layers: ['potion_overlay', it.texture!], tinted: 0, defaultTint: BASE_POTION_COLOR };
   if (it.id === 'tipped_arrow') return { layers: ['tipped_arrow_head', 'tipped_arrow_base'], tinted: 0, defaultTint: BASE_POTION_COLOR };
@@ -29,6 +36,7 @@ export function itemLayers(it: Item): ItemLayers | null {
 
 /** the colour this stack gives its tinted layer (vanilla ItemColors: DyedItemColor, PotionContents.getColor) */
 export function layerTint(s: ItemStack): number {
+  if (s.item.id === 'wolf_armor') return dyedColor(s, NO_TINT);
   if (isDyeable(s.item)) return dyedColor(s);
   if (s.item.id === 'firework_star') return starTint(s);
   return potionColor(contentsOf(s));

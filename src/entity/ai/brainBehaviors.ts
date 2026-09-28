@@ -15,11 +15,15 @@ import type { Path } from './pathfinder';
 import { defaultRandomPosTowards, landRandomPos } from './goals';
 import { randomSwimmablePos } from '../fish';
 import { FLAGS, F_WATER } from '../../world/block';
+import { wrapDegrees } from '../../core/math';
 
 export type Pos = [number, number, number];
 
-/** vanilla PositionTracker: an EntityTracker (at its eyes, or its feet) or a BlockPosTracker */
-export type Tracker = { entity: Entity; eye: boolean } | { pos: Pos };
+/**
+ * vanilla PositionTracker: an EntityTracker (at its eyes, or its feet) or a BlockPosTracker ((remaining mobs: the
+ * armadillo) made from a point, `at`, which is where it looks: vanilla BlockPosTracker(Vec3))
+ */
+export type Tracker = { entity: Entity; eye: boolean } | { pos: Pos; at?: Pos };
 /** vanilla WalkTarget */
 export interface WalkTarget {
   t: Tracker;
@@ -64,6 +68,11 @@ export const PANIC_CAUSES = new Set([
   'fireworks', 'indirectMagic', 'magic', 'mob', 'mobProjectile', 'player', 'playerExplosion', 'sonicBoom', 'sting', 'thrown', 'trident',
   'unattributedFireball', 'windCharge', 'wither', 'witherSkull',
 ]);
+/**
+ * (remaining mobs: the armadillo) vanilla #panic_environmental_causes, the part of #panic_causes that isn't a blow: what
+ * sets an armadillo running (anything else that hurts it makes it roll up)
+ */
+export const PANIC_ENVIRONMENTAL_CAUSES: ReadonlySet<string> = new Set(['cactus', 'freeze', 'hotFloor', 'inFire', 'campfire', 'lava', 'lightningBolt', 'onFire']);
 
 /** vanilla PositionTracker.currentBlockPosition */
 export function trackerBlock(t: Tracker): Pos {
@@ -71,7 +80,7 @@ export function trackerBlock(t: Tracker): Pos {
 }
 /** vanilla PositionTracker.currentPosition: an entity's feet or eyes, a block's middle */
 export function trackerPos(t: Tracker): Pos {
-  if ('pos' in t) return [t.pos[0] + 0.5, t.pos[1] + 0.5, t.pos[2] + 0.5];
+  if ('pos' in t) return t.at ?? [t.pos[0] + 0.5, t.pos[1] + 0.5, t.pos[2] + 0.5];
   return [t.entity.x, t.entity.y + (t.eye ? t.entity.eyeHeight : 0), t.entity.z];
 }
 /** vanilla EntityTracker */
@@ -297,6 +306,29 @@ export function lookAtPlayerSometimes<E extends BrainMob>(range: number, min: nu
   });
 }
 
+/**
+ * (remaining mobs: the armadillo) vanilla RandomLookAround(interval, maxYaw, minPitch, maxPitch): with nothing to look
+ * at and no gaze cooldown, it looks at the point a block off its eyes up to `maxYaw` degrees either side of the way it
+ * faces, at a pitch between the two (clamped to straight up or down), and doesn't again for `min` to `max` ticks
+ * (GAZE_COOLDOWN_TICKS)
+ */
+export function randomLookAround<E extends BrainMob & { gazeCooldown: number }>(min: number, max: number, maxYaw: number, minPitch: number, maxPitch: number): BehaviorControl<E> {
+  const DEG = Math.PI / 180;
+  return new Behavior<E>({
+    canStart: (a) => a.lookTarget === null && a.gazeCooldown < 0,
+    start: (a) => {
+      const r = a.random;
+      const pitch = Math.max(-90, Math.min(90, r.nextFloat() * (maxPitch - minPitch) + minPitch));
+      const yaw = wrapDegrees(a.yaw + 2 * r.nextFloat() * maxYaw - maxYaw);
+      // (vanilla Vec3.directionFromRotation)
+      const f = Math.cos(-yaw * DEG - Math.PI), g = Math.sin(-yaw * DEG - Math.PI), h = -Math.cos(-pitch * DEG), i = Math.sin(-pitch * DEG);
+      const pt: Pos = [a.x + g * h, a.y + a.eyeHeight + i, a.z + f * h];
+      a.lookTarget = { pos: [Math.floor(pt[0]), Math.floor(pt[1]), Math.floor(pt[2])], at: pt };
+      a.gazeCooldown = min + r.nextInt(max - min + 1);
+    },
+  });
+}
+
 /** vanilla BehaviorUtils.lockGazeAndWalkToEachOther */
 export function lockGazeAndWalkToEachOther(a: BrainMob, b: BrainMob, speed: number, dist: number): void {
   a.lookTarget = at(b, true);
@@ -347,9 +379,10 @@ export function animalMakeLove<E extends BrainAnimal>(speed = 1, close = 2): Beh
 
 /**
  * vanilla FollowTemptation: after the player holding its food (looking at them), up to `close` blocks off; losing
- * them (or breeding, or panicking), it pays no heed to food for five seconds
+ * them (or breeding, or panicking), it pays no heed to food for five seconds. ((remaining mobs: the armadillo) `close`
+ * may be the mob's own: vanilla FollowTemptation(speed, closeEnoughDistance))
  */
-export function followTemptation<E extends BrainMob & TemptedMemories>(speed: (a: E) => number, close = 2.5): BehaviorControl<E> {
+export function followTemptation<E extends BrainMob & TemptedMemories>(speed: (a: E) => number, close: number | ((a: E) => number) = 2.5): BehaviorControl<E> {
   return new Behavior<E>({
     timesOut: false,
     canStart: (a) => a.temptationCooldown < 0 && a.temptingPlayer !== null && !a.breedTarget && !isPanicking(a),
@@ -360,7 +393,8 @@ export function followTemptation<E extends BrainMob & TemptedMemories>(speed: (a
     tick: (a) => {
       const p = a.temptingPlayer!;
       a.lookTarget = at(p, true);
-      if (a.distanceToSqr(p.x, p.y, p.z) < close * close) a.walkTarget = null;
+      const d = typeof close === 'number' ? close : close(a);
+      if (a.distanceToSqr(p.x, p.y, p.z) < d * d) a.walkTarget = null;
       else a.walkTarget = { t: at(p, false), speed: speed(a), closeEnough: 2 };
     },
     stop: (a) => {
@@ -455,9 +489,15 @@ export function swim<E extends BrainMob>(chance: number): BehaviorControl<E> {
 
 /**
  * vanilla AnimalPanic(speed): hurt by something that frightens it (#panic_causes), it runs about for five or six
- * seconds, somewhere up to five blocks off each time it gets there (to water nearby if it's on fire)
+ * seconds, somewhere up to five blocks off each time it gets there (to water nearby if it's on fire). ((remaining mobs:
+ * the armadillo) `o`: vanilla AnimalPanic(speed, panicCausingDamageTypes), what frightens this kind, and a subclass's
+ * own start before the panic's: ArmadilloAi.ArmadilloPanic)
  */
-export function animalPanic<E extends BrainMob & { hurtBy: string | null; isPanicking: boolean }>(speed: number): BehaviorControl<E> {
+export function animalPanic<E extends BrainMob & { hurtBy: string | null; isPanicking: boolean }>(
+  speed: number,
+  o: { causes?: ReadonlySet<string>; start?: (a: E) => void } = {},
+): BehaviorControl<E> {
+  const causes = o.causes ?? PANIC_CAUSES;
   // (vanilla lookForWater: the nearest water by Manhattan distance, five blocks round and one up or down)
   const waterNear = (a: E): Pos | null => {
     const bx = Math.floor(a.x), by = Math.floor(a.y), bz = Math.floor(a.z);
@@ -467,8 +507,9 @@ export function animalPanic<E extends BrainMob & { hurtBy: string | null; isPani
   return new Behavior<E>({
     min: 100,
     max: 120,
-    canStart: (a) => (a.hurtBy !== null && PANIC_CAUSES.has(a.hurtBy)) || a.isPanicking,
+    canStart: (a) => (a.hurtBy !== null && causes.has(a.hurtBy)) || a.isPanicking,
     start: (a) => {
+      o.start?.(a);
       a.isPanicking = true;
       a.navigation.stop();
     },

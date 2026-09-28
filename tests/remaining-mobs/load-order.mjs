@@ -22,7 +22,7 @@ if (mods) {
   const hooks = mods[MAIN.length].hiveDispense;
   check('...the beehive has set the dispenser\'s hooks (shears, a glass bottle)', typeof hooks?.shear === 'function' && typeof hooks?.bottle === 'function');
   const { MOB_TYPES } = mods[MAIN.length + 1];
-  check('...every mob the remaining-mobs branch adds is there to be made', ['bee', 'phantom', 'panda', 'mooshroom'].every((t) => typeof MOB_TYPES?.[t] === 'function'));
+  check('...every mob the remaining-mobs branch adds is there to be made', ['bee', 'phantom', 'panda', 'mooshroom', 'armadillo'].every((t) => typeof MOB_TYPES?.[t] === 'function'));
 }
 
 await close?.();

@@ -80,6 +80,8 @@ function craftingCategory(result: string, r?: CraftingRecipe): BookCategory {
   if (result === 'crafter') return 'crafting_redstone';
   // (remaining mobs: the bee) vanilla's honey block is RecipeCategory.REDSTONE, as the slime block is
   if (result === 'honey_block') return 'crafting_redstone';
+  // (remaining mobs: the armadillo) vanilla's wolf armour is RecipeCategory.COMBAT
+  if (result === 'wolf_armor') return 'crafting_equipment';
   if (/(cut|chiseled)_copper$|copper_grate$/.test(result)) return 'crafting_building_blocks';
   if (EQUIPMENT.test(result)) return 'crafting_equipment';
   if (REDSTONE.test(result)) return 'crafting_redstone';

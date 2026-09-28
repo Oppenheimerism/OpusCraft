@@ -80,6 +80,7 @@ import { Bee } from '../entity/bee';
 import { Phantom } from '../entity/phantom';
 import { Panda } from '../entity/panda';
 import { Mooshroom, mooshroomSpawnRulesOk } from '../entity/mooshroom';
+import { Armadillo, armadilloSpawnRulesOk } from '../entity/armadillo';
 import { PhantomSpawner } from './phantomSpawner';
 import { moonPhase } from '../render/environment';
 import { tickInhabitedTime } from './difficulty';
@@ -333,6 +334,9 @@ Object.assign(ENTITY_NAMES, { panda: 'Panda' });
 // (remaining mobs) the mooshroom: in herds on the mushroom fields
 Object.assign(MOB_TYPES, { mooshroom: (l: Level) => new Mooshroom(l) });
 Object.assign(ENTITY_NAMES, { mooshroom: 'Mooshroom' });
+// (remaining mobs) the armadillo: in the savannas and the badlands
+Object.assign(MOB_TYPES, { armadillo: (l: Level) => new Armadillo(l) });
+Object.assign(ENTITY_NAMES, { armadillo: 'Armadillo' });
 
 // (Stage 4: the outer End)
 Object.assign(ENTITY_NAMES, { shulker: 'Shulker', shulker_bullet: 'Shulker Bullet', item_frame: 'Item Frame', glow_item_frame: 'Glow Item Frame', firework_rocket: 'Firework Rocket' });
@@ -461,12 +465,18 @@ function settingsForLand(name: string): Omit<MobSettings, 'water' | 'ambient'> {
     case 'plains':
     case 'sunflower_plains':
       return { creature: [...farmAnimals(), S_('horse', 5, 2, 6), S_('donkey', 1, 1, 3)], monster: monsters(), creatureProbability: 0.1 };
-    // vanilla OverworldBiomes.savanna: a few horses and donkeys (and armadillos, not in the game yet: picked, and nothing comes)
+    // vanilla OverworldBiomes.savanna: a few horses and donkeys, and armadillos in twos and threes
     // (on a plateau, llamas too: vanilla OverworldBiomes.savanna with isPlateau)
     case 'savanna':
     case 'savanna_plateau':
     case 'windswept_savanna':
       return { creature: [...farmAnimals(), S_('horse', 1, 2, 6), S_('donkey', 1, 1, 1), S_('armadillo', 10, 2, 3), ...(name === 'savanna_plateau' ? [S_('llama', 8, 4, 4)] : [])], monster: monsters(), creatureProbability: 0.1 };
+    // (remaining mobs: the armadillo) vanilla OverworldBiomes.badlands: armadillos in ones and twos, few of them at the
+    // world's making (creatureGenerationProbability 0.03); the wooded badlands' wolves are WOLF_SPAWNS'
+    case 'badlands':
+    case 'eroded_badlands':
+    case 'wooded_badlands':
+      return { creature: [S_('armadillo', 6, 1, 2)], monster: monsters(), creatureProbability: 0.03 };
     // vanilla OverworldBiomes.windsweptHills: herds of llamas
     case 'windswept_hills':
     case 'windswept_gravelly_hills':
@@ -870,6 +880,9 @@ export class NaturalSpawner {
       // (remaining mobs: vanilla SpawnPlacements MOOSHROOM, MushroomCow::checkMushroomSpawnRules)
       case 'mooshroom':
         return mooshroomSpawnRulesOk(lvl, x, y, z);
+      // (remaining mobs: vanilla SpawnPlacements ARMADILLO, Armadillo::checkArmadilloSpawnRules)
+      case 'armadillo':
+        return armadilloSpawnRulesOk(lvl, x, y, z);
       case 'pig':
       case 'cow':
       case 'sheep':

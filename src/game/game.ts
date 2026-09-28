@@ -1777,7 +1777,11 @@ export class Game {
       if (e instanceof Piglin && e.isAdult() && stack?.item.id === 'gold_ingot') this.advancements.trigger('distract_piglin', { distract: 'directly' });
       // (M9: frogs) vanilla player_interacted_with_entity: what was in hand, on what kind of mob, of what variant
       const variant = (e as { variant?: unknown }).variant;
-      this.advancements.trigger('player_interacted_with_entity', { interacted: { item: stack?.item.id ?? null, entity: e.type, variant: typeof variant === 'string' ? variant : undefined } });
+      // (remaining mobs: the armadillo) and the body armour it wears after (a wolf's)
+      const armor = (e as { bodyArmor?: ItemStack | null }).bodyArmor;
+      this.advancements.trigger('player_interacted_with_entity', {
+        interacted: { item: stack?.item.id ?? null, entity: e.type, variant: typeof variant === 'string' ? variant : undefined, bodyArmor: armor ? { item: armor.item.id, damage: armor.damage } : null },
+      });
     };
     lvl.onPlayerCrossbowKill = (killed, p) => p === this.player && this.advancements.trigger('killed_by_crossbow', { crossbowKills: killed.map((e) => e.type) });
     // (Stage 4) criteria met out in the world: shields, totems, raids

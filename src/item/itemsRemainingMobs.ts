@@ -7,7 +7,10 @@
 // spawn egg. The panda: its spawn egg; bamboo (the stalk's block item, which plants a shoot on the ground) drawn flat,
 // with the natural blocks before sugar cane, burning for 50 ticks. The mooshroom: its spawn egg; the huge mushrooms'
 // blocks with the natural blocks after the leaves; the suspicious stews (one of each flower's, game/suspiciousStew.ts)
-// with the food after the rabbit stew.
+// with the food after the rabbit stew. The armadillo: its spawn egg; the armadillo scute with the ingredients after the
+// turtle scute; wolf armour (one to a stack, 64 uses: vanilla ArmorItem.Type.BODY's 16 times the armadillo's 4) with
+// the combat items after the diamond horse armour. Wolf armour has no `armor`: it isn't worn by a player, nor
+// enchanted (vanilla 1.21 lists it in no #enchantable tag); its 11 points are entity/wolf.ts's.
 
 import type { Item } from './item';
 
@@ -65,4 +68,11 @@ export function registerRemainingMobItems(reg: Reg, items: Map<string, Item>, li
   }
   // vanilla CreativeModeTabs.FOOD_AND_DRINKS: the mushroom stew, the beetroot soup, the rabbit stew, the suspicious stews
   after('suspicious_stew', 'rabbit_stew');
+
+  // --- the armadillo
+  reg({ id: 'armadillo_spawn_egg', texture: 'armadillo_spawn_egg', creativeTab: 'spawn_eggs' });
+  reg({ id: 'armadillo_scute', texture: 'armadillo_scute' });
+  after('armadillo_scute', 'turtle_scute');
+  reg({ id: 'wolf_armor', texture: 'wolf_armor', maxStack: 1, maxDamage: 64, creativeTab: 'combat' });
+  after('wolf_armor', 'diamond_horse_armor');
 }
