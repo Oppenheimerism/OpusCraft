@@ -91,6 +91,8 @@ import './lodestoneCompass';
 import './signs';
 // (ender chests) opening onto the player's own slots, its lid, its drops
 import './enderChest';
+// (cake) eating it, candles in it, the candle cakes lit and put out
+import './cake';
 
 export interface SoundSink {
   play(name: string, x: number, y: number, z: number, volume?: number, pitch?: number): void;

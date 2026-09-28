@@ -49,6 +49,8 @@ import { registerBastionTextures } from './blocklib/bastion';
 import { registerSignTextures } from './signs';
 // (ender chest) the shut chest's faces, for its item
 import { registerEnderChestTextures } from './enderChest';
+// (cake)
+import { registerCakeTextures } from './cake';
 
 type Gen = () => TexDef;
 export const BLOCK_TEXTURES: Record<string, Gen> = {};
@@ -585,6 +587,8 @@ registerBastionTextures(T);
 registerSignTextures(T);
 // (ender chest) its item's faces
 registerEnderChestTextures(T);
+// (cake) the cake's top, sides, underside and cut face
+registerCakeTextures(T);
 
 // Missing texture (vanilla's magenta/black checkerboard)
 T['missing'] = () => {

@@ -67,6 +67,8 @@ import { trialChamberSounds } from './gen/trialChambers';
 import { signSounds } from './gen/signs';
 // (ender chests)
 import { enderChestSounds } from './gen/enderChest';
+// (cake)
+import { cakeSounds } from './gen/cake';
 import { trialCombatSounds } from './gen/trialCombat';
 import { crafterSounds } from './gen/crafter';
 
@@ -143,6 +145,8 @@ Object.assign(SOUNDS, trialCombatSounds(), crafterSounds());
 Object.assign(SOUNDS, signSounds(SOUNDS));
 // (ender chests) the lid's
 Object.assign(SOUNDS, enderChestSounds());
+// (cake) a candle pushed into it
+Object.assign(SOUNDS, cakeSounds());
 // (vanilla sounds.json: the snow golem's are the snow's breaking, the bow's and the shears')
 for (const [k, v] of Object.entries({ 'entity.snow_golem.hurt': 'block.snow.break', 'entity.snow_golem.death': 'block.snow.break', 'entity.snow_golem.shoot': 'entity.arrow.shoot', 'entity.snow_golem.shear': 'entity.sheep.shear' })) if (SOUNDS[v]) SOUNDS[k] = SOUNDS[v];
 // (vanilla sounds.json: any mob's swimming, and a monster's, is the player's splashing)

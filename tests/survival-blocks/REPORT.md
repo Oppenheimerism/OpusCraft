@@ -6,14 +6,86 @@ next was started. No history rewritten, nothing pushed to `main`.
 | # | Milestone | Commit | State |
 |---|-----------|--------|-------|
 | 1 | Signs and hanging signs (11 woods) | `89f4d4a` | done |
-| 2 | Ender chest | see `git log` (the "Ender chest" commit) | done |
-| 3 | Cake and candle cakes | | to do |
+| 2 | Ender chest | `4cba979` | done |
+| 3 | Cake and candle cakes | see `git log` (the "Cake and candle cakes" commit) | done |
 | 4 | Spyglass | | to do |
 | 5 | Armour stand | | to do |
 | 6 | Minecarts and rails | | to do |
 
 Where nobody could be asked, the choice closest to vanilla 1.21 was made; each such choice is listed under the
 milestone's "Deviations and open points".
+
+---
+
+## M3: cake and candle cakes
+
+The cake block and item, and the 17 candle cakes (plain candle and 16 colours), lit or not.
+
+- **Cake** (`src/world/blocksCake.ts`, `src/game/cake.ts`, vanilla `CakeBlock`): `bites` 0–6, eaten from the west
+  side 2 px a slice (vanilla `SHAPE_BY_BITE`, 14×8×14 whole); strength 0.5, wool sounds, no tool, map colour none,
+  forced solid (a cake, sign or banner stands on it), broken by pistons, needs something solid under it (breaks
+  without drops otherwise), drops nothing even with silk touch, and water doesn't wash it away. Using it: only if
+  hungry, or in creative (vanilla `canEat(false)`), +2 food and +0.4 saturation (`FoodData.eat(2, 0.1)`), the `eat`
+  game event; after the 7th slice the block goes (`block_destroy`). Not hungry: the click passes on to the held item.
+  A comparator reads `(7 − bites) × 2` (14 whole → 2). Eating makes no sound, as in vanilla.
+- **Candles into it** (vanilla `CakeBlock.useItemOn`): any of the 17 candles used on an **uneaten** cake makes that
+  candle's candle cake (1 candle used, none in creative; `block.cake.add_candle`, `block_change`). On a bitten cake the
+  click eats a slice instead (if hungry).
+- **Candle cakes** (vanilla `CandleCakeBlock`/`AbstractCandleBlock`): `lit`; light 3 while lit; the cake's shape plus
+  the candle's (7..9 × 8..14); cut-out layer; a small flame over the wick (and now and then smoke and the crackle).
+  Lit by flint and steel or a fire charge (their use goes straight to lighting it, it isn't eaten), by a dispenser's
+  flint and steel, by a burning arrow. Put out by an empty hand on the candle (the click above the cake's middle,
+  vanilla `candleHit`), a splash of water or a wind burst. Otherwise using it eats it as an uneaten cake: the candle
+  drops and a cake with one slice gone is left. Comparator 14; drops its candle when broken (or when its support
+  goes); picks as a cake; has no item of its own.
+- **Item, recipe, creative**: the cake item stacks to 1, is drawn as its (already existing) sprite, and sits in the
+  Food & Drinks tab after the cookie. Recipe: 3 milk buckets, 2 sugar, an egg, 3 wheat; the 3 buckets stay in the
+  grid (the milk bucket now has vanilla's crafting remainder, `bucket`). Composting, the villager trade and the trial
+  chamber loot that already named `cake` now work, since the item exists.
+- **Textures** (`src/textures/cake.ts`): `cake_top` (frosting with red cherries), `cake_side` (frosting and drips over
+  golden sponge with a jam line, drawn in the tile's lower half), `cake_bottom` (baked crust), `cake_inner` (the cut
+  face); candle cakes use the candles' own textures (lit/unlit) on vanilla's `template_cake_with_candle` model.
+- **Sounds** (`src/audio/gen/cake.ts`): `block.cake.add_candle` (3 takes: a damp squish and a small wax knock); the
+  rest are wool's and the candles' existing ones.
+- **Saving**: plain block states (`bites`, `lit`), kept by name in the chunk palette.
+- **Multiplayer**: all host-side: a guest's clicks eat, add candles, light and put out; the guest's world, its food
+  and inventory follow; everyone near hears it; a late joiner gets the states with the chunk.
+
+**New files**: `src/world/blocksCake.ts`, `src/game/cake.ts`, `src/textures/cake.ts`, `src/item/itemsCake.ts`,
+`src/audio/gen/cake.ts`; tests `tests/survival-blocks/cake.mjs`, `tests/survival-blocks/cake-mp.mjs`.
+
+**Shared files touched** (a line or a few each, marked `(cake)`): `src/world/blocks.ts` (`registerCakeBlocks()`),
+`src/game/level.ts` (`import './cake'`), `src/item/item.ts` (`registerCakeItems`), `src/inventory/recipes.ts` (the
+recipe), `src/textures/blocks.ts` (`registerCakeTextures`), `src/audio/synth.ts` (`cakeSounds`),
+`src/game/candles.ts` (a small `registerCandleKin` hook: `lightCandle`/`extinguishCandle` — used by flint and steel,
+fire charges, dispensers and splash water — also try the candle cakes), `src/game/windBurst.ts` (a wind burst puts
+out lit candles and candle cakes, vanilla `AbstractCandleBlock.onExplosionHit`), `src/game/redstone/piston.ts`
+(candle cakes break when pushed), `src/game/banners.ts` (`legacySolid` also true for cakes).
+
+**Deviations and open points**
+- Wind bursts now also put out ordinary lit candles (the same vanilla method covers both; they didn't before).
+- "Birthday Song" (an allay drops a cake at a note block) stays `never`: there are no allays in this game.
+- There are no statistics, so `eat_cake_slice` isn't counted.
+- The cake texture and the `block.cake.add_candle` sound are our own procedural versions.
+
+**Tests**: `tests/survival-blocks/cake.mjs` (67 checks: states, shapes, strength, sounds, forced solid, pistons, map
+colour, candle cake states/light/shape/layer, models, item/sprite/stack/tab/order, pick block, recipe and crafting
+at a table with the buckets left, faces, the add-candle sound, composting, placing (a cake on a cake), eating when
+full/hungry/creative, food and saturation (capped), `eat`/`block_destroy`, 7 slices, no drops, the analog output
+for every bite and a real comparator, adding candles (consumed; not on a bitten cake; not consumed in creative),
+flint and steel and fire charge lighting (not eaten, light 3), the flame, putting out by hand (hiss, smoke, event),
+eating a lit and an unlit candle cake (candle dropped), holding an item, dispenser, burning arrow, splash water, wind
+burst (also candles), drops, losing support, saving a chunk) and `tests/survival-blocks/cake-mp.mjs` (20 checks).
+
+**Try it** (http://localhost:5173/?seed=12345):
+1. Creative → Food & Drinks: the cake after the cookie (it stacks to 1). Survival: craft it (3 milk buckets, 2 sugar,
+   an egg, 3 wheat): the buckets stay in the grid.
+2. Place it on the ground (not on air). With a full hunger bar right-click does nothing; when hungry each click eats a
+   slice (+1 drumstick); the 7th finishes it. Put a comparator against it: 14, then 2 less a slice.
+3. Right-click a fresh cake with any candle: a candle cake. Flint and steel lights it (light 3, flame); an empty hand
+   on the candle blows it out; a click on the cake part eats a slice and the candle pops off.
+4. Break a candle cake: its candle drops; break a cake: nothing. Push them with a piston: they break.
+5. LAN: a guest eats, adds a candle, lights and blows it out; the host sees the same.
 
 ---
 

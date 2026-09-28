@@ -217,6 +217,8 @@ shapeless('ender_eye', 1, 'ender_pearl', 'blaze_powder');
 shaped('end_crystal', 1, ['GGG', 'GEG', 'GTG'], { G: 'glass', E: 'ender_eye', T: 'ghast_tear' });
 // (ender chests)
 shaped('ender_chest', 1, ['###', '#E#', '###'], { '#': 'obsidian', E: 'ender_eye' });
+// (cake) three milk buckets (their buckets left behind), two sugar, an egg and three wheat
+shaped('cake', 1, ['AAA', 'BEB', 'CCC'], { A: 'milk_bucket', B: 'sugar', C: 'wheat', E: 'egg' });
 // vanilla copySmithingTemplate: a template copied with seven diamonds and the block it's made of
 shaped('netherite_upgrade_smithing_template', 2, ['#S#', '#C#', '###'], { '#': 'diamond', C: 'netherrack', S: 'netherite_upgrade_smithing_template' });
 

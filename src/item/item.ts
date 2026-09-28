@@ -13,6 +13,8 @@ import { registerTrialChamberItems } from './itemsTrialChambers';
 import { registerBastionItems } from './itemsBastion';
 // (signs)
 import { registerSignItems } from './itemsSigns';
+// (cake)
+import { registerCakeItems } from './itemsCake';
 
 export interface ToolInfo {
   type: ToolType;
@@ -602,6 +604,8 @@ for (const [id, tex] of [['redstone_torch', 'block:redstone_torch'], ['repeater'
 registerBastionItems(reg, ITEMS, ITEM_LIST);
 // (signs) every wood's sign and hanging sign: sixteen to a stack, their sprites, their fuel
 registerSignItems(reg, ITEMS, ITEM_LIST);
+// (cake) the cake: one to a stack, its sprite, with the food; milk crafted with leaves its bucket
+registerCakeItems(ITEMS, ITEM_LIST);
 
 export function itemForBlock(name: string): Item | undefined {
   // (a block that is another's item's: a wall banner is its banner's)
