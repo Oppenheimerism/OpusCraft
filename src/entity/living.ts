@@ -280,8 +280,14 @@ export abstract class LivingEntity extends Entity {
     return a >= 0 ? 0.1 * (a + 1) : 0;
   }
 
+  /**
+   * vanilla Entity.getBlockJumpFactor: the jump factor of the block it's in, or else of the one under it that moves it
+   * ((remaining mobs: the bee) the honey block's 0.5)
+   */
   blockJumpFactor(): number {
-    return 1;
+    const w = this.level.world, x = Math.floor(this.x), z = Math.floor(this.z);
+    const f = BLOCKS[STATE_BLOCK[w.getState(x, Math.floor(this.y), z)]].jumpFactor;
+    return f !== 1 ? f : BLOCKS[STATE_BLOCK[w.getState(x, Math.floor(this.y - 0.500001), z)]].jumpFactor;
   }
 
   /** vanilla LivingEntity.onBelowWorld: the void hurts, 4 at a time whatever the armour (tried every tick, landing each half second) */

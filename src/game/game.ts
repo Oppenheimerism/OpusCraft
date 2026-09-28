@@ -570,6 +570,8 @@ export class Game {
     });
     this.renderer.particles = particles;
     particles.onDripstoneDripLand = (x, y, z, lava) => this.sound.play(lava ? 'block.pointed_dripstone.drip_lava' : 'block.pointed_dripstone.drip_water', x, y, z, 0.3 + Math.random() * 0.7, 1);
+    // (remaining mobs: the bee) vanilla HoneyFallAndLandParticle: SoundEvents.BEEHIVE_DRIP, its volume Mth.randomBetween(0.3, 1)
+    particles.onHoneyDripLand = (x, y, z) => this.sound.play('block.beehive.drip', x, y, z, 0.3 + Math.random() * 0.7, 1);
     this.level.particles = {
       blockBreak: (x, y, z, s) => particles.blockBreak(x, y, z, s),
       blockHit: (x, y, z, s, f) => particles.blockHit(x, y, z, s, f),

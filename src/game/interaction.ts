@@ -816,6 +816,8 @@ export class Interaction {
       if (p.gameMode !== 'creative') p.inventory.setSelectedItem(ItemStack.of('bucket'));
       return true;
     }
+    // (remaining mobs: the bee) vanilla BlockItem.updateBlockStateFromTag: the properties the item carries (a hive's honey)
+    st = withItemBlockState(st, stack);
     this.level.setBlock(x, y, z, st);
     // (vanilla BlockItem.updateBlockEntityComponents: a banner's patterns go onto its block entity)
     this.level.world.getBlockEntity(x, y, z)?.applyComponents(stack);
@@ -1295,3 +1297,20 @@ function useAnimation(s: ItemStack): 'drink' | 'eat' | null {
 }
 
 export { S };
+
+/**
+ * (remaining mobs: the bee) vanilla BlockItemStateProperties.apply: an item's block_state (a hive's honey_level) over
+ * the state placed, each property it names that the block has, at a value the property takes
+ */
+function withItemBlockState(st: number, stack: ItemStack): number {
+  const bs = stack.tag?.blockState;
+  if (!bs) return st;
+  const b = BLOCKS[STATE_BLOCK[st]];
+  for (const [k, v] of Object.entries(bs)) {
+    const i = b.propIndex(k);
+    if (i < 0) continue;
+    const val = b.props[i].values.find((x) => String(x) === v);
+    if (val !== undefined) st = b.with(st, k, val);
+  }
+  return st;
+}

@@ -157,7 +157,8 @@ function adjacentAir(ctx: GenContext, x: number, y: number, z: number): boolean 
 // Biome decoration tables
 
 interface Deco {
-  trees?: { count: number; extra?: number; kinds: [TreeKind, number][]; grid?: boolean };
+  /** `bees`: (remaining mobs: the bee) the chance of a bee nest on each (vanilla's trees with a BeehiveDecorator) */
+  trees?: { count: number; extra?: number; kinds: [TreeKind, number][]; grid?: boolean; bees?: number };
   grass?: number;
   grassNoise?: [number, number];
   tallGrass?: number;
@@ -184,12 +185,12 @@ const DEFAULT_FLOWERS = ['dandelion', 'poppy'];
 const PLAINS_FLOWERS = ['dandelion', 'poppy', 'azure_bluet', 'oxeye_daisy', 'cornflower', 'red_tulip', 'orange_tulip', 'white_tulip', 'pink_tulip'];
 
 const DECO: Partial<Record<number, Deco>> = {
-  [B.plains]: { trees: { count: 0, extra: 0.05, kinds: [['oak', 0.8], ['fancy_oak', 0.2]] }, grassNoise: [5, 10], tallGrassNoise: [0, 7], flowers: { patches: 1, rarity: 2, kinds: PLAINS_FLOWERS }, pumpkin: 300, sugarCane: 5 },
-  [B.sunflower_plains]: { trees: { count: 0, extra: 0.05, kinds: [['oak', 0.8], ['fancy_oak', 0.2]] }, grassNoise: [5, 10], tallGrassNoise: [0, 7], flowers: { patches: 1, rarity: 2, kinds: PLAINS_FLOWERS }, sunflowers: 10, sugarCane: 5 },
-  [B.forest]: { trees: { count: 10, extra: 0.1, kinds: OAK_FOREST }, grass: 2, flowers: { patches: 1, rarity: 3, kinds: DEFAULT_FLOWERS }, tallFlowers: { patches: 1, kinds: ['lilac', 'rose_bush', 'peony'] }, mushrooms: 1, sugarCane: 5 },
-  [B.flower_forest]: { trees: { count: 6, extra: 0.1, kinds: OAK_FOREST }, grass: 2, flowers: { patches: 4, kinds: ['dandelion', 'poppy', 'allium', 'azure_bluet', 'red_tulip', 'orange_tulip', 'white_tulip', 'pink_tulip', 'oxeye_daisy', 'cornflower', 'lily_of_the_valley'] }, tallFlowers: { patches: 2, kinds: ['lilac', 'rose_bush', 'peony'] } },
-  [B.birch_forest]: { trees: { count: 10, extra: 0.1, kinds: [['birch', 1]] }, grass: 2, flowers: { patches: 1, rarity: 3, kinds: DEFAULT_FLOWERS }, tallFlowers: { patches: 1, kinds: ['lilac', 'rose_bush', 'peony'] } },
-  [B.old_growth_birch_forest]: { trees: { count: 10, extra: 0.1, kinds: [['tall_birch', 1]] }, grass: 2, flowers: { patches: 1, rarity: 3, kinds: DEFAULT_FLOWERS } },
+  [B.plains]: { trees: { count: 0, extra: 0.05, kinds: [['oak', 0.8], ['fancy_oak', 0.2]], bees: 0.05 }, grassNoise: [5, 10], tallGrassNoise: [0, 7], flowers: { patches: 1, rarity: 2, kinds: PLAINS_FLOWERS }, pumpkin: 300, sugarCane: 5 },
+  [B.sunflower_plains]: { trees: { count: 0, extra: 0.05, kinds: [['oak', 0.8], ['fancy_oak', 0.2]], bees: 0.05 }, grassNoise: [5, 10], tallGrassNoise: [0, 7], flowers: { patches: 1, rarity: 2, kinds: PLAINS_FLOWERS }, sunflowers: 10, sugarCane: 5 },
+  [B.forest]: { trees: { count: 10, extra: 0.1, kinds: OAK_FOREST, bees: 0.002 }, grass: 2, flowers: { patches: 1, rarity: 3, kinds: DEFAULT_FLOWERS }, tallFlowers: { patches: 1, kinds: ['lilac', 'rose_bush', 'peony'] }, mushrooms: 1, sugarCane: 5 },
+  [B.flower_forest]: { trees: { count: 6, extra: 0.1, kinds: OAK_FOREST, bees: 0.02 }, grass: 2, flowers: { patches: 4, kinds: ['dandelion', 'poppy', 'allium', 'azure_bluet', 'red_tulip', 'orange_tulip', 'white_tulip', 'pink_tulip', 'oxeye_daisy', 'cornflower', 'lily_of_the_valley'] }, tallFlowers: { patches: 2, kinds: ['lilac', 'rose_bush', 'peony'] } },
+  [B.birch_forest]: { trees: { count: 10, extra: 0.1, kinds: [['birch', 1]], bees: 0.002 }, grass: 2, flowers: { patches: 1, rarity: 3, kinds: DEFAULT_FLOWERS }, tallFlowers: { patches: 1, kinds: ['lilac', 'rose_bush', 'peony'] } },
+  [B.old_growth_birch_forest]: { trees: { count: 10, extra: 0.1, kinds: [['tall_birch', 1]], bees: 0.002 }, grass: 2, flowers: { patches: 1, rarity: 3, kinds: DEFAULT_FLOWERS } },
   [B.dark_forest]: { trees: { count: 16, kinds: [['dark_oak', 0.667], ['birch', 0.2], ['fancy_oak', 0.1], ['oak', 0.033]], grid: true }, grass: 2, mushrooms: 2, tallFlowers: { patches: 1, kinds: ['lilac', 'rose_bush', 'peony'] } },
   [B.taiga]: { trees: { count: 10, extra: 0.1, kinds: [['pine', 0.33], ['spruce', 0.67]] }, grass: 1, fern: 0.8, berries: 32, mushrooms: 1, tallGrass: 1 },
   [B.snowy_taiga]: { trees: { count: 10, extra: 0.1, kinds: [['pine', 0.33], ['spruce', 0.67]] }, grass: 1, fern: 0.8, berries: 32 },
@@ -204,13 +205,13 @@ const DECO: Partial<Record<number, Deco>> = {
   [B.windswept_hills]: { trees: { count: 0, extra: 0.1, kinds: [['spruce', 0.666], ['fancy_oak', 0.1], ['oak', 0.234]] }, grass: 2, flowers: { patches: 1, rarity: 4, kinds: DEFAULT_FLOWERS } },
   [B.windswept_gravelly_hills]: { trees: { count: 0, extra: 0.1, kinds: [['spruce', 0.666], ['fancy_oak', 0.1], ['oak', 0.234]] }, grass: 2 },
   [B.windswept_forest]: { trees: { count: 3, extra: 0.1, kinds: [['spruce', 0.666], ['fancy_oak', 0.1], ['oak', 0.234]] }, grass: 2 },
-  [B.meadow]: { trees: { count: 0, extra: 0.01, kinds: [['fancy_oak', 0.6], ['tall_birch', 0.4]] }, grass: 6, tallGrass: 5, flowers: { patches: 5, kinds: ['allium', 'poppy', 'azure_bluet', 'dandelion', 'cornflower', 'oxeye_daisy'] } },
-  [B.cherry_grove]: { trees: { count: 10, extra: 0.1, kinds: [['cherry', 1]] }, grass: 4, flowers: { patches: 1, rarity: 2, kinds: ['pink_tulip', 'allium'] } },
+  [B.meadow]: { trees: { count: 0, extra: 0.01, kinds: [['fancy_oak', 0.6], ['tall_birch', 0.4]], bees: 1 }, grass: 6, tallGrass: 5, flowers: { patches: 5, kinds: ['allium', 'poppy', 'azure_bluet', 'dandelion', 'cornflower', 'oxeye_daisy'] } },
+  [B.cherry_grove]: { trees: { count: 10, extra: 0.1, kinds: [['cherry', 1]], bees: 0.05 }, grass: 4, flowers: { patches: 1, rarity: 2, kinds: ['pink_tulip', 'allium'] } },
   [B.grove]: { trees: { count: 10, extra: 0.1, kinds: [['pine', 0.33], ['spruce', 0.67]] } },
   [B.snowy_plains]: { trees: { count: 0, extra: 0.1, kinds: [['spruce', 1]] }, grass: 1 },
   [B.ice_spikes]: {},
   [B.swamp]: { trees: { count: 2, extra: 0.1, kinds: [['swamp_oak', 1]] }, grass: 5, flowers: { patches: 1, kinds: ['blue_orchid'] }, lily: 4, seagrass: 64, sugarCane: 10, mushrooms: 4 },
-  [B.mangrove_swamp]: { trees: { count: 10, extra: 0.1, kinds: [['swamp_oak', 1]] }, grass: 2, lily: 2, seagrass: 64 },
+  [B.mangrove_swamp]: { trees: { count: 10, extra: 0.1, kinds: [['swamp_oak', 1]], bees: 0.01 }, grass: 2, lily: 2, seagrass: 64 },
   [B.desert]: { deadBush: 2, cactus: 10, sugarCane: 10 },
   [B.badlands]: { deadBush: 20, cactus: 5, sugarCane: 13 },
   [B.eroded_badlands]: { deadBush: 20, cactus: 5, sugarCane: 13 },
@@ -639,7 +640,8 @@ export class Decorator {
         const y = ctx.heightOceanFloor(x, z);
         if (ctx.heightMotion(x, z) !== y) continue; // underwater
         const kind = pickWeighted(r, d.trees.kinds);
-        placeTree(ctx, kind, x, y, z, r);
+        // (the bees draw on a random of their own, so the trees stay as they were)
+        placeTree(ctx, kind, x, y, z, r, d.trees.bees ? { chance: d.trees.bees, r: new Rand(hash2(x, z, this.seed ^ 0xbee5), y) } : undefined);
       }
     }
     // grass

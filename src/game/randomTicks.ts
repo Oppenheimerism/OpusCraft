@@ -10,6 +10,8 @@ import { lavaRandomTick } from './fire';
 import { ZombifiedPiglin } from '../entity/monsters';
 import { DX, DY, DZ, DIR_NAMES } from '../world/dir';
 import { behaviorOf } from './blockBehavior';
+// (remaining mobs: the bee) the flowers that make a sapling's tree one with bees
+import { FLOWERS } from '../entity/bee';
 
 const SAPLING_TREE: Record<string, TreeKind> = {
   oak_sapling: 'oak', spruce_sapling: 'spruce', birch_sapling: 'birch', jungle_sapling: 'jungle',
@@ -276,19 +278,33 @@ export class RandomTicker {
 
   private growTree(x: number, y: number, z: number, kind: TreeKind, saplingState: number): void {
     const lvl = this.level;
+    // (remaining mobs: the bee) vanilla TreeGrower.getConfiguredFeature: an oak's, a birch's or a cherry sapling with a
+    // flower near it (TreeGrower.hasFlowers) grows the tree with bees (OAK_BEES_005 and the like)
+    const bees = (kind === 'oak' || kind === 'birch' || kind === 'cherry') && hasFlowers(lvl, x, y, z) ? 0.05 : 0;
     // temporarily remove sapling, try to place via a small generation context over the live world
     lvl.world.setState(x, y, z, 0);
-    const ok = growTreeInWorld(lvl, kind, x, y, z);
+    const ok = growTreeInWorld(lvl, kind, x, y, z, bees);
     if (!ok) lvl.world.setState(x, y, z, saplingState);
   }
+}
+
+/** vanilla TreeGrower.hasFlowers: a #flowers block from a block below to a block above, two blocks round */
+function hasFlowers(lvl: Level, x: number, y: number, z: number): boolean {
+  for (let dx = -2; dx <= 2; dx++)
+    for (let dy = -1; dy <= 1; dy++)
+      for (let dz = -2; dz <= 2; dz++) if (FLOWERS.has(BLOCKS[STATE_BLOCK[lvl.getState(x + dx, y + dy, z + dz)]].name)) return true;
+  return false;
 }
 
 import { GenContext } from '../world/gen/context';
 import { Rand } from '../core/rng';
 import { colIndex } from '../world/constants';
 
-/** Grow a tree in the live world by running the generator over a 3x3 chunk scratch area. */
-export function growTreeInWorld(lvl: Level, kind: TreeKind, x: number, y: number, z: number): boolean {
+/**
+ * Grow a tree in the live world by running the generator over a 3x3 chunk scratch area. `bees`: (remaining mobs: the
+ * bee) the chance of a bee nest on it
+ */
+export function growTreeInWorld(lvl: Level, kind: TreeKind, x: number, y: number, z: number, bees = 0): boolean {
   const world = lvl.world;
   const cx = x >> 4, cz = z >> 4;
   const c = world.getChunk(cx, cz);
@@ -300,7 +316,8 @@ export function growTreeInWorld(lvl: Level, kind: TreeKind, x: number, y: number
       for (let yy = -64; yy < 320; yy++) blocks[colIndex(lx, yy, lz)] = c.getState(lx, yy, lz);
   const ctx = new GenContext(cx, cz, blocks, c.biomes);
   ctx.computeHeightmaps();
-  const ok = placeTree(ctx, kind, x, y, z, new Rand((Math.random() * 1e9) | 0));
+  const rand = new Rand((Math.random() * 1e9) | 0);
+  const ok = placeTree(ctx, kind, x, y, z, rand, bees ? { chance: bees, r: rand } : undefined);
   if (!ok) return false;
   // apply diff inside the chunk
   for (let lx = 0; lx < 16; lx++)
@@ -316,6 +333,14 @@ export function growTreeInWorld(lvl: Level, kind: TreeKind, x: number, y: number
       const cur = world.getState(wx, wy, wz);
       const f = FLAGS[cur];
       if (f & F_AIR || (p.data[i + 4] === 2 && f & F_LEAVES)) world.setState(wx, wy, wz, p.data[i + 3]);
+    }
+  }
+  // (remaining mobs: the bee) what the tree's block entities came with: a bee nest's bees
+  for (const d of ctx.blockEntities) {
+    const be = world.getBlockEntity(d.x, d.y, d.z);
+    if (be && be.id === d.id) {
+      be.load(d);
+      be.container.changed();
     }
   }
   return true;

@@ -423,10 +423,22 @@ const emptyBucket = behavior((src, stack) => {
   return withRemainder(src, stack, ItemStack.of(filled));
 });
 
+/**
+ * (remaining mobs: the bee) a full hive in front, sheared (vanilla ShearsDispenseItemBehavior.tryShearBeehive) or
+ * bottled (the glass bottle's behaviour): true if it was (game/beehive.ts sets these)
+ */
+export const hiveDispense: { shear: ((level: Level, x: number, y: number, z: number) => boolean) | null; bottle: ((level: Level, x: number, y: number, z: number) => boolean) | null } = { shear: null, bottle: null };
+
 /** vanilla: a glass bottle fills from water in front (a water bottle takes its place, a free slot or goes out) */
 const glassBottle = optional((src, stack) => {
   src.success = false;
   const [x, y, z] = front(src);
+  // (remaining mobs: the bee) a full hive's honey first (vanilla takeLiquid: FLUID_PICKUP at the dispenser)
+  if (hiveDispense.bottle?.(src.level, x, y, z)) {
+    src.success = true;
+    src.level.gameEvent('fluid_pickup', src.x + 0.5, src.y + 0.5, src.z + 0.5);
+    return withRemainder(src, stack, ItemStack.of('honey_bottle'));
+  }
   if (!(FLAGS[src.level.getState(x, y, z)] & F_WATER)) return dropOne(src, stack);
   src.success = true;
   return withRemainder(src, stack, potionStack('potion', 'water'));
@@ -488,6 +500,8 @@ const boneMeal = optional((src, stack) => {
  * them); (trial chambers) and a bogged
  */
 const shears = optional((src, stack) => {
+  // (remaining mobs: the bee) a full hive in front first
+  if (hiveDispense.shear?.(src.level, ...front(src))) return wear(stack);
   const s = src.level.getEntities(
     cell(front(src)),
     (e) => (e instanceof Sheep && e.isAlive && !e.sheared && !e.isBaby()) || (e instanceof SnowGolem && e.readyForShearing()) || (e instanceof Bogged && e.readyForShearing()),

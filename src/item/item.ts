@@ -11,6 +11,8 @@ import type { Fireworks, FireworkExplosion } from './fireworks';
 import { registerTrialChamberItems } from './itemsTrialChambers';
 // (bastions)
 import { registerBastionItems } from './itemsBastion';
+// (remaining mobs)
+import { registerRemainingMobItems } from './itemsRemainingMobs';
 
 export interface ToolInfo {
   type: ToolType;
@@ -596,6 +598,8 @@ for (const [id, tex] of [['redstone_torch', 'block:redstone_torch'], ['repeater'
 }
 // (bastions) netherite scrap, the netherite block, polished basalt, the lodestone, Pigstep, the snout trim's template
 registerBastionItems(reg, ITEMS, ITEM_LIST);
+// (remaining mobs) the bee's egg, the nest, the hive, the honeycomb and honey blocks
+registerRemainingMobItems(reg, ITEMS, ITEM_LIST);
 
 export function itemForBlock(name: string): Item | undefined {
   // (a block that is another's item's: a wall banner is its banner's)
@@ -688,6 +692,23 @@ export interface ItemTag {
   instrument?: string;
   /** minecraft:lodestone_tracker: the lodestone a compass points to (game/lodestoneCompass.ts) */
   lodestoneTracker?: LodestoneTracker;
+  /** (remaining mobs: the bee) minecraft:bees: the bees in a bee nest or beehive item (game/beehive.ts) */
+  bees?: BeeOccupant[];
+  /**
+   * (remaining mobs: the bee) minecraft:block_state: properties the block takes when it's placed (a hive's
+   * honey_level), each as its text
+   */
+  blockState?: Record<string, string>;
+}
+
+/**
+ * (remaining mobs: the bee) vanilla BeehiveBlockEntity.Occupant: a bee's record as it went in (a SavedEntity, less
+ * what vanilla's IGNORED_BEE_TAGS leave out), the ticks it has been inside, and the least it stays
+ */
+export interface BeeOccupant {
+  entityData: Record<string, unknown>;
+  ticksInHive: number;
+  minTicksInHive: number;
 }
 
 /**
@@ -789,6 +810,9 @@ export function cloneTag(t: ItemTag | null): ItemTag | null {
     const tg = t.lodestoneTracker.target;
     o.lodestoneTracker = tg ? { target: { dim: tg.dim, pos: [tg.pos[0], tg.pos[1], tg.pos[2]] }, tracked: t.lodestoneTracker.tracked } : { tracked: t.lodestoneTracker.tracked };
   }
+  // (remaining mobs: the bee) a hive's bees (their records copied through JSON: plain data) and its block state
+  if (t.bees) o.bees = t.bees.map((b) => ({ entityData: JSON.parse(JSON.stringify(b.entityData)) as Record<string, unknown>, ticksInHive: b.ticksInHive, minTicksInHive: b.minTicksInHive }));
+  if (t.blockState) o.blockState = { ...t.blockState };
   return o;
 }
 
@@ -817,7 +841,9 @@ export function sameTag(a: ItemTag | null | undefined, b: ItemTag | null | undef
     // (M8: goats)
     a?.instrument === b?.instrument &&
     // (the lodestone compass)
-    sameData(a?.lodestoneTracker, b?.lodestoneTracker)
+    sameData(a?.lodestoneTracker, b?.lodestoneTracker) &&
+    // (remaining mobs: the bee)
+    sameData(a?.bees, b?.bees) && sameData(a?.blockState, b?.blockState)
   );
 }
 

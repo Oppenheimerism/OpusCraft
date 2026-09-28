@@ -1,0 +1,32 @@
+// (remaining mobs) The items that come with the mobs added on the remaining-mobs branch, and where vanilla's creative
+// tabs list them. The bee: its spawn egg; the bee nest and the beehive with the functional blocks; the honeycomb block
+// and the honey block with the natural blocks after the hay bale (vanilla CreativeModeTabs.NATURAL_BLOCKS: hay, bee
+// nest, honeycomb block, slime block, honey block; an item here has one tab, so the nest's place among the natural
+// blocks and the honey block's among the redstone ones are gui/screens/creative.ts's). The honeycomb and the honey
+// bottle came with the trial chambers (itemsTrialChambers.ts); the bottle is its crafting remainder.
+
+import type { Item } from './item';
+
+type Reg = (i: Partial<Item> & { id: string }) => Item;
+
+export function registerRemainingMobItems(reg: Reg, items: Map<string, Item>, list: Item[]): void {
+  const take = (id: string): Item | null => {
+    const i = list.findIndex((x) => x.id === id);
+    return i < 0 ? null : list.splice(i, 1)[0];
+  };
+  const after = (id: string, prev: string): void => {
+    if (!items.has(prev)) return;
+    const it = take(id);
+    if (it) list.splice(list.indexOf(items.get(prev)!) + 1, 0, it);
+  };
+
+  // --- the bee
+  reg({ id: 'bee_spawn_egg', texture: 'bee_spawn_egg', creativeTab: 'spawn_eggs' });
+  for (const id of ['bee_nest', 'beehive']) if (items.has(id)) items.get(id)!.creativeTab = 'functional';
+  for (const id of ['honeycomb_block', 'honey_block']) if (items.has(id)) items.get(id)!.creativeTab = 'natural';
+  after('honeycomb_block', 'hay_block');
+  after('honey_block', 'honeycomb_block');
+  // vanilla Items.HONEY_BOTTLE: craftRemainder(GLASS_BOTTLE), the bottle left in the grid by the honey block's and the
+  // sugar's recipes
+  if (items.has('honey_bottle')) items.get('honey_bottle')!.remainder = 'glass_bottle';
+}

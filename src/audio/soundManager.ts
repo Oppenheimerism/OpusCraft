@@ -5,6 +5,8 @@ import type { Player } from '../entity/player';
 import type { Game } from '../game/game';
 import { MinecartSounds } from './minecartSounds';
 import { ElytraSounds } from './elytraSounds';
+// (remaining mobs: the bee) every bee's buzzing
+import { BeeSounds } from './beeSounds';
 import { BiomeAmbience } from './biomeAmbience';
 
 /**
@@ -195,6 +197,7 @@ export class SoundManager {
   private readonly songBuffers = new Map<string, AudioBuffer>();
   private readonly minecarts = new MinecartSounds(this);
   private readonly elytra = new ElytraSounds(this);
+  private readonly bees = new BeeSounds(this);
   readonly biomeAmbience = new BiomeAmbience(this);
 
   constructor() {
@@ -501,6 +504,7 @@ export class SoundManager {
     const p = game.player;
     this.minecarts.tick(game.level, p);
     this.elytra.tick(game.level, p);
+    this.bees.tick(game.level);
     // biome loops, additions and (where the biome has its own) mood (vanilla BiomeAmbientSoundsHandler)
     const biomeMood = this.biomeAmbience.tick(game);
     // game music (vanilla MusicManager: 12000..24000 tick gaps); a biome with its own music (the

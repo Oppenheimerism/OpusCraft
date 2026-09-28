@@ -100,8 +100,9 @@ export class PathNavigation {
     return path;
   }
 
-  moveTo(x: number, y: number, z: number, speed: number): boolean {
-    return this.moveToPath(this.createPath(x, y, z, 1), speed);
+  /** `accuracy`: how near (block steps) is near enough (vanilla moveTo(x, y, z, accuracy, speed); 1 by default) */
+  moveTo(x: number, y: number, z: number, speed: number, accuracy = 1): boolean {
+    return this.moveToPath(this.createPath(x, y, z, accuracy), speed);
   }
 
   moveToEntity(e: Entity, speed: number): boolean {

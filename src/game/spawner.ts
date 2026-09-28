@@ -75,6 +75,8 @@ import { FireworkRocket } from '../entity/fireworkRocket';
 import { EnderDragon } from '../entity/enderDragon';
 import { Shulker } from '../entity/shulker';
 import { ItemFrame } from '../entity/itemFrame';
+// (remaining mobs)
+import { Bee } from '../entity/bee';
 import { moonPhase } from '../render/environment';
 import { tickInhabitedTime } from './difficulty';
 import { BIOMES } from '../world/gen/biomes';
@@ -314,6 +316,10 @@ Object.assign(ENTITY_NAMES, { breeze: 'Breeze', bogged: 'Bogged', wind_charge: '
 // (bastions) the piglin brute: only the bastion remnants bring it (no natural spawns, no spawners)
 Object.assign(MOB_TYPES, { piglin_brute: (l: Level) => new PiglinBrute(l) });
 Object.assign(ENTITY_NAMES, { piglin_brute: 'Piglin Brute' });
+
+// (remaining mobs) the bee: only its nests and hives bring it (no natural spawns)
+Object.assign(MOB_TYPES, { bee: (l: Level) => new Bee(l) });
+Object.assign(ENTITY_NAMES, { bee: 'Bee' });
 
 // (Stage 4: the outer End)
 Object.assign(ENTITY_NAMES, { shulker: 'Shulker', shulker_bullet: 'Shulker Bullet', item_frame: 'Item Frame', glow_item_frame: 'Glow Item Frame', firework_rocket: 'Firework Rocket' });

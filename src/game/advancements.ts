@@ -90,7 +90,11 @@ export type Criterion =
    * (trial chambers) vanilla item_used_on_block: used one of these items on one of these blocks, with these block state
    * properties if given (the block as it was when the trigger fired: before an item's own use changed it, after a block's)
    */
-  | { t: 'item_used_on_block'; items: string[]; blocks: string[]; state?: Record<string, string | boolean>; biome?: string }
+  | { t: 'item_used_on_block'; items: string[]; blocks: string[]; state?: Record<string, string | boolean>; biome?: string; smokey?: boolean }
+  /** (remaining mobs: the bee) vanilla slide_down_block: slid down the side of that block */
+  | { t: 'slide_down_block'; block: string }
+  /** (remaining mobs: the bee) vanilla bee_nest_destroyed: broke that block, with or without silk touch, that many bees inside */
+  | { t: 'bee_nest_destroyed'; block: string; silkTouch: boolean; bees: number }
   /**
    * (trial chambers) vanilla lightning_strike: a bolt within that distance of the player, that set no more than that
    * many blocks on fire, went with one of that kind standing by unharmed
@@ -284,7 +288,7 @@ const A: AdvancementDef[] = [
   { id: 'adventure/read_power_of_chiseled_bookshelf', parent: 'adventure/root', title: 'The Power of Books', description: 'Read the power signal of a Chiseled Bookshelf using a Comparator', icon: 'chiseled_bookshelf', frame: 'task', criteria: one(never) },
   { id: 'adventure/trade', parent: 'adventure/root', title: 'What a Deal!', description: 'Successfully trade with a Villager', icon: 'emerald', frame: 'task', criteria: one({ t: 'villager_trade' }) },
   { id: 'adventure/trim_with_any_armor_pattern', parent: 'adventure/root', title: 'Crafting a New Look', description: 'Craft a trimmed armor at a Smithing Table', icon: 'dune_armor_trim_smithing_template', frame: 'task', criteria: one(never) },
-  { id: 'adventure/honey_block_slide', parent: 'adventure/root', title: 'Sticky Situation', description: 'Jump into a Honey Block to break your fall', icon: 'honey_block', frame: 'task', criteria: one(never) },
+  { id: 'adventure/honey_block_slide', parent: 'adventure/root', title: 'Sticky Situation', description: 'Jump into a Honey Block to break your fall', icon: 'honey_block', frame: 'task', criteria: { honey_block_slide: { t: 'slide_down_block', block: 'honey_block' } } },
   { id: 'adventure/ol_betsy', parent: 'adventure/root', title: "Ol' Betsy", description: 'Shoot a Crossbow', icon: 'crossbow', frame: 'task', criteria: one({ t: 'shot_crossbow' }) },
   { id: 'adventure/lightning_rod_with_villager_no_fire', parent: 'adventure/root', title: 'Surge Protector', description: 'Protect a Villager from an undesired shock without starting a fire', icon: 'lightning_rod', frame: 'task', criteria: { lightning_rod_with_villager_no_fire: { t: 'lightning_strike', maxDistance: 30, maxBlocksSetOnFire: 0, bystander: 'villager' } } },
   { id: 'adventure/fall_from_world_height', parent: 'adventure/root', title: 'Caves & Cliffs', description: 'Free fall from the top of the world (build limit) to the bottom of the world and survive', icon: 'water_bucket', frame: 'task', criteria: one({ t: 'fall_from_height' }) },
@@ -323,7 +327,7 @@ const A: AdvancementDef[] = [
 
   // --- Husbandry
   { id: 'husbandry/root', parent: null, title: 'Husbandry', description: 'The world is full of friends and food', icon: 'hay_block', frame: 'task', toast: false, announce: false, criteria: { consumed_item: { t: 'consume', item: '*' } } },
-  { id: 'husbandry/safely_harvest_honey', parent: 'husbandry/root', title: 'Bee Our Guest', description: 'Use a Campfire to collect Honey from a Beehive using a Glass Bottle without aggravating the Bees', icon: 'honey_bottle', frame: 'task', criteria: one(never) },
+  { id: 'husbandry/safely_harvest_honey', parent: 'husbandry/root', title: 'Bee Our Guest', description: 'Use a Campfire to collect Honey from a Beehive using a Glass Bottle without aggravating the Bees', icon: 'honey_bottle', frame: 'task', criteria: { safely_harvest_honey: { t: 'item_used_on_block', items: ['glass_bottle'], blocks: ['bee_nest', 'beehive'], smokey: true } } },
   { id: 'husbandry/breed_an_animal', parent: 'husbandry/root', title: 'The Parrots and the Bats', description: 'Breed two animals together', icon: 'wheat', frame: 'task', criteria: one({ t: 'breed', type: '*' }) },
   { id: 'husbandry/allay_deliver_item_to_player', parent: 'husbandry/root', title: "You've Got a Friend in Me", description: 'Have an Allay deliver items to you', icon: 'cookie', frame: 'task', criteria: one(never) },
   // (M8: goats) vanilla: started_riding, the player's vehicle a boat with a goat aboard
@@ -331,7 +335,7 @@ const A: AdvancementDef[] = [
   { id: 'husbandry/tame_an_animal', parent: 'husbandry/root', title: 'Best Friends Forever', description: 'Tame an animal', icon: 'lead', frame: 'task', criteria: one({ t: 'tame', type: '*' }) },
   { id: 'husbandry/make_a_sign_glow', parent: 'husbandry/root', title: 'Glow and Behold!', description: 'Make the text of any kind of sign glow', icon: 'glow_ink_sac', frame: 'task', criteria: one(never) },
   { id: 'husbandry/fishy_business', parent: 'husbandry/root', title: 'Fishy Business', description: 'Catch a fish', icon: 'fishing_rod', frame: 'task', criteria: one(never) },
-  { id: 'husbandry/silk_touch_nest', parent: 'husbandry/root', title: 'Total Beelocation', description: 'Move a Bee Nest, with 3 Bees inside, using Silk Touch', icon: 'bee_nest', frame: 'task', criteria: one(never) },
+  { id: 'husbandry/silk_touch_nest', parent: 'husbandry/root', title: 'Total Beelocation', description: 'Move a Bee Nest, with 3 Bees inside, using Silk Touch', icon: 'bee_nest', frame: 'task', criteria: { silk_touch_nest: { t: 'bee_nest_destroyed', block: 'bee_nest', silkTouch: true, bees: 3 } } },
   { id: 'husbandry/tadpole_in_a_bucket', parent: 'husbandry/root', title: 'Bukkit Bukkit', description: 'Catch a Tadpole in a Bucket', icon: 'tadpole_bucket', frame: 'task', criteria: one({ t: 'filled_bucket', items: ['tadpole_bucket'] }) },
   { id: 'husbandry/obtain_sniffer_egg', parent: 'husbandry/root', title: 'Smells Interesting', description: 'Obtain a Sniffer Egg', icon: 'sniffer_egg', frame: 'task', criteria: one(never) },
   { id: 'husbandry/plant_seed', parent: 'husbandry/root', title: 'A Seedy Place', description: 'Plant a seed and watch it grow', icon: 'wheat_seeds', frame: 'task', criteria: { seeds: { t: 'place', blocks: ['wheat', 'pumpkin_stem', 'melon_stem', 'beetroots', 'nether_wart', 'torchflower_crop', 'pitcher_crop'] } } },
@@ -564,7 +568,11 @@ export interface TriggerPayload {
   /** (M9: frogs) the item the player used on a mob (as it was before), the mob's type and variant (player_interacted_with_entity) */
   interacted?: { item: string | null; entity: string; variant?: string };
   /** (trial chambers) the item the player used on a block (as it was before), the block and its properties (item_used_on_block) */
-  usedOnBlock?: { item: string; block: string; props?: Record<string, string | number | boolean>; biome?: string };
+  usedOnBlock?: { item: string; block: string; props?: Record<string, string | number | boolean>; biome?: string; smokey?: boolean };
+  /** (remaining mobs: the bee) the block the player slid down (slide_down_block) */
+  slideDownBlock?: string;
+  /** (remaining mobs: the bee) the hive the player broke, with silk touch or not, and the bees left inside (bee_nest_destroyed) */
+  beeNestDestroyed?: { block: string; silkTouch: boolean; bees: number };
   /**
    * (trial chambers) a bolt as it went: how far from the player, how many blocks it set on fire, and the kinds of
    * whatever stood by it unharmed (lightning_strike)
@@ -776,7 +784,12 @@ function matches(c: Criterion, p: TriggerPayload): boolean {
       return !!p.interacted && p.interacted.item === c.item && p.interacted.entity === c.entity && (c.variant === undefined || p.interacted.variant === c.variant);
     // (trial chambers)
     case 'item_used_on_block':
-      return !!p.usedOnBlock && c.items.includes(p.usedOnBlock.item) && c.blocks.includes(p.usedOnBlock.block) && (!c.state || Object.entries(c.state).every(([k, v]) => p.usedOnBlock!.props?.[k] === v)) && (!c.biome || p.usedOnBlock.biome === c.biome);
+      return !!p.usedOnBlock && c.items.includes(p.usedOnBlock.item) && c.blocks.includes(p.usedOnBlock.block) && (!c.state || Object.entries(c.state).every(([k, v]) => p.usedOnBlock!.props?.[k] === v)) && (!c.biome || p.usedOnBlock.biome === c.biome) && (c.smokey === undefined || !!p.usedOnBlock.smokey === c.smokey);
+    // (remaining mobs: the bee)
+    case 'slide_down_block':
+      return p.slideDownBlock === c.block;
+    case 'bee_nest_destroyed':
+      return !!p.beeNestDestroyed && p.beeNestDestroyed.block === c.block && p.beeNestDestroyed.silkTouch === c.silkTouch && p.beeNestDestroyed.bees === c.bees;
     case 'lightning_strike':
       return !!p.lightning && p.lightning.distance <= c.maxDistance && p.lightning.blocksSetOnFire <= c.maxBlocksSetOnFire && p.lightning.bystanders.includes(c.bystander);
     case 'player_killed_entity':

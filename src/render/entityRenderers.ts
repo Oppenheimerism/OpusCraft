@@ -82,6 +82,8 @@ import { RabbitRenderers, RABBIT_SHADOW_RADII } from './rabbitRenderer';
 import { FoxRenderers, FOX_SHADOW_RADII } from './foxRenderer';
 // (M9: frogs)
 import { FrogRenderers, FROG_SHADOW_RADII } from './frogRenderer';
+// (remaining mobs)
+import { BeeRenderers, BEE_SHADOW_RADII } from './beeRenderer';
 // (M4: the warden)
 import { WardenRenderer, WARDEN_SHADOW_RADIUS } from './wardenRenderer';
 import { LlamaSpit } from '../entity/llama';
@@ -236,6 +238,8 @@ export class EntityRenderDispatcher {
   private readonly frogs: FrogRenderers;
   /** (M4: the warden) */
   private readonly wardens: WardenRenderer;
+  /** (remaining mobs) the bee */
+  private readonly bees: BeeRenderers;
   /** names over mobs, drawn once every entity is down */
   private readonly nameTags: NameTagRenderer;
   /** this frame's options: names shown at all (not with the GUI hidden), and what the crosshair is on */
@@ -278,6 +282,8 @@ export class EntityRenderDispatcher {
     this.frogs = new FrogRenderers(this.raiders.kit);
     // (M4: the warden)
     this.wardens = new WardenRenderer(this.raiders.kit);
+    // (remaining mobs)
+    this.bees = new BeeRenderers(this.raiders.kit);
     // (trial chambers)
     this.breezes = new BreezeRenderers(gl, this.raiders.kit);
     this.nameTags = new NameTagRenderer(gl);
@@ -825,6 +831,8 @@ export class EntityRenderDispatcher {
     if (this.foxes.render(b, e, dx, dy, dz, p)) return;
     // (M9: frogs)
     if (this.frogs.render(b, e, dx, dy, dz, p)) return;
+    // (remaining mobs)
+    if (this.bees.render(b, e, dx, dy, dz, p)) return;
     // (M4: the warden)
     if (this.wardens.render(b, e, dx, dy, dz, p)) return;
     // (trial chambers)
@@ -1832,6 +1840,8 @@ function shadowRadius(e: Entity): number {
   if (GOAT_SHADOW_RADII[e.type] !== undefined) return GOAT_SHADOW_RADII[e.type] * (e instanceof Mob && e.isBaby() ? 0.5 : 1);
   // (M9: frogs)
   if (FROG_SHADOW_RADII[e.type] !== undefined) return FROG_SHADOW_RADII[e.type];
+  // (remaining mobs; vanilla MobRenderer.getShadowRadius: a baby's half)
+  if (BEE_SHADOW_RADII[e.type] !== undefined) return BEE_SHADOW_RADII[e.type] * (e instanceof Mob && e.isBaby() ? 0.5 : 1);
   // (M4: the warden)
   if (e.type === 'warden') return WARDEN_SHADOW_RADIUS;
   // (trial chambers)

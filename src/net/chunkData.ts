@@ -34,6 +34,11 @@ export function loadingChunks(x: number, z: number, r: number): [number, number]
 
 /** block entities whose contents don't show (vanilla sends a chest's items only to whoever opens it) */
 const HIDDEN_CONTENTS = /(^|_)(chest|barrel|shulker_box|furnace|smoker|hopper|dispenser|dropper|brewing_stand|crafter)$/;
+/**
+ * (remaining mobs: the bee) data that doesn't show either: vanilla BeehiveBlockEntity has no update tag, so a guest
+ * never knows the bees in a hive (their time inside changes every tick) or its flower
+ */
+const HIDDEN_DATA: Readonly<Record<string, readonly string[]>> = { bee_nest: ['bees', 'flower_pos'], beehive: ['bees', 'flower_pos'] };
 
 /** what of `be` a guest needs to draw it (vanilla BlockEntity.getUpdateTag): its data, and its items if they show */
 export function visibleBlockEntity(be: BlockEntity): Record<string, Value> {
@@ -42,7 +47,7 @@ export function visibleBlockEntity(be: BlockEntity): Record<string, Value> {
   if (s.data) {
     // (a loot chest's table is the host's secret: a guest's copy has no data, as a chest without one saves)
     const data: Record<string, Value> = {};
-    for (const [k, v] of Object.entries(s.data)) if (k !== 'lootTable' && k !== 'lootSeed') data[k] = v;
+    for (const [k, v] of Object.entries(s.data)) if (k !== 'lootTable' && k !== 'lootSeed' && !HIDDEN_DATA[s.id]?.includes(k)) data[k] = v;
     if (Object.keys(data).length) out.data = data;
   }
   return out;

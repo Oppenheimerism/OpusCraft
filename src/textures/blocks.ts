@@ -45,6 +45,8 @@ import { registerCopperTextures } from './blocklib/copper';
 import { registerTrialChamberTextures } from './blocklib/trialChambers';
 // (bastions)
 import { registerBastionTextures } from './blocklib/bastion';
+// (remaining mobs: the bee)
+import { registerBeeTextures } from './blocklib/bees';
 
 type Gen = () => TexDef;
 export const BLOCK_TEXTURES: Record<string, Gen> = {};
@@ -577,6 +579,8 @@ registerCopperTextures(T);
 registerTrialChamberTextures(T);
 // (bastions) polished basalt, the block of netherite, the lodestone
 registerBastionTextures(T);
+// (remaining mobs: the bee) the nest's and the hive's, the honey block's bottom, the honeycomb block
+registerBeeTextures(T);
 
 // Missing texture (vanilla's magenta/black checkerboard)
 T['missing'] = () => {

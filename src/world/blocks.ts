@@ -31,6 +31,8 @@ import { registerCopperBlocks } from './blocksCopper';
 import { registerTrialChamberBlocks } from './blocksTrialChambers';
 // (bastions)
 import { registerBastionBlocks } from './blocksBastion';
+// (remaining mobs: the bee)
+import { registerBeeBlocks } from './blocksBees';
 
 const px = (v: number) => v / 16;
 const bx = (x0: number, y0: number, z0: number, x1: number, y1: number, z1: number): Box => [px(x0), px(y0), px(z0), px(x1), px(y1), px(z1)];
@@ -673,6 +675,8 @@ registerCopperBlocks();
 registerTrialChamberBlocks();
 // (bastions) polished basalt, the block of netherite, the lodestone
 registerBastionBlocks();
+// (remaining mobs: the bee) the bee nest, the beehive, the honey block and the honeycomb block
+registerBeeBlocks();
 
 finalizeBlocks();
 

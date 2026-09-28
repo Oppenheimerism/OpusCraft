@@ -72,6 +72,10 @@ const REDSTONE_ALSO = new Set(['sculk_sensor', 'sculk_shrieker', 'amethyst_block
 // (jukebox) vanilla lists the jukebox (a signal source while it plays) with the redstone blocks too, after the crafter
 REDSTONE_ORDER.splice(REDSTONE_ORDER.indexOf('crafter') + 1, 0, 'jukebox');
 REDSTONE_ALSO.add('jukebox');
+// (remaining mobs: the bee) the honey block after the sticky piston (vanilla: after the slime block, which the game
+// hasn't), listed with the natural blocks as well
+REDSTONE_ORDER.splice(REDSTONE_ORDER.indexOf('sticky_piston') + 1, 0, 'honey_block');
+REDSTONE_ALSO.add('honey_block');
 const REDSTONE = new Set(REDSTONE_ORDER.filter((id) => !REDSTONE_ALSO.has(id)));
 const FUNCTIONAL = new Set(['oak_sign', 'painting', 'item_frame', 'red_bed', 'jack_o_lantern', 'carved_pumpkin']);
 const DYE_ORDER = ['white', 'light_gray', 'gray', 'black', 'brown', 'red', 'orange', 'yellow', 'lime', 'green', 'cyan', 'light_blue', 'blue', 'purple', 'magenta', 'pink'];
@@ -90,6 +94,8 @@ const BUILDING = new Set(['oak_door', 'iron_door']);
 const TOOLS = new Set(['minecart', 'chest_minecart', 'oak_boat', 'saddle', 'lead', 'name_tag', 'filled_map', 'map', 'milk_bucket', 'experience_bottle']);
 /** vanilla lists seeds with the natural blocks */
 const NATURAL = new Set(['wheat_seeds', 'cocoa_beans', 'pumpkin_seeds', 'melon_seeds', 'beetroot_seeds']);
+/** (remaining mobs: the bee) listed with the natural blocks as well as their own, each after the one given, as vanilla does */
+const NATURAL_ALSO: [string, string][] = [['bee_nest', 'hay_block']];
 
 function tabOf(it: Item): string {
   if (REDSTONE.has(it.id)) return 'redstone_blocks';
@@ -142,6 +148,10 @@ function tabs(): Tab[] {
   const listed = ITEM_LIST.filter((it) => it.id !== 'enchanted_book');
   for (const it of listed) byId.get(tabOf(it))?.items.push(it);
   for (const it of listed) if (REDSTONE_ALSO.has(it.id)) byId.get('redstone_blocks')!.items.push(it);
+  for (const [id, after] of NATURAL_ALSO) {
+    const it = listed.find((x) => x.id === id), natural = byId.get('natural_blocks')!.items;
+    if (it) natural.splice(natural.findIndex((x) => x.id === after) + 1, 0, it);
+  }
   byId.get('redstone_blocks')!.items.sort((a, b) => REDSTONE_ORDER.indexOf(a.id) - REDSTONE_ORDER.indexOf(b.id));
   const rank = (it: Item) => (FUNCTIONAL_ORDER.includes(it.id) ? FUNCTIONAL_ORDER.indexOf(it.id) : FUNCTIONAL_ORDER.length);
   byId.get('functional_blocks')!.items.sort((a, b) => rank(a) - rank(b));

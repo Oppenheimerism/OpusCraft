@@ -69,7 +69,7 @@ interface SpriteParticle {
   /** vanilla getQuadSize curves */
   sizeCurve?: 'flame' | 'lava';
   /** DripParticle stage: hangs, falls, then lands/splashes */
-  drip?: { stage: 'hang' | 'fall' | 'land'; fluid: 'water' | 'lava' | null; next: string | null; cooling: boolean; dripstone?: boolean };
+  drip?: { stage: 'hang' | 'fall' | 'land'; fluid: 'water' | 'lava' | null; next: string | null; cooling: boolean; dripstone?: boolean; honey?: boolean };
   /** FallingDustParticle spin */
   roll?: number;
   oRoll?: number;
@@ -142,6 +142,8 @@ export class ParticleEngine {
   private readonly tickers: { tick(): boolean }[] = [];
   /** vanilla DripstoneFallAndLandParticle: a drip from a stalactite plays a sound where it lands */
   onDripstoneDripLand: ((x: number, y: number, z: number, lava: boolean) => void) | null = null;
+  /** (remaining mobs: the bee) vanilla DripParticle.HoneyFallAndLandParticle: a drop of honey plays a sound where it lands */
+  onHoneyDripLand: ((x: number, y: number, z: number) => void) | null = null;
 
   /** the deep dark's particles (render/sculkParticles.ts: vibrations, shrieks, sculk charges and souls) */
   readonly sculk: SculkParticles;
@@ -1046,6 +1048,52 @@ export class ParticleEngine {
         this.addSprite(p);
         break;
       }
+      case 'dripping_honey':
+      case 'falling_honey':
+      case 'landing_honey': {
+        // (remaining mobs: the bee) vanilla DripParticle.createHoney{Hang,Fall,Land}Particle: amber, a long hang (its
+        // gravity DripHangParticle's 0.02 of the drip's and a hundredth of that again), a slow fall, a long puddle
+        const p = this.base(kind, x, y, z);
+        p.bbw = 0.01;
+        p.gravity = 0.06;
+        p.friction = 0.98;
+        if (kind.startsWith('dripping')) {
+          p.gravity *= 0.02 * 0.01;
+          p.lifetime = 100;
+          [p.r, p.g, p.b] = [0.622, 0.508, 0.082];
+          p.frames = ['drip_hang'];
+          p.drip = { stage: 'hang', fluid: null, next: 'falling_honey', cooling: false };
+        } else if (kind.startsWith('falling')) {
+          p.gravity = 0.01;
+          p.lifetime = Math.floor(64 / (Math.random() * 0.8 + 0.2));
+          [p.r, p.g, p.b] = [0.582, 0.448, 0.082];
+          p.frames = ['drip_fall'];
+          p.drip = { stage: 'fall', fluid: null, next: 'landing_honey', cooling: false, honey: true };
+        } else {
+          p.lifetime = Math.floor(128 / (Math.random() * 0.8 + 0.2));
+          [p.r, p.g, p.b] = [0.522, 0.408, 0.082];
+          p.frames = ['drip_land'];
+          p.drip = { stage: 'land', fluid: null, next: null, cooling: false };
+        }
+        p.frame = 0;
+        this.addSprite(p);
+        break;
+      }
+      case 'falling_nectar': {
+        // (remaining mobs: the bee) vanilla DripParticle.createNectarFallParticle: a pale speck off a bee carrying
+        // nectar, gone when it lands
+        const p = this.base(kind, x, y, z);
+        p.bbw = 0.01;
+        p.gravity = 0.007;
+        p.friction = 0.98;
+        p.lifetime = Math.floor(16 / (Math.random() * 0.8 + 0.2));
+        [p.r, p.g, p.b] = [0.92, 0.782, 0.72];
+        p.frames = ['drip_fall'];
+        p.frame = 0;
+        p.drip = { stage: 'fall', fluid: null, next: null, cooling: false };
+        this.addSprite(p);
+        break;
+      }
       case 'falling_spore_blossom': {
         // vanilla DripParticle.createSporeBlossomFallParticle: a green speck drifting down, gone when it lands
         const p = this.base(kind, x, y, z);
@@ -1427,6 +1475,7 @@ export class ParticleEngine {
       } else if (d.stage === 'fall' && p.onGround) {
         if (d.next) this.spawn(d.next, p.x, p.y, p.z, 0, 0, 0);
         if (d.dripstone) this.onDripstoneDripLand?.(p.x, p.y, p.z, d.fluid === 'lava');
+        if (d.honey) this.onHoneyDripLand?.(p.x, p.y, p.z);
         return false;
       }
       p.dx *= 0.98;
