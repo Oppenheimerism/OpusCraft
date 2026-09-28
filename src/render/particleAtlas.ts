@@ -39,6 +39,8 @@ export function buildParticleAtlas(gl: GL): { texture: WebGLTexture; rects: Reco
   if (ITEM_TEXTURES['ender_eye']) src['item_ender_eye'] = ITEM_TEXTURES['ender_eye'];
   // (foxes) the crumbs of whatever food a mob eats: every food's sprite
   for (const it of ITEMS.values()) if (it.food && it.texture && ITEM_TEXTURES[it.texture]) src[`item_${it.id}`] ??= ITEM_TEXTURES[it.texture];
+  // (remaining mobs: the panda) and what a panda eats that isn't food: bamboo, and cake
+  for (const id of ['bamboo', 'cake']) if (ITEM_TEXTURES[id]) src[`item_${id}`] ??= ITEM_TEXTURES[id];
   // (a splash potion's model's particle texture is its layer0, the untinted liquid: grey glass shards)
   if (ITEM_TEXTURES['potion_overlay']) src['item_splash_potion'] = ITEM_TEXTURES['potion_overlay'];
   if (BLOCK_TEXTURES['cobweb'])

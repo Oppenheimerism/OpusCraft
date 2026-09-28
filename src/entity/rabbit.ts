@@ -37,7 +37,7 @@ const WHITE_RABBIT_BIOMES = new Set(['snowy_plains', 'ice_spikes', 'frozen_ocean
 export const KILLER_BUNNY_NAME = 'The Killer Bunny';
 
 /** vanilla Monster.class: the hostile mobs (vanilla keeps the slimes, the ghast and (remaining mobs) the phantom apart, as Enemy only) */
-const isMonster = (e: LivingEntity): boolean => e instanceof Monster && e.type !== 'slime' && e.type !== 'magma_cube' && e.type !== 'ghast' && e.type !== 'phantom';
+export const isMonster = (e: LivingEntity): boolean => e instanceof Monster && e.type !== 'slime' && e.type !== 'magma_cube' && e.type !== 'ghast' && e.type !== 'phantom';
 
 /**
  * vanilla Rabbit.getRandomRabbitVariant: white (one in five splotched) in the snowy biomes, gold in the desert, and

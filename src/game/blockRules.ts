@@ -465,6 +465,9 @@ export function destroyProgress(state: number, item: Item | null, underwater: bo
   const b = blk(state);
   const hardness = b.hardness;
   if (hardness < 0) return 0;
+  // (remaining mobs: the panda) a block's own (a sword through bamboo at a stroke)
+  const own = behaviorOf(state)?.destroyProgress?.(state, item);
+  if (own !== undefined) return own;
   let speed = toolSpeed(item, b);
   if (speed > 1) speed += efficiency;
   speed *= effectMul;

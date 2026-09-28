@@ -78,6 +78,7 @@ import { ItemFrame } from '../entity/itemFrame';
 // (remaining mobs)
 import { Bee } from '../entity/bee';
 import { Phantom } from '../entity/phantom';
+import { Panda } from '../entity/panda';
 import { PhantomSpawner } from './phantomSpawner';
 import { moonPhase } from '../render/environment';
 import { tickInhabitedTime } from './difficulty';
@@ -325,6 +326,9 @@ Object.assign(ENTITY_NAMES, { bee: 'Bee' });
 // (remaining mobs) the phantom: only insomnia brings it (PhantomSpawner, below)
 Object.assign(MOB_TYPES, { phantom: (l: Level) => new Phantom(l) });
 Object.assign(ENTITY_NAMES, { phantom: 'Phantom' });
+// (remaining mobs) the panda: in the jungles (the bamboo jungle most), as any animal
+Object.assign(MOB_TYPES, { panda: (l: Level) => new Panda(l) });
+Object.assign(ENTITY_NAMES, { panda: 'Panda' });
 
 // (Stage 4: the outer End)
 Object.assign(ENTITY_NAMES, { shulker: 'Shulker', shulker_bullet: 'Shulker Bullet', item_frame: 'Item Frame', glow_item_frame: 'Glow Item Frame', firework_rocket: 'Firework Rocket' });
@@ -491,7 +495,7 @@ function settingsForLand(name: string): Omit<MobSettings, 'water' | 'ambient'> {
     case 'snowy_slopes':
       return { creature: [S_('rabbit', 4, 2, 3), S_('goat', 5, 1, 3)], monster: monsters(), creatureProbability: 0.1 };
     // vanilla OverworldBiomes.jungle, sparseJungle and bambooJungle (baseJungleSpawns): parrots in the jungle and the
-    // bamboo, and pandas (not in the game yet: picked, and nothing comes)
+    // bamboo, and pandas
     case 'jungle':
     case 'sparse_jungle':
     case 'bamboo_jungle': {
@@ -865,7 +869,9 @@ export class NaturalSpawner {
       case 'donkey':
       case 'mule':
       case 'llama':
-      case 'trader_llama': {
+      case 'trader_llama':
+      // (remaining mobs: vanilla SpawnPlacements PANDA, Animal::checkAnimalSpawnRules)
+      case 'panda': {
         const below = BLOCKS[STATE_BLOCK[lvl.world.getState(x, y - 1, z)]].name;
         return below === 'grass_block' && lvl.rawBrightness(x, y, z, 0) > 8;
       }

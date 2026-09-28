@@ -33,6 +33,8 @@ import { registerTrialChamberBlocks } from './blocksTrialChambers';
 import { registerBastionBlocks } from './blocksBastion';
 // (remaining mobs: the bee)
 import { registerBeeBlocks } from './blocksBees';
+// (remaining mobs: the panda)
+import { registerBambooBlocks } from './blocksBamboo';
 
 const px = (v: number) => v / 16;
 const bx = (x0: number, y0: number, z0: number, x1: number, y1: number, z1: number): Box => [px(x0), px(y0), px(z0), px(x1), px(y1), px(z1)];
@@ -677,6 +679,8 @@ registerTrialChamberBlocks();
 registerBastionBlocks();
 // (remaining mobs: the bee) the bee nest, the beehive, the honey block and the honeycomb block
 registerBeeBlocks();
+// (remaining mobs: the panda) bamboo, its shoot and potted bamboo
+registerBambooBlocks();
 
 finalizeBlocks();
 

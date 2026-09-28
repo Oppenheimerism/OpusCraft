@@ -47,6 +47,8 @@ import { registerTrialChamberTextures } from './blocklib/trialChambers';
 import { registerBastionTextures } from './blocklib/bastion';
 // (remaining mobs: the bee)
 import { registerBeeTextures } from './blocklib/bees';
+// (remaining mobs: the panda)
+import { registerBambooTextures } from './blocklib/bamboo';
 
 type Gen = () => TexDef;
 export const BLOCK_TEXTURES: Record<string, Gen> = {};
@@ -581,6 +583,8 @@ registerTrialChamberTextures(T);
 registerBastionTextures(T);
 // (remaining mobs: the bee) the nest's and the hive's, the honey block's bottom, the honeycomb block
 registerBeeTextures(T);
+// (remaining mobs: the panda) bamboo's stalk, leaves, shoot and the potted one's leaf
+registerBambooTextures(T);
 
 // Missing texture (vanilla's magenta/black checkerboard)
 T['missing'] = () => {

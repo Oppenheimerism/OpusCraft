@@ -12,6 +12,8 @@ import { largeDripstones, dripstoneDecoration } from './dripstone';
 import { lushCaves } from './lush';
 import { deepDarkFeatures } from './deepDark';
 import { biomeTemperature } from './temperature';
+// (remaining mobs: the panda)
+import { bambooVegetation } from './bambooFeature';
 
 // ---------------------------------------------------------------------------
 // Ores
@@ -326,6 +328,9 @@ export class Decorator {
     this.glowLichen(ctx, new Rand(hash2(ctx.cx, ctx.cz, this.seed ^ 0x611c), 6));
     // --- the lush caves' moss, clay pools, plants and rooted azalea trees
     lushCaves(ctx, new Rand(hash2(ctx.cx, ctx.cz, this.seed ^ 0x105b), 11));
+    // --- (remaining mobs: the panda) the jungles' bamboo, before their trees (vanilla BAMBOO_LIGHT before TREES_JUNGLE,
+    // BAMBOO before BAMBOO_VEGETATION); what grew stands in the heightmaps the rest go by
+    if (bambooVegetation(ctx, this.seed)) ctx.computeHeightmaps();
     // --- vegetation: pick sample biomes per quadrant so mixed chunks decorate with each biome
     for (let q = 0; q < 4; q++) {
       const qx = (q & 1) * 8, qz = (q >> 1) * 8;

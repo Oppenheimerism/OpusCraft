@@ -47,6 +47,8 @@ const DESTROYED = new RegExp(
     'hanging_roots|spore_blossom|cave_vines(_plant)?|big_dripleaf(_stem)?|small_dripleaf|moss_carpet|(crimson|warped)_(fungus|roots)|nether_sprouts|' +
     '(weeping|twisting)_vines(_plant)?|lever|.*_button|.*_pressure_plate|redstone_wire|repeater|comparator|tripwire_hook|tripwire|bell|dragon_egg|turtle_egg|frogspawn|' +
     'decorated_pot|suspicious_(sand|gravel)|(.*_)?candle|cake|sculk_vein|' +
+    // (remaining mobs: the panda) a bamboo stalk (its shoot is a sapling)
+    'bamboo|' +
     // (the outer End's: shulker boxes, the chorus plant and its flower, and the mob heads)
     '(.*_)?shulker_box|chorus_(plant|flower)|(wither_)?skeleton_(wall_)?skull|(player|zombie|creeper|piglin|dragon)_(wall_)?head)$',
 );

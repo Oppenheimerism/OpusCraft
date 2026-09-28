@@ -9,6 +9,8 @@ import type { BlockAccess } from '../world/gen/patches';
 import { runPatchColumn } from '../world/gen/patches';
 import { patchColumns, MOSS_BONEMEAL } from '../world/gen/lush';
 import { Rand } from '../core/rng';
+// (remaining mobs: the panda)
+import { behaviorOf } from './blockBehavior';
 
 /** vanilla BoneMealItem.addGrowthParticles */
 export function boneMealParticles(lvl: Level, x: number, y: number, z: number): void {
@@ -33,6 +35,9 @@ export function boneMealParticles(lvl: Level, x: number, y: number, z: number): 
 
 /** vanilla BonemealableBlock.performBonemeal for crops, stems, saplings and grass */
 export function performBoneMeal(lvl: Level, x: number, y: number, z: number, st: number): boolean {
+  // (remaining mobs: the panda) a block with bone meal of its own (bamboo and its shoot)
+  const own = behaviorOf(st)?.performBonemeal;
+  if (own) return own(lvl, x, y, z, st);
   const b = BLOCKS[STATE_BLOCK[st]];
   const n = b.name;
   if (n === 'wheat' || n === 'carrots' || n === 'potatoes' || n === 'beetroots') {

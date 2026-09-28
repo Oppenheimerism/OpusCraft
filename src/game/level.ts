@@ -89,6 +89,8 @@ import './frostWalker';
 import './lodestoneCompass';
 // (remaining mobs: the bee) the bee nest, the beehive and the honey block
 import './beehive';
+// (remaining mobs: the panda) bamboo
+import './bamboo';
 
 export interface SoundSink {
   play(name: string, x: number, y: number, z: number, volume?: number, pitch?: number): void;

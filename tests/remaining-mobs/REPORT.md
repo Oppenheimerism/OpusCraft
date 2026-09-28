@@ -10,8 +10,8 @@ Branch: `claude/optimistic-volta-xe2bah`, from main at 93288e7.
 | # | Milestone | State | Commit |
 |---|---|---|---|
 | 1 | Bee: bee nest, beehive, honey bottle, honeycomb, honey block, honeycomb block | done | `295bada` "Bees. Bee nests hang from trees in meadows (every tree there), plains, sunflower plains, cherry groves and flower forests, …" |
-| 2 | Phantom and insomnia | done | the commit that adds this row ("Phantoms. …") |
-| 3 | Panda and bamboo | not started | |
+| 2 | Phantom and insomnia | done | `4ee0b58` "Phantoms. Stay up three days without lying down in a bed and phantoms come for you at night: …" |
+| 3 | Panda and bamboo | done | the commit that adds this row ("Pandas and bamboo. …") |
 | 4 | Mooshroom and huge mushrooms | not started | |
 | 5 | Armadillo, scutes and wolf armour | not started | |
 | 6 | Camel | not started | |
@@ -123,6 +123,70 @@ Each new line in a shared file is marked with a `(remaining mobs…)` comment. T
   wingtips.
 - **No `PROTOCOL_VERSION` bump.** No packet changed; the phantom's size and wingbeat offset ride the entity-data sync.
 
+### Milestone 3: the panda and bamboo
+
+**New files**
+- `src/entity/panda.ts`: the panda, its genes, its move control and its goals (ten of them its own).
+- `src/render/pandaRenderer.ts`: the model, its animation, the rolling, sitting and on-its-back poses, and what it
+  holds (vanilla `PandaHoldsItemLayer`).
+- `src/textures/panda.ts`: the seven skins.
+- `src/audio/gen/panda.ts`: the panda's 39 sound takes, and bamboo's 23.
+- `src/world/blocksBamboo.ts`: the bamboo stalk, the bamboo shoot (`bamboo_sapling`) and potted bamboo: their
+  states, shapes and models.
+- `src/world/blockOffset.ts`: vanilla's sideways nudge (`OffsetType.XZ`) for the blocks whose outline and collision
+  move with the model. Only bamboo and its shoot are registered.
+- `src/game/bamboo.ts`: planting, growth, bone meal, falling apart, a sword's single stroke, the offset collision.
+- `src/world/gen/bambooFeature.ts`: bamboo in the jungles.
+- `src/textures/blocklib/bamboo.ts` and `src/textures/itemlib/remainingMobs.ts`: bamboo's block faces and its item.
+- `tests/remaining-mobs/panda.mjs` and `panda-mp.mjs`: the tests.
+
+**Registration lines**
+- `src/world/blocks.ts`: `registerBambooBlocks()`.
+- `src/textures/blocks.ts`: `registerBambooTextures(T)`.
+- `src/textures/items.ts`: `REMAINING_MOB_ITEMS` (the bamboo item's sprite).
+- `src/textures/mobs.ts`: the spawn egg's colours in `EGGS`.
+- `src/item/itemsRemainingMobs.ts`: the spawn egg, and the bamboo item's sprite, tab (natural blocks, before sugar
+  cane) and fuel (50 ticks).
+- `src/inventory/recipesRemainingMobs.ts`: a stick from two bamboo; `src/inventory/recipes.ts`: a comment.
+- `src/audio/synth.ts`: `Object.assign(SOUNDS, pandaSounds())`.
+- `src/game/level.ts`: `import './bamboo'`.
+- `src/game/spawner.ts`: `panda` in `MOB_TYPES` and `ENTITY_NAMES`. The jungle spawn lists already named the panda
+  (it was picked and nothing came); only their comment changed. The panda's spawn rule joins the other animals'
+  (grass under it, light over 8).
+- `src/render/entityRenderers.ts`: `PandaRenderers`, and its shadow radius (0.9, halved for a cub).
+
+**Hooks and changed behaviour**
+- `src/game/blockBehavior.ts`: two optional hooks on `BlockBehavior`:
+  - `performBonemeal` (vanilla `BonemealableBlock`), which `src/game/boneMeal.ts` asks first;
+  - `destroyProgress` (vanilla `getDestroyProgress`, a sword through bamboo), which `destroyProgress` in
+    `src/game/blockRules.ts` asks first.
+- `src/game/raycast.ts` and `src/render/overlay.ts`: a block registered in `world/blockOffset.ts` has its outline
+  moved by its offset, for the block picked and the box drawn round it.
+- `src/game/interaction.ts`, two lines:
+  - a block placed from an item plays the placed block's own sound (vanilla `BlockItem.place` uses the placed state's
+    `SoundType`), so bamboo planted as a shoot sounds like a shoot. The other items that place another block (a torch
+    or a sign on a wall, and the like) already share their block's sound, so nothing else changes;
+  - the check that a block isn't placed inside an entity uses the block's shape where it stands (vanilla
+    `isUnobstructed`): a bamboo stalk's post, set off. A shulker box's shape without its block entity is the whole
+    block, as before.
+- `src/game/redstone/piston.ts`: `bamboo` is broken by pistons (the shoot and the pot already were, as a sapling and
+  a potted plant).
+- `src/world/blocksVillage.ts`: `bamboo` in `POTTABLE`, and `flowerPotElements` exported for potted bamboo's model.
+- `src/world/gen/features.ts`: `bambooVegetation` runs before the jungles' trees. It has its own random, so a chunk
+  without bamboo comes out exactly as before; where it placed bamboo, the heightmaps are worked out again.
+- `src/world/gen/temperature.ts`: `biomeInfoNoise` (vanilla `Biome.BIOME_INFO_NOISE`), exported for bamboo's
+  noise-based count.
+- `src/render/particles.ts`: the `sneeze` particle (vanilla `PlayerCloudParticle.SneezeProvider`).
+- `src/render/particleAtlas.ts`: bamboo and cake crumbs for the eating particles (the food items' crumbs were
+  already there).
+- `src/entity/rabbit.ts`: `isMonster` exported (the panda keeps 4 blocks from the same monsters).
+- `tests/villages/flowerpot.mjs`: 31 potted plants now, with potted bamboo.
+- `tests/saves/player.mjs`: its list of the saved player's fields gains `timeSinceRest`. Milestone 2 added that field
+  and should have updated this list; see the regression summary in section 4.
+- **No `PROTOCOL_VERSION` bump.** No packet changed. The panda's genes, counters and amounts ride the entity-data
+  sync; the sneeze cloud and the crumbs ride the existing particle relay; the new blocks' states are block states
+  like any others (`BUILD_ID` already tells builds apart).
+
 ## 3. Open points, deviations, uncertain values, hooks
 
 ### Milestone 1: the bee
@@ -189,6 +253,48 @@ Each new line in a shared file is marked with a `(remaining mobs…)` comment. T
 - **Testing insomnia in the browser.** There is no `/tick sprint` or statistics command (vanilla has no command to
   set the statistic either), so the checklist uses the browser console to set it.
 
+### Milestone 3: the panda and bamboo
+
+**Deviations**
+- **Podzol at chunk edges.** Worldgen puts bamboo's podzol only inside the chunk being decorated; a disc reaching
+  over the edge stops at it. Vanilla can reach into the neighbouring chunk.
+- **Bamboo positions for a seed.** The bamboo feature runs on its own random, so bamboo stands where vanilla's
+  would for the same noise and counts, not at vanilla's exact spots (the game's terrain isn't bit-identical anyway).
+- **A cub drops nothing.** Vanilla drops no loot and no experience from any baby animal (`shouldDropLoot`,
+  `shouldDropExperience`). The game's other animals don't do that yet; I added it to the panda only, so as not to
+  change every animal in this milestone.
+- **The sneeze cloud.** It's vanilla's green, see-through cloud and lifetime, but it doesn't sink towards a player
+  within 2 blocks as vanilla's `PlayerCloudParticle` does.
+- **Cake.** Vanilla pandas also take up and eat cake. The game has no cake item yet (the other session is adding
+  cakes), so the panda's code names `cake` by id and it will work when cake arrives. The crumbs are ready.
+- **Eating on the host.** Vanilla plays the munching and the crumbs on each client from the synced eat counter. Here
+  the host plays them and sends them on, so everyone sees and hears the same munches.
+- **Two by Two for guests.** Breeding pandas counts for Two by Two, as before for the host only: guests have no
+  advancements in the game yet.
+
+**Values I'm not sure of**
+- **Sounds.** All takes are synthesised to sound like vanilla's, not copied. The counts I believe vanilla has:
+  ambient 5, aggressive ambient 4, worried ambient 3, can't breed 5, hurt 3, death 2, bite 3, eat 5, pre-sneeze 1,
+  sneeze 3, step 5. Bamboo: place 6 (its break the same), step 6 (its hit, at half pitch, and its fall the same);
+  the shoot: place 6 (its break the same), hit 5. I am least sure of the pre-sneeze's single take.
+- **The spawn egg's colours** (0xe7e7e7 and 0x1b1b22) are from memory of vanilla `SpawnEggItem`.
+
+**Choices where the brief was open** (the most vanilla-faithful option each time)
+- **Vanilla quirks kept:**
+  - a panda takes up a whole stack and eats it all at the end of one meal;
+  - `/summon` with genes but no health or speed keeps 20 health and 0.15 speed (vanilla sets them only for a natural
+    spawn or a birth), so `{MainGene:"weak",HiddenGene:"weak"}` looks weak with 20 health;
+  - a worried panda gets up every tick outside a storm unless it's eating, so it seldom sits down to bamboo on the
+    ground;
+  - a rolling panda hops only when it's on the ground at a quarter turn, so it hops at the 1st, 14th and 28th ticks
+    (the 7th and 21st come while it's in the air);
+  - vanilla's panic goal finds a place to run only about two times in three on flat ground (a spot level with it),
+    so a panic can start a tick or two late.
+- **The model.** Vanilla's `PandaModel` doesn't put its body's tilt back after sitting in 1.17 and later; here each
+  frame starts from the rest pose, which gives the look vanilla shows.
+- **Guests.** A guest's bamboo feeds, breeds and tempts pandas, the host deciding, and a guest plants and cuts bamboo
+  like anyone. No panda data is kept per player.
+
 ## 4. Tests and results
 
 Run from the repository root with `node tests/remaining-mobs/<file>`. Each prints `ok`/`FAIL` lines and exits
@@ -200,6 +306,8 @@ non-zero on a failure.
 | `bee-mp.mjs` | See below. | all pass (21), about 8 s |
 | `phantom.mjs` | See below. | all pass (63), about 8 s |
 | `phantom-mp.mjs` | See below. | all pass (13), about 8 s |
+| `panda.mjs` | See below. | all pass (126), about 11 s |
+| `panda-mp.mjs` | See below. | all pass (27), about 8 s |
 
 **`bee.mjs`** covers:
 - **The bee:** health, speeds, attack, follow range, size, eyes, the baby, food, name, spawn egg, experience,
@@ -285,6 +393,51 @@ non-zero on a failure.
 - **Sleeping:** the guest lies down in a bed with phantoms about (they don't keep it awake), and its insomnia resets.
 - **Saved player data:** the guest's time since rest is kept when it leaves and is back when it rejoins.
 
+**`panda.mjs`** covers:
+- **Bamboo:**
+  - planting: a shoot on grass, sand or gravel but not stone, never into water; stalk on a shoot (the shoot turning to
+    stalk), thick on thick; hardness, sounds, no shoot item, the pick-block and drops;
+  - growth: a shoot into stalk with small leaves, 12 to 16 tall (always done at 16), large leaves on the top two and
+    small under them, thick all the way down, the top done growing and no more growth; none in the dark;
+  - bone meal: a shoot at once, a stalk one or two more, not a finished one or a shoot with no room;
+  - breaking: falling apart a block a tick from the bottom up, a bamboo each; a shoot with nothing under it; a sword
+    at a stroke, anything else by hardness; pistons break it;
+  - the offset: up to a quarter block, the collision post, the outline set off with it, wider with large leaves;
+  - fire (60, 60), the flower pot, the stick, fuel 50, the creative tab, map colours;
+  - worldgen: dozens of stalks a chunk in a bamboo jungle with podzol, a stalk now and then in a jungle, none in the
+    plains; the sounds and textures.
+- **The panda:**
+  - numbers: health 20, speed 0.15, attack 6, size 1.3 × 1.25 (a cub half), eyes, category, pickup, no leash, food;
+    its name and spawn egg;
+  - genes: the random odds (checked over 160,000 draws), what shows (recessive brown and weak), by name, weak's 10
+    health and lazy's 0.07 speed, spawned genes, inheritance with 1/32 mutations, a pack's cubs (one in five);
+  - eating: going for bamboo within reach, taking the whole stack, sitting, munching every 5 ticks with 6 crumbs,
+    finishing after 100 ticks with the eat game event, getting up; cake when it exists; a cub picks up but doesn't
+    sit; not with mobGriefing off;
+  - feeding and breeding: in love with one bamboo used; sulking (32 ticks, two grumbles) with no bamboo near; a cub
+    with bamboo within 7; the breeding trigger for Two by Two; a cub growing a tenth of the way; one on cooldown sits
+    and eats, dropping what it held; a click gets a panda off its back; a spawn egg gives a cub with its genes;
+  - the sneeze: its timing, the cloud at the nose, grown pandas jumping (not a sitting one), slimeballs 1 in 700, the
+    weak cub's rate (1 in 250 goal checks, plus 1 in 3000) against any other cub's;
+  - rolling (32 ticks, the push, the hops), a lazy one on its back, a worried one cowering in a storm (refusing
+    bamboo) and keeping away from players;
+  - fighting: going for its attacker, the aggressive one joining in, the bite (6, its sound), calling it off after one
+    bite, bamboo calling it off, getting up when hurt, panicking from fire but not a player's hit;
+  - loot (one bamboo, a cub nothing), experience, sounds by gene, the step;
+  - saving and loading (genes, health, speed), `/summon` with genes, without data, and an unknown gene;
+  - spawning: the biome lists, the spawn rules (grass, light), a pack's cubs;
+  - the particles, the skins (every box painted, the faces and snouts per gene), the model and its poses, the
+    renderer (skin choice, sitting, the held bamboo, rolling, the shadow).
+
+**`panda-mp.mjs`** (two players over the multiplayer harness) covers:
+- **A guest's copy of a panda:** its genes and skin, sitting with bamboo in its paws, eating (the guest hears the
+  munching and sees the crumbs), getting up, rolling (its counter), on its back, sulking, a cub's size, the sneeze
+  (its count, the sounds, the cloud); the mirror check.
+- **A guest's bamboo:** puts a panda in love on the host, one piece used on both sides; one on cooldown sits and eats
+  it, which the guest sees; not a panda out of reach.
+- **A guest's planting and cutting:** a shoot on grass, stalk on the shoot, the guest seeing both; a sword cuts the
+  stalk at a stroke and the block above falls.
+
 **Also run**
 - **`npm run typecheck`:** clean.
 - **`node scripts/audio-check.mjs "entity\.bee|block\.beehive|block\.honey_block|block\.coral_block"`:** only "slow"
@@ -300,6 +453,12 @@ non-zero on a failure.
   the face's corners. Also rerun: `cat.mjs`, `parrot.mjs`, `rabbit.mjs`, `multiplayer/m4-playerdata.mjs`,
   `fixes/respawn.mjs`, `sounds/swim.mjs`, `bee.mjs` and `bee-mp.mjs` (all pass). The full regression runs before the
   last commit.
+- **Milestone 3:** `node scripts/audio-check.mjs "entity\.panda|block\.bamboo"` gives no warnings. The skins were viewed
+  with `scripts/preview-textures.mjs`: white fur with the black band round the shoulders, black legs and ears, the eye
+  patches drooping outward, and each gene's face (sleepy slits, raised brows, a scowl, the tongue, the runny nose),
+  and the brown panda's brown and tan. The regression was run for this milestone too (below): its first panda test
+  run caught a slip in my change to `game/raycast.ts` (the block offset shadowed the ray's origin), fixed before this
+  commit.
 
 **Regression summary (milestone 1)**: `node scripts/regress.mjs -j 2` passed 169 of 172 suites in 19.3 min.
 - `tests/end/credits-music.mjs` crashed because the new bee buzz loop read `level.entities` from the test's stand-in
@@ -309,6 +468,18 @@ non-zero on a failure.
 - `tests/end/dragon.mjs` ("a crystal heals a point every half second") depends on the dragon's own random: it looks
   for crystals again 1 tick in 10, and after 3000 ticks of flight it may be over 32 blocks from all of them. Run
   alone, it passed four times. It doesn't touch bee code.
+
+**Regression summary (milestone 3)**: `node scripts/regress.mjs -j 3` passed 173 of 176 suites in 15.7 min.
+- `tests/saves/player.mjs` failed on "the record has every field it had": the phantom milestone added `timeSinceRest`
+  to the saved player and didn't update the test's list of fields. I missed it because milestone 2 had no full
+  regression run. The list now has the field, and the suite passes.
+- `tests/illagers/illagers.mjs` ("evoker conjures fangs") and `tests/illagers/raids.mjs` ("a farmer throws the hero
+  bread…") are on the brief's known-flaky list. Run again on this branch and on main (93288e7, in a separate
+  worktree), the same checks fail about as often on both: illagers failed 2 of 3 runs on the branch and 3 of 4 on
+  main; raids failed 2 of 3 runs on each.
+- I changed `game/interaction.ts` (the placement check) while the regression was running, so I reran every suite
+  that drives `Interaction`, plus the shulker box, `saves/player.mjs` and the panda tests: 26 of 26 passed.
+- From now on I run the full regression for every milestone.
 
 ## 5. Browser checklist
 
@@ -394,3 +565,56 @@ Start at `http://localhost:5173/?seed=12345` (`npm run dev`) in creative. For th
 - **LAN guest:** open a second window, host with Esc → Open to LAN, and join from the other window's Multiplayer
   screen. The guest should see phantoms with their size, wingbeat, specks and glowing eyes, and hear the flaps and
   screeches. A survival guest is chased and bitten, and can sleep in a bed with phantoms about.
+
+### Milestone 3: the panda and bamboo
+
+- **Finding them:** at seed 12345 the nearest large bamboo jungle is about 3,000 blocks north:
+  `/tp @s 790 90 -2930`. There is a small patch at `/tp @s 955 80 1800`. `/locate biome minecraft:bamboo_jungle`
+  finds one from anywhere. Check:
+  - thick bamboo stalks standing off-centre in their blocks, large leaves at the tops, and podzol round some clumps;
+  - pandas among them (spawned with the chunks, and after that as any animal);
+  - in an ordinary jungle, a lone stalk now and then.
+- **Summoning:**
+  - `/summon minecraft:panda ~ ~ ~3` is a random one. `{MainGene:"brown",HiddenGene:"brown"}` is the brown panda;
+    use `lazy`, `worried`, `playful`, `aggressive` or `weak` (for weak, both genes) for the others, and add
+    `,Age:-24000` for a cub.
+  - Each gene has its own face: sleepy slits (lazy), raised brows and sideways eyes (worried), a scowl (aggressive),
+    the tongue out (playful), bleary eyes and a runny nose (weak).
+  - The spawn egg is in the spawn eggs tab (white with black spots).
+- **Bamboo in its paws:**
+  1. Drop bamboo (Q) a few blocks from a grown panda. It walks over, takes the whole stack and sits back on its
+     haunches with it.
+  2. After a while it munches: its head bobs, bamboo crumbs fly, and you hear chewing.
+  3. It eats the lot and gets up.
+  4. Now and then it gets up before it's done and drops what's left.
+- **Breeding:**
+  1. Feed bamboo to two grown pandas with no bamboo growing within about 7 blocks. They shake their heads and grumble
+     twice.
+  2. Plant bamboo next to them, wait for the love hearts to end (about 30 s), and feed them again. A cub comes.
+  3. Bamboo fed to a cub makes it grow up faster.
+- **The cub's sneeze:** `/summon minecraft:panda ~ ~ ~3 {MainGene:"weak",HiddenGene:"weak",Age:-24000}` sneezes
+  often. It draws a breath with its head back, then sneezes a green cloud. Grown pandas nearby jump. Sometimes a
+  slimeball comes out.
+- **Moods:**
+  - a lazy panda lies on its back now and then, paws waving; clicking it gets it up;
+  - a playful one rolls head over heels;
+  - with `/weather thunder`, a worried one cowers where it is, trembling, and it keeps away from you in fine weather;
+  - in survival, hit a panda: it bites you once and calms down. An aggressive one keeps on, and joins in when you
+    hit one near it. Bamboo calls a fight off.
+  - Killed, a panda drops one bamboo (a cub nothing).
+- **Bamboo:**
+  1. Plant it on grass, dirt, sand or gravel: a shoot. `/gamerule randomTickSpeed 300` speeds things up. The shoot
+     grows into a stalk that gets thick, leafs out at the top and stops at 12 to 16 blocks.
+  2. Bone meal grows a stalk one or two blocks at a time.
+  3. The block outline sits on the stalk, set off with it.
+  4. A sword cuts it at a stroke, and the stalk above falls apart block by block from the bottom up. A piston breaks
+     it.
+  5. It goes in a flower pot; two bamboo, one above the other, make a stick; it burns in a furnace.
+  6. Listen for the hollow knock when placing and breaking it, and the rustle when walking by.
+- **LAN guest:** open a second window, host with Esc → Open to LAN, and join from the other window's Multiplayer
+  screen. The guest should see:
+  - each panda's skin;
+  - sitting and munching, with the crumbs and the bamboo in its paws;
+  - rolling, lying on its back, sulking and a cub's sneeze.
+
+  The guest can feed pandas bamboo (they fall in love, or sit and eat it), plant bamboo and cut it with a sword.

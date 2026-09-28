@@ -29,6 +29,8 @@ import { DEEP_DARK_ITEMS } from './itemlib/deepDark';
 import { TRIAL_CHAMBER_ITEMS } from './itemlib/trialChambers';
 // (bastions)
 import { BASTION_ITEMS } from './itemlib/bastion';
+// (remaining mobs: the panda's bamboo)
+import { REMAINING_MOB_ITEMS } from './itemlib/remainingMobs';
 
 export const ITEM_TEXTURES: Record<string, () => TexImage> = {
   ...SPAWN_EGG_TEXTURES,
@@ -51,4 +53,5 @@ export const ITEM_TEXTURES: Record<string, () => TexImage> = {
   ...DEEP_DARK_ITEMS,
   ...TRIAL_CHAMBER_ITEMS,
   ...BASTION_ITEMS,
+  ...REMAINING_MOB_ITEMS,
 };

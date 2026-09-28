@@ -423,6 +423,27 @@ export class ParticleEngine {
         this.addSprite(p);
         break;
       }
+      // (remaining mobs: the panda) vanilla PlayerCloudParticle as its SneezeProvider makes it (a baby panda's sneeze):
+      // the cloud, its made-up speed a tenth plus the given, slowing by 0.96, twice as big as smoke and lasting longer,
+      // through blocks, swelling in as smoke does; 0.4 opaque, in the colour vanilla sets out of range (200, 50, 120 as
+      // fractions, each wrapping round as a byte when drawn, to this green). (Vanilla's cloud also sinks to a player
+      // within 2 blocks under it; not done)
+      case 'sneeze': {
+        const p = this.base(kind, x, y, z);
+        this.withSpeed(p, 0, 0, 0);
+        p.friction = 0.96;
+        p.dx = p.dx * 0.1 + xd;
+        p.dy = p.dy * 0.1 + yd;
+        p.dz = p.dz * 0.1 + zd;
+        [p.r, p.g, p.b] = [56 / 255, 206 / 255, 136 / 255];
+        p.size *= 1.875;
+        p.lifetime = Math.max(Math.floor(Math.floor(8 / (Math.random() * 0.8 + 0.3)) * 2.5), 1);
+        p.physics = false;
+        p.grow = true;
+        p.alpha = 0.4;
+        this.addSprite(p);
+        break;
+      }
       case 'dragon_breath': {
         // vanilla DragonBreathParticle: violet, drifting as sent, slowing across but not up or down (it has no
         // collisions, so it never lands), speeding up across if it stops rising or falling

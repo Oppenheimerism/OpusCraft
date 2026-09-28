@@ -124,6 +124,14 @@ export interface BlockBehavior {
   canBeReplaced?(state: number, stack: ItemStack, sneaking: boolean): boolean;
   /** vanilla playerDestroy: a survival player broke it, holding `held` (it's gone, and what it drops has dropped) */
   playerDestroy?(level: Level, x: number, y: number, z: number, state: number, player: Player, held: ItemStack | null): void;
+  // (remaining mobs: the panda) bamboo's
+  /**
+   * vanilla BonemealableBlock, for a block with its own: isValidBonemealTarget, then performBonemeal (when
+   * isBonemealSuccess comes up); false when it isn't a target, and the bone meal isn't used
+   */
+  performBonemeal?(level: Level, x: number, y: number, z: number, state: number): boolean;
+  /** vanilla getDestroyProgress, where a block has its own (a sword through bamboo at a stroke); undefined: the usual */
+  destroyProgress?(state: number, item: Item | null): number | undefined;
 }
 
 const BEHAVIORS: (BlockBehavior | undefined)[] = [];
