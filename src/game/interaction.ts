@@ -445,9 +445,12 @@ export class Interaction {
           return 'success';
         }
       }
-      // (an entity with its own vanilla interact: an item frame takes the item held out to it, or turns what it holds)
-      const own = (e as { playerInteract?: (p: Player, stack: ItemStack | null) => boolean }).playerInteract;
-      if (own && own.call(e, p, stack)) {
+      // (an entity with its own vanilla interact: an item frame takes the item held out to it, or turns what it holds;
+      // (armour stand) 'consume': the click is spent with nothing to show for it, and no swing)
+      const own = (e as { playerInteract?: (p: Player, stack: ItemStack | null) => boolean | 'consume' }).playerInteract;
+      const r = own?.call(e, p, stack);
+      if (r === 'consume') return 'fail';
+      if (r) {
         p.swing();
         return 'success';
       }

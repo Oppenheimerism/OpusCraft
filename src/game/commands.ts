@@ -23,6 +23,7 @@ import { createMinecart, MINECART_TYPES } from '../entity/minecart';
 import { createBoat, BOAT_TYPES, BOAT_WOODS } from '../entity/boat';
 import { EndCrystal } from '../entity/endCrystal';
 import { ItemFrame } from '../entity/itemFrame';
+import { ArmorStand } from '../entity/armorStand';
 import { MOB_EFFECTS, MobEffect, MobEffectInstance, mobEffect } from '../entity/effects';
 import { ENCHANTMENTS, areCompatible, canEnchant, enchantmentLine } from '../item/enchantments';
 import { craftingEnchants, setCraftingEnchants, weaponOf } from '../item/enchantHelper';
@@ -819,6 +820,12 @@ export const COMMANDS: Record<string, CommandDef> = {
         const f = new ItemFrame(lvl, type, Math.floor(x), Math.floor(y), Math.floor(z));
         if (c.args[4]) f.readEntityData(c.line.slice(c.args[4].pos));
         e = f;
+      } else if (type === 'armor_stand') {
+        // (armour stand) facing south unless its entity data turns it (entity/armorStand.ts reads the rest)
+        const st = new ArmorStand(lvl);
+        st.moveTo(x, y, z, 0, 0);
+        if (c.args[4]) st.readEntityData(c.line.slice(c.args[4].pos), { entries: snbtEntries, stack: snbtStack, name: customNameIn });
+        e = st;
       } else if (BOAT_TYPES.includes(type)) {
         // the wood is entity data in 1.21: /summon boat ~ ~ ~ {Type:"spruce"}
         const wood = c.args[4] ? /Type:\s*"?([a-z_]+)"?/.exec(c.line.slice(c.args[4].pos))?.[1] : undefined;

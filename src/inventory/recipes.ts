@@ -222,6 +222,8 @@ shaped('cake', 1, ['AAA', 'BEB', 'CCC'], { A: 'milk_bucket', B: 'sugar', C: 'whe
 // (spyglass) an amethyst shard over two copper ingots (vanilla's ' # ', ' X ', ' X ', shrunk to its one column as
 // vanilla's ShapedRecipePattern does: any column of a crafting table)
 shaped('spyglass', 1, ['#', 'X', 'X'], { '#': 'amethyst_shard', X: 'copper_ingot' });
+// (armour stand) six sticks round a smooth stone slab (vanilla recipes/armor_stand)
+shaped('armor_stand', 1, ['///', ' / ', '/_/'], { '/': 'stick', _: 'smooth_stone_slab' });
 // vanilla copySmithingTemplate: a template copied with seven diamonds and the block it's made of
 shaped('netherite_upgrade_smithing_template', 2, ['#S#', '#C#', '###'], { '#': 'diamond', C: 'netherrack', S: 'netherite_upgrade_smithing_template' });
 

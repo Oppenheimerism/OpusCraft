@@ -8,12 +8,147 @@ next was started. No history rewritten, nothing pushed to `main`.
 | 1 | Signs and hanging signs (11 woods) | `89f4d4a` | done |
 | 2 | Ender chest | `4cba979` | done |
 | 3 | Cake and candle cakes | `76401ce` | done |
-| 4 | Spyglass | see `git log` (the "Spyglass" commit) | done |
-| 5 | Armour stand | | to do |
+| 4 | Spyglass | `c606cc6` | done |
+| 5 | Armour stand | see `git log` (the "Armour stand" commit) | done |
 | 6 | Minecarts and rails | | to do |
 
 Where nobody could be asked, the choice closest to vanilla 1.21 was made; each such choice is listed under the
 milestone's "Deviations and open points".
+
+---
+
+## M5: armour stand
+
+The armour stand, entity and item: placed facing you, dressed and undressed with right-clicks, knocked over with two
+quick blows, and posed with `/summon` data. Built on vanilla 1.21.1's `ArmorStand` and `ArmorStandItem`.
+
+- **Item** (`src/item/itemsArmorStand.ts`): 16 to a stack, in the Functional Blocks tab after the decorated pot (where
+  vanilla has it), drawn with the existing sprite. Recipe: six sticks round a smooth stone slab (`///`, ` / `, `/_/`),
+  3×3 grid only. The recipe book finds it when you hold a smooth stone slab (vanilla `recipes/armor_stand`: not the
+  sticks). Creative middle-click on a stand picks the item.
+- **Placing** (`src/entity/armorStand.ts`, vanilla `ArmorStandItem.useOn`): goes on top of or beside the block you
+  click, or into it if it's replaceable (grass). Never on a block's underside, and not in adventure mode (the click is
+  passed on). It needs room: a 0.5 × 1.975 box with no block and no entity at all in it (a dropped item counts). It
+  stands on whatever is under it (half a block down onto a slab, one block lower when placed on the side of a block
+  over air), then falls if there's nothing there. It turns to face you, rounded to the nearest eighth of a turn, and
+  takes the name of a renamed item. Sound: `entity.armor_stand.place` at 0.75 volume, pitch 0.8. Game event:
+  `entity_place`. One item is used up (none in creative) and your hand swings.
+- **Dressing it** (vanilla `interactAt`, `getClickedSlot`, `swapItem`): right-click with something it can wear and it
+  goes on its slot: armour, a carved pumpkin or a mob head on the head, an elytra on the chest. It takes one off a
+  stack; a single item swaps with what it had. Held items (swords, shields, anything) go in its hands only when its
+  arms are shown: the main hand is its right. With an empty hand, you take off whatever is at the height you click:
+  boots low down, then leggings, chestplate, helmet at the top (a small stand's heights scaled). Failing that, what's
+  in its hands. In creative, an empty slot gets a copy and your item stays. `DisabledSlots` works as in vanilla: a
+  slot's bit stops it being used at all, +8 stops taking, +16 stops putting. A click that does nothing still counts as
+  used (vanilla's client consumes it): no swing, and your held item's own use doesn't run, so a helmet isn't put on
+  your own head. Equip sounds and equip/unequip game events are the piece's own. A renamed name tag names the stand
+  (the name shows only with `CustomNameVisible`, as in vanilla). A marker ignores clicks.
+- **Breaking it** (vanilla `hurt`): a player's blow makes it wobble for 5 ticks. You hear `entity.armor_stand.hit` at
+  0.3 volume and get `entity_damage`, but it takes no damage. A second blow within 5 ticks breaks it: the break sound,
+  oak-plank particles, `entity_die`. It drops itself (with its name) and everything it wore and held. A creative
+  player's blow breaks it at once and drops nothing. Adventure and spectator players can't break it. An arrow,
+  trident, fireball, wither skull or wind charge breaks it outright. A blast breaks it too but drops only its gear.
+  Invisible stands and markers can't be broken this way, and neither can invulnerable ones (except by a creative
+  player). `/kill` and the void remove any stand, with no drops. Nothing drops with `doTileDrops` off. Nothing else
+  hurts it, and it isn't pushed by mobs or targeted by them (wolves already skipped it), and potions don't affect it.
+  A knockback weapon moves it, as in vanilla.
+- **Fire and falls**: fire and campfires set it alight. While alight it loses 4 health a second (fire touching an
+  already burning stand takes 0.15 more) and breaks after about 5 seconds, dropping its gear but not itself. It falls
+  under gravity (not with `NoGravity`; a marker never moves). Landing from more than 3 blocks up plays
+  `entity.armor_stand.fall`, with no damage. It pushes only a rideable minecart that's pressed right against it.
+- **`/summon armor_stand ~ ~ ~ {…}`** (vanilla `readAdditionalSaveData`): `Small` (half size), `NoBasePlate`,
+  `ShowArms`, `Invisible` (only what it wears shows), `Marker` (no box at all: can't be hit, clicked or moved; its eye
+  height stays the size it would be, so it's lit at that height), `NoGravity`, `Pose` (`Head`, `Body`, `LeftArm`,
+  `RightArm`, `LeftLeg`, `RightLeg`, each `[x, y, z]` in degrees, taken modulo 360), `DisabledSlots`, `ArmorItems`
+  (feet to head), `HandItems` (main, off), `Invulnerable`, `CustomName`, `CustomNameVisible`, `Rotation`.
+- **Dispensers** (`src/game/redstone/dispenseItems.ts`): a dispenser holding armour stands places one in front of it,
+  facing the way the dispenser faces (up or down counts as east, like vanilla's `Direction.toYRot`), with no room
+  check. A dispenser of armour puts it on a stand in front, into a free slot that isn't disabled; otherwise the armour
+  is thrown out.
+- **Drawn** (`src/render/armorStandRenderer.ts`, vanilla `ArmorStandRenderer`/`ArmorStandModel`): M1's smithing
+  preview model and wood texture (`src/render/armorStandPreview.ts`), turned by its body. Each part follows its pose,
+  and the body's sticks move with the body. Arms show only with `ShowArms`, and the base plate unless `NoBasePlate`.
+  A small stand is drawn like a baby mob: its head scaled 0.75, its body half size. A struck stand wobbles
+  (`sin(t/1.5·π)·3°` for 5 ticks). An invisible stand shows only its gear (a spectator sees a 15% ghost of it). On
+  top, the existing layers draw its armour in the stand's pose (`src/render/armorLayer.ts`), what its hands hold (with
+  or without arms), a worn elytra, and any non-armour head item. It's visible from 4× its size away (markers as a
+  1-block entity).
+- **Sounds** (`src/audio/gen/armorStand.ts`): place, hit, break and fall, 4 takes each. Our own: a stone plate and a
+  wooden frame knocking, sticks clattering apart, a hollow wooden thud. Placing is in the Blocks volume category (as
+  vanilla plays it); the rest are Friendly Creatures (neutral).
+- **Saving** (`src/game/spawner.ts`): saved with its chunk, like item frames: flags, pose (only the parts off their
+  default), `DisabledSlots`, gear, name, turn, health, fire, `NoGravity`, `Invulnerable`.
+- **Multiplayer**: guests are sent a stand as its saved record, then its fields as they change. They see it placed,
+  turned, posed, sized, dressed, invisible or named, and see it fall. A guest's right-click and blows are handled by
+  the host, using the host's own view of what the guest is looking at, within reach. So a guest dresses and undresses
+  stands, places them, and knocks them over; everyone sees the result and hears the equip, place, knock and break
+  sounds. The wobble reaches guests through `lastHit` and their synced clock. Adventure guests, guests out of reach,
+  and clicks on markers are refused. A guest who joins later sees each stand as it is.
+
+**New files**: `src/entity/armorStand.ts`, `src/item/itemsArmorStand.ts`, `src/render/armorStandRenderer.ts`,
+`src/audio/gen/armorStand.ts`; tests `tests/survival-blocks/armor-stand.mjs`, `tests/survival-blocks/armor-stand-mp.mjs`.
+
+**Shared files touched** (a line or a few each, marked `(armour stand)`): `src/item/item.ts`
+(`registerArmorStandItem`), `src/inventory/recipes.ts` (the recipe), `src/game/spawner.ts` (save/load, saved with the
+chunk, name, summonable), `src/game/commands.ts` (`/summon` with its data), `src/game/interaction.ts` (an entity's own
+interact may return `'consume'`: the click is spent with no swing), `src/game/combat.ts` (no `player_hurt_entity`
+trigger for a stand, as vanilla's hurt never gets that far), `src/game/redstone/dispenseItems.ts` (placing stands,
+armour onto stands), `src/render/entityRenderers.ts` (builds and calls `ArmorStandRenderer`, its render distance, its
+name tag), `src/render/armorStandPreview.ts` (exports its texture), `src/net/entityNet.ts` (sent as its record),
+`src/net/server/entityTracker.ts` (tracked within 10 chunks, as vanilla), `src/audio/synth.ts` (`armorStandSounds`),
+`src/audio/soundManager.ts` (placing in the Blocks category). No protocol change.
+
+**Hooks**: none new. `playerInteract` returning `'consume'` is the one addition to the existing duck-typed entity
+interact. The stand also uses `ignoreExplosion` and `LivingEntity`'s `onFallDamage`, `animateMirror`,
+`canBeSeenAsEnemy` and `isAffectedByPotions`.
+
+**Deviations and open points**
+- Based on vanilla 1.21.1 (no `mobGriefing` check on blasts; an invisible stand ignores explosions). The damage-type
+  tag contents are from memory, including `mace_smash` in `can_break_armor_stand`.
+- No block fall sound on landing (this game plays none for any mob). No `Silent`, `Glowing` or `entity_data` item
+  component. A dispenser always puts armour in its natural slot (vanilla moves it to the main hand when that slot is
+  disabled, which then fails anyway).
+- The texture is M1's smithing-preview wood and smooth stone, and the sounds are our own (vanilla's are assets).
+- No statistics in this game, so nothing is counted for using or breaking one.
+
+**Tests**: `tests/survival-blocks/armor-stand.mjs` (104 checks). Item, recipe (table only, wrong slab, missing
+stick), recipe book, names. Placing: the real click through pick and use, the eight turns, blocked by a block or any
+entity, underside, adventure, creative, into grass, onto a slab, beside a block over air (one lower, then falls),
+named. Dressing: chestplate, one off a stack, stack against a worn piece, swaps, boots/leggings, taking off by click
+height, hands with and without arms, shield, pumpkin/elytra/head, creative copy and take, `DisabledSlots` (+8/+16),
+name tag, marker. Breaking: wobble, after 5 ticks, double hit with drops and name, creative, adventure, arrow,
+blast, invisible (blows, blast, `/kill`), invulnerable, `doTileDrops`, void. Fire (4 a second, burnt in 5 s, a fire
+block), falls (6 blocks clatters, 2 don't), `NoGravity`, marker, small, not pushable/targeted/potions. `/summon` data,
+dispensers (placing, armour, disabled slot, facing), save/load, sounds. Drawing: box counts with/without arms/plate,
+pose rotations, invisible and the spectator ghost, layers, small, render distance, name.
+`tests/survival-blocks/armor-stand-mp.mjs` (23 checks): both guests see a stand where it is and click its box; a
+guest dresses it (heard by the other), puts a stick in its hand and takes both off by height; a disabled slot, out of
+reach and a marker are refused; removal reaches the guests; a guest places one (seen, heard, one used on both sides);
+a guest's blow wobbles it (seen on the other's clock, knock heard), a second quick one breaks it (gone everywhere,
+drops on the host); an adventurer's blows do nothing; a creative guest's one blow breaks it with no drops; a late
+joiner sees a small, posed, named, dressed stand; later pose, invisibility, gear and size changes reach them; a fall is
+seen. Re-run after the change: all M1–M4 suites, `tests/armor/equip-test.mjs`, `tests/commands/summon.mjs`,
+`lookups.mjs`, `tests/end/frames.mjs`, `elytra.mjs`, `skulls.mjs`, `tests/multiplayer/m2-entities.mjs`,
+`m2-actions.mjs`, `m2-security.mjs`, `m3-survival.mjs`, `m6-commands.mjs`, `tests/saves/roundtrip.mjs`, `player.mjs`,
+`tests/redstone2/hopper.mjs`: all pass. The save roundtrip's 100 ms stall check read 105 ms once with three suites
+running at the same time and passed alone. `npm run typecheck` clean.
+
+**Try it** (http://localhost:5173/?seed=12345):
+1. Creative → Functional Blocks: the armour stand after the decorated pot. Survival: craft it (six sticks round a
+   smooth stone slab).
+2. Place one: it faces you (walk round and place more: 8 directions). On a slab it sits half a block down.
+3. Right-click it with a helmet, chestplate, leggings and boots: each goes on with its sound. Right-click with an
+   empty hand at its feet, knees, chest and head: each piece comes off.
+4. `/summon armor_stand ~ ~ ~ {ShowArms:1b,Pose:{RightArm:[-90f,0f,0f]}}`: arms out. Give it a sword and a shield.
+   Try `Small:1b`, `NoBasePlate:1b`, `Invisible:1b` with armour on, `Marker:1b`, `NoGravity:1b` placed in the air.
+5. Hit it once: it wobbles with a knock. Hit it twice quickly: it breaks and drops itself and its gear. In creative,
+   one hit breaks it with no drops. Shoot it with an arrow: it breaks. Set it alight (flint and steel on the
+   ground at the edge of its block, beside the stand): it burns down in about 5 seconds.
+6. `/summon armor_stand ~ ~10 ~`: it falls and lands with a clatter.
+7. A dispenser with armour stands, powered: one is placed facing out. With armour in it: the armour goes on that stand.
+8. In a world made from the title screen: dress and pose a stand, save and quit, reopen: it's still there as it was.
+9. LAN: the guest dresses and undresses a stand and places its own; the host sees it and hears the sounds. The guest
+   hits a stand twice: it breaks for everyone.
 
 ---
 

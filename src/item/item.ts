@@ -17,6 +17,8 @@ import { registerSignItems } from './itemsSigns';
 import { registerCakeItems } from './itemsCake';
 // (spyglass)
 import { registerSpyglassItem } from './itemsSpyglass';
+// (armour stand)
+import { registerArmorStandItem } from './itemsArmorStand';
 
 export interface ToolInfo {
   type: ToolType;
@@ -610,6 +612,8 @@ registerSignItems(reg, ITEMS, ITEM_LIST);
 registerCakeItems(ITEMS, ITEM_LIST);
 // (spyglass) the spyglass: one to a stack, with the tools after the clock
 registerSpyglassItem(reg, ITEM_LIST);
+// (armour stand) the armour stand: sixteen to a stack, with the functional blocks
+registerArmorStandItem(reg);
 
 export function itemForBlock(name: string): Item | undefined {
   // (a block that is another's item's: a wall banner is its banner's)
