@@ -502,7 +502,12 @@ export abstract class AbstractMinecart extends Entity {
   }
 
   save(): SavedEntity {
-    return { id: this.type, x: this.x, y: this.y, z: this.z, yaw: this.yaw, pitch: this.pitch, dx: this.dx, dy: this.dy, dz: this.dz, health: 0, fire: this.remainingFireTicks, data: this.saveData() };
+    return {
+      id: this.type, x: this.x, y: this.y, z: this.z, yaw: this.yaw, pitch: this.pitch, dx: this.dx, dy: this.dy, dz: this.dz, health: 0, fire: this.remainingFireTicks, data: this.saveData(),
+      // ((minecarts) vanilla Entity.saveWithoutId: CustomName and CustomNameVisible, a named cart item's)
+      name: this.customName ?? undefined,
+      nameVisible: this.customNameVisible || undefined,
+    };
   }
 
   load(d: SavedEntity): void {
@@ -511,8 +516,32 @@ export abstract class AbstractMinecart extends Entity {
     this.dy = d.dy;
     this.dz = d.dz;
     this.remainingFireTicks = d.fire ?? 0;
+    if (typeof d.name === 'string') this.setCustomName(d.name);
+    this.customNameVisible = d.nameVisible === true;
     if (d.data) this.loadData(d.data);
   }
+
+  /**
+   * (minecarts) /summon's entity data (vanilla Entity.load and readAdditionalSaveData): CustomName, CustomNameVisible
+   * and Motion (a part over 10 taken as 0, as vanilla does), then the cart's own (readOwnData)
+   */
+  readEntityData(nbt: string, read: CartDataReaders): void {
+    const name = read.name(nbt);
+    if (name !== null) this.setCustomName(name);
+    if (/\bCustomNameVisible\s*:\s*(1b|true)/.test(nbt)) this.customNameVisible = true;
+    const motion = /\bMotion\s*:\s*\[([^\]]*)\]/.exec(nbt);
+    if (motion) {
+      const [dx, dy, dz] = motion[1].split(',').map((v) => parseFloat(v));
+      const part = (v: number) => (Number.isFinite(v) && Math.abs(v) <= 10 ? v : 0);
+      this.dx = part(dx);
+      this.dy = part(dy);
+      this.dz = part(dz);
+    }
+    this.readOwnData(nbt, read, read.scalars(nbt));
+  }
+
+  /** (minecarts) the entity data of a cart's own kind, for /summon (readEntityData): none for a plain one */
+  protected readOwnData(_nbt: string, _read: CartDataReaders, _given: Record<string, number | string | boolean>): void {}
 
   protected saveData(): Record<string, number | string | boolean> | undefined {
     return undefined;
@@ -590,6 +619,18 @@ export class Minecart extends AbstractMinecart {
   }
 }
 
+/** (minecarts) what /summon reads a cart's entity data with (game/commands.ts's SNBT readers) */
+export interface CartDataReaders {
+  /** the top-level {...} entries of a list `key:[...]` */
+  entries(nbt: string, key: string): string[] | null;
+  /** an item, {id:..., count:..., components:{...}} */
+  stack(e: string): ItemStack | null;
+  /** CustomName, as a text component or plain */
+  name(nbt: string): string | null;
+  /** the plain values at the top of the compound */
+  scalars(nbt: string): Record<string, number | string | boolean>;
+}
+
 /**
  * vanilla AbstractMinecartContainer (+ ContainerEntity): a cart carrying a container ((minecarts) a chest's 27 slots,
  * a hopper's 5), its loot table rolled when it's first got at
@@ -658,6 +699,23 @@ export abstract class AbstractMinecartContainer extends AbstractMinecart {
       if (s && s.count > 0) items.push(s.tag ? [i, s.item.id, s.count, s.damage, cloneTag(s.tag)!] : [i, s.item.id, s.count, s.damage]);
     });
     return { items: JSON.stringify(items) };
+  }
+
+  /**
+   * (minecarts) vanilla readChestVehicleSaveData, for /summon: a LootTable (and its LootTableSeed) to roll when it's first
+   * opened or broken, or Items, each in its Slot
+   */
+  protected override readOwnData(nbt: string, read: CartDataReaders, given: Record<string, number | string | boolean>): void {
+    if (typeof given.LootTable === 'string') {
+      this.lootTable = given.LootTable.replace(/^minecraft:/, '');
+      this.lootSeed = Number(given.LootTableSeed ?? 0) || 0;
+      return;
+    }
+    for (const e of read.entries(nbt, 'Items') ?? []) {
+      const slot = Number(/\bSlot\s*:\s*(\d+)/.exec(e)?.[1] ?? -1);
+      const s = read.stack(e);
+      if (s && slot >= 0 && slot < this.container.size) this.container.items[slot] = s;
+    }
   }
 
   protected override loadData(d: Record<string, number | string | boolean>): void {

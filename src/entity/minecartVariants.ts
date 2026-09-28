@@ -13,7 +13,7 @@
 // A furnace minecart burns coal or charcoal (three minutes a lump, up to 32000 ticks) and pushes itself along the
 // track away from whoever fuelled it, smoking and lit, at up to 4 m/s (3 in water).
 
-import { AbstractMinecart, AbstractMinecartContainer, registerMinecartType } from './minecart';
+import { AbstractMinecart, AbstractMinecartContainer, registerMinecartType, type CartDataReaders } from './minecart';
 import { ItemEntity } from './itemEntity';
 import type { Entity } from './entity';
 import type { Player } from './player';
@@ -120,6 +120,12 @@ export class MinecartHopper extends AbstractMinecartContainer {
   protected override loadData(d: Record<string, number | string | boolean>): void {
     super.loadData(d);
     this.enabled = d.Enabled !== false;
+  }
+
+  /** /summon's entity data: its items or loot table, and Enabled (vanilla: on unless it says otherwise) */
+  protected override readOwnData(nbt: string, read: CartDataReaders, given: Record<string, number | string | boolean>): void {
+    super.readOwnData(nbt, read, given);
+    if (given.Enabled !== undefined) this.enabled = given.Enabled === true || (typeof given.Enabled === 'number' && given.Enabled !== 0);
   }
 }
 
@@ -238,6 +244,11 @@ export class MinecartTNT extends AbstractMinecart {
   protected override loadData(d: Record<string, number | string | boolean>): void {
     if (typeof d.TNTFuse === 'number') this.fuse = d.TNTFuse;
   }
+
+  /** /summon's entity data: TNTFuse (lit, when it's 0 or more) */
+  protected override readOwnData(_nbt: string, _read: CartDataReaders, given: Record<string, number | string | boolean>): void {
+    if (typeof given.TNTFuse === 'number') this.fuse = given.TNTFuse | 0;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -339,6 +350,11 @@ export class MinecartFurnace extends AbstractMinecart {
     this.zPush = Number(d.PushZ ?? 0) || 0;
     this.fuel = Math.max(0, Math.min(MAX_FUEL, Number(d.Fuel ?? 0) | 0));
     this.lit = this.fuel > 0;
+  }
+
+  /** /summon's entity data: Fuel, PushX and PushZ, read as they're saved */
+  protected override readOwnData(_nbt: string, _read: CartDataReaders, given: Record<string, number | string | boolean>): void {
+    this.loadData(given);
   }
 }
 

@@ -8,7 +8,7 @@
 // it pushes off away from them, lit for everyone; a guest opens a hopper minecart's menu and takes from it; a TNT
 // minecart lit on an activator rail hisses for the guests, its fuse burning down and flashing on their side as on the
 // host, and goes off, the rails left; a guest sets a hopper minecart on a rail; a guest who joins late sees a switched
-// off hopper minecart, a lit furnace minecart, a lit TNT minecart and the rails' power as they are.
+// off hopper minecart (and its name), a lit furnace minecart, a lit TNT minecart and the rails' power as they are.
 import { loadNet, ENTITY_MODULES, flatHost, makeGuest, hostCopy, copyOf, step, check, exitWithStatus, SETTLE } from '../multiplayer/lib.mjs';
 setTimeout(() => { console.log('TIMEOUT'); process.exit(2); }, 300000).unref();
 
@@ -306,7 +306,7 @@ function flashing(e) {
   track('rail', 55, 65, 40);
   lvl.setBlock(60, G, 40, m.getBlock('activator_rail').state({ shape: 'east_west' }));
   lvl.setBlock(60, G, 41, m.S('redstone_block'));
-  const off = cart('hopper_minecart', 60, 40);
+  const off = cart('hopper_minecart', 60, 40, (c) => c.setCustomName('Hoppy'));
   const lit = cart('furnace_minecart', 56, 40, (c) => (c.fuel = 3000));
   track('rail', 55, 65, 44);
   const tnt = cart('tnt_minecart', 58, 44, (c) => (c.fuse = 1500));
@@ -316,7 +316,7 @@ function flashing(e) {
   put(c, 58.5, G, 36.5, 180, 0);
   step(host, 10);
   const [co, cl, cn] = [off, lit, tnt].map((e) => copyOf(c, e));
-  check('late: a guest who joins late sees a switched-off hopper minecart as it is', off.enabled === false && co instanceof m.MinecartHopper && co.enabled === false);
+  check('late: a guest who joins late sees a switched-off hopper minecart as it is, its name too', off.enabled === false && co instanceof m.MinecartHopper && co.enabled === false && co.customName === 'Hoppy');
   check('late: a lit furnace minecart lit, a lit TNT minecart burning', cl instanceof m.MinecartFurnace && cl.lit && cn instanceof m.MinecartTNT && cn.fuse > 0 && cn.fuse === tnt.fuse);
   check('late: the activator rail powered', gprop(c, 60, G, 40, 'powered') === true);
   lvl.setBlock(60, G, 41, 0);

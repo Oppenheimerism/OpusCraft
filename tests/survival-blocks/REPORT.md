@@ -26,6 +26,23 @@ multiplayer. Each fix is its own commit after M6's.
   its gear dropped" failed about two runs in five. It did so on M5's own commit too (5 of 12 runs of `1e4f0c9`). The
   player stood two blocks from the stand and now and then picked up the helmet the burnt stand dropped. The player
   now stands well away for that part, and 15 of 15 runs pass. Nothing in the game changed.
+- **The full regression again, on M6's code** (`0a2e643`; nothing but this report changed while it ran): 179 of 182
+  suites passed in 30.9 min. `drowned`, `illagers` and `wolf` failed checks that fail on `1e4f0c9` too. Run again,
+  `wolf` failed 2 of 3 runs on each commit ("within ten blocks it stays put", "it comes after its owner"), and
+  `drowned` passed 3 of 3 on each.
+- **Minecart names saved; `/summon` reads the carts' data** (`src/entity/minecart.ts`,
+  `src/entity/minecartVariants.ts`, `src/game/commands.ts`): a cart named from a renamed item lost its name when the
+  world was saved and loaded. A cart's record had no name in it: the name is saved by the mobs' code, which carts
+  don't use. Carts now save and load `CustomName` and `CustomNameVisible`, as vanilla's `Entity.saveWithoutId` does,
+  and a guest who joins later gets the name with the cart's record. `/summon` now reads a cart's `CustomName`,
+  `CustomNameVisible` and `Motion` (a part over 10 taken as 0, as vanilla does). For a chest or hopper minecart it
+  reads `Items` (each in its `Slot`, none past the cart's size) or `LootTable` and `LootTableSeed` (rolled when the
+  cart is first opened). It also reads a hopper minecart's `Enabled`, a TNT minecart's `TNTFuse`, and a furnace
+  minecart's `Fuel`, `PushX` and `PushZ`. Tests: 7 new checks in `minecarts.mjs` (now 161): the name through a save
+  (the check fails without the fix) and each kind's `/summon` data. `minecarts-mp.mjs`'s late joiner also sees a
+  cart's name. Re-run and passing: `minecarts-mp.mjs`, `multiplayer/m2-entities.mjs`, `m2-actions.mjs`,
+  `m6-commands.mjs`, `commands/summon.mjs`, `commands/lookups.mjs`, `survival-blocks/armor-stand.mjs`,
+  `saves/roundtrip.mjs`. `npm run typecheck` clean.
 
 ---
 
@@ -103,7 +120,8 @@ the game; they now share the new code.
 - **Placing and dispensing**: every cart item (minecart, chest, hopper, TNT, furnace) sets its cart on a rail you
   click, half a block up on a slope. One item is used (none in creative), with ENTITY_PLACE. A dispenser sets them on
   the rail in front of it, or on a rail below an empty space in front. A renamed item names its cart, and a named cart
-  drops an item with its name (vanilla keeps both ways).
+  drops an item with its name (vanilla keeps both ways). At first the name wasn't saved with the cart; the
+  self-review fixed that.
 - **Other**: arrows and tridents can hit minecarts (vanilla: anything that can be picked). Container minecarts are
   hopper and dropper targets. Iron golems aren't scooped up by a rolling minecart (a vanilla rule that was missing).
   The rolling and riding loops already covered every kind of cart.
@@ -148,7 +166,9 @@ is a target), `src/entity/arrow.ts` (arrows hit minecarts), `src/game/level.ts` 
   it therefore names the cart.
 - A creative player's blow on a chest or hopper minecart now spills its contents (vanilla's `discard`), where the
   chest minecart used to vanish with them.
-- `/summon` makes the new carts but reads no entity data for them (`TNTFuse`, `Fuel`, `Items`...).
+- `/summon` made the new carts but read no entity data for them at first. Since the self-review it reads each
+  cart's own data (see there), but not Entity's other fields (`Rotation`, `NoGravity`, `Invulnerable`, `Passengers`...)
+  nor a custom display block (`DisplayState`), which this game's carts don't have.
 - There are no command-block or spawner minecarts in this game, so the detector rail has no command-block reading.
   Snowballs, eggs and other thrown things still don't hit carts (only arrows and tridents do), and arrows still
   don't hit boats; vanilla lets all of them. Those were left for the boats' and projectiles' own work.
@@ -176,7 +196,8 @@ the brake (against the same cart on plain rails), the 0.4-a-tick cap. Detector: 
 power below only, powered rails it leads to, a comparator reading 0 for a plain cart, 15/1/0 for a chest minecart and
 9 for a hopper minecart three slots full, a loot table rolled, off a second after the cart has gone, a cart rolling
 over it, no game events. A detector rail gets random ticks. With its check lost, as after a save and load, a random tick
-switches it off once the cart has gone, or keeps it on with its check due again while the cart is still there. Activator: rider thrown out with a shake, unpowered does nothing, a TNT minecart lit (fuse,
+switches it off once the cart has gone, or keeps it on with its check due again while the cart is still there.
+Activator: rider thrown out with a shake, unpowered does nothing, a TNT minecart lit (fuse,
 hiss, smoke, blast on time, rails and blocks under them spared, others blown, a second TNT minecart lit by the blast
 and going off), a hopper minecart switched off and on again. A junction flipped by a lever, not by a redstone block
 set down; powered rails never curve. Hopper minecart: items above, beside, out of a chest above one a tick, beside

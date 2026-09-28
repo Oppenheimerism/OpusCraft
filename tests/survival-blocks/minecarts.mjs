@@ -12,7 +12,8 @@
 // a fall, a crash; its fuse, smoke and hiss; its blast sparing the rails and lighting other TNT carts; saving); the
 // furnace minecart (coal and charcoal, three minutes a lump up to 32000, none used in creative, pushing away from the
 // player at up to 4 m/s round a bend, running out, lit, saving); every cart set on a rail by its item or a dispenser
-// (and a name kept); and drawing a lit TNT cart (the flash and the swell).
+// (and a name kept, through a save too); /summon's entity data for each kind; and drawing a lit TNT cart (the flash
+// and the swell).
 import { load, check, exitWithStatus, flatLevel, place, prop, use } from '../redstone2/lib.mjs';
 import { readFileSync } from 'node:fs';
 setTimeout(() => { console.log('TIMEOUT'); process.exit(2); }, 300000).unref();
@@ -22,6 +23,7 @@ const { m, close } = await load([
   '/src/game/rails.ts', '/src/world/blocksRails.ts', '/src/item/itemsMinecarts.ts', '/src/game/redstone/comparator.ts', '/src/game/redstone/dispenseItems.ts',
   '/src/game/spawner.ts', '/src/inventory/recipeBook.ts', '/src/textures/items.ts', '/src/textures/blocks.ts', '/src/entity/arrow.ts', '/src/game/explosion.ts',
   '/src/render/minecartContents.ts', '/src/game/openMenu.ts', '/src/inventory/hopperMenu.ts', '/src/game/redstone/components.ts',
+  '/src/game/commands.ts',
 ]);
 const { ItemStack } = m;
 const G = 64;
@@ -873,6 +875,8 @@ const reload = (e, level) => m.loadEntity(JSON.parse(JSON.stringify(save(e))), l
   inter.rightClickDelay = 0;
   const nc = live(level, m.MinecartTNT).find((c) => near(c.x, 20.5));
   check('name: a named item\'s cart has its name', nc?.customName === 'Boom' && m.entityDisplayName(nc) === 'Boom');
+  const kept = reload(nc, level);
+  check('name: kept when the world is saved and loaded', kept?.customName === 'Boom' && !kept.customNameVisible && reload(live(level, m.MinecartFurnace).find((c) => near(c.x, 17.5)), level)?.customName === null);
   nc.hurt(5, 'player', p, p);
   const it = items(level, 'tnt_minecart')[0];
   check('name: and breaking it, the item keeps it', it?.stack.tag?.customName === 'Boom');
@@ -913,6 +917,31 @@ const reload = (e, level) => m.loadEntity(JSON.parse(JSON.stringify(save(e))), l
   check('chest minecart: a creative player\'s blow removes it, its contents spilled', c.removed && items(level, 'gold_ingot').length === 1 && items(level, 'chest_minecart').length === 0);
   const back = reload(cart(level, 'chest_minecart', 0, G, 0, (c) => c.container.set(1, ItemStack.of('iron_ingot', 3))), level);
   check('chest minecart: saved and loaded as before', back instanceof m.MinecartChest && countIn(back.container, 'iron_ingot') === 3);
+}
+
+// ---------------------------------------------------------------------------
+// /summon's entity data (vanilla readAdditionalSaveData, and Entity's CustomName and Motion)
+{
+  const { level } = world();
+  const p = player(level, 0.5, G, 0.5);
+  const chats = [];
+  const game = { meta: { allowCommands: true }, chat: (t) => chats.push(t), player: p, playerName: 'Tester', level, world: level.world, sound: { play() {} } };
+  const summon = (line) => {
+    m.executeCommand(game, line);
+    return live(level, m.AbstractMinecart).pop();
+  };
+  const t = summon('summon minecraft:tnt_minecart ~ ~ ~2 {TNTFuse:30}');
+  check('summon: a TNT minecart\'s TNTFuse (lit)', t instanceof m.MinecartTNT && t.fuse === 30 && t.isPrimed(), chats.join(' | '));
+  const f = summon('summon furnace_minecart ~2 ~ ~2 {Fuel:200s,PushX:1.0d,PushZ:0.0d}');
+  check('summon: a furnace minecart\'s Fuel, PushX and PushZ (lit)', f instanceof m.MinecartFurnace && f.fuel === 200 && f.xPush === 1 && f.zPush === 0 && f.lit);
+  const h = summon('summon hopper_minecart ~4 ~ ~2 {Enabled:0b,Items:[{Slot:2b,id:"minecraft:diamond",count:5},{Slot:9b,id:"minecraft:stone",count:1}]}');
+  check('summon: a hopper minecart\'s Enabled and Items, each in its slot (none past its five)', h instanceof m.MinecartHopper && !h.enabled && h.container.get(2)?.item.id === 'diamond' && h.container.get(2).count === 5 && countIn(h.container) === 5);
+  const c = summon('summon chest_minecart ~6 ~ ~2 {LootTable:"minecraft:chests/abandoned_mineshaft",LootTableSeed:7L}');
+  check('summon: a chest minecart\'s LootTable and LootTableSeed, rolled only when it\'s opened', c instanceof m.MinecartChest && c.lootTable === 'chests/abandoned_mineshaft' && c.lootSeed === 7 && countIn(c.container) === 0);
+  const n = summon('summon minecart ~8 ~ ~2 {CustomName:\'"Bob"\',CustomNameVisible:1b,Motion:[0.25d,0.0d,20.0d]}');
+  check('summon: a name (shown) and Motion (a part over 10 taken as 0)', n instanceof m.Minecart && n.customName === 'Bob' && n.customNameVisible && m.entityDisplayName(n) === 'Bob' && near(n.dx, 0.25) && n.dz === 0);
+  const plain = summon('summon hopper_minecart ~10 ~ ~2');
+  check('summon: with none, as it\'s made (a hopper minecart on, empty)', plain instanceof m.MinecartHopper && plain.enabled && countIn(plain.container) === 0 && plain.customName === null);
 }
 
 // ---------------------------------------------------------------------------

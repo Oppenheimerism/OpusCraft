@@ -809,6 +809,8 @@ export const COMMANDS: Record<string, CommandDef> = {
       } else if (MINECART_TYPES.includes(type)) {
         const cart = createMinecart(type, lvl)!;
         cart.moveTo(x, y, z, 0, 0);
+        // (minecarts) its entity data (entity/minecart.ts reads it): a name, its motion, a hopper's items, a fuse, fuel
+        if (c.args[4]) cart.readEntityData(c.line.slice(c.args[4].pos), { entries: snbtEntries, stack: snbtStack, name: customNameIn, scalars: snbtScalars });
         e = cart;
       } else if (type === 'end_crystal') {
         // (entity data: {ShowBottom:0b} hides the plinth)
