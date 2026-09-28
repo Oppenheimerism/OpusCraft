@@ -27,8 +27,9 @@ let session = new MemStorage();
 Object.defineProperty(globalThis, 'localStorage', { get: () => local, configurable: true });
 Object.defineProperty(globalThis, 'sessionStorage', { get: () => session, configurable: true });
 
-const { mods, close } = await loadModules(['/src/gui/screens/multiplayer.ts']);
-const [mp] = mods;
+// (the blocks and items first, as the game loads them: the pause menu reaches them through the commands)
+const { mods, close } = await loadModules(['/src/world/blocks.ts', '/src/item/item.ts', '/src/gui/screens/multiplayer.ts', '/src/gui/screens/ingame.ts']);
+const [, , mp, ingame] = mods;
 let fails = 0;
 const check = (name, cond, extra = '') => { if (!cond) fails++; console.log(`${cond ? 'ok  ' : 'FAIL'} ${name}${extra ? ' ' + extra : ''}`); };
 const game = { opts: { renderDistance: 8 } };
@@ -53,6 +54,17 @@ session.setItem('mc-mp-name', 'Alex');
 check("...and a window that was Alex stays Alex (its tab's own name first)", mp.rememberedName() === 'Alex');
 session = steveTab;
 check('...Steve\'s stays Steve', mp.rememberedName() === 'Steve');
+
+// Disconnect (the pause menu's): back on the Multiplayer screen, by the same name, the join code still in its box
+{
+  let to = null;
+  const guest = { mode: 'client', joinedWith: 'ABCDEFGH', lanShare: null, titleScreenFactory: () => null, leaveWorld: async (s) => (to = s), setScreen() {} };
+  const pause = new ingame.PauseScreen(guest);
+  pause.initScreen(427, 240);
+  const btn = pause.widgets.find((w) => w.label === 'Disconnect');
+  btn?.onPress(btn);
+  check("Disconnect: back to Multiplayer, as Steve, the join code kept to join again", to instanceof mp.JoinMultiplayerScreen && to.code === 'ABCD-EFGH' && to.name === 'Steve', `${to?.code} ${to?.name}`);
+}
 
 // what isn't a name is never offered
 session = new MemStorage();

@@ -230,8 +230,8 @@ export class Game {
    * world's own setting (vanilla PlayerList.allowCommandsForAllPlayers; the guests' own commands aren't here yet)
    */
   lanCheats = false;
-  /** (a guest) the join code it joined with */
-  private joinedWith = '';
+  /** (a guest) the join code it joined with: the Multiplayer screen it goes back to keeps it, to join again */
+  joinedWith = '';
   /** (hosting) the players of the guests this world has had, kept with it (vanilla PlayerDataStorage) */
   private playerData: PlayerDataStore | null = null;
   /** chunks with a saved entity record / with entities not yet saved / with a record load in flight */
