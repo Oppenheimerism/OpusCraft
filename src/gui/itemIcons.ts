@@ -64,6 +64,8 @@ export class ItemIcons implements IconSource {
         const l = this.renderer.items.itemSprites.get(name)?.img;
         if (!l) return;
         const t = li === layered.tinted ? col : 0xffffff;
+        // (remaining mobs: the armadillo) an undyed wolf armour's overlay isn't drawn (vanilla alpha 0)
+        if (t < 0) return;
         for (let i = 0; i < data.length; i += 4) {
           if (!l.data[i + 3]) continue;
           data[i] = (l.data[i] * ((t >> 16) & 255)) / 255;

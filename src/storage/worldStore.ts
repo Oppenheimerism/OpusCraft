@@ -66,6 +66,8 @@ export interface WorldMeta {
     wardenSpawnTracker?: import('../game/wardenSpawnTracker').WardenSpawnTrackerData;
     /** vanilla EnderItems: the player's own ender chest slots, a stack or null for each of the 27 */
     enderItems?: (SavedStack | null)[];
+    /** (remaining mobs: the phantom) vanilla's minecraft:time_since_rest statistic: ticks awake (phantoms come after 72000) */
+    timeSinceRest?: number;
   } | null;
   /** nether portal blocks per dimension (vanilla POI records), as x, y, z triples */
   portals?: Record<string, number[]>;

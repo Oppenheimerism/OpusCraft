@@ -98,6 +98,13 @@ import './spyglass';
 // (minecarts) the powered, detector and activator rails; the hopper, TNT and furnace minecarts
 import './poweredRails';
 import '../entity/minecartVariants';
+// (remaining mobs: the bee) the bee nest, the beehive and the honey block
+import './beehive';
+// (remaining mobs: the panda) bamboo
+import './bamboo';
+// (remaining mobs: the mooshroom) mushrooms small and huge, and mycelium's spores; suspicious stew from flowers
+import './mushrooms';
+import './suspiciousStew';
 
 export interface SoundSink {
   play(name: string, x: number, y: number, z: number, volume?: number, pitch?: number): void;
@@ -980,7 +987,7 @@ export class Level {
     }
     if (drop) {
       for (const s of blockDrops(dropState, tool, this.random, levelOf(stack, 'silk_touch') > 0, levelOf(stack, 'fortune'), be)) ItemEntity.drop(this, x, y, z, s);
-      behaviorOf(st)?.spawnAfterBreak?.(this, x, y, z, st, stack);
+      behaviorOf(st)?.spawnAfterBreak?.(this, x, y, z, st, stack, breaker || null, be);
     }
     this.updateNeighborsAt(x, y, z, b.id);
     if (hasAnalogOutput(st)) this.updateNeighbourForOutputSignal(x, y, z, b.id);

@@ -7,6 +7,8 @@ import { registerTrialChamberRecipes } from './recipesTrialChambers';
 import { registerBastionRecipes } from './recipesBastion';
 // (signs)
 import { registerSignRecipes } from './recipesSigns';
+// (remaining mobs)
+import { registerRemainingMobRecipes } from './recipesRemainingMobs';
 
 /** ingredient: item id, '#tag', or list of alternatives */
 type Ing = string | string[];
@@ -459,6 +461,9 @@ registerTrialChamberRecipes(shaped, shapeless);
 registerBastionRecipes(shaped, shapeless);
 // (signs) every wood's sign (the oak one's is above) and hanging sign
 registerSignRecipes(shaped);
+// (remaining mobs) the bee's: the beehive, the honey block and back, sugar from honey, the honeycomb block; the
+// panda's: a stick from bamboo; the armadillo's: wolf armour
+registerRemainingMobRecipes(shaped, shapeless);
 
 // drop recipes whose items don't exist in this game
 for (let i = RECIPES.length - 1; i >= 0; i--) {

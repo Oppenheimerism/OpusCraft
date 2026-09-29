@@ -95,6 +95,11 @@ function N() {
 
 const f32 = Math.fround;
 
+/** (remaining mobs: the panda) vanilla Biome.BIOME_INFO_NOISE.getValue(x, z, false) (NoiseBasedCountPlacement's) */
+export function biomeInfoNoise(x: number, z: number): number {
+  return N().info.getValue(x, z);
+}
+
 /** vanilla Biome.getTemperature at a block (float arithmetic, as vanilla's threshold checks see it) */
 export function biomeTemperature(base: number, frozen: boolean, x: number, y: number, z: number): number {
   let t = f32(base);

@@ -4,6 +4,8 @@ import { OUTLINE, COLLISION, FLAGS, F_AIR, F_WATER, F_LAVA } from '../world/bloc
 import type { World } from '../world/world';
 import { AABB } from '../core/aabb';
 import { fluidHeight, fluidType, FLUID_NONE } from '../world/fluids';
+// (remaining mobs: the panda) a bamboo stalk's outline is set off with it
+import { shapeOffset } from '../world/blockOffset';
 
 export interface BlockHit {
   x: number;
@@ -34,8 +36,9 @@ export function raycast(world: World, ox: number, oy: number, oz: number, dx: nu
       const isFluidBlock = (f & (F_WATER | F_LAVA)) !== 0 && OUTLINE[st].length === 0;
       let best: BlockHit | null = null;
       if (!isFluidBlock) {
+        const [sx, sz] = shapeOffset(st, x, z);
         for (const b of OUTLINE[st]) {
-          const box = new AABB(x + b[0], y + b[1], z + b[2], x + b[3], y + b[4], z + b[5]);
+          const box = new AABB(x + sx + b[0], y + b[1], z + sz + b[2], x + sx + b[3], y + b[4], z + sz + b[5]);
           const hit = box.clip(ox, oy, oz, ex, ey, ez);
           if (hit && (!best || hit.t * maxDist < best.dist)) {
             best = { x, y, z, face: hit.face, hx: ox + (ex - ox) * hit.t, hy: oy + (ey - oy) * hit.t, hz: oz + (ez - oz) * hit.t, state: st, dist: hit.t * maxDist };

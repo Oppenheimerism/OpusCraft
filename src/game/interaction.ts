@@ -50,6 +50,8 @@ import { levelOf, miningEfficiency, submergedMiningSpeed, hurtAndBreak, hasBindi
 import { armorIndex, equipSound, equipableSlot } from '../item/equipment';
 import type { Hand } from '../item/inventory';
 import { equipEvent } from './vibrations';
+// (remaining mobs: the panda)
+import { DYNAMIC_SHAPE, dynamicCollision } from '../world/dynamicShapes';
 import { isCharged, performShooting, shootingPower, PLAYER_INACCURACY, playerProjectile, useDuration, crossbowUseTick, releaseUsing as releaseCrossbow } from '../item/crossbow';
 
 
@@ -368,6 +370,9 @@ export class Interaction {
         }
       }
       if (e instanceof Animal && e.interact(p, stack)) {
+        // (remaining mobs: the armadillo) vanilla player_interacted_with_entity: the item as it was, if the click used
+        // it (a wolf told to sit or stand didn't: vanilla SUCCESS_NO_ITEM_USED)
+        this.onInteractedWithEntity?.((e as { interactUsedItem?: () => boolean }).interactUsedItem?.() === false ? null : heldBefore, e);
         if (p.vehicle === e) this.onMounted?.();
         p.swing();
         return 'success';
@@ -597,8 +602,9 @@ export class Interaction {
       const u = updateShape(world, x, y, z, st);
       if (u) st = u;
     }
-    // don't place inside entities
-    const boxes = COLLISION[st];
+    // don't place inside entities ((remaining mobs: the panda) vanilla isUnobstructed: the shape where it stands, a
+    // bamboo stalk's post set off as the stalk is)
+    const boxes = DYNAMIC_SHAPE[st] ? dynamicCollision(world, x, y, z, st) : COLLISION[st];
     if (boxes) {
       for (const c of boxes) {
         const bb = new AABB(x + c[0], y + c[1], z + c[2], x + c[3], y + c[4], z + c[5]);
@@ -631,7 +637,9 @@ export class Interaction {
       this.level.setBlock(hx, y, hz, block.with(st, 'part', 'head'), false);
       return this.commitPlace(x, y, z, block.with(st, 'part', 'foot'), stack, block.sound);
     }
-    return this.commitPlace(x, y, z, st, stack, block.sound);
+    // (vanilla BlockItem.place: the placed state's own sound; (remaining mobs: the panda) bamboo planted as a shoot
+    // sounds as the shoot does)
+    return this.commitPlace(x, y, z, st, stack, BLOCKS[STATE_BLOCK[st]].sound);
   }
 
   /** right-click actions on blocks (vanilla useWithoutItem / item useOn); true if handled ('fail': refused, nothing else tried) */
@@ -822,6 +830,8 @@ export class Interaction {
       if (p.gameMode !== 'creative') p.inventory.setSelectedItem(ItemStack.of('bucket'));
       return true;
     }
+    // (remaining mobs: the bee) vanilla BlockItem.updateBlockStateFromTag: the properties the item carries (a hive's honey)
+    st = withItemBlockState(st, stack);
     this.level.setBlock(x, y, z, st);
     // (vanilla BlockItem.updateBlockEntityComponents: a banner's patterns go onto its block entity)
     this.level.world.getBlockEntity(x, y, z)?.applyComponents(stack);
@@ -1307,3 +1317,20 @@ function useAnimation(s: ItemStack): 'drink' | 'eat' | null {
 }
 
 export { S };
+
+/**
+ * (remaining mobs: the bee) vanilla BlockItemStateProperties.apply: an item's block_state (a hive's honey_level) over
+ * the state placed, each property it names that the block has, at a value the property takes
+ */
+function withItemBlockState(st: number, stack: ItemStack): number {
+  const bs = stack.tag?.blockState;
+  if (!bs) return st;
+  const b = BLOCKS[STATE_BLOCK[st]];
+  for (const [k, v] of Object.entries(bs)) {
+    const i = b.propIndex(k);
+    if (i < 0) continue;
+    const val = b.props[i].values.find((x) => String(x) === v);
+    if (val !== undefined) st = b.with(st, k, val);
+  }
+  return st;
+}

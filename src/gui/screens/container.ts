@@ -8,7 +8,7 @@ import { ContainerMenu, Slot, canItemQuickReplace, quickCraftPlaceCount, quickcr
 import { InventoryMenu, CraftingMenu, FurnaceMenu, ChestMenu, BrewingStandMenu } from '../../inventory/menus';
 import { ItemStack, ITEMS, RARITY_COLOR } from '../../item/item';
 import { enchantmentLine, tooltipOrder } from '../../item/enchantments';
-import { hoverText } from '../../item/hoverText';
+import { hoverText, tooltipFlag } from '../../item/hoverText';
 import { KEYS } from '../../game/input';
 import { RecipeBookComponent } from '../recipeBookComponent';
 import { MobEffectInstance, compareEffects, effectDisplayName, formatEffectDuration } from '../../entity/effects';
@@ -195,6 +195,8 @@ export abstract class AbstractContainerScreen<M extends ContainerMenu> extends S
 
   override renderTooltip(g: GuiGraphics, mx: number, my: number): void {
     if (!this.menu.carried && this.hoveredSlot?.hasItem()) {
+      // (remaining mobs: the mooshroom) vanilla TooltipFlag: creative mode's
+      tooltipFlag.creative = this.game.player.gameMode === 'creative';
       g.tooltip(itemTooltip(this.hoveredSlot.item!), mx, my);
       return;
     }

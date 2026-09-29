@@ -254,6 +254,23 @@ export function airAndWaterRandomPos(m: Mob, radius: number, yRange: number, yOf
   });
 }
 
+/**
+ * (remaining mobs: the bee) vanilla AirRandomPos.getPosTowards: as AirAndWaterRandomPos, within `maxAngle` of the way to
+ * (tx, tz), but never in water
+ */
+export function airRandomPosTowards(m: Mob, radius: number, yRange: number, yOff: number, tx: number, tz: number, maxAngle: number): Pos | null {
+  const restricted = mobRestricted(m, radius);
+  const vx = tx - m.x, vz = tz - m.z;
+  return bestOf(m, () => {
+    const d = randomDirectionWithinRadians(m, radius, yRange, vx, vz, maxAngle, yOff);
+    if (!d) return null;
+    const p = towardDirection(m, d, radius);
+    if (outsideLimits(p) || isRestricted(restricted, m, p)) return null;
+    const q = moveUpOutOfSolid(m, p);
+    return hasMalus(m, q[0], q[1], q[2]) || isWater(m, q[0], q[1], q[2]) ? null : q;
+  });
+}
+
 // ---------------------------------------------------------------------------
 // movement goals
 

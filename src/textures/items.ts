@@ -31,6 +31,8 @@ import { TRIAL_CHAMBER_ITEMS } from './itemlib/trialChambers';
 import { BASTION_ITEMS } from './itemlib/bastion';
 // (signs) the hanging signs
 import { SIGN_ITEMS } from './signs';
+// (remaining mobs: the panda's bamboo)
+import { REMAINING_MOB_ITEMS } from './itemlib/remainingMobs';
 
 export const ITEM_TEXTURES: Record<string, () => TexImage> = {
   ...SPAWN_EGG_TEXTURES,
@@ -54,4 +56,5 @@ export const ITEM_TEXTURES: Record<string, () => TexImage> = {
   ...TRIAL_CHAMBER_ITEMS,
   ...BASTION_ITEMS,
   ...SIGN_ITEMS,
+  ...REMAINING_MOB_ITEMS,
 };

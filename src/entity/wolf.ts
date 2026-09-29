@@ -1,6 +1,7 @@
 // The wolf (vanilla 1.21 Wolf): packs of one coat per biome that hunt sheep and skeletons, turn on whoever hurts
 // one of them, and can be won over with bones. A tame wolf sits when told, follows its owner and fights for it,
 // wears a collar you can dye, heals on meat, begs with its head on one side, and shakes itself dry after a swim.
+// (remaining mobs: the armadillo) And it wears wolf armour (entity/wolfArmor.ts).
 
 import { Animal, BreedGoal, DYE_COLORS } from './animals';
 import { TamableAnimal, SitWhenOrderedToGoal, FollowOwnerGoal, OwnerHurtByTargetGoal, OwnerHurtTargetGoal, NonTameRandomTargetGoal, TamableAnimalPanicGoal } from './tamable';
@@ -13,10 +14,12 @@ import { Llama } from './llama';
 import { LivingEntity } from './living';
 import type { Player } from './player';
 import type { Entity } from './entity';
-import { ItemStack } from '../item/item';
+import { ItemStack, loadStack, saveStack, type SavedStack } from '../item/item';
 import { BLOCKS, STATE_BLOCK } from '../world/block';
 import { BIOMES } from '../world/gen/biomes';
 import { babyTurtleOnLand } from './turtlePredators';
+// (remaining mobs: the armadillo)
+import { dropWolfArmor, setWolfArmor, WOLF_ARMOR_DEFENSE, wolfArmorAbsorb, wolfArmorCanAbsorb, wolfArmorInteract } from './wolfArmor';
 
 // ---------------------------------------------------------------------------
 // variants (vanilla WolfVariants, registered in this order)
@@ -84,6 +87,13 @@ export class Wolf extends TamableAnimal {
   /** vanilla NeutralMob: ticks of anger left, and at whom */
   angerTime = 0;
   angerTarget: LivingEntity | null = null;
+  /** (remaining mobs: the armadillo) vanilla Mob.bodyArmorItem: its wolf armour (entity/wolfArmor.ts) */
+  bodyArmor: ItemStack | null = null;
+  /**
+   * (remaining mobs: the armadillo) whether its last interact took the click without using what was held (vanilla
+   * InteractionResult.SUCCESS_NO_ITEM_USED: sitting down or getting up when told), for player_interacted_with_entity
+   */
+  private readonly lastInteract = { noItem: false };
 
   constructor(level: Level) {
     super(level);
@@ -190,6 +200,7 @@ export class Wolf extends TamableAnimal {
 
   /** vanilla Wolf.mobInteract */
   override interact(p: Player, stack: ItemStack | null): boolean {
+    this.lastInteract.noItem = false;
     const creative = p.gameMode === 'creative';
     if (this.isTame()) {
       if (stack && this.isFood(stack) && this.health < this.maxHealth) {
@@ -206,9 +217,11 @@ export class Wolf extends TamableAnimal {
         }
         return super.interact(p, stack);
       }
-      // (wolf armor, its shearing and mending with armadillo scutes: no armadillos yet)
+      // (remaining mobs: the armadillo) wolf armour put on, shorn off, or mended with a scute (entity/wolfArmor.ts)
+      if (wolfArmorInteract(this, p, stack)) return true;
       if (super.interact(p, stack)) return true;
       if (this.isOwnedBy(p)) {
+        this.lastInteract.noItem = true;
         this.orderedToSit = !this.orderedToSit;
         this.jumping = false;
         this.navigation.stop();
@@ -227,6 +240,42 @@ export class Wolf extends TamableAnimal {
 
   override variantId(): string {
     return this.variant.id;
+  }
+
+  /** (remaining mobs: the armadillo) vanilla InteractionResult.indicateItemUse: false after it sat or stood when told */
+  interactUsedItem(): boolean {
+    return !this.lastInteract.noItem;
+  }
+
+  /** (remaining mobs: the armadillo) vanilla Mob.setBodyArmorItem, for its wolf armour (a dispenser's, /summon's) */
+  setBodyArmorItem(s: ItemStack | null): void {
+    setWolfArmor(this, s);
+  }
+
+  /** (remaining mobs: the armadillo) vanilla ARMOR attribute: its wolf armour's 11 points besides */
+  override armorValue(): number {
+    return Math.min(30, super.armorValue() + (this.bodyArmor ? WOLF_ARMOR_DEFENSE : 0));
+  }
+
+  /** (remaining mobs: the armadillo) vanilla Wolf.actuallyHurt: its armour takes what it can instead of the wolf */
+  protected override actuallyHurt(source: string, amount: number): void {
+    if (!wolfArmorAbsorb(this, source, amount)) super.actuallyHurt(source, amount);
+  }
+
+  /** (remaining mobs: the armadillo) vanilla Wolf.getHurtSound: the armour's knock when it took the blow */
+  protected override playHurtSound(source: string): void {
+    if (!wolfArmorCanAbsorb(this, source)) {
+      super.playHurtSound(source);
+      return;
+    }
+    this.ambientSoundTime = -this.ambientSoundInterval();
+    this.playSound('item.wolf_armor.damage', this.soundVolume(), this.voicePitch());
+  }
+
+  /** (remaining mobs: the armadillo) and its armour, the body slot's sure drop */
+  protected override dropCustomDeathLoot(attacker: Entity | null, recentlyHit: boolean, looting: number): void {
+    super.dropCustomDeathLoot(attacker, recentlyHit, looting);
+    dropWolfArmor(this);
   }
 
   /** vanilla Wolf.wantsToAttack: not creepers, ghasts or armor stands, nor a wolf, horse or pet of the same owner */
@@ -400,6 +449,8 @@ export class Wolf extends TamableAnimal {
     const d: Record<string, number | string | boolean> = { ...super.saveData(), CollarColor: this.collarColor, variant: this.variant.id };
     // (vanilla NeutralMob.addPersistentAngerSaveData)
     if (this.angerTime > 0) Object.assign(d, { AngerTime: this.angerTime, ...angryAtData(this.angerTarget) });
+    // (remaining mobs: the armadillo) vanilla Mob's body_armor_item
+    if (this.bodyArmor) d.body_armor_item = JSON.stringify(saveStack(this.bodyArmor));
     return d;
   }
   protected override loadData(d: Record<string, number | string | boolean>): void {
@@ -409,6 +460,15 @@ export class Wolf extends TamableAnimal {
     this.angerTime = Number(d.AngerTime ?? 0);
     if (this.angerTime > 0) this.angerTarget = angryAtFrom(this.level, d);
     if (this.isTame()) this.maxHealth = 40;
+    // (remaining mobs: the armadillo)
+    if (typeof d.body_armor_item === 'string') {
+      try {
+        this.bodyArmor = loadStack(JSON.parse(d.body_armor_item) as SavedStack);
+      } catch {
+        // (a damaged save: no armour)
+        this.bodyArmor = null;
+      }
+    }
   }
 }
 

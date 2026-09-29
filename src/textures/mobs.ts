@@ -2092,6 +2092,9 @@ const EGGS: [string, number, number][] = [
   ['frog', 0xd07444, 0xffc77c], ['tadpole', 0x6d533d, 0x160a00],
   // (M4: the deep dark's warden)
   ['warden', 0x0f4649, 0x39d6e0],
+  // (remaining mobs) vanilla SpawnEggItem colours
+  ['bee', 0xedc343, 0x43241b], ['phantom', 0x43518a, 0x88ff00], ['panda', 0xe7e7e7, 0x1b1b22], ['mooshroom', 0xa00f10, 0xb7b7b7],
+  ['armadillo', 0xad716d, 0x824848],
 ];
 
 export const SPAWN_EGG_TEXTURES: Record<string, () => TexImage> = {};

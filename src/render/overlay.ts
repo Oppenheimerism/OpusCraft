@@ -4,6 +4,8 @@ import { GL, Shader, createTexture } from './gl';
 import type { Atlas } from './atlas';
 import type { Renderer, Camera } from './renderer';
 import { OUTLINE, BLOCKS, STATE_BLOCK } from '../world/block';
+// (remaining mobs: the panda)
+import { shapeOffset } from '../world/blockOffset';
 import { getStateModels, initMesher } from './mesher';
 import { destroyStages } from '../textures/env';
 import type { Game } from '../game/game';
@@ -234,9 +236,11 @@ export class Overlay {
     if (!boxes || !boxes.length) return;
     const verts: number[] = [];
     const e = 0.002;
+    // (remaining mobs: the panda) a bamboo stalk's outline is drawn where the stalk is
+    const [ox, oz] = shapeOffset(state, x, z);
     for (const b of boxes) {
-      const x0 = x + b[0] - e - cam.x, y0 = y + b[1] - e - cam.y, z0 = z + b[2] - e - cam.z;
-      const x1 = x + b[3] + e - cam.x, y1 = y + b[4] + e - cam.y, z1 = z + b[5] + e - cam.z;
+      const x0 = x + ox + b[0] - e - cam.x, y0 = y + b[1] - e - cam.y, z0 = z + oz + b[2] - e - cam.z;
+      const x1 = x + ox + b[3] + e - cam.x, y1 = y + b[4] + e - cam.y, z1 = z + oz + b[5] + e - cam.z;
       const c = [
         [x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [x0, y0, z1],
         [x0, y1, z0], [x1, y1, z0], [x1, y1, z1], [x0, y1, z1],

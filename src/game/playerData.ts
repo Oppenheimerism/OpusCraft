@@ -40,6 +40,8 @@ export function savePlayer(p: Player, dimension: string, books: SavedBooks = {})
     shoulderRight: p.shoulderRight ?? undefined,
     wardenSpawnTracker: p.wardenSpawnTracker.save(),
     enderItems: enderChestOf(p).save(),
+    // (remaining mobs: the phantom) how long since it last slept
+    timeSinceRest: p.timeSinceRest,
   };
 }
 
@@ -83,6 +85,8 @@ export function loadPlayer(p: Player, pd: SavedPlayer): void {
   p.wardenSpawnTracker.load(pd.wardenSpawnTracker);
   // (saves from before ender chests have none: an empty one)
   enderChestOf(p).load(pd.enderItems);
+  // (remaining mobs: the phantom; a save from before it was kept: freshly rested)
+  p.timeSinceRest = Math.max(0, Math.floor(Number(pd.timeSinceRest ?? 0)) || 0);
 }
 
 /** a guest's record's name among its world's data (vanilla playerdata/<uuid>.dat) */

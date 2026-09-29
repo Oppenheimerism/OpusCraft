@@ -67,9 +67,13 @@ export abstract class Monster extends Mob {
   }
 
   override aiStep(): void {
-    // vanilla Monster.updateNoActionTime: bright light makes monsters "bored" (despawn sooner)
-    if (this.lightMagic() > 0.5) this.noActionTime += 2;
+    this.updateNoActionTime();
     super.aiStep();
+  }
+
+  /** vanilla Monster.updateNoActionTime: bright light makes monsters "bored" (despawn sooner) */
+  protected updateNoActionTime(): void {
+    if (this.lightMagic() > 0.5) this.noActionTime += 2;
   }
 
   override shouldDespawnInPeaceful(): boolean {

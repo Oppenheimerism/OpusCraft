@@ -89,9 +89,11 @@ export interface BlockBehavior {
   drops?(state: number, tool: Item | null, r: Rand, silk: boolean, fortune: number, be?: BlockEntity | null): ItemStack[];
   /**
    * vanilla spawnAfterBreak: the block was broken with its drops (by a player with `stack`, by a mob or a blast with
-   * nothing), and may leave something behind besides them (an infested block's silverfish)
+   * nothing), and may leave something behind besides them (an infested block's silverfish); (remaining mobs: the bee)
+   * `source` is who or what broke it (vanilla getDrops' THIS_ENTITY: a blast's direct source), `be` its block entity
+   * as it was
    */
-  spawnAfterBreak?(level: Level, x: number, y: number, z: number, state: number, stack: ItemStack | null): void;
+  spawnAfterBreak?(level: Level, x: number, y: number, z: number, state: number, stack: ItemStack | null, source?: Entity | null, be?: BlockEntity | null): void;
   /** vanilla entityInside: `e`'s box overlaps the block */
   entityInside?(level: Level, x: number, y: number, z: number, state: number, e: Entity): void;
   /** vanilla stepOn: `e`, on the ground, stands on the block holding it up this tick (a sculk sensor or shrieker set off, a turtle egg underfoot) */
@@ -122,6 +124,14 @@ export interface BlockBehavior {
   canBeReplaced?(state: number, stack: ItemStack, sneaking: boolean): boolean;
   /** vanilla playerDestroy: a survival player broke it, holding `held` (it's gone, and what it drops has dropped) */
   playerDestroy?(level: Level, x: number, y: number, z: number, state: number, player: Player, held: ItemStack | null): void;
+  // (remaining mobs: the panda) bamboo's
+  /**
+   * vanilla BonemealableBlock, for a block with its own: isValidBonemealTarget, then performBonemeal (when
+   * isBonemealSuccess comes up); false when it isn't a target, and the bone meal isn't used
+   */
+  performBonemeal?(level: Level, x: number, y: number, z: number, state: number): boolean;
+  /** vanilla getDestroyProgress, where a block has its own (a sword through bamboo at a stroke); undefined: the usual */
+  destroyProgress?(state: number, item: Item | null): number | undefined;
 }
 
 const BEHAVIORS: (BlockBehavior | undefined)[] = [];

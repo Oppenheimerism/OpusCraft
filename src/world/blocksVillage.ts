@@ -293,20 +293,21 @@ export const FLOWER_POT_SHAPE: Box[] = [bx(5, 0, 5, 11, 6, 11)];
 
 /**
  * the plants a pot takes (vanilla FlowerPotBlock.POTTED_BY_CONTENT, in vanilla's order). Those this world doesn't have
- * yet (torchflower, mangrove propagule, wither rose) get their pot when they arrive; bamboo would need its own model.
+ * yet (torchflower, mangrove propagule, wither rose) get their pot when they arrive; (remaining mobs: the panda)
+ * bamboo's pot, with its own model, is world/blocksBamboo.ts's.
  */
 export const POTTABLE = [
   'torchflower', 'oak_sapling', 'spruce_sapling', 'birch_sapling', 'jungle_sapling', 'acacia_sapling', 'cherry_sapling', 'dark_oak_sapling',
   'mangrove_propagule', 'fern', 'dandelion', 'poppy', 'blue_orchid', 'allium', 'azure_bluet', 'red_tulip', 'orange_tulip', 'white_tulip',
   'pink_tulip', 'oxeye_daisy', 'cornflower', 'lily_of_the_valley', 'wither_rose', 'red_mushroom', 'brown_mushroom', 'dead_bush', 'cactus',
-  'crimson_fungus', 'warped_fungus', 'crimson_roots', 'warped_roots', 'azalea', 'flowering_azalea',
+  'bamboo', 'crimson_fungus', 'warped_fungus', 'crimson_roots', 'warped_roots', 'azalea', 'flowering_azalea',
 ];
 
 /** the potted block's name (vanilla Blocks.POTTED_AZALEA is potted_azalea_bush) */
 export const pottedName = (plant: string): string => (plant.endsWith('azalea') ? `potted_${plant}_bush` : `potted_${plant}`);
 
 /** vanilla block/flower_pot: four walls a pixel thick round a bed of dirt */
-function flowerPotElements(): ElementDef[] {
+export function flowerPotElements(): ElementDef[] {
   const t = 'flower_pot';
   return [
     { from: [5, 0, 5], to: [6, 6, 11], faces: { down: f(t, [5, 5, 6, 11], 'down'), up: f(t, [5, 5, 6, 11]), north: f(t, [10, 10, 11, 16]), south: f(t, [5, 10, 6, 16]), west: f(t, [5, 10, 11, 16]), east: f(t, [5, 10, 11, 16]) } },

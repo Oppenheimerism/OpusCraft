@@ -91,6 +91,9 @@ export function deathMessage(source: string, victim: LivingEntity, n: string): s
       return `${n} was squashed by a falling block`;
     case 'thorns':
       return `${n} was killed while trying to hurt ${kn}`;
+    // (remaining mobs: the bee) vanilla death.attack.sting
+    case 'sting':
+      return `${n} was stung to death`;
     // (M4: the warden) vanilla death.attack.sonic_boom
     case 'sonicBoom':
       return `${n} was obliterated by a sonically-charged shriek`;

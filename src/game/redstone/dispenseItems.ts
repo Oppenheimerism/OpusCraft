@@ -29,6 +29,13 @@ import { Pig, Sheep, DYE_COLORS } from '../../entity/animals';
 import { SnowGolem } from '../../entity/snowGolem';
 // (trial chambers)
 import { Bogged } from '../../entity/bogged';
+// (remaining mobs: the mooshroom)
+import { Mooshroom } from '../../entity/mooshroom';
+// (remaining mobs: the bee)
+import { hiveDispense } from './hiveDispense';
+// (remaining mobs: the armadillo)
+import { Armadillo } from '../../entity/armadillo';
+import { Wolf } from '../../entity/wolf';
 import { Strider } from '../../entity/strider';
 import { AbstractHorse, AbstractChestedHorse } from '../../entity/horse';
 import { createBoat, boatItemInfo } from '../../entity/boat';
@@ -434,10 +441,23 @@ const emptyBucket = behavior((src, stack) => {
   return withRemainder(src, stack, ItemStack.of(filled));
 });
 
+/**
+ * (remaining mobs: the bee) a full hive in front, sheared (vanilla ShearsDispenseItemBehavior.tryShearBeehive) or
+ * bottled (the glass bottle's behaviour): true if it was (game/beehive.ts sets these, in ./hiveDispense.ts: the
+ * hooks' own module, so the beehive can set them before this one has loaded)
+ */
+export { hiveDispense };
+
 /** vanilla: a glass bottle fills from water in front (a water bottle takes its place, a free slot or goes out) */
 const glassBottle = optional((src, stack) => {
   src.success = false;
   const [x, y, z] = front(src);
+  // (remaining mobs: the bee) a full hive's honey first (vanilla takeLiquid: FLUID_PICKUP at the dispenser)
+  if (hiveDispense.bottle?.(src.level, x, y, z)) {
+    src.success = true;
+    src.level.gameEvent('fluid_pickup', src.x + 0.5, src.y + 0.5, src.z + 0.5);
+    return withRemainder(src, stack, ItemStack.of('honey_bottle'));
+  }
   if (!(FLAGS[src.level.getState(x, y, z)] & F_WATER)) return dropOne(src, stack);
   src.success = true;
   return withRemainder(src, stack, potionStack('potion', 'water'));
@@ -496,13 +516,18 @@ const boneMeal = optional((src, stack) => {
 
 /**
  * vanilla ShearsDispenseItemBehavior: a sheep or snow golem in front that can be shorn is (beehives, when the game has
- * them); (trial chambers) and a bogged
+ * them); (trial chambers) and a bogged; (remaining mobs) and a mooshroom
  */
 const shears = optional((src, stack) => {
+  // (remaining mobs: the bee) a full hive in front first
+  if (hiveDispense.shear?.(src.level, ...front(src))) return wear(stack);
   const s = src.level.getEntities(
     cell(front(src)),
-    (e) => (e instanceof Sheep && e.isAlive && !e.sheared && !e.isBaby()) || (e instanceof SnowGolem && e.readyForShearing()) || (e instanceof Bogged && e.readyForShearing()),
-  )[0] as Sheep | SnowGolem | Bogged | undefined;
+    (e) =>
+      (e instanceof Sheep && e.isAlive && !e.sheared && !e.isBaby()) || (e instanceof SnowGolem && e.readyForShearing()) || (e instanceof Bogged && e.readyForShearing()) ||
+      // (remaining mobs: the mooshroom)
+      (e instanceof Mooshroom && e.readyForShearing()),
+  )[0] as Sheep | SnowGolem | Bogged | Mooshroom | undefined;
   if (!s) {
     src.success = false;
     return stack;
@@ -690,3 +715,23 @@ const windCharge = behavior((src, stack) => {
   return left(stack);
 }, (src) => windChargeShootSound(src.level, src.x, src.y, src.z));
 Object.assign(BEHAVIORS, { wind_charge: windCharge });
+
+// (remaining mobs: the armadillo) vanilla DispenseItemBehavior's brush: the first armadillo in front (no spectators)
+// that sheds a scute to it is brushed, and the brush worn 16; else the failed click, the brush kept
+const brush = optional((src, stack) => {
+  for (const e of src.level.getEntities(cell(front(src)), (o) => o instanceof Armadillo && !isSpectator(o))) {
+    if ((e as Armadillo).brushOffScute()) return hurtAndBreak(stack, 16) ? null : stack;
+  }
+  src.success = false;
+  return stack;
+});
+// (remaining mobs: the armadillo) vanilla AnimalArmorItem's (ArmorItem.dispenseArmor) wolf armour, as the horse
+// armour's: onto a grown, tame wolf in front wearing none (it's then kept: persistence), else thrown out
+const wolfArmor = behavior((src, stack) => {
+  const w = src.level.getEntities(cell(front(src)), (o) => o instanceof Wolf && o.isAlive && o.isTame() && !o.isBaby() && !o.bodyArmor)[0] as Wolf | undefined;
+  if (!w) return dropOne(src, stack);
+  w.setBodyArmorItem(stack.split(1));
+  w.persistenceRequired = true;
+  return left(stack);
+});
+Object.assign(BEHAVIORS, { brush, wolf_armor: wolfArmor });

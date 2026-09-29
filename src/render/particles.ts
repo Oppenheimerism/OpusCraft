@@ -69,7 +69,7 @@ interface SpriteParticle {
   /** vanilla getQuadSize curves */
   sizeCurve?: 'flame' | 'lava';
   /** DripParticle stage: hangs, falls, then lands/splashes */
-  drip?: { stage: 'hang' | 'fall' | 'land'; fluid: 'water' | 'lava' | null; next: string | null; cooling: boolean; dripstone?: boolean };
+  drip?: { stage: 'hang' | 'fall' | 'land'; fluid: 'water' | 'lava' | null; next: string | null; cooling: boolean; dripstone?: boolean; honey?: boolean };
   /** FallingDustParticle spin */
   roll?: number;
   oRoll?: number;
@@ -142,6 +142,8 @@ export class ParticleEngine {
   private readonly tickers: { tick(): boolean }[] = [];
   /** vanilla DripstoneFallAndLandParticle: a drip from a stalactite plays a sound where it lands */
   onDripstoneDripLand: ((x: number, y: number, z: number, lava: boolean) => void) | null = null;
+  /** (remaining mobs: the bee) vanilla DripParticle.HoneyFallAndLandParticle: a drop of honey plays a sound where it lands */
+  onHoneyDripLand: ((x: number, y: number, z: number) => void) | null = null;
 
   /** the deep dark's particles (render/sculkParticles.ts: vibrations, shrieks, sculk charges and souls) */
   readonly sculk: SculkParticles;
@@ -418,6 +420,27 @@ export class ParticleEngine {
         p.size *= 0.75 * mul;
         p.lifetime = Math.max(1, Math.floor((8 / (Math.random() * 0.8 + 0.2)) * mul));
         p.grow = true;
+        this.addSprite(p);
+        break;
+      }
+      // (remaining mobs: the panda) vanilla PlayerCloudParticle as its SneezeProvider makes it (a baby panda's sneeze):
+      // the cloud, its made-up speed a tenth plus the given, slowing by 0.96, twice as big as smoke and lasting longer,
+      // through blocks, swelling in as smoke does; 0.4 opaque, in the colour vanilla sets out of range (200, 50, 120 as
+      // fractions, each wrapping round as a byte when drawn, to this green). (Vanilla's cloud also sinks to a player
+      // within 2 blocks under it; not done)
+      case 'sneeze': {
+        const p = this.base(kind, x, y, z);
+        this.withSpeed(p, 0, 0, 0);
+        p.friction = 0.96;
+        p.dx = p.dx * 0.1 + xd;
+        p.dy = p.dy * 0.1 + yd;
+        p.dz = p.dz * 0.1 + zd;
+        [p.r, p.g, p.b] = [56 / 255, 206 / 255, 136 / 255];
+        p.size *= 1.875;
+        p.lifetime = Math.max(Math.floor(Math.floor(8 / (Math.random() * 0.8 + 0.3)) * 2.5), 1);
+        p.physics = false;
+        p.grow = true;
+        p.alpha = 0.4;
         this.addSprite(p);
         break;
       }
@@ -1046,6 +1069,52 @@ export class ParticleEngine {
         this.addSprite(p);
         break;
       }
+      case 'dripping_honey':
+      case 'falling_honey':
+      case 'landing_honey': {
+        // (remaining mobs: the bee) vanilla DripParticle.createHoney{Hang,Fall,Land}Particle: amber, a long hang (its
+        // gravity DripHangParticle's 0.02 of the drip's and a hundredth of that again), a slow fall, a long puddle
+        const p = this.base(kind, x, y, z);
+        p.bbw = 0.01;
+        p.gravity = 0.06;
+        p.friction = 0.98;
+        if (kind.startsWith('dripping')) {
+          p.gravity *= 0.02 * 0.01;
+          p.lifetime = 100;
+          [p.r, p.g, p.b] = [0.622, 0.508, 0.082];
+          p.frames = ['drip_hang'];
+          p.drip = { stage: 'hang', fluid: null, next: 'falling_honey', cooling: false };
+        } else if (kind.startsWith('falling')) {
+          p.gravity = 0.01;
+          p.lifetime = Math.floor(64 / (Math.random() * 0.8 + 0.2));
+          [p.r, p.g, p.b] = [0.582, 0.448, 0.082];
+          p.frames = ['drip_fall'];
+          p.drip = { stage: 'fall', fluid: null, next: 'landing_honey', cooling: false, honey: true };
+        } else {
+          p.lifetime = Math.floor(128 / (Math.random() * 0.8 + 0.2));
+          [p.r, p.g, p.b] = [0.522, 0.408, 0.082];
+          p.frames = ['drip_land'];
+          p.drip = { stage: 'land', fluid: null, next: null, cooling: false };
+        }
+        p.frame = 0;
+        this.addSprite(p);
+        break;
+      }
+      case 'falling_nectar': {
+        // (remaining mobs: the bee) vanilla DripParticle.createNectarFallParticle: a pale speck off a bee carrying
+        // nectar, gone when it lands
+        const p = this.base(kind, x, y, z);
+        p.bbw = 0.01;
+        p.gravity = 0.007;
+        p.friction = 0.98;
+        p.lifetime = Math.floor(16 / (Math.random() * 0.8 + 0.2));
+        [p.r, p.g, p.b] = [0.92, 0.782, 0.72];
+        p.frames = ['drip_fall'];
+        p.frame = 0;
+        p.drip = { stage: 'fall', fluid: null, next: null, cooling: false };
+        this.addSprite(p);
+        break;
+      }
       case 'falling_spore_blossom': {
         // vanilla DripParticle.createSporeBlossomFallParticle: a green speck drifting down, gone when it lands
         const p = this.base(kind, x, y, z);
@@ -1112,6 +1181,26 @@ export class ParticleEngine {
         p.dz = zd * 0.2 + (Math.random() * 2 - 1) * 0.02;
         p.lifetime = Math.floor(8 / (Math.random() * 0.8 + 0.2));
         p.frames = ['bubble'];
+        p.frame = 0;
+        this.addSprite(p);
+        break;
+      }
+      case 'mycelium': {
+        // (remaining mobs: the phantom) vanilla SuspendedTownParticle.Provider: a grey speck that hangs where it's left
+        // (off a phantom's wingtips, over mycelium), barely drifting, for a second or so
+        const p = this.base(kind, x, y, z);
+        this.withSpeed(p, xd, yd, zd);
+        const f = Math.random() * 0.1 + 0.2;
+        p.r = p.g = p.b = f;
+        p.bbw = 0.02;
+        p.size *= Math.random() * 0.6 + 0.5;
+        p.dx *= 0.02;
+        p.dy *= 0.02;
+        p.dz *= 0.02;
+        p.lifetime = Math.floor(20 / (Math.random() * 0.8 + 0.2));
+        p.physics = false;
+        p.friction = 0.99;
+        p.frames = ['generic_0'];
         p.frame = 0;
         this.addSprite(p);
         break;
@@ -1427,6 +1516,7 @@ export class ParticleEngine {
       } else if (d.stage === 'fall' && p.onGround) {
         if (d.next) this.spawn(d.next, p.x, p.y, p.z, 0, 0, 0);
         if (d.dripstone) this.onDripstoneDripLand?.(p.x, p.y, p.z, d.fluid === 'lava');
+        if (d.honey) this.onHoneyDripLand?.(p.x, p.y, p.z);
         return false;
       }
       p.dx *= 0.98;
@@ -1475,6 +1565,7 @@ export class ParticleEngine {
         p.dz *= 0.85;
         return fluidType(w.getState(Math.floor(p.x), Math.floor(p.y), Math.floor(p.z))) === FLUID_WATER;
       }
+      case 'mycelium':
       case 'happy_villager':
       case 'composter': {
         // vanilla SuspendedTownParticle.tick (moves without collision)

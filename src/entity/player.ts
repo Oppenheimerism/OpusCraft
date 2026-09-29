@@ -82,6 +82,11 @@ export class Player extends LivingEntity {
   readonly food = new FoodData();
   /** vanilla Player.wardenSpawnTracker: how many times sculk shriekers have warned them lately */
   readonly wardenSpawnTracker = new WardenSpawnTracker();
+  /**
+   * (remaining mobs: the phantom) vanilla's minecraft:time_since_rest statistic: ticks since it last lay down in a bed
+   * or died, counted on the host while it isn't asleep (game/phantomSpawner.ts: phantoms come after three days)
+   */
+  timeSinceRest = 0;
   xpLevel = 0;
   xpProgress = 0;
   xpTotal = 0;
@@ -283,6 +288,8 @@ export class Player extends LivingEntity {
     this.crouching = false;
     this.sprinting = false;
     this.sleepingPos = [x, y, z];
+    // (remaining mobs: the phantom) lying down is rest enough (vanilla resets minecraft:time_since_rest)
+    this.timeSinceRest = 0;
     this.setSize(0.2, 0.2);
     this.setPos(x + 0.5, y + 0.6875, z + 0.5);
     this.dx = this.dy = this.dz = 0;
@@ -542,6 +549,8 @@ export class Player extends LivingEntity {
     this.bob += (f - this.bob) * 0.4;
     // (vanilla FoodData.tick runs on the server: a guest hears how hungry it is from the host)
     if (!this.level.isClientSide) this.food.tick(this);
+    // (remaining mobs: the phantom) vanilla Player.tick: awardStat(TIME_SINCE_REST) on the server, while not asleep
+    if (!this.level.isClientSide && !this.sleepingPos) this.timeSinceRest++;
     this.wardenSpawnTracker.tick();
     this.tickAir();
     this.inventory.tick(this);
@@ -969,6 +978,8 @@ export class Player extends LivingEntity {
     super.die(source, attacker);
     // (vanilla ServerPlayer.die: setLastDeathLocation)
     this.lastDeathLocation = { dim: this.level.dim.id, pos: [Math.floor(this.x), Math.floor(this.y), Math.floor(this.z)] };
+    // (remaining mobs: the phantom) vanilla ServerPlayer.die: resetStat(TIME_SINCE_REST)
+    this.timeSinceRest = 0;
     this.onDeath?.(this, source);
   }
 

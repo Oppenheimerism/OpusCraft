@@ -53,6 +53,12 @@ import { registerEnderChestTextures } from './enderChest';
 import { registerCakeTextures } from './cake';
 // (minecarts)
 import { registerRailTextures } from './railsPowered';
+// (remaining mobs: the bee)
+import { registerBeeTextures } from './blocklib/bees';
+// (remaining mobs: the panda)
+import { registerBambooTextures } from './blocklib/bamboo';
+// (remaining mobs: the mooshroom)
+import { registerMushroomTextures } from './blocklib/mushrooms';
 
 type Gen = () => TexDef;
 export const BLOCK_TEXTURES: Record<string, Gen> = {};
@@ -593,6 +599,12 @@ registerEnderChestTextures(T);
 registerCakeTextures(T);
 // (minecarts) the powered, detector and activator rails, off and powered
 registerRailTextures(T);
+// (remaining mobs: the bee) the nest's and the hive's, the honey block's bottom, the honeycomb block
+registerBeeTextures(T);
+// (remaining mobs: the panda) bamboo's stalk, leaves, shoot and the potted one's leaf
+registerBambooTextures(T);
+// (remaining mobs: the mooshroom) the huge mushrooms': the brown and red caps' skins, the stem's, and the inside
+registerMushroomTextures(T);
 
 // Missing texture (vanilla's magenta/black checkerboard)
 T['missing'] = () => {

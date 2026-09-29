@@ -76,6 +76,13 @@ import { EnderDragon } from '../entity/enderDragon';
 import { Shulker } from '../entity/shulker';
 import { ItemFrame } from '../entity/itemFrame';
 import { ArmorStand } from '../entity/armorStand';
+// (remaining mobs)
+import { Bee } from '../entity/bee';
+import { Phantom } from '../entity/phantom';
+import { Panda } from '../entity/panda';
+import { Mooshroom, mooshroomSpawnRulesOk } from '../entity/mooshroom';
+import { Armadillo, armadilloSpawnRulesOk } from '../entity/armadillo';
+import { PhantomSpawner } from './phantomSpawner';
 import { moonPhase } from '../render/environment';
 import { tickInhabitedTime } from './difficulty';
 import { BIOMES } from '../world/gen/biomes';
@@ -323,6 +330,22 @@ Object.assign(ENTITY_NAMES, { breeze: 'Breeze', bogged: 'Bogged', wind_charge: '
 Object.assign(MOB_TYPES, { piglin_brute: (l: Level) => new PiglinBrute(l) });
 Object.assign(ENTITY_NAMES, { piglin_brute: 'Piglin Brute' });
 
+// (remaining mobs) the bee: only its nests and hives bring it (no natural spawns)
+Object.assign(MOB_TYPES, { bee: (l: Level) => new Bee(l) });
+Object.assign(ENTITY_NAMES, { bee: 'Bee' });
+// (remaining mobs) the phantom: only insomnia brings it (PhantomSpawner, below)
+Object.assign(MOB_TYPES, { phantom: (l: Level) => new Phantom(l) });
+Object.assign(ENTITY_NAMES, { phantom: 'Phantom' });
+// (remaining mobs) the panda: in the jungles (the bamboo jungle most), as any animal
+Object.assign(MOB_TYPES, { panda: (l: Level) => new Panda(l) });
+Object.assign(ENTITY_NAMES, { panda: 'Panda' });
+// (remaining mobs) the mooshroom: in herds on the mushroom fields
+Object.assign(MOB_TYPES, { mooshroom: (l: Level) => new Mooshroom(l) });
+Object.assign(ENTITY_NAMES, { mooshroom: 'Mooshroom' });
+// (remaining mobs) the armadillo: in the savannas and the badlands
+Object.assign(MOB_TYPES, { armadillo: (l: Level) => new Armadillo(l) });
+Object.assign(ENTITY_NAMES, { armadillo: 'Armadillo' });
+
 // (Stage 4: the outer End)
 Object.assign(ENTITY_NAMES, { shulker: 'Shulker', shulker_bullet: 'Shulker Bullet', item_frame: 'Item Frame', glow_item_frame: 'Glow Item Frame', firework_rocket: 'Firework Rocket' });
 // (armour stand)
@@ -445,19 +468,27 @@ function settingsFor(name: string): MobSettings {
 function settingsForLand(name: string): Omit<MobSettings, 'water' | 'ambient'> {
   const none = { creature: [], monster: monsters(), creatureProbability: 0.1 };
   switch (name) {
+    // (remaining mobs: the mooshroom) vanilla BiomeDefaultFeatures.mooshroomSpawns: herds of four to eight, and no monsters
     case 'mushroom_fields':
+      return { creature: [S_('mooshroom', 8, 4, 8)], monster: [], creatureProbability: 0.1 };
     case 'deep_dark':
       return { creature: [], monster: [], creatureProbability: 0.1 };
     // vanilla BiomeDefaultFeatures.plainsSpawns: herds of horses, and a few donkeys
     case 'plains':
     case 'sunflower_plains':
       return { creature: [...farmAnimals(), S_('horse', 5, 2, 6), S_('donkey', 1, 1, 3)], monster: monsters(), creatureProbability: 0.1 };
-    // vanilla OverworldBiomes.savanna: a few horses and donkeys (and armadillos, not in the game yet: picked, and nothing comes)
+    // vanilla OverworldBiomes.savanna: a few horses and donkeys, and armadillos in twos and threes
     // (on a plateau, llamas too: vanilla OverworldBiomes.savanna with isPlateau)
     case 'savanna':
     case 'savanna_plateau':
     case 'windswept_savanna':
       return { creature: [...farmAnimals(), S_('horse', 1, 2, 6), S_('donkey', 1, 1, 1), S_('armadillo', 10, 2, 3), ...(name === 'savanna_plateau' ? [S_('llama', 8, 4, 4)] : [])], monster: monsters(), creatureProbability: 0.1 };
+    // (remaining mobs: the armadillo) vanilla OverworldBiomes.badlands: armadillos in ones and twos, few of them at the
+    // world's making (creatureGenerationProbability 0.03); the wooded badlands' wolves are WOLF_SPAWNS'
+    case 'badlands':
+    case 'eroded_badlands':
+    case 'wooded_badlands':
+      return { creature: [S_('armadillo', 6, 1, 2)], monster: monsters(), creatureProbability: 0.03 };
     // vanilla OverworldBiomes.windsweptHills: herds of llamas
     case 'windswept_hills':
     case 'windswept_gravelly_hills':
@@ -492,7 +523,7 @@ function settingsForLand(name: string): Omit<MobSettings, 'water' | 'ambient'> {
     case 'snowy_slopes':
       return { creature: [S_('rabbit', 4, 2, 3), S_('goat', 5, 1, 3)], monster: monsters(), creatureProbability: 0.1 };
     // vanilla OverworldBiomes.jungle, sparseJungle and bambooJungle (baseJungleSpawns): parrots in the jungle and the
-    // bamboo, and pandas (not in the game yet: picked, and nothing comes)
+    // bamboo, and pandas
     case 'jungle':
     case 'sparse_jungle':
     case 'bamboo_jungle': {
@@ -557,6 +588,8 @@ export class NaturalSpawner {
   readonly cats = new CatSpawner();
   /** vanilla WanderingTraderSpawner (its wait and chance are saved with the world: game.ts) */
   readonly traders = new WanderingTraderSpawner();
+  /** (remaining mobs) vanilla PhantomSpawner: insomnia */
+  readonly phantoms = new PhantomSpawner();
 
   constructor(readonly level: Level, readonly worldSeed: number) {}
 
@@ -582,7 +615,8 @@ export class NaturalSpawner {
     // and water creatures every tick
     const spawnFriendlies = lvl.gameTime % 400 === 0;
     const spawnEnemies = lvl.difficulty !== 'peaceful';
-    // (Stage 4: patrols) vanilla ServerLevel.tickCustomSpawners
+    // (Stage 4: patrols) vanilla ServerLevel.tickCustomSpawners (the phantoms' first, as vanilla lists them)
+    this.phantoms.tick(lvl, spawnEnemies);
     this.patrols.tick(lvl, spawnEnemies);
     this.cats.tick(lvl);
     this.traders.tick(lvl);
@@ -855,6 +889,12 @@ export class NaturalSpawner {
       case 'hoglin':
         // vanilla Hoglin.checkHoglinSpawnRules: any light, just not on a nether wart block
         return BLOCKS[STATE_BLOCK[lvl.world.getState(x, y - 1, z)]].name !== 'nether_wart_block';
+      // (remaining mobs: vanilla SpawnPlacements MOOSHROOM, MushroomCow::checkMushroomSpawnRules)
+      case 'mooshroom':
+        return mooshroomSpawnRulesOk(lvl, x, y, z);
+      // (remaining mobs: vanilla SpawnPlacements ARMADILLO, Armadillo::checkArmadilloSpawnRules)
+      case 'armadillo':
+        return armadilloSpawnRulesOk(lvl, x, y, z);
       case 'pig':
       case 'cow':
       case 'sheep':
@@ -863,7 +903,9 @@ export class NaturalSpawner {
       case 'donkey':
       case 'mule':
       case 'llama':
-      case 'trader_llama': {
+      case 'trader_llama':
+      // (remaining mobs: vanilla SpawnPlacements PANDA, Animal::checkAnimalSpawnRules)
+      case 'panda': {
         const below = BLOCKS[STATE_BLOCK[lvl.world.getState(x, y - 1, z)]].name;
         return below === 'grass_block' && lvl.rawBrightness(x, y, z, 0) > 8;
       }

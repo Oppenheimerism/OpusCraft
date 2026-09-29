@@ -3,6 +3,7 @@
 import { Rand } from '../../core/rng';
 import { S, getBlock, blockOf, FLAGS, F_AIR, F_REPLACEABLE, F_LEAVES, F_WATER } from '../block';
 import { GenContext, W_LOG, W_REPLACEABLE, W_ANY } from './context';
+import { beehiveDecorator } from './beehiveDecorator';
 
 export type TreeKind =
   | 'oak' | 'fancy_oak' | 'birch' | 'tall_birch' | 'spruce' | 'pine' | 'mega_spruce' | 'mega_pine'
@@ -121,8 +122,11 @@ function canGrowOn(s: number): boolean {
   return n === 'grass_block' || n === 'dirt' || n === 'coarse_dirt' || n === 'podzol' || n === 'rooted_dirt' || n === 'moss_block' || n === 'mud' || n === 'farmland' || n === 'mycelium';
 }
 
-/** Try to grow a tree at (x,y,z) where y is the first air block above ground. */
-export function placeTree(ctx: GenContext, kind: TreeKind, x: number, y: number, z: number, r: Rand): boolean {
+/**
+ * Try to grow a tree at (x,y,z) where y is the first air block above ground. `bees`: (remaining mobs: the bee) the
+ * tree's vanilla BeehiveDecorator, its chance and the random it draws on
+ */
+export function placeTree(ctx: GenContext, kind: TreeKind, x: number, y: number, z: number, r: Rand, bees?: { chance: number; r: Rand }): boolean {
   const ground = ctx.get(x, y - 1, z);
   // (the azalea tree's callers check its ground: the bush's soil, or a root system's surface)
   if (kind !== 'azalea' && !canGrowOn(ground)) return false;
@@ -162,6 +166,7 @@ export function placeTree(ctx: GenContext, kind: TreeKind, x: number, y: number,
   t.commit();
   if (kind === 'swamp_oak') vines(ctx, t, r, 0.25);
   if (kind === 'jungle' || kind === 'mega_jungle') vines(ctx, t, r, 0.25);
+  if (bees) beehiveDecorator(ctx, t.logs.values(), t.leaves.values(), bees.r, bees.chance);
   return true;
 }
 

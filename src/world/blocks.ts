@@ -39,6 +39,12 @@ import { registerEnderChestBlock } from './blocksEnderChest';
 import { registerCakeBlocks } from './blocksCake';
 // (minecarts) the powered, detector and activator rails
 import { registerRailBlocks } from './blocksRails';
+// (remaining mobs: the bee)
+import { registerBeeBlocks } from './blocksBees';
+// (remaining mobs: the panda)
+import { registerBambooBlocks } from './blocksBamboo';
+// (remaining mobs: the mooshroom)
+import { registerMushroomBlocks } from './blocksMushrooms';
 
 const px = (v: number) => v / 16;
 const bx = (x0: number, y0: number, z0: number, x1: number, y1: number, z1: number): Box => [px(x0), px(y0), px(z0), px(x1), px(y1), px(z1)];
@@ -689,6 +695,12 @@ registerEnderChestBlock();
 registerCakeBlocks();
 // (minecarts) the powered, detector and activator rails
 registerRailBlocks();
+// (remaining mobs: the bee) the bee nest, the beehive, the honey block and the honeycomb block
+registerBeeBlocks();
+// (remaining mobs: the panda) bamboo, its shoot and potted bamboo
+registerBambooBlocks();
+// (remaining mobs: the mooshroom) the huge mushrooms' blocks: the brown and red caps, the stem
+registerMushroomBlocks();
 
 finalizeBlocks();
 

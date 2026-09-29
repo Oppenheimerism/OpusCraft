@@ -14,7 +14,9 @@ export type PoiKind =
   | 'armorer' | 'butcher' | 'cartographer' | 'cleric' | 'farmer' | 'fisherman' | 'fletcher' | 'leatherworker' | 'librarian' | 'mason'
   | 'shepherd' | 'toolsmith' | 'weaponsmith' | 'home' | 'meeting'
   // (trial chambers) where lightning strikes (vanilla PoiTypes.LIGHTNING_ROD: no tickets)
-  | 'lightning_rod';
+  | 'lightning_rod'
+  // (remaining mobs: the bee) the bees' homes (vanilla PoiTypes.BEE_NEST and BEEHIVE, #bee_home: no tickets)
+  | 'bee_nest' | 'beehive';
 
 /** vanilla PoiTypes: which blocks are which point */
 const BY_BLOCK: Record<string, PoiKind> = {
@@ -22,9 +24,11 @@ const BY_BLOCK: Record<string, PoiKind> = {
   fletching_table: 'fletcher', cauldron: 'leatherworker', water_cauldron: 'leatherworker', lava_cauldron: 'leatherworker', powder_snow_cauldron: 'leatherworker',
   lectern: 'librarian', stonecutter: 'mason', loom: 'shepherd', smithing_table: 'toolsmith', grindstone: 'weaponsmith', bell: 'meeting',
   lightning_rod: 'lightning_rod',
+  // (remaining mobs: the bee)
+  bee_nest: 'bee_nest', beehive: 'beehive',
 };
 
-const KINDS: PoiKind[] = ['armorer', 'butcher', 'cartographer', 'cleric', 'farmer', 'fisherman', 'fletcher', 'leatherworker', 'librarian', 'mason', 'shepherd', 'toolsmith', 'weaponsmith', 'home', 'meeting', 'lightning_rod'];
+const KINDS: PoiKind[] = ['armorer', 'butcher', 'cartographer', 'cleric', 'farmer', 'fisherman', 'fletcher', 'leatherworker', 'librarian', 'mason', 'shepherd', 'toolsmith', 'weaponsmith', 'home', 'meeting', 'lightning_rod', 'bee_nest', 'beehive'];
 
 let KIND_OF_STATE: Uint8Array | null = null;
 
@@ -48,7 +52,7 @@ export function poiKindOf(st: number): PoiKind | null {
 
 /** vanilla PoiType.maxTickets */
 function maxTickets(k: PoiKind): number {
-  return k === 'meeting' ? 32 : k === 'lightning_rod' ? 0 : 1;
+  return k === 'meeting' ? 32 : k === 'lightning_rod' || k === 'bee_nest' || k === 'beehive' ? 0 : 1;
 }
 
 const posKey = (x: number, y: number, z: number): string => x + ',' + y + ',' + z;

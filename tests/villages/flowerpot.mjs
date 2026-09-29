@@ -29,7 +29,8 @@ const count = (id) => inv.main.reduce((n, s) => n + (s && s.item.id === id ? s.c
 
 // the pots there are
 const potted = bv.POTTABLE.filter((p) => BLOCK_BY_NAME.has(p));
-check('a pot for every plant the world has', potted.length === 30 && potted.every((p) => BLOCK_BY_NAME.has(bv.pottedName(p))), `${potted.length}`);
+// (31 with bamboo, which came with the panda: world/blocksBamboo.ts)
+check('a pot for every plant the world has', potted.length === 31 && potted.every((p) => BLOCK_BY_NAME.has(bv.pottedName(p))), `${potted.length}`);
 check('names as vanilla', BLOCK_BY_NAME.has('potted_azalea_bush') && BLOCK_BY_NAME.has('potted_flowering_azalea_bush') && BLOCK_BY_NAME.has('potted_dead_bush'));
 check('no potted items', potted.every((p) => !ITEMS.get(bv.pottedName(p))));
 check('pick block gives the plant', ['potted_azalea_bush:azalea', 'potted_flowering_azalea_bush:flowering_azalea', 'potted_dead_bush:dead_bush', 'potted_poppy:poppy', 'flower_pot:flower_pot']

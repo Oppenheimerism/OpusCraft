@@ -84,13 +84,20 @@ export type Criterion =
   | { t: 'kill_mob_near_sculk_catalyst' }
   /** (M8: goats) vanilla started_riding: the player's vehicle, of this type, carries one of these too */
   | { t: 'started_riding'; vehicle: string; passenger: string }
-  /** (M9: frogs) vanilla player_interacted_with_entity: used this item on this kind of mob (of this variant) */
-  | { t: 'player_interacted_with_entity'; item: string; entity: string; variant?: string }
+  /**
+   * (M9: frogs) vanilla player_interacted_with_entity: used this item on this kind of mob (of this variant; (remaining
+   * mobs: the armadillo) wearing this body armour with this much wear, after)
+   */
+  | { t: 'player_interacted_with_entity'; item: string; entity: string; variant?: string; bodyArmor?: { item: string; damage: number } }
   /**
    * (trial chambers) vanilla item_used_on_block: used one of these items on one of these blocks, with these block state
    * properties if given (the block as it was when the trigger fired: before an item's own use changed it, after a block's)
    */
-  | { t: 'item_used_on_block'; items: string[]; blocks: string[]; state?: Record<string, string | boolean>; biome?: string }
+  | { t: 'item_used_on_block'; items: string[]; blocks: string[]; state?: Record<string, string | boolean>; biome?: string; smokey?: boolean }
+  /** (remaining mobs: the bee) vanilla slide_down_block: slid down the side of that block */
+  | { t: 'slide_down_block'; block: string }
+  /** (remaining mobs: the bee) vanilla bee_nest_destroyed: broke that block, with or without silk touch, that many bees inside */
+  | { t: 'bee_nest_destroyed'; block: string; silkTouch: boolean; bees: number }
   /**
    * (trial chambers) vanilla lightning_strike: a bolt within that distance of the player, that set no more than that
    * many blocks on fire, went with one of that kind standing by unharmed
@@ -293,7 +300,7 @@ const A: AdvancementDef[] = [
   { id: 'adventure/read_power_of_chiseled_bookshelf', parent: 'adventure/root', title: 'The Power of Books', description: 'Read the power signal of a Chiseled Bookshelf using a Comparator', icon: 'chiseled_bookshelf', frame: 'task', criteria: one(never) },
   { id: 'adventure/trade', parent: 'adventure/root', title: 'What a Deal!', description: 'Successfully trade with a Villager', icon: 'emerald', frame: 'task', criteria: one({ t: 'villager_trade' }) },
   { id: 'adventure/trim_with_any_armor_pattern', parent: 'adventure/root', title: 'Crafting a New Look', description: 'Craft a trimmed armor at a Smithing Table', icon: 'dune_armor_trim_smithing_template', frame: 'task', criteria: one(never) },
-  { id: 'adventure/honey_block_slide', parent: 'adventure/root', title: 'Sticky Situation', description: 'Jump into a Honey Block to break your fall', icon: 'honey_block', frame: 'task', criteria: one(never) },
+  { id: 'adventure/honey_block_slide', parent: 'adventure/root', title: 'Sticky Situation', description: 'Jump into a Honey Block to break your fall', icon: 'honey_block', frame: 'task', criteria: { honey_block_slide: { t: 'slide_down_block', block: 'honey_block' } } },
   { id: 'adventure/ol_betsy', parent: 'adventure/root', title: "Ol' Betsy", description: 'Shoot a Crossbow', icon: 'crossbow', frame: 'task', criteria: one({ t: 'shot_crossbow' }) },
   { id: 'adventure/lightning_rod_with_villager_no_fire', parent: 'adventure/root', title: 'Surge Protector', description: 'Protect a Villager from an undesired shock without starting a fire', icon: 'lightning_rod', frame: 'task', criteria: { lightning_rod_with_villager_no_fire: { t: 'lightning_strike', maxDistance: 30, maxBlocksSetOnFire: 0, bystander: 'villager' } } },
   { id: 'adventure/fall_from_world_height', parent: 'adventure/root', title: 'Caves & Cliffs', description: 'Free fall from the top of the world (build limit) to the bottom of the world and survive', icon: 'water_bucket', frame: 'task', criteria: one({ t: 'fall_from_height' }) },
@@ -332,7 +339,7 @@ const A: AdvancementDef[] = [
 
   // --- Husbandry
   { id: 'husbandry/root', parent: null, title: 'Husbandry', description: 'The world is full of friends and food', icon: 'hay_block', frame: 'task', toast: false, announce: false, criteria: { consumed_item: { t: 'consume', item: '*' } } },
-  { id: 'husbandry/safely_harvest_honey', parent: 'husbandry/root', title: 'Bee Our Guest', description: 'Use a Campfire to collect Honey from a Beehive using a Glass Bottle without aggravating the Bees', icon: 'honey_bottle', frame: 'task', criteria: one(never) },
+  { id: 'husbandry/safely_harvest_honey', parent: 'husbandry/root', title: 'Bee Our Guest', description: 'Use a Campfire to collect Honey from a Beehive using a Glass Bottle without aggravating the Bees', icon: 'honey_bottle', frame: 'task', criteria: { safely_harvest_honey: { t: 'item_used_on_block', items: ['glass_bottle'], blocks: ['bee_nest', 'beehive'], smokey: true } } },
   { id: 'husbandry/breed_an_animal', parent: 'husbandry/root', title: 'The Parrots and the Bats', description: 'Breed two animals together', icon: 'wheat', frame: 'task', criteria: one({ t: 'breed', type: '*' }) },
   { id: 'husbandry/allay_deliver_item_to_player', parent: 'husbandry/root', title: "You've Got a Friend in Me", description: 'Have an Allay deliver items to you', icon: 'cookie', frame: 'task', criteria: one(never) },
   // (M8: goats) vanilla: started_riding, the player's vehicle a boat with a goat aboard
@@ -340,8 +347,11 @@ const A: AdvancementDef[] = [
   { id: 'husbandry/tame_an_animal', parent: 'husbandry/root', title: 'Best Friends Forever', description: 'Tame an animal', icon: 'lead', frame: 'task', criteria: one({ t: 'tame', type: '*' }) },
   { id: 'husbandry/make_a_sign_glow', parent: 'husbandry/root', title: 'Glow and Behold!', description: 'Make the text of any kind of sign glow', icon: 'glow_ink_sac', frame: 'task', criteria: { make_a_sign_glow: { t: 'item_used_on_block', items: ['glow_ink_sac'], blocks: ALL_SIGNS } } },
   { id: 'husbandry/fishy_business', parent: 'husbandry/root', title: 'Fishy Business', description: 'Catch a fish', icon: 'fishing_rod', frame: 'task', criteria: one(never) },
-  { id: 'husbandry/silk_touch_nest', parent: 'husbandry/root', title: 'Total Beelocation', description: 'Move a Bee Nest, with 3 Bees inside, using Silk Touch', icon: 'bee_nest', frame: 'task', criteria: one(never) },
+  { id: 'husbandry/silk_touch_nest', parent: 'husbandry/root', title: 'Total Beelocation', description: 'Move a Bee Nest, with 3 Bees inside, using Silk Touch', icon: 'bee_nest', frame: 'task', criteria: { silk_touch_nest: { t: 'bee_nest_destroyed', block: 'bee_nest', silkTouch: true, bees: 3 } } },
   { id: 'husbandry/tadpole_in_a_bucket', parent: 'husbandry/root', title: 'Bukkit Bukkit', description: 'Catch a Tadpole in a Bucket', icon: 'tadpole_bucket', frame: 'task', criteria: one({ t: 'filled_bucket', items: ['tadpole_bucket'] }) },
+  // (remaining mobs: the armadillo) vanilla 1.20.5's Isn't It Scute?: a brush used on an armadillo (it takes the click only when a scute comes off)
+  { id: 'husbandry/brush_armadillo', parent: 'husbandry/root', title: "Isn't It Scute?", description: 'Get Armadillo Scutes from an Armadillo using a Brush', icon: 'armadillo_scute', frame: 'task',
+    criteria: { brush_armadillo: { t: 'player_interacted_with_entity', item: 'brush', entity: 'armadillo' } } },
   { id: 'husbandry/obtain_sniffer_egg', parent: 'husbandry/root', title: 'Smells Interesting', description: 'Obtain a Sniffer Egg', icon: 'sniffer_egg', frame: 'task', criteria: one(never) },
   { id: 'husbandry/plant_seed', parent: 'husbandry/root', title: 'A Seedy Place', description: 'Plant a seed and watch it grow', icon: 'wheat_seeds', frame: 'task', criteria: { seeds: { t: 'place', blocks: ['wheat', 'pumpkin_stem', 'melon_stem', 'beetroots', 'nether_wart', 'torchflower_crop', 'pitcher_crop'] } } },
   { id: 'husbandry/wax_on', parent: 'husbandry/safely_harvest_honey', title: 'Wax On', description: 'Apply Honeycomb to a Copper block!', icon: 'honeycomb', frame: 'task', criteria: { wax_on: { t: 'item_used_on_block', items: ['honeycomb'], blocks: COPPER_BLOCKS } } },
@@ -349,7 +359,9 @@ const A: AdvancementDef[] = [
   { id: 'husbandry/allay_deliver_cake_to_note_block', parent: 'husbandry/allay_deliver_item_to_player', title: 'Birthday Song', description: 'Have an Allay drop a Cake at a Note Block', icon: 'note_block', frame: 'task', criteria: one(never) },
   { id: 'husbandry/whole_pack', parent: 'husbandry/tame_an_animal', title: 'The Whole Pack', description: 'Tame one of each Wolf variant', icon: 'bone', frame: 'challenge', criteria: each(WOLF_VARIANT_IDS, (v) => ({ t: 'tame', type: 'wolf', variant: v })) },
   { id: 'husbandry/complete_catalogue', parent: 'husbandry/tame_an_animal', title: 'A Complete Catalogue', description: 'Tame all Cat variants!', icon: 'cod', frame: 'challenge', criteria: each(CAT_VARIANT_IDS, (v) => ({ t: 'tame', type: 'cat', variant: v })) },
-  { id: 'husbandry/remove_wolf_armor', parent: 'husbandry/tame_an_animal', title: 'Shear Brilliance', description: 'Remove Wolf Armor from a Wolf using Shears', icon: 'shears', frame: 'task', criteria: one(never) },
+  // (remaining mobs: the armadillo) vanilla VanillaHusbandryAdvancements: shears used on a wolf (only taking its armour off uses them)
+  { id: 'husbandry/remove_wolf_armor', parent: 'husbandry/tame_an_animal', title: 'Shear Brilliance', description: 'Remove Wolf Armor from a Wolf using Shears', icon: 'shears', frame: 'task',
+    criteria: { remove_wolf_armor: { t: 'player_interacted_with_entity', item: 'shears', entity: 'wolf' } } },
   { id: 'husbandry/tactical_fishing', parent: 'husbandry/fishy_business', title: 'Tactical Fishing', description: 'Catch a Fish... without a Fishing Rod!', icon: 'pufferfish_bucket', frame: 'task', criteria: one({ t: 'filled_bucket', items: ['cod_bucket', 'tropical_fish_bucket', 'pufferfish_bucket', 'salmon_bucket'] }) },
   { id: 'husbandry/leash_all_frog_variants', parent: 'husbandry/tadpole_in_a_bucket', title: 'When the Squad Hops into Town', description: 'Get each Frog variant on a Lead', icon: 'lead', frame: 'task',
     criteria: each(['temperate', 'warm', 'cold'], (v) => ({ t: 'player_interacted_with_entity', item: 'lead', entity: 'frog', variant: v })) },
@@ -357,7 +369,9 @@ const A: AdvancementDef[] = [
   { id: 'husbandry/balanced_diet', parent: 'husbandry/plant_seed', title: 'A Balanced Diet', description: "Eat everything that is edible, even if it's not good for you", icon: 'apple', frame: 'challenge', criteria: each(FOODS, (f) => ({ t: 'consume', item: f })) },
   { id: 'husbandry/obtain_netherite_hoe', parent: 'husbandry/plant_seed', title: 'Serious Dedication', description: 'Use a Netherite Ingot to upgrade a Hoe, and then reevaluate your life choices', icon: 'netherite_hoe', frame: 'challenge', criteria: { netherite_hoe: inv('netherite_hoe') } },
   { id: 'husbandry/wax_off', parent: 'husbandry/wax_on', title: 'Wax Off', description: 'Scrape Wax off of a Copper block!', icon: 'stone_axe', frame: 'task', criteria: { wax_off: { t: 'item_used_on_block', items: AXES, blocks: WAXED_COPPER_BLOCKS } } },
-  { id: 'husbandry/repair_wolf_armor', parent: 'husbandry/remove_wolf_armor', title: 'Good as New', description: 'Repair a damaged Wolf Armor using Armadillo Scutes', icon: 'wolf_armor', frame: 'task', criteria: one(never) },
+  // (remaining mobs: the armadillo) a scute used on a wolf whose armour's then as good as new (damage 0)
+  { id: 'husbandry/repair_wolf_armor', parent: 'husbandry/remove_wolf_armor', title: 'Good as New', description: 'Repair a damaged Wolf Armor using Armadillo Scutes', icon: 'wolf_armor', frame: 'task',
+    criteria: { repair_wolf_armor: { t: 'player_interacted_with_entity', item: 'armadillo_scute', entity: 'wolf', bodyArmor: { item: 'wolf_armor', damage: 0 } } } },
   { id: 'husbandry/axolotl_in_a_bucket', parent: 'husbandry/tactical_fishing', title: 'The Cutest Predator', description: 'Catch an Axolotl in a Bucket', icon: 'axolotl_bucket', frame: 'task', criteria: one({ t: 'filled_bucket', items: ['axolotl_bucket'] }) },
   { id: 'husbandry/froglights', parent: 'husbandry/leash_all_frog_variants', title: 'With Our Powers Combined!', description: 'Have all Froglights in your inventory', icon: 'verdant_froglight', frame: 'challenge',
     criteria: { froglights: { t: 'inventory', items: ['ochre_froglight', 'pearlescent_froglight', 'verdant_froglight'], all: true } } },
@@ -570,10 +584,17 @@ export interface TriggerPayload {
   filledBucket?: string;
   /** (M8: goats) what the player rides and all it carries, as someone got on (started_riding) */
   riding?: { vehicle: string | null; passengers: string[] };
-  /** (M9: frogs) the item the player used on a mob (as it was before), the mob's type and variant (player_interacted_with_entity) */
-  interacted?: { item: string | null; entity: string; variant?: string };
+  /**
+   * (M9: frogs) the item the player used on a mob (as it was before), the mob's type and variant; (remaining mobs: the
+   * armadillo) the body armour it wears after, and its wear (player_interacted_with_entity)
+   */
+  interacted?: { item: string | null; entity: string; variant?: string; bodyArmor?: { item: string; damage: number } | null };
   /** (trial chambers) the item the player used on a block (as it was before), the block and its properties (item_used_on_block) */
-  usedOnBlock?: { item: string; block: string; props?: Record<string, string | number | boolean>; biome?: string };
+  usedOnBlock?: { item: string; block: string; props?: Record<string, string | number | boolean>; biome?: string; smokey?: boolean };
+  /** (remaining mobs: the bee) the block the player slid down (slide_down_block) */
+  slideDownBlock?: string;
+  /** (remaining mobs: the bee) the hive the player broke, with silk touch or not, and the bees left inside (bee_nest_destroyed) */
+  beeNestDestroyed?: { block: string; silkTouch: boolean; bees: number };
   /**
    * (trial chambers) a bolt as it went: how far from the player, how many blocks it set on fire, and the kinds of
    * whatever stood by it unharmed (lightning_strike)
@@ -784,10 +805,18 @@ function matches(c: Criterion, p: TriggerPayload): boolean {
       return !!p.riding && p.riding.vehicle === c.vehicle && p.riding.passengers.includes(c.passenger);
     // (M9: frogs)
     case 'player_interacted_with_entity':
-      return !!p.interacted && p.interacted.item === c.item && p.interacted.entity === c.entity && (c.variant === undefined || p.interacted.variant === c.variant);
+      return (
+        !!p.interacted && p.interacted.item === c.item && p.interacted.entity === c.entity && (c.variant === undefined || p.interacted.variant === c.variant) &&
+        (c.bodyArmor === undefined || (p.interacted.bodyArmor?.item === c.bodyArmor.item && p.interacted.bodyArmor.damage === c.bodyArmor.damage))
+      );
     // (trial chambers)
     case 'item_used_on_block':
-      return !!p.usedOnBlock && c.items.includes(p.usedOnBlock.item) && c.blocks.includes(p.usedOnBlock.block) && (!c.state || Object.entries(c.state).every(([k, v]) => p.usedOnBlock!.props?.[k] === v)) && (!c.biome || p.usedOnBlock.biome === c.biome);
+      return !!p.usedOnBlock && c.items.includes(p.usedOnBlock.item) && c.blocks.includes(p.usedOnBlock.block) && (!c.state || Object.entries(c.state).every(([k, v]) => p.usedOnBlock!.props?.[k] === v)) && (!c.biome || p.usedOnBlock.biome === c.biome) && (c.smokey === undefined || !!p.usedOnBlock.smokey === c.smokey);
+    // (remaining mobs: the bee)
+    case 'slide_down_block':
+      return p.slideDownBlock === c.block;
+    case 'bee_nest_destroyed':
+      return !!p.beeNestDestroyed && p.beeNestDestroyed.block === c.block && p.beeNestDestroyed.silkTouch === c.silkTouch && p.beeNestDestroyed.bees === c.bees;
     case 'lightning_strike':
       return !!p.lightning && p.lightning.distance <= c.maxDistance && p.lightning.blocksSetOnFire <= c.maxBlocksSetOnFire && p.lightning.bystanders.includes(c.bystander);
     case 'player_killed_entity':
