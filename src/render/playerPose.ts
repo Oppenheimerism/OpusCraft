@@ -9,6 +9,8 @@ import type { Player } from '../entity/player';
 import type { ItemStack } from '../item/item';
 import type { Hand } from '../item/inventory';
 import { crossbowChargeProgress, crossbowTexture, isCharged } from '../item/crossbow';
+// (spyglass)
+import { drawSpyglassAtHead } from './spyglassRenderer';
 
 export type Arm = 'left' | 'right';
 
@@ -28,6 +30,8 @@ export function playerArms(e: Player, mainArm: Arm): HumanoidArms {
       if (s.item.id === 'brush') return 'brush';
       // (M8: goats) vanilla UseAnim.TOOT_HORN
       if (s.item.id === 'goat_horn') return 'toot_horn';
+      // (spyglass) vanilla UseAnim.SPYGLASS
+      if (s.item.id === 'spyglass') return 'spyglass';
     } else if (!e.swinging && s.item.id === 'crossbow' && isCharged(s)) return 'crossbow_hold';
     return 'item';
   };
@@ -78,7 +82,9 @@ export function drawArmItem(b: EntityBatch, items: ItemRenderer, pose: PoseStack
 export function drawPlayerHeldItems(b: EntityBatch, items: ItemRenderer, pose: PoseStack, root: ModelPart, e: Player, mainArm: Arm): void {
   for (const arm of ['right', 'left'] as const) {
     const s = e.inventory.inHand(arm === mainArm ? 'main' : 'off');
-    if (s) drawArmItem(b, items, pose, root, s, arm === 'left', e.useItem === s ? e.ticksUsingItem() : -1);
+    // (spyglass) vanilla PlayerItemInHandLayer: a spyglass in use (not mid-swing) is held to the eye
+    if (s?.item.id === 'spyglass' && e.useItem === s && e.swingTime === 0) drawSpyglassAtHead(b, items, pose, root, s, arm === 'left');
+    else if (s) drawArmItem(b, items, pose, root, s, arm === 'left', e.useItem === s ? e.ticksUsingItem() : -1);
   }
 }
 

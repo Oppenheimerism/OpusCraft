@@ -86,6 +86,10 @@ function categoryOf(name: string): Category {
   // (Stage 4: raids) the horn is vanilla's SoundSource.NEUTRAL; the bottle and the omens are the drinker's (a player's)
   if (name === 'event.raid.horn') return 'friendly';
   if (name.startsWith('item.ominous_bottle.') || name.startsWith('event.mob_effect.')) return 'players';
+  // (spyglass) vanilla SpyglassItem: its holder's (Player.playSound, LivingEntity.playSound: SoundSource.PLAYERS)
+  if (name.startsWith('item.spyglass.')) return 'players';
+  // (armour stand) vanilla ArmorStandItem plays the placing with SoundSource.BLOCKS (the rest are the stand's NEUTRAL)
+  if (name === 'entity.armor_stand.place') return 'blocks';
   if (name.startsWith('block.') || name.startsWith('item.')) return 'blocks';
   if (name.startsWith('weather.') || name.startsWith('entity.lightning')) return 'weather';
   if (name.startsWith('ambient.')) return 'ambient';

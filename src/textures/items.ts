@@ -29,6 +29,8 @@ import { DEEP_DARK_ITEMS } from './itemlib/deepDark';
 import { TRIAL_CHAMBER_ITEMS } from './itemlib/trialChambers';
 // (bastions)
 import { BASTION_ITEMS } from './itemlib/bastion';
+// (signs) the hanging signs
+import { SIGN_ITEMS } from './signs';
 
 export const ITEM_TEXTURES: Record<string, () => TexImage> = {
   ...SPAWN_EGG_TEXTURES,
@@ -51,4 +53,5 @@ export const ITEM_TEXTURES: Record<string, () => TexImage> = {
   ...DEEP_DARK_ITEMS,
   ...TRIAL_CHAMBER_ITEMS,
   ...BASTION_ITEMS,
+  ...SIGN_ITEMS,
 };

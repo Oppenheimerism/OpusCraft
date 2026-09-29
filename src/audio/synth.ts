@@ -63,6 +63,16 @@ import { DISC_SONG_POOLS, renderDiscSong } from './gen/discSongs';
 // (trial chambers)
 import { copperTuffSounds } from './gen/copperTuff';
 import { trialChamberSounds } from './gen/trialChambers';
+// (signs)
+import { signSounds } from './gen/signs';
+// (ender chests)
+import { enderChestSounds } from './gen/enderChest';
+// (cake)
+import { cakeSounds } from './gen/cake';
+// (spyglass)
+import { spyglassSounds } from './gen/spyglass';
+// (armour stand)
+import { armorStandSounds } from './gen/armorStand';
 import { trialCombatSounds } from './gen/trialCombat';
 import { crafterSounds } from './gen/crafter';
 
@@ -135,6 +145,16 @@ Object.assign(SOUNDS, copperTuffSounds());
 Object.assign(SOUNDS, trialChamberSounds());
 // (trial chambers) the breeze's, the wind charges', the bogged's and the mace's; the crafter's
 Object.assign(SOUNDS, trialCombatSounds(), crafterSounds());
+// (signs) the hanging signs' (on the wood and chain above), a waxed sign's knock, the ink sacs'
+Object.assign(SOUNDS, signSounds(SOUNDS));
+// (ender chests) the lid's
+Object.assign(SOUNDS, enderChestSounds());
+// (cake) a candle pushed into it
+Object.assign(SOUNDS, cakeSounds());
+// (spyglass) raised to the eye and lowered
+Object.assign(SOUNDS, spyglassSounds());
+// (armour stand) place, hit, break and fall
+Object.assign(SOUNDS, armorStandSounds());
 // (vanilla sounds.json: the snow golem's are the snow's breaking, the bow's and the shears')
 for (const [k, v] of Object.entries({ 'entity.snow_golem.hurt': 'block.snow.break', 'entity.snow_golem.death': 'block.snow.break', 'entity.snow_golem.shoot': 'entity.arrow.shoot', 'entity.snow_golem.shear': 'entity.sheep.shear' })) if (SOUNDS[v]) SOUNDS[k] = SOUNDS[v];
 // (vanilla sounds.json: any mob's swimming, and a monster's, is the player's splashing)

@@ -28,7 +28,8 @@ export class DispenserScreen extends AbstractContainerScreen<DispenserMenu> {
 
 export class HopperScreen extends AbstractContainerScreen<HopperMenu> {
   constructor(game: Game, menu: HopperMenu) {
-    super(game, menu, 'Hopper');
+    // ((minecarts) a hopper minecart's name)
+    super(game, menu, menu.title);
     // (vanilla HopperScreen: 133 high, so the inventory's label sits at 39)
     this.imageHeight = 133;
   }

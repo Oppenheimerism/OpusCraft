@@ -248,8 +248,8 @@ export class Arrow extends Entity {
 
   private canHit(e: Entity): boolean {
     // (vanilla canBeHitByProjectile: whatever can be picked — the living, end crystals, the dragon's parts, a shulker's
-    // bullet, item frames)
-    if (!(e instanceof LivingEntity || e.type === 'end_crystal' || e.type === 'ender_dragon' || e.type === 'shulker_bullet' || e.type === 'item_frame' || e.type === 'glow_item_frame') || !e.isPickable()) return false;
+    // bullet, item frames; (minecarts) the minecarts, a burning arrow setting off a TNT one)
+    if (!(e instanceof LivingEntity || e.type === 'end_crystal' || e.type === 'ender_dragon' || e.type === 'shulker_bullet' || e.type === 'item_frame' || e.type === 'glow_item_frame' || /(^|_)minecart$/.test(e.type)) || !e.isPickable()) return false;
     if (e === this.owner && !this.leftOwner) return false;
     if (e.type === 'player' && (e as Player).gameMode === 'spectator') return false;
     return !this.pierced?.has(e);

@@ -1,9 +1,10 @@
 // The entity net registry (vanilla EntityType with Entity.getAddEntityPacket / ClientPacketListener.handleAddEntity):
 // what a guest is sent to make its own copy of an entity, and the making of it. An entity that has a saved record
-// (mobs, dropped items, boats, minecarts, arrows and tridents, rockets, item frames, end crystals, leash knots) goes as
-// that record and comes back through loadEntity, as a chunk's entities do; the ones that are never saved (orbs, primed
-// TNT, falling blocks, thrown things, fireballs, lightning and the rest) are made afresh by their type. Either way the
-// fields the host goes on to send (net/entityData.ts) then make the copy look as the entity does on the host.
+// (mobs, dropped items, boats, minecarts, arrows and tridents, rockets, item frames, end crystals, leash knots, armour
+// stands) goes as that record and comes back through loadEntity, as a chunk's entities do; the ones that are never
+// saved (orbs, primed TNT, falling blocks, thrown things, fireballs, lightning and the rest) are made afresh by their
+// type. Either way the fields the host goes on to send (net/entityData.ts) then make the copy look as the entity does
+// on the host.
 
 import type { Value } from './codec';
 import type { Entity } from '../entity/entity';
@@ -56,7 +57,7 @@ const MADE: Record<string, (level: Level) => Entity> = {
 };
 
 /** the entities that go as their saved record */
-const RECORDED = new Set(['item', 'arrow', 'trident', 'firework_rocket', 'end_crystal', 'item_frame', 'glow_item_frame', 'leash_knot', ...MINECART_TYPES, ...BOAT_TYPES]);
+const RECORDED = new Set(['item', 'arrow', 'trident', 'firework_rocket', 'end_crystal', 'item_frame', 'glow_item_frame', 'leash_knot', 'armor_stand', ...MINECART_TYPES, ...BOAT_TYPES]);
 
 /**
  * what a record keeps that a guest isn't shown (vanilla sends none of it): what's in a chest minecart or boat, a
@@ -64,6 +65,8 @@ const RECORDED = new Set(['item', 'arrow', 'trident', 'firework_rocket', 'end_cr
  * memories and a villager's dealings
  */
 const HIDDEN_DATA = ['items', 'Items', 'inventory', 'LootTable', 'LootTableSeed', 'Brain', 'listener', 'Offers', 'Gossips'];
+// ((minecarts) nor a container minecart's or chest boat's loot table, and its seed, not yet rolled)
+HIDDEN_DATA.push('lootTable', 'lootSeed');
 
 /** whether a guest can be shown this kind of entity (players aside: they go by AddPlayer) */
 export function isNetType(type: string): boolean {

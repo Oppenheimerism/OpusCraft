@@ -17,7 +17,7 @@ import { registerBehavior } from '../blockBehavior';
 import { lookingDirections } from '../blockRules';
 import { hasNeighborSignal } from './signal';
 import { composterInsert, composterFillEffects, isCompostable } from '../villageBlocks';
-import { MinecartChest } from '../../entity/minecart';
+import { AbstractMinecartContainer } from '../../entity/minecart';
 import { ChestBoat } from '../../entity/boat';
 import { dispenseBehaviorFor, DEFAULT_DISPENSE, failClick, type DispenseSource } from './dispenseItems';
 import type { Level } from '../level';
@@ -175,11 +175,11 @@ function composterTarget(level: Level, x: number, y: number, z: number, st: numb
   };
 }
 
-/** vanilla getEntityContainer: a chest minecart or chest boat there (one at random) */
+/** vanilla getEntityContainer: a chest minecart ((minecarts) or hopper minecart) or chest boat there (one at random) */
 function entityTarget(level: Level, x: number, y: number, z: number): InsertTarget | null {
-  const found = level.getEntities(new AABB(x, y, z, x + 1, y + 1, z + 1), (e) => (e instanceof MinecartChest || e instanceof ChestBoat) && !e.removed);
+  const found = level.getEntities(new AABB(x, y, z, x + 1, y + 1, z + 1), (e) => (e instanceof AbstractMinecartContainer || e instanceof ChestBoat) && !e.removed);
   if (!found.length) return null;
-  const e = found[level.random.nextInt(found.length)] as MinecartChest | ChestBoat;
+  const e = found[level.random.nextInt(found.length)] as AbstractMinecartContainer | ChestBoat;
   // (vanilla ContainerEntity.setChestVehicleItem: its loot is rolled first)
   e.unpackLoot();
   return { container: e.container };

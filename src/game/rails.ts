@@ -3,11 +3,15 @@
 // around it, curving into corners and sloping up onto rails one block higher,
 // and the rails it joins bend towards it. Neighbour changes only pop rails off
 // (and let a signal source flip a junction); generated rails are never reshaped.
+// ((minecarts) the junction's power is any redstone's: game/poweredRails.ts hands
+// it the neighbour changes)
 
 import { BLOCKS, STATE_BLOCK, FLAGS, F_WATERLOGGED, S, Block } from '../world/block';
 import { canSurvive, blockDrops } from './blockRules';
 import { ItemEntity } from '../entity/itemEntity';
 import type { Level } from './level';
+// (minecarts) the junctions' power
+import { hasNeighborSignal as redstoneNeighborSignal, isSignalSource } from './redstone/signal';
 
 /** vanilla RailShape */
 export type RailShape =
@@ -39,18 +43,28 @@ function isStraight(b: Block): boolean {
   return b.name !== 'rail';
 }
 
-/** vanilla isSignalSource, for the redstone blocks this game has */
-function isSignalSource(st: number): boolean {
-  return BLOCKS[STATE_BLOCK[st]].name === 'redstone_block';
-}
-
-/** vanilla Level.hasNeighborSignal: a block of redstone next to it powers the rail */
+/** vanilla Level.hasNeighborSignal: ((minecarts) any redstone power next to it) */
 function hasNeighborSignal(level: Level, x: number, y: number, z: number): boolean {
-  for (const [dx, dy, dz] of [[0, -1, 0], [0, 1, 0], [0, 0, -1], [0, 0, 1], [-1, 0, 0], [1, 0, 0]]) if (isSignalSource(level.getState(x + dx, y + dy, z + dz))) return true;
-  return false;
+  return redstoneNeighborSignal(level.world, x, y, z);
 }
 
 type Pos = [number, number, number];
+
+/** vanilla RailState.updateConnections: the two block positions a rail of this shape leads to (a slope's high end a block up) */
+export function railConnections(x: number, y: number, z: number, shape: RailShape): Pos[] {
+  switch (shape) {
+    case 'north_south': return [[x, y, z - 1], [x, y, z + 1]];
+    case 'east_west': return [[x - 1, y, z], [x + 1, y, z]];
+    case 'ascending_east': return [[x - 1, y, z], [x + 1, y + 1, z]];
+    case 'ascending_west': return [[x - 1, y + 1, z], [x + 1, y, z]];
+    case 'ascending_north': return [[x, y + 1, z - 1], [x, y, z + 1]];
+    case 'ascending_south': return [[x, y, z - 1], [x, y + 1, z + 1]];
+    case 'south_east': return [[x + 1, y, z], [x, y, z + 1]];
+    case 'south_west': return [[x - 1, y, z], [x, y, z + 1]];
+    case 'north_west': return [[x - 1, y, z], [x, y, z - 1]];
+    case 'north_east': return [[x + 1, y, z], [x, y, z - 1]];
+  }
+}
 
 /** vanilla RailState: a rail and the two block positions it leads to */
 class RailState {
@@ -69,21 +83,9 @@ class RailState {
   }
 
   private updateConnections(shape: RailShape): void {
-    const { x, y, z } = this;
     const c = this.connections;
     c.length = 0;
-    switch (shape) {
-      case 'north_south': c.push([x, y, z - 1], [x, y, z + 1]); break;
-      case 'east_west': c.push([x - 1, y, z], [x + 1, y, z]); break;
-      case 'ascending_east': c.push([x - 1, y, z], [x + 1, y + 1, z]); break;
-      case 'ascending_west': c.push([x - 1, y + 1, z], [x + 1, y, z]); break;
-      case 'ascending_north': c.push([x, y + 1, z - 1], [x, y, z + 1]); break;
-      case 'ascending_south': c.push([x, y, z - 1], [x, y + 1, z + 1]); break;
-      case 'south_east': c.push([x + 1, y, z], [x, y, z + 1]); break;
-      case 'south_west': c.push([x - 1, y, z], [x, y, z + 1]); break;
-      case 'north_west': c.push([x - 1, y, z], [x, y, z - 1]); break;
-      case 'north_east': c.push([x + 1, y, z], [x, y, z - 1]); break;
-    }
+    c.push(...railConnections(this.x, this.y, this.z, shape));
   }
 
   /** keep only the connections whose rail leads back here */
@@ -245,13 +247,19 @@ export function railOnPlace(level: Level, x: number, y: number, z: number, st: n
  * slope) the rail drops as an item — no break sound or particles. `changed` is the old state of
  * the block that changed (vanilla passes the neighbour's previous block).
  */
-export function railNeighborChanged(level: Level, x: number, y: number, z: number, st: number, changed?: number): void {
+export function railNeighborChanged(level: Level, x: number, y: number, z: number, st: number, _changed?: number): void {
   if (!canSurvive(level.world, x, y, z, st)) {
     // vanilla Block.dropResources + Level.removeBlock
     if (level.gameRules.doTileDrops) for (const s of blockDrops(st, null, level.random)) ItemEntity.drop(level, x, y, z, s);
     level.setBlock(x, y, z, FLAGS[st] & F_WATERLOGGED ? S('water') : 0);
-    return;
   }
-  // vanilla RailBlock.updateState: a signal source changing next to a junction re-picks its shape
-  if (changed !== undefined && isSignalSource(changed) && new RailState(level, x, y, z, st).countPotentialConnections() === 3) updateDir(level, x, y, z, st, false);
+}
+
+/**
+ * vanilla RailBlock.updateState, from neighborChanged ((minecarts) game/poweredRails.ts's hook for the plain rail):
+ * a signal source (`source`, a block id: vanilla's neighbour block) changing next to a three-way junction re-picks
+ * its shape by the power there now
+ */
+export function railSignalChanged(level: Level, x: number, y: number, z: number, st: number, source: number): void {
+  if (isSignalSource(BLOCKS[source].defaultState) && new RailState(level, x, y, z, st).countPotentialConnections() === 3) updateDir(level, x, y, z, st, false);
 }

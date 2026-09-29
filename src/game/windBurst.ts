@@ -27,6 +27,8 @@ import { explosionKnockbackResistance } from '../item/enchantHelper';
 import { behaviorOf, type UseContext } from './blockBehavior';
 import { openSound } from './redstone/components';
 import { bellRinger } from './villageBlocks';
+// (cake) candles and candle cakes blown out
+import { extinguishCandle } from './candles';
 
 /** how a burst goes */
 export interface WindBurstOptions {
@@ -162,6 +164,8 @@ export function triggerBlock(level: Level, x: number, y: number, z: number): voi
   else if (n === 'lever' || n.endsWith('_button')) behaviorOf(st)?.use?.(level, x, y, z, st, NO_USER);
   // vanilla BellBlock.onExplosionHit: attemptToRing with no direction (it swings from its facing)
   else if (n === 'bell') bellRinger.ring(level, x, y, z, null);
+  // (cake) vanilla AbstractCandleBlock.onExplosionHit: lit candles, and a lit candle cake, blown out
+  else extinguishCandle(level, x, y, z);
 }
 
 // ---------------------------------------------------------------------------------------------------------------

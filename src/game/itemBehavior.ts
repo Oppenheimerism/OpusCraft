@@ -23,6 +23,8 @@ export interface ItemBehavior {
   useTick?(level: Level, p: Player, stack: ItemStack, remaining: number): void;
   /** vanilla Item.finishUsingItem: the use has run its course (the drink is drunk) */
   finishUsing?(level: Level, p: Player, stack: ItemStack): void;
+  /** (spyglass) vanilla Item.releaseUsing: let go before the use ran its course (the spyglass lowered), `used` ticks in */
+  releaseUsing?(level: Level, p: Player, stack: ItemStack, used: number): void;
   /** vanilla Item.inventoryTick: every tick it's in a player's inventory (`selected`: its slot's index is the hotbar's pick) */
   inventoryTick?(level: Level, p: Player, stack: ItemStack, slot: number, selected: boolean): void;
   /** vanilla Item.onCraftedBy: taken from a crafting result (a map zoomed out or locked becomes a new map) */

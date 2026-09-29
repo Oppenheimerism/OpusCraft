@@ -49,6 +49,9 @@ export function explode(level: Level, source: Entity | null, x: number, y: numbe
   const rand = level.random;
   level.gameEvent('explode', x, y, z, { entity: source });
   const destroys = kind === 'none' ? false : kind === 'mob' ? level.gameRules.mobGriefing : true;
+  // ((minecarts) vanilla EntityBasedExplosionDamageCalculator: what the exploding entity leaves be, neither stopping
+  // the blast nor blown up by it: a lit TNT minecart's rails)
+  const spares = (source as { explosionSpares?: (x: number, y: number, z: number, st: number) => boolean } | null)?.explosionSpares?.bind(source);
   // 1) blocks: 16x16x16 rays from the surface of a cube
   const toBlow = new Map<string, [number, number, number]>();
   if (destroys) {
@@ -70,10 +73,12 @@ export function explode(level: Level, source: Entity | null, x: number, y: numbe
             const fl = FLAGS[st];
             if (!(fl & F_AIR)) {
               const b = BLOCKS[STATE_BLOCK[st]];
+              const spared = spares?.(bx, by, bz, st) ?? false;
               let res = b.resistance;
               if (fl & (F_WATER | F_LAVA)) res = Math.max(res, 100);
+              if (spared) res = 0;
               f -= (res + 0.3) * 0.3;
-              if (f > 0 && b.hardness >= 0 && !(fl & (F_WATER | F_LAVA))) toBlow.set(bx + ',' + by + ',' + bz, [bx, by, bz]);
+              if (f > 0 && b.hardness >= 0 && !(fl & (F_WATER | F_LAVA)) && !spared) toBlow.set(bx + ',' + by + ',' + bz, [bx, by, bz]);
             }
             px += d0 * 0.3;
             py += d1 * 0.3;

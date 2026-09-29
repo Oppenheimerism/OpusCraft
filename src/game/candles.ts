@@ -35,10 +35,28 @@ export function canLightCandle(st: number): boolean {
   return isCandle(st) && !blk(st).get(st, 'lit') && !blk(st).get(st, 'waterlogged');
 }
 
+/**
+ * (cake) blocks lit and put out as candles are, by whatever lights or puts them out (flint and steel, a fire charge, a
+ * dispenser's flint and steel, a splash of water, a wind burst): the candle cakes (game/cake.ts, vanilla
+ * AbstractCandleBlock's other kind)
+ */
+export interface CandleKin {
+  /** lit if it's one that is out; false if there's none to light */
+  light(level: Level, x: number, y: number, z: number): boolean;
+  /** put out if it's one that is lit; false if there's none */
+  extinguish(level: Level, x: number, y: number, z: number): boolean;
+}
+const KIN: CandleKin[] = [];
+
+/** (cake) another kind of block lit and put out as candles are */
+export function registerCandleKin(k: CandleKin): void {
+  KIN.push(k);
+}
+
 /** vanilla FlintAndSteelItem / FireChargeItem.useOn, and a dispenser's flint and steel: a candle that is out is lit; false if there's none to light */
 export function lightCandle(level: Level, x: number, y: number, z: number): boolean {
   const st = level.getState(x, y, z);
-  if (!canLightCandle(st)) return false;
+  if (!canLightCandle(st)) return KIN.some((k) => k.light(level, x, y, z));
   level.setBlock(x, y, z, blk(st).with(st, 'lit', true));
   return true;
 }
@@ -57,7 +75,7 @@ function extinguish(level: Level, x: number, y: number, z: number, st: number, b
 /** a lit candle put out where it stands (vanilla ThrownPotion.dowseFire: a splash of water); false if there's none */
 export function extinguishCandle(level: Level, x: number, y: number, z: number): boolean {
   const st = level.getState(x, y, z);
-  if (!isLitCandle(st)) return false;
+  if (!isLitCandle(st)) return KIN.some((k) => k.extinguish(level, x, y, z));
   extinguish(level, x, y, z, st);
   return true;
 }

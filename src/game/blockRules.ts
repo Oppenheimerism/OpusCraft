@@ -66,6 +66,9 @@ const DRIPLEAF_SOIL = new Set([...PLANT_SOIL, 'clay']);
 /** vanilla FungusBlock / RootsBlock / NetherSproutsBlock.mayPlaceOn: #nylium, soul soil, or what a bush grows in */
 const NETHER_PLANT_SOIL = new Set([...PLANT_SOIL, 'crimson_nylium', 'warped_nylium', 'soul_soil']);
 
+/** (minecarts) vanilla #rails: the plain, powered, detector and activator rails */
+const RAILS = /^(rail|powered_rail|detector_rail|activator_rail)$/;
+
 /** Can the block `state` stay at (x,y,z)? `placing`: the other half of a tall plant isn't there yet */
 export function canSurvive(world: World, x: number, y: number, z: number, state: number, placing = false): boolean {
   const own = behaviorOf(state)?.canSurvive;
@@ -134,7 +137,8 @@ export function canSurvive(world: World, x: number, y: number, z: number, state:
     const d = DIR_NAMES.indexOf(b.get(state, 'facing') as (typeof DIR_NAMES)[number]);
     return isSturdyFace(world.getState(x - DX[d], y - DY[d], z - DZ[d]), d);
   }
-  if (n === 'rail') {
+  // ((minecarts) the powered, detector and activator rails alike)
+  if (RAILS.test(n)) {
     // vanilla BaseRailBlock.canSurvive + shouldBeRemoved: a rigid block below, and one under the high end of a slope
     if (!isSturdyFace(below, UP)) return false;
     const shape = String(b.get(state, 'shape'));
@@ -304,8 +308,8 @@ export function placementState(block: Block, ctx: PlaceContext): number | null {
     }
     return null;
   }
-  // vanilla BaseRailBlock.getStateForPlacement (connections are made once placed)
-  if (n === 'rail') st = block.with(st, 'shape', facingH === 'east' || facingH === 'west' ? 'east_west' : 'north_south');
+  // vanilla BaseRailBlock.getStateForPlacement (connections are made once placed; (minecarts) every kind of rail)
+  if (RAILS.test(n)) st = block.with(st, 'shape', facingH === 'east' || facingH === 'west' ? 'east_west' : 'north_south');
   if (n.endsWith('_stairs')) {
     st = block.with(st, 'facing', facingH);
     const top = ctx.face === DOWN || (ctx.face !== UP && ctx.hitY > 0.5);

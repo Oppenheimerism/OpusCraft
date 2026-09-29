@@ -25,7 +25,7 @@ const RANGE: Record<string, number> = {
   arrow: 4, trident: 4, egg: 4, snowball: 4, ender_pearl: 4, potion: 4, experience_bottle: 4, firework_rocket: 4, llama_spit: 4,
   fireball: 4, small_fireball: 4, dragon_fireball: 4, wind_charge: 4, breeze_wind_charge: 4, eye_of_ender: 4,
   shulker_bullet: 8, ominous_item_spawner: 8,
-  tnt: 10, falling_block: 10, item_frame: 10, glow_item_frame: 10, leash_knot: 10, area_effect_cloud: 10,
+  tnt: 10, falling_block: 10, item_frame: 10, glow_item_frame: 10, leash_knot: 10, area_effect_cloud: 10, armor_stand: 10,
   end_crystal: 16, lightning_bolt: 16,
   warden: 16, ender_dragon: 10, wither: 10, ghast: 10, ravager: 10, shulker: 10, breeze: 10, elder_guardian: 10,
   villager: 10, wandering_trader: 10, iron_golem: 10, snow_golem: 8, bee: 8, fox: 8, cat: 8, parrot: 8, rabbit: 8, mule: 8,

@@ -52,6 +52,8 @@ export function menuKind(m: ContainerMenu): MenuKind | null {
 /** the name over the menu, where it's the container's own (a chest's or barrel's, a named box's, a trader's) */
 export function menuTitle(m: ContainerMenu): string {
   if (m instanceof ChestMenu) return m.title;
+  // ((minecarts) a hopper minecart's name over its hopper menu)
+  if (m instanceof HopperMenu) return m.title;
   if (m instanceof MerchantMenu) return entityDisplayName(m.trader);
   if (m instanceof HorseInventoryMenu) return entityDisplayName(m.horse);
   return '';

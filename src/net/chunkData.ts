@@ -45,6 +45,9 @@ export function visibleBlockEntity(be: BlockEntity): Record<string, Value> {
     for (const [k, v] of Object.entries(s.data)) if (k !== 'lootTable' && k !== 'lootSeed') data[k] = v;
     if (Object.keys(data).length) out.data = data;
   }
+  // (what only a copy needs to draw it, never saved: an ender chest's lid)
+  const shown = (be as { visibleData?(): Record<string, number | string> }).visibleData?.();
+  if (shown) out.data = { ...((out.data as Record<string, Value> | undefined) ?? {}), ...shown };
   return out;
 }
 

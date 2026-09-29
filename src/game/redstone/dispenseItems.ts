@@ -33,6 +33,7 @@ import { Strider } from '../../entity/strider';
 import { AbstractHorse, AbstractChestedHorse } from '../../entity/horse';
 import { createBoat, boatItemInfo } from '../../entity/boat';
 import { createMinecart } from '../../entity/minecart';
+import { ArmorStand, dispenseArmorStand } from '../../entity/armorStand';
 import { createMob } from '../spawner';
 // (Stage 5: ocean)
 import { bucketEmptySound, releaseBucketFish } from '../../entity/fish';
@@ -320,11 +321,21 @@ function minecart(type: string): DispenseBehavior {
     }
     const cart = createMinecart(type, level)!;
     cart.moveTo(x, y + dy, z, 0, 0);
+    // ((minecarts) vanilla EntityType.createDefaultStackConfig: a named item's name on the cart)
+    if (stack.tag?.customName !== undefined) cart.setCustomName(stack.tag.customName);
     level.addEntity(cart);
     stack.count--;
     return left(stack);
   });
 }
+
+/** (armour stand) vanilla's ARMOR_STAND behaviour: one stood in the block in front, facing out (entity/armorStand.ts) */
+const armorStand = behavior((src, stack) => {
+  const [x, y, z] = front(src);
+  dispenseArmorStand(src.level, x, y, z, src.facing, stack);
+  stack.count--;
+  return left(stack);
+});
 
 /** vanilla: TNT comes out primed, in the block in front */
 const tnt = behavior((src, stack) => {
@@ -516,7 +527,7 @@ function slotFor(it: Item): EquipSlot | null {
 }
 
 function itemInSlot(e: LivingEntity, slot: EquipSlot): ItemStack | null {
-  if (e instanceof Mob) return e.getItemBySlot(slot);
+  if (e instanceof Mob || e instanceof ArmorStand) return e.getItemBySlot(slot);
   if (e instanceof Player) return slot === 'offhand' ? e.inventory.offhand : isArmorSlot(slot) ? e.inventory.armor[armorIndex(slot)] : e.inventory.selectedItem;
   return null;
 }
@@ -524,6 +535,8 @@ function itemInSlot(e: LivingEntity, slot: EquipSlot): ItemStack | null {
 /** vanilla LivingEntity.canTakeItem: a player with that slot free, a mob as it says (one that picks things up, with it free) */
 function canTakeItem(e: LivingEntity, slot: EquipSlot): boolean {
   if (e instanceof Mob) return e.canTakeItem(slot);
+  // (armour stand) vanilla ArmorStand.canTakeItem: that slot free, and not disabled
+  if (e instanceof ArmorStand) return !e.hasItemInSlot(slot) && !e.isDisabled(slot);
   if (e instanceof Player) return slot !== 'mainhand' && !itemInSlot(e, slot);
   return false;
 }
@@ -536,6 +549,7 @@ function dispenseArmor(src: DispenseSource, stack: ItemStack): boolean {
   if (!e) return false;
   const one = stack.split(1);
   if (e instanceof Mob) e.setItemSlotAndDropWhenKilled(slot, one);
+  else if (e instanceof ArmorStand) e.setItemSlot(slot, one);
   else if (e instanceof Player) {
     if (slot === 'offhand') e.inventory.offhand = one;
     else if (isArmorSlot(slot)) e.inventory.armor[armorIndex(slot)] = one;
@@ -624,12 +638,16 @@ const BEHAVIORS: Record<string, DispenseBehavior> = {
   arrow, tipped_arrow: arrow, trident, egg: thrown('egg'), snowball: thrown('snowball'), splash_potion: potion, lingering_potion: potion,
   experience_bottle: experienceBottle, fire_charge: fireCharge, firework_rocket: fireworkRocket,
   tnt, minecart: minecart('minecart'), chest_minecart: minecart('chest_minecart'),
+  // (minecarts) and the hopper, TNT and furnace minecarts (vanilla MinecartItem's behaviour for every kind)
+  hopper_minecart: minecart('hopper_minecart'), tnt_minecart: minecart('tnt_minecart'), furnace_minecart: minecart('furnace_minecart'),
   water_bucket: fullBucket('water'), lava_bucket: fullBucket('lava'), bucket: emptyBucket,
   glass_bottle: glassBottle, potion: waterBottle,
   flint_and_steel: flintAndSteel, bone_meal: boneMeal, shears,
   carved_pumpkin: carvedPumpkin, saddle,
   // (Stage 6: tameable animals)
   leather_horse_armor: horseArmor, iron_horse_armor: horseArmor, golden_horse_armor: horseArmor, diamond_horse_armor: horseArmor, chest: chestOnDonkey,
+  // (armour stand)
+  armor_stand: armorStand,
 };
 // (vanilla: the wool carpets go on a tame llama as a horse's armour does on a horse)
 for (const c of DYE_COLORS) BEHAVIORS[`${c}_carpet`] = horseArmor;

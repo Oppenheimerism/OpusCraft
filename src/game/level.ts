@@ -87,6 +87,17 @@ import './powderSnow';
 import './frostWalker';
 // (the lodestone compass)
 import './lodestoneCompass';
+// (signs) placing, editing, dyeing and waxing signs and hanging signs
+import './signs';
+// (ender chests) opening onto the player's own slots, its lid, its drops
+import './enderChest';
+// (cake) eating it, candles in it, the candle cakes lit and put out
+import './cake';
+// (spyglass) raised to the eye and lowered, what it's looking at
+import './spyglass';
+// (minecarts) the powered, detector and activator rails; the hopper, TNT and furnace minecarts
+import './poweredRails';
+import '../entity/minecartVariants';
 
 export interface SoundSink {
   play(name: string, x: number, y: number, z: number, volume?: number, pitch?: number): void;

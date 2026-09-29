@@ -5,6 +5,8 @@ import { ITEMS, ItemStack } from '../item/item';
 import { registerTrialChamberRecipes } from './recipesTrialChambers';
 // (bastions)
 import { registerBastionRecipes } from './recipesBastion';
+// (signs)
+import { registerSignRecipes } from './recipesSigns';
 
 /** ingredient: item id, '#tag', or list of alternatives */
 type Ing = string | string[];
@@ -213,6 +215,22 @@ shapeless('firework_rocket', 3, 'paper', 'gunpowder');
 shapeless('magma_cream', 1, 'blaze_powder', 'slime_ball');
 shapeless('ender_eye', 1, 'ender_pearl', 'blaze_powder');
 shaped('end_crystal', 1, ['GGG', 'GEG', 'GTG'], { G: 'glass', E: 'ender_eye', T: 'ghast_tear' });
+// (ender chests)
+shaped('ender_chest', 1, ['###', '#E#', '###'], { '#': 'obsidian', E: 'ender_eye' });
+// (cake) three milk buckets (their buckets left behind), two sugar, an egg and three wheat
+shaped('cake', 1, ['AAA', 'BEB', 'CCC'], { A: 'milk_bucket', B: 'sugar', C: 'wheat', E: 'egg' });
+// (spyglass) an amethyst shard over two copper ingots (vanilla's ' # ', ' X ', ' X ', shrunk to its one column as
+// vanilla's ShapedRecipePattern does: any column of a crafting table)
+shaped('spyglass', 1, ['#', 'X', 'X'], { '#': 'amethyst_shard', X: 'copper_ingot' });
+// (armour stand) six sticks round a smooth stone slab (vanilla recipes/armor_stand)
+shaped('armor_stand', 1, ['///', ' / ', '/_/'], { '/': 'stick', _: 'smooth_stone_slab' });
+// (minecarts) vanilla recipes/powered_rail, detector_rail, activator_rail; hopper_minecart, tnt_minecart, furnace_minecart
+shaped('powered_rail', 6, ['X X', 'X#X', 'XRX'], { X: 'gold_ingot', '#': 'stick', R: 'redstone' });
+shaped('detector_rail', 6, ['X X', 'X#X', 'XRX'], { X: 'iron_ingot', '#': 'stone_pressure_plate', R: 'redstone' });
+shaped('activator_rail', 6, ['XSX', 'X#X', 'XSX'], { X: 'iron_ingot', '#': 'redstone_torch', S: 'stick' });
+shapeless('hopper_minecart', 1, 'hopper', 'minecart');
+shapeless('tnt_minecart', 1, 'tnt', 'minecart');
+shapeless('furnace_minecart', 1, 'furnace', 'minecart');
 // vanilla copySmithingTemplate: a template copied with seven diamonds and the block it's made of
 shaped('netherite_upgrade_smithing_template', 2, ['#S#', '#C#', '###'], { '#': 'diamond', C: 'netherrack', S: 'netherite_upgrade_smithing_template' });
 
@@ -439,6 +457,8 @@ shaped('chiseled_deepslate', 1, ['#', '#'], { '#': 'cobbled_deepslate_slab' });
 registerTrialChamberRecipes(shaped, shapeless);
 // (bastions) polished basalt, the netherite block and ingot, the lodestone, the snout trim's template
 registerBastionRecipes(shaped, shapeless);
+// (signs) every wood's sign (the oak one's is above) and hanging sign
+registerSignRecipes(shaped);
 
 // drop recipes whose items don't exist in this game
 for (let i = RECIPES.length - 1; i >= 0; i--) {

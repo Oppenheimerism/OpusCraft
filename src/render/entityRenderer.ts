@@ -176,6 +176,8 @@ export interface DrawState {
   colorWrite?: boolean;
   /** added to every UV (vanilla OffsetTexturingStateShard: the energy swirl's scroll) */
   uvOffset?: [number, number];
+  /** pulled toward the camera by this many depth units (vanilla POLYGON_OFFSET_LAYERING's -1, -10: a sign's text) */
+  polygonOffset?: number;
 }
 
 /** Accumulates quads for one texture/state, then flushes. */
@@ -308,7 +310,12 @@ export class EntityBatch {
     if (st.depthEqual) gl.depthFunc(gl.EQUAL);
     if (st.depthTest === false) gl.disable(gl.DEPTH_TEST);
     if (st.colorWrite === false) gl.colorMask(false, false, false, false);
+    if (st.polygonOffset) {
+      gl.enable(gl.POLYGON_OFFSET_FILL);
+      gl.polygonOffset(-1, -st.polygonOffset);
+    }
     gl.drawArrays(gl.TRIANGLES, 0, this.n);
+    if (st.polygonOffset) gl.disable(gl.POLYGON_OFFSET_FILL);
     if (st.colorWrite === false) gl.colorMask(true, true, true, true);
     gl.bindVertexArray(null);
     gl.enable(gl.CULL_FACE);
@@ -328,5 +335,5 @@ export class EntityBatch {
 }
 
 function sameState(a: DrawState, b: DrawState): boolean {
-  return a.texture === b.texture && a.cutoff === b.cutoff && a.blend === b.blend && a.cull === b.cull && a.lit === b.lit && a.useLightmap === b.useLightmap && !!a.additive === !!b.additive && !!a.lightning === !!b.lightning && (a.depthWrite !== false) === (b.depthWrite !== false) && (a.depthTest !== false) === (b.depthTest !== false) && !!a.depthEqual === !!b.depthEqual && (a.colorWrite !== false) === (b.colorWrite !== false) && (a.uvOffset?.[0] ?? 0) === (b.uvOffset?.[0] ?? 0) && (a.uvOffset?.[1] ?? 0) === (b.uvOffset?.[1] ?? 0);
+  return a.texture === b.texture && a.cutoff === b.cutoff && a.blend === b.blend && a.cull === b.cull && a.lit === b.lit && a.useLightmap === b.useLightmap && !!a.additive === !!b.additive && !!a.lightning === !!b.lightning && (a.depthWrite !== false) === (b.depthWrite !== false) && (a.depthTest !== false) === (b.depthTest !== false) && !!a.depthEqual === !!b.depthEqual && (a.colorWrite !== false) === (b.colorWrite !== false) && (a.uvOffset?.[0] ?? 0) === (b.uvOffset?.[0] ?? 0) && (a.uvOffset?.[1] ?? 0) === (b.uvOffset?.[1] ?? 0) && (a.polygonOffset ?? 0) === (b.polygonOffset ?? 0);
 }

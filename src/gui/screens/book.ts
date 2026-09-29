@@ -121,12 +121,12 @@ function wordPosition(text: string, dir: number, cursor: number, skipWhitespace:
 }
 
 /** vanilla StringUtil.isAllowedChatCharacter */
-const allowedChar = (c: string): boolean => c.length === 1 && c !== '§' && c >= ' ' && c !== '\x7f';
+export const allowedChar = (c: string): boolean => c.length === 1 && c !== '§' && c >= ' ' && c !== '\x7f';
 
 // ---------------------------------------------------------------------------
 // vanilla TextFieldHelper: a cursor and selection over a string held elsewhere
 
-class TextFieldHelper {
+export class TextFieldHelper {
   cursorPos = 0;
   selectionPos = 0;
 
@@ -243,7 +243,7 @@ class TextFieldHelper {
 }
 
 /** the system clipboard (vanilla KeyboardHandler; what's pasted loses its carriage returns and formatting codes) */
-function copyToClipboard(s: string): void {
+export function copyToClipboard(s: string): void {
   if (!s) return;
   try {
     void navigator.clipboard?.writeText(s).catch(() => {});
@@ -251,7 +251,7 @@ function copyToClipboard(s: string): void {
     // (no clipboard access)
   }
 }
-function readClipboard(then: (s: string) => void): void {
+export function readClipboard(then: (s: string) => void): void {
   try {
     void navigator.clipboard
       ?.readText()
@@ -262,7 +262,7 @@ function readClipboard(then: (s: string) => void): void {
   }
 }
 
-const hasControlDown = (e: KeyboardEvent): boolean => e.ctrlKey || e.metaKey;
+export const hasControlDown = (e: KeyboardEvent): boolean => e.ctrlKey || e.metaKey;
 
 // ---------------------------------------------------------------------------
 // vanilla PageButton

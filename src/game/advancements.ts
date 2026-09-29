@@ -113,6 +113,11 @@ export type Criterion =
   | { t: 'player_hurt_entity'; minDealt: number; source: string; weapon: string }
   /** (trial chambers) vanilla crafter_recipe_crafted: a crafter near the player crafted this recipe */
   | { t: 'crafter_recipe_crafted'; recipe: string }
+  /**
+   * (spyglass) vanilla using_item, each tick an item is in use: this item, the player (PlayerPredicate.looking_at) looking
+   * at a mob of this kind, if given
+   */
+  | { t: 'using_item'; item: string; lookingAt?: string }
   | { t: 'impossible' };
 
 export interface AdvancementDef {
@@ -136,6 +141,8 @@ export interface AdvancementDef {
 
 const inv = (...items: string[]): Criterion => ({ t: 'inventory', items });
 const never: Criterion = { t: 'impossible' };
+/** (spyglass) vanilla using_item: a spyglass in use, looking at that kind of mob */
+const spyglassAt = (lookingAt: string): Criterion => ({ t: 'using_item', item: 'spyglass', lookingAt });
 const one = (c: Criterion): Record<string, Criterion> => ({ c });
 const toNether: Criterion = { t: 'changed_dimension', to: 'the_nether' };
 const toEnd: Criterion = { t: 'changed_dimension', to: 'the_end' };
@@ -146,6 +153,8 @@ const COPPER_BLOCKS = ['', 'exposed_', 'weathered_', 'oxidized_'].flatMap((age) 
     .map((kind) => (kind === 'copper_block' && age ? `${age}copper` : age + kind)));
 const WAXED_COPPER_BLOCKS = COPPER_BLOCKS.map((n) => `waxed_${n}`);
 const AXES = ['wooden_axe', 'golden_axe', 'stone_axe', 'iron_axe', 'diamond_axe', 'netherite_axe'];
+// (signs) vanilla #all_signs: every wood's standing, wall, hanging and wall hanging sign
+const ALL_SIGNS = ['oak', 'spruce', 'birch', 'jungle', 'acacia', 'dark_oak', 'mangrove', 'cherry', 'bamboo', 'crimson', 'warped'].flatMap((w) => [`${w}_sign`, `${w}_wall_sign`, `${w}_hanging_sign`, `${w}_wall_hanging_sign`]);
 
 const HOSTILE = [
   'blaze', 'bogged', 'breeze', 'cave_spider', 'creeper', 'drowned', 'elder_guardian', 'ender_dragon', 'enderman', 'endermite', 'evoker',
@@ -279,7 +288,7 @@ const A: AdvancementDef[] = [
     criteria: { killed_something: { t: 'kill', type: '*' }, killed_by_something: { t: 'killed_by' } }, requirements: [['killed_something', 'killed_by_something']],
   },
   { id: 'adventure/voluntary_exile', parent: 'adventure/root', title: 'Voluntary Exile', description: 'Kill a raid captain.\nMaybe consider staying away from villages for the time being...', icon: 'white_banner', frame: 'task', hidden: true, criteria: one({ t: 'killed_raid_captain' }) },
-  { id: 'adventure/spyglass_at_parrot', parent: 'adventure/root', title: 'Is It a Bird?', description: 'Look at a Parrot through a Spyglass', icon: 'spyglass', frame: 'task', criteria: one(never) },
+  { id: 'adventure/spyglass_at_parrot', parent: 'adventure/root', title: 'Is It a Bird?', description: 'Look at a Parrot through a Spyglass', icon: 'spyglass', frame: 'task', criteria: one(spyglassAt('parrot')) },
   { id: 'adventure/kill_a_mob', parent: 'adventure/root', title: 'Monster Hunter', description: 'Kill any hostile monster', icon: 'iron_sword', frame: 'task', criteria: each(HOSTILE, (n) => ({ t: 'kill', type: n })), requirements: [HOSTILE] },
   { id: 'adventure/read_power_of_chiseled_bookshelf', parent: 'adventure/root', title: 'The Power of Books', description: 'Read the power signal of a Chiseled Bookshelf using a Comparator', icon: 'chiseled_bookshelf', frame: 'task', criteria: one(never) },
   { id: 'adventure/trade', parent: 'adventure/root', title: 'What a Deal!', description: 'Successfully trade with a Villager', icon: 'emerald', frame: 'task', criteria: one({ t: 'villager_trade' }) },
@@ -315,11 +324,11 @@ const A: AdvancementDef[] = [
   { id: 'adventure/lighten_up', parent: 'adventure/minecraft_trials_edition', title: 'Lighten Up', description: 'Scrape a Copper Bulb with an Axe to make it brighter', icon: 'oxidized_copper_bulb', frame: 'task', criteria: { lighten_up: { t: 'item_used_on_block', items: AXES, blocks: ['oxidized_copper_bulb', 'weathered_copper_bulb', 'exposed_copper_bulb', 'waxed_oxidized_copper_bulb', 'waxed_weathered_copper_bulb', 'waxed_exposed_copper_bulb'] } } },
   { id: 'adventure/overoverkill', parent: 'adventure/minecraft_trials_edition', title: 'Over-Overkill', description: 'Deal 50 hearts of damage in a single hit using the Mace', icon: 'mace', frame: 'challenge', criteria: { overoverkill: { t: 'player_hurt_entity', minDealt: 100, source: 'maceSmash', weapon: 'mace' } } },
   { id: 'adventure/revaulting', parent: 'adventure/under_lock_and_key', title: 'Revaulting', description: 'Unlock an Ominous Vault with an Ominous Trial Key', icon: 'ominous_trial_key', frame: 'goal', criteria: { revaulting: { t: 'item_used_on_block', items: ['ominous_trial_key'], blocks: ['vault'], state: { ominous: true } } } },
-  { id: 'adventure/spyglass_at_ghast', parent: 'adventure/spyglass_at_parrot', title: 'Is It a Balloon?', description: 'Look at a Ghast through a Spyglass', icon: 'spyglass', frame: 'task', criteria: one(never) },
+  { id: 'adventure/spyglass_at_ghast', parent: 'adventure/spyglass_at_parrot', title: 'Is It a Balloon?', description: 'Look at a Ghast through a Spyglass', icon: 'spyglass', frame: 'task', criteria: one(spyglassAt('ghast')) },
   { id: 'adventure/very_very_frightening', parent: 'adventure/throw_trident', title: 'Very Very Frightening', description: 'Strike a Villager with lightning', icon: 'trident', frame: 'task', criteria: one({ t: 'channeled_lightning', victims: ['villager'] }) },
   { id: 'adventure/sniper_duel', parent: 'adventure/shoot_arrow', title: 'Sniper Duel', description: 'Kill a Skeleton from at least 50 meters away', icon: 'arrow', frame: 'challenge', criteria: one({ t: 'sniper' }) },
   { id: 'adventure/bullseye', parent: 'adventure/shoot_arrow', title: 'Bullseye', description: 'Hit the bullseye of a Target block from at least 30 meters away', icon: 'target', frame: 'challenge', criteria: one(never) },
-  { id: 'adventure/spyglass_at_dragon', parent: 'adventure/spyglass_at_ghast', title: 'Is It a Plane?', description: 'Look at the Ender Dragon through a Spyglass', icon: 'spyglass', frame: 'task', criteria: one(never) },
+  { id: 'adventure/spyglass_at_dragon', parent: 'adventure/spyglass_at_ghast', title: 'Is It a Plane?', description: 'Look at the Ender Dragon through a Spyglass', icon: 'spyglass', frame: 'task', criteria: one(spyglassAt('ender_dragon')) },
 
   // --- Husbandry
   { id: 'husbandry/root', parent: null, title: 'Husbandry', description: 'The world is full of friends and food', icon: 'hay_block', frame: 'task', toast: false, announce: false, criteria: { consumed_item: { t: 'consume', item: '*' } } },
@@ -329,7 +338,7 @@ const A: AdvancementDef[] = [
   // (M8: goats) vanilla: started_riding, the player's vehicle a boat with a goat aboard
   { id: 'husbandry/ride_a_boat_with_a_goat', parent: 'husbandry/root', title: 'Whatever Floats Your Goat!', description: 'Get in a Boat and float with a Goat', icon: 'oak_boat', frame: 'task', criteria: one({ t: 'started_riding', vehicle: 'boat', passenger: 'goat' }) },
   { id: 'husbandry/tame_an_animal', parent: 'husbandry/root', title: 'Best Friends Forever', description: 'Tame an animal', icon: 'lead', frame: 'task', criteria: one({ t: 'tame', type: '*' }) },
-  { id: 'husbandry/make_a_sign_glow', parent: 'husbandry/root', title: 'Glow and Behold!', description: 'Make the text of any kind of sign glow', icon: 'glow_ink_sac', frame: 'task', criteria: one(never) },
+  { id: 'husbandry/make_a_sign_glow', parent: 'husbandry/root', title: 'Glow and Behold!', description: 'Make the text of any kind of sign glow', icon: 'glow_ink_sac', frame: 'task', criteria: { make_a_sign_glow: { t: 'item_used_on_block', items: ['glow_ink_sac'], blocks: ALL_SIGNS } } },
   { id: 'husbandry/fishy_business', parent: 'husbandry/root', title: 'Fishy Business', description: 'Catch a fish', icon: 'fishing_rod', frame: 'task', criteria: one(never) },
   { id: 'husbandry/silk_touch_nest', parent: 'husbandry/root', title: 'Total Beelocation', description: 'Move a Bee Nest, with 3 Bees inside, using Silk Touch', icon: 'bee_nest', frame: 'task', criteria: one(never) },
   { id: 'husbandry/tadpole_in_a_bucket', parent: 'husbandry/root', title: 'Bukkit Bukkit', description: 'Catch a Tadpole in a Bucket', icon: 'tadpole_bucket', frame: 'task', criteria: one({ t: 'filled_bucket', items: ['tadpole_bucket'] }) },
@@ -581,6 +590,8 @@ export interface TriggerPayload {
   hurtEntity?: { dealt: number; source: string; weapon: string | null };
   /** (trial chambers) the recipe a crafter near the player crafted (crafter_recipe_crafted) */
   crafterCrafted?: { recipe: string };
+  /** (spyglass) the item the player is using this tick, and the kind of what they look at, if anything (using_item) */
+  usingItem?: { item: string; lookingAt: string | null };
 }
 
 export class PlayerAdvancements {
@@ -787,6 +798,9 @@ function matches(c: Criterion, p: TriggerPayload): boolean {
       return !!p.hurtEntity && p.hurtEntity.dealt >= c.minDealt && p.hurtEntity.source === c.source && p.hurtEntity.weapon === c.weapon;
     case 'crafter_recipe_crafted':
       return !!p.crafterCrafted && p.crafterCrafted.recipe === c.recipe;
+    // (spyglass)
+    case 'using_item':
+      return !!p.usingItem && p.usingItem.item === c.item && (c.lookingAt === undefined || p.usingItem.lookingAt === c.lookingAt);
     default:
       return false;
   }

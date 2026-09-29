@@ -63,6 +63,11 @@ export const SB = {
    * place. The host sends those again, or puts it in (net/server/session.ts resync); nothing like it in vanilla
    */
   Resync: 20,
+  /**
+   * (signs) [x, y, z, front, line 1, line 2, line 3, line 4]: the lines typed in a sign's editor, for the side it was
+   * opened for (vanilla ServerboundSignUpdatePacket). Numbered from 40, out of the way of packets added elsewhere
+   */
+  SignUpdate: 40,
 } as const;
 
 /** host → guest (vanilla Clientbound*Packet) */
@@ -173,6 +178,12 @@ export const CB = {
    * puts its player there (vanilla ClientboundRespawnPacket, with ReceivingLevelScreen's reason)
    */
   ChangeDimension: 45,
+  /**
+   * (signs) [x, y, z, front]: the sign's editor opened for the guest's player, for its front or its back (vanilla
+   * ClientboundOpenSignEditorPacket; the block and its text come just before, as vanilla's ServerPlayer.openTextEdit
+   * sends the block first). Numbered from 80, out of the way of packets added elsewhere
+   */
+  OpenSignEditor: 80,
 } as const;
 
 /** the dimensions there are (vanilla's three: a guest takes no other) */
@@ -343,6 +354,9 @@ const RECIPE = str(1, 128);
 SERVERBOUND[SB.PlaceRecipe] = [CONTAINER, RECIPE, bool];
 // (the 5 by 5 a loading screen waits for, at most: net/chunkData.ts loadingChunks)
 SERVERBOUND[SB.Resync] = [(v) => arr(50, CHUNK)(v) && (v as Value[]).length % 2 === 0, int(0, 0x7fffffff), bool];
+// (signs: vanilla ServerboundSignUpdatePacket reads each line with readUtf(384))
+const SIGN_LINE = str(0, 384);
+SERVERBOUND[SB.SignUpdate] = [BX, BY, BX, bool, SIGN_LINE, SIGN_LINE, SIGN_LINE, SIGN_LINE];
 
 const CLIENTBOUND: Check[][] = [];
 CLIENTBOUND[CB.Login] = [obj];
@@ -397,6 +411,7 @@ CLIENTBOUND[CB.PlaceGhostRecipe] = [CONTAINER, RECIPE];
 // (every recipe in the book at most: inventory/recipeBook.ts has some 800)
 CLIENTBOUND[CB.RecipeBookAdd] = [arr(4096, RECIPE), bool];
 const DIMENSION: Check = (v) => typeof v === 'string' && DIMENSION_IDS.includes(v);
+CLIENTBOUND[CB.OpenSignEditor] = [BX, BY, BX, bool];
 CLIENTBOUND[CB.ChangeDimension] = [DIMENSION, (v) => typeof v === 'string' && (RECEIVING_REASONS as readonly string[]).includes(v)];
 
 /**

@@ -60,8 +60,8 @@ export function playerAttack(level: Level, p: Player, target: Entity, damageHeld
     return;
   }
   // (trial chambers) vanilla PlayerHurtEntityTrigger (from the target's hurt): the blow's damage as dealt, its kind,
-  // what was in hand (Over-Overkill)
-  if (target instanceof LivingEntity) level.onPlayerTrigger?.(p, 'player_hurt_entity', { hurtEntity: { dealt: f + f1, source, weapon: held?.item.id ?? null } });
+  // what was in hand (Over-Overkill); ((armour stand) not an armour stand's, whose own hurt never gets that far)
+  if (target instanceof LivingEntity && target.type !== 'armor_stand') level.onPlayerTrigger?.(p, 'player_hurt_entity', { hurtEntity: { dealt: f + f1, source, weapon: held?.item.id ?? null } });
   // vanilla getKnockback: the knockback enchantment, +1 for a sprinting hit
   const kb = levelOf(held, 'knockback') + (sprintKnock ? 1 : 0);
   if (kb > 0) {

@@ -75,6 +75,7 @@ import { FireworkRocket } from '../entity/fireworkRocket';
 import { EnderDragon } from '../entity/enderDragon';
 import { Shulker } from '../entity/shulker';
 import { ItemFrame } from '../entity/itemFrame';
+import { ArmorStand } from '../entity/armorStand';
 import { moonPhase } from '../render/environment';
 import { tickInhabitedTime } from './difficulty';
 import { BIOMES } from '../world/gen/biomes';
@@ -187,6 +188,8 @@ function saveOne(e: Entity): SavedEntity | null {
   if (e instanceof AbstractMinecart || e instanceof Boat || e instanceof EndCrystal || e instanceof LeashKnot) return e.removed ? null : e.save();
   // (vanilla: item frames are kept with their chunk, and what they hold)
   if (e instanceof ItemFrame) return e.removed ? null : e.save();
+  // (armour stand) kept with its chunk, with all it wears
+  if (e instanceof ArmorStand) return e.removed ? null : e.save();
   // (vanilla: arrows and tridents are kept with their chunk, stuck where they landed; so is a rocket in flight)
   if (e instanceof Arrow || e instanceof FireworkRocket) return e.removed ? null : e.save();
   if (e instanceof ItemEntity && !e.removed) {
@@ -240,6 +243,11 @@ function loadOne(d: SavedEntity, level: Level): Entity | null {
     return f;
   }
   if (d.id === 'leash_knot') return LeashKnot.load(level, d);
+  if (d.id === 'armor_stand') {
+    const a = new ArmorStand(level);
+    a.load(d);
+    return a;
+  }
   if (d.id === 'firework_rocket') {
     const r = new FireworkRocket(level);
     r.load(d);
@@ -275,7 +283,7 @@ export function carriesOnePlayer(e: Entity): boolean {
 /** entities that belong to chunk storage (whatever carries the player is saved with the player: vanilla RootVehicle) */
 export function isChunkSaved(e: Entity): boolean {
   if (carriesOnePlayer(e)) return false;
-  if (e instanceof ItemFrame) return true;
+  if (e instanceof ItemFrame || e instanceof ArmorStand) return true;
   return e instanceof AbstractMinecart || e instanceof Boat || e instanceof Mob || e instanceof ItemEntity || e instanceof EndCrystal || e instanceof Arrow || e instanceof LeashKnot || e instanceof FireworkRocket;
 }
 
@@ -317,10 +325,14 @@ Object.assign(ENTITY_NAMES, { piglin_brute: 'Piglin Brute' });
 
 // (Stage 4: the outer End)
 Object.assign(ENTITY_NAMES, { shulker: 'Shulker', shulker_bullet: 'Shulker Bullet', item_frame: 'Item Frame', glow_item_frame: 'Glow Item Frame', firework_rocket: 'Firework Rocket' });
+// (armour stand)
+ENTITY_NAMES.armor_stand = 'Armor Stand';
+// (minecarts) vanilla's names for the hopper, TNT and furnace minecarts
+Object.assign(ENTITY_NAMES, { hopper_minecart: 'Minecart with Hopper', tnt_minecart: 'Minecart with TNT', furnace_minecart: 'Minecart with Furnace' });
 
 /** entity type ids accepted by /summon */
 export function summonableTypes(): string[] {
-  return [...Object.keys(MOB_TYPES), 'tnt', 'experience_orb', 'arrow', 'trident', 'lightning_bolt', ...MINECART_TYPES, ...BOAT_TYPES, 'end_crystal', 'item_frame', 'glow_item_frame'];
+  return [...Object.keys(MOB_TYPES), 'tnt', 'experience_orb', 'arrow', 'trident', 'lightning_bolt', ...MINECART_TYPES, ...BOAT_TYPES, 'end_crystal', 'item_frame', 'glow_item_frame', 'armor_stand'];
 }
 
 /** vanilla MobCategory caps (per 289 spawnable chunks) */

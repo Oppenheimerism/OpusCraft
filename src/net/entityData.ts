@@ -41,7 +41,11 @@ const NOT_SENT = new Set([
 const NOT_SENT_BY_TYPE: Record<string, readonly string[]> = {
   item: ['age', 'pickupDelay', 'health', 'bobOffset', 'thrower'],
   experience_orb: ['age'],
+  // ((minecarts) vanilla MinecartFurnace sends only whether it's lit, not its fuel's count nor its push)
+  furnace_minecart: ['fuel', 'xPush', 'zPush'],
 };
+// ((minecarts) a container minecart's or chest boat's loot table, and its seed, not yet rolled: vanilla sends neither)
+NOT_SENT.add('lootTable').add('lootSeed');
 
 /**
  * sent coarsely: counters whose only use off the host is whether they're running (a baby, a mob on fire, angry, a

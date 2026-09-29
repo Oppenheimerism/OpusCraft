@@ -35,6 +35,8 @@ import type { ItemStack } from '../../item/item';
 import type { Hand } from '../../item/inventory';
 import type { ContainerMenu } from '../../inventory/container';
 import type { Level } from '../../game/level';
+// (signs)
+import { updateSignText } from '../../game/signs';
 
 /** a player another guest (or the host's player) sees, as last sent */
 interface Seen {
@@ -343,6 +345,10 @@ export class ServerPlayerSession {
         return this.editBook(p[1] as number, p[2] as string[], p[3] as string | null);
       case SB.Resync:
         return this.resync(p[1] as number[], p[2] as number, p[3] as boolean);
+      case SB.SignUpdate:
+        // (signs) vanilla handleSignUpdate: checked there (who may edit it, how near, not waxed, what the lines hold)
+        updateSignText(this.level, pl, p[1] as number, p[2] as number, p[3] as number, p[4] as boolean, p.slice(5, 9) as string[]);
+        return;
     }
   }
 

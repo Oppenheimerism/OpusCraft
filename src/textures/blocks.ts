@@ -45,6 +45,14 @@ import { registerCopperTextures } from './blocklib/copper';
 import { registerTrialChamberTextures } from './blocklib/trialChambers';
 // (bastions)
 import { registerBastionTextures } from './blocklib/bastion';
+// (signs) bamboo's planks and stripped block, for its signs' specks
+import { registerSignTextures } from './signs';
+// (ender chest) the shut chest's faces, for its item
+import { registerEnderChestTextures } from './enderChest';
+// (cake)
+import { registerCakeTextures } from './cake';
+// (minecarts)
+import { registerRailTextures } from './railsPowered';
 
 type Gen = () => TexDef;
 export const BLOCK_TEXTURES: Record<string, Gen> = {};
@@ -577,6 +585,14 @@ registerCopperTextures(T);
 registerTrialChamberTextures(T);
 // (bastions) polished basalt, the block of netherite, the lodestone
 registerBastionTextures(T);
+// (signs) bamboo's planks and stripped block
+registerSignTextures(T);
+// (ender chest) its item's faces
+registerEnderChestTextures(T);
+// (cake) the cake's top, sides, underside and cut face
+registerCakeTextures(T);
+// (minecarts) the powered, detector and activator rails, off and powered
+registerRailTextures(T);
 
 // Missing texture (vanilla's magenta/black checkerboard)
 T['missing'] = () => {

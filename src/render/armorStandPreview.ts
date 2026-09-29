@@ -38,9 +38,10 @@ export function armorStandModel(): ModelPart {
 
 /**
  * the stand's wood (vanilla textures/entity/armorstand/wood.png, 64x64): oak planks all over and smooth stone where
- * the base plate's faces are. An approximation drawn from the block textures, not a copy of vanilla's
+ * the base plate's faces are. An approximation drawn from the block textures, not a copy of vanilla's ((armour stand)
+ * the world's stands too: render/armorStandRenderer.ts)
  */
-function armorStandTexture(): Uint8ClampedArray {
+export function armorStandTexture(): Uint8ClampedArray {
   const still = (t: TexDef): TexImage => (isAnim(t) ? { w: t.w, h: t.h, data: t.frames[0] } : t);
   const wood = still(BLOCK_TEXTURES['oak_planks']()), stone = still(BLOCK_TEXTURES['smooth_stone']());
   const out = new Uint8ClampedArray(64 * 64 * 4);

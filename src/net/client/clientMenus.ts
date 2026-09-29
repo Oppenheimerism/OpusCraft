@@ -274,7 +274,7 @@ export class ClientMenus {
       case 'dropper':
         return new DispenserMenu(p, new DispenserBlockEntity(0, 0, 0, kind));
       case 'hopper':
-        return new HopperMenu(p, new HopperBlockEntity(0, 0, 0));
+        return new HopperMenu(p, new HopperBlockEntity(0, 0, 0), title || 'Hopper');
       case 'crafter':
         return new CrafterMenu(p, new CrafterBlockEntity(0, 0, 0));
       case 'horse': {

@@ -61,6 +61,8 @@ import { Rand } from '../core/rng';
 import { Squid } from '../entity/water';
 import { ThrownItem } from '../entity/throwable';
 import { AbstractMinecart } from '../entity/minecart';
+// (minecarts)
+import { renderMinecartContents } from './minecartContents';
 import { Boat } from '../entity/boat';
 import { EndCrystal } from '../entity/endCrystal';
 import { EyeOfEnder } from '../entity/eyeOfEnder';
@@ -105,6 +107,14 @@ import { ShulkerBullet } from '../entity/shulkerBullet';
 import { ItemFrame } from '../entity/itemFrame';
 import { ItemFrameRenderer } from './itemFrameRenderer';
 import { SkullRenderer } from './skullRenderer';
+// (signs)
+import { SignRenderer } from './signRenderer';
+// (ender chests)
+import { EnderChestRenderer } from './enderChestRenderer';
+// (spyglass)
+import { SpyglassRenderer } from './spyglassRenderer';
+import { ArmorStandRenderer, armorStandRenderSize, armorStandShowsName } from './armorStandRenderer';
+import { ArmorStand } from '../entity/armorStand';
 import { ElytraLayer } from './elytraLayer';
 import { FireworkRocket } from '../entity/fireworkRocket';
 import { renderFireworkRocket } from './fireworkRenderer';
@@ -215,8 +225,14 @@ export class EntityRenderDispatcher {
   private readonly frames: ItemFrameRenderer;
   /** mob heads: placed, held, worn and in the inventory */
   private readonly skulls: SkullRenderer;
+  private readonly signs: SignRenderer;
+  private readonly enderChests: EnderChestRenderer;
+  /** (spyglass) the spyglass's model in the hands and at the eye */
+  private readonly spyglasses: SpyglassRenderer;
   /** worn elytra (and the broken one's torn look as an item) */
   private readonly elytra: ElytraLayer;
+  /** (armour stand) the stands, and what they wear and hold */
+  private readonly armorStands: ArmorStandRenderer;
   /** (Stage 4: illagers) the pillager, vindicator, evoker, vex, ravager and the evoker's fangs */
   private readonly raiders: RaiderRenderers;
   /** (Stage 5: ocean) the guardians, their lasers, the elder's ghostly face */
@@ -248,7 +264,11 @@ export class EntityRenderDispatcher {
     this.shulkers = new ShulkerRenderers(gl);
     this.frames = new ItemFrameRenderer(gl, items);
     this.skulls = new SkullRenderer(gl);
+    this.signs = new SignRenderer(gl);
+    this.enderChests = new EnderChestRenderer(gl);
+    this.spyglasses = new SpyglassRenderer(gl);
     this.elytra = new ElytraLayer(gl, items);
+    this.armorStands = new ArmorStandRenderer(gl, items, this.armor, this.elytra);
     this.archaeology = new ArchaeologyRenderers(gl);
     this.endCrystals = new EndCrystalRenderer(gl);
     this.dragons = new EnderDragonRenderer(gl, this.endCrystals.beam);
@@ -432,6 +452,8 @@ export class EntityRenderDispatcher {
       else if (e instanceof ItemFrame) size = 16;
       // (vanilla FireworkRocketEntity.shouldRenderAtSqrDistance: within 64 blocks)
       else if (e instanceof FireworkRocket) size = 1;
+      // ((armour stand) and a stand four times as far as its size, a marker's as a block's)
+      else if (e instanceof ArmorStand) size = armorStandRenderSize(e);
       const maxD = size * 64 * opts.distanceScale;
       // (vanilla EndCrystalRenderer.shouldRender: a crystal with a beam is always drawn; the dragon is never culled)
       const beam = e instanceof EndCrystal && e.beamTarget !== null;
@@ -481,6 +503,9 @@ export class EntityRenderDispatcher {
     this.village.renderCampfires(b, this.items, level, cam, frustum);
     this.shulkers.renderBlockEntities(b, level, cam, partial, frustum);
     this.skulls.renderBlockEntities(b, level, cam, partial, frustum);
+    // (signs) the boards and their text; the glow's outline is for the camera's entity near enough
+    this.signs.renderBlockEntities(b, level, cam, frustum, level.player, !opts.drawPlayer);
+    this.enderChests.renderBlockEntities(b, level, cam, partial, frustum);
     this.pistons.render(b, this.items, level, cam, partial, frustum);
     this.archaeology.render(b, this.items, level, cam, partial, frustum);
     // (trial chambers) drawn in their cages as the spawner's mob is (vanilla SpawnerRenderer.renderEntityInSpawner)
@@ -586,6 +611,7 @@ export class EntityRenderDispatcher {
     else if (e instanceof Shulker) this.shulkers.renderShulker(b, e, dx, dy, dz, p);
     else if (e instanceof ShulkerBullet) this.shulkers.renderBullet(b, e, dx, dy, dz, p);
     else if (e instanceof ItemFrame) this.frames.render(b, e, dx, dy, dz);
+    else if (e instanceof ArmorStand) this.armorStands.render(b, this.pose, e, dx, dy, dz, p, level.player?.gameMode === 'spectator'); // (armour stand)
     else if (e instanceof Mob) this.renderMob(b, e, dx, dy, dz, p);
     else if (e instanceof LivingEntity && e.type === 'player') this.renderPlayer(b, e as Player, dx, dy, dz, p);
     else if (e instanceof ThrownTrident) this.items.trident.renderThrown(b, this.pose, e, dx, dy, dz, p, rotLerp(p, e.yawO, e.yaw));
@@ -627,6 +653,10 @@ export class EntityRenderDispatcher {
       // (multiplayer: vanilla PlayerRenderer.renderNameTag, another player's name over its head)
       this.setLight(b, level, e, x, y, z);
       this.nameTags.add((e as Player).profileName!, dx, dy + e.height + 0.5, dz, b.lightB, b.lightS, e.isShiftKeyDown());
+    } else if (e instanceof ArmorStand && this.renderNames && armorStandShowsName(e, dx * dx + dy * dy + dz * dz)) {
+      // (armour stand) its name, when set to show
+      this.setLight(b, level, e, x, y, z);
+      this.nameTags.add(e.customName!, dx, dy + e.height + 0.5, dz, b.lightB, b.lightS);
     }
     // (at the renderer's offset: a crouching player's flames sink with it)
     if (e.isOnFire() && !(e instanceof ItemEntity) && !(e instanceof ExperienceOrb)) this.renderFlame(b, e, dx, dy + renderOffsetY(e), dz, cam.yaw, level.gameTime);
@@ -1611,7 +1641,8 @@ export class EntityRenderDispatcher {
       pose.scale(0.75, 0.75, 0.75);
       pose.translate(-0.5, (e.displayOffset() - 8) / 16, 0.5);
       pose.rotY(90);
-      this.items.renderBlockState(b, pose, display);
+      // ((minecarts) a lit TNT minecart's TNT flashes and swells)
+      renderMinecartContents(b, pose, this.items, e, display, p);
       pose.pop();
     }
     pose.scale(-1, -1, 1);
@@ -1856,6 +1887,10 @@ function shadowRadius(e: Entity): number {
       break;
     case 'minecart':
     case 'chest_minecart':
+    // (minecarts)
+    case 'hopper_minecart':
+    case 'tnt_minecart':
+    case 'furnace_minecart':
       r = 0.7;
       break;
     case 'squid':

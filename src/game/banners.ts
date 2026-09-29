@@ -22,11 +22,12 @@ import type { Level } from './level';
 const blk = (st: number): Block => BLOCKS[STATE_BLOCK[st]];
 
 /**
- * vanilla BlockStateBase.isSolid: the legacy "solid" flag (a collision shape filling most of the block); banners are
- * forced solid (Properties.forceSolidOn), so one can stand on another
+ * vanilla BlockStateBase.isSolid: the legacy "solid" flag (a collision shape filling most of the block); banners,
+ * signs and cakes are forced solid (Properties.forceSolidOn), so one can stand on another
  */
 export function legacySolid(st: number): boolean {
-  return /_banner$/.test(blk(st).name) || isSolidBlock(st);
+  // (cake: the cake and the candle cakes are forced solid too)
+  return /_(banner|sign)$|^cake$|candle_cake$/.test(blk(st).name) || isSolidBlock(st);
 }
 
 /** vanilla BannerBlock.canSurvive: something solid under it */
