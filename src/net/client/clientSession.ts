@@ -5,7 +5,7 @@
 
 import type { Value } from '../codec';
 import { decode, encodeBundle, CodecError } from '../codec';
-import { SB, CB, Action, PoseFlag, checkPacket, checkLogin, SLOT_ARMOR, SLOT_OFFHAND, SLOT_COUNT, ANIMATE_SWING_OFF_HAND, type LoginInfo, type ReceivingReason } from '../protocol';
+import { SB, CB, Action, PoseFlag, checkPacket, checkLogin, packetFault, SLOT_ARMOR, SLOT_OFFHAND, SLOT_COUNT, ANIMATE_SWING_OFF_HAND, type LoginInfo, type ReceivingReason } from '../protocol';
 import { PROTOCOL_VERSION, BUILD_ID, MAX_HOST_MESSAGE, MAX_HOST_BACKLOG, MAX_HOST_BACKLOG_BYTES, TIMEOUT_TICKS, MAX_CHAT, MAX_GUEST_MESSAGE, MAX_GUEST_PACKETS, RESYNC_AFTER_TICKS, RESYNC_UNPLACED_TICKS, RESYNC_EVERY_TICKS } from '../config';
 import { HOST_PEER, type PeerId, type Transport } from '../transport/transport';
 import { itemFromHost, itemToWire } from '../items';
@@ -225,7 +225,8 @@ export class ClientSession {
           this.handle(p as Value[]);
         } catch (e) {
           console.error('multiplayer: handling a packet from the host', e);
-          return this.fail('something went wrong with it');
+          // (what went wrong and with what, on the Disconnected screen, where it can be read and passed on)
+          return this.fail(`something went wrong with it (${packetFault(CB, (p as Value[])[0], e)})`);
         }
         if (this.isClosed) return;
       }
@@ -1038,7 +1039,7 @@ export class ClientSession {
   /** the host sent something this game can't take: we leave, saying why */
   private fail(why: string): void {
     if (this.state === 'play' || this.state === 'login') {
-      this.out = [[SB.Disconnect, `Bad data from the host: ${why}`]];
+      this.out = [[SB.Disconnect, `Bad data from the host: ${why}`.slice(0, 256)]];
       this.flush();
     }
     this.lost(`Bad data from the host: ${why}`);

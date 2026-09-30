@@ -4,7 +4,7 @@
 
 import type { Value } from '../codec';
 import { decode, encodeBundle, CodecError } from '../codec';
-import { SB, CB, Action, PoseFlag, CLICK_TYPES, checkPacket, isAllowedChat, SLOT_ARMOR, SLOT_OFFHAND, SLOT_COUNT, ANIMATE_SWING_MAIN_HAND, ANIMATE_SWING_OFF_HAND, type LoginInfo, type ReceivingReason } from '../protocol';
+import { SB, CB, Action, PoseFlag, CLICK_TYPES, checkPacket, packetFault, isAllowedChat, SLOT_ARMOR, SLOT_OFFHAND, SLOT_COUNT, ANIMATE_SWING_MAIN_HAND, ANIMATE_SWING_OFF_HAND, type LoginInfo, type ReceivingReason } from '../protocol';
 import { PROTOCOL_VERSION, BUILD_ID, MAX_GUEST_MESSAGE, MAX_GUEST_PACKETS, MESSAGES_PER_TICK, MAX_GUEST_BACKLOG, MAX_GUEST_BACKLOG_BYTES, MAX_LOGIN_BACKLOG, MAX_GUESTS, LOGIN_TICKS, KEEPALIVE_TICKS, TIMEOUT_TICKS, GUEST_VIEW_DISTANCE, CHUNKS_PER_TICK, MAX_MOVE_PER_TICK, MOVES_KEPT_PER_TICK, RESYNC_MIN_TICKS, CHAT_SPAM_STEP, CHAT_SPAM_LIMIT, NAME_PATTERN, DROP_SPAM_STEP, DROP_SPAM_LIMIT, ENTITY_REACH_SLACK, MAX_MOTION, RESPAWN_BED_WAIT_TICKS } from '../config';
 import type { PeerId } from '../transport/transport';
 import { creativeItem, itemToWire } from '../items';
@@ -267,7 +267,8 @@ export class ServerPlayerSession {
           handle(p as Value[]);
         } catch (e) {
           console.error('multiplayer: handling a guest packet', e);
-          return this.disconnect('Something went wrong with what you sent');
+          // (what went wrong and with what, on the guest's Disconnected screen, where it can be read and passed on)
+          return this.disconnect(`Something went wrong with what you sent (${packetFault(SB, (p as Value[])[0], e)})`);
         }
         if (this.isGone) return;
       }

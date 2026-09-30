@@ -7,6 +7,16 @@ import type { Value } from './codec';
 import { MAX_CHAT, PROTOCOL_VERSION } from './config';
 import { SECTIONS, CAVE_BIOME_LEVELS } from '../world/constants';
 
+/**
+ * (a disconnect's reason, when something went wrong with a packet) the packet's name and what went wrong, short enough
+ * to read on the Disconnected screen, so that what it says can be passed on: SB's 12 → "UseItemOn", an error's message
+ */
+export function packetFault(table: Readonly<Record<string, number>>, id: unknown, e: unknown): string {
+  const name = Object.keys(table).find((k) => table[k] === id) ?? String(id);
+  const what = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
+  return `${name}: ${what}`.slice(0, 160);
+}
+
 /** guest → host (vanilla Serverbound*Packet) */
 export const SB = {
   /** [protocol, build, name, uuid, viewDistance]: the first thing a guest says (vanilla ServerboundHelloPacket) */
