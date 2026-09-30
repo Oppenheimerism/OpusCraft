@@ -807,6 +807,9 @@ export class Level {
       const nx = x + dx, ny = y + dy, nz = z + dz;
       const st = this.world.getState(nx, ny, nz);
       const f = FLAGS[st];
+      // (vanilla LiquidBlock.onPlace / neighborChanged: lava meeting water turns to obsidian or cobblestone there and
+      // then, shouldSpreadLiquid, rather than at its next tick, by when the water would have flowed in over it)
+      if (f & F_LAVA && BLOCKS[STATE_BLOCK[st]].s.fluid && !this.isClientSide && !this.fluids.checkLavaInteraction(nx, ny, nz)) continue;
       if (f & (F_WATER | F_LAVA) && BLOCKS[STATE_BLOCK[st]].s.fluid) this.scheduleTick(nx, ny, nz, fluidStateOf(st).type === 1 ? 5 : this.world.dim.ultraWarm ? 10 : 30);
       // (vanilla FallingBlock.getDelayAfterPlace: 2, the dragon egg's 5)
       else if (isGravityBlock(st)) this.scheduleTick(nx, ny, nz, BLOCKS[STATE_BLOCK[st]].name === 'dragon_egg' ? 5 : 2);

@@ -244,7 +244,9 @@ export class FluidTicker {
       if (n.type === WATER) {
         const out = fs.source ? S('obsidian') : S('cobblestone');
         this.level.setBlock(x, y, z, out);
+        // (vanilla LiquidBlock.fizz: level event 1501, the hiss and eight puffs of large smoke)
         this.level.sound.play('block.fire.extinguish', x + 0.5, y + 0.5, z + 0.5, 0.5, 2.6 + (Math.random() - Math.random()) * 0.8);
+        for (let i = 0; i < 8; i++) this.level.particles.spawn?.('large_smoke', x + Math.random(), y + 1.2, z + Math.random(), 0, 0, 0);
         return false;
       }
     }
