@@ -1952,6 +1952,9 @@ export class Game {
     const share = this.lanShare;
     if (!share || share.relay !== relay) return;
     const link = lanLink(share.code, relay);
+    // (the relay's gone, npm run lan stopped or started again: its friends were sent home, and the world goes back on
+    // it by itself once it's running, with the same code)
+    if (relay.state === 'connecting') return this.chat('The LAN server stopped, and friends on other computers were sent home. They can join again with the same code once it runs again.');
     if (relay.state === 'closed') {
       share.relay = null;
       share.why = relay.endCode === CLOSE_HOST_TAKEN

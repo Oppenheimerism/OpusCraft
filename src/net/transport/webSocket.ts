@@ -221,7 +221,7 @@ interface Guest {
  * relay's word on where friends can open the game comes in `lan` (and `onRelay` is called), as does whether it's gone
  */
 export class WebSocketHostTransport implements Transport {
-  private readonly ws: SocketLike;
+  private ws: SocketLike;
   private readonly guests = new Map<PeerId, Guest>();
   private msgCb: ((peer: PeerId, data: Uint8Array) => void) | null = null;
   private peerCb: ((peer: PeerId, joined: boolean, reason?: string) => void) | null = null;
@@ -239,19 +239,29 @@ export class WebSocketHostTransport implements Transport {
   onRelay: (() => void) | null = null;
   /** this world as the Multiplayer screens show it, last told */
   private world = '';
+  /** (the relay gone after this world was on it) tries so far to reach it again, and the next one's timer */
+  private retries = 0;
+  private retryTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(private readonly opts: SocketOptions = {}) {
-    const ws = (this.ws = (opts.socket ?? defaultSocket)(opts.url ?? relayUrl('host')));
+    this.ws = this.connect();
+  }
+
+  /** a socket to the relay, this end's from now on (a socket this end has left behind is heard no more) */
+  private connect(): SocketLike {
+    const ws = (this.opts.socket ?? defaultSocket)(this.opts.url ?? relayUrl('host'));
     ws.binaryType = 'arraybuffer';
     ws.onopen = () => {
-      if (this.state !== 'connecting') return;
+      if (this.state !== 'connecting' || ws !== this.ws) return;
       this.state = 'open';
       this.wasOpen = true;
+      this.retries = 0;
       if (this.world) ws.send(this.world);
     };
-    ws.onmessage = (ev) => this.received(ev.data);
-    ws.onclose = (ev) => this.ended(ev.code, ev.reason);
+    ws.onmessage = (ev) => ws === this.ws && this.received(ev.data);
+    ws.onclose = (ev) => ws === this.ws && this.ended(ev.code, ev.reason);
     ws.onerror = () => {};
+    return ws;
   }
 
   /** what the Multiplayer screens of other computers show of this world (said again only when it changes; never the join code) */
@@ -315,11 +325,24 @@ export class WebSocketHostTransport implements Transport {
   private ended(code: number, reason: string): void {
     const was = this.state;
     if (was === 'closed' && this.endReason) return;
-    this.state = 'closed';
     this.endCode = code;
     this.endReason = closeReason(code, reason, was === 'open');
     for (const [peer, g] of this.guests) this.arrive(g, () => this.peerCb?.(peer, false));
     this.guests.clear();
+    // (the relay went away after this world was on it: npm run lan stopped or started again. The guests on it have gone
+    // with it; this end tries to reach it again a second later, then twice as long each time, up to 10 s, so that once
+    // it's back this world is on it again and friends can join with the same code. Another page on this computer taking
+    // the relay, or this end closing, ends it for good. `onRelay` hears of the relay going, then of its coming back)
+    if (this.wasOpen && code !== CLOSE_HOST_TAKEN) {
+      this.state = 'connecting';
+      this.retryTimer = setTimeout(() => {
+        this.retryTimer = null;
+        if (this.state === 'connecting') this.ws = this.connect();
+      }, Math.min(10_000, 1000 * 2 ** this.retries++));
+      if (was === 'open') this.onRelay?.();
+      return;
+    }
+    this.state = 'closed';
     this.onRelay?.();
   }
 
@@ -371,6 +394,8 @@ export class WebSocketHostTransport implements Transport {
 
   close(): void {
     if (this.state === 'closed') return;
+    if (this.retryTimer) clearTimeout(this.retryTimer);
+    this.retryTimer = null;
     const outgoing = [...this.guests.values()].map((g) => g.outgoing.whenIdle());
     this.guests.clear();
     this.state = 'closed';
