@@ -85,14 +85,15 @@ export class Hud {
     // (Stage 4: totems) vanilla GameRenderer.renderItemActivation, drawn just before the HUD
     renderItemActivation(g, partial);
     if (p.gameMode === 'spectator') {
-      this.renderCrosshair(g, game);
+      if (!game.fingerAims()) this.renderCrosshair(g, game);
       this.renderEffects(g, game);
       this.bossOverlay.render(g);
       return;
     }
     const cx = Math.floor(W / 2);
     // crosshair
-    if (!game.showDebug || true) this.renderCrosshair(g, game);
+    // (fingers that touch the world where it is have none, as Bedrock's: game/touch.ts)
+    if (!game.fingerAims()) this.renderCrosshair(g, game);
     // hotbar
     g.sprite('hotbar', cx - 91, H - 22, 182, 22);
     g.sprite('hotbar_selection', cx - 91 - 1 + p.inventory.selected * 20, H - 22 - 1, 24, 23);

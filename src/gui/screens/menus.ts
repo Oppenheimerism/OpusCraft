@@ -54,7 +54,7 @@ let toldOfTouch = false;
  */
 export function afterTouchNotice(game: Game, back: Screen, next: () => Screen): Screen {
   if (toldOfTouch || !touchOnly()) return next();
-  const what = `${GAME_NAME} is made for a keyboard and a mouse, and its touch controls are new. Turn your phone sideways. Slide your left thumb to move, drag a finger to look around. Tap to place or use, or to hit a mob. Hold a finger still to break a block.`;
+  const what = `${GAME_NAME} is made for a keyboard and a mouse, and its touch controls are new. Turn your phone sideways. The stick walks; drag a finger to look around. Tap a block to place or use, hold a finger on it to break it; tap a mob to hit it. Options, Controls has the other way: a crosshair and buttons.`;
   return new ConfirmScreen(game, 'Touch Controls', what, 'Proceed', 'Back', (ok) => {
     toldOfTouch ||= ok;
     game.setScreen(ok ? next() : back);

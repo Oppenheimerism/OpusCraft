@@ -90,7 +90,7 @@ const fakeSocket = () => ({ onopen: null, onmessage: null, onclose: null, onerro
   check('an iPad calling itself a Mac, nothing on it that hovers: touch-only', m.touchOnly());
   device('Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1', 5, false);
   const warning = m.afterTouchNotice(game, back, () => next);
-  check('a phone: the notice first, with Proceed and Back, saying how fingers play the game', m.touchOnly() && warning instanceof m.ConfirmScreen && warning.title === 'Touch Controls' && warning.yes === 'Proceed' && warning.no === 'Back' && /left thumb/.test(warning.message) && /Hold a finger/.test(warning.message) && warning.message.startsWith(m.GAME_NAME), `${warning?.title}: ${warning?.message}`);
+  check('a phone: the notice first, with Proceed and Back, saying how fingers play the game', m.touchOnly() && warning instanceof m.ConfirmScreen && warning.title === 'Touch Controls' && warning.yes === 'Proceed' && warning.no === 'Back' && /The stick walks/.test(warning.message) && /hold a finger on it to break it/.test(warning.message) && warning.message.startsWith(m.GAME_NAME), `${warning?.title}: ${warning?.message}`);
   warning.callback(false);
   check('Back: the title screen again, and the notice again the next time', game.shown === back && m.afterTouchNotice(game, back, () => next) instanceof m.ConfirmScreen);
   warning.callback(true);

@@ -65,9 +65,10 @@ itself (TypeScript and Vite build it; `ws` carries multiplayer between computers
 Open https://opuscraft.pages.dev in a desktop browser with WebGL 2 (it is developed and played in Chrome and Safari). The keys are
 the original's: WASD, Space, Shift, E, Q, T, F3, F5, Esc.
 
-On a phone or a tablet, held sideways: slide your left thumb to move and drag a finger to look around; tap to place
-or use, or to hit a mob; hold a finger still to break a block. Buttons jump, sneak and use, and the three dots beside
-the hotbar open the inventory.
+On a phone or a tablet, held sideways, it is played by touch, the way Bedrock Edition is: the stick walks and a
+dragged finger looks around; tap a block to place or use, hold a finger on it to break it, tap a mob to hit it.
+Buttons jump, sneak and sprint, and the dots at the hotbar's end open the inventory. **Options**, **Controls** has
+the other way of touching the world: a crosshair, with buttons to attack and to use.
 
 Your worlds are kept in your browser, for that site. **Make Backup** (Singleplayer, pick a world, **Edit**) saves a
 world as a file, and **Import World** brings one back, on any computer.

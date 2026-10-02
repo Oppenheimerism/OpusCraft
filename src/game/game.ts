@@ -12,7 +12,7 @@ import { ChunkManager } from '../world/chunkManager';
 import { Level } from './level';
 import { Player, GameMode } from '../entity/player';
 import { Input, KEYS } from './input';
-import { TouchControls, touchOnly } from './touch';
+import { TouchControls, touchOnly, aimAngles, type TouchMode } from './touch';
 import { Interaction } from './interaction';
 import { mat4, translate, rotateX, rotateZ, rotateY, DEG, clamp } from '../core/math';
 import { BLOCKS, STATE_BLOCK, FLAGS, F_WATER, F_LAVA, F_OPAQUE, F_COLLIDE } from '../world/block';
@@ -119,6 +119,8 @@ export class Game {
   /** fingers on a phone's or a tablet's screen, as the keys and the mouse */
   readonly touch = new TouchControls(this);
   private askedFullscreen = false;
+  /** the view's height in degrees as it was last drawn (what a finger aims through: game/touch.ts) */
+  private viewFov = 70;
   interaction!: Interaction;
   overlay!: Overlay;
   opts: GameOptions;
@@ -135,7 +137,7 @@ export class Game {
     isSurvival: () => this.player?.gameMode === 'survival' || this.player?.gameMode === 'adventure',
     inventoryItems: () => this.inventoryItemIds(),
     keyName: (a) => keyDisplayName(this.opts.keys[a] ?? ''),
-    touch: () => this.input.touch,
+    touch: () => (this.input.touch ? this.touchMode() : null),
     getStep: () => this.opts.tutorialStep as TutorialStep,
     setStepOption: (st) => {
       this.opts.tutorialStep = st;
@@ -432,8 +434,59 @@ export class Game {
     return (window.devicePixelRatio || 1) / this.gui.scale;
   }
 
-  crosshairEntity(): boolean {
-    return !!this.interaction?.entityHit;
+  /** (a guest's clicks are the host's to act on, at what the guest looks at: so with the crosshair) */
+  touchMode(): TouchMode {
+    return this.client ? 'crosshair' : this.opts.touchMode;
+  }
+
+  /** fingers touch the world where it is: there is no crosshair, and nothing is aimed at but under a finger */
+  fingerAims(): boolean {
+    return this.input.touch && this.touchMode() === 'tap';
+  }
+
+  targetAt(x: number, y: number): 'entity' | 'block' | null {
+    if (!this.inWorld || !this.spawned) return null;
+    this.pickThrough(x, y);
+    return this.interaction.entityHit ? 'entity' : this.interaction.hit ? 'block' : null;
+  }
+
+  /** what the player would hit aiming through (x, y) of the GUI: Interaction's hit and entityHit */
+  private pickThrough(x: number, y: number): void {
+    const p = this.player, s = this.gui.scale, w = this.canvas.width, h = this.canvas.height;
+    const [yaw, pitch] = aimAngles(p.yaw, p.pitch, this.viewFov, w / h, ((x * s) / w) * 2 - 1, 1 - ((y * s) / h) * 2);
+    this.interaction.pick(p.x, p.y + p.eyeHeight, p.z, yaw, pitch);
+  }
+
+  flying(): boolean {
+    return !!this.player?.flying;
+  }
+
+  /**
+   * the Auto-Jump option (vanilla LocalPlayer.updateAutoJump, in short): walking along the ground into a step higher
+   * than a slab and no higher than a jump, with room for the player on top of it, jumps it
+   */
+  private autoJumps(p: Player): boolean {
+    const i = p.input;
+    if (!p.onGround || !p.horizontalCollision || i.sneak || p.vehicle || p.flying) return false;
+    const f = (i.forward ? 1 : 0) - (i.back ? 1 : 0), l = (i.left ? 1 : 0) - (i.right ? 1 : 0);
+    if (!f && !l) return false;
+    // (ahead is (-sin yaw, cos yaw), left of it (cos yaw, sin yaw))
+    const yr = (p.yaw * Math.PI) / 180, n = Math.hypot(f, l) / 0.4;
+    const ahead = p.bb.move((-Math.sin(yr) * f + Math.cos(yr) * l) / n, 0, (Math.cos(yr) * f + Math.sin(yr) * l) / n);
+    let top = -Infinity;
+    for (const b of p.collisionBoxes(ahead)) top = Math.max(top, b.maxY);
+    const up = top - p.y;
+    return up > 0.5 && up <= 1.2 && p.isFree(p.bb.move(0, up + 0.01, 0)) && p.isFree(ahead.move(0, up + 0.01, 0));
+  }
+
+  dropStack(): void {
+    if (!this.inWorld || !this.spawned || this.screen) return;
+    if (this.client) this.client.drop(true);
+    else this.interaction.drop(true);
+  }
+
+  breakProgress(): number {
+    return this.interaction?.destroying ? this.interaction.destroyProgress : 0;
   }
 
   tapKey(code: string): void {
@@ -1332,7 +1385,11 @@ export class Game {
     if (this.spawned) {
       const p = this.player;
       const eye = p.y + p.eyeHeight;
-      this.interaction.pick(p.x, eye, p.z, p.yaw, p.pitch);
+      const aim = this.fingerAims() ? this.touch.aim() : null;
+      if (aim) this.pickThrough(aim[0], aim[1]);
+      // (fingers that touch the world where it is, and none aiming: nothing is aimed at)
+      else if (this.fingerAims()) this.interaction.hit = this.interaction.entityHit = null;
+      else this.interaction.pick(p.x, eye, p.z, p.yaw, p.pitch);
     }
   }
 
@@ -1422,6 +1479,7 @@ export class Game {
     p.input.jump = active && inp.isDown(KEYS.jump);
     p.input.sneak = active && (inp.isDown(KEYS.sneak) || inp.isDown('ShiftRight'));
     p.input.sprint = active && (inp.isDown(KEYS.sprint) || inp.isDown('ControlRight'));
+    if (active && this.opts.autoJump && !p.input.jump && this.autoJumps(p)) p.input.jump = true;
     const clicks = inp.consumeClicks();
     if (client) {
       // (a guest's attack and use buttons are the host's to act on; picking a block is the guest's own inventory's)
@@ -1437,6 +1495,7 @@ export class Game {
       if (p.isUsingItem()) this.interaction.releaseUsingItem();
     }
     if (!client) this.interaction.tickUsingItem();
+    this.touch.ticked();
     this.fovModO = this.fovMod;
     // (spyglass) scoping in first person: the spyglass's 0.1, not scaled by the FOV effects option
     const target = scopedFov(p, this.thirdPerson === 0) ?? clamp(1 + (p.fovModifier() - 1) * this.opts.fovEffects, 0.1, 1.5);
@@ -1553,7 +1612,7 @@ export class Game {
     }
     this.renderWorld(partial);
     if (!this.hideGui) this.hud.render(g, this, partial, !!this.screen && (this.screen as { isChat?: boolean }).isChat === true);
-    if (!this.hideGui) this.touch.render(g);
+    if (!this.hideGui) this.touch.render(g, performance.now());
     if (this.screen) this.screen.render(g, this.mouseX, this.mouseY, partial);
     this.touch.renderOver(g);
     // vanilla GameRenderer: toasts over everything, hidden with F1
@@ -1623,6 +1682,7 @@ export class Game {
       cz = ez - lz * dist;
     }
     const cam: Camera = camOverride ?? { x: cx, y: cy, z: cz, yaw, pitch, fov };
+    this.viewFov = fov;
     const biome = this.world.getBiome3(Math.floor(cam.x), Math.floor(cam.y), Math.floor(cam.z));
     const b = BIOMES[biome];
     const w = this.world;

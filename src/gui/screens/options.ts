@@ -229,6 +229,12 @@ export class ControlsScreen extends OptionsSubScreen {
       boolOption(g, 'Auto-Jump', 'autoJump'),
       boolOption(g, 'Operator Items Tab', 'operatorItemsTab'),
     );
+    // (played with fingers: which of Bedrock's two ways they touch the world, game/touch.ts. A mouse's player never sees it)
+    if (g.input.touch)
+      list.addBig(new CycleButton<'tap' | 'crosshair'>(0, 0, 310, 20, 'Touch Controls', ['tap', 'crosshair'], g.opts.touchMode, (v) => (v === 'tap' ? 'Joystick & tap to interact' : 'Joystick & aim crosshair'), (v) => {
+        g.opts.touchMode = v;
+        g.saveOptions();
+      }));
   }
 }
 

@@ -1,5 +1,6 @@
 // Game options (vanilla options.txt equivalents), persisted in localStorage.
 
+import { touchOnly } from './touch';
 import { KEYS } from './input';
 
 export interface GameOptions {
@@ -54,6 +55,8 @@ export interface GameOptions {
   mouseWheelSensitivity: number;
   discreteMouseScroll: boolean;
   touchscreen: boolean;
+  /** (game/touch.ts) how fingers touch the world: a block where it is tapped, or what the crosshair is on with buttons */
+  touchMode: 'tap' | 'crosshair';
   rawMouseInput: boolean;
   // accessibility / chat
   narrator: number;
@@ -148,6 +151,7 @@ export const DEFAULT_OPTIONS: GameOptions = {
   mouseWheelSensitivity: 1,
   discreteMouseScroll: false,
   touchscreen: false,
+  touchMode: 'tap',
   rawMouseInput: true,
   narrator: 0,
   highContrast: false,
@@ -198,7 +202,9 @@ export function loadOptions(): GameOptions {
       const saved = JSON.parse(s) as Partial<GameOptions> & { clouds?: number | boolean };
       if (typeof saved.clouds === 'boolean') saved.clouds = saved.clouds ? 2 : 0;
       o = { ...o, ...(saved as Partial<GameOptions>), keys: { ...DEFAULT_KEYS, ...(saved.keys ?? {}) } };
-    }
+      // (options saved before there were touch controls, on a phone: Auto-Jump on, as below)
+      if (saved.touchMode === undefined && touchOnly()) o.autoJump = true;
+    } else if (touchOnly()) o.autoJump = true; // (Bedrock: "Auto jump" is on by default on a phone, where jumping is a button to reach for)
   } catch {
     /* ignore */
   }

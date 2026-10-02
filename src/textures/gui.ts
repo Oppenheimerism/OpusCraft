@@ -23,10 +23,13 @@ import { GAME_NAME } from '../brand';
 import { FONT } from './font';
 import { BLOCK_TEXTURES } from './blocks';
 import { MOB_EFFECT_TEXTURES } from './mobEffects';
+import { TOUCH_TEXTURES } from './touchControls';
 
 type Gen = () => TexImage;
 export const GUI_TEXTURES: Record<string, Gen> = {};
 const G = GUI_TEXTURES;
+// (the touch controls' buttons and stick: textures/touchControls.ts)
+Object.assign(G, TOUCH_TEXTURES);
 
 function R(name: string, salt = 0): Rand {
   return new Rand(hashString('gui:' + name) ^ salt, 91);
