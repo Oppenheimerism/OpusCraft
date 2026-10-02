@@ -9,6 +9,7 @@ import { shapeOffset } from '../world/blockOffset';
 import { getStateModels, initMesher } from './mesher';
 import { destroyStages } from '../textures/env';
 import type { Game } from '../game/game';
+import { GAME_NAME, GAME_VERSION } from '../brand';
 
 const LINE_VS = `#version 300 es
 layout(location=0) in vec3 a_pos;
@@ -382,7 +383,7 @@ export function debugLines(game: Game): string[] {
   const r = game.renderer.world.stats;
   const yawW = ((p.yaw % 360) + 540) % 360 - 180;
   return [
-    `Minecraft 1.21.8 (vanilla)`,
+    `${GAME_NAME} ${GAME_VERSION} (web)`,
     `${game.fps} fps T: inf vsync fancy-clouds B: 2`,
     `C: ${r.drawn}/${r.sections} (s) D: ${game.opts.renderDistance}, pC: 000, pU: 00, aB: ${game.pool?.busy() ?? 0}`,
     `E: ${game.renderer.entities.rendered}/${game.level.entities.length}, SD: ${game.level.simulationDistance}`,

@@ -17,6 +17,7 @@ import { COLOR_CODES, type GuiGraphics } from '../guiGraphics';
 import { JavaRandom } from '../../core/rng';
 import { FONT, glyphWidth } from '../../textures/font';
 import { END_POEM, CREDITS, POSTCREDITS } from './endTexts';
+import { GAME_NAME } from '../../brand';
 
 /** vanilla OBFUSCATE_TOKEN (white, obfuscated, green, aqua): where the poem has words the player can't read */
 const OBFUSCATE_TOKEN = '§f§k§a§b';
@@ -237,9 +238,9 @@ export class WinScreen extends Screen {
     const top = this.height + 50;
     const f = -this.scroll;
     // the logo, as on the title screen
-    const lx = Math.floor(this.width / 2) - 137;
-    if (!g.sprite('title_logo', lx, top + f)) g.centered('MINECRAFT', Math.floor(this.width / 2), top + f + 16, 0xffffff, true);
-    g.sprite('title_edition', lx + 88, top + f + 37);
+    const cx = Math.floor(this.width / 2);
+    if (!g.sprite('title_logo', cx - (g.spriteWidth('title_logo') >> 1), top + f)) g.centered(GAME_NAME.toUpperCase(), cx, top + f + 16, 0xffffff, true);
+    g.sprite('title_edition', cx - 64, top + f + 37);
     let k = top + 100;
     let shift = 0;
     for (let l = 0; l < lines.length; l++) {

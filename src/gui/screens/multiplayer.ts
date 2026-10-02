@@ -293,6 +293,12 @@ export class JoinMultiplayerScreen extends Screen {
     if (!this.name) g.centered('Type your name: use the same one each time to keep your things', cx, this.height - 63, 0xffff55, true);
     else if (!this.nameOk()) g.centered('A name is 3 to 16 letters, digits or _', cx, this.height - 63, 0xff5555, true);
     else if (s && 'world' in s && s.via === 'relay' && !this.codeOk()) g.centered("Type the join code from the host's screen", cx, this.height - 63, 0xff5555, true);
+    // (a site with no relay, as the game's public one, and nothing heard: who can join here, and how friends on other
+    // computers can play, under the "Scanning..." row)
+    if (this.relay?.gone && this.list.entries.length === 1) {
+      const how = g.wrap('To play with friends on other computers, one of you runs the game on their own computer: see Source Code on the title screen.', Math.min(this.width - 40, 340));
+      ['Here, only other windows of this browser can join.', ...how].slice(0, 5).forEach((l, i) => g.centered(l, cx, 92 + (i ? 4 : 0) + i * 10, 0x808080, true));
+    }
     this.renderTooltip(g, mx, my);
     void partial;
   }

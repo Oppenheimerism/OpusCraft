@@ -5,6 +5,7 @@
 
 // (jukebox) the discs, for Sound of Music
 import { JUKEBOX_SONGS } from '../item/jukeboxSongs';
+import { GAME_NAME } from '../brand';
 
 export type FrameType = 'task' | 'goal' | 'challenge';
 
@@ -215,7 +216,7 @@ export const TABS: { root: string; background: string }[] = [
 
 const A: AdvancementDef[] = [
   // --- Minecraft (story)
-  { id: 'story/root', parent: null, title: 'Minecraft', description: 'The heart and story of the game', icon: 'grass_block', frame: 'task', toast: false, announce: false, criteria: { crafting_table: inv('crafting_table') } },
+  { id: 'story/root', parent: null, title: GAME_NAME, description: 'The heart and story of the game', icon: 'grass_block', frame: 'task', toast: false, announce: false, criteria: { crafting_table: inv('crafting_table') } },
   { id: 'story/mine_stone', parent: 'story/root', title: 'Stone Age', description: 'Mine Stone with your new Pickaxe', icon: 'wooden_pickaxe', frame: 'task', criteria: { get_stone: inv('cobblestone', 'blackstone', 'cobbled_deepslate') } },
   { id: 'story/upgrade_tools', parent: 'story/mine_stone', title: 'Getting an Upgrade', description: 'Construct a better Pickaxe', icon: 'stone_pickaxe', frame: 'task', criteria: { stone_pickaxe: inv('stone_pickaxe') } },
   { id: 'story/smelt_iron', parent: 'story/upgrade_tools', title: 'Acquire Hardware', description: 'Smelt an Iron Ingot', icon: 'iron_ingot', frame: 'task', criteria: { iron: inv('iron_ingot') } },
@@ -307,7 +308,7 @@ const A: AdvancementDef[] = [
   { id: 'adventure/salvage_sherd', parent: 'adventure/root', title: 'Respecting the Remnants', description: 'Brush a Suspicious block to obtain a Pottery Sherd', icon: 'brush', frame: 'task', criteria: each(ARCHAEOLOGY_TABLES, (n) => ({ t: 'container_loot', table: `archaeology/${n}` })), requirements: [ARCHAEOLOGY_TABLES] },
   { id: 'adventure/avoid_vibration', parent: 'adventure/root', title: 'Sneak 100', description: 'Sneak near a Sculk Sensor or Warden to prevent it from detecting you', icon: 'sculk_sensor', frame: 'task', criteria: { avoid_vibration: { t: 'avoid_vibration' } } },
   { id: 'adventure/sleep_in_bed', parent: 'adventure/root', title: 'Sweet Dreams', description: 'Sleep in a Bed to change your respawn point', icon: 'red_bed', frame: 'task', criteria: one({ t: 'slept' }) },
-  { id: 'adventure/minecraft_trials_edition', parent: 'adventure/root', title: 'Minecraft: Trial(s) Edition', description: 'Step foot in a Trial Chamber', icon: 'chiseled_tuff', frame: 'task', criteria: { minecraft_trials_edition: { t: 'structure', structure: 'trial_chambers' } } },
+  { id: 'adventure/minecraft_trials_edition', parent: 'adventure/root', title: `${GAME_NAME}: Trial(s) Edition`, description: 'Step foot in a Trial Chamber', icon: 'chiseled_tuff', frame: 'task', criteria: { minecraft_trials_edition: { t: 'structure', structure: 'trial_chambers' } } },
   { id: 'adventure/hero_of_the_village', parent: 'adventure/voluntary_exile', title: 'Hero of the Village', description: 'Successfully defend a village from a raid', icon: 'white_banner', frame: 'challenge', criteria: one({ t: 'raid_won' }) },
   { id: 'adventure/throw_trident', parent: 'adventure/kill_a_mob', title: 'A Throwaway Joke', description: 'Throw a Trident at something.\nNote: Throwing away your only weapon is not a good idea.', icon: 'trident', frame: 'task', criteria: one({ t: 'throw_trident' }) },
   { id: 'adventure/shoot_arrow', parent: 'adventure/kill_a_mob', title: 'Take Aim', description: 'Shoot something with an Arrow', icon: 'bow', frame: 'task', criteria: one({ t: 'shoot_arrow' }) },

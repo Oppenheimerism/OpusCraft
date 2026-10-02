@@ -1,4 +1,4 @@
-// M5b: the 1.21 advancements. The tree (Minecraft: Trial(s) Edition under Adventure, its six children, Revaulting
+// M5b: the 1.21 advancements. The tree (Minecraft: Trial(s) Edition, under the game's own name, under Adventure, its six children, Revaulting
 // under Under Lock and Key; frames and icons); Trial(s) Edition inside a trial chambers' piece (every 20 ticks, the
 // Overworld only); Blowback for a breeze killed by a breeze's wind charge turned back by the player (not a player's own
 // charge, not another mob); Who Needs Rockets? for a wind charge throwing the player 7 blocks up (a jump and a charge;
@@ -11,7 +11,7 @@ import { load, check, flatLevel, playerAt, rightClick, exitWithStatus } from './
 setTimeout(() => { console.log('TIMEOUT'); process.exit(2); }, 300000).unref();
 
 const { m, close } = await load([
-  '/src/game/spawner.ts', '/src/entity/breeze.ts', '/src/entity/windCharge.ts', '/src/game/combat.ts', '/src/game/mace.ts', '/src/game/windBurst.ts', '/src/game/windCharges.ts',
+  '/src/brand.ts', '/src/game/spawner.ts', '/src/entity/breeze.ts', '/src/entity/windCharge.ts', '/src/game/combat.ts', '/src/game/mace.ts', '/src/game/windBurst.ts', '/src/game/windCharges.ts',
   '/src/game/trialChamberProgress.ts', '/src/game/trialChamberStructure.ts', '/src/entity/effects.ts',
 ]);
 const G = 64;
@@ -28,8 +28,8 @@ function earned(triggers) {
 
 {
   const kids = ['under_lock_and_key', 'blowback', 'who_needs_rockets', 'crafters_crafting_crafters', 'lighten_up', 'overoverkill'];
-  check('Minecraft: Trial(s) Edition under Adventure, "Step foot in a Trial Chamber", chiseled tuff',
-    A('minecraft_trials_edition')?.parent === 'adventure/root' && A('minecraft_trials_edition').title === 'Minecraft: Trial(s) Edition' && A('minecraft_trials_edition').icon === 'chiseled_tuff');
+  check('Trial(s) Edition, with the game\'s name before it, under Adventure, "Step foot in a Trial Chamber", chiseled tuff',
+    A('minecraft_trials_edition')?.parent === 'adventure/root' && A('minecraft_trials_edition').title === `${m.GAME_NAME}: Trial(s) Edition` && A('minecraft_trials_edition').icon === 'chiseled_tuff');
   check('its six children, and Revaulting under Under Lock and Key', kids.every((k) => A(k)?.parent === 'adventure/minecraft_trials_edition') && A('revaulting').parent === 'adventure/under_lock_and_key');
   check('frames: Blowback and Over-Overkill challenges, Revaulting a goal, the rest tasks',
     A('blowback').frame === 'challenge' && A('overoverkill').frame === 'challenge' && A('revaulting').frame === 'goal' &&

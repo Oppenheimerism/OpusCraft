@@ -497,6 +497,8 @@ export class RelayWorldList {
   version = 0;
   /** whether the relay answered */
   connected = false;
+  /** whether there is no relay to hear from: it never answered (a site with none, as the game's public one), or it went */
+  gone = false;
 
   constructor(opts: SocketOptions = {}) {
     try {
@@ -508,6 +510,7 @@ export class RelayWorldList {
       ws.onmessage = (ev) => this.received(ev.data);
       ws.onclose = () => {
         this.connected = false;
+        this.gone = true;
         if (this.heard.length) this.heard = [];
         this.version++;
       };
@@ -515,6 +518,7 @@ export class RelayWorldList {
     } catch {
       // (no WebSocket here, or not to that address: no worlds from the relay)
       this.ws = null;
+      this.gone = true;
     }
   }
 

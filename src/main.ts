@@ -2,7 +2,7 @@
 
 import { Game } from './game/game';
 import { installScreens } from './gui/screens';
-import { TitleScreen, newWorldMeta } from './gui/screens/menus';
+import { TitleScreen, newWorldMeta, afterKeyboardWarning } from './gui/screens/menus';
 import { openToLanOnceSpawned, joinFirstLanWorld, guestModeParam, JoinMultiplayerScreen } from './gui/screens/multiplayer';
 import { MULTIPLAYER_ENABLED } from './net/config';
 import { getWorldMeta } from './storage/worldStore';
@@ -56,7 +56,8 @@ async function main(): Promise<void> {
     game.setScreen(new TitleScreen(game, false));
     joinFirstLanWorld(game, params.get('code') ?? '');
   } else if (joinCode !== null) {
-    game.setScreen(new JoinMultiplayerScreen(game, new TitleScreen(game, false), joinCode));
+    const title = new TitleScreen(game, false);
+    game.setScreen(afterKeyboardWarning(game, title, () => new JoinMultiplayerScreen(game, title, joinCode)));
   } else {
     game.setScreen(new TitleScreen(game, true));
   }

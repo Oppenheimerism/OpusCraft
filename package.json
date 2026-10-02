@@ -1,8 +1,13 @@
 {
-  "name": "minecraft-replica",
+  "name": "opuscraft",
   "private": true,
   "version": "0.1.0",
+  "description": "Minecraft Java Edition 1.21, rebuilt from scratch for the browser by Claude Opus 5.5. Not an official Minecraft product.",
+  "license": "MIT",
   "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",

@@ -2,7 +2,7 @@
 // message screens (vanilla 1.21 layouts and strings).
 
 import type { Game } from '../../game/game';
-import { Screen, Button, CycleButton, EditBox, IconButton } from '../screen';
+import { Screen, Button, CycleButton, EditBox, IconButton, playClick } from '../screen';
 import { ScrollList } from '../list';
 import type { GuiGraphics } from '../guiGraphics';
 import { OptionsScreen, LanguageScreen, AccessibilityOptionsScreen, DIFFICULTY_NAMES, DIFFICULTY_INFO } from './options';
@@ -11,8 +11,8 @@ import { tidyUpInterruptedImport } from '../../storage/worldTransfer';
 import { makeBackup, importWorldFiles, pickWorldFiles, WorldFileDrop } from './worldFiles';
 import { JoinMultiplayerScreen } from './multiplayer';
 import { MULTIPLAYER_ENABLED } from '../../net/config';
-
-export const GAME_VERSION = '1.21.8';
+import { GAME_NAME, GAME_VERSION, SOURCE_URL } from '../../brand';
+import { WinScreen } from './winScreen';
 
 const SPLASHES = [
   'Blocky and proud!', 'Now with 100% more cubes!', 'Hand-placed pixels!', 'Punch a tree!', "Don't dig straight down!",
@@ -27,6 +27,7 @@ const SPLASHES = [
   'Sandbox!', 'Adventure awaits!', "Don't feed the lava!", 'Night falls fast!', 'Cubes, not spheres!', 'Tall grass sways!',
   'Mine the mountain!', 'Caves echo!', 'Snowy peaks!', 'Now in stereo!', 'Sixty frames of fun!', 'Pixel perfect!',
   'Grass is green-ish!', 'The sky is the limit!', 'Try the chat commands!', 'Chop, chop!', 'Rain or shine!',
+  'Made from scratch!', 'No assets, all code!', 'Every pixel drawn in code!', 'Every sound synthesized!',
 ];
 
 function pickSplash(): string {
@@ -36,6 +37,31 @@ function pickSplash(): string {
   if (m === 1 && day === 1) return 'Happy new year!';
   if (m === 10 && day === 31) return 'OOoooOOOoooo! Spooky!';
   return SPLASHES[Math.floor(Math.random() * SPLASHES.length)];
+}
+
+/** the title screen's bottom right corner (vanilla's "Copyright Mojang AB. Do not distribute!", and like it a way to the credits) */
+const UNOFFICIAL = 'Not an official Minecraft product';
+
+/** a phone or a tablet, with no mouse or trackpad to play with (a stylus that hovers isn't one: so by its name too) */
+export function touchOnly(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 0 && typeof matchMedia === 'function' && !matchMedia('(any-hover: hover)').matches);
+}
+
+let toldItNeedsKeys = false;
+
+/**
+ * Going on from the title screen on a phone or a tablet, the first time: the game has no touch controls yet, and says
+ * so, the way vanilla warns before Multiplayer (SafetyScreen: what to know, then Proceed or Back). Anywhere else, and
+ * once told, straight on to `next`.
+ */
+export function afterKeyboardWarning(game: Game, back: Screen, next: () => Screen): Screen {
+  if (toldItNeedsKeys || !touchOnly()) return next();
+  const what = `${GAME_NAME} has no touch controls yet: it is played with a keyboard and a mouse. Open this page on a computer to play. You can still look around here.`;
+  return new ConfirmScreen(game, 'Keyboard and Mouse Needed', what, 'Proceed', 'Back', (ok) => {
+    toldItNeedsKeys ||= ok;
+    game.setScreen(ok ? next() : back);
+  });
 }
 
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
@@ -55,10 +81,11 @@ export class TitleScreen extends Screen {
     const g = this.game;
     const cx = Math.floor(this.width / 2);
     const l = Math.floor(this.height / 4) + 48;
-    this.add(new Button(cx - 100, l, 200, 20, 'Singleplayer', () => g.setScreen(new SelectWorldScreen(g, this))));
+    this.add(new Button(cx - 100, l, 200, 20, 'Singleplayer', () => g.setScreen(afterKeyboardWarning(g, this, () => new SelectWorldScreen(g, this)))));
     // (multiplayer/ switched off, the button stays greyed out, as it was)
-    this.add(new Button(cx - 100, l + 24, 200, 20, 'Multiplayer', () => g.setScreen(new JoinMultiplayerScreen(g, this)))).active = MULTIPLAYER_ENABLED;
-    this.add(new Button(cx - 100, l + 48, 200, 20, 'Minecraft Realms', () => {})).active = false;
+    this.add(new Button(cx - 100, l + 24, 200, 20, 'Multiplayer', () => g.setScreen(afterKeyboardWarning(g, this, () => new JoinMultiplayerScreen(g, this))))).active = MULTIPLAYER_ENABLED;
+    // (where vanilla has Minecraft Realms: the game's source, in a tab of its own)
+    this.add(new Button(cx - 100, l + 48, 200, 20, 'Source Code...', () => void window.open(SOURCE_URL, '_blank', 'noopener')));
     this.add(new IconButton(cx - 124, l + 84, 'icon_language', () => g.setScreen(new LanguageScreen(g, this)), 'Language'));
     this.add(new Button(cx - 100, l + 84, 98, 20, 'Options...', () => g.setScreen(new OptionsScreen(g, this))));
     this.add(new Button(cx + 2, l + 84, 98, 20, 'Quit Game', () => quitGame()));
@@ -84,7 +111,17 @@ export class TitleScreen extends Screen {
 
   override mouseClicked(mx: number, my: number, button: number): boolean {
     if (!this.startupReady()) return false;
-    return super.mouseClicked(mx, my, button);
+    if (super.mouseClicked(mx, my, button)) return true;
+    // (vanilla: the line in the corner is a button to the credits, which here say how the game was made)
+    if (button !== 0 || !this.overCorner(mx, my)) return false;
+    playClick();
+    this.game.setScreen(new WinScreen(this.game, false, () => this.game.setScreen(this)));
+    return true;
+  }
+
+  /** whether the mouse is over the bottom right corner's line */
+  private overCorner(mx: number, my: number): boolean {
+    return mx >= this.width - this.game.gui.textWidth(UNOFFICIAL) - 2 && mx < this.width - 2 && my >= this.height - 11 && my < this.height;
   }
 
   override render(g: GuiGraphics, mx: number, my: number, partial: number): void {
@@ -111,7 +148,10 @@ export class TitleScreen extends Screen {
     for (const w of this.widgets) if (w.visible) w.render(g, mx, my);
     this.renderLogo(g);
     if (!this.game.opts.hideSplashTexts) this.renderSplash(g);
-    g.text(`Minecraft ${GAME_VERSION}`, 2, this.height - 10, 0xffffff, true);
+    g.text(`${GAME_NAME} ${GAME_VERSION}`, 2, this.height - 10, 0xffffff, true);
+    // (where vanilla has "Copyright Mojang AB. Do not distribute!", underlined like it with the mouse over it)
+    g.text(UNOFFICIAL, this.width - g.textWidth(UNOFFICIAL) - 2, this.height - 10, 0xffffff, true);
+    if (f >= 1 && this.overCorner(mx, my)) g.fill(this.width - g.textWidth(UNOFFICIAL) - 2, this.height - 1, this.width - 2, this.height, 0xffffffff);
     g.popAlpha();
     if (f >= 1) this.renderTooltip(g, mx, my);
     // startup overlay fading out on top (vanilla LoadingOverlay, 1s)
@@ -123,17 +163,18 @@ export class TitleScreen extends Screen {
   }
 
   private renderLogo(g: GuiGraphics): void {
-    const x = Math.floor(this.width / 2) - 137;
+    const cx = Math.floor(this.width / 2);
     const y = 30;
-    if (!g.sprite('title_logo', x, y)) g.centered('MINECRAFT', this.width / 2, y + 16, 0xffffff, true);
-    g.sprite('title_edition', x + 88, y + 37);
+    if (!g.sprite('title_logo', cx - (g.spriteWidth('title_logo') >> 1), y)) g.centered(GAME_NAME.toUpperCase(), this.width / 2, y + 16, 0xffffff, true);
+    g.sprite('title_edition', cx - 64, y + 37);
   }
 
   private renderSplash(g: GuiGraphics): void {
     const t = (performance.now() % 1000) / 1000;
     let f = 1.8 - Math.abs(Math.sin(t * Math.PI * 2) * 0.1);
     f = (f * 100) / (g.textWidth(this.splash) + 32);
-    g.pushTransform(this.width / 2 + 123, 69, -20, f);
+    // (over the logo's end: 123 right of the middle for a logo 274 wide)
+    g.pushTransform(this.width / 2 + ((g.spriteWidth('title_logo') || 274) >> 1) - 14, 69, -20, f);
     g.text(this.splash, -Math.floor(g.textWidth(this.splash) / 2), -8, 0xffff00, true);
     g.popTransform();
   }
@@ -143,6 +184,11 @@ export class TitleScreen extends Screen {
     const W = g.width, H = g.height;
     g.pushAlpha(alpha);
     g.fill(0, 0, W, H, 0xff000000);
+    // (where vanilla has Mojang's logo: the game's own, and how it was made, while its textures and sounds are)
+    const cx = Math.floor(W / 2), cy = Math.floor(H / 2);
+    g.sprite('title_logo', cx - (g.spriteWidth('title_logo') >> 1), cy - 50);
+    g.centered(`Made from scratch, in code, by Claude Opus 5.5:`, cx, cy + 8, 0xa0a0a0, false);
+    g.centered('every texture, every sound, every world.', cx, cy + 20, 0xa0a0a0, false);
     const d1 = Math.min(W * 0.75, H) * 0.25;
     const k1 = Math.floor(d1 * 4 * 0.5);
     const y = Math.floor(H * 0.8325);

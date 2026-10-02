@@ -87,6 +87,7 @@ import { BackgroundClock } from './backgroundClock';
 import { savePlayer, loadPlayer, PlayerDataStore } from './playerData';
 // (multiplayer)
 import { MULTIPLAYER_ENABLED } from '../net/config';
+import { SOURCE_URL } from '../brand';
 import { HostServer } from '../net/server/hostServer';
 import { ClientSession, type GuestIdentity } from '../net/client/clientSession';
 import type { LoginInfo, ReceivingReason } from '../net/protocol';
@@ -2186,9 +2187,9 @@ function relayHostable(): string | null {
   if (typeof WebSocket !== 'function' || (location.protocol !== 'http:' && location.protocol !== 'https:')) return 'Only windows of this browser can join this world.';
   const h = location.hostname;
   if (h === 'localhost' || h.endsWith('.localhost') || h === '[::1]' || /^127\./.test(h)) return null;
-  // (a page come through a tunnel has no port of the server's to say)
-  const local = location.port ? `http://localhost:${location.port}` : 'localhost';
-  return `Only windows of this browser can join: to let other computers join, open the game at ${local} on the computer running it.`;
+  if (location.port) return `Only windows of this browser can join: to let other computers join, open the game at http://localhost:${location.port} on the computer running it.`;
+  // (a page with no port of the server's to say: the game's public site, which has no relay, or one come through a tunnel)
+  return `Only windows of this browser can join here. For friends on other computers, run the game on your own computer and open it at localhost: ${SOURCE_URL}`;
 }
 
 /** (hosting) the link to send a friend on this network: where the relay says the game can be opened, with the join code */

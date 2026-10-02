@@ -91,7 +91,7 @@ check('its music stops with it', music.includes('stop music.credits'));
 // drawing: a fake GuiGraphics catching what's drawn
 {
   const drawn = [];
-  const g = { width: 427, height: 240, ctx: null, sprite: (n, x, y) => { drawn.push(['sprite', n, x, y]); return true; }, centered() {}, text: (s, x, y, c, sh) => { drawn.push(['text', s, x, y, c, sh]); return x + fontMod.textWidth(s); } };
+  const g = { width: 427, height: 240, ctx: null, spriteWidth: () => 274, sprite: (n, x, y) => { drawn.push(['sprite', n, x, y]); return true; }, centered() {}, text: (s, x, y, c, sh) => { drawn.push(['text', s, x, y, c, sh]); return x + fontMod.textWidth(s); } };
   const s4 = new winMod.WinScreen(fakeGame, true, () => {});
   s4.initScreen(427, 240);
   s4.render(g, 0, 0, 0);

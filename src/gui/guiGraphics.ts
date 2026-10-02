@@ -226,6 +226,11 @@ export class GuiGraphics {
     c.fillRect(x0 * s, y0 * s, (x1 - x0) * s, (y1 - y0) * s);
   }
 
+  /** how wide a sprite is, 0 if there is none by that name */
+  spriteWidth(name: string): number {
+    return this.sprites.get(name)?.width ?? 0;
+  }
+
   /** blit a sprite (or sub-rect) at GUI coords */
   sprite(name: string, x: number, y: number, w?: number, h?: number, sx = 0, sy = 0, sw?: number, sh?: number, alpha = 1): boolean {
     const img = this.sprites.get(name);

@@ -19,6 +19,7 @@
 
 import { TexImage, img, plot, rect, clear, getA, getPx, mixC, mulC, gray, packRGB, rgbOf, valueNoise, whiteNoise, combine, equalize, paletteMap, tintC, blit, Rand } from './tex';
 import { hashString } from '../core/rng';
+import { GAME_NAME } from '../brand';
 import { FONT } from './font';
 import { BLOCK_TEXTURES } from './blocks';
 import { MOB_EFFECT_TEXTURES } from './mobEffects';
@@ -1167,14 +1168,21 @@ const LOGO: Record<string, LogoGlyph> = {
   A: { w: 28, rects: [[0, 0, 28, 7], [0, 0, 8, 34], [20, 0, 8, 34], [8, 15, 12, 7]], round: [[0, 0, 'tl', 4], [27, 0, 'tr', 4]] },
   F: { w: 26, rects: [[0, 0, 8, 34], [8, 0, 18, 7], [8, 14, 13, 7]] },
   T: { w: 30, rects: [[0, 0, 30, 7], [11, 7, 8, 27]] },
+  O: { w: 28, rects: [[0, 0, 8, 34], [20, 0, 8, 34], [8, 0, 12, 7], [8, 27, 12, 7]], round: [[0, 0, 'tl', 4], [27, 0, 'tr', 4], [0, 33, 'bl', 4], [27, 33, 'br', 4]] },
+  P: { w: 28, rects: [[0, 0, 8, 34], [8, 0, 20, 7], [20, 0, 8, 20], [8, 13, 13, 7]], round: [[27, 0, 'tr', 4], [27, 19, 'br', 4]] },
+  U: { w: 28, rects: [[0, 0, 8, 34], [20, 0, 8, 34], [8, 27, 12, 7]], round: [[0, 33, 'bl', 4], [27, 33, 'br', 4]] },
+  S: { w: 26, rects: [[0, 0, 26, 7], [0, 0, 8, 20], [0, 13, 26, 7], [18, 13, 8, 21], [0, 27, 26, 7]], round: [[0, 0, 'tl', 4], [25, 33, 'br', 4]] },
+  L: { w: 24, rects: [[0, 0, 8, 34], [8, 27, 16, 7]] },
+  D: { w: 28, rects: [[0, 0, 8, 34], [8, 0, 12, 7], [8, 27, 12, 7], [20, 0, 8, 34]], round: [[27, 0, 'tr', 5], [27, 33, 'br', 5]] },
 };
 
 G['title_logo'] = () => {
-  const W = 274, H = 44;
-  const word = 'MINECRAFT';
+  // (the game's name, in the letters there are; as wide as the word, with room for the outline and the extrusion)
+  const word = [...GAME_NAME.toUpperCase()].filter((ch) => LOGO[ch]);
   const gap = 4, depth = 5, top = 2;
-  const total = [...word].reduce((a, ch) => a + LOGO[ch].w, 0) + gap * (word.length - 1);
-  let x0 = Math.max(1, Math.floor((W - total - 3) / 2));
+  const total = word.reduce((a, ch) => a + LOGO[ch].w, 0) + gap * (word.length - 1);
+  const W = total + 3, H = 44;
+  let x0 = 1;
   const face = new Uint8Array(W * H);
   for (const ch of word) {
     const L = LOGO[ch];
@@ -1248,12 +1256,12 @@ G['title_logo'] = () => {
 };
 
 // ===========================================================================
-// "JAVA EDITION" badge (128x14): the font drawn 2x wide and ~1.5x tall
+// "WEB EDITION" badge (128x14), where vanilla's says JAVA EDITION: the font drawn 2x wide and ~1.5x tall
 // (rows alternate 2/1 px), light-gray gradient face with a dark outline.
 
 G['title_edition'] = () => {
   const W = 128, H = 14;
-  const text = 'JAVA EDITION';
+  const text = 'WEB EDITION';
   const rowH = [2, 1, 2, 1, 2, 1, 2]; // glyph rows 0-6 -> 11 px
   const colW = 2;
   const glyph = (ch: string) => FONT.glyphs[ch] ?? FONT.glyphs['?'];
