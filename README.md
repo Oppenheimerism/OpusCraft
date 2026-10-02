@@ -2,7 +2,7 @@
 
 Minecraft Java Edition 1.21, rebuilt from scratch for the browser by Claude Opus 5.5.
 
-**Play it: https://opuscraft.pages.dev** (on a computer, with a keyboard and a mouse)
+**Play it: https://opuscraft.pages.dev** (best on a computer, with a keyboard and a mouse; phones and tablets play it by touch)
 
 ![OpusCraft's title screen](public/og.jpg)
 
@@ -49,7 +49,8 @@ itself (TypeScript and Vite build it; `ws` carries multiplayer between computers
 
 ## What isn't there yet
 
-- Touch controls: it needs a keyboard and a mouse, so it doesn't play on phones or tablets.
+- On phones and tablets the touch controls are new and plain: there is no typing yet (chat, commands, signs), and a
+  stack can't be split.
 - Playing with friends straight from the public site. Multiplayer works when one player runs the game from this
   repository (see below).
 - In multiplayer everyone is in the same dimension as the host: when the host goes to the Nether or the End, the
@@ -63,6 +64,10 @@ itself (TypeScript and Vite build it; `ws` carries multiplayer between computers
 
 Open https://opuscraft.pages.dev in a desktop browser with WebGL 2 (it is developed and played in Chrome and Safari). The keys are
 the original's: WASD, Space, Shift, E, Q, T, F3, F5, Esc.
+
+On a phone or a tablet, held sideways: slide your left thumb to move and drag a finger to look around; tap to place
+or use, or to hit a mob; hold a finger still to break a block. Buttons jump, sneak and use, and the three dots beside
+the hotbar open the inventory.
 
 Your worlds are kept in your browser, for that site. **Make Backup** (Singleplayer, pick a world, **Edit**) saves a
 world as a file, and **Import World** brings one back, on any computer.

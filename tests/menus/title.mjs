@@ -2,8 +2,8 @@
 // the word (so the title screen and the credits centre it by its width), with WEB EDITION under it where vanilla says
 // JAVA EDITION; the advancements say the name where vanilla's say Minecraft. And a site with no relay (the game's public
 // one: static files, nothing at /__mp): the Multiplayer screen's list of the relay's worlds knows there is none to hear
-// from, so the screen can say who can join there. And on a phone or a tablet, with no touch controls yet: going on from
-// the title screen says so first, once, the way vanilla warns before Multiplayer, with Proceed and Back.
+// from, so the screen can say who can join there. And on a phone or a tablet: going on from the title screen says
+// first, once, how the game is played with fingers, the way vanilla warns before Multiplayer, with Proceed and Back.
 
 import { load, check, exitWithStatus } from '../fixes/lib.mjs';
 setTimeout(() => { console.log('TIMEOUT'); process.exit(2); }, 120000).unref();
@@ -74,7 +74,7 @@ const fakeSocket = () => ({ onopen: null, onmessage: null, onclose: null, onerro
   check('the screen closing its own list: not "gone"', !list.gone);
 }
 
-// a phone or a tablet: the warning before the worlds or the servers
+// a phone or a tablet: the notice before the worlds or the servers
 {
   const game = { gui: { wrap: (t) => [t], textWidth: (t) => t.length * 6 }, shown: null, setScreen(sc) { this.shown = sc; } };
   const back = { is: 'the title screen' }, next = { is: 'the worlds' };
@@ -83,18 +83,18 @@ const fakeSocket = () => ({ onopen: null, onmessage: null, onclose: null, onerro
     globalThis.matchMedia = (q) => ({ matches: q === '(any-hover: hover)' ? hovers : false });
   };
   device('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/140 Safari/537.36', 0, true);
-  check('a computer: not a touch-only device, and straight on to the worlds', !m.touchOnly() && m.afterKeyboardWarning(game, back, () => next) === next);
+  check('a computer: not a touch-only device, and straight on to the worlds', !m.touchOnly() && m.afterTouchNotice(game, back, () => next) === next);
   device('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140 Safari/537.36', 10, true);
-  check('a laptop with a touch screen (it has a trackpad): straight on too', !m.touchOnly() && m.afterKeyboardWarning(game, back, () => next) === next);
+  check('a laptop with a touch screen (it has a trackpad): straight on too', !m.touchOnly() && m.afterTouchNotice(game, back, () => next) === next);
   device('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Version/18.0 Safari/605.1.15', 5, false);
   check('an iPad calling itself a Mac, nothing on it that hovers: touch-only', m.touchOnly());
   device('Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1', 5, false);
-  const warning = m.afterKeyboardWarning(game, back, () => next);
-  check('a phone: the warning first, with Proceed and Back, saying a keyboard and a mouse are needed', m.touchOnly() && warning instanceof m.ConfirmScreen && warning.title === 'Keyboard and Mouse Needed' && warning.yes === 'Proceed' && warning.no === 'Back' && /keyboard and a mouse/.test(warning.message) && warning.message.startsWith(m.GAME_NAME), `${warning?.title}: ${warning?.message}`);
+  const warning = m.afterTouchNotice(game, back, () => next);
+  check('a phone: the notice first, with Proceed and Back, saying how fingers play the game', m.touchOnly() && warning instanceof m.ConfirmScreen && warning.title === 'Touch Controls' && warning.yes === 'Proceed' && warning.no === 'Back' && /left thumb/.test(warning.message) && /Hold a finger/.test(warning.message) && warning.message.startsWith(m.GAME_NAME), `${warning?.title}: ${warning?.message}`);
   warning.callback(false);
-  check('Back: the title screen again, and the warning again the next time', game.shown === back && m.afterKeyboardWarning(game, back, () => next) instanceof m.ConfirmScreen);
+  check('Back: the title screen again, and the notice again the next time', game.shown === back && m.afterTouchNotice(game, back, () => next) instanceof m.ConfirmScreen);
   warning.callback(true);
-  check('Proceed: on to the worlds, and not asked again this visit', game.shown === next && m.afterKeyboardWarning(game, back, () => next) === next);
+  check('Proceed: on to the worlds, and not asked again this visit', game.shown === next && m.afterTouchNotice(game, back, () => next) === next);
 }
 
 await exitWithStatus(close);

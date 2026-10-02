@@ -18,6 +18,8 @@ export interface TutorialHost {
   inventoryItems(): Set<string>;
   /** key names as shown in hints (vanilla Tutorial.key: bold key names) */
   keyName(action: 'forward' | 'left' | 'back' | 'right' | 'jump' | 'attack' | 'inventory'): string;
+  /** the game is played with fingers (game/touch.ts): the hints name what's on the screen, not keys */
+  touch?(): boolean;
   getStep(): TutorialStep;
   setStepOption(s: TutorialStep): void;
 }
@@ -108,10 +110,11 @@ export class Tutorial {
             if (timeWaiting >= 100) {
               if (moveCompleted === -1 && !moveToast) {
                 const title = `Move with ${bold(h.keyName('forward'))}, ${bold(h.keyName('left'))}, ${bold(h.keyName('back'))} and ${bold(h.keyName('right'))}`;
-                moveToast = new TutorialToast('movement_keys', title, `Jump with ${bold(h.keyName('jump'))}`, true);
+                if (h.touch?.()) moveToast = new TutorialToast('movement_keys', 'Move: your left thumb', 'Jump: the arrow button', true);
+                else moveToast = new TutorialToast('movement_keys', title, `Jump with ${bold(h.keyName('jump'))}`, true);
                 h.toasts.add(moveToast);
               } else if (moveCompleted !== -1 && timeWaiting - moveCompleted >= 20 && lookCompleted === -1 && !lookToast) {
-                lookToast = new TutorialToast('mouse', 'Look around', 'Use your mouse to turn', true);
+                lookToast = new TutorialToast('mouse', 'Look around', h.touch?.() ? 'Drag a finger to turn' : 'Use your mouse to turn', true);
                 h.toasts.add(lookToast);
               }
             }
@@ -177,7 +180,7 @@ export class Tutorial {
               return;
             }
             if ((timeWaiting >= 600 || resetCount > 3) && !toast) {
-              toast = new TutorialToast('tree', 'Destroy the tree', `Hold down ${bold(h.keyName('attack'))}`, true);
+              toast = new TutorialToast('tree', 'Destroy the tree', h.touch?.() ? 'Hold a finger on it' : `Hold down ${bold(h.keyName('attack'))}`, true);
               h.toasts.add(toast);
             }
           },
@@ -210,7 +213,7 @@ export class Tutorial {
               return;
             }
             if (timeWaiting >= 600 && !toast) {
-              toast = new TutorialToast('recipe_book', 'Open your inventory', `Press ${bold(h.keyName('inventory'))}`, false);
+              toast = new TutorialToast('recipe_book', 'Open your inventory', h.touch?.() ? 'Tap the three dots' : `Press ${bold(h.keyName('inventory'))}`, false);
               h.toasts.add(toast);
             }
           },

@@ -12,6 +12,7 @@ import { ChunkManager } from '../world/chunkManager';
 import { Level } from './level';
 import { Player, GameMode } from '../entity/player';
 import { Input, KEYS } from './input';
+import { TouchControls, touchOnly } from './touch';
 import { Interaction } from './interaction';
 import { mat4, translate, rotateX, rotateZ, rotateY, DEG, clamp } from '../core/math';
 import { BLOCKS, STATE_BLOCK, FLAGS, F_WATER, F_LAVA, F_OPAQUE, F_COLLIDE } from '../world/block';
@@ -115,6 +116,9 @@ export class Game {
   level!: Level;
   player!: Player;
   input: Input;
+  /** fingers on a phone's or a tablet's screen, as the keys and the mouse */
+  readonly touch = new TouchControls(this);
+  private askedFullscreen = false;
   interaction!: Interaction;
   overlay!: Overlay;
   opts: GameOptions;
@@ -131,6 +135,7 @@ export class Game {
     isSurvival: () => this.player?.gameMode === 'survival' || this.player?.gameMode === 'adventure',
     inventoryItems: () => this.inventoryItemIds(),
     keyName: (a) => keyDisplayName(this.opts.keys[a] ?? ''),
+    touch: () => this.input.touch,
     getStep: () => this.opts.tutorialStep as TutorialStep,
     setStepOption: (st) => {
       this.opts.tutorialStep = st;
@@ -246,6 +251,8 @@ export class Game {
   constructor(readonly canvas: HTMLCanvasElement, readonly ui: HTMLCanvasElement) {
     this.opts = loadOptions();
     this.input = new Input(canvas);
+    // (a phone or a tablet: fingers play from the start, the world never waiting for a mouse to take hold of)
+    this.input.touch = touchOnly();
   }
 
   saveOptions(): void {
@@ -294,6 +301,10 @@ export class Game {
     this.gui = new GuiGraphics(this.ui.getContext('2d')!, sprites, new BitmapFont(font), this.icons);
     setClickSound(() => this.sound.playUI('ui.button.click', 0.25, 1));
     this.setupInputRouting();
+    this.touch.attach(this.canvas, (x, y) => {
+      const r = this.canvas.getBoundingClientRect();
+      return [(((x - r.left) / r.width) * this.canvas.width) / this.gui.scale, (((y - r.top) / r.height) * this.canvas.height) / this.gui.scale];
+    }, () => this.fingerLifted());
     window.addEventListener('resize', () => this.resize());
     this.resize();
     this.panorama = new Panorama(this);
@@ -413,6 +424,50 @@ export class Game {
 
   openPause(): void {
     if (this.pauseScreenFactory) this.setScreen(this.pauseScreenFactory());
+  }
+
+  // the touch controls' (game/touch.ts TouchHost)
+
+  cssPx(): number {
+    return (window.devicePixelRatio || 1) / this.gui.scale;
+  }
+
+  crosshairEntity(): boolean {
+    return !!this.interaction?.entityHit;
+  }
+
+  tapKey(code: string): void {
+    // (screens know Escape by its name, the game by its code; a key with no name types nothing)
+    this.input.onKey?.({ code, key: code === 'Escape' ? code : '', repeat: false, preventDefault() {} } as KeyboardEvent);
+  }
+
+  screenCloses(): boolean {
+    return !!this.screen && this.inWorld && this.screen.shouldCloseOnEsc();
+  }
+
+  touchScreen(type: 'down' | 'up' | 'move', mx: number, my: number): boolean {
+    if (!this.screen) return false;
+    this.mouseX = mx;
+    this.mouseY = my;
+    if (type === 'down') return this.screen.mouseClicked(mx, my, 0);
+    if (type === 'up') return this.screen.mouseReleased(mx, my, 0);
+    return this.screen.mouseDragged(mx, my);
+  }
+
+  scrollScreen(mx: number, my: number, d: number): void {
+    this.screen?.mouseScrolled(mx, my, d);
+  }
+
+  /**
+   * a finger lifted, which a browser counts as the user's own act: sound may start; and on a phone or a tablet, once,
+   * the world takes the whole screen and turns on its side, where the browser has a way to (an iPhone's hasn't)
+   */
+  private fingerLifted(): void {
+    this.sound.unlock();
+    if (this.askedFullscreen || !this.inWorld || !touchOnly() || document.fullscreenElement) return;
+    this.askedFullscreen = true;
+    const lock = () => (screen.orientation as unknown as { lock?: (o: string) => Promise<void> } | undefined)?.lock?.('landscape');
+    document.documentElement.requestFullscreen?.({ navigationUI: 'hide' })?.then(lock)?.catch(() => {});
   }
 
   setScreen(s: Screen | null): void {
@@ -1223,6 +1278,7 @@ export class Game {
     this.last = Math.max(this.last, now);
     const paused = this.isPaused();
     if (!paused) this.acc += dt;
+    this.touch.frame(t0);
     if (this.inWorld) this.handleFrameInput();
     let n = 0;
     while (this.acc >= 0.05 && n < 10) {
@@ -1497,7 +1553,9 @@ export class Game {
     }
     this.renderWorld(partial);
     if (!this.hideGui) this.hud.render(g, this, partial, !!this.screen && (this.screen as { isChat?: boolean }).isChat === true);
+    if (!this.hideGui) this.touch.render(g);
     if (this.screen) this.screen.render(g, this.mouseX, this.mouseY, partial);
+    this.touch.renderOver(g);
     // vanilla GameRenderer: toasts over everything, hidden with F1
     if (!this.hideGui) this.toasts.render(g);
     this.applyBlur();

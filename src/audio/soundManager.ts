@@ -210,6 +210,11 @@ export class SoundManager {
     window.addEventListener('keydown', unlock, { once: false });
   }
 
+  /** the user has just done something (a finger lifted: game/touch.ts): the browser lets sound start now */
+  unlock(): void {
+    this.ensure();
+  }
+
   private ensure(): void {
     if (this.ctx) {
       if (this.ctx.state === 'suspended') void this.ctx.resume();

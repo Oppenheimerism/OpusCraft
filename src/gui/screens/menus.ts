@@ -12,6 +12,7 @@ import { makeBackup, importWorldFiles, pickWorldFiles, WorldFileDrop } from './w
 import { JoinMultiplayerScreen } from './multiplayer';
 import { MULTIPLAYER_ENABLED } from '../../net/config';
 import { GAME_NAME, GAME_VERSION, SOURCE_URL } from '../../brand';
+import { touchOnly } from '../../game/touch';
 import { WinScreen } from './winScreen';
 
 const SPLASHES = [
@@ -42,24 +43,20 @@ function pickSplash(): string {
 /** the title screen's bottom right corner (vanilla's "Copyright Mojang AB. Do not distribute!", and like it a way to the credits) */
 const UNOFFICIAL = 'Not an official Minecraft product';
 
-/** a phone or a tablet, with no mouse or trackpad to play with (a stylus that hovers isn't one: so by its name too) */
-export function touchOnly(): boolean {
-  if (typeof navigator === 'undefined') return false;
-  return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 0 && typeof matchMedia === 'function' && !matchMedia('(any-hover: hover)').matches);
-}
+export { touchOnly };
 
-let toldItNeedsKeys = false;
+let toldOfTouch = false;
 
 /**
- * Going on from the title screen on a phone or a tablet, the first time: the game has no touch controls yet, and says
- * so, the way vanilla warns before Multiplayer (SafetyScreen: what to know, then Proceed or Back). Anywhere else, and
- * once told, straight on to `next`.
+ * Going on from the title screen on a phone or a tablet, the first time: how the game is played with fingers, and
+ * that it is new there, said the way vanilla warns before Multiplayer (SafetyScreen: what to know, then Proceed or
+ * Back). Anywhere else, and once told, straight on to `next`.
  */
-export function afterKeyboardWarning(game: Game, back: Screen, next: () => Screen): Screen {
-  if (toldItNeedsKeys || !touchOnly()) return next();
-  const what = `${GAME_NAME} has no touch controls yet: it is played with a keyboard and a mouse. Open this page on a computer to play. You can still look around here.`;
-  return new ConfirmScreen(game, 'Keyboard and Mouse Needed', what, 'Proceed', 'Back', (ok) => {
-    toldItNeedsKeys ||= ok;
+export function afterTouchNotice(game: Game, back: Screen, next: () => Screen): Screen {
+  if (toldOfTouch || !touchOnly()) return next();
+  const what = `${GAME_NAME} is made for a keyboard and a mouse, and its touch controls are new. Turn your phone sideways. Slide your left thumb to move, drag a finger to look around. Tap to place or use, or to hit a mob. Hold a finger still to break a block.`;
+  return new ConfirmScreen(game, 'Touch Controls', what, 'Proceed', 'Back', (ok) => {
+    toldOfTouch ||= ok;
     game.setScreen(ok ? next() : back);
   });
 }
@@ -81,9 +78,9 @@ export class TitleScreen extends Screen {
     const g = this.game;
     const cx = Math.floor(this.width / 2);
     const l = Math.floor(this.height / 4) + 48;
-    this.add(new Button(cx - 100, l, 200, 20, 'Singleplayer', () => g.setScreen(afterKeyboardWarning(g, this, () => new SelectWorldScreen(g, this)))));
+    this.add(new Button(cx - 100, l, 200, 20, 'Singleplayer', () => g.setScreen(afterTouchNotice(g, this, () => new SelectWorldScreen(g, this)))));
     // (multiplayer/ switched off, the button stays greyed out, as it was)
-    this.add(new Button(cx - 100, l + 24, 200, 20, 'Multiplayer', () => g.setScreen(afterKeyboardWarning(g, this, () => new JoinMultiplayerScreen(g, this))))).active = MULTIPLAYER_ENABLED;
+    this.add(new Button(cx - 100, l + 24, 200, 20, 'Multiplayer', () => g.setScreen(afterTouchNotice(g, this, () => new JoinMultiplayerScreen(g, this))))).active = MULTIPLAYER_ENABLED;
     // (where vanilla has Minecraft Realms: the game's source, in a tab of its own)
     this.add(new Button(cx - 100, l + 48, 200, 20, 'Source Code...', () => void window.open(SOURCE_URL, '_blank', 'noopener')));
     this.add(new IconButton(cx - 124, l + 84, 'icon_language', () => g.setScreen(new LanguageScreen(g, this)), 'Language'));

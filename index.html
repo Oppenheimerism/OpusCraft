@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>OpusCraft</title>
     <meta name="description" content="A block-building survival game in the browser: Minecraft Java Edition 1.21, rebuilt from scratch by Claude Opus 5.5. Every texture, sound and world is made in code. Not an official Minecraft product." />
     <meta property="og:type" content="website" />
@@ -17,6 +17,8 @@
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' shape-rendering='crispEdges'%3E%3Crect width='16' height='16' fill='%23866043'/%3E%3Cpath fill='%23745236' d='M2 7h2v2H2zM9 9h2v2H9zM5 12h2v2H5zM12 6h2v2h-2zM13 12h2v2h-2z'/%3E%3Cpath fill='%2396704e' d='M6 7h2v2H6zM1 11h2v2H1zM10 13h2v2h-2z'/%3E%3Cpath fill='%2370b33f' d='M0 0h16v4H0zM1 4h2v1H1zM5 4h3v2H5zM10 4h2v1h-2zM13 4h3v2h-3z'/%3E%3Cpath fill='%2386c653' d='M2 0h2v2H2zM8 1h2v2H8zM13 0h2v1h-2z'/%3E%3C/svg%3E" />
     <style>
       html, body { margin: 0; padding: 0; overflow: hidden; background: #000; width: 100%; height: 100%; }
+      /* fingers play the game (src/game/touch.ts): they don't scroll, zoom or select the page */
+      html, body, canvas { touch-action: none; overscroll-behavior: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
       canvas { position: absolute; left: 0; top: 0; width: 100%; height: 100%; display: block; }
       #gl { z-index: 0; }
       #ui { z-index: 1; image-rendering: pixelated; pointer-events: none; }

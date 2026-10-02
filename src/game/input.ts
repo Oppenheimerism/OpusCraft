@@ -75,8 +75,18 @@ export class Input {
   private relock = false;
   /** test hook: behave as if the pointer were locked */
   forceLocked = false;
+  /**
+   * fingers play the game (game/touch.ts sets it at the first touch; a mouse's own button takes it back): the world
+   * is played without the pointer's lock, which a phone hasn't got
+   */
+  touch = false;
+  /** when a finger last touched the screen: for a moment after, a mouse event is one the browser made up from it */
+  touchAt = -Infinity;
   get locked(): boolean {
-    return this.realLocked || this.forceLocked;
+    return this.realLocked || this.forceLocked || this.touch;
+  }
+  private fromTouch(): boolean {
+    return performance.now() - this.touchAt < 800;
   }
   onLockChange: ((locked: boolean) => void) | null = null;
   /** requestPointerLock was refused (e.g. no recent user gesture) */
@@ -111,13 +121,18 @@ export class Input {
       this.buttons[0] = this.buttons[1] = this.buttons[2] = false;
     });
     document.addEventListener('mousemove', (e) => {
-      if (this.locked) {
+      if (this.fromTouch()) return;
+      // (with fingers playing, a mouse that isn't held doesn't turn the view)
+      if (this.realLocked || this.forceLocked) {
         this.mouseDX += e.movementX;
         this.mouseDY += e.movementY;
       }
       this.onMouse?.(e, 'move');
     });
     target.addEventListener('mousedown', (e) => {
+      if (this.fromTouch()) return;
+      // (a mouse's own button: the mouse plays again, and this click takes hold of it as the first one did)
+      this.touch = false;
       if (!this.locked && !this.onMouse) return;
       if (e.button <= 2) {
         this.buttons[e.button] = true;
@@ -126,6 +141,7 @@ export class Input {
       this.onMouse?.(e, 'down');
     });
     window.addEventListener('mouseup', (e) => {
+      if (this.fromTouch()) return;
       if (e.button <= 2) this.buttons[e.button] = false;
       this.onMouse?.(e, 'up');
     });
@@ -206,6 +222,11 @@ export class Input {
 
   isDown(code: string): boolean {
     return this.down.has(code);
+  }
+
+  /** a key pressed by something other than the keyboard (a button of the touch controls) */
+  press(code: string): void {
+    this.pressedQueue.push(code);
   }
 
   /** Consume key presses since last call. */
