@@ -20,6 +20,8 @@ function setup(width = 640, height = 296, u = 0.75) {
     mode: 'tap', target: null, fly: false, closes: false, takes: false, progress: 0,
     keys: [], events: [], scrolls: [], aims: [], drops: 0,
     cssPx: () => u,
+    safe: { left: 0, right: 0, top: 0, bottom: 0 },
+    insets() { return this.safe; },
     touchMode() { return this.mode; },
     targetAt(x, y) { this.aims.push(`${x},${y}`); return this.target; },
     tapKey(c) { this.keys.push(c); },
@@ -53,6 +55,12 @@ const near = (a, b) => Math.abs(a - b) < 1e-6;
   check('...sprint and the sword in a column beside them, each between two of those', L.sprint.x === L.attack.x && L.sprint.x + L.sprint.w < L.jump.x && L.sprint.y > L.jump.y && L.sprint.y < L.sneak.y && L.attack.y > L.sneak.y && L.attack.y < L.interact.y);
   check('...the pause bars at the middle of the top, the dots at the hotbar\'s end', Math.abs(L.pause.x + L.pause.w / 2 - W / 2) <= 1 && L.pause.y < 20 && L.more.x === L.hotbar.x + L.hotbar.w && L.more.y === L.hotbar.y);
   check('a button a share of the screen\'s height, and no wider than 60 CSS pixels on a tablet', L.jump.w === 39 && setup(1180, 820, 1).t.layout().jump.w === 60, `${L.jump.w}`);
+  const N = setup(W, H);
+  N.host.safe = { left: 44, right: 44, top: 6, bottom: 16 };
+  const S = N.t.layout();
+  check('a phone with a notch: the stick, the buttons and the cross in from the sides by it, the bars down from the top; the hotbar where it was',
+    S.stick.x >= 44 + 30 && S.stick.x > L.stick.x && S.jump.x + S.jump.w <= W - 44 - 20 && S.jump.x < L.jump.x && S.sprint.x < L.sprint.x && S.close.x >= 44 && S.pause.y === L.pause.y + 6
+    && S.hotbar.x === L.hotbar.x && S.more.x === L.more.x && Math.abs(S.pause.x - L.pause.x) === 0, `stick ${S.stick.x}, jump ends ${S.jump.x + S.jump.w}`);
   const P = setup(393, 852, 1).t.layout();
   check('a phone held upright: all of it still on the screen, clear of the hotbar', P.interact.y + P.interact.h < 852 - 60 && P.jump.x + P.jump.w <= 393 && P.stick.x + P.stick.w < P.sprint.x && P.stick.y + P.stick.h < 852 - 60, `marks end ${P.interact.y + P.interact.h}`);
 }

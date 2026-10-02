@@ -37,6 +37,8 @@ export interface TouchHost {
   readonly spawned: boolean;
   /** how many of the GUI's units a CSS pixel is */
   cssPx(): number;
+  /** how far in from each edge the screen is clear of a phone's notch, corners and home bar, in the GUI's units */
+  insets(): { left: number; right: number; top: number; bottom: number };
   /** which of the two ways of touching the world is on */
   touchMode(): TouchMode;
   /** aim through (x, y) on the screen, now: what is there, within reach */
@@ -170,21 +172,23 @@ export class TouchControls {
     const b = Math.round(Math.min(m * BUTTON, BUTTON_MAX * u)), s = Math.round(Math.min(m * STICK, STICK_MAX * u)), c = Math.round(Math.min(m * TOP, TOP_MAX * u));
     // (the right hand's buttons: a column by the edge, jump over sneak over the four marks, each a button and a half
     // below the last; and a column beside it, sprint and the sword, each between two of those)
-    const col = W - Math.round(W * 0.045) - b, col2 = col - b - Math.round(W * 0.04);
+    // (in from the sides by what a phone's notch takes: the world is drawn under it, the controls aren't put there)
+    const I = this.host.insets(), left = Math.round(I.left), right = Math.round(I.right), over = Math.round(I.top), clear = W - left - right;
+    const col = W - right - Math.round(clear * 0.045) - b, col2 = col - b - Math.round(clear * 0.04);
     const top = Math.round(H * 0.333), step = Math.round(b * 1.5);
     const at = (x: number, y: number): Rect => ({ x, y, w: b, h: b });
     const edge = Math.round(m * 0.03);
     return {
-      stick: { x: Math.round(W * 0.075), y: Math.round(H * 0.55 - s / 2), w: s, h: s },
+      stick: { x: left + Math.round(clear * 0.075), y: Math.round(H * 0.55 - s / 2), w: s, h: s },
       knob: Math.round(s / 2),
       jump: at(col, top),
       sneak: at(col, top + step),
       interact: at(col, top + 2 * step),
       sprint: at(col2, top + Math.round(step / 2)),
       attack: at(col2, top + Math.round(step * 1.5)),
-      pause: { x: cx - (c >> 1), y: edge, w: c, h: c },
+      pause: { x: cx - (c >> 1), y: over + edge, w: c, h: c },
       // (the corner away from the toasts')
-      close: { x: edge, y: edge, w: c, h: c },
+      close: { x: left + edge, y: over + edge, w: c, h: c },
       more: { x: cx + 91, y: H - 22, w: 20, h: 22 },
       hotbar: { x: cx - 91, y: H - 22, w: 182, h: 22 },
     };

@@ -208,6 +208,10 @@ export class SoundManager {
     const unlock = () => this.ensure();
     window.addEventListener('pointerdown', unlock, { once: false });
     window.addEventListener('keydown', unlock, { once: false });
+    // (a phone lets sound start when a finger lifts, not when it lands)
+    window.addEventListener('pointerup', unlock, { once: false });
+    window.addEventListener('touchend', unlock, { once: false });
+    window.addEventListener('click', unlock, { once: false });
   }
 
   /** the user has just done something (a finger lifted: game/touch.ts): the browser lets sound start now */
@@ -217,7 +221,9 @@ export class SoundManager {
 
   private ensure(): void {
     if (this.ctx) {
-      if (this.ctx.state === 'suspended') void this.ctx.resume();
+      // (suspended till the user does something; on a phone, interrupted too, by a call or by the page going out of sight)
+      const state: string = this.ctx.state;
+      if (state !== 'running' && state !== 'closed') this.ctx.resume().catch(() => {});
       return;
     }
     try {

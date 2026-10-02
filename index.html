@@ -2,7 +2,12 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <!-- (a phone: added to the home screen, the game opens by itself with no browser round it, and fills the whole screen, under the notch too) -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="OpusCraft" />
     <title>OpusCraft</title>
     <meta name="description" content="A block-building survival game in the browser: Minecraft Java Edition 1.21, rebuilt from scratch by Claude Opus 5.5. Every texture, sound and world is made in code. Not an official Minecraft product." />
     <meta property="og:type" content="website" />
@@ -22,11 +27,14 @@
       canvas { position: absolute; left: 0; top: 0; width: 100%; height: 100%; display: block; }
       #gl { z-index: 0; }
       #ui { z-index: 1; image-rendering: pixelated; pointer-events: none; }
+      /* how far in from each edge a phone's screen is clear of its notch, corners and home bar: read by Game.resize for the touch controls */
+      #safe { position: fixed; left: 0; top: 0; width: 0; height: 0; visibility: hidden; pointer-events: none; padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px); }
     </style>
   </head>
   <body>
     <canvas id="gl"></canvas>
     <canvas id="ui"></canvas>
+    <div id="safe"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

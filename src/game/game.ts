@@ -121,6 +121,8 @@ export class Game {
   private askedFullscreen = false;
   /** the view's height in degrees as it was last drawn (what a finger aims through: game/touch.ts) */
   private viewFov = 70;
+  /** how far in from each edge the screen is clear of a phone's notch, corners and home bar, in the GUI's units (index.html's #safe) */
+  private safe = { left: 0, right: 0, top: 0, bottom: 0 };
   interaction!: Interaction;
   overlay!: Overlay;
   opts: GameOptions;
@@ -327,7 +329,22 @@ export class Game {
       const s = this.guiScale();
       this.gui.setup(this.canvas.width, this.canvas.height, s);
       if (this.screen) this.screen.initScreen(this.gui.width, this.gui.height);
+      this.measureSafe();
+      // (a phone turned on its side says its new insets a moment after its new size)
+      window.setTimeout(() => this.measureSafe(), 400);
     }
+  }
+
+  private measureSafe(): void {
+    const el = document.getElementById('safe');
+    if (!el || !this.gui) return;
+    const cs = getComputedStyle(el), u = this.cssPx();
+    const units = (v: string) => (parseFloat(v) || 0) * u;
+    this.safe = { left: units(cs.paddingLeft), right: units(cs.paddingRight), top: units(cs.paddingTop), bottom: units(cs.paddingBottom) };
+  }
+
+  insets(): { left: number; right: number; top: number; bottom: number } {
+    return this.safe;
   }
 
   private setupInputRouting(): void {
