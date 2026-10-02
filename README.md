@@ -2,7 +2,9 @@
 
 Minecraft Java Edition 1.21, rebuilt from scratch for the browser by Claude Opus 5.5.
 
-**Play it: _link to be added_** (on a computer, with a keyboard and a mouse)
+**Play it: https://opuscraft.pages.dev** (on a computer, with a keyboard and a mouse)
+
+![OpusCraft's title screen](public/og.jpg)
 
 > NOT AN OFFICIAL MINECRAFT PRODUCT. NOT APPROVED BY OR ASSOCIATED WITH MOJANG OR MICROSOFT.
 
@@ -12,11 +14,13 @@ A survival sandbox game that runs in a browser tab and is made to play like Mine
 items, mobs, recipes, structures and rules, as far as it has got.
 
 All of it was written by an AI model, Claude Opus 5.5, working in Claude Code, with a person choosing what to build
-and playtesting. The repository holds no files from Minecraft, and no image or audio files at all:
+and playtesting, in about a week. The game uses no files from Minecraft, and no image or audio files at all:
 
 - every texture is drawn pixel by pixel, in code, when the game starts;
 - every sound and every piece of music is synthesized as you play;
 - every world is grown from its seed.
+
+(The one picture in this repository, `public/og.jpg`, is a screenshot of the game, for this page and for link previews.)
 
 It is about 230,000 lines of TypeScript on WebGL 2, with nothing to install to play and no libraries in the game
 itself (TypeScript and Vite build it; `ws` carries multiplayer between computers).
@@ -57,7 +61,7 @@ itself (TypeScript and Vite build it; `ws` carries multiplayer between computers
 
 ### In your browser
 
-Open the link above in a desktop browser with WebGL 2 (it is developed and played in Chrome and Safari). The keys are
+Open https://opuscraft.pages.dev in a desktop browser with WebGL 2 (it is developed and played in Chrome and Safari). The keys are
 the original's: WASD, Space, Shift, E, Q, T, F3, F5, Esc.
 
 Your worlds are kept in your browser, for that site. **Make Backup** (Singleplayer, pick a world, **Edit**) saves a
@@ -96,7 +100,8 @@ that ran for hours on their own. A person chose what to build next, played each 
 wrong. The model wrote the code and the tests, working from what it knows of the original and from the Minecraft
 Wiki, and the comments name the part of the original each piece follows.
 
-The commit messages are written for players, and read in order they tell how it grew.
+It took about a week: the first commit is from 22 September 2026, and nearly all the rest are from the six days
+after it. The commit messages are written for players, and read in order they tell how it grew.
 
 ## Development
 
