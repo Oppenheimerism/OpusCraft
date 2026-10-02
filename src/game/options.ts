@@ -57,6 +57,8 @@ export interface GameOptions {
   touchscreen: boolean;
   /** (game/touch.ts) how fingers touch the world: a block where it is tapped, or what the crosshair is on with buttons */
   touchMode: 'tap' | 'crosshair';
+  /** a phone's own distances have been given to these options (loadOptions): 1, else 0 */
+  touchDefaults: number;
   rawMouseInput: boolean;
   // accessibility / chat
   narrator: number;
@@ -152,6 +154,7 @@ export const DEFAULT_OPTIONS: GameOptions = {
   discreteMouseScroll: false,
   touchscreen: false,
   touchMode: 'tap',
+  touchDefaults: 0,
   rawMouseInput: true,
   narrator: 0,
   highContrast: false,
@@ -194,8 +197,16 @@ export const DEFAULT_OPTIONS: GameOptions = {
   tutorialStep: 'movement',
 };
 
+/**
+ * (a phone or a tablet) how many chunks each way are drawn and ticked to begin with. A computer's 12 keep some 700
+ * chunks in memory, and a phone's browser throws out a page that takes more memory than it allows (it loads the page
+ * again, in the middle of play). The sliders still go as high as on a computer
+ */
+export const TOUCH_DISTANCE = 8;
+
 export function loadOptions(): GameOptions {
   let o: GameOptions = { ...DEFAULT_OPTIONS, keys: { ...DEFAULT_KEYS } };
+  const touch = touchOnly();
   try {
     const s = localStorage.getItem('mc.options');
     if (s) {
@@ -203,10 +214,16 @@ export function loadOptions(): GameOptions {
       if (typeof saved.clouds === 'boolean') saved.clouds = saved.clouds ? 2 : 0;
       o = { ...o, ...(saved as Partial<GameOptions>), keys: { ...DEFAULT_KEYS, ...(saved.keys ?? {}) } };
       // (options saved before there were touch controls, on a phone: Auto-Jump on, as below)
-      if (saved.touchMode === undefined && touchOnly()) o.autoJump = true;
-    } else if (touchOnly()) o.autoJump = true; // (Bedrock: "Auto jump" is on by default on a phone, where jumping is a button to reach for)
+      if (saved.touchMode === undefined && touch) o.autoJump = true;
+    } else if (touch) o.autoJump = true; // (Bedrock: "Auto jump" is on by default on a phone, where jumping is a button to reach for)
   } catch {
     /* ignore */
+  }
+  // (a phone's distances, once: options saved there before it had them are brought down to them; a distance chosen since is kept)
+  if (touch && !o.touchDefaults) {
+    o.renderDistance = Math.min(o.renderDistance, TOUCH_DISTANCE);
+    o.simulationDistance = Math.min(o.simulationDistance, TOUCH_DISTANCE);
+    o.touchDefaults = 1;
   }
   o.fancy = o.graphics >= 1;
   applyKeys(o);

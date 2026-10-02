@@ -4,6 +4,16 @@ import type { SpriteRect } from '../world/models';
 import type { MeshInput } from '../render/mesher';
 import type { GenResult } from '../world/world';
 import type { DimensionId } from '../world/dimension';
+import { touchOnly } from '../game/touch';
+
+/**
+ * how many workers a pool has: two fewer than the cores, from 2 to 6; on a phone or a tablet 2, as each holds the
+ * blocks and the generators (some 70 MB) and a phone's browser throws out a page that takes more than it allows
+ */
+export function workerCount(): number {
+  if (touchOnly()) return 2;
+  return Math.max(2, Math.min(6, (navigator.hardwareConcurrency || 4) - 2));
+}
 
 export interface GenJob {
   type: 'gen';

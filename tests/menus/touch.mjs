@@ -5,12 +5,13 @@
 // and four marks are the attack and use buttons. In both: the stick walks eight ways and sprints past its plate; a drag
 // turns the view, from past the slop on; the buttons jump (a tick long at least), sprint and sneak (on and off; held,
 // flying); a hotbar slot is tapped, and held to throw its stack out; the dots and the pause bars are tapped; three
-// fingers are F3. On a screen a finger is the left button, and a drag the screen doesn't take scrolls it.
+// fingers are F3. On a screen a finger is the left button, and a drag the screen doesn't take scrolls it. A phone
+// begins with shorter distances than a computer's, and two chunk workers, for its memory.
 
 import { load, check, exitWithStatus } from '../fixes/lib.mjs';
 setTimeout(() => { console.log('TIMEOUT'); process.exit(2); }, 120000).unref();
 
-const { m, close } = await load(['/src/game/touch.ts', '/src/game/input.ts', '/src/textures/touchControls.ts']);
+const { m, close } = await load(['/src/game/touch.ts', '/src/game/input.ts', '/src/textures/touchControls.ts', '/src/game/options.ts', '/src/worker/pool.ts']);
 const K = m.KEYS;
 
 function setup(width = 640, height = 296, u = 0.75) {
@@ -364,6 +365,37 @@ const near = (a, b) => Math.abs(a - b) < 1e-6;
   check('through the top edge: 45 up; the bottom: 45 down', A(0, 0, 90, 1, 0, 1) === '0,-45' && A(0, 0, 90, 1, 0, -1) === '0,45', `${A(0, 0, 90, 1, 0, 1)}; ${A(0, 0, 90, 1, 0, -1)}`);
   const [yaw, pitch] = m.aimAngles(0, 60, 90, 1, 0, 1);
   check('looking down, the top of the screen is further ahead: less far down', Math.abs(yaw) < 1e-9 && Math.abs(pitch - 15) < 1e-6, `${yaw}, ${pitch}`);
+}
+
+// a phone's own distances, and its workers (options.ts loadOptions, worker/pool.ts workerCount)
+{
+  const nav = Object.getOwnPropertyDescriptor(globalThis, 'navigator'), ls = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+  const PHONE = { userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)', maxTouchPoints: 5, hardwareConcurrency: 6 };
+  const MAC = { userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)', maxTouchPoints: 0, hardwareConcurrency: 8 };
+  const on = (device, saved) => {
+    Object.defineProperty(globalThis, 'navigator', { value: device, configurable: true, writable: true });
+    const store = saved ? { 'mc.options': JSON.stringify(saved) } : {};
+    Object.defineProperty(globalThis, 'localStorage', { value: { getItem: (k) => store[k] ?? null, setItem: (k, v) => { store[k] = v; } }, configurable: true, writable: true });
+    return m.loadOptions();
+  };
+  const d = (o) => `${o.renderDistance}/${o.simulationDistance}`;
+  let o = on(MAC, null);
+  check('a computer begins at 12 chunks each way, drawn and ticked, with Auto-Jump off', d(o) === '12/12' && !o.autoJump && !o.touchDefaults, `${d(o)} ${o.autoJump}`);
+  check('...with two workers fewer than its cores (6 of 8)', m.workerCount() === 6, m.workerCount());
+  o = on(PHONE, null);
+  check('a phone begins at 8 each way, with Auto-Jump on', m.TOUCH_DISTANCE === 8 && d(o) === '8/8' && o.autoJump && o.touchDefaults === 1, `${d(o)} ${o.autoJump} ${o.touchDefaults}`);
+  check('...with two workers, whatever its cores', m.workerCount() === 2, m.workerCount());
+  o = on(PHONE, { renderDistance: 12, simulationDistance: 12, touchMode: 'tap' });
+  check('options a phone saved before it had distances of its own: brought down to them', d(o) === '8/8' && o.touchDefaults === 1, d(o));
+  o = on(PHONE, { renderDistance: 4, simulationDistance: 5 });
+  check('...but never up', d(o) === '4/5', d(o));
+  o = on(PHONE, { renderDistance: 16, simulationDistance: 10, touchDefaults: 1 });
+  check('distances chosen on a phone since then are kept', d(o) === '16/10', d(o));
+  o = on(MAC, { renderDistance: 20, simulationDistance: 12 });
+  check("a computer's are its own", d(o) === '20/12' && !o.touchDefaults, d(o));
+  if (nav) Object.defineProperty(globalThis, 'navigator', nav);
+  if (ls) Object.defineProperty(globalThis, 'localStorage', ls);
+  else delete globalThis.localStorage;
 }
 
 await exitWithStatus(close);

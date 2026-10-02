@@ -7,7 +7,7 @@ import { Atlas } from '../render/atlas';
 import { Renderer, Camera } from '../render/renderer';
 import { EndRenderer } from '../render/endRenderer';
 import { World } from '../world/world';
-import { WorkerPool } from '../worker/pool';
+import { WorkerPool, workerCount } from '../worker/pool';
 import { ChunkManager } from '../world/chunkManager';
 import { Level } from './level';
 import { Player, GameMode } from '../entity/player';
@@ -578,9 +578,8 @@ export class Game {
 
   /** the chunk workers, started afresh for a world (generating with its seed) */
   private async startWorkers(seed: string): Promise<void> {
-    const workers = Math.max(2, Math.min(6, (navigator.hardwareConcurrency || 4) - 2));
     this.pool?.terminate();
-    this.pool = new WorkerPool(workers, seed, this.atlas.sprites);
+    this.pool = new WorkerPool(workerCount(), seed, this.atlas.sprites);
     await this.pool.ready;
   }
 

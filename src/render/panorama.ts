@@ -2,7 +2,7 @@
 // a scenic spot, then display it spinning slowly (vanilla PanoramaRenderer).
 
 import type { Game } from '../game/game';
-import { WorkerPool } from '../worker/pool';
+import { WorkerPool, workerCount } from '../worker/pool';
 import { World } from '../world/world';
 import { ChunkManager } from '../world/chunkManager';
 import { Shader } from './gl';
@@ -53,7 +53,7 @@ export class Panorama {
   private async start(): Promise<void> {
     this.state = 'loading';
     const g = this.game;
-    this.pool = new WorkerPool(Math.max(2, Math.min(6, (navigator.hardwareConcurrency || 4) - 2)), PANORAMA_SEED, g.atlas.sprites);
+    this.pool = new WorkerPool(workerCount(), PANORAMA_SEED, g.atlas.sprites);
     await this.pool.ready;
     this.world = new World();
     this.cm = new ChunkManager(this.world, this.pool, g.renderer.world);
