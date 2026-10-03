@@ -1,6 +1,6 @@
 // Miscellaneous items: crafting components, utility items, containers.
 
-import { TexImage, plot, getA, getPx, clear } from '../tex';
+import { TexImage, plot, getA, getPx, clear, flipH } from '../tex';
 import { Gen, Pal, spr, over, autoShade, maskFn, inEllipse, rng, paint, outline4 } from './common';
 
 export const MISC_ITEMS: Record<string, Gen> = {};
@@ -448,10 +448,13 @@ function bow(pull: number): TexImage {
   }
   return t;
 }
-M['bow'] = () => bow(0);
-M['bow_pulling_0'] = () => bow(1);
-M['bow_pulling_1'] = () => bow(2);
-M['bow_pulling_2'] = () => bow(3);
+// (drawn above with the arrow toward the upper right, as a sword points; vanilla's bow faces the other way, the arrow
+// toward the upper left: that is the way the hand's transforms (bow.json, the drawing pose) turn forward, where the
+// upper right turns straight up)
+M['bow'] = () => flipH(bow(0));
+M['bow_pulling_0'] = () => flipH(bow(1));
+M['bow_pulling_1'] = () => flipH(bow(2));
+M['bow_pulling_2'] = () => flipH(bow(3));
 
 // prettier-ignore
 const ARROW = [
