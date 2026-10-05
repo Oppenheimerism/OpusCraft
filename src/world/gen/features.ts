@@ -60,6 +60,17 @@ const ORES: OreSpec[] = [
   { stone: 'emerald_ore', deep: 'deepslate_emerald_ore', size: 3, count: 100, height: ['trapezoid', -16, 480], biomes: [B.windswept_hills, B.windswept_forest, B.windswept_gravelly_hills, B.meadow, B.grove, B.snowy_slopes, B.jagged_peaks, B.frozen_peaks, B.stony_peaks, B.cherry_grove] },
 ];
 
+/**
+ * Two ores that came later. They are placed after the ones above with random numbers of their own, so that everything
+ * a seed already made (every other ore, and the plants and trees that follow them) stays where it was.
+ */
+const LATER_ORES: OreSpec[] = [
+  // vanilla ore_diamond_medium (1.20 on): two more veins of 8 a chunk, down in the deepslate
+  { stone: 'diamond_ore', deep: 'deepslate_diamond_ore', size: 8, count: 2, height: ['uniform', -64, -4], discard: 0.5 },
+  // vanilla ore_gold_extra (BiomeDefaultFeatures.addExtraGold): the badlands' gold, up in the hills
+  { stone: 'gold_ore', deep: 'deepslate_gold_ore', size: 9, count: 50, height: ['uniform', 32, 256], biomes: [B.badlands, B.eroded_badlands, B.wooded_badlands] },
+];
+
 const COPPER_LARGE: OreSpec = { ...ORES.find((o) => o.stone === 'copper_ore')!, size: 20 };
 /**
  * vanilla ore_infested (BiomeDefaultFeatures.addInfestedStone, UNDERGROUND_DECORATION step): 14 veins of 9 a chunk,
@@ -300,6 +311,14 @@ export class Decorator {
         if (y < MIN_Y || y >= 320) continue;
         // dripstone caves grow the large copper ore (vanilla ore_copper_large, size 20)
         placeOre(ctx, r, spec.stone === 'copper_ore' && ctx.biomeAt3(x, y, z) === B.dripstone_caves ? COPPER_LARGE : spec, x, y, z);
+      }
+    }
+    const rl = new Rand(hash2(ctx.cx, ctx.cz, this.seed ^ 0x0d1a), 14);
+    for (const spec of LATER_ORES) {
+      if (spec.biomes && !spec.biomes.includes(centerBiome)) continue;
+      for (let i = 0; i < (spec.count as number); i++) {
+        const x = ctx.x0 + rl.nextInt(16), z = ctx.z0 + rl.nextInt(16);
+        placeOre(ctx, rl, spec, x, sampleHeight(rl, spec.height), z);
       }
     }
     if (ctx.caveBiomes?.includes(B.lush_caves)) {
