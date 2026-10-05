@@ -78,6 +78,11 @@ export const SB = {
    * opened for (vanilla ServerboundSignUpdatePacket). Numbered from 40, out of the way of packets added elsewhere
    */
   SignUpdate: 40,
+  /**
+   * (guests under load) [id]: the answer to the host's Ping, sent as the guest's game gets to it (vanilla
+   * ServerboundPongPacket). Numbered from 60, out of the way of packets added elsewhere
+   */
+  Pong: 60,
 } as const;
 
 /** host → guest (vanilla Clientbound*Packet) */
@@ -215,6 +220,12 @@ export const CB = {
    * the guest says so (SB.ClientCommand 0, vanilla PERFORM_RESPAWN) and the host puts its player home
    */
   WinGame: 103,
+  /**
+   * (guests under load) [id]: how far has the guest got? Every half second, the host's tick for the id; the answer
+   * (SB.Pong) says how far behind the guest's game is, its connection's queue and all (vanilla ClientboundPingPacket).
+   * One that falls behind is sent only what can't wait till it catches up, then the rest afresh (net/server/session.ts)
+   */
+  Ping: 104,
 } as const;
 
 /** the dimensions there are (vanilla's three: a guest takes no other) */
@@ -358,6 +369,7 @@ const SERVERBOUND: Check[][] = [];
 // (a name that isn't one is turned away with a word on what a name is: ServerPlayerSession.hello; the join code, as typed)
 SERVERBOUND[SB.Hello] = [int(0, 0x7fffffff), str(1, 64), str(0, 64), UUID, int(2, 32), str(0, 32)];
 SERVERBOUND[SB.KeepAlive] = [ID];
+SERVERBOUND[SB.Pong] = [ID];
 SERVERBOUND[SB.MovePlayer] = [X, Y, X, ANGLE, PITCH, FLAGS, int(-1, 0x7fffffff)];
 SERVERBOUND[SB.AcceptTeleportation] = [ID];
 SERVERBOUND[SB.PlayerAction] = [int(0, 7), int(0, 100)];
@@ -449,6 +461,7 @@ export const BOSS_BAR_OVERLAYS: readonly string[] = ['progress', 'notched_6', 'n
 CLIENTBOUND[CB.BossEvent] = [ID, TEXT(256), (v) => typeof v === 'string' && BOSS_BAR_COLORS.includes(v), (v) => typeof v === 'string' && BOSS_BAR_OVERLAYS.includes(v), num(0, 1), int(0, 7)];
 CLIENTBOUND[CB.BossEventRemove] = [ID];
 CLIENTBOUND[CB.WinGame] = [];
+CLIENTBOUND[CB.Ping] = [ID];
 // (guests' advancements: some 120 of them, the most criteria one has is Adventuring Time's 53)
 CLIENTBOUND[CB.UpdateAdvancements] = [bool, arr(512, (v) => Array.isArray(v) && v.length === 2 && str(1, 64)(v[0]) && arr(128, str(1, 64))(v[1]))];
 CLIENTBOUND[CB.ChangeDimension] = [DIMENSION, (v) => typeof v === 'string' && (RECEIVING_REASONS as readonly string[]).includes(v)];

@@ -872,20 +872,29 @@ export class Chicken extends Animal {
   }
   override aiStep(): void {
     super.aiStep();
-    this.flapO = this.flap;
-    this.flapSpeedO = this.flapSpeed;
-    this.flapSpeed += (this.onGround ? -1 : 4) * 0.3;
-    this.flapSpeed = Math.max(0, Math.min(1, this.flapSpeed));
-    if (!this.onGround && this.flapping < 1) this.flapping = 1;
-    this.flapping *= 0.9;
+    this.flapWings();
     if (!this.onGround && this.dy < 0) this.dy *= 0.6;
-    this.flap += this.flapping * 2;
     if (this.isAlive && !this.isBaby() && --this.eggTime <= 0) {
       this.playSound('entity.chicken.egg', 1, (this.random.nextFloat() - this.random.nextFloat()) * 0.2 + 1);
       const egg = ITEMS.get('egg');
       if (egg) this.spawnAtLocation(new ItemStack(egg, 1));
       this.eggTime = this.random.nextInt(6000) + 6000;
     }
+  }
+  /** vanilla Chicken.aiStep's wings, which its clients beat too: flapping while it's off the ground, folding on it */
+  private flapWings(): void {
+    this.flapO = this.flap;
+    this.flapSpeedO = this.flapSpeed;
+    this.flapSpeed += (this.onGround ? -1 : 4) * 0.3;
+    this.flapSpeed = Math.max(0, Math.min(1, this.flapSpeed));
+    if (!this.onGround && this.flapping < 1) this.flapping = 1;
+    this.flapping *= 0.9;
+    this.flap += this.flapping * 2;
+  }
+  /** (a guest's copy) its wings beaten here, as vanilla's client does: the host doesn't send them */
+  override animateMirror(): void {
+    super.animateMirror();
+    this.flapWings();
   }
   protected override causeFallDamage(): void {}
   isFood(s: ItemStack): boolean {

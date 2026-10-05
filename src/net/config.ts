@@ -34,6 +34,17 @@ export const ANNOUNCE_EXPIRE_MS = 3000;
 /** vanilla ServerGamePacketListenerImpl: a keep-alive every 15 s, and a guest that hasn't answered for 30 s is gone */
 export const KEEPALIVE_TICKS = 15 * 20;
 export const TIMEOUT_TICKS = 30 * 20;
+/**
+ * (guests under load) the host asks each guest how far it's got every PING_TICKS (CB.Ping, its tick; vanilla's ping and
+ * pong). A guest whose latest answer is to a question asked more than SLOW_TICKS ago is behind: its connection, or its
+ * game, isn't keeping up with what it's sent, which would otherwise wait in the relay till it let the guest go (or in
+ * the guest's game till it gave up). Till its answers come within CAUGHT_UP_TICKS again it is sent only what can't
+ * wait (blocks changing, its own player, chat, menus); the rest, where everything is and how it looks, it is then sent
+ * afresh
+ */
+export const PING_TICKS = 10;
+export const SLOW_TICKS = 100;
+export const CAUGHT_UP_TICKS = 40;
 
 /** how far round a guest the host sends chunks (vanilla's view distance, capped as a LAN server would) */
 export const GUEST_VIEW_DISTANCE = 8;

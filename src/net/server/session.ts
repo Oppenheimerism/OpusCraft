@@ -5,7 +5,7 @@
 import type { Value } from '../codec';
 import { decode, encodeBundle, CodecError } from '../codec';
 import { SB, CB, Action, PoseFlag, CLICK_TYPES, checkPacket, packetFault, isAllowedChat, SLOT_ARMOR, SLOT_OFFHAND, SLOT_COUNT, ANIMATE_SWING_MAIN_HAND, ANIMATE_SWING_OFF_HAND, type LoginInfo, type ReceivingReason } from '../protocol';
-import { PROTOCOL_VERSION, BUILD_ID, MAX_GUEST_MESSAGE, MAX_GUEST_PACKETS, MESSAGES_PER_TICK, MAX_GUEST_BACKLOG, MAX_GUEST_BACKLOG_BYTES, MAX_LOGIN_BACKLOG, MAX_GUESTS, LOGIN_TICKS, KEEPALIVE_TICKS, TIMEOUT_TICKS, GUEST_VIEW_DISTANCE, CHUNKS_PER_TICK, MAX_MOVE_PER_TICK, MOVES_KEPT_PER_TICK, RESYNC_MIN_TICKS, CHAT_SPAM_STEP, CHAT_SPAM_LIMIT, NAME_PATTERN, DROP_SPAM_STEP, DROP_SPAM_LIMIT, ENTITY_REACH_SLACK, MAX_MOTION, RESPAWN_BED_WAIT_TICKS } from '../config';
+import { PROTOCOL_VERSION, BUILD_ID, MAX_GUEST_MESSAGE, MAX_GUEST_PACKETS, MESSAGES_PER_TICK, MAX_GUEST_BACKLOG, MAX_GUEST_BACKLOG_BYTES, MAX_LOGIN_BACKLOG, MAX_GUESTS, LOGIN_TICKS, KEEPALIVE_TICKS, TIMEOUT_TICKS, PING_TICKS, SLOW_TICKS, CAUGHT_UP_TICKS, GUEST_VIEW_DISTANCE, CHUNKS_PER_TICK, MAX_MOVE_PER_TICK, MOVES_KEPT_PER_TICK, RESYNC_MIN_TICKS, CHAT_SPAM_STEP, CHAT_SPAM_LIMIT, NAME_PATTERN, DROP_SPAM_STEP, DROP_SPAM_LIMIT, ENTITY_REACH_SLACK, MAX_MOTION, RESPAWN_BED_WAIT_TICKS } from '../config';
 import type { PeerId } from '../transport/transport';
 import { creativeItem, itemToWire } from '../items';
 import { applyPoseFlags, equipment, poseFlags, stackKey } from '../playerState';
@@ -177,6 +177,14 @@ export class ServerPlayerSession {
   private afterCredits = false;
   /** (stage 5) when it last asked for the world again from its loading screen (resync), in its ticks */
   private lastResync = -Infinity;
+  /** (guests under load) the tick of the latest Ping it has answered (0: none yet, and it isn't judged) */
+  private answered = 0;
+  /**
+   * (guests under load) behind (net/config.ts SLOW_TICKS): sent only what can't wait till it catches up; `stale` till
+   * it's been sent afresh how the others and the world's entities look
+   */
+  slow = false;
+  private stale = false;
 
   constructor(readonly server: HostServer, readonly peer: PeerId) {}
 
@@ -258,6 +266,7 @@ export class ServerPlayerSession {
     if (this.isGone) return;
     if (this.ticks - this.lastHeard > TIMEOUT_TICKS) return this.disconnect('Timed out');
     if (this.ticks % KEEPALIVE_TICKS === 0) this.send([CB.KeepAlive, ++this.keepAliveId]);
+    if (this.ticks % PING_TICKS === 0) this.send([CB.Ping, this.ticks]);
     this.sendOut();
   }
 
@@ -311,6 +320,8 @@ export class ServerPlayerSession {
         return this.disconnect('Already here');
       case SB.KeepAlive:
         return;
+      case SB.Pong:
+        return this.pong(p[1] as number);
       case SB.MovePlayer:
         this.target = p[7] as number;
         return this.moved({ x: p[1] as number, y: p[2] as number, z: p[3] as number, yRot: p[4] as number, xRot: p[5] as number, flags: p[6] as number });
@@ -394,6 +405,8 @@ export class ServerPlayerSession {
         return this.systemChat('§cOnly the host can use commands.');
       case SB.Disconnect:
         return this.gone('left');
+      case SB.Pong:
+        return this.pong(p[1] as number);
       case SB.Resync:
         // (on its way with the host, which isn't there itself yet: it's put in when the host is, as ever)
         return this.resync(p[1] as number[], p[2] as number, p[3] as boolean);
@@ -922,6 +935,7 @@ export class ServerPlayerSession {
     if (this.state !== 'play') return;
     if (this.ticks - this.lastHeard > TIMEOUT_TICKS) return this.disconnect('Timed out');
     if (this.ticks % KEEPALIVE_TICKS === 0) this.send([CB.KeepAlive, ++this.keepAliveId]);
+    if (this.ticks % PING_TICKS === 0) this.send([CB.Ping, this.ticks]);
     // (on its way to another dimension: nothing of this one to do; home after its End Poem, once its bed's chunks are in
     // or it has waited long enough)
     if (this.travelling) {
@@ -938,7 +952,7 @@ export class ServerPlayerSession {
     this.tickInteraction();
     this.progress.tick();
     this.menus!.tick();
-    this.tickChunks();
+    this.tickChunks(!this.slow);
     // (respawning at a bed whose chunks were asked for: once they're in, or it's waited long enough)
     if (this.respawnWait > 0 && (this.bedLoaded() || --this.respawnWait === 0)) this.respawnNow();
   }
@@ -1028,7 +1042,8 @@ export class ServerPlayerSession {
   }
 
   /** vanilla ChunkMap.updateChunkTracking: send the nearest missing chunks, forget the far ones */
-  private tickChunks(): void {
+  /** (`more`: new chunks may go, not while it's behind) */
+  private tickChunks(more: boolean): void {
     const world = this.level.world;
     const cx = Math.floor(this.pos.x) >> 4, cz = Math.floor(this.pos.z) >> 4, vd = this.viewDistance;
     this.server.hooks.setTicket(`player:${this.player!.id}`, [cx, cz, vd]);
@@ -1045,6 +1060,7 @@ export class ServerPlayerSession {
         this.send([CB.ForgetLevelChunk, kx, kz]);
       }
     }
+    if (!more) return;
     const want: [Chunk, number][] = [];
     for (let dz = -vd; dz <= vd; dz++)
       for (let dx = -vd; dx <= vd; dx++) {
@@ -1096,9 +1112,14 @@ export class ServerPlayerSession {
   /** (end of the host's tick) what the guest sees of the others, its inventory's changes, and off it all goes */
   flush(): void {
     if (this.state !== 'play' || this.travelling) return this.sendOut();
+    this.checkPace();
     this.flushBlocks();
-    this.trackPlayers();
-    this.tracker.tick(this.ticks);
+    // (behind: where the others and the world's entities go and how they look waits till it's caught up)
+    if (!this.slow) {
+      if (this.stale) this.refresh();
+      this.trackPlayers();
+      this.tracker.tick(this.ticks);
+    }
     this.dismounted();
     // (the open menu's slots first: the inventory's that it shows go with its state number; the rest after)
     this.menus!.broadcast();
@@ -1109,6 +1130,41 @@ export class ServerPlayerSession {
     this.progress.flush();
     this.bossBars.sync(this.level, this.player!, (pk) => this.send(pk), this.viewDistance);
     this.sendOut();
+  }
+
+  /** (guests under load) its answer to a Ping: the latest it has got to */
+  private pong(id: number): void {
+    if (id > this.answered && id <= this.ticks) this.answered = id;
+  }
+
+  /**
+   * (guests under load) whether it's behind: its latest answer to a Ping is to one asked more than SLOW_TICKS ago, what
+   * it's sent waiting in its connection or its game; from then on, till its answers come within CAUGHT_UP_TICKS again,
+   * it's sent only what can't wait. Vanilla has nothing like it: a client that can't keep up there times out, its
+   * keep-alive's answer stuck behind what it hasn't read yet. (One that hasn't answered any isn't judged: a game that
+   * doesn't ask, a test's)
+   */
+  private checkPace(): void {
+    if (!this.answered) return;
+    const behind = this.ticks - this.answered;
+    if (!this.slow && behind > SLOW_TICKS) {
+      this.slow = this.stale = true;
+      console.info(`multiplayer: ${this.name} is ${(behind / 20).toFixed(1)} s behind: sending it only what can't wait till it catches up`);
+    } else if (this.slow && behind <= CAUGHT_UP_TICKS) {
+      this.slow = false;
+      console.info(`multiplayer: ${this.name} has caught up`);
+    }
+  }
+
+  /**
+   * (guests under load) caught up after falling behind: how the others and the world's entities it was shown look now,
+   * all of it, since what changed while it was behind wasn't sent (where they are, their riders, what the others hold go
+   * as they always do: what changed since it was last sent; what came and went in its view, as ever)
+   */
+  private refresh(): void {
+    this.stale = false;
+    for (const o of this.seen.keys()) if (!o.removed) this.send([CB.SetEntityData, o.id, this.server.dataFull(o)]);
+    this.tracker.refresh();
   }
 
   /**

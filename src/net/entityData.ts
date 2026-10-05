@@ -2,7 +2,8 @@
 // entities declare the few values their client needs; this game's entities keep all theirs as plain fields, and draw
 // themselves from whichever they like (a sheep's wool, a creeper's swell, a horse's saddle, a goat's horns), so the host
 // sends them all, but for its wiring, its place and motion (MoveEntity says those), what the guest works out for itself
-// (its clock, its walk), and the busiest of what only the host's own tick reads. A field that is a number, a flag or a
+// (its walk, its clock, which counts on from the host's age of it, and what each copy's animateMirror works out as
+// vanilla's client does), and the busiest of what only the host's own tick reads. A field that is a number, a flag or a
 // text goes as it is; an item as the wire's item; another entity as its id; a short list of those as a list; a
 // container as its first slots where a mob shows them (a horse's saddle and armour); and the few parts that hold what
 // a mob shows (a pig's saddle) as their own plain fields. What changed goes each tick.
@@ -35,7 +36,17 @@ const NOT_SENT = new Set([
   'boardingCooldown', 'fluidHeightWater', 'fluidHeightLava', 'wasInWater', 'wasInPowderSnow', 'pistonMoving',
   'lastHurtByMob', 'lastHurtByMobTimestamp', 'lastHurtByPlayer', 'lastHurtByPlayerTime', 'lastHurtMob', 'lastHurtMobTimestamp',
   'lastDamageStamp', 'hurtMarked', 'effectsDirty', 'goalsReady', 'targetChangeTime', 'sensorTime', 'sensorTimers', 'nearestLiving', 'visibleLiving',
+  // ((guests under load) the block its feet were last checked in for Soul Speed and Frost Walker, which changes as it
+  // walks; and what the brains of piglins, hoglins, goats, frogs and the like last sensed and are waiting out)
+  'soulX', 'soulY', 'soulZ', 'soulLevel', 'frostLevel',
+  'nearbyAdultPiglins', 'visibleAdultPiglins', 'visibleAdultHoglins', 'nearestVisiblePlayer', 'nearestVisibleAdult', 'lookTarget',
+  'idleLookBusyUntil', 'idleMoveBusyUntil', 'lookSinkUntil', 'sinkTarget', 'cantReachSince', 'cantReachWalkTargetSince',
+  'longJumpCooldown', 'ramCooldown', 'targetPos',
 ]);
+
+/** (NOT_SENT_BY_TYPE) a squid's beat and tilt, its copy's to work out (all but the beat's speed); a guardian's tail and spikes */
+const SQUID_ANIMATION = ['xBodyRot', 'xBodyRotO', 'zBodyRot', 'zBodyRotO', 'tentacleMovement', 'oldTentacleMovement', 'tentacleAngle', 'oldTentacleAngle', 'swimSpeed', 'rotateSpeed', 'tx', 'ty', 'tz'];
+const GUARDIAN_ANIMATION = ['tailAnimation', 'tailAnimationO', 'tailAnimationSpeed', 'spikesAnimation', 'spikesAnimationO', 'touchedGround'];
 
 /** never sent for these kinds, besides NOT_SENT: what's the guest's own to count (an item's bobbing age) */
 const NOT_SENT_BY_TYPE: Record<string, readonly string[]> = {
@@ -48,6 +59,24 @@ const NOT_SENT_BY_TYPE: Record<string, readonly string[]> = {
   ender_dragon: ['posPointer', 'growlTime'],
   // ((the End Poem) out of the level while it plays, the host's own player is the guests' to forget, not to copy)
   player: ['wonGame'],
+  // ((guests under load) what a guest's copy works out for itself, as vanilla's client does (each its animateMirror):
+  // a slime's squish, a chicken's and a parrot's wings, a squid's tentacles, a guardian's tail and spikes, a warden's
+  // heart and a breeze's whirl; and what only the host's tick counts (a blaze's next height, a fox's last meal, a
+  // trader's llama's time left)
+  slime: ['squish', 'oSquish', 'targetSquish', 'wasOnGround'],
+  magma_cube: ['squish', 'oSquish', 'targetSquish', 'wasOnGround'],
+  chicken: ['flap', 'flapO', 'flapSpeed', 'flapSpeedO', 'flapping', 'eggTime'],
+  parrot: ['flap', 'oFlap', 'flapSpeed', 'oFlapSpeed', 'flapping', 'nextFlap', 'rideCooldownCounter'],
+  squid: SQUID_ANIMATION,
+  glow_squid: SQUID_ANIMATION,
+  guardian: GUARDIAN_ANIMATION,
+  elder_guardian: GUARDIAN_ANIMATION,
+  warden: ['heartAnimation', 'heartAnimationO', 'tendrilAnimationO'],
+  breeze: ['soundTick', 'jumpTrailStartedTick'],
+  blaze: ['nextHeightOffsetChangeTick', 'allowedHeightOffset'],
+  fox: ['ticksSinceEaten'],
+  trader_llama: ['despawnDelay'],
+  wandering_trader: ['despawnDelay'],
 };
 // ((minecarts) a container minecart's or chest boat's loot table, and its seed, not yet rolled: vanilla sends neither)
 NOT_SENT.add('lootTable').add('lootSeed');
@@ -60,6 +89,13 @@ const SIGN_ONLY = new Set(['age', 'remainingFireTicks', 'timeInOverworld', 'ange
 
 /** sent no higher than this: a count whose only use off the host is its start (a body's 20-tick fall as it dies) */
 const CLAMPED: Record<string, number> = { deathTime: 20 };
+
+/**
+ * ((guests under load) counted down a tick at a time by a guest's copy as by the host (vanilla's hurtTime, which its
+ * client counts from the hurt event; a warden's tendrils; a glow squid's dark): sent as it starts, not each tick of
+ * the count, nor as it runs out. Its change key is the tick it runs out on. Not a player's, whose copy is told each
+ */
+const COUNTDOWN = new Set(['hurtTime', 'tendrilAnimation', 'darkTicksRemaining']);
 
 /**
  * what a guest is sent of another player, which has its place, pose and hands from the players' own packets (vanilla
@@ -136,6 +172,7 @@ function wireOne(v: unknown): Value {
 /** a field's change key, or NO when it doesn't go */
 function keyField(e: Entity, name: string, v: unknown): unknown {
   if (SIGN_ONLY.has(name) && typeof v === 'number') return Number.isFinite(v) ? Math.sign(v) : NO;
+  if (COUNTDOWN.has(name) && typeof v === 'number' && e.type !== 'player') return Number.isFinite(v) ? (v > 0 ? e.tickCount + v : 0) : NO;
   if (name in CLAMPED && typeof v === 'number') return Number.isFinite(v) ? Math.min(v, CLAMPED[name]) : NO;
   if (SHOWN_PARTS.has(name) && typeof v === 'object' && v !== null && kindOf(v) === null) {
     let key = 'o';
@@ -220,13 +257,17 @@ export class DataWatcher {
   /** (`only`: just these fields, a player's PLAYER_FIELDS) */
   constructor(private readonly only: ReadonlySet<string> | null = null) {}
 
-  /** every field (for a guest seeing it for the first time), remembered as sent */
+  /**
+   * every field (for a guest seeing it for the first time), remembered as sent; and its age (`$tick`), which its copy
+   * counts on from (the animations a host's entity starts at a tick of its age play on its copy from that tick)
+   */
   full(e: Entity): EntityData {
     const out: EntityData = {};
     fieldsOf(e, (name, key, wire) => {
       out[name] = wire();
       this.last.set(name, key);
     }, this.only);
+    if (!this.only && Number.isSafeInteger(e.tickCount) && e.tickCount >= 0) out.$tick = e.tickCount;
     return out;
   }
 
@@ -234,8 +275,11 @@ export class DataWatcher {
   changes(e: Entity): EntityData | null {
     let out: EntityData | null = null;
     fieldsOf(e, (name, key, wire) => {
-      if (this.last.get(name) === key && this.last.has(name)) return;
+      const was = this.last.get(name);
+      if (was === key && this.last.has(name)) return;
       this.last.set(name, key);
+      // (a countdown run out when it was to, as the copy counted it: nothing to say)
+      if (key === 0 && typeof was === 'number' && was <= e.tickCount && COUNTDOWN.has(name) && e.type !== 'player') return;
       (out ??= {})[name] = wire();
     }, this.only);
     return out;
@@ -269,6 +313,11 @@ export function applyData(e: Entity, data: Value, resolve: Resolve, only: Readon
     if (only && !only.has(name)) continue;
     if (name === '$effects') {
       if (!applyEffects(e, wire)) return 'bad effects';
+      continue;
+    }
+    if (name === '$tick') {
+      if (typeof wire !== 'number' || !Number.isSafeInteger(wire) || wire < 0) return 'bad entity data';
+      e.tickCount = wire;
       continue;
     }
     if (NOT_SENT.has(name) || (skip && skip.includes(name)) || !Object.prototype.hasOwnProperty.call(rec, name)) continue;

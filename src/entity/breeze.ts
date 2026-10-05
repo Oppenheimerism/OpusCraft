@@ -551,6 +551,20 @@ export class Breeze extends Monster {
    * slide's animation giving way to sliding back once it stops, and its whirl every tick to four seconds
    */
   override tick(): void {
+    this.level.clientEffects(() => this.clientTick());
+    if (this.pose === 'long_jumping' && this.jumpAnimStart < 0) this.jumpAnimStart = this.tickCount;
+    if (this.pose !== 'sliding' && this.slideAnimStart >= 0) {
+      this.slideBackAnimStart = this.tickCount;
+      this.slideAnimStart = -1;
+    }
+    super.tick();
+  }
+
+  /**
+   * vanilla Breeze.tick's client side (vanilla's dust is a client's, its whirl a playLocalSound), each client's own
+   * (the host's own player's, a guest's copy's)
+   */
+  private clientTick(): void {
     switch (this.pose) {
       case 'shooting':
       case 'inhaling':
@@ -562,17 +576,17 @@ export class Breeze extends Monster {
         this.emitGroundParticles(20);
         break;
       case 'long_jumping':
-        if (this.jumpAnimStart < 0) this.jumpAnimStart = this.tickCount;
         this.emitJumpTrailParticles();
         break;
     }
-    if (this.pose !== 'sliding' && this.slideAnimStart >= 0) {
-      this.slideBackAnimStart = this.tickCount;
-      this.slideAnimStart = -1;
-    }
     this.soundTick = this.soundTick === 0 ? 1 + this.random.nextInt(80) : this.soundTick - 1;
     if (this.soundTick === 0) this.playWhirlSound();
-    super.tick();
+  }
+
+  /** (a guest's copy) its dust and its whirl are its own, as on vanilla's client: the host sends neither */
+  override animateMirror(): void {
+    super.animateMirror();
+    this.clientTick();
   }
 
   /** vanilla getInBlockState if it isn't air, else getBlockStateOn */

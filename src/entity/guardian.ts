@@ -152,48 +152,8 @@ export class Guardian extends Monster {
 
   override aiStep(): void {
     if (this.isAlive) {
-      // (vanilla's client half: the tail, the spikes, the bubbles, the laser's count)
-      this.tailAnimationO = this.tailAnimation;
-      if (!this.inWater) {
-        this.tailAnimationSpeed = 2;
-        if (this.dy > 0 && this.touchedGround) this.playSound(`${this.soundPrefix()}.flop`, 1, 1);
-        const below = this.level.world.getState(Math.floor(this.x), Math.floor(this.y) - 1, Math.floor(this.z));
-        this.touchedGround = this.dy < 0 && (FLAGS[below] & F_COLLIDE) !== 0;
-      } else if (this.moving) {
-        this.tailAnimationSpeed = this.tailAnimationSpeed < 0.5 ? 4 : this.tailAnimationSpeed + (0.5 - this.tailAnimationSpeed) * 0.1;
-      } else this.tailAnimationSpeed += (0.125 - this.tailAnimationSpeed) * 0.2;
-      this.tailAnimation += this.tailAnimationSpeed;
-      this.spikesAnimationO = this.spikesAnimation;
-      if (!this.inWater) this.spikesAnimation = this.random.nextFloat();
-      else if (this.moving) this.spikesAnimation += (0 - this.spikesAnimation) * 0.25;
-      else this.spikesAnimation += (1 - this.spikesAnimation) * 0.06;
-      if (this.moving && this.inWater) {
-        const [vx, vy, vz] = this.viewVector();
-        for (let i = 0; i < 2; i++) {
-          const px = this.x + (this.random.nextDouble() * 2 - 1) * this.width * 0.5 - vx * 1.5;
-          const py = this.y + this.random.nextDouble() * this.height - vy * 1.5;
-          const pz = this.z + (this.random.nextDouble() * 2 - 1) * this.width * 0.5 - vz * 1.5;
-          this.level.particles.spawn?.('bubble', px, py, pz, 0, 0, 0);
-        }
-      }
+      this.clientHalf(true);
       const t = this.activeAttackTarget();
-      if (t) {
-        if (this.attackTime < this.attackDuration()) this.attackTime++;
-        // bubbles along the beam, closer together as it charges
-        const d5 = this.attackAnimationScale(0);
-        let d0 = t.x - this.x, d1 = t.y + t.height * 0.5 - (this.y + this.eyeHeight), d2 = t.z - this.z;
-        const d3 = Math.sqrt(d0 * d0 + d1 * d1 + d2 * d2);
-        if (d3 > 0) {
-          d0 /= d3;
-          d1 /= d3;
-          d2 /= d3;
-          let d4 = this.random.nextDouble();
-          while (d4 < d3) {
-            d4 += 1.8 - d5 + this.random.nextDouble() * (1.7 - d5);
-            this.level.particles.spawn?.('bubble', this.x + d0 * d4, this.y + this.eyeHeight + d1 * d4, this.z + d2 * d4, 0, 0, 0);
-          }
-        }
-      }
       if (this.inWater) this.air = 300;
       else if (this.onGround) {
         // stranded, it flops about
@@ -206,6 +166,64 @@ export class Guardian extends Monster {
       if (t) this.yaw = this.headYaw;
     }
     super.aiStep();
+  }
+
+  /**
+   * vanilla Guardian.aiStep's client half, which the host runs for its own player and a guest's copy for its own: the
+   * tail, the spikes, the bubbles (each side's own) and the laser's count (the host's, which it sends: `host`)
+   */
+  private clientHalf(host: boolean): void {
+    this.tailAnimationO = this.tailAnimation;
+    if (!this.inWater) {
+      this.tailAnimationSpeed = 2;
+      if (this.dy > 0 && this.touchedGround) this.level.clientEffects(() => this.playSound(`${this.soundPrefix()}.flop`, 1, 1));
+      const below = this.level.world.getState(Math.floor(this.x), Math.floor(this.y) - 1, Math.floor(this.z));
+      this.touchedGround = this.dy < 0 && (FLAGS[below] & F_COLLIDE) !== 0;
+    } else if (this.moving) {
+      this.tailAnimationSpeed = this.tailAnimationSpeed < 0.5 ? 4 : this.tailAnimationSpeed + (0.5 - this.tailAnimationSpeed) * 0.1;
+    } else this.tailAnimationSpeed += (0.125 - this.tailAnimationSpeed) * 0.2;
+    this.tailAnimation += this.tailAnimationSpeed;
+    this.spikesAnimationO = this.spikesAnimation;
+    if (!this.inWater) this.spikesAnimation = this.random.nextFloat();
+    else if (this.moving) this.spikesAnimation += (0 - this.spikesAnimation) * 0.25;
+    else this.spikesAnimation += (1 - this.spikesAnimation) * 0.06;
+    if (this.moving && this.inWater) {
+      const [vx, vy, vz] = this.viewVector();
+      this.level.clientEffects(() => {
+        for (let i = 0; i < 2; i++) {
+          const px = this.x + (this.random.nextDouble() * 2 - 1) * this.width * 0.5 - vx * 1.5;
+          const py = this.y + this.random.nextDouble() * this.height - vy * 1.5;
+          const pz = this.z + (this.random.nextDouble() * 2 - 1) * this.width * 0.5 - vz * 1.5;
+          this.level.particles.spawn?.('bubble', px, py, pz, 0, 0, 0);
+        }
+      });
+    }
+    const t = this.activeAttackTarget();
+    if (t) {
+      if (host && this.attackTime < this.attackDuration()) this.attackTime++;
+      // bubbles along the beam, closer together as it charges
+      const d5 = this.attackAnimationScale(0);
+      let d0 = t.x - this.x, d1 = t.y + t.height * 0.5 - (this.y + this.eyeHeight), d2 = t.z - this.z;
+      const d3 = Math.sqrt(d0 * d0 + d1 * d1 + d2 * d2);
+      if (d3 > 0) {
+        d0 /= d3;
+        d1 /= d3;
+        d2 /= d3;
+        this.level.clientEffects(() => {
+          let d4 = this.random.nextDouble();
+          while (d4 < d3) {
+            d4 += 1.8 - d5 + this.random.nextDouble() * (1.7 - d5);
+            this.level.particles.spawn?.('bubble', this.x + d0 * d4, this.y + this.eyeHeight + d1 * d4, this.z + d2 * d4, 0, 0, 0);
+          }
+        });
+      }
+    }
+  }
+
+  /** (a guest's copy) its tail, its spikes and its bubbles worked out here, as vanilla's client does: the host sends none of them */
+  override animateMirror(): void {
+    super.animateMirror();
+    if (this.isAlive) this.clientHalf(false);
   }
 
   /** vanilla getViewVector(0) */

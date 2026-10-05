@@ -137,12 +137,23 @@ export class Phantom extends Monster {
   }
 
   /**
-   * vanilla Phantom.tick (the client's part, which each game plays here for itself and its guests): a flap of the
-   * wings once a beat, as they come down, and a speck of mycelium off each wingtip every tick
+   * vanilla Phantom.tick (the client's part, which each game plays for itself, a host's guests' copies too): a flap of
+   * the wings once a beat, as they come down, and a speck of mycelium off each wingtip every tick
    */
   override tick(): void {
     super.tick();
     if (this.removed) return;
+    this.level.clientEffects(() => this.clientTick());
+  }
+
+  /** (a guest's copy) its wingbeats' flaps and specks are its own, as on vanilla's client: the host sends neither */
+  override animateMirror(): void {
+    super.animateMirror();
+    this.clientTick();
+  }
+
+  /** (tick) the client's part, each client's own (the host's own player's, a guest's copy's) */
+  private clientTick(): void {
     const f = Math.cos(this.flapTicks() * FLAP_DEGREES_PER_TICK * DEG + Math.PI);
     const g = Math.cos(this.flapTicks(1) * FLAP_DEGREES_PER_TICK * DEG + Math.PI);
     const r = this.random;

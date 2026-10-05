@@ -57,7 +57,12 @@ export class AreaEffectCloud extends Entity {
   override tick(): void {
     this.baseTick();
     this.serverTick();
-    if (!this.removed) this.clientTick();
+    if (!this.removed) this.level.clientEffects(() => this.clientTick());
+  }
+
+  /** (a guest's copy) its puffs are its own, as on vanilla's client: the host sends its radius, not its particles */
+  animateMirror(): void {
+    this.clientTick();
   }
 
   /** vanilla AreaEffectCloud.serverTick */
@@ -96,7 +101,10 @@ export class AreaEffectCloud extends Entity {
     }
   }
 
-  /** vanilla AreaEffectCloud.clientTick: the puffs (always drawn, however far off or many) */
+  /**
+   * vanilla AreaEffectCloud.clientTick: the puffs (always drawn, however far off or many), each client's own (the
+   * host's own player's, a guest's copy's)
+   */
   private clientTick(): void {
     const r = this.random;
     const waiting = this.waiting;

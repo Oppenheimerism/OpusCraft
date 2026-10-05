@@ -149,18 +149,22 @@ export class HostServer {
       wake?.();
       this.sleepStatus.sleeping = 0;
     };
+    // (vanilla's client-side effects, a blaze's smoke say, are the host's own: its guests' copies make theirs)
+    const clientEffects = level.onClientEffects;
+    level.onClientEffects = (fn) => this.runLocal(fn);
     this.undo.push(() => {
       world.onBlockChanged = blockChanged;
       world.onBlockEntityChanged = beChanged;
       level.onDestroyBlockProgress = progress;
       level.onTake = take;
       level.onWakeUpAll = wake;
+      level.onClientEffects = clientEffects;
     });
     this.undo.push(
       broadcastEffects(level, {
-        sound: (name, x, y, z, volume, pitch) => this.muted || this.broadcastNear([CB.Sound, name, x, y, z, Math.min(volume, 1024), Math.min(pitch, 16)], x, y, z, soundRange(volume), this.actor),
+        sound: (name, x, y, z, volume, pitch) => this.muted || this.broadcastNear([CB.Sound, name, x, y, z, Math.min(volume, 1024), Math.min(pitch, 16)], x, y, z, soundRange(volume), this.actor, true),
         soundTo: (p, name, x, y, z, volume, pitch) => this.muted || this.sessionOf(p)?.send([CB.Sound, name, x, y, z, Math.min(volume, 1024), Math.min(pitch, 16)]),
-        particles: (method, args, x, y, z) => this.muted || this.broadcastNear([CB.LevelParticles, method, args], x, y, z, PARTICLE_RANGE, this.actor),
+        particles: (method, args, x, y, z) => this.muted || this.broadcastNear([CB.LevelParticles, method, args], x, y, z, PARTICLE_RANGE, this.actor, true),
       }),
     );
     // (guests' advancements: what the level's hooks say a guest's player did, to its advancements)
@@ -400,11 +404,14 @@ export class HostServer {
     for (const s of this.sessions.values()) if (s.state === 'play') s.send(p);
   }
 
-  /** to the guests whose players are within `r` of (x, y, z) (but `except`) */
-  broadcastNear(p: Value[], x: number, y: number, z: number, r: number, except: ServerPlayerSession | null = null): void {
+  /**
+   * to the guests whose players are within `r` of (x, y, z) (but `except`); `passing`: a sound or particles, there and
+   * gone, which a guest that's behind isn't sent (net/server/session.ts checkPace)
+   */
+  broadcastNear(p: Value[], x: number, y: number, z: number, r: number, except: ServerPlayerSession | null = null, passing = false): void {
     for (const s of this.sessions.values()) {
       const pl = s.player;
-      if (s !== except && s.state === 'play' && !s.travelling && pl && (pl.x - x) ** 2 + (pl.y - y) ** 2 + (pl.z - z) ** 2 < r * r) s.send(p);
+      if (s !== except && s.state === 'play' && !s.travelling && !(passing && s.slow) && pl && (pl.x - x) ** 2 + (pl.y - y) ** 2 + (pl.z - z) ** 2 < r * r) s.send(p);
     }
   }
 

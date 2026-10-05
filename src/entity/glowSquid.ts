@@ -19,12 +19,21 @@ export class GlowSquid extends Squid {
     super(level);
   }
 
-  /** vanilla GlowSquid.aiStep: the dark wears off; a glow spark about it every tick */
+  /** vanilla GlowSquid.aiStep: the dark wears off; a glow spark about it every tick (a client's, each its own) */
   override aiStep(): void {
     super.aiStep();
     if (this.darkTicksRemaining > 0) this.darkTicksRemaining--;
+    this.level.clientEffects(() => this.spark());
+  }
+  private spark(): void {
     const r = this.random;
     this.level.particles.spawn?.('glow', this.x + (2 * r.nextDouble() - 1) * this.width * 0.6, this.y + this.height * r.nextDouble(), this.z + (2 * r.nextDouble() - 1) * this.width * 0.6, 0, 0, 0);
+  }
+  /** (a guest's copy) its sparks are its own, and its dark wears off here as it does on the host, which sends when it starts */
+  override animateMirror(): void {
+    super.animateMirror();
+    if (this.darkTicksRemaining > 0) this.darkTicksRemaining--;
+    this.spark();
   }
 
   /** vanilla GlowSquid.hurt: hurt by something (Squid.hurt counts only a blow from a mob), it goes dark 5 seconds */
