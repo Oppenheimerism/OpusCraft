@@ -22,7 +22,7 @@ and playtesting, in about a week. The game uses no files from Minecraft, and no 
 
 (The one picture in this repository, `public/og.jpg`, is a screenshot of the game, for this page and for link previews.)
 
-It is about 230,000 lines of TypeScript on WebGL 2, with nothing to install to play and no libraries in the game
+It is about 235,000 lines of TypeScript on WebGL 2, with nothing to install to play and no libraries in the game
 itself (TypeScript and Vite build it; `ws` carries multiplayer between computers).
 
 ## What's in it
@@ -31,7 +31,8 @@ itself (TypeScript and Vite build it; `ws` carries multiplayer between computers
   islands and deep oceans; caves, lush caves and the deep dark; weather, lightning, day and night.
 - **Structures.** Five kinds of village, temples, woodland mansions, pillager outposts, ruined portals, shipwrecks,
   ocean ruins and monuments, buried treasure, strongholds, ancient cities and trial chambers.
-- **The Nether.** Fortresses and bastion remnants; piglins, hoglins, striders, blazes, ghasts and wither skeletons.
+- **The Nether.** Fortresses and bastion remnants; piglins, hoglins, striders, blazes, ghasts and wither skeletons;
+  and the wither, built from soul sand and three of their skulls, with the beacon made from the star it drops.
 - **The End.** The ender dragon fight, the outer islands, end cities, shulkers and the elytra, and the End Poem and
   credits when you win.
 - **Mobs.** The usual monsters and farm animals; villagers that work, trade, breed and gossip, with iron golems,
@@ -55,8 +56,15 @@ itself (TypeScript and Vite build it; `ws` carries multiplayer between computers
   repository (see below).
 - In multiplayer everyone is in the same dimension as the host: when the host goes to the Nether or the End, the
   others go too. It has been played by two people so far, not by eight.
-- A handful of mobs and a number of smaller things. Where it differs from the original, that is a bug: issues are
-  welcome.
+- Some of the original, as of October 2026:
+  - mobs: the allay, the camel, the sniffer, the endermite, and skeleton and zombie horses;
+  - blocks: slime blocks, scaffolding, note blocks, trapped chests, targets and respawn anchors; and a number of
+    building and decorative ones: coral, quartz, bamboo planks, concrete powder (concrete itself is there), glazed
+    terracotta, mud bricks, cocoa, sea pickles, pink petals, chiseled bookshelves;
+  - items: spectral arrows, armour trims, bamboo rafts;
+  - structures: trail ruins and nether fossils;
+  - commands: about thirty of the original's sixty or so.
+- Where anything else differs from the original, that is a bug: issues are welcome.
 
 ## Play
 
@@ -107,7 +115,9 @@ wrong. The model wrote the code and the tests, working from what it knows of the
 Wiki, and the comments name the part of the original each piece follows.
 
 It took about a week: the first commit is from 22 September 2026, and nearly all the rest are from the six days
-after it. The commit messages are written for players, and read in order they tell how it grew.
+after it. A few more days at the start of October added the touch controls, the wither and the beacon, and fixes for
+what two people playing together had found. The commit messages are written for players, and read in order they tell
+how it grew.
 
 ## Development
 
@@ -120,7 +130,7 @@ npm run typecheck
 The tests run the game's own code in Node, without a browser:
 
 ```bash
-node scripts/regress.mjs                              # every suite (about 190; a long run on a laptop)
+node scripts/regress.mjs                              # every suite (about 210; a long run on a laptop)
 node scripts/regress.mjs tests/misc/lava-water.mjs    # one suite
 ```
 
