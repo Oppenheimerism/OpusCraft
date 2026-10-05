@@ -21,6 +21,8 @@ import { buildParticleAtlas } from './particleAtlas';
 import type { BlindnessFog, DarknessVisuals } from './effectVisuals';
 import { OVERWORLD, type DimensionType } from '../world/dimension';
 import { EndRenderer } from './endRenderer';
+// (the beacon)
+import { BeaconRenderer } from './beaconRenderer';
 
 export interface Camera {
   x: number;
@@ -75,6 +77,8 @@ export class Renderer {
   readonly entities: EntityRenderDispatcher;
   /** the End's sky and the end portal's starfield */
   readonly end: EndRenderer;
+  /** (the beacon) vanilla BeaconRenderer's beams */
+  readonly beacons: BeaconRenderer;
   private particleAtlas: ReturnType<typeof buildParticleAtlas> | null = null;
   particles: ParticleEngine | null = null;
   fancy = true;
@@ -106,6 +110,7 @@ export class Renderer {
     this.weather = new WeatherRenderer(gl);
     this.entities = new EntityRenderDispatcher(gl, this.items, this.hand.skinTexture);
     this.end = new EndRenderer(gl);
+    this.beacons = new BeaconRenderer(gl);
   }
 
   resize(w: number, h: number): void {
@@ -254,6 +259,8 @@ export class Renderer {
     if (e.level) {
       // (vanilla TheEndGatewayRenderer's beams, with the block entities)
       this.end.renderGatewayBeams(this.batch, e.level.world, e.level.gameTime, cam.x, cam.y, cam.z, this.frustum, e.partial);
+      // (the beacon) and the beacons' beams
+      this.beacons.render(this.batch, e.level.world, e.level.gameTime, cam.x, cam.y, cam.z, this.frustum, e.partial);
       this.batch.flush();
     }
     this.world.drawTranslucent(tp);
