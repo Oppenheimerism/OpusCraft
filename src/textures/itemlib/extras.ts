@@ -1,7 +1,7 @@
 // Additional vanilla items beyond the core set: more foods, mob drops,
 // materials, tools and block items that use flat item sprites.
 
-import { TexImage, plot, getA, getPx } from '../tex';
+import { TexImage, plot, getA, getPx, flipH } from '../tex';
 import { Gen, Pal, spr, over, autoShade, maskFn, inEllipse, rng, paint, outline4 } from './common';
 import { apple, carrotSprite, potato, melonSprite, fish, bowlRows, BOWL_PAL, SEEDS, CHICKEN_MASK } from './food';
 import { blank } from './misc';
@@ -613,13 +613,15 @@ function crossbow(pull: number, load: 'none' | 'arrow' | 'firework'): TexImage {
   }
   return t;
 }
-E['crossbow'] = () => crossbow(0, 'none');
+// (drawn above pointing to the upper right; vanilla's crossbow points to the upper left, and that is the way the
+// hand's transforms (crossbow.json: flat, turned 55 degrees) turn straight ahead, where the upper right turns sideways)
+E['crossbow'] = () => flipH(crossbow(0, 'none'));
 E['crossbow_standby'] = E['crossbow'];
-E['crossbow_pulling_0'] = () => crossbow(1, 'none');
-E['crossbow_pulling_1'] = () => crossbow(2, 'none');
-E['crossbow_pulling_2'] = () => crossbow(3, 'none');
-E['crossbow_arrow'] = () => crossbow(3, 'arrow');
-E['crossbow_firework'] = () => crossbow(3, 'firework');
+E['crossbow_pulling_0'] = () => flipH(crossbow(1, 'none'));
+E['crossbow_pulling_1'] = () => flipH(crossbow(2, 'none'));
+E['crossbow_pulling_2'] = () => flipH(crossbow(3, 'none'));
+E['crossbow_arrow'] = () => flipH(crossbow(3, 'arrow'));
+E['crossbow_firework'] = () => flipH(crossbow(3, 'firework'));
 
 // Spyglass: copper tube with a leather grip and a glass lens
 E['spyglass'] = () => {
