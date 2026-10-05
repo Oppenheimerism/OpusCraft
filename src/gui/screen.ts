@@ -139,6 +139,8 @@ export class EditBox extends Widget {
   hint = '';
   onChange: ((v: string) => void) | null = null;
   bordered = true;
+  /** vanilla EditBox.setTextColor */
+  textColor = 0xe0e0e0;
   constructor(x: number, y: number, w: number, h: number, initial = '') {
     super(x, y, w, h);
     this.value = initial;
@@ -156,7 +158,7 @@ export class EditBox extends Widget {
     const tx = this.bordered ? this.x + 4 : this.x;
     const ty = this.bordered ? this.y + Math.floor((this.h - 8) / 2) : this.y;
     if (!this.value && this.hint && !this.focused) g.text(this.hint, tx, ty, 0x808080, true);
-    g.text(this.value, tx, ty, 0xe0e0e0, true);
+    g.text(this.value, tx, ty, this.textColor, true);
     if (this.focused && Math.floor(this.blink / 6) % 2 === 0) {
       const cx = tx + g.textWidth(this.value.slice(0, this.cursor));
       if (this.cursor >= this.value.length) g.text('_', cx, ty, 0xd0d0d0, true);

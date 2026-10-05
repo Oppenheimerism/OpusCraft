@@ -14,6 +14,8 @@ import { MULTIPLAYER_ENABLED } from '../../net/config';
 import { GAME_NAME, GAME_VERSION, SOURCE_URL } from '../../brand';
 import { touchOnly } from '../../game/touch';
 import { WinScreen } from './winScreen';
+import { EditGameRulesScreen } from './gameRules';
+import { DEFAULT_GAME_RULES, type GameRules } from '../../game/gameRules';
 
 const SPLASHES = [
   'Blocky and proud!', 'Now with 100% more cubes!', 'Hand-placed pixels!', 'Punch a tree!', "Don't dig straight down!",
@@ -537,6 +539,8 @@ export class CreateWorldScreen extends Screen {
   private cheats = false;
   private structures = true;
   private bonusChest = false;
+  /** vanilla WorldCreationUiState.gameRules: what the Game Rules screen left them at */
+  private gameRules: GameRules = { ...DEFAULT_GAME_RULES };
   private existingIds: Set<string> | null = null;
   private tabs: TabButton[] = [];
   private creating = false;
@@ -550,6 +554,8 @@ export class CreateWorldScreen extends Screen {
       this.mode = recreate.hardcore ? 'hardcore' : recreate.gameMode === 'creative' ? 'creative' : 'survival';
       this.difficulty = recreate.difficulty;
       this.cheats = recreate.allowCommands;
+      // (vanilla's Re-Create copies the world's game rules too)
+      this.gameRules = { ...DEFAULT_GAME_RULES, ...(recreate.gameRules ?? {}) };
     }
     void listWorlds().then((ws) => (this.existingIds = new Set(ws.map((w) => w.id))));
   }
@@ -616,7 +622,7 @@ export class CreateWorldScreen extends Screen {
       ];
     } else {
       const y0 = areaTop + Math.floor((areaBottom - areaTop - 76) / 6);
-      this.add(new Button(cx - 105, y0, 210, 20, 'Game Rules', () => {})).active = false;
+      this.add(new Button(cx - 105, y0, 210, 20, 'Game Rules', () => this.game.setScreen(new EditGameRulesScreen(this.game, this, this.gameRules, (r) => (this.gameRules = r)))));
       this.add(new Button(cx - 105, y0 + 28, 210, 20, 'Experiments', () => {})).active = false;
       this.add(new Button(cx - 105, y0 + 56, 210, 20, 'Data Packs', () => {})).active = false;
     }
@@ -677,6 +683,7 @@ export class CreateWorldScreen extends Screen {
     );
     meta.structures = this.structures;
     meta.bonusChest = this.bonusChest;
+    meta.gameRules = { ...this.gameRules };
     await saveWorldMeta(meta);
     await this.game.startWorld(meta);
   }
