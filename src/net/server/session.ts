@@ -16,6 +16,7 @@ import { levelChunkPacket, inView } from '../chunkData';
 import { offlinePlayerUuid } from '../offlineUuid';
 import type { HostServer } from './hostServer';
 import { EntityTracker } from './entityTracker';
+import { GuestProgress } from './guestProgress';
 import type { Entity } from '../../entity/entity';
 import { Player } from '../../entity/player';
 import { Interaction } from '../../game/interaction';
@@ -35,6 +36,7 @@ import type { ItemStack } from '../../item/item';
 import type { Hand } from '../../item/inventory';
 import type { ContainerMenu } from '../../inventory/container';
 import type { Level } from '../../game/level';
+import { MerchantMenu } from '../../inventory/merchantMenu';
 // (signs)
 import { updateSignText } from '../../game/signs';
 
@@ -150,6 +152,8 @@ export class ServerPlayerSession {
    * advancements), told to the guest as they come; the recipe book's clicks count only for these
    */
   readonly recipes = new PlayerRecipeBook();
+  /** (guests' advancements) its advancements (vanilla ServerPlayer.getAdvancements): met here, kept with its player, told to it */
+  readonly progress = new GuestProgress(this);
   /** when each plain message was last shown (so a held button doesn't repeat it every few ticks) */
   private readonly notices = new Map<string, number>();
   /** (logging in) its player as the world last kept it, being read: the guest is let in once it's here */
@@ -485,6 +489,7 @@ export class ServerPlayerSession {
     p.onHurtSound = (pl, src) => srv.heardByAll(() => playerHurtSound(level.sound, pl, src));
     p.onFall = (pl, _dmg, dist) => playerFallSound(level.sound, pl, dist);
     p.onDeath = (_pl, src) => this.died(src);
+    this.progress.hookPlayer(p);
     const here = !!pd && (pd.dimension ?? 'overworld') === level.world.dim.id;
     const dead = !!pd && (!!pd.dead || pd.health <= 0);
     if (!here) {
@@ -513,7 +518,9 @@ export class ServerPlayerSession {
       }
     }
     this.recipes.load(pd?.recipeBook);
+    this.progress.load(pd?.advancements);
     const it = (this.interaction = srv.guestInteraction(this, p));
+    this.progress.hookInteraction(it);
     // (what doesn't fit in its inventory, or it throws out, lands in the world: vanilla Player.drop)
     p.dropHandler = (s) => it.throwItem(s);
     this.menus = new ServerMenus({
@@ -808,7 +815,10 @@ export class ServerPlayerSession {
     this.drops = [];
     // (a teleport it can't have taken: its moves are the old dimension's till it takes the one arrive sends)
     this.awaitingTeleport = -1;
-    if (!this.travelling) this.travelFrom = this.level.world.dim.id;
+    if (!this.travelling) {
+      this.travelFrom = this.level.world.dim.id;
+      this.progress.leavingDimension(this.travelFrom, p);
+    }
     this.travelling = true;
     this.send([CB.ChangeDimension, dim, reason]);
   }
@@ -830,6 +840,9 @@ export class ServerPlayerSession {
     p.dx = p.dy = p.dz = 0;
     this.menus!.resync();
     this.teleport(host.x, host.y, host.z, host.yaw, host.pitch);
+    // (vanilla ServerPlayer.triggerDimensionChangeTriggers, where it came in)
+    const to = this.level.world.dim.id;
+    if (this.travelFrom !== to) this.progress.changedDimension(this.travelFrom, to, p);
   }
 
   // -------------------------------------------------------------------------
@@ -854,6 +867,7 @@ export class ServerPlayerSession {
     p.food.difficulty = this.level.difficulty;
     p.food.naturalRegen = !!this.level.gameRules.naturalRegeneration;
     this.tickInteraction();
+    this.progress.tick();
     this.menus!.tick();
     this.tickChunks();
     // (respawning at a bed whose chunks were asked for: once they're in, or it's waited long enough)
@@ -1022,6 +1036,7 @@ export class ServerPlayerSession {
     this.syncExperience();
     this.syncStatus();
     this.placedByHost();
+    this.progress.flush();
     this.sendOut();
   }
 
@@ -1273,7 +1288,7 @@ export class ServerPlayerSession {
 
   /** (its Interaction) a bed it used: to sleep in, or set its spawn by (game/sleep.ts, as the host's own player does) */
   useBed(x: number, y: number, z: number): void {
-    const host: SleepHost = { level: this.level, player: this.player!, overlay: (m) => this.systemChat(m, true), chat: (m) => this.systemChat(m) };
+    const host: SleepHost = { level: this.level, player: this.player!, overlay: (m) => this.systemChat(m, true), chat: (m) => this.systemChat(m), onSlept: () => this.progress.trigger('slept') };
     useBed(host, x, y, z);
   }
 
@@ -1299,6 +1314,8 @@ export class ServerPlayerSession {
       m.removed();
       return false;
     }
+    // (a trade made earns it What a Deal!: Game.openMerchant, for the host's own player)
+    if (m instanceof MerchantMenu) m.onTraded = () => this.progress.trigger('villager_trade', { tradeY: this.player!.y });
     return this.menus.open(m);
   }
 
@@ -1355,7 +1372,7 @@ export class ServerPlayerSession {
     if (this.state !== 'play' || !p) return;
     // (on its way to another dimension, it's still where it was in the one it left)
     const dim = this.travelling ? this.travelFrom : this.level.world.dim.id;
-    this.server.hooks.saveGuest?.(this.uuid, savePlayer(p, dim, { recipeBook: this.recipes.save() }));
+    this.server.hooks.saveGuest?.(this.uuid, savePlayer(p, dim, { advancements: this.progress.advancements.save(), recipeBook: this.recipes.save() }));
   }
 
   /**

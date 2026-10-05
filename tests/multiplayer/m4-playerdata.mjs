@@ -157,13 +157,15 @@ let kept = null;
   check('save: the world saved with it here keeps its player as it is now', k.puts.length === 1 && k.puts[0].uuid === uuidOf('Alex') && k.puts[0].d.xpLevel === 7);
   // it leaves
   k.puts.length = 0;
+  // (guests' advancements: its own, kept with it as vanilla keeps each player's)
+  const own = host.server.sessionOf(ha)?.progress.advancements.save();
   a.session.leave();
   await settle(host, 2);
   check('leave: it\'s kept as it leaves', k.puts.length === 1 && k.puts[0].uuid === uuidOf('Alex'), `${k.puts.length}`);
   const d = k.puts[0]?.d;
   check('leave: ...where it was, its look', d && Math.abs(d.x - 5.5) < 1e-9 && Math.abs(d.z - 7.5) < 1e-9 && d.yaw === 45 && d.pitch === 10 && d.dimension === 'overworld');
   check('leave: ...its recipe book', d?.recipeBook && recipeIds.every((id) => d.recipeBook.known.includes(id)));
-  check('leave: ...not the host\'s advancements (a guest has none kept)', d && d.advancements === undefined);
+  check('leave: ...its own advancements, not the host\'s (guests\' advancements)', d && own !== undefined && JSON.stringify(d.advancements) === JSON.stringify(own));
   // written with the world
   await k.store.save();
   const key = `${WORLD}/data/playerdata/${uuidOf('Alex')}`;

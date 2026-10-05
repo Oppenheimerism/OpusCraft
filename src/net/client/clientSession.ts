@@ -15,6 +15,8 @@ import { replayParticles } from '../effects';
 import { createFromPayload } from '../entityNet';
 import { applyData, PLAYER_FIELDS } from '../entityData';
 import { applyPlayerStatus, applyEffectList } from '../playerStatus';
+import { readProgress } from '../advancementSync';
+import type { AdvancementDef } from '../../game/advancements';
 import { MirrorPlayer } from './mirrorPlayer';
 import { ClientMenus } from './clientMenus';
 import { EntityMirror } from './entityMirror';
@@ -78,6 +80,11 @@ export interface ClientHooks {
    * loading screen up (`reason`'s) till the host puts our player there; what the session had of the old one is gone
    */
   changeDimension?(dim: string, reason: ReceivingReason): void;
+  /**
+   * (guests' advancements) our advancements as the host keeps them (vanilla handleUpdateAdvancementsPacket): those whose
+   * criteria changed, each with all it has now, or, the first time (`reset`), all of them (net/advancementSync.ts applyProgress)
+   */
+  advancements?(changes: [AdvancementDef, string[]][], reset: boolean): void;
 }
 
 const GAME_MODES: readonly GameMode[] = ['survival', 'creative', 'adventure', 'spectator'];
@@ -494,6 +501,11 @@ export class ClientSession {
         return;
       case CB.ChangeDimension:
         return this.changeDimension(p[1] as string, p[2] as ReceivingReason);
+      case CB.UpdateAdvancements: {
+        const changes = readProgress(p[2] as Value[]);
+        if (!changes) return this.fail('an advancement that does not exist');
+        return this.hooks.advancements?.(changes, p[1] as boolean);
+      }
       case CB.RecipeBookAdd: {
         const rs: BookRecipe[] = [];
         for (const id of p[1] as string[]) {

@@ -824,7 +824,7 @@ export abstract class Mob extends LivingEntity {
 
   /** vanilla Mob.onItemPickup: thrown_item_picked_up_by_entity for the player who threw it */
   protected onItemPickup(it: ItemEntity): void {
-    if (it.thrower?.type === 'player') this.level.onThrownItemPickedUp?.(it.stack, this);
+    if (it.thrower?.type === 'player') this.level.onThrownItemPickedUp?.(it.stack, this, it.thrower);
   }
 
   /**

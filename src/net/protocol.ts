@@ -194,6 +194,13 @@ export const CB = {
    * sends the block first). Numbered from 80, out of the way of packets added elsewhere
    */
   OpenSignEditor: 80,
+  /**
+   * (guests' advancements) [first, progress [[advancement id, criteria]...]]: the guest's advancements whose criteria
+   * changed, each with all the criteria it has now (none: nothing left), or, first, all of them (vanilla
+   * ClientboundUpdateAdvancementsPacket with its reset flag; the advancements themselves are the build's own:
+   * net/advancementSync.ts). Numbered from 100, out of the way of packets added elsewhere
+   */
+  UpdateAdvancements: 100,
 } as const;
 
 /** the dimensions there are (vanilla's three: a guest takes no other) */
@@ -422,6 +429,8 @@ CLIENTBOUND[CB.PlaceGhostRecipe] = [CONTAINER, RECIPE];
 CLIENTBOUND[CB.RecipeBookAdd] = [arr(4096, RECIPE), bool];
 const DIMENSION: Check = (v) => typeof v === 'string' && DIMENSION_IDS.includes(v);
 CLIENTBOUND[CB.OpenSignEditor] = [BX, BY, BX, bool];
+// (guests' advancements: some 120 of them, the most criteria one has is Adventuring Time's 53)
+CLIENTBOUND[CB.UpdateAdvancements] = [bool, arr(512, (v) => Array.isArray(v) && v.length === 2 && str(1, 64)(v[0]) && arr(128, str(1, 64))(v[1]))];
 CLIENTBOUND[CB.ChangeDimension] = [DIMENSION, (v) => typeof v === 'string' && (RECEIVING_REASONS as readonly string[]).includes(v)];
 
 /**
