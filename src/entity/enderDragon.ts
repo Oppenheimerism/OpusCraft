@@ -538,16 +538,22 @@ export class EnderDragon extends Mob {
     }
   }
 
-  /** vanilla EnderDragon.knockBack: the wings' buffet flings the living away (and hurts, unless it's sitting) */
+  /**
+   * vanilla EnderDragon.knockBack: the wings' buffet flings the living away (and hurts, unless it's sitting). A
+   * player is flung only by a buffet that hurts: vanilla's server pushes them every time, but a player's own game
+   * hears of a push only with a hurt (Entity.hurtMarked), so a perched dragon's wings, which don't hurt, move mobs and
+   * leave players where they stand, free to walk up to it and strike.
+   */
   private knockBack(list: Entity[]): void {
     const bb = this.body.bb;
     const d0 = (bb.minX + bb.maxX) / 2, d1 = (bb.minZ + bb.maxZ) / 2;
+    const sitting = this.isSitting();
     for (const e of list) {
       if (!(e instanceof LivingEntity)) continue;
       const d2 = e.x - d0, d3 = e.z - d1;
       const d4 = Math.max(d2 * d2 + d3 * d3, 0.1);
-      e.push((d2 / d4) * 4, fr(0.2), (d3 / d4) * 4);
-      if (!this.isSitting() && e.lastHurtByMobTimestamp < e.tickCount - 2) {
+      if (!(sitting && e.type === 'player')) e.push((d2 / d4) * 4, fr(0.2), (d3 / d4) * 4);
+      if (!sitting && e.lastHurtByMobTimestamp < e.tickCount - 2) {
         e.hurt(5, 'mob', this, this);
         doPostAttackEffects(e, this, null, false);
       }
