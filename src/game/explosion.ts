@@ -52,6 +52,9 @@ export function explode(level: Level, source: Entity | null, x: number, y: numbe
   // ((minecarts) vanilla EntityBasedExplosionDamageCalculator: what the exploding entity leaves be, neither stopping
   // the blast nor blown up by it: a lit TNT minecart's rails)
   const spares = (source as { explosionSpares?: (x: number, y: number, z: number, st: number) => boolean } | null)?.explosionSpares?.bind(source);
+  // ((the wither) vanilla Entity.getBlockExplosionResistance: what the exploding entity makes of a block's
+  // resistance: a blue wither skull's blast makes light of all the wither may break)
+  const resists = (source as { explosionResistance?: (st: number, res: number) => number } | null)?.explosionResistance?.bind(source);
   // 1) blocks: 16x16x16 rays from the surface of a cube
   const toBlow = new Map<string, [number, number, number]>();
   if (destroys) {
@@ -74,11 +77,13 @@ export function explode(level: Level, source: Entity | null, x: number, y: numbe
             if (!(fl & F_AIR)) {
               const b = BLOCKS[STATE_BLOCK[st]];
               const spared = spares?.(bx, by, bz, st) ?? false;
+              const fluid = (fl & (F_WATER | F_LAVA)) !== 0;
               let res = b.resistance;
-              if (fl & (F_WATER | F_LAVA)) res = Math.max(res, 100);
-              if (spared) res = 0;
-              f -= (res + 0.3) * 0.3;
-              if (f > 0 && b.hardness >= 0 && !(fl & (F_WATER | F_LAVA)) && !spared) toBlow.set(bx + ',' + by + ',' + bz, [bx, by, bz]);
+              if (fluid) res = Math.max(res, 100);
+              // ((the wither) a fluid is blown away only where the exploding entity makes light of it: a blue skull's)
+              const own = resists ? resists(st, res) : res;
+              f -= ((spared ? 0 : own) + 0.3) * 0.3;
+              if (f > 0 && b.hardness >= 0 && (!fluid || own < res) && !spared) toBlow.set(bx + ',' + by + ',' + bz, [bx, by, bz]);
             }
             px += d0 * 0.3;
             py += d1 * 0.3;
@@ -142,7 +147,9 @@ export function explode(level: Level, source: Entity | null, x: number, y: numbe
         continue;
       }
       if (!decay || rand.nextFloat() < 1 / radius) {
-        for (const s of blockDrops(st, null, rand, false, 0, w.getBlockEntity(bx, by, bz))) {
+        // ((the wither) vanilla BlockBehaviour.onExplosionHit: the block's loot with an empty hand, the right tool
+        // never asked for: stone blown up leaves cobblestone, an ore its ore's drop, obsidian under a blue skull obsidian)
+        for (const s of blockDrops(st, null, rand, false, 0, w.getBlockEntity(bx, by, bz), false)) {
           const same = drops.find((d) => d[0].sameItem(s) && d[0].count + s.count <= d[0].maxStack);
           if (same) same[0].count += s.count;
           else drops.push([s, bx, by, bz]);

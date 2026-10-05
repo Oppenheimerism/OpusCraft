@@ -83,6 +83,8 @@ import { pandaSounds } from './gen/panda';
 import { mooshroomSounds } from './gen/mooshroom';
 // (remaining mobs: the armadillo)
 import { armadilloSounds } from './gen/armadillo';
+// (the wither)
+import { witherSounds } from './gen/wither';
 
 export const SAMPLE_RATE = 44100;
 
@@ -175,6 +177,10 @@ Object.assign(SOUNDS, mooshroomSounds());
 if (SOUNDS['entity.sheep.shear']) SOUNDS['entity.mooshroom.shear'] = SOUNDS['entity.sheep.shear'];
 // (remaining mobs: the armadillo) its voice, its shell's clatter and knocks, its scutes; wolf armour's
 Object.assign(SOUNDS, armadilloSounds());
+// (the wither) its groans, snarls and death roar, its skulls' launch and the blast of its making; its breaking
+// blocks is the zombie's breaking a wooden door (vanilla sounds.json entity.wither.break_block: mob/zombie/woodbreak)
+Object.assign(SOUNDS, witherSounds());
+if (SOUNDS['entity.zombie.break_wooden_door']) SOUNDS['entity.wither.break_block'] = SOUNDS['entity.zombie.break_wooden_door'];
 // (vanilla sounds.json: the snow golem's are the snow's breaking, the bow's and the shears')
 for (const [k, v] of Object.entries({ 'entity.snow_golem.hurt': 'block.snow.break', 'entity.snow_golem.death': 'block.snow.break', 'entity.snow_golem.shoot': 'entity.arrow.shoot', 'entity.snow_golem.shear': 'entity.sheep.shear' })) if (SOUNDS[v]) SOUNDS[k] = SOUNDS[v];
 // (vanilla sounds.json: any mob's swimming, and a monster's, is the player's splashing)

@@ -1,7 +1,7 @@
 // The player: input-driven movement (vanilla LocalPlayer/Player behaviour),
 // abilities, sprinting, sneaking, flying, food.
 
-import { LivingEntity } from './living';
+import { LivingEntity, DEATH_HOOKS } from './living';
 import type { Entity } from './entity';
 import { MOB_EFFECTS, MobEffectInstance } from './effects';
 import { FLUID_NONE, FLUID_WATER, fluidType } from '../world/fluids';
@@ -1021,6 +1021,8 @@ export class Player extends LivingEntity {
     this.level.gameEvent?.('entity_die', this.x, this.y, this.z, { entity: this });
     this.removeEntitiesOnShoulder();
     super.die(source, attacker);
+    // ((the wither) vanilla ServerPlayer.die: createWitherRose(getKillCredit()))
+    DEATH_HOOKS.witherRose?.(this);
     // (vanilla ServerPlayer.die: setLastDeathLocation)
     this.lastDeathLocation = { dim: this.level.dim.id, pos: [Math.floor(this.x), Math.floor(this.y), Math.floor(this.z)] };
     // (remaining mobs: the phantom) vanilla ServerPlayer.die: resetStat(TIME_SINCE_REST)

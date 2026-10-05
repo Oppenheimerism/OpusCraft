@@ -93,7 +93,7 @@ export abstract class Fireball extends Entity {
     }
     // speed up along its heading, smoke trailing
     const v = Math.sqrt(this.dx * this.dx + this.dy * this.dy + this.dz * this.dz) || 1;
-    const f = this.inWater ? 0.8 : 0.95;
+    const f = this.inWater ? 0.8 : this.inertia();
     const nx = this.x + this.dx, ny = this.y + this.dy, nz = this.z + this.dz;
     this.dx = (this.dx + (this.dx / v) * 0.1) * f;
     this.dy = (this.dy + (this.dy / v) * 0.1) * f;
@@ -106,6 +106,11 @@ export abstract class Fireball extends Entity {
   /** vanilla getTrailParticle */
   protected trailParticle(): string | null {
     return 'smoke';
+  }
+
+  /** (the wither) vanilla getInertia: how much of its speed it keeps each tick out of water (a blue wither skull's less) */
+  protected inertia(): number {
+    return 0.95;
   }
 
   /** vanilla Projectile.mayInteract: a mob's fireball changes the world only while mobs may grief */

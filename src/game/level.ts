@@ -105,6 +105,9 @@ import './bamboo';
 // (remaining mobs: the mooshroom) mushrooms small and huge, and mycelium's spores; suspicious stew from flowers
 import './mushrooms';
 import './suspiciousStew';
+// (the wither) building it from soul sand and wither skeleton skulls; the wither rose
+import './witherSpawn';
+import './witherRose';
 
 export interface SoundSink {
   play(name: string, x: number, y: number, z: number, volume?: number, pitch?: number): void;
@@ -944,9 +947,11 @@ export class Level {
 
   /**
    * Destroy a block: effects, drops, neighbour updates. `stack` = the breaking tool (silk touch, fortune); `breaker`:
-   * who broke it, for the game event (vanilla Level.destroyBlock's entity; false where vanilla removes it without one)
+   * who broke it, for the game event (vanilla Level.destroyBlock's entity; false where vanilla removes it without one);
+   * (the wither) `harvest` false: the drops as vanilla's Block.dropResources gives them to no player, whatever tool a
+   * hand would need (the wither breaking obsidian drops it)
    */
-  destroyBlock(x: number, y: number, z: number, drop: boolean, tool: Item | null = null, effects = true, stack: ItemStack | null = null, breaker: Entity | null | false = null): boolean {
+  destroyBlock(x: number, y: number, z: number, drop: boolean, tool: Item | null = null, effects = true, stack: ItemStack | null = null, breaker: Entity | null | false = null, harvest = true): boolean {
     if (this.isClientSide) return false;
     const st = this.world.getState(x, y, z);
     if (FLAGS[st] & F_AIR) return false;
@@ -991,7 +996,7 @@ export class Level {
       }
     }
     if (drop) {
-      for (const s of blockDrops(dropState, tool, this.random, levelOf(stack, 'silk_touch') > 0, levelOf(stack, 'fortune'), be)) ItemEntity.drop(this, x, y, z, s);
+      for (const s of blockDrops(dropState, tool, this.random, levelOf(stack, 'silk_touch') > 0, levelOf(stack, 'fortune'), be, harvest)) ItemEntity.drop(this, x, y, z, s);
       behaviorOf(st)?.spawnAfterBreak?.(this, x, y, z, st, stack, breaker || null, be);
     }
     this.updateNeighborsAt(x, y, z, b.id);

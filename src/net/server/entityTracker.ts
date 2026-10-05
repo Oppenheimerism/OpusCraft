@@ -24,6 +24,8 @@ const RANGE: Record<string, number> = {
   item: 6, experience_orb: 6, evoker_fangs: 6,
   arrow: 4, trident: 4, egg: 4, snowball: 4, ender_pearl: 4, potion: 4, experience_bottle: 4, firework_rocket: 4, llama_spit: 4,
   fireball: 4, small_fireball: 4, dragon_fireball: 4, wind_charge: 4, breeze_wind_charge: 4, eye_of_ender: 4,
+  // (the wither)
+  wither_skull: 4,
   shulker_bullet: 8, ominous_item_spawner: 8,
   tnt: 10, falling_block: 10, item_frame: 10, glow_item_frame: 10, leash_knot: 10, area_effect_cloud: 10, armor_stand: 10,
   end_crystal: 16, lightning_bolt: 16,

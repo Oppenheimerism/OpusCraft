@@ -280,6 +280,28 @@ const FLOWERS: Record<string, { rows: string[]; key: Record<string, number> }> =
     ],
     key: { ...G, W: 0xf8f8f2, w: 0xcfd4c8 },
   },
+  // (the wither) vanilla wither_rose: a black rose, its petals curled round a darker heart, on a withered stem
+  wither_rose: {
+    rows: [
+      '................',
+      '................',
+      '................',
+      '......kHHk......',
+      '.....kKHKKk.....',
+      '....kKKkKHKk....',
+      '....HKkKKKkK....',
+      '....kKKKkKKk....',
+      '.....kKKKKk.....',
+      '......kDDk......',
+      '.......gd.......',
+      '..Ll...g...lL...',
+      '...ll..g..ll....',
+      '....ldgg.ld.....',
+      '......ggdd......',
+      '.......g........',
+    ],
+    key: { g: 0x3b4224, G: 0x2b3019, l: 0x4a5130, L: 0x5d6440, d: 0x2b3019, K: 0x2a2a2a, k: 0x161616, H: 0x474747, D: 0x1e2414 },
+  },
 };
 
 export function flower(name: string): TexImage {

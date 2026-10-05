@@ -68,8 +68,9 @@ export class Hud {
     if (this.actionBar && --this.actionBar.time <= 0) this.actionBar = null;
     if (this.title && --this.title.time <= 0) this.title = null;
     // (Stage 4: raids) and the raids' bars; (guests' boss bars) whatever boss event shows its bar to this game's own
-    // player, a guest's host's among them (game/bossBars.ts)
-    this.bossOverlay.update(bossBarsShownTo(game.level, game.level.player));
+    // player, a guest's host's among them (game/bossBars.ts); (the wither) its bars are a source there too
+    this.bossOverlay.update(bossBarsShownTo(game.level, game.level.player, game.opts.renderDistance));
+    this.bossOverlay.tickDarken();
   }
 
   addChat(text: string, tick: number): void {

@@ -23,6 +23,8 @@ import { registerArmorStandItem } from './itemsArmorStand';
 import { registerMinecartItems } from './itemsMinecarts';
 // (remaining mobs)
 import { registerRemainingMobItems } from './itemsRemainingMobs';
+// (the wither)
+import { registerWitherItems } from './itemsWither';
 
 export interface ToolInfo {
   type: ToolType;
@@ -622,6 +624,8 @@ registerArmorStandItem(reg);
 registerMinecartItems(reg, ITEMS, ITEM_LIST);
 // (remaining mobs) the bee's egg, the nest, the hive, the honeycomb and honey blocks
 registerRemainingMobItems(reg, ITEMS, ITEM_LIST);
+// (the wither) the nether star, its spawn egg, the wither rose's place
+registerWitherItems(reg, ITEMS, ITEM_LIST);
 
 export function itemForBlock(name: string): Item | undefined {
   // (a block that is another's item's: a wall banner is its banner's)

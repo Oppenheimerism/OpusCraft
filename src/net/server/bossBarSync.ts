@@ -31,9 +31,12 @@ export class BossBarSync {
   /** the bars the guest has, with how each was last sent */
   private readonly told = new Map<BossBar, { id: number; key: string }>();
 
-  /** what `viewer` is shown now against what its guest has: a bar come or changed (all of it), a bar gone */
-  sync(level: Level, viewer: Player, send: (p: Value[]) => void): void {
-    const shown = bossBarsShownTo(level, viewer);
+  /**
+   * what `viewer` is shown now against what its guest has: a bar come or changed (all of it), a bar gone;
+   * `viewDistance`: the guest's (game/bossBars.ts)
+   */
+  sync(level: Level, viewer: Player, send: (p: Value[]) => void, viewDistance?: number): void {
+    const shown = bossBarsShownTo(level, viewer, viewDistance);
     for (const b of shown) {
       const name = String(b.name).slice(0, 256), progress = Number.isFinite(b.progress) ? Math.max(0, Math.min(1, b.progress)) : 0, flags = bossBarFlags(b);
       const key = `${name}\u0000${b.color}\u0000${b.overlay}\u0000${progress}\u0000${flags}`;

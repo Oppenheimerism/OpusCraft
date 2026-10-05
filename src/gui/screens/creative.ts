@@ -156,7 +156,8 @@ function tabs(): Tab[] {
   ];
   const byId = new Map(t.map((x) => [x.id, x]));
   // (no bare enchanted book: vanilla lists one per enchantment instead)
-  const listed = ITEM_LIST.filter((it) => it.id !== 'enchanted_book');
+  // ((the wither) nor what vanilla keeps out of every tab: creativeTab 'none', the wither's spawn egg)
+  const listed = ITEM_LIST.filter((it) => it.id !== 'enchanted_book' && it.creativeTab !== 'none');
   for (const it of listed) byId.get(tabOf(it))?.items.push(it);
   for (const it of listed) if (REDSTONE_ALSO.has(it.id)) byId.get('redstone_blocks')!.items.push(it);
   for (const [id, after] of NATURAL_ALSO) {

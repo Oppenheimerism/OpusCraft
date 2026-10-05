@@ -264,7 +264,7 @@ const A: AdvancementDef[] = [
   { id: 'nether/charge_respawn_anchor', parent: 'nether/obtain_crying_obsidian', title: 'Not Quite "Nine" Lives', description: 'Charge a Respawn Anchor to the maximum', icon: 'respawn_anchor', frame: 'task', criteria: one(never) },
   { id: 'nether/ride_strider_in_overworld_lava', parent: 'nether/ride_strider', title: 'Feels Like Home', description: 'Take a Strider for a loooong ride on a lava lake in the Overworld', icon: 'warped_fungus_on_a_stick', frame: 'task', criteria: { ride_entity_distance: { t: 'ride_in_lava', vehicle: 'strider', distance: 50, dimension: 'overworld' } } },
   { id: 'nether/explore_nether', parent: 'nether/ride_strider', title: 'Hot Tourist Destinations', description: 'Explore all Nether biomes', icon: 'netherite_boots', frame: 'challenge', criteria: each(NETHER_BIOMES, (b) => ({ t: 'biome', biome: b })) },
-  { id: 'nether/summon_wither', parent: 'nether/get_wither_skull', title: 'Withering Heights', description: 'Summon the Wither', icon: 'nether_star', frame: 'task', criteria: one(never) },
+  { id: 'nether/summon_wither', parent: 'nether/get_wither_skull', title: 'Withering Heights', description: 'Summon the Wither', icon: 'nether_star', frame: 'task', criteria: { summoned: { t: 'summoned_entity', entity: 'wither' } } },
   { id: 'nether/brew_potion', parent: 'nether/obtain_blaze_rod', title: 'Local Brewery', description: 'Brew a Potion', icon: 'potion', frame: 'task', criteria: { potion: { t: 'brewed_potion' } } },
   { id: 'nether/create_beacon', parent: 'nether/summon_wither', title: 'Bring Home the Beacon', description: 'Construct and place a Beacon', icon: 'beacon', frame: 'task', criteria: one(never) },
   {

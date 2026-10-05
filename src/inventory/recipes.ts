@@ -9,6 +9,8 @@ import { registerBastionRecipes } from './recipesBastion';
 import { registerSignRecipes } from './recipesSigns';
 // (remaining mobs)
 import { registerRemainingMobRecipes } from './recipesRemainingMobs';
+// (the wither) black dye from its rose
+import { registerWitherRecipes } from './recipesWither';
 
 /** ingredient: item id, '#tag', or list of alternatives */
 type Ing = string | string[];
@@ -464,6 +466,8 @@ registerSignRecipes(shaped);
 // (remaining mobs) the bee's: the beehive, the honey block and back, sugar from honey, the honeycomb block; the
 // panda's: a stick from bamboo; the armadillo's: wolf armour
 registerRemainingMobRecipes(shaped, shapeless);
+// (the wither) black dye from a wither rose
+registerWitherRecipes(shaped, shapeless);
 
 // drop recipes whose items don't exist in this game
 for (let i = RECIPES.length - 1; i >= 0; i--) {

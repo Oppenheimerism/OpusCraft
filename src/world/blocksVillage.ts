@@ -329,7 +329,7 @@ function pottedCross(plant: string, tint?: number): ElementDef[] {
 }
 
 /** the pot with `plant` in it */
-function pottedModel(plant: string): ModelDef {
+export function pottedModel(plant: string): ModelDef {
   const pot = flowerPotElements();
   const model = (elements: ElementDef[]): ModelDef => ({ ao: false, particle: 'flower_pot', elements: [...pot, ...elements] });
   if (plant === 'fern') return model(pottedCross('fern', 0));

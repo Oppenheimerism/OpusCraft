@@ -92,6 +92,9 @@ import { PandaRenderers, PANDA_SHADOW_RADII } from './pandaRenderer';
 import { MooshroomRenderers, MOOSHROOM_SHADOW_RADII } from './mooshroomRenderer';
 // (remaining mobs: the armadillo)
 import { ArmadilloRenderers, ARMADILLO_SHADOW_RADII } from './armadilloRenderer';
+// (the wither) the wither, its armour and its skulls
+import { WitherRenderers, WITHER_SHADOW_RADII } from './witherRenderer';
+import { WitherSkull } from '../entity/wither';
 import { WolfArmorLayer } from './wolfArmorLayer';
 // (M4: the warden)
 import { WardenRenderer, WARDEN_SHADOW_RADIUS } from './wardenRenderer';
@@ -270,6 +273,8 @@ export class EntityRenderDispatcher {
   private readonly mooshrooms: MooshroomRenderers;
   /** (remaining mobs) the armadillo, and the wolf armour made from its scutes */
   private readonly armadillos: ArmadilloRenderers;
+  /** (the wither) vanilla WitherBossRenderer with its WitherArmorLayer, and WitherSkullRenderer */
+  private readonly withers: WitherRenderers;
   private readonly wolfArmor: WolfArmorLayer;
   /** names over mobs, drawn once every entity is down */
   private readonly nameTags: NameTagRenderer;
@@ -323,6 +328,8 @@ export class EntityRenderDispatcher {
     this.pandas = new PandaRenderers(this.raiders.kit);
     this.mooshrooms = new MooshroomRenderers(this.raiders.kit);
     this.armadillos = new ArmadilloRenderers(this.raiders.kit);
+    // (the wither)
+    this.withers = new WitherRenderers(this.raiders.kit);
     this.wolfArmor = new WolfArmorLayer(this.raiders.kit);
     // (trial chambers)
     this.breezes = new BreezeRenderers(gl, this.raiders.kit);
@@ -395,8 +402,8 @@ export class EntityRenderDispatcher {
     const gen = MOB_TEXTURES[name];
     if (!gen) return null;
     const img = gen();
-    // (the charged creeper's swirl scrolls, so its texture wraps)
-    t = createTexture(this.gl, img.w, img.h, new Uint8Array(img.data.buffer, img.data.byteOffset, img.data.byteLength), { clamp: name !== 'creeper_armor' });
+    // (the charged creeper's swirl scrolls, so its texture wraps; the wither's armour's too)
+    t = createTexture(this.gl, img.w, img.h, new Uint8Array(img.data.buffer, img.data.byteOffset, img.data.byteLength), { clamp: name !== 'creeper_armor' && name !== 'wither_armor' });
     this.textures.set(name, t);
     return t;
   }
@@ -628,8 +635,9 @@ export class EntityRenderDispatcher {
   private setLight(b: EntityBatch, level: Level, e: Entity, x: number, y: number, z: number): void {
     const l = level.world.getLight(Math.floor(x), Math.floor(y + e.eyeHeight), Math.floor(z));
     b.lightS = (l >> 4) * 16;
-    // (vanilla MagmaCubeRenderer and BlazeRenderer.getBlockLightLevel: they glow by their own light; Stage 4: VexRenderer too)
-    b.lightB = (e.isOnFire() || e instanceof MagmaCube || e instanceof Blaze || e.type === 'vex' ? 15 : l & 15) * 16;
+    // (vanilla MagmaCubeRenderer and BlazeRenderer.getBlockLightLevel: they glow by their own light; Stage 4: VexRenderer too;
+    // the wither: WitherBossRenderer and WitherSkullRenderer)
+    b.lightB = (e.isOnFire() || e instanceof MagmaCube || e instanceof Blaze || e.type === 'vex' || e.type === 'wither' || e.type === 'wither_skull' ? 15 : l & 15) * 16;
   }
 
   private renderEntity(b: EntityBatch, level: Level, e: Entity, x: number, y: number, z: number, dx: number, dy: number, dz: number, p: number, cam: Camera): void {
@@ -651,6 +659,7 @@ export class EntityRenderDispatcher {
     else if (e instanceof FireworkRocket) renderFireworkRocket(b, this.pose, this.items, e, dx, dy, dz, cam);
     else if (e instanceof EyeOfEnder) this.renderEyeOfEnder(b, e, dx, dy, dz, cam);
     else if (e instanceof DragonFireball) this.dragons.renderFireball(b, this.pose, dx, dy, dz, cam);
+    else if (e instanceof WitherSkull) this.withers.renderSkull(b, e, dx, dy, dz, p); // (the wither: before the fireball it extends)
     else if (e instanceof Fireball) this.renderFireball(b, e, dx, dy, dz, cam);
     else if (e instanceof AbstractMinecart) this.renderMinecart(b, e, x, y, z, dx, dy, dz, p);
     else if (e instanceof Boat) this.renderBoat(b, e, dx, dy, dz, p);
@@ -889,6 +898,8 @@ export class EntityRenderDispatcher {
     if (this.pandas.render(b, e, dx, dy, dz, p)) return;
     if (this.mooshrooms.render(b, e, dx, dy, dz, p)) return;
     if (this.armadillos.render(b, e, dx, dy, dz, p)) return;
+    // (the wither)
+    if (this.withers.render(b, e, dx, dy, dz, p)) return;
     // (M4: the warden)
     if (this.wardens.render(b, e, dx, dy, dz, p)) return;
     // (trial chambers)
@@ -1909,6 +1920,8 @@ function shadowRadius(e: Entity): number {
   if (PANDA_SHADOW_RADII[e.type] !== undefined) return PANDA_SHADOW_RADII[e.type] * (e instanceof Mob && e.isBaby() ? 0.5 : 1);
   if (MOOSHROOM_SHADOW_RADII[e.type] !== undefined) return MOOSHROOM_SHADOW_RADII[e.type] * (e instanceof Mob && e.isBaby() ? 0.5 : 1);
   if (ARMADILLO_SHADOW_RADII[e.type] !== undefined) return ARMADILLO_SHADOW_RADII[e.type] * (e instanceof Mob && e.isBaby() ? 0.5 : 1);
+  // (the wither)
+  if (WITHER_SHADOW_RADII[e.type] !== undefined) return WITHER_SHADOW_RADII[e.type];
   // (M4: the warden)
   if (e.type === 'warden') return WARDEN_SHADOW_RADIUS;
   // (trial chambers)

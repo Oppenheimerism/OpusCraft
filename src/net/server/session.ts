@@ -1107,7 +1107,7 @@ export class ServerPlayerSession {
     this.syncStatus();
     this.placedByHost();
     this.progress.flush();
-    this.bossBars.sync(this.level, this.player!, (pk) => this.send(pk));
+    this.bossBars.sync(this.level, this.player!, (pk) => this.send(pk), this.viewDistance);
     this.sendOut();
   }
 

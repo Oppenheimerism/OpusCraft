@@ -88,7 +88,8 @@ const items = () => level.entities.filter((e) => e instanceof itemEntMod.ItemEnt
   let left = 0;
   for (let x = -12; x <= -8; x++) for (let z = -2; z <= 2; z++) if (name(world.getState(x, 40, z)) === 'infested_stone') left++;
   const n = fish().length;
-  check('a blast breaks infested blocks and lets their silverfish out', n > 0 && n === 25 - left && items().length === 0, `${n} silverfish, ${left} left`);
+  // ((the wither) vanilla BlockBehaviour.onExplosionHit: the stone floor under them caught in the blast leaves cobblestone)
+  check('a blast breaks infested blocks and lets their silverfish out', n > 0 && n === 25 - left && items().every((e) => e.stack.item.id === 'cobblestone'), `${n} silverfish, ${left} left`);
   clearFish();
 }
 

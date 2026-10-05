@@ -81,6 +81,9 @@ export function deathMessage(source: string, victim: LivingEntity, n: string): s
       return k ? `${n} was killed by ${kn} using magic` : `${n} was killed by magic`;
     case 'wither':
       return `${n} withered away`;
+    // (the wither) vanilla death.attack.witherSkull
+    case 'witherSkull':
+      return `${n} was shot by a skull from ${kn}`;
     case 'stalagmite':
       return `${n} was impaled on a stalagmite`;
     case 'fallingStalactite':

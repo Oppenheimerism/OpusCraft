@@ -55,6 +55,8 @@ export interface FrameEnv {
   dim?: DimensionType;
   /** a boss bar asks for the fog to close in (vanilla BossHealthOverlay.shouldCreateWorldFog: the dragon's) */
   worldFog?: boolean;
+  /** (the wither) vanilla GameRenderer.getDarkenWorldAmount: a bar darkening the screen (the lightmap and the fog's colour) */
+  darkenWorld?: number;
   /** the biome fog and sky colours blended round the camera (environment.blendBiomeColors) */
   biomeColors?: { fog: env.RGB; sky: env.RGB };
   level?: Level;
@@ -186,6 +188,9 @@ export class Renderer {
       fogEnd = f;
       fogShape = 0;
     }
+    // ((the wither) vanilla FogRenderer.setupColor's bossColorModifier: a bar darkening the screen dims and reddens the fog)
+    const dw = e.darkenWorld ?? 0;
+    if (dw > 0) fog = [fog[0] * (1 - dw) + fog[0] * 0.7 * dw, fog[1] * (1 - dw) + fog[1] * 0.6 * dw, fog[2] * (1 - dw) + fog[2] * 0.6 * dw];
     // vanilla FogRenderer.setupColor: night vision brightens the fog (underwater, water vision does), but not in darkness
     const nv = e.underwater ? 0 : e.darkness ? 0 : e.nightVision;
     if (nv > 0 && fog[0] !== 0 && fog[1] !== 0 && fog[2] !== 0) {
@@ -194,7 +199,7 @@ export class Renderer {
     }
     this.lastFog = fog;
     // lightmap
-    this.lightmap.update(env.skyDarken(tod, e.weather), e.weather.flash > 0, e.gamma, e.nightVision, dim.ambientLight, dim.effects.forceBrightLightmap, e.darkness?.gamma ?? 0, e.darkness?.pulse ?? 0);
+    this.lightmap.update(env.skyDarken(tod, e.weather), e.weather.flash > 0, e.gamma, e.nightVision, dim.ambientLight, dim.effects.forceBrightLightmap, e.darkness?.gamma ?? 0, e.darkness?.pulse ?? 0, dw);
     // clear to fog color
     gl.viewport(0, 0, this.width, this.height);
     gl.clearColor(fog[0], fog[1], fog[2], 1);

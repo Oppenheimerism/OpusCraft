@@ -40,6 +40,8 @@ const FATIGUE_DIG = [0.3, 0.09, 0.0027, 8.1e-4];
 const BURN_FROM_STEPPING = new Set(['hotFloor', 'campfire']);
 /** (Frost Walker) game/frostWalker.ts's freezing of the water around a Frost Walker's feet */
 export const FEET_HOOKS: { frostWalk?: (e: LivingEntity, level: number) => void } = {};
+/** (the wither) vanilla LivingEntity.createWitherRose, as game/witherRose.ts does it: a rose where the wither's victim fell */
+export const DEATH_HOOKS: { witherRose?: (victim: LivingEntity) => void } = {};
 /** (Soul Speed) vanilla #soul_speed_blocks */
 const SOUL_SPEED_BLOCKS = new Set(['soul_sand', 'soul_soil']);
 

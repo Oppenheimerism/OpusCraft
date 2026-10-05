@@ -29,6 +29,8 @@ import { AreaEffectCloud } from '../entity/areaEffectCloud';
 import { WindCharge, BreezeWindCharge } from '../entity/windCharge';
 import { OminousItemSpawner } from '../entity/ominousItemSpawner';
 import { EvokerFangs } from '../entity/evoker';
+// (the wither)
+import { WitherSkull } from '../entity/wither';
 import { ItemStack } from '../item/item';
 
 /** the entities that are never saved, made afresh (their fields, sent next, do the rest) */
@@ -54,6 +56,8 @@ const MADE: Record<string, (level: Level) => Entity> = {
   breeze_wind_charge: (l) => new BreezeWindCharge(l, null),
   ominous_item_spawner: (l) => new OminousItemSpawner(l),
   evoker_fangs: (l) => new EvokerFangs(l, 0, 0, 0, 0, 0, null),
+  // (the wither) its skulls, black or blue (`dangerous`, sent next)
+  wither_skull: (l) => new WitherSkull(l, null, 0, 0, 0),
 };
 
 /** the entities that go as their saved record */
