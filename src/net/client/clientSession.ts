@@ -976,6 +976,20 @@ export class ClientSession {
     dropCopy(e);
   }
 
+  /**
+   * the host's id for `e`: one of our copies, or a part of one, which vanilla numbers after its entity, one each
+   * (EnderDragon.setId: an ender dragon's head, neck, body, tail and wings); -1 if it's neither
+   */
+  private netIdOf(e: Entity): number {
+    const c = this.copies.get(e);
+    if (c) return c.netId;
+    const parent = (e as { parent?: unknown }).parent;
+    const parts = parent && (parent as { subEntities?: unknown }).subEntities;
+    const pc = Array.isArray(parts) ? this.copies.get(parent as Entity) : undefined;
+    const i = pc ? (parts as unknown[]).indexOf(e) : -1;
+    return pc && i >= 0 ? pc.netId + 1 + i : -1;
+  }
+
   /** (end of the guest's tick) where our player is, what the buttons did, what's changed in the inventory: sent */
   sendTick(): void {
     if (this.state !== 'play') return this.flush();
@@ -991,7 +1005,7 @@ export class ClientSession {
     if (i.jump) flags |= PoseFlag.JUMP;
     if (p.horizontalCollision) flags |= PoseFlag.HORIZONTAL_COLLISION;
     const t = this.target;
-    const target = t && !t.removed ? (t instanceof MirrorPlayer ? t.netId : (this.copies.get(t)?.netId ?? -1)) : -1;
+    const target = t && !t.removed ? (t instanceof MirrorPlayer ? t.netId : this.netIdOf(t)) : -1;
     // (the look first, so the host clicks where we looked)
     this.send([SB.MovePlayer, p.x, p.y, p.z, p.yaw, p.pitch, flags, target]);
     const inv = p.inventory;

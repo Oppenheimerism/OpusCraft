@@ -942,12 +942,13 @@ export class ServerPlayerSession {
   }
 
   /**
-   * the entity the guest says it looks at, if it may: one it's been shown and that's still here, that can be picked,
-   * isn't what it rides, and whose box is in its reach from its eyes (vanilla canInteractWithEntity, with its slack)
+   * the entity the guest says it looks at, if it may: one it's been shown and that's still here (or a part of one, an
+   * ender dragon's: vanilla getEntityOrPart), that can be picked, isn't what it rides, and whose box is in its reach
+   * from its eyes (vanilla canInteractWithEntity, with its slack: a part's own box)
    */
   private targetEntity(ex: number, ey: number, ez: number): Entity | null {
     if (this.target === NO_TARGET) return null;
-    const p = this.player!, e = this.tracker.byId(this.target) ?? this.seenPlayer(this.target);
+    const p = this.player!, e = this.tracker.byId(this.target) ?? this.tracker.partById(this.target) ?? this.seenPlayer(this.target);
     if (!e || e.removed || !e.isPickable() || e.rootVehicle() === p.rootVehicle()) return null;
     const b = e.bb.inflate(e.pickRadius());
     const dx = Math.max(b.minX - ex, 0, ex - b.maxX), dy = Math.max(b.minY - ey, 0, ey - b.maxY), dz = Math.max(b.minZ - ez, 0, ez - b.maxZ);

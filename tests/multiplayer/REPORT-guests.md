@@ -9,8 +9,8 @@ on two computers found a guest couldn't do. Each lettered milestone is committed
 | | Milestone | State | Commit |
 |---|---|---|---|
 | a | Advancements for guests | done | a96b5a5 A guest playing on someone's LAN world now has advancements of its own… |
-| b | Boss bars for guests | done | (this commit) |
-| c | Hitting the ender dragon; the fight from a guest's side | not started | |
+| b | Boss bars for guests | done | 6f92a50 A guest now sees the boss bars the host's world shows it… |
+| c | Hitting the ender dragon; the fight from a guest's side | done | (this commit) |
 | d | Firework rockets for a gliding guest | not started | |
 | e | The End Poem | not started | |
 | f | Being disconnected | not started | |
@@ -59,6 +59,52 @@ only `addBossBarSource((level, viewer) => [...])`**, or a line in that list; its
 overlay; drawing the darkened sky from `hud.bossOverlay.shouldDarkenScreen()` is the wither branch's (no boss here
 darkens the sky yet), and done that way it works for guests too.
 
+### c. Hitting the ender dragon, and the fight from a guest's side
+
+**Why a guest couldn't hurt it.** Three things, each enough on its own:
+
+- A guest's copy of the dragon never laid its parts out: vanilla's client places the eight part boxes round the dragon
+  in its own `aiStep`, and a copy's own tick never runs here, so its boxes stayed where they were made (at 0, 0, 0) and
+  its crosshair never found the dragon. Worse, the entity data had taken the copy's `head`, `neck`, `body`, … fields
+  for references to host entities the guest had no copy of, and set them to nothing.
+- Even with a part under its crosshair, a guest named nothing to the host (only copies have the host's ids), and the
+  host would have refused the dragon itself (only its parts can be picked).
+- The copy's 64-tick trail (vanilla `positions`) was never filled and its phase never followed the host's, so a guest
+  drew the dragon always facing south, its neck and tail straight, its head hanging as if it sat.
+
+**What it does now.**
+
+- The copy works out what vanilla's client does in its `aiStep` (`EnderDragon.animateMirror`): the phase the host says
+  it's in (a field `phase`, vanilla `DATA_PHASE`, kept by `DragonPhaseManager.setPhase`, followed as vanilla's
+  `onSyncedDataUpdated`), its trail, and its parts laid out round it (`tickParts(false)`; the wings' buffet, the bite,
+  the blocks eaten and the fight's bookkeeping stay the host's, vanilla's `ServerLevel` checks). Its breath, roars and
+  bursts are the host's, heard and seen from there.
+- A guest names the part under its crosshair as vanilla's client does: the dragon's id, then one more for each part in
+  order (vanilla `EnderDragon.setId`). No new packet: it's `MovePlayer`'s target. The host finds the part among the
+  entities it has shown that guest (`EntityTracker.partById`, vanilla `ServerLevel.getEntityOrPart`), checks the reach
+  against **that part's own box** (3 blocks and vanilla's 3 more, `canInteractWithEntity(box, 3.0)`), and the blow goes
+  to the part: the head takes it in full, the rest a quarter plus one; a perched dragon shrugs off arrows, set alight.
+- The entity data never sends an entity's own parts nor lets a host overwrite them (any entity's, not the dragon's by
+  name); the dragon's trail pointer and growl countdown are each side's own.
+
+**The fight from a guest's side** (`tests/multiplayer/m8-dragon.mjs`, a real End and fight, the guest in survival):
+
+| What | As the guest has it |
+|---|---|
+| Its phases (circling, landing, perched: scanning, roaring, breathing; taking off; swooping; dying) | follows the host's (was stuck at the one it came into view in) |
+| How it's drawn: facing, neck and tail (its trail), its wings' beat, its hurt flash | as the host's, a few ticks behind (was: always facing south, straight) |
+| Hitting it: sword, through the part under the crosshair; reach against that part | head in full, the rest ¼ + 1; a part 6 blocks off isn't hit, though the dragon's own box is a block and a half away |
+| Hit enough while perched (a quarter of its health) | takes off |
+| Arrows at a perched dragon | no harm, set alight |
+| Its roar, its breath, the cloud of breath before it | heard, seen; the cloud hurts the guest standing in it (instant damage) |
+| A fireball spat at the guest as it swoops | seen and heard; its cloud where it bursts |
+| The crystals: the healing beam, a crystal broken by the guest's blow | the beam to the crystal the host has it to; blown up, gone |
+| The death: coming apart over the portal, the rays, its roar | seen and heard |
+| Its experience | taken by the guest |
+| Free the End | the guest's, whose blow brought it down |
+| The exit portal, the egg, a gateway, the boss bar going | in the guest's world, gone from its screen |
+| Through the gateway | out on the outer islands, told where it is, the world there sent |
+
 ## 2. Shared files changed (for merging)
 
 | File | What changed, and the hook |
@@ -74,10 +120,16 @@ darkens the sky yet), and done that way it works for guests too.
 | `src/game/advancements.ts` | `PlayerAdvancements.remote` (two lines). |
 | `src/game/level.ts`, `src/entity/mob.ts` | `onThrownItemPickedUp` gets the thrower as a third argument. |
 | `tests/multiplayer/m4-playerdata.mjs` | one check expected a guest's record to have no advancements; it now expects the guest's own. |
+| `src/entity/enderDragon.ts` | `phase` (vanilla `DATA_PHASE`); `animateMirror()` (a guest's copy: phase, trail, parts); the trail's lines moved to `recordPosition()`; `tickParts(server)`: the host's part of it (`server`: buffet, bite, walls, fight) behind a flag, the layout shared. The host's tick does what it did. |
+| `src/entity/dragonPhases.ts` | `DragonPhaseManager.setPhase` keeps `dragon.phase` (one line). |
+| `src/net/entityData.ts` | an entity's own parts (`subEntities`) never sent nor overwritten, by any field naming one; `ender_dragon`'s `posPointer` and `growlTime` not sent. |
+| `src/net/server/entityTracker.ts` | `partById(id)`. |
+| `src/net/server/session.ts` (again) | `targetEntity` also finds a part (`tracker.partById`). |
+| `src/net/client/clientSession.ts` (again) | `netIdOf(e)`: a part of a copy is named by its dragon's id and its place (`MovePlayer`'s target). |
 
 New files: `src/net/advancementSync.ts`, `src/net/server/guestProgress.ts`, `src/game/progressTriggers.ts`,
 `src/game/bossBars.ts`, `src/net/server/bossBarSync.ts`, `tests/multiplayer/m8-advancements.mjs`,
-`tests/multiplayer/m8-bossbars.mjs`.
+`tests/multiplayer/m8-bossbars.mjs`, `tests/multiplayer/m8-dragon.mjs`.
 
 ## 3. Open points
 
@@ -89,6 +141,16 @@ New files: `src/net/advancementSync.ts`, `src/net/server/guestProgress.ts`, `src
   changes only when it's hurt.
 - Only the pink bar and the raid's red notched one have textures in this game; a colour another branch adds needs its
   sprites, as it does for the host.
+- (c) The head's box lies inside the neck's (vanilla's sizes and offsets: 1 and 3 wide, 6.5 and 5.5 blocks out), and
+  seen from in front of a perched dragon the two share a face: which one the crosshair lands on is a tie, as it is in
+  vanilla (the first in the list, the head, when they are exactly level). A diving dragon's head hangs below its neck.
+- (c) Found, not changed (single-player alike, and part 1 leaves single-player as it is): vanilla's `Player.attack`
+  counts a blow to a part against its dragon (`parentMob`) for the weapon's wear, `lastHurtMob` and the damage
+  particles; here a blow to a part wears no sword and shows no particles, for the host as for guests.
+- (c) The dragon's breath, its bursts as it dies and a cloud's puffs reach a guest as the host's particles, within 32
+  blocks (vanilla `sendParticles`); vanilla's client makes them itself and shows them as far as it draws the dragon.
+- (c) The dragon's wing beat (`flapTime`) and turn (`yRotA`) still go to guests each tick: the wings stay in step with
+  the flap sound the host plays, and a few numbers for one entity are nothing (vanilla's client counts its own).
 
 ## 4. Tests
 
@@ -109,8 +171,15 @@ New files: `src/net/advancementSync.ts`, `src/net/server/guestProgress.ts`, `src
   not seen in the Overworld. A host sending a colour, overlay, progress, flag, name length or shape that's wrong (the
   guest leaves, saying why), a name with formatting (shown plain), a removal of a bar it never had (taken). Passes in
   memory and through the relay with lag.
-- Every other multiplayer suite passes, with `tests/end/elytra.mjs`, `tests/saves/player.mjs`, the horse, wolf, frog
-  and armadillo suites, and `tests/remaining-mobs/load-order.mjs`. `npm run typecheck` is clean.
+- `tests/multiplayer/m8-dragon.mjs`: 44 checks, on a generated End with its fight. The guest's copy (its parts its own,
+  laid out where the host had them a few ticks before, its trail turning, its wings, its phase); the perched dragon hit
+  by the guest's sword through the part under its crosshair (head in full, neck a quarter plus one, parts out of reach
+  and the dragon itself not hit, part ids past its eight refused), an arrow glancing off; taking off; roar, breath and
+  its cloud; a fireball spat at the guest; the crystals' beam and one broken; the death, the roar, the experience,
+  Free the End, the exit portal, the egg, a gateway, the bar gone; through the gateway. Passes in memory (three runs),
+  and through the relay with lag (seeds 12345 and 777).
+- Every other multiplayer suite passes, with all of `tests/end/`, `tests/saves/player.mjs`, the horse, wolf, frog and
+  armadillo suites, and `tests/remaining-mobs/load-order.mjs`. `npm run typecheck` is clean.
 
 ## 5. Checklist for the lead
 
@@ -129,3 +198,8 @@ Start LAN World; guest: Multiplayer → the world → a name → Join Server).
    in both windows. A raid (Bad Omen into a village) shows its red notched bar to the guest near it.
 8. The guest right-clicks a tame horse (`/summon horse ~ ~ ~2 {Tame:1b}`) and gets on; so does the host with another:
    the game keeps running smoothly in both windows.
+9. In the End with the guest: the dragon, in the guest's window, faces the way it flies, its neck and tail bending as
+   in the host's. When it perches on the portal, the guest walks up to its head and hits it with a sword: the boss
+   bar goes down in both windows (a full blow on the head, less elsewhere). The guest sees its breath, its fireballs
+   and the purple beam to the crystal healing it; when it dies, its coming apart, the portal, the egg and a gateway;
+   it takes the experience, and an ender pearl thrown into the gateway takes it to the outer islands.

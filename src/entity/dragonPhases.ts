@@ -663,6 +663,8 @@ export class DragonPhaseManager {
     if (this.current && id === this.current.id) return;
     this.current?.end();
     this.current = this.getPhase(id);
+    // (vanilla: into the dragon's DATA_PHASE, which its clients follow; here its guests' copies do)
+    this.dragon.phase = id;
     this.current.begin();
   }
 

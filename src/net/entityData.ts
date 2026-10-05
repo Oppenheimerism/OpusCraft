@@ -43,6 +43,9 @@ const NOT_SENT_BY_TYPE: Record<string, readonly string[]> = {
   experience_orb: ['age'],
   // ((minecarts) vanilla MinecartFurnace sends only whether it's lit, not its fuel's count nor its push)
   furnace_minecart: ['fuel', 'xPush', 'zPush'],
+  // ((guests and the dragon) the trail its neck and tail follow, each side's own (vanilla: not synched), and the
+  // host's countdown to its next growl
+  ender_dragon: ['posPointer', 'growlTime'],
 };
 // ((minecarts) a container minecart's or chest boat's loot table, and its seed, not yet rolled: vanilla sends neither)
 NOT_SENT.add('lootTable').add('lootSeed');
@@ -98,6 +101,12 @@ function kindOf(v: unknown): Kind {
   if (v instanceof SimpleContainer) return 'container';
   if (isEntity(v)) return 'entity';
   return null;
+}
+
+/** the parts an entity is made of (vanilla getParts: an ender dragon's), if it has any */
+function partsOf(e: Entity): readonly Entity[] | null {
+  const parts = (e as { subEntities?: unknown }).subEntities;
+  return Array.isArray(parts) ? (parts as Entity[]) : null;
 }
 
 function isEntity(v: unknown): v is Entity {
@@ -177,10 +186,13 @@ function wireField(e: Entity, name: string, v: unknown): Value {
 function fieldsOf(e: Entity, each: (name: string, key: unknown, wire: () => Value) => void, only: ReadonlySet<string> | null): void {
   const skip = NOT_SENT_BY_TYPE[e.type];
   const rec = e as unknown as Record<string, unknown>;
+  const parts = partsOf(e);
   for (const name of Object.keys(e)) {
     if (NOT_SENT.has(name) || (skip && skip.includes(name)) || (only && !only.has(name))) continue;
     const v = rec[name];
     if (typeof v === 'function' || v === undefined) continue;
+    // ((guests and the dragon) a part of its own, by name (a dragon's head): its wiring, as subEntities is)
+    if (parts && parts.includes(v as Entity)) continue;
     const key = keyField(e, name, v);
     if (key !== NO) each(name, key, () => wireField(e, name, v));
   }
@@ -247,6 +259,7 @@ export function applyData(e: Entity, data: Value, resolve: Resolve, only: Readon
   if (typeof data !== 'object' || data === null || Array.isArray(data) || ArrayBuffer.isView(data)) return 'bad entity data';
   const rec = e as unknown as Record<string, unknown>;
   const skip = NOT_SENT_BY_TYPE[e.type];
+  const parts = partsOf(e);
   for (const [name, wire] of Object.entries(data)) {
     if (wire === undefined) continue;
     if (!NAME.test(name)) return 'bad entity field';
@@ -258,6 +271,7 @@ export function applyData(e: Entity, data: Value, resolve: Resolve, only: Readon
     }
     if (NOT_SENT.has(name) || (skip && skip.includes(name)) || !Object.prototype.hasOwnProperty.call(rec, name)) continue;
     const cur = rec[name];
+    if (parts && parts.includes(cur as Entity)) continue;
     const kind = kindOf(cur);
     if (kind === null) {
       // (a part's plain fields: each into a field the part has, of the kind it holds)
