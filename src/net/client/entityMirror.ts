@@ -112,5 +112,7 @@ export class EntityMirror {
     // (what the host doesn't send, since each game counts it alike: an item's bob and spin, an orb's)
     if (e instanceof ItemEntity || e instanceof ExperienceOrb) e.age++;
     if (l) l.animateMirror();
+    // (what else works out something of its own here, as vanilla's client does: a rocket pushing our gliding player)
+    else (e as { animateMirror?: () => void }).animateMirror?.();
   }
 }

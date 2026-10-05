@@ -248,6 +248,11 @@ export class EnderDragon extends Mob {
   /** vanilla fightOrigin: the middle of the island the fight is over */
   fightOrigin: [number, number, number] = [0, 0, 0];
   readonly phaseManager: DragonPhaseManager;
+  /**
+   * vanilla DATA_PHASE: the id of the phase it's in, kept by the phase manager; what a guest's copy follows (its
+   * neck's bend, its head sitting low)
+   */
+  phase: number = PHASE.HOVERING;
   private growlTime = 100;
   sittingDamageReceived = 0;
   private readonly nodes: (DragonNode | null)[] = new Array(24).fill(null);
@@ -369,15 +374,7 @@ export class EnderDragon extends Mob {
     else if (this.inWall) this.flapTime += f9 * 0.5;
     else this.flapTime += f9;
     this.yaw = wrapDegrees(this.yaw);
-    const pos = this.positions;
-    if (this.posPointer < 0)
-      for (let i = 0; i < 64; i++) {
-        pos[i * 2] = this.yaw;
-        pos[i * 2 + 1] = this.y;
-      }
-    if (++this.posPointer === 64) this.posPointer = 0;
-    pos[this.posPointer * 2] = this.yaw;
-    pos[this.posPointer * 2 + 1] = this.y;
+    this.recordPosition();
     // (the client's copy of the phase: breath, roars, death bursts)
     this.phaseManager.current.doClientTick();
     // the server's: where to fly
@@ -391,7 +388,35 @@ export class EnderDragon extends Mob {
     if (target) this.flyToward(phase, target);
     this.bodyYaw = this.bodyYawO = this.yaw;
     this.headYaw = this.yaw;
-    this.tickParts();
+    this.tickParts(true);
+  }
+
+  /**
+   * (a guest's copy: net/client) what vanilla's client works out in its own aiStep: the phase the host says it's in
+   * (vanilla onSyncedDataUpdated(DATA_PHASE)), its heading and height for the trail its neck and tail follow, and its
+   * parts laid out round it, so that a guest's crosshair finds the part it's on. Its breath, roars and bursts are
+   * the host's, heard and seen from there
+   */
+  override animateMirror(): void {
+    super.animateMirror();
+    if (this.phaseManager.current.id !== this.phase) this.phaseManager.setPhase(this.phase);
+    if (this.health <= 0) return;
+    this.yaw = wrapDegrees(this.yaw);
+    this.recordPosition();
+    this.tickParts(false);
+  }
+
+  /** vanilla aiStep's trail: its heading and height this tick (all 64 the first time) */
+  private recordPosition(): void {
+    const pos = this.positions;
+    if (this.posPointer < 0)
+      for (let i = 0; i < 64; i++) {
+        pos[i * 2] = this.yaw;
+        pos[i * 2 + 1] = this.y;
+      }
+    if (++this.posPointer === 64) this.posPointer = 0;
+    pos[this.posPointer * 2] = this.yaw;
+    pos[this.posPointer * 2 + 1] = this.y;
   }
 
   /** vanilla EnderDragon.aiStep's steering toward the phase's fly target */
@@ -424,8 +449,11 @@ export class EnderDragon extends Mob {
     this.dz *= d5;
   }
 
-  /** vanilla EnderDragon.aiStep's parts: laid out round the body, the wings' buffet and the head's bite, blocks eaten */
-  private tickParts(): void {
+  /**
+   * vanilla EnderDragon.aiStep's parts: laid out round the body; on the host (`server`, vanilla's ServerLevel checks)
+   * the wings' buffet and the head's bite, blocks eaten, the fight told
+   */
+  private tickParts(server: boolean): void {
     const parts = this.subEntities;
     const old = parts.map((p) => [p.x, p.y, p.z]);
     const f12 = fr((this.getLatencyPos(5, 1)[1] - this.getLatencyPos(10, 1)[1]) * 10 * DEG);
@@ -435,7 +463,7 @@ export class EnderDragon extends Mob {
     this.tickPart(this.body, f1 * 0.5, 0, -f15 * 0.5);
     this.tickPart(this.wing1, f15 * 4.5, 2, f1 * 4.5);
     this.tickPart(this.wing2, f15 * -4.5, 2, f1 * -4.5);
-    if (this.hurtTime === 0) {
+    if (server && this.hurtTime === 0) {
       const lvl = this.level;
       this.knockBack(lvl.getEntities(this.wing1.bb.inflate(4, 2, 4).move(0, -2, 0), noCreativeOrSpectator, this));
       this.knockBack(lvl.getEntities(this.wing2.bb.inflate(4, 2, 4).move(0, -2, 0), noCreativeOrSpectator, this));
@@ -455,10 +483,12 @@ export class EnderDragon extends Mob {
       const f22 = (k + 1) * 2;
       this.tickPart(tails[k], -(f1 * 1.5 + f4 * f22) * f13, lat[1] - spine[1] - (f22 + 1.5) * f + 1.5, (f15 * 1.5 + f20 * f22) * f13);
     }
-    // (vanilla ORs all three without stopping short: each part eats its own way through)
-    const a = this.checkWalls(this.head.bb), b = this.checkWalls(this.neck.bb), c = this.checkWalls(this.body.bb);
-    this.inWall = a || b || c;
-    this.dragonFight?.updateDragon(this);
+    if (server) {
+      // (vanilla ORs all three without stopping short: each part eats its own way through)
+      const a = this.checkWalls(this.head.bb), b = this.checkWalls(this.neck.bb), c = this.checkWalls(this.body.bb);
+      this.inWall = a || b || c;
+      this.dragonFight?.updateDragon(this);
+    }
     for (let i = 0; i < parts.length; i++) {
       parts[i].xo = old[i][0];
       parts[i].yo = old[i][1];

@@ -15,6 +15,10 @@ import { replayParticles } from '../effects';
 import { createFromPayload } from '../entityNet';
 import { applyData, PLAYER_FIELDS } from '../entityData';
 import { applyPlayerStatus, applyEffectList } from '../playerStatus';
+import { readProgress } from '../advancementSync';
+import type { AdvancementDef } from '../../game/advancements';
+import { addBossBarSource } from '../../game/bossBars';
+import type { BossBar } from '../../gui/bossOverlay';
 import { MirrorPlayer } from './mirrorPlayer';
 import { ClientMenus } from './clientMenus';
 import { EntityMirror } from './entityMirror';
@@ -78,6 +82,11 @@ export interface ClientHooks {
    * loading screen up (`reason`'s) till the host puts our player there; what the session had of the old one is gone
    */
   changeDimension?(dim: string, reason: ReceivingReason): void;
+  /**
+   * (guests' advancements) our advancements as the host keeps them (vanilla handleUpdateAdvancementsPacket): those whose
+   * criteria changed, each with all it has now, or, the first time (`reset`), all of them (net/advancementSync.ts applyProgress)
+   */
+  advancements?(changes: [AdvancementDef, string[]][], reset: boolean): void;
 }
 
 const GAME_MODES: readonly GameMode[] = ['survival', 'creative', 'adventure', 'spectator'];
@@ -98,6 +107,24 @@ function unsent(p: Value, e: CodecError): void {
   unsentIds.add(id);
   console.error(`multiplayer: a packet (${String(id)}) left out of a message to the host`, e);
 }
+
+/** (guests' boss bars) a bar the host shows us, as it last said (changed in place, so the overlay slides it along) */
+interface HostBossBar extends BossBar {
+  name: string;
+  color: string;
+  overlay: string;
+  progress: number;
+  playBossMusic: boolean;
+  createWorldFog: boolean;
+  darkenScreen: boolean;
+}
+
+/** (guests' boss bars) each guest's level's session: its host's bars are what its own player is shown (game/bossBars.ts) */
+const sessionOfLevel = new WeakMap<Level, ClientSession>();
+addBossBarSource((level, viewer) => {
+  const s = sessionOfLevel.get(level);
+  return s && viewer === s.player ? [...s.bossBars.values()] : [];
+});
 
 export interface GuestIdentity {
   name: string;
@@ -167,6 +194,8 @@ export class ClientSession {
   /** (a stuck loading screen's report) the host's latest packets: their ids, and the ticks they came in */
   private readonly latelyIds: number[] = [];
   private readonly latelyAt: number[] = [];
+  /** (guests' boss bars) the bars the host shows us, by its ids (vanilla BossHealthOverlay.events) */
+  readonly bossBars = new Map<number, HostBossBar>();
 
   constructor(readonly transport: Transport, readonly hooks: ClientHooks, readonly me: GuestIdentity) {
     transport.onPeer((peer, joined, reason) => {
@@ -494,6 +523,28 @@ export class ClientSession {
         return;
       case CB.ChangeDimension:
         return this.changeDimension(p[1] as string, p[2] as ReceivingReason);
+      case CB.BossEvent: {
+        const [, bid, name, color, overlay, progress, flags] = p as [number, number, string, string, string, number, number];
+        let b = this.bossBars.get(bid);
+        if (!b) this.bossBars.set(bid, (b = { name: '', color, overlay, progress, playBossMusic: false, createWorldFog: false, darkenScreen: false }));
+        // (a name is plain text: control characters and the formatting sign taken out, as a menu's title is)
+        b.name = name.replace(/[\u0000-\u001f\u007f§]/g, '');
+        b.color = color;
+        b.overlay = overlay;
+        b.progress = progress;
+        b.darkenScreen = (flags & 1) !== 0;
+        b.playBossMusic = (flags & 2) !== 0;
+        b.createWorldFog = (flags & 4) !== 0;
+        return;
+      }
+      case CB.BossEventRemove:
+        this.bossBars.delete(p[1] as number);
+        return;
+      case CB.UpdateAdvancements: {
+        const changes = readProgress(p[2] as Value[]);
+        if (!changes) return this.fail('an advancement that does not exist');
+        return this.hooks.advancements?.(changes, p[1] as boolean);
+      }
       case CB.RecipeBookAdd: {
         const rs: BookRecipe[] = [];
         for (const id of p[1] as string[]) {
@@ -519,6 +570,7 @@ export class ClientSession {
     this.level = level;
     this.player = player;
     this.sink = chunks;
+    sessionOfLevel.set(level, this);
     this.menus = new ClientMenus(player, {
       send: (pk) => this.send(pk),
       entity: (id) => this.byNetId(id),
@@ -554,6 +606,8 @@ export class ClientSession {
     this.waitingCount = 0;
     this.pending.clear();
     this.target = null;
+    // (the host's bars are its old dimension's: those of the new come as it shows them)
+    this.bossBars.clear();
     this.level!.destroyProgress.clear();
     this.player!.removeVehicle();
     this.rainTarget = this.thunderTarget = 0;
@@ -922,6 +976,20 @@ export class ClientSession {
     dropCopy(e);
   }
 
+  /**
+   * the host's id for `e`: one of our copies, or a part of one, which vanilla numbers after its entity, one each
+   * (EnderDragon.setId: an ender dragon's head, neck, body, tail and wings); -1 if it's neither
+   */
+  private netIdOf(e: Entity): number {
+    const c = this.copies.get(e);
+    if (c) return c.netId;
+    const parent = (e as { parent?: unknown }).parent;
+    const parts = parent && (parent as { subEntities?: unknown }).subEntities;
+    const pc = Array.isArray(parts) ? this.copies.get(parent as Entity) : undefined;
+    const i = pc ? (parts as unknown[]).indexOf(e) : -1;
+    return pc && i >= 0 ? pc.netId + 1 + i : -1;
+  }
+
   /** (end of the guest's tick) where our player is, what the buttons did, what's changed in the inventory: sent */
   sendTick(): void {
     if (this.state !== 'play') return this.flush();
@@ -937,7 +1005,7 @@ export class ClientSession {
     if (i.jump) flags |= PoseFlag.JUMP;
     if (p.horizontalCollision) flags |= PoseFlag.HORIZONTAL_COLLISION;
     const t = this.target;
-    const target = t && !t.removed ? (t instanceof MirrorPlayer ? t.netId : (this.copies.get(t)?.netId ?? -1)) : -1;
+    const target = t && !t.removed ? (t instanceof MirrorPlayer ? t.netId : this.netIdOf(t)) : -1;
     // (the look first, so the host clicks where we looked)
     this.send([SB.MovePlayer, p.x, p.y, p.z, p.yaw, p.pitch, flags, target]);
     const inv = p.inventory;

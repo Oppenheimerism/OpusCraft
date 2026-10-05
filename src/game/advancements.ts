@@ -622,6 +622,11 @@ export class PlayerAdvancements {
   /** bumped whenever anything changes (screens refresh) */
   version = 0;
   onAward: ((a: AdvancementDef) => void) | null = null;
+  /**
+   * (guests' advancements) vanilla ClientAdvancements: a guest's are the host's to keep and tell it
+   * (net/advancementSync.ts), and nothing its own game sees meets a criterion
+   */
+  remote = false;
 
   isDone(a: AdvancementDef): boolean {
     const got = this.progress.get(a.id);
@@ -658,6 +663,7 @@ export class PlayerAdvancements {
 
   /** feed a trigger to every unfinished criterion of its type */
   trigger(type: Criterion['t'], p: TriggerPayload = {}): void {
+    if (this.remote) return;
     for (const a of ADVANCEMENTS.values()) {
       if (this.isDone(a)) continue;
       const got = this.progress.get(a.id);

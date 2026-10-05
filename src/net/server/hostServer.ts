@@ -13,6 +13,7 @@ import { broadcastEffects, soundRange, PARTICLE_RANGE } from '../effects';
 import { visibleBlockEntity } from '../chunkData';
 import { DataWatcher, PLAYER_FIELDS, type EntityData } from '../entityData';
 import { ServerPlayerSession } from './session';
+import { hookGuestProgress } from './guestProgress';
 import type { Level } from '../../game/level';
 import type { Entity } from '../../entity/entity';
 import type { LivingEntity } from '../../entity/living';
@@ -162,6 +163,8 @@ export class HostServer {
         particles: (method, args, x, y, z) => this.muted || this.broadcastNear([CB.LevelParticles, method, args], x, y, z, PARTICLE_RANGE, this.actor),
       }),
     );
+    // (guests' advancements: what the level's hooks say a guest's player did, to its advancements)
+    this.undo.push(hookGuestProgress(this));
     if (opts.announce !== false) {
       // (the other windows of this browser hear the join code too: they're this player's own)
       this.announcer = new LanAnnouncer(() => ({ ...this.lanInfo(), code: this.joinCode }));
@@ -497,7 +500,7 @@ export class HostServer {
   guestInteraction(s: ServerPlayerSession, p: Player): Interaction {
     const it = new Interaction(this.level, p);
     it.onOpenContainer = (kind, x, y, z) => {
-      const m = blockMenu(this.level, p, kind, x, y, z);
+      const m = blockMenu(this.level, p, kind, x, y, z, s.progress.menuEvents);
       if (m) s.showMenu(m);
     };
     it.onOpenEntityContainer = (e) => void s.showMenu(entityContainerMenu(this.level, p, e));

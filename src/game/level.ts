@@ -602,8 +602,8 @@ export class Level {
   onChanneledLightning: ((victims: Entity[], p: Player) => void) | null = null;
   /** vanilla LivingEntity.take: something alive picked up an item, arrow or orb (the pop, and it flying to them) */
   onTake: ((e: Entity, taker: LivingEntity, amount: number) => void) | null = null;
-  /** a mob picked up an item a player had thrown (vanilla thrown_item_picked_up_by_entity) */
-  onThrownItemPickedUp: ((stack: ItemStack, by: Entity) => void) | null = null;
+  /** a mob picked up an item a player had thrown (vanilla thrown_item_picked_up_by_entity: the thrower's) */
+  onThrownItemPickedUp: ((stack: ItemStack, by: Entity, thrower: Entity | null) => void) | null = null;
   /** a villager or a wandering trader opened its trading screen for a player (vanilla Merchant.openTradingScreen) */
   onOpenMerchant: ((v: Merchant, p: Player) => void) | null = null;
   /** the night slept through: everyone is about to be woken (vanilla ServerLevel.wakeUpAllPlayers, game/sleep.ts) */

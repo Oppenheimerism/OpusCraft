@@ -55,6 +55,8 @@ import { useBed, BED_YROT, SleepHost } from './sleep';
 import { AmbientTicker } from './animateTick';
 import { ToastComponent, AdvancementToast, RecipeToast } from '../gui/toasts';
 import { PlayerAdvancements, announcement, AdvancementDef } from './advancements';
+import { applyProgress } from '../net/advancementSync';
+import { interactedPayload } from './progressTriggers';
 import { PlayerRecipeBook, BookRecipe } from '../inventory/recipeBook';
 import { Tutorial, TutorialStep } from './tutorial';
 import { keyDisplayName } from './input';
@@ -655,11 +657,14 @@ export class Game {
     installMenuHooks();
     setShulkerBoxMenuHook((menu) => showMenu(menu.player, menu));
     // (the archaeology advancements: a suspicious block's loot rolled for the player, a pot made of four sherds)
+    // (a host's guest's player: its own advancements, net/server/guestProgress.ts, by the level's hook)
     setGenerateLootListener((p, table) => {
       if (p === this.player) this.advancements.trigger('container_loot', { lootTable: table });
+      else p.level.onPlayerTrigger?.(p, 'container_loot', { lootTable: table });
     });
     setPotCraftedListener((p, sides) => {
       if (p === this.player) this.advancements.trigger('recipe_crafted', { crafted: { recipe: 'decorated_pot', ingredients: sides } });
+      else p.level.onPlayerTrigger?.(p, 'recipe_crafted', { crafted: { recipe: 'decorated_pot', ingredients: sides } });
     });
     this.interaction.onOpenEntityContainer = (e) => this.openEntityContainer(e);
     this.interaction.onMounted = () => this.hud.setOverlayMessage(`Press ${keyDisplayName(KEYS.sneak)} to Dismount`);
@@ -732,6 +737,8 @@ export class Game {
     setNowPlayingListener((level, description) => level === this.level && this.hud.setNowPlaying(description));
     this.toasts.clear();
     this.advancements = new PlayerAdvancements();
+    // (a guest's are the host's to keep and tell us: vanilla ClientAdvancements)
+    if (login) this.advancements.remote = true;
     this.recipeBook = new PlayerRecipeBook();
     this.hookProgress();
     // player data
@@ -1200,7 +1207,12 @@ export class Game {
   /** vanilla ServerLevel: the End has its dragon fight (saved with the world), nowhere else does */
   private attachDragonFight(): void {
     const f = this.world.dim === THE_END ? new EndDragonFight(this.level, this.meta?.dragonFight ?? null) : null;
-    if (f) f.onDragonSummoned = (_d, p) => p === this.player && this.advancements.trigger('summoned_entity', { summoned: 'ender_dragon' });
+    if (f)
+      f.onDragonSummoned = (_d, p) => {
+        if (p === this.player) this.advancements.trigger('summoned_entity', { summoned: 'ender_dragon' });
+        // (a host's guest's player: its own advancements, by the level's hook)
+        else this.level.onPlayerTrigger?.(p, 'summoned_entity', { summoned: 'ender_dragon' });
+      };
     this.level.dragonFight = f;
   }
 
@@ -1218,6 +1230,8 @@ export class Game {
     else if (kind === 'end_gateway') {
       // (vanilla enter_block: Remote Getaway)
       if (e === this.player) this.advancements.trigger('enter_block', { enteredBlock: 'end_gateway' });
+      // (a host's guest's player: its own advancements, by the level's hook)
+      else if (e.type === 'player') this.level.onPlayerTrigger?.(e as Player, 'enter_block', { enteredBlock: 'end_gateway' });
       gatewayTravel(this.level, e, x, y, z);
     } else if (e === this.player) this.portalTravel(x, y, z);
   }
@@ -1868,7 +1882,12 @@ export class Game {
   /** vanilla ClientAdvancements: toast + chat announcement for a finished advancement */
   private onAdvancement(a: AdvancementDef): void {
     if (a.toast !== false) this.toasts.add(new AdvancementToast(a.title, a.frame, a.icon));
-    if (a.announce !== false && this.level.gameRules.announceAdvancements) this.chat(announcement(this.playerName, a));
+    if (a.announce !== false && this.level.gameRules.announceAdvancements) {
+      const line = announcement(this.playerName, a);
+      this.chat(line);
+      // (vanilla PlayerList.broadcastSystemMessage: the host's guests read it too)
+      this.server?.hostChatted(line);
+    }
   }
 
   /** vanilla RecipeToast.addOrUpdate for each newly unlocked recipe */
@@ -1912,18 +1931,16 @@ export class Game {
     lvl.onPlayerArrowHit = (_e, p) => p === this.player && this.advancements.trigger('shoot_arrow');
     lvl.onPlayerTridentHit = (_e, p) => p === this.player && this.advancements.trigger('throw_trident');
     lvl.onChanneledLightning = (victims, p) => p === this.player && this.advancements.trigger('channeled_lightning', { channeled: victims.map((e) => e.type) });
-    lvl.onThrownItemPickedUp = (stack, by) => {
+    lvl.onThrownItemPickedUp = (stack, by, thrower) => {
+      // (the thrower's: a host's guest's is its own, net/server/guestProgress.ts)
+      if (thrower !== this.player) return;
       if (by instanceof Piglin && by.isAdult() && isLovedItem(stack)) this.advancements.trigger('distract_piglin', { distract: 'thrown' });
     };
     this.interaction.onInteractedWithEntity = (stack, e) => {
       if (e instanceof Piglin && e.isAdult() && stack?.item.id === 'gold_ingot') this.advancements.trigger('distract_piglin', { distract: 'directly' });
-      // (M9: frogs) vanilla player_interacted_with_entity: what was in hand, on what kind of mob, of what variant
-      const variant = (e as { variant?: unknown }).variant;
-      // (remaining mobs: the armadillo) and the body armour it wears after (a wolf's)
-      const armor = (e as { bodyArmor?: ItemStack | null }).bodyArmor;
-      this.advancements.trigger('player_interacted_with_entity', {
-        interacted: { item: stack?.item.id ?? null, entity: e.type, variant: typeof variant === 'string' ? variant : undefined, bodyArmor: armor ? { item: armor.item.id, damage: armor.damage } : null },
-      });
+      // (M9: frogs) vanilla player_interacted_with_entity: what was in hand, on what kind of mob, of what variant;
+      // (remaining mobs: the armadillo) and the body armour it wears after (a wolf's; a horse's is behind a method)
+      this.advancements.trigger('player_interacted_with_entity', interactedPayload(stack, e));
     };
     lvl.onPlayerCrossbowKill = (killed, p) => p === this.player && this.advancements.trigger('killed_by_crossbow', { crossbowKills: killed.map((e) => e.type) });
     // (Stage 4) criteria met out in the world: shields, totems, raids
@@ -2210,6 +2227,11 @@ export class Game {
         if (!replace) return this.recipeBook.add(rs);
         this.recipeBook.known.clear();
         for (const r of rs) this.recipeBook.known.add(r.id);
+      },
+      // (guests' advancements: ours are the host's to keep, and it tells us them; their toasts are ours, the chat line
+      // everyone's, the host's to send)
+      advancements: (changes, reset) => {
+        for (const a of applyProgress(this.advancements, changes, reset)) if (a.toast !== false) this.toasts.add(new AdvancementToast(a.title, a.frame, a.icon));
       },
     }, me);
   }

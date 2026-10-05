@@ -9,6 +9,7 @@ import { FLUID_WATER } from '../world/fluids';
 import { RARITY_COLOR, type ItemStack } from '../item/item';
 import { compareEffects } from '../entity/effects';
 import { BossHealthOverlay } from './bossOverlay';
+import { bossBarsShownTo } from '../game/bossBars';
 import { hsvToRgb } from '../core/math';
 // (Stage 4: totems)
 import { renderItemActivation, tickItemActivation } from './itemActivation';
@@ -66,8 +67,9 @@ export class Hud {
     this.vignetteBrightness += (f - this.vignetteBrightness) * 0.01;
     if (this.actionBar && --this.actionBar.time <= 0) this.actionBar = null;
     if (this.title && --this.title.time <= 0) this.title = null;
-    // (Stage 4: raids) and the raids' bars
-    this.bossOverlay.update([game.level.dragonFight?.shownBar() ?? null, ...game.level.raids.shownBars()]);
+    // (Stage 4: raids) and the raids' bars; (guests' boss bars) whatever boss event shows its bar to this game's own
+    // player, a guest's host's among them (game/bossBars.ts)
+    this.bossOverlay.update(bossBarsShownTo(game.level, game.level.player));
   }
 
   addChat(text: string, tick: number): void {

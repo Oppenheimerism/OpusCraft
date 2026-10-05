@@ -74,6 +74,18 @@ export class EntityTracker {
     return this.byIds.get(id) ?? null;
   }
 
+  /**
+   * vanilla ServerLevel.getEntityOrPart: a part of an entity the guest sees (an ender dragon's head, say), by the id
+   * vanilla gives it, its entity's and then one each in order (EnderDragon.setId)
+   */
+  partById(id: number): Entity | null {
+    for (const e of this.seen.keys()) {
+      const parts = (e as { subEntities?: readonly Entity[] }).subEntities;
+      if (parts && !e.removed && id > e.id && id <= e.id + parts.length) return parts[id - e.id - 1];
+    }
+    return null;
+  }
+
   get size(): number {
     return this.seen.size;
   }
