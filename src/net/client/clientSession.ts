@@ -17,6 +17,8 @@ import { applyData, PLAYER_FIELDS } from '../entityData';
 import { applyPlayerStatus, applyEffectList } from '../playerStatus';
 import { readProgress } from '../advancementSync';
 import type { AdvancementDef } from '../../game/advancements';
+import { addBossBarSource } from '../../game/bossBars';
+import type { BossBar } from '../../gui/bossOverlay';
 import { MirrorPlayer } from './mirrorPlayer';
 import { ClientMenus } from './clientMenus';
 import { EntityMirror } from './entityMirror';
@@ -106,6 +108,24 @@ function unsent(p: Value, e: CodecError): void {
   console.error(`multiplayer: a packet (${String(id)}) left out of a message to the host`, e);
 }
 
+/** (guests' boss bars) a bar the host shows us, as it last said (changed in place, so the overlay slides it along) */
+interface HostBossBar extends BossBar {
+  name: string;
+  color: string;
+  overlay: string;
+  progress: number;
+  playBossMusic: boolean;
+  createWorldFog: boolean;
+  darkenScreen: boolean;
+}
+
+/** (guests' boss bars) each guest's level's session: its host's bars are what its own player is shown (game/bossBars.ts) */
+const sessionOfLevel = new WeakMap<Level, ClientSession>();
+addBossBarSource((level, viewer) => {
+  const s = sessionOfLevel.get(level);
+  return s && viewer === s.player ? [...s.bossBars.values()] : [];
+});
+
 export interface GuestIdentity {
   name: string;
   uuid: string;
@@ -174,6 +194,8 @@ export class ClientSession {
   /** (a stuck loading screen's report) the host's latest packets: their ids, and the ticks they came in */
   private readonly latelyIds: number[] = [];
   private readonly latelyAt: number[] = [];
+  /** (guests' boss bars) the bars the host shows us, by its ids (vanilla BossHealthOverlay.events) */
+  readonly bossBars = new Map<number, HostBossBar>();
 
   constructor(readonly transport: Transport, readonly hooks: ClientHooks, readonly me: GuestIdentity) {
     transport.onPeer((peer, joined, reason) => {
@@ -501,6 +523,23 @@ export class ClientSession {
         return;
       case CB.ChangeDimension:
         return this.changeDimension(p[1] as string, p[2] as ReceivingReason);
+      case CB.BossEvent: {
+        const [, bid, name, color, overlay, progress, flags] = p as [number, number, string, string, string, number, number];
+        let b = this.bossBars.get(bid);
+        if (!b) this.bossBars.set(bid, (b = { name: '', color, overlay, progress, playBossMusic: false, createWorldFog: false, darkenScreen: false }));
+        // (a name is plain text: control characters and the formatting sign taken out, as a menu's title is)
+        b.name = name.replace(/[\u0000-\u001f\u007f§]/g, '');
+        b.color = color;
+        b.overlay = overlay;
+        b.progress = progress;
+        b.darkenScreen = (flags & 1) !== 0;
+        b.playBossMusic = (flags & 2) !== 0;
+        b.createWorldFog = (flags & 4) !== 0;
+        return;
+      }
+      case CB.BossEventRemove:
+        this.bossBars.delete(p[1] as number);
+        return;
       case CB.UpdateAdvancements: {
         const changes = readProgress(p[2] as Value[]);
         if (!changes) return this.fail('an advancement that does not exist');
@@ -531,6 +570,7 @@ export class ClientSession {
     this.level = level;
     this.player = player;
     this.sink = chunks;
+    sessionOfLevel.set(level, this);
     this.menus = new ClientMenus(player, {
       send: (pk) => this.send(pk),
       entity: (id) => this.byNetId(id),
@@ -566,6 +606,8 @@ export class ClientSession {
     this.waitingCount = 0;
     this.pending.clear();
     this.target = null;
+    // (the host's bars are its old dimension's: those of the new come as it shows them)
+    this.bossBars.clear();
     this.level!.destroyProgress.clear();
     this.player!.removeVehicle();
     this.rainTarget = this.thunderTarget = 0;

@@ -201,6 +201,14 @@ export const CB = {
    * net/advancementSync.ts). Numbered from 100, out of the way of packets added elsewhere
    */
   UpdateAdvancements: 100,
+  /**
+   * (guests' boss bars) [id, name, colour, overlay, progress 0-1, flags (1 darkens the sky, 2 the boss music, 4 the
+   * fog)]: a boss bar shown to the guest, or changed: all of it (vanilla ClientboundBossEventPacket's ADD, and its
+   * UPDATE_PROGRESS, UPDATE_NAME, UPDATE_STYLE and UPDATE_PROPERTIES in one)
+   */
+  BossEvent: 101,
+  /** (guests' boss bars) [id]: a bar the guest isn't shown any more (vanilla ClientboundBossEventPacket's REMOVE) */
+  BossEventRemove: 102,
 } as const;
 
 /** the dimensions there are (vanilla's three: a guest takes no other) */
@@ -429,6 +437,11 @@ CLIENTBOUND[CB.PlaceGhostRecipe] = [CONTAINER, RECIPE];
 CLIENTBOUND[CB.RecipeBookAdd] = [arr(4096, RECIPE), bool];
 const DIMENSION: Check = (v) => typeof v === 'string' && DIMENSION_IDS.includes(v);
 CLIENTBOUND[CB.OpenSignEditor] = [BX, BY, BX, bool];
+// (guests' boss bars: vanilla BossEvent.BossBarColor and BossBarOverlay, as gui/bossOverlay.ts names them)
+export const BOSS_BAR_COLORS: readonly string[] = ['pink', 'blue', 'red', 'green', 'yellow', 'purple', 'white'];
+export const BOSS_BAR_OVERLAYS: readonly string[] = ['progress', 'notched_6', 'notched_10', 'notched_12', 'notched_20'];
+CLIENTBOUND[CB.BossEvent] = [ID, TEXT(256), (v) => typeof v === 'string' && BOSS_BAR_COLORS.includes(v), (v) => typeof v === 'string' && BOSS_BAR_OVERLAYS.includes(v), num(0, 1), int(0, 7)];
+CLIENTBOUND[CB.BossEventRemove] = [ID];
 // (guests' advancements: some 120 of them, the most criteria one has is Adventuring Time's 53)
 CLIENTBOUND[CB.UpdateAdvancements] = [bool, arr(512, (v) => Array.isArray(v) && v.length === 2 && str(1, 64)(v[0]) && arr(128, str(1, 64))(v[1]))];
 CLIENTBOUND[CB.ChangeDimension] = [DIMENSION, (v) => typeof v === 'string' && (RECEIVING_REASONS as readonly string[]).includes(v)];

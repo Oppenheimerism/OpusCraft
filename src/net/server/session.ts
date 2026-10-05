@@ -17,6 +17,7 @@ import { offlinePlayerUuid } from '../offlineUuid';
 import type { HostServer } from './hostServer';
 import { EntityTracker } from './entityTracker';
 import { GuestProgress } from './guestProgress';
+import { BossBarSync } from './bossBarSync';
 import type { Entity } from '../../entity/entity';
 import { Player } from '../../entity/player';
 import { Interaction } from '../../game/interaction';
@@ -154,6 +155,8 @@ export class ServerPlayerSession {
   readonly recipes = new PlayerRecipeBook();
   /** (guests' advancements) its advancements (vanilla ServerPlayer.getAdvancements): met here, kept with its player, told to it */
   readonly progress = new GuestProgress(this);
+  /** (guests' boss bars) the boss bars it's shown, as it was last told them */
+  private readonly bossBars = new BossBarSync();
   /** when each plain message was last shown (so a held button doesn't repeat it every few ticks) */
   private readonly notices = new Map<string, number>();
   /** (logging in) its player as the world last kept it, being read: the guest is let in once it's here */
@@ -809,6 +812,7 @@ export class ServerPlayerSession {
     this.blockUpdates = [];
     this.tracker.clear();
     this.seen.clear();
+    this.bossBars.clear();
     this.moves = [];
     this.target = NO_TARGET;
     this.attackPressed = this.usePressed = this.attackHeld = this.useHeld = false;
@@ -1037,6 +1041,7 @@ export class ServerPlayerSession {
     this.syncStatus();
     this.placedByHost();
     this.progress.flush();
+    this.bossBars.sync(this.level, this.player!, (pk) => this.send(pk));
     this.sendOut();
   }
 

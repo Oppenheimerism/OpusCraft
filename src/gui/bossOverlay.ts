@@ -18,6 +18,8 @@ export interface BossBar {
   readonly progress: number;
   readonly playBossMusic: boolean;
   readonly createWorldFog: boolean;
+  /** vanilla BossEvent.darkenScreen (the wither's): the sky darkens while it's shown (absent: no) */
+  readonly darkenScreen?: boolean;
 }
 
 /** vanilla LerpingBossEvent */
@@ -99,6 +101,12 @@ export class BossHealthOverlay {
   /** vanilla shouldCreateWorldFog */
   shouldCreateWorldFog(): boolean {
     for (const l of this.events.keys()) if (l.createWorldFog) return true;
+    return false;
+  }
+
+  /** vanilla shouldDarkenScreen */
+  shouldDarkenScreen(): boolean {
+    for (const l of this.events.keys()) if (l.darkenScreen) return true;
     return false;
   }
 }
