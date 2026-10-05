@@ -8,7 +8,8 @@
 // ServerPlayer.showEndCredits), the End Poem and the credits roll on the way
 // home: out of the End at once, home loading behind them, and back at the bed
 // or the world spawn with everything they had once they're over or skipped
-// (vanilla WinScreen, then PERFORM_RESPAWN keeping everything).
+// (vanilla WinScreen, then PERFORM_RESPAWN keeping everything). In a world open
+// to LAN the world goes on meanwhile, and each guest gets its own poem.
 //
 // Only one dimension is loaded at a time, so a mob, an item or a cart that
 // goes through while the player stays behind is written down (PortalArrivals)
@@ -87,18 +88,34 @@ function playerThrough(g: Game, from: DimensionType, to: DimensionType): void {
 
 /**
  * vanilla ServerPlayer.showEndCredits: seen now, out of the End, and the End Poem and the credits over the loading
- * (vanilla ClientboundGameEventPacket.WIN_GAME); once they're done, home (PERFORM_RESPAWN)
+ * (vanilla ClientboundGameEventPacket.WIN_GAME); once they're done, home (PERFORM_RESPAWN).
+ *
+ * A world open to LAN goes on for its guests meanwhile, as vanilla's server goes on for everyone else: home comes in
+ * behind the poem as it would after any end portal, and the host's player is put there, but out of the level till the
+ * poem is over (vanilla's is out of every level: Player.wonGame). Each guest taken along that hasn't seen the poem gets
+ * its own, skippable, and comes home once its own is over (net/server: ServerPlayerSession.winGame); the others come
+ * in as home does
  */
 function showEndCredits(g: Game): void {
-  g.player.seenCredits = true;
+  const p = g.player;
+  p.seenCredits = true;
   let over = !g.winScreenFactory;
-  goHome(g, THE_END, () => over, true);
+  const lan = !!g.server;
+  goHome(g, THE_END, lan ? null : () => over, true);
+  g.server?.showEndCredits();
   if (over) return;
+  if (lan) p.wonGame = true;
   g.setScreen(
     g.winScreenFactory!(() => {
       over = true;
+      if (p.wonGame) {
+        // (back in the level where home put it: nothing that pushed at it meanwhile carried over)
+        p.wonGame = false;
+        p.dx = p.dy = p.dz = 0;
+        p.fallDistance = 0;
+      }
       // (home still loading: its "Loading terrain..." over the starfield, as after any end portal)
-      g.setScreen(g.receivingScreenFactory ? g.receivingScreenFactory('end_portal') : null);
+      g.setScreen(!g.spawned && g.receivingScreenFactory ? g.receivingScreenFactory('end_portal') : null);
     }),
   );
 }

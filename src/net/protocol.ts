@@ -61,7 +61,7 @@ export const SB = {
   SlotStateChanged: 15,
   /** [slot]: survival's pick-block, a slot of the inventory brought to hand (vanilla ServerboundPickItemPacket) */
   PickItem: 16,
-  /** [action]: 0 respawn (vanilla ServerboundClientCommandPacket PERFORM_RESPAWN) */
+  /** [action]: 0 respawn, or home once the End Poem is over (vanilla ServerboundClientCommandPacket PERFORM_RESPAWN) */
   ClientCommand: 17,
   /** [slot, pages, title or null]: a book and quill written in, or signed with the title (vanilla ServerboundEditBookPacket) */
   EditBook: 18,
@@ -209,6 +209,12 @@ export const CB = {
   BossEvent: 101,
   /** (guests' boss bars) [id]: a bar the guest isn't shown any more (vanilla ClientboundBossEventPacket's REMOVE) */
   BossEventRemove: 102,
+  /**
+   * (the End Poem) []: taken out of the End by the host's exit portal, the guest hasn't seen the End Poem: it rolls,
+   * with the credits, over the loading screen (vanilla ClientboundGameEventPacket.WIN_GAME); once it's over or skipped
+   * the guest says so (SB.ClientCommand 0, vanilla PERFORM_RESPAWN) and the host puts its player home
+   */
+  WinGame: 103,
 } as const;
 
 /** the dimensions there are (vanilla's three: a guest takes no other) */
@@ -442,6 +448,7 @@ export const BOSS_BAR_COLORS: readonly string[] = ['pink', 'blue', 'red', 'green
 export const BOSS_BAR_OVERLAYS: readonly string[] = ['progress', 'notched_6', 'notched_10', 'notched_12', 'notched_20'];
 CLIENTBOUND[CB.BossEvent] = [ID, TEXT(256), (v) => typeof v === 'string' && BOSS_BAR_COLORS.includes(v), (v) => typeof v === 'string' && BOSS_BAR_OVERLAYS.includes(v), num(0, 1), int(0, 7)];
 CLIENTBOUND[CB.BossEventRemove] = [ID];
+CLIENTBOUND[CB.WinGame] = [];
 // (guests' advancements: some 120 of them, the most criteria one has is Adventuring Time's 53)
 CLIENTBOUND[CB.UpdateAdvancements] = [bool, arr(512, (v) => Array.isArray(v) && v.length === 2 && str(1, 64)(v[0]) && arr(128, str(1, 64))(v[1]))];
 CLIENTBOUND[CB.ChangeDimension] = [DIMENSION, (v) => typeof v === 'string' && (RECEIVING_REASONS as readonly string[]).includes(v)];

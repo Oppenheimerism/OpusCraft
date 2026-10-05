@@ -1452,7 +1452,8 @@ export class Game {
         this.server?.hostArrived();
         if (!this.joined) this.tutorial.start();
         this.joined = true;
-        if (this.screen) this.setScreen(null);
+        // (not the End Poem, which a world open to LAN plays on over: endTravel.ts)
+        if (this.screen && !this.player.wonGame) this.setScreen(null);
         this.input.lock();
         this.loadingTicks = 0;
       } else {
@@ -1556,7 +1557,8 @@ export class Game {
     this.renderer.particles?.tick();
     this.renderer.entities.tickPickups();
     this.hud.tick(this);
-    this.sound.tick(this);
+    // (out of the level while the End Poem plays to it, the host hears nothing of it, the credits' music alone: Player.wonGame)
+    if (!p.wonGame) this.sound.tick(this);
     if (client) return client.sendTick();
     if (++this.autosaveTimer >= 6000) {
       this.autosaveTimer = 0;
@@ -1617,16 +1619,21 @@ export class Game {
     if (this.icons.builtScale !== guiScale) this.icons.build(guiScale);
     g.clear();
     this.blurRequested = false;
-    if (!this.inWorld || !this.spawned) {
+    // (multiplayer: the host's own player out of the level while the End Poem plays to it, the level going on for its
+    // guests: the poem over the end portal's starfield, as while home loads; Player.wonGame)
+    const outOfWorld = this.inWorld && this.spawned && this.player.wonGame;
+    if (this.inWorld && !outOfWorld) this.starfieldFrom = this.level.gameTime;
+    if (!this.inWorld || !this.spawned || outOfWorld) {
       const gl = this.gl;
-      if (this.inWorld && this.receivingPortal) {
+      const portal = outOfWorld ? 'end_portal' : this.receivingPortal;
+      if (this.inWorld && portal) {
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);
         gl.viewport(0, 0, this.canvas.width, this.canvas.height);
         gl.clearColor(0, 0, 0, 1);
         gl.clear(gl.COLOR_BUFFER_BIT);
         // (the level's clock stands still till the player is in: the client's keeps the starfield drifting — over the
-        // End Poem and the credits, minutes long)
-        if (this.receivingPortal === 'end_portal') this.renderer.end.renderScreen(EndRenderer.shaderTime(this.level.gameTime + this.ticks, partial));
+        // End Poem and the credits, minutes long; and on from there, a tick a tick, if the level goes on behind them)
+        if (portal === 'end_portal') this.renderer.end.renderScreen(EndRenderer.shaderTime(this.starfieldFrom + this.ticks, partial));
         else this.overlay.renderScreenSprite('nether_portal', 1, this.canvas.width, this.canvas.height);
       } else if (this.panorama && this.panorama.state === 'ready') this.panorama.render(this.panoramaFade);
       else {
@@ -1650,6 +1657,10 @@ export class Game {
     this.applyBlur();
   }
 
+  /** (the loading screen's starfield) the level's clock it drifts from: still while the level is, as it is behind the End Poem */
+  private starfieldFrom = 0;
+  /** (a guest) the End Poem it's watching, till it's over (guestWinGame) */
+  private guestPoem: { screen: Screen | null; over: boolean } | null = null;
   /** menu background blur (vanilla 1.20.5+ post-effect), done with a CSS filter on the 3D canvas */
   private blurRequested = false;
   private blurApplied = '';
@@ -2233,7 +2244,36 @@ export class Game {
       advancements: (changes, reset) => {
         for (const a of applyProgress(this.advancements, changes, reset)) if (a.toast !== false) this.toasts.add(new AdvancementToast(a.title, a.frame, a.icon));
       },
+      winGame: () => this.guestWinGame(),
     }, me);
+  }
+
+  /**
+   * (a guest) vanilla handleGameEvent WIN_GAME: taken out of the End by the host's exit portal for the first time, the
+   * End Poem and the credits over the loading screen the host's ChangeDimension put up, as for the host's own player
+   * (endTravel.showEndCredits); once they're over or skipped (vanilla PERFORM_RESPAWN), the host puts our player home,
+   * and "Loading terrain..." till it has
+   */
+  private guestWinGame(): void {
+    const client = this.client;
+    if (!client) return;
+    if (!this.winScreenFactory) return client.creditsOver();
+    const poem = { screen: null as Screen | null, over: false };
+    poem.screen = this.winScreenFactory(() => {
+      poem.over = true;
+      if (this.guestPoem === poem) this.guestPoem = null;
+      client.creditsOver();
+      this.setScreen(!this.spawned && this.receivingScreenFactory ? this.receivingScreenFactory('end_portal') : null);
+    });
+    this.guestPoem = poem;
+    this.waitForPoem(poem);
+    this.setScreen(poem.screen);
+  }
+
+  /** (a guest's End Poem) not in place till it's over, whatever the host does meanwhile */
+  private waitForPoem(poem: { over: boolean }): void {
+    const then = this.arrival;
+    this.arrival = (g) => poem.over && (!then || then(g));
   }
 
   /**
@@ -2266,6 +2306,9 @@ export class Game {
     this.spawned = false;
     this.loadingTicks = 0;
     this.receivingPortal = reason === 'other' ? null : reason;
+    // (watching the End Poem, the host gone on meanwhile: it stays up, the next dimension loading behind it)
+    const poem = this.guestPoem;
+    if (poem && this.screen === poem.screen) return this.waitForPoem(poem);
     this.setScreen(this.receivingScreenFactory ? this.receivingScreenFactory(reason) : null);
   }
 
@@ -2296,6 +2339,7 @@ export class Game {
     const c = this.client;
     if (!c) return false;
     this.client = null;
+    this.guestPoem = null;
     this.mode = 'single';
     this.clock.stop();
     window.removeEventListener('pagehide', this.onPageHide);
@@ -2310,6 +2354,7 @@ export class Game {
   private connectionLost(reason: string): void {
     const wasIn = this.inWorld;
     this.client = null;
+    this.guestPoem = null;
     this.mode = 'single';
     this.clock.stop();
     window.removeEventListener('pagehide', this.onPageHide);

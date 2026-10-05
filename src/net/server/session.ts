@@ -168,6 +168,13 @@ export class ServerPlayerSession {
   /** (respawning at a bed whose chunks aren't in) ticks left to wait for them, and whether they've been asked for */
   private respawnWait = 0;
   private respawnTicket = false;
+  /**
+   * (the End Poem) vanilla ServerPlayer.wonGame: taken out of the End by the host's exit portal, it's watching the End
+   * Poem and the credits, out of the world (travelling) till it says they're over (creditsOver); then `afterCredits`
+   * till it's home (vanilla PlayerList.respawn(player, true): at its bed or by the world spawn, keeping everything)
+   */
+  private wonGame = false;
+  private afterCredits = false;
   /** (stage 5) when it last asked for the world again from its loading screen (resync), in its ticks */
   private lastResync = -Infinity;
 
@@ -185,6 +192,14 @@ export class ServerPlayerSession {
   /** it said who it is and was let in, its player still being read: a seat, and its name and uuid, are taken */
   get loggingIn(): boolean {
     return this.reading !== null && this.state === 'login';
+  }
+
+  /**
+   * (the End Poem) out of the world on its way home for a reason of its own, not left behind: its End Poem playing, or,
+   * once it's over, its bed's chunks coming in
+   */
+  get held(): boolean {
+    return this.travelling && (this.wonGame || this.respawnWait > 0);
   }
 
   // -------------------------------------------------------------------------
@@ -332,7 +347,7 @@ export class ServerPlayerSession {
       case SB.Disconnect:
         return this.gone('left');
       case SB.ClientCommand:
-        return this.respawn();
+        return this.wonGame ? this.creditsOver() : this.respawn();
       case SB.PickItem:
         return this.pickSlot(p[1] as number);
       case SB.ContainerClick:
@@ -382,6 +397,10 @@ export class ServerPlayerSession {
       case SB.Resync:
         // (on its way with the host, which isn't there itself yet: it's put in when the host is, as ever)
         return this.resync(p[1] as number[], p[2] as number, p[3] as boolean);
+      case SB.ClientCommand:
+        // (its End Poem over before the host is home: it comes in with the host)
+        if (this.wonGame) this.creditsOver();
+        return;
     }
   }
 
@@ -418,6 +437,8 @@ export class ServerPlayerSession {
       },
     });
     if (this.travelling) {
+      // (its End Poem over as far as it knows, though what said so never came: it asks from its loading screen)
+      if (this.wonGame) return this.creditsOver();
       // (forgotten on the way: the host has been there a while)
       if (hostThere) this.arrive();
       return;
@@ -833,7 +854,18 @@ export class ServerPlayerSession {
    * its inventory as it is
    */
   arrive(): void {
-    if (this.state !== 'play' || !this.travelling) return;
+    if (this.state !== 'play' || !this.travelling || this.held) return;
+    // (home after its End Poem, in the Overworld: at its bed, whose chunks are asked for first and waited for a few
+    // seconds at most, as a respawn's are)
+    if (this.afterCredits && this.level.world.dim.id === 'overworld' && !this.bedLoaded()) return this.askForBed();
+    this.comeIn();
+  }
+
+  /**
+   * in the host's dimension at last: beside the host; or, home after its End Poem (vanilla PlayerList.respawn(player,
+   * true)), at its bed or by the world spawn, a new player keeping everything but its fire and its breath
+   */
+  private comeIn(): void {
     this.travelling = false;
     const p = this.player!, host = this.level.player;
     p.removed = false;
@@ -843,10 +875,39 @@ export class ServerPlayerSession {
     p.fallDistance = 0;
     p.dx = p.dy = p.dz = 0;
     this.menus!.resync();
-    this.teleport(host.x, host.y, host.z, host.yaw, host.pitch);
-    // (vanilla ServerPlayer.triggerDimensionChangeTriggers, where it came in)
+    if (this.afterCredits) {
+      this.afterCredits = false;
+      p.remainingFireTicks = 0;
+      p.air = 300;
+      const [x, y, z, yaw] = this.respawnPlace();
+      this.teleport(x, y, z, yaw, 0);
+    } else this.teleport(host.x, host.y, host.z, host.yaw, host.pitch);
+    // (vanilla ServerPlayer.triggerDimensionChangeTriggers, where it came in; after the End Poem, handleClientCommand's
+    // CHANGED_DIMENSION from the End)
     const to = this.level.world.dim.id;
     if (this.travelFrom !== to) this.progress.changedDimension(this.travelFrom, to, p);
+  }
+
+  /**
+   * (HostServer.showEndCredits, the host going home through the End's exit portal) vanilla ServerPlayer.showEndCredits:
+   * taken along alive, it hasn't seen the End Poem: seen now, and shown it (WIN_GAME), out of the world till it's over
+   */
+  winGame(): void {
+    const p = this.player;
+    if (this.state !== 'play' || !this.travelling || !p || p.seenCredits || p.health <= 0 || p.dead) return;
+    p.seenCredits = true;
+    this.wonGame = true;
+    this.send([CB.WinGame]);
+  }
+
+  /**
+   * (the guest's PERFORM_RESPAWN while it's watching) its End Poem is over or skipped: home, now, or with the host if it
+   * isn't home itself yet (hostArrived)
+   */
+  private creditsOver(): void {
+    this.wonGame = false;
+    this.afterCredits = true;
+    if (!this.server.travelling) this.arrive();
   }
 
   // -------------------------------------------------------------------------
@@ -861,8 +922,12 @@ export class ServerPlayerSession {
     if (this.state !== 'play') return;
     if (this.ticks - this.lastHeard > TIMEOUT_TICKS) return this.disconnect('Timed out');
     if (this.ticks % KEEPALIVE_TICKS === 0) this.send([CB.KeepAlive, ++this.keepAliveId]);
-    // (on its way to another dimension: nothing of this one to do)
-    if (this.travelling) return;
+    // (on its way to another dimension: nothing of this one to do; home after its End Poem, once its bed's chunks are in
+    // or it has waited long enough)
+    if (this.travelling) {
+      if (this.respawnWait > 0 && (this.bedLoaded() || --this.respawnWait === 0)) this.comeIn();
+      return;
+    }
     if (this.dropSpam > 0) this.dropSpam--;
     // (a rider is where its mount took it, round which its chunks are sent)
     const p = this.player!;
@@ -1252,14 +1317,16 @@ export class ServerPlayerSession {
   private respawn(): void {
     const p = this.player!;
     if ((p.health > 0 && !p.dead) || this.travelling || this.respawnWait > 0) return;
-    if (this.level.world.dim.id === 'overworld' && !this.bedLoaded()) {
-      const [bx, , bz] = p.respawnPos!;
-      this.respawnWait = RESPAWN_BED_WAIT_TICKS;
-      this.respawnTicket = true;
-      this.server.hooks.setTicket(`respawn:${p.id}`, [bx >> 4, bz >> 4, 1]);
-      return;
-    }
+    if (this.level.world.dim.id === 'overworld' && !this.bedLoaded()) return this.askForBed();
     this.respawnNow();
+  }
+
+  /** its bed's chunks asked for, to wait for them a few seconds at most (respawnWait) */
+  private askForBed(): void {
+    const p = this.player!, [bx, , bz] = p.respawnPos!;
+    this.respawnWait = RESPAWN_BED_WAIT_TICKS;
+    this.respawnTicket = true;
+    this.server.hooks.setTicket(`respawn:${p.id}`, [bx >> 4, bz >> 4, 1]);
   }
 
   private releaseRespawnTicket(): void {
@@ -1275,10 +1342,22 @@ export class ServerPlayerSession {
   }
 
   private respawnNow(): void {
+    const p = this.player!;
+    resetForRespawn(p, !!this.level.gameRules.keepInventory);
+    const [x, y, z, yaw] = this.respawnPlace();
+    this.send([CB.Respawn]);
+    this.teleport(x, y, z, yaw, 0);
+    p.dx = p.dy = p.dz = 0;
+  }
+
+  /**
+   * vanilla ServerPlayer.findRespawnPositionAndUseSpawnBlock: where it comes back, and which way it faces: its bed if
+   * it's still there and clear, else by the world spawn (the bed forgotten, and the guest told so)
+   */
+  private respawnPlace(): [number, number, number, number] {
     const p = this.player!, level = this.level;
     this.releaseRespawnTicket();
     this.respawnWait = 0;
-    resetForRespawn(p, !!level.gameRules.keepInventory);
     // (a bed that couldn't be looked at, its chunks not in or the host elsewhere, is kept)
     const looked = level.world.dim.id === 'overworld' && this.bedLoaded();
     const bed = looked ? findRespawn(level, p) : null;
@@ -1287,9 +1366,7 @@ export class ServerPlayerSession {
       p.respawnPos = null;
     }
     const [x, y, z] = bed ? [bed.x, bed.y, bed.z] : this.server.hooks.spawnPoint();
-    this.send([CB.Respawn]);
-    this.teleport(x, y, z, bed ? bed.yaw : 0, 0);
-    p.dx = p.dy = p.dz = 0;
+    return [x, y, z, bed ? bed.yaw : 0];
   }
 
   /** (its Interaction) a bed it used: to sleep in, or set its spawn by (game/sleep.ts, as the host's own player does) */

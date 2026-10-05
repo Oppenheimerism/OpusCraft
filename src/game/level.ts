@@ -300,15 +300,16 @@ export class Level {
 
   /**
    * vanilla ServerLevel.players: everyone in this level, in the order they came, `player` among them (first, if it
-   * never came in as an entity; whether removed or not, as before there were others)
+   * never came in as an entity; whether removed or not, as before there were others); not one out of it while the End
+   * Poem plays to it (Player.wonGame)
    */
   players(): readonly Player[] {
     const list = this.playerList, own = this.player;
     let whole = !own || list.includes(own);
-    for (let i = 0; whole && i < list.length; i++) if (list[i].removed) whole = false;
+    for (let i = 0; whole && i < list.length; i++) if (list[i].removed || list[i].wonGame) whole = false;
     if (whole) return list;
-    const out = list.filter((p) => !p.removed);
-    if (own && !out.includes(own)) out.unshift(own);
+    const out = list.filter((p) => !p.removed && !p.wonGame);
+    if (own && !own.wonGame && !out.includes(own)) out.unshift(own);
     return out;
   }
 
@@ -374,7 +375,8 @@ export class Level {
     const out: Entity[] = [];
     let dragons = false;
     for (const e of this.entities) {
-      if (e.removed || e === except) continue;
+      // (nor a player out of the level while the End Poem plays to it: Player.wonGame)
+      if (e.removed || e === except || (e as Player).wonGame) continue;
       if ((e as { subEntities?: Entity[] }).subEntities) dragons = true;
       if (!e.bb.intersects(box)) continue;
       if (filter && !filter(e)) continue;
@@ -668,7 +670,7 @@ export class Level {
     for (const [e, arrive] of this.inTransit) if (e.removed || arrive()) this.inTransit.delete(e);
     for (let i = 0; i < this.entities.length; i++) {
       const e = this.entities[i];
-      if (e.removed || e.vehicle || this.inTransit.has(e)) continue;
+      if (e.removed || e.vehicle || this.inTransit.has(e) || (e as Player).wonGame) continue;
       // (vanilla LocalPlayer.tick: the player stays put while the chunk they're in hasn't come, after a /tp far off)
       if (e.type === 'player' ? !this.world.isLoaded(Math.floor(e.x), Math.floor(e.z)) : !this.isEntityTicking(e.x, e.z)) continue;
       e.tick();

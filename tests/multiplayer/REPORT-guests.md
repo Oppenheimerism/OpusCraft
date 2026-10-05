@@ -11,8 +11,8 @@ on two computers found a guest couldn't do. Each lettered milestone is committed
 | a | Advancements for guests | done | a96b5a5 A guest playing on someone's LAN world now has advancements of its own… |
 | b | Boss bars for guests | done | 6f92a50 A guest now sees the boss bars the host's world shows it… |
 | c | Hitting the ender dragon; the fight from a guest's side | done | 5d949fb A guest can hurt the Ender Dragon… |
-| d | Firework rockets for a gliding guest | done | (this commit) |
-| e | The End Poem | not started | |
+| d | Firework rockets for a gliding guest | done | 97d0271 A firework rocket now speeds up a guest gliding with an elytra… |
+| e | The End Poem | done | (this commit) |
 | f | Being disconnected | not started | |
 | g | The survival sweep | not started | |
 
@@ -124,6 +124,49 @@ and hears it go, its sparks and its burst with its stars as made) and one shot f
 the other hand, flying along its look and drawn on its back, heard; bursting on the pig it hits and hurting it, the
 guest out of its reach unhurt). Both worked; nothing changed there.
 
+### e. The End Poem
+
+**Why a guest was stuck.** The host's world is the only one there is: when the host leaves a dimension its guests go
+with it, and come in beside it once it's there. Going home through the End's exit portal for the first time, the
+host's own arrival waited for its poem (seven minutes and more), and its level stood still meanwhile, only keeping its
+guests alive on the way (`HostServer.idleTick`). So every guest sat on "Loading terrain..." until the host's poem was
+over or skipped, with nothing to do and no way on.
+
+**What vanilla does.** The player going through gets the poem (`ServerPlayer.showEndCredits` → `WIN_GAME`) and is taken
+out of its level meanwhile; the server goes on for everyone else. When the poem is over or skipped, the client sends
+`PERFORM_RESPAWN` and the player comes back at its bed or by the world spawn, keeping everything
+(`PlayerList.respawn(player, true)`, with the `CHANGED_DIMENSION` trigger from the End). Each player sees it once
+(`seenCredits`).
+
+**Decision: each gets its own poem, the world goes on, nobody waits for anybody.** In a world open to LAN:
+
+- **The host:** the world goes on during its poem, as vanilla's server does. Home comes in behind the poem as after any
+  end portal and the host's player is put there, but **out of the level till its poem is over**, as vanilla's is out of
+  every level (`Player.wonGame`): not among the level's players nor the entities anything finds (so no mob goes for it,
+  nothing pushes, hits or picks it, it doesn't count for sleeping or spawning), not ticking, not hurt, gone from the
+  guests' worlds, and hearing nothing of the world (the credits' music alone). Its poem stays over the end portal's
+  starfield as before. Over or skipped (Esc), it's back in the level where home put it.
+- **Each guest taken along that hasn't seen the poem gets its own** (`CB.WinGame`): the same screen as the host's,
+  skippable with Esc, over its loading screen's stars. Meanwhile it's out of the world (still on its way, as any guest
+  taken along is), nobody times out, and its loading screen doesn't ask the host for the world again (it isn't stuck,
+  it's watching). Over or skipped, its game says so (`SB.ClientCommand` 0, vanilla's `PERFORM_RESPAWN`), "Loading
+  terrain..." comes up, and the host brings it home as vanilla's respawn after the credits does: **at its bed** (whose
+  chunks are asked for and waited for a few seconds, as a respawn's are) **or by the world spawn**, keeping everything
+  but its fire and its breath, its trip from the End counted. If the host has gone on meanwhile (say, to the Nether),
+  its poem rolls on as it's taken along, and it comes in beside the host there.
+- **A guest that has seen the poem, or a dead one,** comes in beside the host as soon as home is in, as it always has.
+- **A guest that leaves in the middle of its poem** is kept where it was in the End, the poem seen (vanilla keeps the
+  player where it was too).
+- **Never stuck:** the host doesn't wait for its guests' poems, nor they for the host's or each other's. A guest whose
+  "over" got lost would ask for the world again from its loading screen (as any slow guest does), and the host takes
+  that as its poem over too.
+- **Single-player is unchanged:** with no LAN, the host's arrival still waits for its poem, its level standing still.
+
+Why not something simpler: making guests wait for the host's poem is the bug; giving guests no poem and letting them in
+beside the host while its own plays would leave the host's player standing frozen in a running world (and take the
+poem from each guest); skipping the host's poem when it has guests would take it from the host. Each player's own
+poem, out of the world while it plays, back home after, is vanilla's own behaviour.
+
 ## 2. Shared files changed (for merging)
 
 | File | What changed, and the hook |
@@ -147,10 +190,22 @@ guest out of its reach unhurt). Both worked; nothing changed there.
 | `src/net/client/clientSession.ts` (again) | `netIdOf(e)`: a part of a copy is named by its dragon's id and its place (`MovePlayer`'s target). |
 | `src/entity/fireworkRocket.ts` | the push to a glider moved into `boostGlider(a)` (the host's tick unchanged); `animateMirror()` for a guest's copy. |
 | `src/net/client/entityMirror.ts` | calls `animateMirror()` on any copy that has one, not only living ones (two lines). |
+| `src/game/endTravel.ts` | `showEndCredits`: with `g.server` (open to LAN) home doesn't wait for the poem, the host's player is `wonGame` while it plays, `g.server.showEndCredits()` gives the guests theirs; after it, "Loading terrain..." only if home isn't in yet. Single-player takes the same lines as before. |
+| `src/game/game.ts` (again) | at arrival the poem isn't closed if the host is out of the world; `render` draws the starfield behind it while the host is out (`starfieldFrom`: the starfield's clock, the same as before on a loading screen); `sound.tick` skipped while out; the guest hook `winGame` → `guestWinGame()` (the WinScreen over the loading, `creditsOver` once it's done, the arrival waiting for it); `guestChangedDimension` leaves the poem up if one is playing; `guestPoem` let go on leaving. |
+| `src/entity/player.ts` | `wonGame` (vanilla `ServerPlayer.wonGame`); `isInvulnerableTo` is true while it's set. |
+| `src/game/level.ts` (again) | `players()`, `getEntities()` and the entity loop in `tick()` leave out a `wonGame` player (never set in single-player). |
+| `src/net/effects.ts` | the host's own ears don't hear the level while its player is `wonGame` (the guests still do). |
+| `src/net/entityData.ts` (again) | a player's `wonGame` isn't sent. |
+| `src/net/protocol.ts` (again) | `CB.WinGame` = 103 (no fields); `SB.ClientCommand`'s doc. |
+| `src/net/server/session.ts` (again) | `winGame()`, `creditsOver()`, `held`; `arrive()` now waits for a bed's chunks after a poem and puts the guest in with `comeIn()` (the old body, plus the respawn-after-credits placing); `askForBed()` and `respawnPlace()` taken out of `respawn()`/`respawnNow()` (a death's respawn does what it did); `ClientCommand` in `handle` and `handleIdle`; `resync` takes a watching guest's ask as its poem over; the bed wait in `tick()` while travelling. |
+| `src/net/server/hostServer.ts` (again) | `showEndCredits()`; the "left behind" check skips `held` guests. |
+| `src/net/client/clientSession.ts` (again) | `CB.WinGame` → `ClientHooks.winGame` (straight `creditsOver()` without one); `inCredits` pauses `checkLoading`; `creditsOver()` sends `ClientCommand` 0 at once. |
+| `tests/multiplayer/lib.mjs` | the test guest's `winGame` hook counts `poems` (the test says when each is over). |
 
 New files: `src/net/advancementSync.ts`, `src/net/server/guestProgress.ts`, `src/game/progressTriggers.ts`,
 `src/game/bossBars.ts`, `src/net/server/bossBarSync.ts`, `tests/multiplayer/m8-advancements.mjs`,
-`tests/multiplayer/m8-bossbars.mjs`, `tests/multiplayer/m8-dragon.mjs`, `tests/multiplayer/m8-fireworks.mjs`.
+`tests/multiplayer/m8-bossbars.mjs`, `tests/multiplayer/m8-dragon.mjs`, `tests/multiplayer/m8-fireworks.mjs`,
+`tests/multiplayer/m8-endpoem.mjs`.
 
 ## 3. Open points
 
@@ -178,6 +233,16 @@ New files: `src/net/advancementSync.ts`, `src/net/server/guestProgress.ts`, `src
   `shouldRender`), so nothing else shows it.
 - (d) The guest's push lasts while the guest has the copy: from its coming to its going, each a one-way trip after the
   host's, so as long as the host's rocket lives.
+- (e) Guests taken along get the poem though they didn't step into the portal themselves (in vanilla each sees it when
+  it goes through on its own): taking guests along is how this game runs one dimension at a time, and giving each its
+  poem then is the nearest thing.
+- (e) The host's player waits out its poem at home in the Overworld (only one dimension runs), and the chunks round it
+  stay loaded; vanilla's is in no level and holds none.
+- (e) The host's player is put home as its poem starts (at its bed or near the world spawn), not as it ends, as
+  vanilla's respawn would: a bed broken meanwhile doesn't send it to the world spawn. Its trip home (`changed_dimension`)
+  counts as home comes in (no advancement hangs on End → Overworld).
+- (e) What can't be checked headless: the host's poem kept up through its arrival with the starfield behind it, and a
+  guest's poem kept up through a second `ChangeDimension`. Both are a few lines of `Game`; see the checklist.
 
 ## 4. Tests
 
@@ -211,6 +276,18 @@ New files: `src/net/advancementSync.ts`, `src/net/server/guestProgress.ts`, `src
   heard, its sparks, its burst and star); one shot from a crossbow (loaded from the other hand, shot along the look on
   its back, heard, bursting on a pig and hurting it). Without the fix, the speed checks fail (0.52 against 1.67). Passes
   in memory (repeatedly) and through the relay with lag (seeds 12345 and 777).
+- `tests/multiplayer/m8-endpoem.mjs`: 35 checks, six guests. The host through the exit portal the first time: seen,
+  out of the End at once, its poem over the loading, out of the level; everyone taken along; Alex, Cleo, Eve and Fay
+  get the poem, Bea (seen it) and Dee (dead) don't. Cleo skips hers before the host is home and comes in with it. Home
+  in, the host is put there at once with its poem still rolling; Bea and dead Dee come in beside it, Cleo by the world
+  spawn (its trip from the End counted), the three still watching stay out. The level goes on; the host's player isn't
+  among the players or the entities found, isn't ticking or hurt, and is gone from the guests' worlds. Fay leaves in
+  the middle (kept in the End, the poem seen). 45 seconds on: nobody times out, no loading screen asks for the world
+  again. Alex's poem over: its far bed's chunks asked for and waited for, then home beside its bed, keeping its
+  diamonds, levels and health, fire out and breath back, its bed its own. The host's poem over: back where home put
+  it, among the players, in the guests' worlds. The host goes on to the Nether while Eve watches: Eve taken along, its
+  poem not restarted; over, it comes in beside the host there. Passes in memory and through the relay with lag (seeds
+  12345, 777 and 4242, repeatedly). `tests/end/credits.mjs` (single-player: home waits for the poem) passes unchanged.
 - Every other multiplayer suite passes, with all of `tests/end/`, `tests/saves/player.mjs`, the horse, wolf, frog and
   armadillo suites, and `tests/remaining-mobs/load-order.mjs`. `npm run typecheck` is clean.
 
@@ -239,3 +316,9 @@ Start LAN World; guest: Multiplayer → the world → a name → Join Server).
 10. The guest, wearing an elytra (`/give Alex elytra`, `/give Alex firework_rocket 16`), jumps off something high and
     glides, then right-clicks with a rocket: it shoots forward as the host does with one; the rocket used up. A rocket
     set off on the ground and one shot from a loaded crossbow (rocket in the other hand) fly and burst in both windows.
+11. The dragon dead, host and guest in the End, neither having left it through the exit portal before (a new world, a
+    new guest name): the host walks into the exit portal. Both windows show the End Poem over the stars. The guest
+    presses Esc: "Loading terrain..." for a moment, then it's home (its bed, or by the world spawn) and can play, while
+    the host's poem still rolls (the host's player isn't in the world meanwhile: the guest doesn't see it). The host
+    presses Esc: it's home, and the guest sees it appear. The second time through, nobody gets the poem, and the guest
+    comes in beside the host at once.
