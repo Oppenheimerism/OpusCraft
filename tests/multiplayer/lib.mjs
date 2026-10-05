@@ -112,7 +112,7 @@ export function makeHost(m, { world, level }, { makeChunk, x = 0.5, y = 65, z = 
  */
 export function makeGuest(host, name = 'Guest', { viewDistance = 3, uuid, code, transport = host.net.connect() } = {}) {
   const { m } = host;
-  const g = { name, transport, chat: [], overlays: [], disconnected: null, world: null, level: null, player: null, session: null, chunkAdds: 0, took: [], mounted: [], died: [], respawned: 0, recipes: new Set(), toasts: [], dims: [] };
+  const g = { name, transport, chat: [], overlays: [], disconnected: null, world: null, level: null, player: null, session: null, chunkAdds: 0, took: [], mounted: [], died: [], respawned: 0, recipes: new Set(), toasts: [], dims: [], poems: 0 };
   const hooks = {
     login(info) {
       const world = new m.World();
@@ -168,6 +168,8 @@ export function makeGuest(host, name = 'Guest', { viewDistance = 3, uuid, code, 
       g.player.dx = g.player.dy = g.player.dz = 0;
       g.player.fallDistance = 0;
     },
+    // (the End Poem: rolling till the test says it's over, g.session.creditsOver())
+    winGame: () => g.poems++,
   };
   g.session = new m.ClientSession(transport, hooks, { name, uuid: uuid ?? m.offlinePlayerUuid(name), viewDistance, code: code ?? host.server?.joinCode ?? '' });
   host.guests.push(g);

@@ -246,6 +246,16 @@ export class HostServer {
     this.dirtyBlockEntities.clear();
   }
 
+  /**
+   * (endTravel, the host going home through the End's exit portal, its guests taken along) vanilla
+   * ServerPlayer.showEndCredits for each: those that haven't seen the End Poem are shown it, and come home once it's over
+   * (ServerPlayerSession.winGame)
+   */
+  showEndCredits(): void {
+    if (this.closed) return;
+    for (const s of this.sessions.values()) s.winGame();
+  }
+
   /** (Game.tick, the host in place in its new dimension) its guests come in beside it */
   hostArrived(): void {
     if (this.closed || !this.travelling) return;
@@ -290,11 +300,11 @@ export class HostServer {
   tick(): void {
     if (this.closed) return;
     this.ticks++;
-    // (stage 5: a guest still on its way to this dimension though the host is here and its level ticking again: it was
-    // left behind somehow, and comes in now, said in the console so it can be looked into)
+    // (stage 5: a guest still on its way to this dimension though the host is here and its level ticking again, and not
+    // held by its End Poem: it was left behind somehow, and comes in now, said in the console so it can be looked into)
     if (!this.travelling)
       for (const s of this.sessions.values())
-        if (s.travelling) {
+        if (s.travelling && !s.held) {
           console.warn(`multiplayer: ${s.player?.profileName ?? 'a guest'} was still on its way to ${this.level.world.dim.id} though the host is here: put in now`);
           s.arrive();
         }

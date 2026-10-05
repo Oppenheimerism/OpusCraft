@@ -46,6 +46,8 @@ const NOT_SENT_BY_TYPE: Record<string, readonly string[]> = {
   // ((guests and the dragon) the trail its neck and tail follow, each side's own (vanilla: not synched), and the
   // host's countdown to its next growl
   ender_dragon: ['posPointer', 'growlTime'],
+  // ((the End Poem) out of the level while it plays, the host's own player is the guests' to forget, not to copy)
+  player: ['wonGame'],
 };
 // ((minecarts) a container minecart's or chest boat's loot table, and its seed, not yet rolled: vanilla sends neither)
 NOT_SENT.add('lootTable').add('lootSeed');

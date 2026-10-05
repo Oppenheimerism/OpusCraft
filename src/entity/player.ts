@@ -148,6 +148,12 @@ export class Player extends LivingEntity {
   respawnForced = false;
   /** vanilla ServerPlayer.seenCredits: they've left the End through its exit portal before (the End Poem and credits roll only the first time) */
   seenCredits = false;
+  /**
+   * vanilla ServerPlayer.wonGame: out of the level while the End Poem and the credits play to it — the host's own player
+   * in a world open to LAN, which goes on for its guests meanwhile (game/endTravel.ts): not among the level's players or
+   * its entities, not ticking, not hurt, till they're over
+   */
+  wonGame = false;
   /** vanilla Player.lastDeathLocation: the dimension and block they last died at (the recovery compass points there) */
   lastDeathLocation: { dim: string; pos: [number, number, number] } | null = null;
   /** bed head block while asleep (vanilla sleepingPos) */
@@ -866,6 +872,7 @@ export class Player extends LivingEntity {
   }
 
   override isInvulnerableTo(source: string): boolean {
+    if (this.wonGame) return true;
     if (this.invulnerable && source !== 'void' && source !== 'genericKill') return true;
     const rules = this.level.gameRules;
     if (((source === 'fall' || source === 'stalagmite') && !rules.fallDamage) || (source === 'drown' && !rules.drowningDamage)) return true;

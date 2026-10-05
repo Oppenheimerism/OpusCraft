@@ -55,15 +55,16 @@ export interface EffectsOut {
 export function broadcastEffects(level: Level, out: EffectsOut): () => void {
   const sound = level.sound, particles = level.particles;
   const own = () => level.player;
+  // (the host's own player out of the level while the End Poem plays to it hears nothing of it: Player.wonGame)
   const s: SoundSink = {
     play(name, x, y, z, volume = 1, pitch = 1) {
-      sound.play(name, x, y, z, volume, pitch);
+      if (!own().wonGame) sound.play(name, x, y, z, volume, pitch);
       out.sound(name, x, y, z, volume, pitch);
     },
     playUI: (name, volume, pitch) => sound.playUI(name, volume, pitch),
     playTo(p, name, x, y, z, volume = 1, pitch = 1) {
-      if (p === own()) sound.play(name, x, y, z, volume, pitch);
-      else out.soundTo(p, name, x, y, z, volume, pitch);
+      if (p !== own()) out.soundTo(p, name, x, y, z, volume, pitch);
+      else if (!p.wonGame) sound.play(name, x, y, z, volume, pitch);
     },
     playJukeboxSong: sound.playJukeboxSong?.bind(sound),
     stopJukeboxSong: sound.stopJukeboxSong?.bind(sound),

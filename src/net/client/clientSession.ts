@@ -87,6 +87,12 @@ export interface ClientHooks {
    * criteria changed, each with all it has now, or, the first time (`reset`), all of them (net/advancementSync.ts applyProgress)
    */
   advancements?(changes: [AdvancementDef, string[]][], reset: boolean): void;
+  /**
+   * (the End Poem) taken out of the End by the host's exit portal for the first time (vanilla handleGameEvent WIN_GAME):
+   * the End Poem and the credits over the loading screen; once they're over or skipped, `creditsOver` (without this,
+   * straight home)
+   */
+  winGame?(): void;
 }
 
 const GAME_MODES: readonly GameMode[] = ['survival', 'creative', 'adventure', 'spectator'];
@@ -191,6 +197,8 @@ export class ClientSession {
    * never), and the chunks that came meanwhile, and when the last did
    */
   private loading: { since: number; placed: number; asked: number; chunks: number; lastChunk: number } | null = null;
+  /** (the End Poem) watching it (CB.WinGame), out of the host's world till it's over: nothing to ask the host for meanwhile */
+  private inCredits = false;
   /** (a stuck loading screen's report) the host's latest packets: their ids, and the ticks they came in */
   private readonly latelyIds: number[] = [];
   private readonly latelyAt: number[] = [];
@@ -540,6 +548,9 @@ export class ClientSession {
       case CB.BossEventRemove:
         this.bossBars.delete(p[1] as number);
         return;
+      case CB.WinGame:
+        this.inCredits = true;
+        return this.hooks.winGame ? this.hooks.winGame() : this.creditsOver();
       case CB.UpdateAdvancements: {
         const changes = readProgress(p[2] as Value[]);
         if (!changes) return this.fail('an advancement that does not exist');
@@ -631,7 +642,7 @@ export class ClientSession {
    */
   private checkLoading(): void {
     const l = this.loading;
-    if (!l) return;
+    if (!l || this.inCredits) return;
     const missing = this.missingChunks();
     if (!missing.length && l.placed >= 0) {
       this.loading = null;
@@ -862,6 +873,18 @@ export class ClientSession {
   /** the death screen's Respawn (vanilla ClientboundClientCommandPacket PERFORM_RESPAWN) */
   respawn(): void {
     this.action([SB.ClientCommand, 0]);
+  }
+
+  /**
+   * (the End Poem) over or skipped (vanilla WinScreen's onFinished: PERFORM_RESPAWN): the host puts our player home, the
+   * loading screen waiting for it from now
+   */
+  creditsOver(): void {
+    if (!this.inCredits) return;
+    this.inCredits = false;
+    if (this.loading) this.loading.since = this.ticks;
+    // (sent as it is, not queued with the actions: whatever else is waiting, this goes)
+    if (this.state === 'play') this.send([SB.ClientCommand, 0]);
   }
 
   /** the in-bed screen's Leave Bed (vanilla sendWakeUp: STOP_SLEEPING) */
