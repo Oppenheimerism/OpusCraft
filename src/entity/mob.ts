@@ -1,7 +1,7 @@
 // Mob: AI-driven living entity (vanilla Mob + PathfinderMob): goals, controls,
 // navigation, sensing, despawning, melee, loot and experience.
 
-import { LivingEntity } from './living';
+import { LivingEntity, DEATH_HOOKS } from './living';
 import type { Entity } from './entity';
 import type { Level } from '../game/level';
 import { GoalSelector, Flag } from './ai/goal';
@@ -1100,6 +1100,8 @@ export abstract class Mob extends LivingEntity {
       }
       if (byPlayer && !this.skipDropExperience) this.level.awardExperience?.(this.x, this.y, this.z, this.experienceReward());
     }
+    // ((the wither) vanilla LivingEntity.die: createWitherRose(getKillCredit()))
+    DEATH_HOOKS.witherRose?.(this);
   }
 
   /**

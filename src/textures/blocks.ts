@@ -304,6 +304,8 @@ T['large_fern_top'] = () => PL.fern('large_fern_top', { fronds: 5, h: 14, spread
 T['dead_bush'] = () => PL.deadBush();
 T['sugar_cane'] = () => PL.sugarCane();
 for (const f of ['dandelion', 'poppy', 'blue_orchid', 'allium', 'azure_bluet', 'oxeye_daisy', 'cornflower', 'lily_of_the_valley']) T[f] = () => PL.flower(f);
+// (the wither)
+T['wither_rose'] = () => PL.flower('wither_rose');
 T['red_tulip'] = () => PL.tulip(0xd8261f, 0xf2524a, 0x9a1612);
 T['orange_tulip'] = () => PL.tulip(0xef7d12, 0xffa640, 0xb35708);
 T['white_tulip'] = () => PL.tulip(0xe8ecec, 0xffffff, 0xb2babb);

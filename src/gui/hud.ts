@@ -14,6 +14,8 @@ import { hsvToRgb } from '../core/math';
 import { renderItemActivation, tickItemActivation } from './itemActivation';
 // (spyglass)
 import { renderSpyglassOverlay } from './spyglassOverlay';
+// (the wither)
+import { witherBars } from '../entity/wither';
 
 export class Hud {
   private tickCount = 0;
@@ -66,8 +68,9 @@ export class Hud {
     this.vignetteBrightness += (f - this.vignetteBrightness) * 0.01;
     if (this.actionBar && --this.actionBar.time <= 0) this.actionBar = null;
     if (this.title && --this.title.time <= 0) this.title = null;
-    // (Stage 4: raids) and the raids' bars
-    this.bossOverlay.update([game.level.dragonFight?.shownBar() ?? null, ...game.level.raids.shownBars()]);
+    // (Stage 4: raids) and the raids' bars; (the wither) and the bars of the withers it sees
+    this.bossOverlay.update([game.level.dragonFight?.shownBar() ?? null, ...game.level.raids.shownBars(), ...witherBars(game.level, game.player, game.opts.renderDistance)]);
+    this.bossOverlay.tickDarken();
   }
 
   addChat(text: string, tick: number): void {

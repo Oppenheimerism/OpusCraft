@@ -59,6 +59,8 @@ import type { Level } from '../level';
 import { equipEvent } from '../vibrations';
 // (trial chambers)
 import { windChargeFrom, windChargeShootSound } from '../windCharges';
+// (the wither)
+import { canSpawnWither, checkWitherSpawn } from '../witherSpawn';
 
 const blk = (st: number): Block => BLOCKS[STATE_BLOCK[st]];
 
@@ -656,6 +658,30 @@ const skull = optional((src, stack) => {
   return left(stack);
 });
 
+/**
+ * vanilla RotationSegment.convertToSegment(Direction) (SegmentedAnglePrecision.fromDirection): south 0, west 4, north 8,
+ * east 12, up or down 0 — as a floor skull's rotation, one looking back the other way (at the dispenser)
+ */
+const SKULL_ROTATION: Record<number, number> = { [SOUTH]: 0, [WEST]: 4, [NORTH]: 8 };
+
+/**
+ * (the wither) vanilla DispenseItemBehavior's wither skeleton skull: where it would finish a wither in front
+ * (WitherSkullBlock.canSpawnMob), set down there looking back at the dispenser, and the wither made (checkSpawn); else
+ * on the head of whoever stands in front, as any mob head
+ */
+const witherSkull = optional((src, stack) => {
+  const level = src.level;
+  const [x, y, z] = front(src);
+  if (FLAGS[level.getState(x, y, z)] & F_AIR && canSpawnWither(level, x, y, z)) {
+    const f = src.facing;
+    level.setBlock(x, y, z, getBlock('wither_skeleton_skull').state({ rotation: f === UP || f === DOWN ? 0 : SKULL_ROTATION[f] ?? 12 }));
+    level.gameEvent('block_place', x + 0.5, y + 0.5, z + 0.5, {});
+    checkWitherSpawn(level, x, y, z);
+    stack.count--;
+  } else src.success = dispenseArmor(src, stack);
+  return left(stack);
+});
+
 // ---------------------------------------------------------------------------
 // The registry (vanilla DispenserBlock.DISPENSER_REGISTRY)
 
@@ -673,6 +699,8 @@ const BEHAVIORS: Record<string, DispenseBehavior> = {
   leather_horse_armor: horseArmor, iron_horse_armor: horseArmor, golden_horse_armor: horseArmor, diamond_horse_armor: horseArmor, chest: chestOnDonkey,
   // (armour stand)
   armor_stand: armorStand,
+  // (the wither)
+  wither_skeleton_skull: witherSkull,
 };
 // (vanilla: the wool carpets go on a tame llama as a horse's armour does on a horse)
 for (const c of DYE_COLORS) BEHAVIORS[`${c}_carpet`] = horseArmor;

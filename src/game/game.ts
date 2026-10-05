@@ -1723,6 +1723,8 @@ export class Game {
       powderSnow: eyeFluid || BLOCKS[STATE_BLOCK[w.getState(Math.floor(cam.x), Math.floor(cam.y), Math.floor(cam.z))]].name !== 'powder_snow' ? null : p.gameMode === 'spectator' ? 'spectator' : 'normal',
       dim: w.dim,
       worldFog: this.hud.bossOverlay.shouldCreateWorldFog(),
+      // (the wither)
+      darkenWorld: this.hud.bossOverlay.darkenWorld(partial),
       biomeColors: blendBiomeColors(cam.x, cam.y, cam.z, (qx, qy, qz) => BIOMES[w.getBiome3(qx * 4 + 2, qy * 4 + 2, qz * 4 + 2)] ?? b),
       level: this.level,
       entityOptions: {

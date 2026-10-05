@@ -42,8 +42,10 @@ export class Lightmap {
    * @param ambient the dimension's ambient light (0.1 in the Nether)
    * @param forceBright vanilla forceBrightLightmap (the End): sky light plays no part, and the block light's
    * colour is lifted a quarter of the way toward (0.99, 1.12, 1.0)
+   * @param darkenWorld (the wither) vanilla GameRenderer.getDarkenWorldAmount: how far each colour goes toward
+   * itself times (0.7, 0.6, 0.6), darker and redder (not under a forced bright lightmap)
    */
-  update(skyDarken: number, flash: boolean, gamma: number, nightVision: number, ambient = 0, forceBright = false, darkGamma = 0, darkPulse = 0): void {
+  update(skyDarken: number, flash: boolean, gamma: number, nightVision: number, ambient = 0, forceBright = false, darkGamma = 0, darkPulse = 0, darkenWorld = 0): void {
     const f1 = flash ? 1 : skyDarken * 0.95 + 0.05;
     // skyVec = (f, f, 1) lerp (1,1,1) 0.35
     const sv0 = skyDarken + (1 - skyDarken) * 0.35;
@@ -68,6 +70,12 @@ export class Lightmap {
           r += (0.75 - r) * 0.04;
           g += (0.75 - g) * 0.04;
           b += (0.75 - b) * 0.04;
+          // ((the wither) a bar that darkens the screen)
+          if (darkenWorld > 0) {
+            r += (r * 0.7 - r) * darkenWorld;
+            g += (g * 0.6 - g) * darkenWorld;
+            b += (b * 0.6 - b) * darkenWorld;
+          }
         }
         if (nightVision > 0) {
           const m = Math.max(r, g, b);

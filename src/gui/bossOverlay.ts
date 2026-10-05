@@ -18,6 +18,8 @@ export interface BossBar {
   readonly progress: number;
   readonly playBossMusic: boolean;
   readonly createWorldFog: boolean;
+  /** (the wither) vanilla setDarkenScreen: the world darkens and reddens while it's shown */
+  readonly darkenScreen?: boolean;
 }
 
 /** vanilla LerpingBossEvent */
@@ -100,5 +102,27 @@ export class BossHealthOverlay {
   shouldCreateWorldFog(): boolean {
     for (const l of this.events.keys()) if (l.createWorldFog) return true;
     return false;
+  }
+
+  /** (the wither) vanilla shouldDarkenScreen */
+  shouldDarkenScreen(): boolean {
+    for (const l of this.events.keys()) if (l.darkenScreen) return true;
+    return false;
+  }
+
+  /** (the wither) vanilla GameRenderer.darkenWorldAmount, now and a tick ago */
+  private darkenWorldAmount = 0;
+  private darkenWorldAmountO = 0;
+
+  /** (the wither) vanilla GameRenderer.tick's part: 0.05 darker a tick while a bar asks, 0.0125 lighter after */
+  tickDarken(): void {
+    this.darkenWorldAmountO = this.darkenWorldAmount;
+    if (this.shouldDarkenScreen()) this.darkenWorldAmount = Math.min(1, this.darkenWorldAmount + 0.05);
+    else if (this.darkenWorldAmount > 0) this.darkenWorldAmount -= 0.0125;
+  }
+
+  /** (the wither) vanilla getDarkenWorldAmount: how far the lightmap and the fog go toward (0.7, 0.6, 0.6) */
+  darkenWorld(partial: number): number {
+    return this.darkenWorldAmountO + (this.darkenWorldAmount - this.darkenWorldAmountO) * partial;
   }
 }

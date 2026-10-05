@@ -13,6 +13,8 @@ export interface PatternMatch {
   readonly width: number;
   readonly height: number;
   readonly depth: number;
+  /** (the wither) vanilla BlockPatternMatch.getForwards: the way the pattern's depth runs (the finger) */
+  readonly forwards: readonly [number, number, number];
 }
 
 export class BlockPattern {
@@ -52,6 +54,7 @@ export class BlockPattern {
       width: this.width,
       height: this.height,
       depth: this.depth,
+      forwards: finger,
     };
   }
 

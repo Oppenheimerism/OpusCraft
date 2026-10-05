@@ -640,7 +640,9 @@ const invCount = (player, id) => player.inventory.main.reduce((n, s) => n + (s?.
   check('...(the three without a flower: mushroom stew, as before)', plainStew?.result === 'mushroom_stew');
   const cs = M['item/creativeStacks'].stacksOf(ITEMS.get('suspicious_stew'));
   const labels = cs.map((s) => s.tag.stewEffects.map((e) => `${e.id}:${e.duration}`).join());
-  check('the creative tabs: a stew for each different flower (8), in vanilla\'s order', labels.join() === 'saturation:7,night_vision:100,fire_resistance:60,blindness:220,weakness:140,regeneration:140,jump_boost:100,poison:220', labels.join());
+  // ((the wither) and vanilla's ninth, the wither rose's, after the lily of the valley's, once the rose is in the game)
+  const wantStews = 'saturation:7,night_vision:100,fire_resistance:60,blindness:220,weakness:140,regeneration:140,jump_boost:100,poison:220' + (ITEMS.has('wither_rose') ? ',wither:140' : '');
+  check('the creative tabs: a stew for each different flower (8; 9 with the wither rose), in vanilla\'s order', labels.join() === wantStews, labels.join());
   const food = ITEM_LIST.filter((i) => i.creativeTab === 'food').map((i) => i.id);
   check('...after the rabbit stew', food.indexOf('suspicious_stew') === food.indexOf('rabbit_stew') + 1);
   const NI = M['net/items'];

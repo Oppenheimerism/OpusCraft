@@ -82,6 +82,8 @@ import { Phantom } from '../entity/phantom';
 import { Panda } from '../entity/panda';
 import { Mooshroom, mooshroomSpawnRulesOk } from '../entity/mooshroom';
 import { Armadillo, armadilloSpawnRulesOk } from '../entity/armadillo';
+// (the wither)
+import { WitherBoss } from '../entity/wither';
 import { PhantomSpawner } from './phantomSpawner';
 import { moonPhase } from '../render/environment';
 import { tickInhabitedTime } from './difficulty';
@@ -345,6 +347,9 @@ Object.assign(ENTITY_NAMES, { mooshroom: 'Mooshroom' });
 // (remaining mobs) the armadillo: in the savannas and the badlands
 Object.assign(MOB_TYPES, { armadillo: (l: Level) => new Armadillo(l) });
 Object.assign(ENTITY_NAMES, { armadillo: 'Armadillo' });
+// (the wither) built from soul sand and wither skeleton skulls (game/witherSpawn.ts), never spawning by itself
+Object.assign(MOB_TYPES, { wither: (l: Level) => new WitherBoss(l) });
+Object.assign(ENTITY_NAMES, { wither: 'Wither', wither_skull: 'Wither Skull' });
 
 // (Stage 4: the outer End)
 Object.assign(ENTITY_NAMES, { shulker: 'Shulker', shulker_bullet: 'Shulker Bullet', item_frame: 'Item Frame', glow_item_frame: 'Glow Item Frame', firework_rocket: 'Firework Rocket' });

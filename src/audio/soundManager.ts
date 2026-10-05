@@ -96,6 +96,9 @@ function categoryOf(name: string): Category {
   if (name.startsWith('weather.') || name.startsWith('entity.lightning')) return 'weather';
   if (name.startsWith('ambient.')) return 'ambient';
   if (/entity\.(zombie|skeleton|creeper|spider|enderman|slime|witch|drowned|husk|stray|phantom|ender_dragon|dragon_fireball|silverfish)/.test(name)) return 'hostile';
+  // (the wither: vanilla WitherBoss is a Monster, and its level events 1022-1024 play in SoundSource.HOSTILE; the
+  // wither skeleton's too)
+  if (/^entity\.(wither|wither_skeleton)\./.test(name)) return 'hostile';
   // (vanilla ItemFrame.getSoundSource is the default NEUTRAL: "Friendly Creatures", not the dropped item's)
   if (name.startsWith('entity.item_frame')) return 'friendly';
   if (name.startsWith('entity.player') || name.startsWith('entity.generic') || name.startsWith('entity.item') || name.startsWith('entity.experience') || name.startsWith('entity.arrow')) return 'players';
