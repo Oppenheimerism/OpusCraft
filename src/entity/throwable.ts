@@ -103,16 +103,24 @@ export class ThrownItem extends Entity {
       this.onHit(hit.x, hit.y, hit.z, hit);
       return;
     }
-    if (bh && !deflected) {
+    // vanilla ThrowableProjectile.tick: what it's in has its say (an end gateway takes it through). As 1.21.2 on, what
+    // it passes through on this tick's way has it too, up to the block it hits: thrown at 1.5 blocks a tick, a pearl
+    // would else go clean through a gateway between two ticks, one time in seven, and land far behind it
+    const mx = x1 - x0, my = y1 - y0, mz = z1 - z0;
+    const steps = deflected ? 0 : Math.ceil(Math.sqrt(mx * mx + my * my + mz * mz) / 0.25);
+    for (let i = 0; i <= steps && !this.removed && !this.portal; i++) {
+      const f = steps ? i / steps : 0;
+      this.checkInsideBlocks(this.bb.move(mx * f, my * f, mz * f));
+    }
+    if (this.removed) return;
+    // (a gateway that has it takes it before it lands: one dropping on to the bedrock under the gateway goes through)
+    if (bh && !deflected && !this.portal) {
       onProjectileHit(this.level, bh.x, bh.y, bh.z, bh, this);
       this.onHitBlock(bh);
       projectileLandedAt(this, bh.x, bh.y, bh.z);
       this.onHit(bh.px, bh.py, bh.pz, null);
       return;
     }
-    // vanilla ThrowableProjectile.tick: what it's in has its say (an end gateway takes it through)
-    this.checkInsideBlocks();
-    if (this.removed) return;
     const h = Math.sqrt(this.dx * this.dx + this.dz * this.dz);
     this.yaw = Math.atan2(this.dx, this.dz) * RAD;
     this.pitch = Math.atan2(this.dy, h) * RAD;

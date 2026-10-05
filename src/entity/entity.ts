@@ -699,10 +699,10 @@ export abstract class Entity {
 
   /**
    * vanilla Entity.checkInsideBlocks → BlockBehaviour.entityInside for the
-   * blocks the bounding box overlaps. Returns true when touching fire or lava.
+   * blocks the bounding box overlaps (or `bb`: its box somewhere along its way). Returns true when touching fire or lava.
    */
-  checkInsideBlocks(): boolean {
-    const bb = this.bb, w = this.level.world;
+  checkInsideBlocks(bb: AABB = this.bb): boolean {
+    const w = this.level.world;
     const x0 = Math.floor(bb.minX + 1e-7), y0 = Math.floor(bb.minY + 1e-7), z0 = Math.floor(bb.minZ + 1e-7);
     const x1 = Math.floor(bb.maxX - 1e-7), y1 = Math.floor(bb.maxY - 1e-7), z1 = Math.floor(bb.maxZ - 1e-7);
     let fire = false;

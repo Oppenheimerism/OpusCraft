@@ -11,7 +11,7 @@ import { Inventory, type Hand } from '../item/inventory';
 import { FoodData } from './food';
 import { ExperienceOrb } from './xpOrb';
 import { Arrow } from './arrow';
-import { BLOCKS, STATE_BLOCK } from '../world/block';
+import { BLOCKS, STATE_BLOCK, FLAGS, F_OPAQUE, F_FULL_COLLISION } from '../world/block';
 import { wrapDegrees } from '../core/math';
 import { findStandUpPosition } from '../game/sleep';
 import { hurtAndBreak, oxygenBonus, sumLevels } from '../item/enchantHelper';
@@ -695,6 +695,14 @@ export class Player extends LivingEntity {
       this.jumping = false;
       return;
     }
+    // vanilla LocalPlayer.aiStep: out of a block it's partly in (an ender pearl that landed by a wall puts it there)
+    if (!this.noPhysics && !this.remote) {
+      const w = this.width * 0.35;
+      this.moveTowardsClosestSpace(this.x - w, this.z + w);
+      this.moveTowardsClosestSpace(this.x - w, this.z - w);
+      this.moveTowardsClosestSpace(this.x + w, this.z - w);
+      this.moveTowardsClosestSpace(this.x + w, this.z + w);
+    }
     // vanilla updatePlayerPose: a riptide spin curls up (0.6 tall); after it, standing if there's room, else crouching
     if (this.isAutoSpinAttack() !== this.spinPose) {
       if (!this.spinPose) {
@@ -801,6 +809,36 @@ export class Player extends LivingEntity {
     this.xxa = left;
     this.zza = fwd;
     this.jumping = inp.jump && !this.flying;
+  }
+
+  /**
+   * vanilla LocalPlayer.moveTowardsClosestSpace: where the point (x, z) of the box is in a block it would suffocate in,
+   * a push of 0.1 a tick out through the nearest side of that block with free space beyond (west, east, north, south)
+   */
+  private moveTowardsClosestSpace(x: number, z: number): void {
+    const bx = Math.floor(x), bz = Math.floor(z);
+    if (!this.suffocatesAt(bx, bz)) return;
+    const fx = x - bx, fz = z - bz;
+    let best = Infinity, sx = 0, sz = 0;
+    for (const [ox, oz, d] of [[-1, 0, fx], [1, 0, 1 - fx], [0, -1, fz], [0, 1, 1 - fz]]) {
+      if (d < best && !this.suffocatesAt(bx + ox, bz + oz)) {
+        best = d;
+        sx = ox;
+        sz = oz;
+      }
+    }
+    if (sx) this.dx = 0.1 * sx;
+    else if (sz) this.dz = 0.1 * sz;
+  }
+
+  /** vanilla LocalPlayer.suffocatesAt: a block to suffocate in, in the column (bx, bz), anywhere up the box's height */
+  private suffocatesAt(bx: number, bz: number): boolean {
+    const w = this.level.world;
+    for (let y = Math.floor(this.bb.minY + 1e-7); y <= Math.floor(this.bb.maxY - 1e-7); y++) {
+      const fl = FLAGS[w.getState(bx, y, bz)];
+      if (fl & F_OPAQUE && fl & F_FULL_COLLISION) return true;
+    }
+    return false;
   }
 
   /** vanilla jumpableVehicle: the mount you're steering, if it leaps (a saddled horse) */
