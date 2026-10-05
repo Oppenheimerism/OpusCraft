@@ -157,14 +157,26 @@ export class Blaze extends Monster {
   override aiStep(): void {
     // falls gently
     if (!this.onGround && this.dy < 0) this.dy *= 0.6;
+    this.level.clientEffects(() => this.smoulder());
+    // vanilla isSensitiveToWater
+    if (this.isAlive && this.isInWaterOrRainNow()) this.hurt(1, 'drown');
+    super.aiStep();
+  }
+  /**
+   * vanilla Blaze.aiStep's client side, each client's own (the host's own player's, a guest's copy's): now and then its
+   * burning sound, and its smoke
+   */
+  private smoulder(): void {
     const r = this.random;
     if (r.nextInt(24) === 0) this.level.sound.play('entity.blaze.burn', this.x + 0.5, this.y + 0.5, this.z + 0.5, 1 + r.nextFloat(), r.nextFloat() * 0.7 + 0.3);
     for (let i = 0; i < 2; i++) {
       this.level.particles.spawn?.('large_smoke', this.x + (r.nextDouble() * 2 - 1) * this.width * 0.5, this.y + r.nextDouble() * this.height, this.z + (r.nextDouble() * 2 - 1) * this.width * 0.5, 0, 0, 0);
     }
-    // vanilla isSensitiveToWater
-    if (this.isAlive && this.isInWaterOrRainNow()) this.hurt(1, 'drown');
-    super.aiStep();
+  }
+  /** (a guest's copy) its smoke and its burning sound are its own, as on vanilla's client: the host sends neither */
+  override animateMirror(): void {
+    super.animateMirror();
+    this.smoulder();
   }
   override isSensitiveToWater(): boolean {
     return true;

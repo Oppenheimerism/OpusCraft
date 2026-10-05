@@ -301,6 +301,8 @@ export class ClientSession {
         return this.fail('let in twice');
       case CB.KeepAlive:
         return this.send([SB.KeepAlive, p[1]]);
+      case CB.Ping:
+        return this.send([SB.Pong, p[1]]);
       case CB.LevelChunk:
         return this.levelChunk(p[1] as number, p[2] as number, p[3] as (Uint16Array | null)[], p[4] as Uint8Array, p[5] as Uint8Array | null, p[6] as Value[]);
       case CB.ForgetLevelChunk: {

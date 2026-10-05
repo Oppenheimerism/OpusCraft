@@ -1,8 +1,10 @@
 # What LAN guests were missing: report
 
 Branch `claude/vibrant-hypatia-2p2ou6`, from `main` at b935350. Part 1 of the brief: what two people playing survival
-on two computers found a guest couldn't do. Each lettered milestone is committed and pushed on its own.
-`PROTOCOL_VERSION` is 8 on this branch (main's 7), bumped once for all of part 1.
+on two computers found a guest couldn't do. Each lettered milestone is committed and pushed on its own. a to e are in
+`main` already (merged as 4b3a7d6 and 52f4331); the branch was then brought up to `main` at 2d08345 (the wither merged;
+a fast-forward, nothing rewritten), and f onwards are built on that. `PROTOCOL_VERSION` is 8 (b935350's 7), bumped once
+for all of part 1.
 
 ## 1. Milestones
 
@@ -12,8 +14,8 @@ on two computers found a guest couldn't do. Each lettered milestone is committed
 | b | Boss bars for guests | done | 6f92a50 A guest now sees the boss bars the host's world shows it… |
 | c | Hitting the ender dragon; the fight from a guest's side | done | 5d949fb A guest can hurt the Ender Dragon… |
 | d | Firework rockets for a gliding guest | done | 97d0271 A firework rocket now speeds up a guest gliding with an elytra… |
-| e | The End Poem | done | (this commit) |
-| f | Being disconnected | not started | |
+| e | The End Poem | done | c1004a4 In a LAN world, leaving the End through its exit portal no longer leaves the guests on "Loading terrain..."… |
+| f | Being disconnected | done | (this commit) |
 | g | The survival sweep | not started | |
 
 ### a. Advancements
@@ -167,6 +169,92 @@ beside the host while its own plays would leave the host's player standing froze
 poem from each guest); skipping the host's poem when it has guests would take it from the host. Each player's own
 poem, out of the world while it plays, back home after, is vanilla's own behaviour.
 
+### f. Being disconnected under load (the Nether's crowds)
+
+**What was sent.** Measured with the test harness (a scratch sweep over every mob kind, eight of each round a guest, and
+a basalt delta's crowd), before this change:
+
+- **48 magma cubes cost a guest about 1000 packets a second** (62 KiB/s before compression), the lead's number. Nearly
+  all of it was each cube's `squish`, `oSquish` and `targetSquish`, sent every tick: after each landing the squish eases
+  back by ×0.6 a tick, so its value changes every tick for well over a minute. Vanilla syncs none of it: its client
+  works the squish out from the cube landing and leaving the ground.
+- **Particles vanilla's client makes itself, sent as the host's:** a dragon's breath cloud 580 a second each, a warden
+  digging or emerging 310 a second, a breeze's dust 117, a blaze's smoke 40, an enderman's portal specks 40, a phantom's
+  40, a glow squid's 20, and a slime's or magma cube's splash as it lands (16 to 65 each landing).
+- **Fields that change every tick, which vanilla doesn't sync or its client counts:** a squid's and a glow squid's
+  tentacles and tilt, a guardian's tail and spikes, a chicken's and a parrot's wings, a warden's heartbeat, a breeze's
+  whirl countdown, a blaze's next height, a goat's and a frog's jump and ram cooldowns, a fox's time since it ate, a
+  trader's llama's time left, the block every mob's feet were last checked in for Soul Speed, the piglins' and hoglins'
+  brain memories, and a hurt mob's red flash counting down (ten packets a hurt).
+
+**What drops the guest** (reproduced in real time: a host and a guest through the relay at 20 ticks a second, the
+relay's link to the guest throttled by a proxy; scratch, not in the repo):
+
+- None of the game's own backlogs or rate limits is reached by this. The host bundles a tick's packets into one message
+  for each guest, so a guest gets 20 messages a second however many packets are in them: the guest's limit (2400
+  messages waiting between two of its ticks) would take two minutes of its game standing still; the relay's rate limit
+  (800 messages a second) is on what a guest sends, not on what it's sent; the host's own backlog limit likewise.
+- The keep-alive doesn't drop it here either: the host and the guest each take any message as a sign of life, not only
+  the keep-alive's answer, so an answer stuck behind a queue doesn't time a guest out (vanilla's server does: a
+  keep-alive answered 15 s late is "Timed out"; that may be what the lead had in mind).
+- **What happens is that the guest falls further and further behind.** The host's link to the relay is local and never
+  pushes back, so what the guest's link can't carry waits in the relay (and the computers' socket buffers). With 48
+  cubes over a link of 16 KiB/s the guest fell behind by 0.3 s every second (18 s after a minute); at 8 KiB/s, 98 s
+  behind after two and a half minutes, without end: its world shows what happened a minute ago while the host acts on
+  its clicks now. It is let go only when the relay holds 32 MB for it ("The connection couldn't keep up with the host.",
+  tens of minutes at those rates, the sockets' own buffers taking the first megabytes: with the relay's limit cut to
+  1 MB it was still connected, 98 s behind, after 150 s), or by its own game when more than 2400 messages reach it at
+  once (as a queue let go all together does: a throttle lifted, a page frozen in the background).
+- `?mplag=` and `tests/multiplayer/m5-latency.mjs`: lag on its own (20 to 200 ms) piles nothing up, and m5-latency
+  passes before and after. One thing to know: under `?mplag=` each message the page receives waits on a timer, which
+  browsers run once a second in a background tab (Chrome, after five minutes hidden: once a minute), so a test page
+  with `?mplag=` left in the background reads one message a second and falls behind for as long as it's hidden. The
+  flag is for testing only.
+
+**Confidence.** That the flood is what the lead saw: high (the numbers match). That the drop came from the guest falling
+behind over a link or a game that couldn't keep up, and was then let go by the relay's or the guest's limit: medium (I
+can't see the lead's network or computers; a LAN's Wi-Fi carries 20 KiB/s easily, a tunnel or a busy network may not,
+and a guest's game slowed by thousands of particles a second falls behind the same way, in its own queue). That it was
+the keep-alive timing out: low, for this code (see above). If it happens again, the reason on the guest's Disconnected
+screen tells which: "The connection couldn't keep up with the host." (the relay), "too much, too fast" (its game),
+"Timed out" (nothing heard for 30 s).
+
+**Decision: don't send what the guest's game works out, as vanilla's server doesn't; and when a guest falls behind
+anyway, send it only what can't wait until it catches up, then the rest afresh, rather than letting it go.**
+
+- **Worked out by the guest's copies** (each copy's `animateMirror`, the same lines as the host's tick, as vanilla's
+  client runs them): a slime's and magma cube's squish and landing splash (from the on-ground flag its moves carry); a
+  chicken's and a parrot's wings; a squid's and glow squid's tentacles and tilt (the beat's speed is still sent); a
+  guardian's tail, spikes and bubbles; a warden's heartbeat, tendrils and digging dust; a breeze's dust and whirl; a
+  blaze's smoke and burning sound; an enderman's portal specks; a phantom's specks and wing flaps; a glow squid's
+  sparks; a dragon's breath cloud's puffs; a hurt mob's red flash running out, sent as it starts (also a warden's
+  tendrils and a glow squid's dark). The host's own player still sees all of them: they're played for it
+  (`Level.clientEffects`), just not sent. Not sent at all: the host-only counters listed above.
+- **A copy counts its age from the host's** (sent as it comes into view): animations the host starts at an age (a
+  frog's croak and leap, a warden's emerging, a breeze's slide, a bat taking off) played from the wrong tick on a guest
+  before, whose copies counted from when they first saw them.
+- **A guest that falls behind** (new `CB.Ping` / `SB.Pong`, vanilla's ping and pong packets): the host asks each guest
+  how far it's got every half second. A guest whose latest answer is to a question asked more than 5 s ago is behind:
+  until its answers come within 2 s again, it's sent only what can't wait (blocks changing, its own player's health,
+  inventory, menus, chat, the time) and not where the others and the world's entities are, how they look, new chunks,
+  sounds or particles. Once caught up it's sent every entity's and player's fields afresh (their places and riders go
+  as ever, being what changed since last sent; whatever came or went meanwhile comes or goes). The guest that keeps up
+  meanwhile is sent everything as ever. The console says when a guest falls behind and when it's caught up. The
+  relay's 32 MB limit stays as the last resort.
+
+**Results.** The 48 cubes with 4 blazes and 4 endermen: about 100 packets a second, 4.4 KiB/s (was over 1000 packets,
+60 KiB/s). From the sweep, eight of each, packets a second before → after: magma cube 168 → 10, slime 242 → 38,
+blaze 520 → 34, enderman 349 → 28, squid 162 → 2, glow squid 322 → 2, guardian 225 → 55, chicken 191 → 45, parrot 198
+→ 39, fox 198 → 45, goat 210 → 51, trader llama 196 → 29, breeze 1124 → 22, warden 2532 → 1, phantom 406 → 64, a
+dragon's breath cloud 4641 → 1; what's left is mostly their moves. The real-time reproduction: over 16 KiB/s the guest
+now keeps up (0.1 s behind); over 2 KiB/s, slower than even the crowd's new traffic, the host takes it for behind
+every 15 s or so, it catches up within 5 to 8 s, it's never more than 7 s behind and never let go (before: further
+behind without end).
+
+Why not something simpler: a bigger relay buffer only puts the drop off while the guest falls further behind; sending
+entity data every other tick to everyone loses changes (an entity's data is worked out once a tick for all guests
+together, `net/entityData.ts`); compressing harder doesn't make a slow link faster.
+
 ## 2. Shared files changed (for merging)
 
 | File | What changed, and the hook |
@@ -201,11 +289,23 @@ poem, out of the world while it plays, back home after, is vanilla's own behavio
 | `src/net/server/hostServer.ts` (again) | `showEndCredits()`; the "left behind" check skips `held` guests. |
 | `src/net/client/clientSession.ts` (again) | `CB.WinGame` → `ClientHooks.winGame` (straight `creditsOver()` without one); `inCredits` pauses `checkLoading`; `creditsOver()` sends `ClientCommand` 0 at once. |
 | `tests/multiplayer/lib.mjs` | the test guest's `winGame` hook counts `poems` (the test says when each is over). |
+| `src/game/level.ts` (again) | `clientEffects(fn)` and `onClientEffects`: vanilla's client-side particles and sounds, played for the game's own player; a host sends them to nobody (single-player: `fn` runs as before, the same random numbers in the same order). |
+| `src/net/server/hostServer.ts` (again) | `onClientEffects` → `runLocal` (undone on close); `broadcastNear(…, passing)`: a sound or particles skip a guest that's behind. |
+| `src/net/entityData.ts` (again) | more host-only fields in `NOT_SENT` (Soul Speed's last block, brain memories) and `NOT_SENT_BY_TYPE` (what the copies work out); `COUNTDOWN` (a hurt flash, a warden's tendrils, a glow squid's dark: sent as they start); `$tick` (the entity's age) in `DataWatcher.full`, taken by `applyData`. A branch adding a mob whose fields change every tick should add them here, or work them out in its `animateMirror`. |
+| `src/entity/living.ts` | `animateMirror` also counts down `hurtTime` (a copy's only). |
+| `src/entity/monsters.ts` | Slime: the landing moved into `land(host)`, `animateMirror`; Enderman: `portalParticles()`, `animateMirror`. The host's ticks do what they did. |
+| `src/entity/animals.ts`, `src/entity/parrot.ts` | Chicken `flapWings()`, Parrot `calculateFlapping(glide)`, each with `animateMirror`. |
+| `src/entity/blaze.ts`, `src/entity/breeze.ts`, `src/entity/phantom.ts`, `src/entity/warden.ts`, `src/entity/glowSquid.ts`, `src/entity/guardian.ts`, `src/entity/areaEffectCloud.ts`, `src/entity/water.ts` (Squid) | each one's client-side lines moved into a method of their own, called through `level.clientEffects` by the host's tick and by the copy's `animateMirror`; Guardian's `clientHalf(host)`. Same order of random numbers in single-player. |
+| `src/net/protocol.ts` (again) | `CB.Ping` = 104, `SB.Pong` = 60 (numbered clear of other branches' packets). |
+| `src/net/config.ts` (again) | `PING_TICKS`, `SLOW_TICKS`, `CAUGHT_UP_TICKS`. |
+| `src/net/server/session.ts` (again) | pings in `tick()` and `idleTick()`; `pong()`; `slow`, `checkPace()` and `refresh()` in `flush()`; `tickChunks(more)` sends no new chunks while behind. |
+| `src/net/server/entityTracker.ts` (again) | `refresh()`: every tracked entity's fields afresh. |
+| `src/net/client/clientSession.ts` (again) | answers `CB.Ping` with `SB.Pong`. |
 
 New files: `src/net/advancementSync.ts`, `src/net/server/guestProgress.ts`, `src/game/progressTriggers.ts`,
 `src/game/bossBars.ts`, `src/net/server/bossBarSync.ts`, `tests/multiplayer/m8-advancements.mjs`,
 `tests/multiplayer/m8-bossbars.mjs`, `tests/multiplayer/m8-dragon.mjs`, `tests/multiplayer/m8-fireworks.mjs`,
-`tests/multiplayer/m8-endpoem.mjs`.
+`tests/multiplayer/m8-endpoem.mjs`, `tests/multiplayer/m8-load.mjs`.
 
 ## 3. Open points
 
@@ -223,8 +323,9 @@ New files: `src/net/advancementSync.ts`, `src/net/server/guestProgress.ts`, `src
 - (c) Found, not changed (single-player alike, and part 1 leaves single-player as it is): vanilla's `Player.attack`
   counts a blow to a part against its dragon (`parentMob`) for the weapon's wear, `lastHurtMob` and the damage
   particles; here a blow to a part wears no sword and shows no particles, for the host as for guests.
-- (c) The dragon's breath, its bursts as it dies and a cloud's puffs reach a guest as the host's particles, within 32
-  blocks (vanilla `sendParticles`); vanilla's client makes them itself and shows them as far as it draws the dragon.
+- (c) The dragon's breath and its bursts as it dies reach a guest as the host's particles, within 32 blocks (vanilla
+  `sendParticles`); vanilla's client makes them itself and shows them as far as it draws the dragon. (A breath cloud's
+  puffs are now the guest's copy's own: f.)
 - (c) The dragon's wing beat (`flapTime`) and turn (`yRotA`) still go to guests each tick: the wings stay in step with
   the flap sound the host plays, and a few numbers for one entity are nothing (vanilla's client counts its own).
 - (d) A rocket's sparks are the host's particles, made where the host has the rocket, by its copy of the guest's
@@ -243,6 +344,24 @@ New files: `src/net/advancementSync.ts`, `src/net/server/guestProgress.ts`, `src
   counts as home comes in (no advancement hangs on End → Overworld).
 - (e) What can't be checked headless: the host's poem kept up through its arrival with the starfield behind it, and a
   guest's poem kept up through a second `ChangeDimension`. Both are a few lines of `Game`; see the checklist.
+- (f) The thresholds (behind past 5 s, caught up within 2 s, a ping every half second) are mine; vanilla has nothing like
+  it (its client either keeps up or times out).
+- (f) While a guest is behind, its copies stand where they were last told, its chunks don't come (walking fast, it may
+  reach the edge of what it has for a few seconds), and it hears and sees no sounds or particles from the host; whatever
+  it does itself is taken by the host as ever.
+- (f) Still sent as they change, being small: the dragon's wing beat and turn (c), a dolphin's moistness out of water
+  (vanilla syncs it too), a rabbit's jump counters, a shulker's peek while it opens, a horse's tail swish, a mob's arm
+  swing (vanilla: an animate packet). A mob's moves still go as full positions (vanilla sends small ones as steps).
+- (f) A squid's copy begins its tentacles' beat again itself (vanilla's client holds it till the server's event says
+  it's begun): the beat's speed is the host's, its phase the copy's own.
+- (f) The sounds vanilla plays on its client only (`playLocalSound`: a blaze burning, a breeze's whirl, a phantom's
+  flap, a warden's heartbeat, a guardian flopping on land) are now made by the guest's copy, at its own random
+  moments, rather than sent at the host's.
+- (f) Not reproduced: the lead's own disconnect (which screen said what). The browser checks of the slow-guest handling
+  were done headless with real sockets, not in two browser windows.
+- (f) The wither (merged from the other branch) sends its smoke to guests as particles, 60 a second for one wither
+  (vanilla: its client's own); one line in its file (`level.clientEffects` round the smoke, and the same call from an
+  `animateMirror`) would make it the copy's, as here for the blaze. Left to that branch.
 
 ## 4. Tests
 
@@ -288,6 +407,22 @@ New files: `src/net/advancementSync.ts`, `src/net/server/guestProgress.ts`, `src
   it, among the players, in the guests' worlds. The host goes on to the Nether while Eve watches: Eve taken along, its
   poem not restarted; over, it comes in beside the host there. Passes in memory and through the relay with lag (seeds
   12345, 777 and 4242, repeatedly). `tests/end/credits.mjs` (single-player: home waits for the poem) passes unchanged.
+- `tests/multiplayer/m8-load.mjs`: 29 checks. A basalt delta's crowd round a guest (48 magma cubes, 4 blazes, 4
+  endermen): the cubes' data seldom, no particles sent, under 200 packets a second and 12 KiB/s; the copies squishing,
+  splashing flame as they land, the blazes smoking and burning and the endermen trailing specks on the guest, the host
+  still seeing its own; each copy's age the host's. A hurt cube: its flash on the copy, run out a tick at a time, sent
+  once. A dragon's breath cloud: its puffs the copy's own, none sent. A second guest whose game stops: not behind at
+  3 s, behind past 5 s and not let go; while behind, sent nothing of where things are or how they look, nor sounds or
+  particles, a few small messages a second, its game not flooded, while the guest that keeps up gets everything; its
+  game going on, it catches up within a second or two and is sent it all afresh: a sheep dyed, a cube moved, a cube
+  and a pig gone and a pig come meanwhile, and every entity it's shown where the host has it, with its size and
+  health. Passes in memory and through the relay with lag (seeds 12345, 777 and 4242).
+- Through the relay with lag (`MP_NET=ws MP_LAG=20-200 MP_LAG_SEED=12345`) every m8 suite passes. Several older
+  suites (m1-blocks, m1-chunks, m1-leave, m1-login, m1-players, m1-world, m2-actions, m2-entities, m3-menus,
+  m3-survival, m4-dimensions, m6-commands) fail under that lag on `main` too (2d08345, the same seed), with the same
+  checks give or take a few that come and go between runs on either: their ticks were written for a network that
+  answers within the tick. Not changed. `tests/ocean/m2.mjs` ("never drowning") and `tests/goat/goat.mjs` ("hurt, it
+  runs") each failed once in a run and passed three times after, on this branch and on `main` alike.
 - Every other multiplayer suite passes, with all of `tests/end/`, `tests/saves/player.mjs`, the horse, wolf, frog and
   armadillo suites, and `tests/remaining-mobs/load-order.mjs`. `npm run typecheck` is clean.
 
@@ -322,3 +457,9 @@ Start LAN World; guest: Multiplayer → the world → a name → Join Server).
     the host's poem still rolls (the host's player isn't in the world meanwhile: the guest doesn't see it). The host
     presses Esc: it's home, and the guest sees it appear. The second time through, nobody gets the poem, and the guest
     comes in beside the host at once.
+12. In the Nether (a basalt delta, or `/summon magma_cube` a few dozen times round the guest): the guest's window keeps
+    up, its magma cubes squashing as they land and splashing flame, blazes smoking, endermen trailing purple specks, as
+    in the host's. With the guest's window throttled (Chrome DevTools → Network → a slow preset) it lags a little but
+    keeps up; on a preset slower than the crowd, the host's console says "Alex is 5.0 s behind…", the guest's mobs
+    stand still a few seconds, then "Alex has caught up" and everything is where the host has it. Nobody is
+    disconnected.

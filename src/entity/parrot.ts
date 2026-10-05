@@ -242,18 +242,27 @@ export class Parrot extends TamableAnimal {
     }
     if (this.level.random.nextInt(400) === 0) imitateNearbyMobs(this.level, this);
     super.aiStep();
-    this.calculateFlapping();
+    this.calculateFlapping(true);
   }
 
-  /** vanilla calculateFlapping: the beat quickens in the air and dies away on the ground; falling, it glides down slower */
-  private calculateFlapping(): void {
+  /**
+   * vanilla calculateFlapping, which its clients run too: the beat quickens in the air and dies away on the ground;
+   * falling, it glides down slower (`glide`: the host's, whose parrot it is to move)
+   */
+  private calculateFlapping(glide: boolean): void {
     this.oFlap = this.flap;
     this.oFlapSpeed = this.flapSpeed;
     this.flapSpeed = Math.max(0, Math.min(1, this.flapSpeed + (!this.onGround && !this.vehicle ? 4 : -1) * 0.3));
     if (!this.onGround && this.flapping < 1) this.flapping = 1;
     this.flapping *= 0.9;
-    if (!this.onGround && this.dy < 0) this.dy *= 0.6;
+    if (glide && !this.onGround && this.dy < 0) this.dy *= 0.6;
     this.flap += this.flapping * 2;
+  }
+
+  /** (a guest's copy) its wings beaten here, as vanilla's client does: the host doesn't send them */
+  override animateMirror(): void {
+    super.animateMirror();
+    this.calculateFlapping(false);
   }
 
   /** vanilla isFlapping / onFlap: a wingbeat's sound every so far flown, the further the harder it's flapping */

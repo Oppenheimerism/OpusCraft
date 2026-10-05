@@ -1397,14 +1397,22 @@ export class Enderman extends Monster {
     }
   }
   override aiStep(): void {
-    // portal particles (client)
+    this.level.clientEffects(() => this.portalParticles());
+    // vanilla isSensitiveToWater
+    if (this.isAlive && this.isInWaterOrRainNow()) this.hurt(1, 'drown');
+    super.aiStep();
+  }
+  /** vanilla EnderMan.aiStep's client side, each client's own (the host's own player's, a guest's copy's): its portal particles */
+  private portalParticles(): void {
     for (let i = 0; i < 2; i++) {
       const r = this.random;
       this.level.particles.spawn?.('portal', this.x + (r.nextDouble() - 0.5) * this.width, this.y + r.nextDouble() * this.height - 0.25, this.z + (r.nextDouble() - 0.5) * this.width, (r.nextDouble() - 0.5) * 2, -r.nextDouble(), (r.nextDouble() - 0.5) * 2);
     }
-    // vanilla isSensitiveToWater
-    if (this.isAlive && this.isInWaterOrRainNow()) this.hurt(1, 'drown');
-    super.aiStep();
+  }
+  /** (a guest's copy) its particles are its own, as on vanilla's client: the host doesn't send them */
+  override animateMirror(): void {
+    super.animateMirror();
+    this.portalParticles();
   }
   override isSensitiveToWater(): boolean {
     return true;
@@ -1707,17 +1715,34 @@ export class Slime extends Monster {
     this.oSquish = this.squish;
     super.tick();
     if (this.removed) return;
+    this.land(true);
+  }
+  /**
+   * vanilla Slime.tick's rest, which its clients run too: landing, a splash of particles (each side's own: the host's
+   * own player's, a guest's copy's) and, the host's to send, its squelch; squashed as it lands, stretched as it leaves
+   * the ground, easing back
+   */
+  private land(host: boolean): void {
     if (this.onGround && !this.wasOnGround) {
       const f = this.width * 2, f1 = f / 2;
-      for (let i = 0; i < f * 16; i++) {
-        const a = this.random.nextFloat() * Math.PI * 2, r = this.random.nextFloat() * 0.5 + 0.5;
-        this.level.particles.spawn?.(this.landingParticle(), this.x + Math.sin(a) * f1 * r, this.y, this.z + Math.cos(a) * f1 * r, 0, 0, 0);
-      }
-      this.playSound(this.squishSound(), this.soundVolume(), ((this.random.nextFloat() - this.random.nextFloat()) * 0.2 + 1) / 0.8);
+      this.level.clientEffects(() => {
+        for (let i = 0; i < f * 16; i++) {
+          const a = this.random.nextFloat() * Math.PI * 2, r = this.random.nextFloat() * 0.5 + 0.5;
+          this.level.particles.spawn?.(this.landingParticle(), this.x + Math.sin(a) * f1 * r, this.y, this.z + Math.cos(a) * f1 * r, 0, 0, 0);
+        }
+      });
+      if (host) this.playSound(this.squishSound(), this.soundVolume(), ((this.random.nextFloat() - this.random.nextFloat()) * 0.2 + 1) / 0.8);
       this.targetSquish = -0.5;
     } else if (!this.onGround && this.wasOnGround) this.targetSquish = 1;
     this.wasOnGround = this.onGround;
     this.decreaseSquish();
+  }
+  /** (a guest's copy) its squish and its landings' particles worked out here, as vanilla's client does: the host sends neither */
+  override animateMirror(): void {
+    super.animateMirror();
+    this.squish += (this.targetSquish - this.squish) * 0.5;
+    this.oSquish = this.squish;
+    this.land(false);
   }
   /** vanilla Slime.playerTouch → dealDamage */
   touchPlayer(p: Player): void {

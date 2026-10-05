@@ -488,6 +488,17 @@ export class Warden extends Monster {
     if (this.persistenceRequired || this.requiresCustomPersistence()) setDigCooldown(this);
     super.tick();
     if (this.removed) return;
+    this.level.clientEffects(() => this.clientTick());
+  }
+
+  /** (a guest's copy) its heart, its tendrils and its digging's dust are its own, as on vanilla's client: the host sends none of them */
+  override animateMirror(): void {
+    super.animateMirror();
+    this.clientTick();
+  }
+
+  /** vanilla Warden.tick's client side, each client's own (the host's own player's, a guest's copy's) */
+  private clientTick(): void {
     if (this.tickCount % this.heartBeatDelay() === 0) {
       this.heartAnimation = 10;
       this.level.sound.play('entity.warden.heartbeat', this.x, this.y, this.z, 5, this.voicePitch());

@@ -999,10 +999,11 @@ export abstract class LivingEntity extends Entity {
 
   /**
    * (a guest's copy of the host's entity: net/client) what its own tick works out from how it moved, which the host
-   * doesn't send: its walk
+   * doesn't send: its walk; and its hurt flash running out (the host sends when it starts: net/entityData.ts)
    */
   animateMirror(): void {
     this.updateWalkAnimation();
+    if (this.hurtTime > 0) this.hurtTime--;
   }
 
   protected updateWalkAnimation(): void {

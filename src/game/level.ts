@@ -640,6 +640,18 @@ export class Level {
   /** a crack changed (vanilla ServerLevel.destroyBlockProgress sends it to the players near: net/) */
   onDestroyBlockProgress: ((id: number, x: number, y: number, z: number, stage: number) => void) | null = null;
 
+  /**
+   * vanilla's client-side effects, the particles and sounds each client makes for itself from what it sees (a blaze's
+   * smoke, a slime landing): played here for this game's own player (`fn`, as it is)
+   */
+  clientEffects(fn: () => void): void {
+    if (this.onClientEffects) this.onClientEffects(fn);
+    else fn();
+  }
+
+  /** (a host) what it does with them: they're its own player's, not sent to its guests, whose copies make their own (net/) */
+  onClientEffects: ((fn: () => void) => void) | null = null;
+
   /** vanilla: entities tick only inside the simulation distance (and in loaded chunks) */
   isEntityTicking(x: number, z: number): boolean {
     const bx = Math.floor(x), bz = Math.floor(z);

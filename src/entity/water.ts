@@ -230,6 +230,38 @@ export class Squid extends WaterAnimal {
     }
   }
 
+  /**
+   * (a guest's copy) the rest of vanilla Squid.aiStep, which its client runs too: its tentacles' beat and its body's
+   * tilt and roll, worked out here from how it moves (the host sends none of them, only the beat's speed). Vanilla's
+   * client holds the beat at its end till the server says it's begun again; the copy begins it again itself
+   */
+  override animateMirror(): void {
+    super.animateMirror();
+    this.xBodyRotO = this.xBodyRot;
+    this.zBodyRotO = this.zBodyRot;
+    this.oldTentacleMovement = this.tentacleMovement;
+    this.oldTentacleAngle = this.tentacleAngle;
+    this.tentacleMovement += this.tentacleSpeed;
+    if (this.tentacleMovement > Math.PI * 2) this.tentacleMovement -= Math.PI * 2;
+    if (this.inWater) {
+      if (this.tentacleMovement < Math.PI) {
+        const f = this.tentacleMovement / Math.PI;
+        this.tentacleAngle = Math.sin(f * f * Math.PI) * Math.PI * 0.25;
+        if (f > 0.75) this.rotateSpeed = 1;
+        else this.rotateSpeed *= 0.8;
+      } else {
+        this.tentacleAngle = 0;
+        this.rotateSpeed *= 0.99;
+      }
+      const d0 = Math.sqrt(this.dx * this.dx + this.dz * this.dz);
+      this.zBodyRot += Math.PI * this.rotateSpeed * 1.5;
+      this.xBodyRot += (-Math.atan2(d0, this.dy) * (180 / Math.PI) - this.xBodyRot) * 0.1;
+    } else {
+      this.tentacleAngle = Math.abs(Math.sin(this.tentacleMovement)) * Math.PI * 0.25;
+      this.xBodyRot += (-90 - this.xBodyRot) * 0.02;
+    }
+  }
+
   /** vanilla Squid.travel: just move by the delta (no input physics) */
   override travel(): void {
     this.move(this.dx, this.dy, this.dz);

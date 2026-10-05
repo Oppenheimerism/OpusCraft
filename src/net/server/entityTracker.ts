@@ -92,6 +92,15 @@ export class EntityTracker {
     return this.seen.size;
   }
 
+  /**
+   * (guests under load: the guest caught up after falling behind) all the fields of everything it was shown, afresh:
+   * what changed meanwhile wasn't sent it (its moves and riders go as ever, being what changed since they were sent)
+   */
+  refresh(): void {
+    const s = this.session;
+    for (const e of this.seen.keys()) if (!e.removed) s.send([CB.SetEntityData, e.id, s.server.dataFull(e)]);
+  }
+
   /** (the guest going to another dimension with the host) nothing it was shown is there any more */
   clear(): void {
     this.seen.clear();
