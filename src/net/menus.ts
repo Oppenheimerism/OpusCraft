@@ -20,6 +20,8 @@ import { HopperMenu } from '../inventory/hopperMenu';
 import { CrafterMenu } from '../inventory/crafterMenu';
 import { HorseInventoryMenu } from '../inventory/horseMenu';
 import { ShulkerBoxMenu } from '../inventory/shulkerBoxMenu';
+// (the beacon)
+import { BeaconMenu, encodePower, decodePower } from '../inventory/beaconMenu';
 import { MerchantOffer } from '../entity/trading';
 import { ENCHANTMENTS } from '../item/enchantments';
 import { entityDisplayName } from '../game/spawner';
@@ -46,6 +48,8 @@ export function menuKind(m: ContainerMenu): MenuKind | null {
   if (m instanceof HopperMenu) return 'hopper';
   if (m instanceof CrafterMenu) return 'crafter';
   if (m instanceof HorseInventoryMenu) return 'horse';
+  // (the beacon)
+  if (m instanceof BeaconMenu) return 'beacon';
   return null;
 }
 
@@ -80,7 +84,7 @@ function enchantmentIds(): string[] {
  * vanilla ContainerData: the numbers `m` shows besides its slots, as the host has them. A furnace's burn and cook
  * times; a brewing stand's brew time and fuel; an enchanting table's three costs, its seed (the glyphs), the
  * enchantment each offer hints at and its level; an anvil's cost; the stonecutter's and loom's pick; a lectern's
- * page; a crafter's switched-off slots and whether it's powered
+ * page; a crafter's switched-off slots and whether it's powered; (the beacon) a beacon's tiers and powers
  */
 export function menuData(m: ContainerMenu): number[] {
   let d: number[] = [];
@@ -96,6 +100,8 @@ export function menuData(m: ContainerMenu): number[] {
   else if (m instanceof LoomMenu) d = [m.selectedBannerPatternIndex];
   else if (m instanceof LecternMenu) d = [m.lectern.page];
   else if (m instanceof CrafterMenu) d = [...m.crafter.disabled.map((off) => (off ? 1 : 0)), m.crafter.triggered ? 1 : 0];
+  // ((the beacon) vanilla BeaconMenu's data: its tiers, and its powers by number)
+  else if (m instanceof BeaconMenu) d = [m.levels, encodePower(m.primary), encodePower(m.secondary)];
   return d.map(int32);
 }
 
@@ -125,6 +131,11 @@ export function applyMenuData(m: ContainerMenu, i: number, v: number): boolean {
   else if (m instanceof CrafterMenu && i < 10) {
     if (i < 9) m.crafter.disabled[i] = v !== 0;
     else m.crafter.triggered = v !== 0;
+  } else if (m instanceof BeaconMenu && i < 3) {
+    // (the beacon)
+    if (i === 0) m.beacon.levels = Math.max(0, Math.min(4, v));
+    else if (i === 1) m.beacon.primary = decodePower(v);
+    else m.beacon.secondary = decodePower(v);
   } else return false;
   return true;
 }

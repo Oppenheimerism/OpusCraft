@@ -11,8 +11,8 @@ Branch: `claude/determined-turing-0anamq`, from main at `b935350`.
 
 | # | Milestone | State | Commit |
 |---|---|---|---|
-| 1 | The wither: building it, its charge, its purple bar darkening the world, its AI, heads and skulls, its armour, healing, drops, the wither rose, `/summon` with its data, the spawn egg, Withering Heights | done | the commit that adds this row ("The wither. …") |
-| 2 | The beacon | not started | |
+| 1 | The wither: building it, its charge, its purple bar darkening the world, its AI, heads and skulls, its armour, healing, drops, the wither rose, `/summon` with its data, the spawn egg, Withering Heights | done | `c353d0f` |
+| 2 | The beacon: the block, its pyramid, its beam (coloured by stained glass), its powers, its menu and touch-friendly screen, its sounds, Bring Home the Beacon and Beaconator, its recipe | done | `6bcdd5c` (first part), and the commit that adds this row ("Beacons, second part. …") |
 | 3a | Slime block | not started | |
 | 3b | Scaffolding | not started | |
 | 3c | Note block | not started | |
@@ -21,13 +21,19 @@ Branch: `claude/determined-turing-0anamq`, from main at `b935350`.
 | 3f | Respawn anchor | not started | |
 | 4 | Endermite, camel, allay, sniffer (torchflower, pitcher plant), skeleton horse trap, zombie horse | only if all else is done | |
 
-`PROTOCOL_VERSION` is unchanged. The wither needs nothing new on the wire: its state syncs through the existing
-entity-data fields, and guests draw its bar from their own copy of it.
+`PROTOCOL_VERSION` is unchanged (7).
+- The wither needs nothing new on the wire: its state syncs through the existing entity-data fields, and guests draw
+  its bar from their own copy of it.
+- The beacon adds no packet and changes none. Its menu is a new value in an existing list (`MENU_KINDS`: `'beacon'`),
+  and a guest's copy of the block entity gets two more keys in the data it is already sent (`shown_levels` and
+  `beam`, never saved). Host and guest must run the same build anyway (`BUILD_ID`, checked on joining), so I didn't
+  bump the version.
 
 ## 2. Shared files changed, and hooks
 
-Every new line in a shared file is marked with a `(the wither)` comment that names the vanilla class it follows. The
-changes are small and additive, except for the three behaviour fixes listed at the end of this section.
+Every new line in a shared file is marked with a comment naming its milestone, `(the wither)` or `(the beacon)`, and
+the vanilla class it follows. The changes are small and additive, except for the three behaviour fixes at the end of
+milestone 1's part.
 
 ### Milestone 1: the wither
 
@@ -109,7 +115,53 @@ changes are small and additive, except for the three behaviour fixes listed at t
   - `tests/end/silverfish.mjs`: the stone floor under a blast now leaves cobblestone; the check still requires that
     the infested blocks themselves drop nothing.
 
+### Milestone 2: the beacon
+
+New lines in shared files are marked `(the beacon)`.
+
+**New files**
+- `src/game/beacon.ts`: `BeaconBlockEntity` (vanilla `BeaconBlockEntity`). It covers:
+  - the beam scan, up to ten blocks a tick;
+  - the pyramid count every 80 ticks;
+  - the powers given, the four sounds, saving;
+  - the block's behaviour: opening its menu, dropping itself with its name, the power-down sound when it goes;
+  - the beacon's recipe-book unlock (vanilla: the nether star alone, as `spyglass.ts` and `armorStand.ts` do for
+    theirs).
+- `src/inventory/beaconMenu.ts`: `BeaconMenu` (vanilla `BeaconMenu`): the payment slot, the three data numbers, and
+  Done as a menu button carrying both powers.
+- `src/gui/screens/beacon.ts`: `BeaconScreen` (vanilla `BeaconScreen`). `src/textures/beaconGui.ts`: its sprites.
+- `src/textures/beacon.ts`: the block's heart and the beam's texture.
+- `src/render/beaconRenderer.ts`: the beams (vanilla `BeaconRenderer`).
+- `src/audio/gen/beacon.ts`: the four sounds (activate, ambient, deactivate, power_select, one take each).
+- `tests/wither/beacon.mjs` and `tests/wither/beacon-mp.mjs`.
+
+**Additions to this branch's own files**
+- `src/world/blocksWither.ts`: the block and its model (vanilla `block/beacon`: glass case, obsidian base, heart).
+- `src/item/itemsWither.ts`: rare, in Functional Blocks after the bell (the tab's order already listed it).
+- `src/inventory/recipesWither.ts`: its recipe.
+
+**Registration lines**
+- `src/game/level.ts`: `import './beacon'`.
+- `src/textures/blocks.ts`: `T['beacon']`.
+- `src/audio/synth.ts`: `beaconSounds()`.
+- `src/render/renderer.ts`: `beacons: BeaconRenderer`, drawn right after the end gateways' beams.
+
+**Hooks and small additions**
+- `src/game/advancements.ts`: a new criterion, `construct_beacon` (vanilla `ConstructBeaconTrigger`), with a new
+  `beaconLevel` payload field. Bring Home the Beacon (1 tier) and Beaconator (4 tiers) are wired to it; both were
+  `never`.
+- `src/game/openMenu.ts`: `installMenuHooks()` sets the beacon's menu hook, beside the dispenser's, hopper's and
+  crafter's.
+- `src/gui/screens/index.ts`: `BeaconMenu` opens `BeaconScreen`.
+- `src/net/protocol.ts`: `MENU_KINDS` gains `'beacon'`.
+- `src/net/menus.ts`: the beacon's menu kind, and its data both ways (vanilla `BeaconMenu`'s three data slots:
+  tiers, primary, secondary).
+- `src/net/client/clientMenus.ts`: a guest's beacon menu wraps a stand-in block entity that the host's data fills.
+  Its Done goes to the host as a menu button, like the lectern's, and is not run on the guest.
+
 ## 3. Open points and deviations
+
+### Milestone 1: the wither
 
 **Choices where the brief and vanilla differ (vanilla chosen)**
 - **No creative-tab place for the wither spawn egg.** Vanilla keeps it out of every tab (as with the ender dragon's
@@ -148,6 +200,48 @@ changes are small and additive, except for the three behaviour fixes listed at t
   an owner. So a creeper's victim reads "<name> blew up", where vanilla (`Explosion.getIndirectSourceEntityInternal`:
   a living source is its own cause) says "<name> was blown up by Creeper". The wither passes its own damage source,
   so its blast reads "was blown up by Wither" as in vanilla. The creeper is left as it was.
+
+### Milestone 2: the beacon
+
+**Ambiguities (the most vanilla-faithful option chosen)**
+- **The host checks Done more strictly than vanilla's server.** Vanilla's server takes any of the six powers. The
+  host takes a primary only from a tier the beacon reaches, or the primary it already has, which is exactly what
+  vanilla's screen lets a player pick. It also needs a payment in the slot and a primary chosen, as vanilla's Done
+  button does. Any beacon power is accepted as the secondary, as in vanilla, and the beacon gives it only with all
+  four tiers. So no guest can get more than vanilla's screen allows, and nothing a vanilla screen sends is refused.
+- **`PROTOCOL_VERSION` stays at 7**, as section 1 explains.
+
+**Faithful quirks**
+- **A beam cut off keeps the beacon's tiers.** When an opaque block cuts the beam, there is no power-down sound, no
+  powers, and no beam drawn, but the screen still offers the tiers' powers. Vanilla counts the pyramid only while
+  there is a beam. Breaking the pyramid does turn it off, with the sound.
+- **The tiers are saved but not read back.** After loading, the beacon lights again within about 4 seconds, with
+  its power-up sound and the advancement check.
+- **Shift-clicking puts a payment in only when it is a single item.** A stack goes up into the inventory (vanilla
+  `quickMoveStack`: `getCount() == 1`).
+- **A payment left in the slot is dropped at the player's feet** whenever the screen closes, including when the
+  player walks more than 8 blocks off or the beacon is broken (vanilla `BeaconMenu.removed`).
+- **The beam goes through bedrock but not tinted glass.**
+- **The power-down sound plays whenever a beacon is removed,** lit or not (vanilla `setRemoved`).
+- **The screen shows no title,** not even a renamed beacon's (vanilla draws only "Primary Power" and "Secondary
+  Power"). The name is kept when the beacon is broken.
+
+**Known gaps**
+- **No statistics.** Vanilla counts `interact_with_beacon`, but the game keeps no statistics.
+- **No `lock`.** Vanilla's lock component, which opens a beacon only for a named item, isn't supported. No other
+  container in the game has it yet.
+- **The beam scan's top is `World.heightAt`** (the top block that stops the sky or can be stood on), not vanilla's
+  WORLD_SURFACE heightmap (the top block of any kind). Everything that colours or cuts a beam counts for both, and
+  the last section is drawn 1024 blocks high anyway, so the beam looks the same.
+- **Game events:** placing and breaking a beacon raise `block_place` and `block_destroy` through the shared code.
+  Vanilla raises none for its menu or its powers, and neither does the game.
+
+**Multiplayer**
+- **Bring Home the Beacon and Beaconator for guests:** the host raises `construct_beacon` for every non-spectator
+  player in vanilla's box: 10 blocks out from the beacon, from 9 below it to 5 above. A guest is tested. As with Withering Heights, on this branch `level.onPlayerTrigger` reaches only the host's own player, so
+  guests get the toast once the guests' branch routes triggers to them.
+- **A guest's copy of a beacon doesn't tick.** The host sends its tiers and beam whenever they change, and the
+  powers with the block entity's data.
 
 ## 4. Tests and the regression summary
 
@@ -198,6 +292,57 @@ After the explosion fix, I reran every suite that touches blasts, `destroyBlock`
 - one placement in my own test, made robust;
 - `illagers/raids`: its hero-gift check also fails on the base (1 of 6 runs).
 
+**Milestone 2**
+- `node tests/wither/beacon.mjs`: 97 checks, all ok. It covers:
+  - the block's numbers, model, texture, item, recipe (and its recipe-book unlock) and creative place;
+  - the pyramid counted tier by tier, with all five base blocks, mixed;
+  - the beam scan: stained glass and panes colouring it (the first its own colour, then averages such as
+    `0x763968`), opaque blocks and tinted glass cutting it, bedrock and see-through blocks not;
+  - lighting only with a pyramid, and dark again without one;
+  - the powers by tier: range, duration, up to the top of the world, II with four tiers, the secondary, not to
+    spectators, nothing with no power chosen or the beam cut;
+  - its four sounds, as they play and as they're made;
+  - Bring Home the Beacon and Beaconator for players near it as it lights;
+  - saving and loading (the tiers counted again);
+  - its menu: the payment slot's rules, Done's checks, shift-clicks, the payment dropped on closing, `stillValid`,
+    the data guests get;
+  - its screen, driven as a player would with taps: button positions and states by tier, choosing, Done, Cancel,
+    the choice reset when the beacon's powers change, the sprites;
+  - the beam renderer.
+- `node tests/wither/beacon-mp.mjs`: 53 checks, all passed, over `tests/multiplayer/lib.mjs`. A survival guest:
+  - places a renamed beacon on a pyramid (the host places it, with the name);
+  - sees it light, with the host's beam and stained-glass colours, hears it, and is in range for Bring Home the
+    Beacon (a guest 30 blocks off isn't);
+  - opens its menu (slot for slot the host's, the tier shown), pays by hand (a stack of two won't shift-click in,
+    and a second ingot won't go in with the first);
+  - has Strength (a tier it lacks), out-of-range buttons and an empty choice refused by the host, then Speed
+    accepted, the payment taken and the chime heard;
+  - gets Speed I (ambient) on its own player, while a guest out of range doesn't;
+  - has a payment dropped when it closes the screen, and when it walks off;
+  - sees the beam change when the glass is taken away, go dark under stone (tier kept, no sound, Speed not
+    renewed), light again, and power down with the sound when a corner of the pyramid goes;
+  - has the menu closed when the beacon is broken.
+- `node tests/remaining-mobs/load-order.mjs`: all ok. `npm run typecheck`: clean. `npm run build`: builds.
+- **Headless Chromium:**
+  - A one-tier beacon lights within 4 seconds, with its beam white, then light blue through the glass. A two-tier
+    one shows the screen with Speed chosen and an emerald paid in. Strength and the tier-4 powers are dark, and the
+    Bring Home the Beacon toast shows.
+  - The 4-tier commands in the checklist build a 4-tier beacon, and the chat reports Bring Home the Beacon and
+    Beaconator.
+  - No console errors. The screenshot isn't committed.
+
+**Full regression** (`node scripts/regress.mjs -j 2`, 201 suites, run once the beacon was in): 197 passed, 4 failed.
+None of the failures comes from the beacon.
+- `bastions/m2a-structure`: the shallow clone again, as for milestone 1.
+- `illagers/illagers` (evoker fangs): on the brief's flaky list. It failed on the base for milestone 1 as well.
+- `drowned/drowned` ("at night it rises from the sea bed") is not on the brief's list. It failed 3 of 12 runs on
+  this branch and 2 of 14 on `b935350`.
+- `trader/trader` ("and a drowned" goes for the wandering trader within 2 seconds) is not on the brief's list
+  either. It failed 1 of 8 runs on `b935350` and 0 of 8 here.
+
+The suites on the brief's flaky list (raids, wolf, witch, gossip, panda, the crafter, the breeze, the save
+round trip) all passed this time.
+
 ## 5. Browser checklist
 
 Start with `npm run dev` and open `http://localhost:5173/?seed=12345&mode=creative`. Type the commands in chat (`t`).
@@ -239,7 +384,41 @@ Start with `npm run dev` and open `http://localhost:5173/?seed=12345&mode=creati
 11. Put a dispenser with wither skeleton skulls facing a T that has two skulls. Power it, and check that it finishes
     the wither.
 
-**LAN guest**
+**The beacon** (the commands build south of you, toward +Z; stand on open, level ground)
+12. A one-tier beacon: run `/fill ~-1 ~ ~3 ~1 ~ ~5 iron_block`, then `/setblock ~ ~1 ~4 beacon`.
+    - Check that within 4 seconds it hums and a white beam rises from it into the sky.
+    - Check that the advancement toast says Bring Home the Beacon.
+13. Colours: run `/setblock ~ ~3 ~4 red_stained_glass`. Check that the beam turns red above the glass. Then run
+    `/setblock ~ ~5 ~4 blue_stained_glass`, and check that above that it's a mix of the two (purple).
+14. Cut it: run `/setblock ~ ~4 ~4 stone`. Check that the whole beam goes out, not just the part above the stone (as
+    in vanilla), with no sound. Run `/setblock ~ ~4 ~4 air` and check that the beam comes back.
+15. Its screen: right-click (or tap) the beacon.
+    - Check for "Primary Power" with its first row lit (Speed and Haste) and the rest dark, and "Secondary Power"
+      all dark.
+    - The five payment items are pictured beside the payment slot, and Done (green tick) is dark until there's a
+      payment in and a power chosen.
+    - Run `/give @s iron_ingot 2` and put one ingot in the slot. Shift-clicking a stack of two doesn't put it in.
+    - Pick Speed and press Done. Check that you hear a chime, the screen closes, the ingot is gone, and Speed I shows
+      at the top right with the beacon's blue frame.
+    - Open it again, put an ingot in and press Cancel or Escape. Check that the ingot is dropped a little way in
+      front of you, as Q throws one.
+16. Four tiers, for Beaconator and the secondary power:
+    - Run `/fill ~-6 ~ ~0 ~6 ~12 ~12 air`, then `/fill ~-4 ~ ~2 ~4 ~ ~10 iron_block`, `/fill ~-3 ~1 ~3 ~3 ~1 ~9
+      iron_block`, `/fill ~-2 ~2 ~4 ~2 ~2 ~8 iron_block`, `/fill ~-1 ~3 ~5 ~1 ~3 ~7 iron_block` and
+      `/setblock ~ ~4 ~6 beacon`.
+    - Check that the toast says Beaconator.
+    - Climb the steps and open it. Check that every power is lit. Choose Strength and Regeneration, pay and press
+      Done: you get both.
+    - Choose Strength and its II (the button beside Regeneration): you get Strength II.
+17. Break the beacon: check that it drops itself, with the power-down sound. Rename one in an anvil, place it and
+    break it: it keeps its name.
+18. Craft one: five glass over a nether star, over three obsidian. The recipe book shows it once you've had a nether
+    star (not for glass or obsidian alone).
+19. Creative inventory: check that the beacon is in Functional Blocks, after the bell.
+20. On a touch screen (or with touch emulation): tap a power, then Done. The buttons respond to taps as to clicks,
+    and a power's name shows over it.
+
+**LAN guest: the wither**
 1. Open the world to LAN and join from a second browser (as `npm run lan` and the multiplayer reports describe).
 2. As the guest, place the last skull on a T:
    - check that the host makes the wither;
@@ -249,3 +428,15 @@ Start with `npm run dev` and open `http://localhost:5173/?seed=12345&mode=creati
 5. Below half health, check that the guest also sees the armour swirl.
 6. Kill it, and check that the guest sees the nether star and its bar goes away.
 7. Check that a rose left by a mob is in the guest's world too, and withers the guest when they stand in it.
+
+**LAN guest: the beacon**
+1. As the guest (survival), place a beacon on an iron pyramid. Check that it lights for both players, with the beam
+   and its stained-glass colours, and that the guest hears it power up.
+2. As the guest, open it, put an iron ingot in, choose Speed and press Done.
+   - Check that the guest hears the chime.
+   - Check that the ingot is gone for both players, and that when the host opens the beacon, Speed is chosen.
+3. Check that the guest gets Speed I with the blue frame while within 20 blocks, and not beyond.
+4. As the guest, open it, put an ingot in, and walk away more than 8 blocks. Check that the screen closes and the
+   ingot is dropped where the guest was.
+5. As the host, break a corner of the pyramid. Check that within 4 seconds the guest hears it power down and the
+   beam goes for both players.

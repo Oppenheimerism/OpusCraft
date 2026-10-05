@@ -33,6 +33,9 @@ import { CrafterMenu } from '../../inventory/crafterMenu';
 import { CrafterScreen } from './crafter';
 import { HorseInventoryMenu } from '../../inventory/horseMenu';
 import { HorseInventoryScreen } from './horse';
+// (the beacon)
+import { BeaconScreen } from './beacon';
+import { BeaconMenu } from '../../inventory/beaconMenu';
 import { ConnectScreen, DisconnectedScreen, JoinMultiplayerScreen } from './multiplayer';
 
 export function installScreens(game: Game): void {
@@ -76,6 +79,8 @@ export function installScreens(game: Game): void {
     if (menu instanceof HopperMenu) return new HopperScreen(game, menu);
     if (menu instanceof CrafterMenu) return new CrafterScreen(game, menu);
     if (menu instanceof HorseInventoryMenu) return new HorseInventoryScreen(game, menu);
+    // (the beacon)
+    if (menu instanceof BeaconMenu) return new BeaconScreen(game, menu);
     return new InventoryScreen(game, menu as InventoryMenu);
   };
   installBookScreens(game);

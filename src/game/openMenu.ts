@@ -28,6 +28,9 @@ import { entityDisplayName } from './spawner';
 import { setDispenserMenuHook } from './redstone/dispenser';
 import { setHopperMenuHook } from './redstone/hopper';
 import { setCrafterMenuHook } from './crafter';
+// (the beacon)
+import { setBeaconMenuHook } from './beacon';
+import { BeaconMenu } from '../inventory/beaconMenu';
 
 /** shows `menu`, opened for `p`; false if it can't be (a player nobody shows menus to) */
 export type ShowMenu = (p: Player, menu: ContainerMenu) => boolean;
@@ -166,11 +169,13 @@ export function entityContainerMenu(level: Level, p: Player, e: AbstractMinecart
 
 /**
  * the hooks of the blocks and entities whose menus aren't opened by name (a dispenser's or dropper's, a hopper's, a
- * crafter's, a horse's inventory): each makes its menu for whoever used it and has it shown
+ * crafter's, a horse's inventory; (the beacon) a beacon's): each makes its menu for whoever used it and has it shown
  */
 export function installMenuHooks(): void {
   setDispenserMenuHook((be, p) => void showMenu(p, new DispenserMenu(p, be)));
   setHopperMenuHook((be, p) => void showMenu(p, new HopperMenu(p, be)));
   setCrafterMenuHook((be, p) => void showMenu(p, new CrafterMenu(p, be)));
   horseHooks.openInventory = (h, p) => void showMenu(p, new HorseInventoryMenu(p, h));
+  // (the beacon)
+  setBeaconMenuHook((be, p) => void showMenu(p, new BeaconMenu(p, be)));
 }

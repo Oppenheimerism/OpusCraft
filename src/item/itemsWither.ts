@@ -29,4 +29,6 @@ export function registerWitherItems(reg: Reg, items: Map<string, Item>, list: It
     Object.assign(items.get('wither_rose')!, { creativeTab: 'natural', texture: 'block:wither_rose' });
     after('wither_rose', 'lily_of_the_valley');
   }
+  // (the beacon) vanilla Items.BEACON: rare (its name aqua), in the functional blocks (after the bell: gui/screens/creative.ts)
+  if (items.has('beacon')) Object.assign(items.get('beacon')!, { rarity: 'rare', creativeTab: 'functional' });
 }

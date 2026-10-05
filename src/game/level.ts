@@ -108,6 +108,8 @@ import './suspiciousStew';
 // (the wither) building it from soul sand and wither skeleton skulls; the wither rose
 import './witherSpawn';
 import './witherRose';
+// (the beacon) its block entity: the beam, the pyramid, the powers
+import './beacon';
 
 export interface SoundSink {
   play(name: string, x: number, y: number, z: number, volume?: number, pitch?: number): void;
