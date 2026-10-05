@@ -10,8 +10,8 @@ on two computers found a guest couldn't do. Each lettered milestone is committed
 |---|---|---|---|
 | a | Advancements for guests | done | a96b5a5 A guest playing on someone's LAN world now has advancements of its own… |
 | b | Boss bars for guests | done | 6f92a50 A guest now sees the boss bars the host's world shows it… |
-| c | Hitting the ender dragon; the fight from a guest's side | done | (this commit) |
-| d | Firework rockets for a gliding guest | not started | |
+| c | Hitting the ender dragon; the fight from a guest's side | done | 5d949fb A guest can hurt the Ender Dragon… |
+| d | Firework rockets for a gliding guest | done | (this commit) |
 | e | The End Poem | not started | |
 | f | Being disconnected | not started | |
 | g | The survival sweep | not started | |
@@ -105,6 +105,25 @@ darkens the sky yet), and done that way it works for guests too.
 | The exit portal, the egg, a gateway, the boss bar going | in the guest's world, gone from its screen |
 | Through the gateway | out on the outer islands, told where it is, the world there sent |
 
+### d. Firework rockets for a gliding guest
+
+**Why.** A rocket used while gliding is fixed to the glider and, every tick, pushes it along its look. On the host
+that push went to the host's copy of the guest's player, whose place and speed the guest's own moves overwrite each
+tick; the guest's own game, which moves its player, never got it. Vanilla's client runs the rocket's tick too, and it
+is the client's copy of the rocket that pushes the client's own player.
+
+**Now.** A guest's copy of a rocket fixed to the guest's own gliding player gives it that push in the guest's own tick
+(`FireworkRocket.animateMirror`, the same lines as the host's tick, `boostGlider`), before the guest's player moves, as
+vanilla's client does; and the copy keeps by whoever it's fixed to. A guest's copy of any entity that has an
+`animateMirror` now gets it called (`EntityMirror.tick`; before, only living ones). Measured in the test: a gliding
+guest went from 0.29 to 0.52 blocks a tick with a rocket before (the host's own player: 1.67); now to 1.5 to 1.67,
+within a quarter of a block a tick of the host's own player.
+
+**Checked as well:** a rocket a guest sets off on a block (from where it clicked, one used up; the guest sees it rise
+and hears it go, its sparks and its burst with its stars as made) and one shot from a guest's crossbow (loaded from
+the other hand, flying along its look and drawn on its back, heard; bursting on the pig it hits and hurting it, the
+guest out of its reach unhurt). Both worked; nothing changed there.
+
 ## 2. Shared files changed (for merging)
 
 | File | What changed, and the hook |
@@ -126,10 +145,12 @@ darkens the sky yet), and done that way it works for guests too.
 | `src/net/server/entityTracker.ts` | `partById(id)`. |
 | `src/net/server/session.ts` (again) | `targetEntity` also finds a part (`tracker.partById`). |
 | `src/net/client/clientSession.ts` (again) | `netIdOf(e)`: a part of a copy is named by its dragon's id and its place (`MovePlayer`'s target). |
+| `src/entity/fireworkRocket.ts` | the push to a glider moved into `boostGlider(a)` (the host's tick unchanged); `animateMirror()` for a guest's copy. |
+| `src/net/client/entityMirror.ts` | calls `animateMirror()` on any copy that has one, not only living ones (two lines). |
 
 New files: `src/net/advancementSync.ts`, `src/net/server/guestProgress.ts`, `src/game/progressTriggers.ts`,
 `src/game/bossBars.ts`, `src/net/server/bossBarSync.ts`, `tests/multiplayer/m8-advancements.mjs`,
-`tests/multiplayer/m8-bossbars.mjs`, `tests/multiplayer/m8-dragon.mjs`.
+`tests/multiplayer/m8-bossbars.mjs`, `tests/multiplayer/m8-dragon.mjs`, `tests/multiplayer/m8-fireworks.mjs`.
 
 ## 3. Open points
 
@@ -151,6 +172,12 @@ New files: `src/net/advancementSync.ts`, `src/net/server/guestProgress.ts`, `src
   blocks (vanilla `sendParticles`); vanilla's client makes them itself and shows them as far as it draws the dragon.
 - (c) The dragon's wing beat (`flapTime`) and turn (`yRotA`) still go to guests each tick: the wings stay in step with
   the flap sound the host plays, and a few numbers for one entity are nothing (vanilla's client counts its own).
+- (d) A rocket's sparks are the host's particles, made where the host has the rocket, by its copy of the guest's
+  player: a guest flying at a rocket's pace sees its sparks trail a little behind it (the round trip's worth of flight;
+  vanilla's client makes them at its own player). The rocket itself isn't drawn while it's fixed to a glider (vanilla
+  `shouldRender`), so nothing else shows it.
+- (d) The guest's push lasts while the guest has the copy: from its coming to its going, each a one-way trip after the
+  host's, so as long as the host's rocket lives.
 
 ## 4. Tests
 
@@ -178,6 +205,12 @@ New files: `src/net/advancementSync.ts`, `src/net/server/guestProgress.ts`, `src
   its cloud; a fireball spat at the guest; the crystals' beam and one broken; the death, the roar, the experience,
   Free the End, the exit portal, the egg, a gateway, the bar gone; through the gateway. Passes in memory (three runs),
   and through the relay with lag (seeds 12345 and 777).
+- `tests/multiplayer/m8-fireworks.mjs`: 16 checks. A gliding guest and the host's own player, each with a rocket: the
+  guest's fixed to it on both sides, its speed up to a rocket's pace as the host's own player's is, the host's copy of
+  it following, the push gone with the rocket; a rocket set off on a block (from the click, used up, seen rising and
+  heard, its sparks, its burst and star); one shot from a crossbow (loaded from the other hand, shot along the look on
+  its back, heard, bursting on a pig and hurting it). Without the fix, the speed checks fail (0.52 against 1.67). Passes
+  in memory (repeatedly) and through the relay with lag (seeds 12345 and 777).
 - Every other multiplayer suite passes, with all of `tests/end/`, `tests/saves/player.mjs`, the horse, wolf, frog and
   armadillo suites, and `tests/remaining-mobs/load-order.mjs`. `npm run typecheck` is clean.
 
@@ -203,3 +236,6 @@ Start LAN World; guest: Multiplayer → the world → a name → Join Server).
    bar goes down in both windows (a full blow on the head, less elsewhere). The guest sees its breath, its fireballs
    and the purple beam to the crystal healing it; when it dies, its coming apart, the portal, the egg and a gateway;
    it takes the experience, and an ender pearl thrown into the gateway takes it to the outer islands.
+10. The guest, wearing an elytra (`/give Alex elytra`, `/give Alex firework_rocket 16`), jumps off something high and
+    glides, then right-clicks with a rocket: it shoots forward as the host does with one; the rocket used up. A rocket
+    set off on the ground and one shot from a loaded crossbow (rocket in the other hand) fly and burst in both windows.

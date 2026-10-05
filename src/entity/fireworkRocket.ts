@@ -108,14 +108,10 @@ export class FireworkRocket extends Entity {
     if (!this.leftOwner) this.leftOwner = this.checkLeftOwner();
     const a = this.attachedTo;
     if (a) {
-      // fixed to its glider: while they glide, pushed a tenth of the look on and half the way to one and a half times it,
-      // riding out by the hand that holds a rocket
+      // fixed to its glider: while they glide, pushed along their look, riding out by the hand that holds a rocket
       let ox = 0, oz = 0;
       if (a.fallFlying) {
-        const [lx, ly, lz] = viewVector(a.pitch, a.yaw);
-        a.dx += lx * 0.1 + (lx * 1.5 - a.dx) * 0.5;
-        a.dy += ly * 0.1 + (ly * 1.5 - a.dy) * 0.5;
-        a.dz += lz * 0.1 + (lz * 1.5 - a.dz) * 0.5;
+        boostGlider(a);
         [ox, oz] = handHoldingRocket(a);
       }
       this.setPos(a.x + ox, a.y, a.z + oz);
@@ -165,6 +161,22 @@ export class FireworkRocket extends Entity {
     // (vanilla: every tick a spark falls behind it, slowed to half its rise)
     this.level.particles.spawn?.('firework', this.x, this.y, this.z, gauss(this.rnd) * 0.05, -this.dy * 0.5, gauss(this.rnd) * 0.05);
     if (this.life > this.lifetime && !this.removed) this.explode();
+  }
+
+  /**
+   * (a guest's copy: net/client) vanilla's client runs a rocket's tick too, and the push it gives the glider it's fixed
+   * to is what moves a client's own player: so it does here for the guest's own player, which its own game moves (the
+   * host's push goes to the host's copy of it, which the guest's moves overwrite). It keeps by whoever it's fixed to
+   */
+  animateMirror(): void {
+    const a = this.attachedTo;
+    if (!a) return;
+    let ox = 0, oz = 0;
+    if (a.fallFlying) {
+      if (a === this.level.player) boostGlider(a);
+      [ox, oz] = handHoldingRocket(a);
+    }
+    this.setPos(a.x + ox, a.y, a.z + oz);
   }
 
   /** vanilla Projectile.checkLeftOwner: nothing of its owner's (vehicle and all) about it any more */
@@ -296,6 +308,14 @@ function handHoldingRocket(a: LivingEntity): [number, number] {
   const right = (w.mainArm ?? 'right') === 'right' ? main : !main;
   const [x, , z] = viewVector(0, a.yaw + (right ? 80 : -80));
   return [x * 0.5, z * 0.5];
+}
+
+/** vanilla FireworkRocketEntity.tick's push to its glider: a tenth of the look on, and half the way to one and a half times it */
+function boostGlider(a: LivingEntity): void {
+  const [lx, ly, lz] = viewVector(a.pitch, a.yaw);
+  a.dx += lx * 0.1 + (lx * 1.5 - a.dx) * 0.5;
+  a.dy += ly * 0.1 + (ly * 1.5 - a.dy) * 0.5;
+  a.dz += lz * 0.1 + (lz * 1.5 - a.dz) * 0.5;
 }
 
 // ---------------------------------------------------------------------------
