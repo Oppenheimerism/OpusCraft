@@ -30,6 +30,9 @@ import { ShulkerBoxBlockEntity } from '../../world/shulkerBoxEntity';
 import { DispenserBlockEntity } from '../../game/redstone/dispenser';
 import { HopperBlockEntity } from '../../game/redstone/hopper';
 import { CrafterBlockEntity } from '../../game/crafter';
+// (the beacon)
+import { BeaconMenu } from '../../inventory/beaconMenu';
+import { BeaconBlockEntity } from '../../game/beacon';
 import { AbstractHorse } from '../../entity/horse';
 import type { Merchant, MerchantOffer } from '../../entity/trading';
 import type { Entity } from '../../entity/entity';
@@ -277,6 +280,9 @@ export class ClientMenus {
         return new HopperMenu(p, new HopperBlockEntity(0, 0, 0), title || 'Hopper');
       case 'crafter':
         return new CrafterMenu(p, new CrafterBlockEntity(0, 0, 0));
+      case 'beacon':
+        // (the beacon: its tiers and powers are the host's, sent as data)
+        return new BeaconMenu(p, new BeaconBlockEntity(0, 0, 0));
       case 'horse': {
         // (vanilla ClientboundHorseScreenOpenPacket: our copy of the horse, whose chest must have the host's columns)
         const h = typeof extra.entity === 'number' ? this.link.entity(extra.entity) : null;
@@ -306,8 +312,8 @@ export class ClientMenus {
         if (ok) this.link.send([SB.ContainerButtonClick, id, b]);
         return ok;
       };
-    } else if (m instanceof LecternMenu) {
-      // (a lectern's pages and its book are the host's to turn and take)
+    } else if (m instanceof LecternMenu || m instanceof BeaconMenu) {
+      // (a lectern's pages and its book are the host's to turn and take; (the beacon) a beacon's powers its to set)
       m.clickMenuButton = (b: number) => {
         this.link.send([SB.ContainerButtonClick, id, b]);
         return true;

@@ -5,7 +5,8 @@
 // up as high as the world, II with all four tiers, the secondary, nobody in spectator, nothing with no power chosen
 // or the beam cut); its sounds (powering up and down, its hum, the selection); Bring Home the Beacon and Beaconator
 // for those near as it lights; saving (Levels counted again after loading); its menu (the payment slot, the powers
-// chosen and paid for, the payment given back) and screen (buttons by tier, touch); its beam's renderer.
+// chosen and paid for, the payment given back) and screen (buttons by tier, touch); its beam's renderer; its sounds
+// (made in code).
 import { loadModules } from '../../scripts/load.mjs';
 setTimeout(() => { console.log('TIMEOUT'); process.exit(2); }, 900000).unref();
 const P = [
@@ -13,6 +14,8 @@ const P = [
   '/src/item/item.ts', '/src/world/gen/biomes.ts', '/src/game/beacon.ts', '/src/game/blockBehavior.ts', '/src/world/blockEntity.ts',
   '/src/game/advancements.ts', '/src/inventory/recipes.ts', '/src/entity/effects.ts', '/src/textures/blocks.ts', '/src/textures/beacon.ts',
   '/src/render/beaconRenderer.ts', '/src/render/entityRenderer.ts', '/src/audio/synth.ts', '/src/game/blockRules.ts', '/src/gui/screens/creative.ts',
+  '/src/inventory/beaconMenu.ts', '/src/gui/screens/beacon.ts', '/src/net/menus.ts', '/src/net/chunkData.ts', '/src/game/openMenu.ts', '/src/net/protocol.ts',
+  '/src/textures/gui.ts', '/src/textures/beaconGui.ts', '/src/inventory/recipeBook.ts',
 ];
 const { mods, close } = await loadModules(P);
 const M = Object.fromEntries(P.map((p, i) => [p.replace(/^\/src\//, '').replace(/\.ts$/, ''), mods[i]]));
@@ -84,6 +87,8 @@ function beaconAt(level, x, y, z, tiers, block) {
   const made = R.findRecipe(g('glass', 'glass', 'glass', 'glass', 'nether_star', 'glass', 'obsidian', 'obsidian', 'obsidian'), 3, 3);
   check('its recipe: five glass round a nether star over three obsidian', made?.result === 'beacon' && made.count === 1, made?.result);
   check('...nothing with the star elsewhere', !R.findRecipe(g('glass', 'nether_star', 'glass', 'glass', 'glass', 'glass', 'obsidian', 'obsidian', 'obsidian'), 3, 3));
+  const book = M['inventory/recipeBook'].BOOK_BY_ID.get('beacon');
+  check('...in the recipe book, unlocked by a nether star alone (vanilla has_nether_star), not by glass or obsidian', !!book && [...book.unlockBy].join() === 'nether_star', book && [...book.unlockBy].join());
   const { level } = setup();
   level.setBlock(0, 64, 0, S('beacon'));
   check('placed: its block entity', level.world.getBlockEntity(0, 64, 0) instanceof BeaconBlockEntity);
@@ -275,6 +280,140 @@ function beaconAt(level, x, y, z, tiers, block) {
   check('...nothing for a dark beacon', verts.length === 0 && dark.shownBeam().length === 0);
   const t = M['textures/beacon'].beaconBeamTexture();
   check('the beam\'s texture: 16x16, near white, half see-through to solid', t.w === 16 && t.h === 16 && [...t.data].filter((_, i) => i % 4 === 3).every((a) => a >= 120));
+}
+
+// ===========================================================================
+// its menu
+{
+  const { level, player, sounds } = setup({ px: 0.5, pz: 3.5 });
+  player.setGameMode('survival');
+  const dropped = [];
+  player.dropHandler = (st, thrown) => dropped.push({ st, thrown });
+  const be = beaconAt(level, 0, 64, 0, 2);
+  toCount(level);
+  let opened = null;
+  BC.setBeaconMenuHook((b, p) => (opened = { b, p }));
+  const ctx = { player, face: 1, hx: 0.5, hy: 65, hz: 0.5, hand: 'main' };
+  behaviorOf(S('beacon')).use(level, 0, 64, 0, S('beacon'), ctx);
+  check('used: its menu opened for the player (vanilla useWithoutItem)', opened?.b === be && opened.p === player);
+  M['game/openMenu'].installMenuHooks();
+  const { BeaconMenu, beaconButton, encodePower, decodePower } = M['inventory/beaconMenu'];
+  const m = new BeaconMenu(player, be);
+  check('the menu: the payment slot at (136, 110), the inventory at (36, 137), the hotbar at (36, 195)', m.slots.length === 37 && m.slots[0].x === 136 && m.slots[0].y === 110 && m.slots[1].x === 36 && m.slots[1].y === 137 && m.slots[28].y === 195);
+  check('...it takes an iron ingot, gold ingot, emerald, diamond or netherite ingot, one at a time', ['iron_ingot', 'gold_ingot', 'emerald', 'diamond', 'netherite_ingot'].every((id) => m.paymentSlot.mayPlace(ItemStack.of(id))) && !m.paymentSlot.mayPlace(ItemStack.of('coal')) && m.paymentSlot.maxStackSize() === 1);
+  check('...its numbers: the tiers and powers (none yet)', m.levels === 2 && m.primary === null && m.secondary === null);
+  check('Done with nothing paid: nothing', !m.clickMenuButton(beaconButton('speed', null)) && be.primary === null);
+  const inv = player.inventory;
+  for (let i = 0; i < 36; i++) inv.main[i] = null;
+  inv.main[9] = ItemStack.of('iron_ingot', 2);
+  m.quickMoveStack(player, 1);
+  check('shift-click two iron ingots: not into the payment slot (vanilla: only a single item goes), to the hotbar', !m.hasPayment() && inv.main[0]?.count === 2, `${inv.main[0]?.item.id}`);
+  inv.main[0] = ItemStack.of('iron_ingot', 1);
+  m.quickMoveStack(player, 28);
+  check('...a single one: into the payment slot', m.hasPayment() && !inv.main[0]);
+  check('Done asking for strength (three tiers) from a two-tier beacon: refused, the payment kept', !m.clickMenuButton(beaconButton('strength', null)) && m.hasPayment() && be.primary === null);
+  check('...asking for regeneration as primary: refused', !m.clickMenuButton(beaconButton('regeneration', null)) && m.hasPayment());
+  check('...nonsense numbers refused', !m.clickMenuButton(-1) && !m.clickMenuButton(4095) && !m.clickMenuButton(7 * 8 + 1) && m.hasPayment());
+  sounds.length = 0;
+  check('Done with jump boost (two tiers): set, the payment taken', m.clickMenuButton(beaconButton('jump_boost', null)) && be.primary === 'jump_boost' && be.secondary === null && !m.hasPayment());
+  check('...with the selection sound (the beam lit)', sounds.some((s) => s.n === 'block.beacon.power_select'));
+  check('the powers by number, as vanilla encodes them (0 none)', encodePower(null) === 0 && encodePower('speed') === 1 && encodePower('regeneration') === 6 && decodePower(5) === 'strength' && decodePower(0) === null && decodePower(9) === null);
+  m.payment.set(0, ItemStack.of('emerald'));
+  level.setBlock(2, 62, 0, S('dirt'));
+  toCount(level);
+  check('(the second tier broken: one tier)', be.levels === 1);
+  check('...Done keeping jump boost (its own, which the screen opens with) still goes', m.clickMenuButton(beaconButton('jump_boost', 'regeneration')) && be.secondary === 'regeneration' && !m.hasPayment());
+  m.payment.set(0, ItemStack.of('diamond'));
+  m.removed();
+  check('closed with a payment in: dropped at the player\'s feet (vanilla player.drop)', dropped.length === 1 && dropped[0].st.item.id === 'diamond' && dropped[0].thrown === false && !m.hasPayment());
+  check('...in reach within 8', m.stillValid(player));
+  player.moveTo(0.5, 64, 9.5, 0, 0);
+  check('...not from 9 away', !m.stillValid(player));
+  player.moveTo(0.5, 64, 3.5, 0, 0);
+  level.setBlock(0, 64, 0, S('air'));
+  check('...nor once it\'s broken', !m.stillValid(player));
+  // over the wire: its kind and numbers
+  const NM = M['net/menus'];
+  const be2 = beaconAt(level, 30, 64, 30, 4);
+  toCount(level);
+  be2.setPowers(level, 'haste', 'haste');
+  const m2 = new BeaconMenu(player, be2);
+  check('for a guest: a "beacon" menu (a kind the protocol knows), its numbers the tiers and the powers', NM.menuKind(m2) === 'beacon' && M['net/protocol'].MENU_KINDS.includes('beacon') && JSON.stringify(NM.menuData(m2)) === '[4,2,2]');
+  const copy = new BeaconMenu(player, new BeaconBlockEntity(0, 0, 0));
+  check('...a guest\'s copy takes them', NM.applyMenuData(copy, 0, 4) && NM.applyMenuData(copy, 1, 2) && NM.applyMenuData(copy, 2, 6) && copy.levels === 4 && copy.primary === 'haste' && copy.secondary === 'regeneration' && !NM.applyMenuData(copy, 3, 1));
+  // what a guest's world gets of it
+  const vis = M['net/chunkData'].visibleBlockEntity(be2);
+  check('a guest\'s world gets its tiers and beam (never saved)', vis.data.shown_levels === 4 && typeof vis.data.beam === 'string' && be2.save().data.beam === undefined);
+  const g = new BeaconBlockEntity(30, 64, 30);
+  g.load({ id: 'beacon', x: 30, y: 64, z: 30, items: [], data: vis.data });
+  check('...its copy draws the same beam', g.levels === 4 && JSON.stringify(g.shownBeam()) === JSON.stringify(be2.shownBeam()) && g.shownBeam().length === 1);
+  check('...nonsense in it left out', BC.decodeBeam('zz:3,ffffff:0,ff:12,1234567:2').length === 1);
+}
+
+// ===========================================================================
+// its screen (a stand-in game; a graphics stand-in that notes what's drawn)
+{
+  const { level, player } = setup({ px: 0.5, pz: 3.5 });
+  player.setGameMode('survival');
+  const be = beaconAt(level, 0, 64, 0, 3);
+  toCount(level);
+  const { BeaconMenu } = M['inventory/beaconMenu'];
+  const m = new BeaconMenu(player, be);
+  let screen = null;
+  const font = { charWidth: () => 6, width(s) { return s.length * 6; } };
+  const game = { gui: { font }, player, sound: { playUI() {} }, setScreen: (s) => (screen = s), renderTransparentBackground() {}, input: { isDown: () => false } };
+  const S2 = M['gui/screens/beacon'];
+  const sc = new S2.BeaconScreen(game, m);
+  sc.initScreen(320, 240);
+  const L = sc.leftPos, T = sc.topPos;
+  check('the screen: 230x219, centred', sc.imageWidth === 230 && sc.imageHeight === 219 && L === 45 && T === 10, `${L},${T}`);
+  const at = (x, y) => sc.widgets.find((w) => w.x === L + x && w.y === T + y);
+  const speed = at(53, 22), haste = at(77, 22), resist = at(53, 47), jump = at(77, 47), strength = at(65, 72), regen = at(144, 47), up = at(168, 47), done = at(164, 107), cancel = at(190, 107);
+  check('...the buttons where vanilla has them (speed, haste; resistance, jump boost; strength; regeneration and the II; Done, Cancel)', [speed, haste, resist, jump, strength, regen, up, done, cancel].every(Boolean) && speed.effect === 'speed' && jump.effect === 'jump_boost' && strength.effect === 'strength' && regen.effect === 'regeneration');
+  check('...three tiers: the three rows lit, the secondary dark; the II hidden till a primary\'s chosen', speed.active && strength.active && !regen.active && !up.visible);
+  check('...Done dark (nothing paid, nothing chosen), Cancel lit', !done.active && cancel.active);
+  check('...the powers\' names over them (and the II\'s)', speed.tooltip === 'Speed' && jump.tooltip === 'Jump Boost' && done.tooltip === 'Done' && cancel.tooltip === 'Cancel');
+  // a tap on strength (as a click: game/touch.ts)
+  sc.mouseClicked(strength.x + 11, strength.y + 11, 0);
+  check('a tap on strength: chosen (pressed in), the II now strength\'s, still dark', sc.primary === 'strength' && strength.selected && up.visible && up.effect === 'strength' && up.tooltip === 'Strength II' && !up.active);
+  m.payment.set(0, ItemStack.of('gold_ingot'));
+  sc.tick();
+  check('...a gold ingot paid: Done lit', done.active);
+  const calls = [];
+  const g = new Proxy({ scale: 2, font }, { get: (t, k) => (k in t ? t[k] : (...a) => (calls.push([k, ...a]), true)) });
+  sc.render(g, strength.x + 5, strength.y + 5, 0);
+  const sprites = calls.filter((c) => c[0] === 'sprite').map((c) => c[1]);
+  check('drawn: the panel, the buttons by their state, the powers\' icons, Done\'s tick, Cancel\'s cross', sprites.includes('container_beacon') && sprites.includes('beacon_button_selected') && sprites.includes('beacon_button_disabled') && sprites.includes('mob_effect_strength') && sprites.includes('beacon_confirm') && sprites.includes('beacon_cancel'));
+  check('...the five payment items beside the slot, the two headings', calls.filter((c) => c[0] === 'stack').length >= 5 && calls.some((c) => c[0] === 'centered' && c[1] === 'Primary Power' && c[2] === 62) && calls.some((c) => c[0] === 'centered' && c[1] === 'Secondary Power' && c[2] === 169));
+  sc.mouseClicked(done.x + 11, done.y + 11, 0);
+  check('Done: strength set, the gold taken, the screen closed', be.primary === 'strength' && !m.hasPayment() && screen === null);
+  const sc2 = new S2.BeaconScreen(game, new BeaconMenu(player, be));
+  sc2.initScreen(320, 240);
+  check('opened again: the beacon\'s own power chosen', sc2.primary === 'strength');
+  sc2.mouseClicked(L + 77 + 11, T + 22 + 11, 0);
+  check('...haste tapped: chosen instead', sc2.primary === 'haste');
+  be.setPowers(level, 'speed', null);
+  sc2.tick();
+  check('...the beacon\'s powers change meanwhile: the choice goes back to its own (vanilla dataChanged)', sc2.primary === 'speed');
+  for (const id of ['container_beacon', 'beacon_button', 'beacon_button_highlighted', 'beacon_button_selected', 'beacon_button_disabled', 'beacon_confirm', 'beacon_cancel']) {
+    const t = M['textures/gui'].GUI_TEXTURES[id]?.();
+    if (!t || !t.w) check(`sprite ${id} drawn`, false);
+  }
+  const bg = M['textures/gui'].GUI_TEXTURES.container_beacon();
+  check('its sprites drawn (the panel 230x219, the buttons 22x22, the icons 18x18)', bg.w === 230 && bg.h === 219 && M['textures/gui'].GUI_TEXTURES.beacon_button().w === 22 && M['textures/gui'].GUI_TEXTURES.beacon_confirm().w === 18);
+}
+
+// ===========================================================================
+// its sounds (vanilla sounds.json block.beacon.*): one take each, made in code, finite and quiet at their ends; the
+// hum (every four seconds) shorter than four seconds
+{
+  const SOUNDS = M['audio/synth'].SOUNDS;
+  const names = ['block.beacon.activate', 'block.beacon.ambient', 'block.beacon.deactivate', 'block.beacon.power_select'];
+  check('its sounds: activate, ambient, deactivate and power_select, one take each', names.every((n) => SOUNDS[n]?.variants === 1), names.filter((n) => !SOUNDS[n]).join());
+  const takes = names.map((n) => SOUNDS[n].generate(0, 22050));
+  check('...each made (finite, not silent, peaking under 1)', takes.every((t) => t.length > 0 && t.every(Number.isFinite) && Math.max(...t.map(Math.abs)) > 0.1 && Math.max(...t.map(Math.abs)) <= 1));
+  check('...the hum shorter than the four seconds between hums', takes[1].length / 22050 < 4, `${(takes[1].length / 22050).toFixed(2)} s`);
+  check('...each ending quietly (no click)', takes.every((t) => Math.max(...t.slice(-50).map(Math.abs)) < 0.01));
 }
 
 await close();

@@ -229,6 +229,8 @@ export const CLICK_TYPES = ['pickup', 'quick_move', 'swap', 'clone', 'throw', 'q
 export const MENU_KINDS = [
   'crafting', 'furnace', 'smoker', 'blast_furnace', 'chest', 'shulker_box', 'brewing_stand', 'enchantment', 'anvil', 'grindstone',
   'merchant', 'stonecutter', 'smithing', 'loom', 'cartography', 'lectern', 'dispenser', 'dropper', 'hopper', 'crafter', 'horse',
+  // (the beacon: a new kind, not a new packet; host and guest run the same build)
+  'beacon',
 ] as const;
 export type MenuKind = (typeof MENU_KINDS)[number];
 /** the most slots a menu has (a chest's 27 or a horse's 17, and the inventory's 36) */

@@ -18,7 +18,9 @@ import { AABB } from '../core/aabb';
 import { MobEffectInstance, MOB_EFFECTS } from '../entity/effects';
 import { DYE_COLORS, DYE_DIFFUSE } from '../entity/animals';
 import { ItemStack, ITEMS } from '../item/item';
+import { BOOK_BY_ID } from '../inventory/recipeBook';
 import type { Level } from './level';
+import type { Player } from '../entity/player';
 
 /** vanilla BeaconBlockEntity.BEACON_EFFECTS: the powers of each tier (the last, with all four, the secondary's) */
 export const BEACON_EFFECTS: readonly (readonly string[])[] = [['speed', 'haste'], ['resistance', 'jump_boost'], ['strength'], ['regeneration']];
@@ -64,6 +66,21 @@ export interface BeamSection {
   height: number;
 }
 
+/** a beam as a guest's copy gets it (net/chunkData.ts): each length's colour and height */
+export function encodeBeam(sections: readonly BeamSection[]): string {
+  return sections.map((s) => `${s.color.toString(16)}:${s.height}`).join(',');
+}
+
+/** (a guest) the beam from the host's words; what makes no sense left out */
+export function decodeBeam(s: string): BeamSection[] {
+  const out: BeamSection[] = [];
+  for (const part of s.split(',').slice(0, 512)) {
+    const m = /^([0-9a-f]{1,6}):(\d{1,4})$/.exec(part);
+    if (m && +m[2] > 0) out.push({ color: parseInt(m[1], 16), height: +m[2] });
+  }
+  return out;
+}
+
 /** vanilla updateBase: the whole tiers of the pyramid under (x, y, z), from the top (up to four) */
 export function pyramidLevels(level: Level, x: number, y: number, z: number): number {
   let i = 0;
@@ -90,6 +107,8 @@ export class BeaconBlockEntity extends BlockEntity {
   /** vanilla checkingBeamSections and lastCheckY: the scan under way */
   private checking: BeamSection[] = [];
   private lastCheckY = 0;
+  /** the tiers and beam guests last had (net/chunkData.ts visibleData) */
+  private shownToGuests = '';
 
   constructor(x: number, y: number, z: number) {
     super(x, y, z, 0);
@@ -165,7 +184,19 @@ export class BeaconBlockEntity extends BlockEntity {
         } else if (was > 0 && !on) playBeaconSound(level, i, j, k, 'block.beacon.deactivate');
       }
     }
-    if (this.levels !== was) this.version++;
+    // (a guest's copy doesn't tick: what it draws is sent it whenever it changes)
+    if (!level.isClientSide && (this.levels !== was || this.lastCheckY === level.world.dim.minY - 1)) {
+      const shown = `${this.levels}|${encodeBeam(this.beamSections)}`;
+      if (shown !== this.shownToGuests) {
+        this.shownToGuests = shown;
+        this.container.changed();
+      }
+    }
+  }
+
+  /** what a guest's copy needs to draw its beam (net/chunkData.ts visibleBlockEntity); not kept in the save */
+  visibleData(): Record<string, number | string> {
+    return { shown_levels: this.levels, beam: encodeBeam(this.beamSections) };
   }
 
   /**
@@ -194,7 +225,8 @@ export class BeaconBlockEntity extends BlockEntity {
     if (!level.isClientSide && this.beamSections.length) playBeaconSound(level, this.x, this.y, this.z, 'block.beacon.power_select');
     this.primary = filterEffect(primary);
     this.secondary = filterEffect(secondary);
-    this.version++;
+    // (vanilla Level.blockEntityChanged: kept with the chunk, and sent on)
+    this.container.changed();
   }
 
   // (vanilla saveAdditional: Levels saved but, as vanilla, not read back: it's counted again, and the beam lights four
@@ -211,7 +243,20 @@ export class BeaconBlockEntity extends BlockEntity {
     this.primary = filterEffect(typeof d.primary_effect === 'string' ? d.primary_effect : null);
     this.secondary = filterEffect(typeof d.secondary_effect === 'string' ? d.secondary_effect : null);
     this.customName = typeof d.CustomName === 'string' ? d.CustomName : null;
+    // (only a host's copy sends these, for a guest's to draw)
+    if (typeof d.shown_levels === 'number' && typeof d.beam === 'string') {
+      this.levels = Math.max(0, Math.min(4, Math.trunc(d.shown_levels) || 0));
+      this.beamSections = decodeBeam(d.beam);
+    }
   }
+}
+
+type MenuOpener = (be: BeaconBlockEntity, player: Player) => void;
+let openMenu: MenuOpener | null = null;
+
+/** the game's screens (gui/screens/beacon.ts, game/openMenu.ts): how a beacon's menu is opened for whoever used it */
+export function setBeaconMenuHook(fn: MenuOpener | null): void {
+  openMenu = fn;
 }
 
 /** vanilla BeaconBlockEntity.playSound: from its middle, the blocks' sounds */
@@ -222,6 +267,13 @@ export function playBeaconSound(level: Level, x: number, y: number, z: number, n
 registerBlockEntityType('beacon', (x, y, z) => new BeaconBlockEntity(x, y, z));
 
 registerBehavior('beacon', {
+  /** vanilla BeaconBlock.useWithoutItem: its menu (vanilla also counts Stats.INTERACT_WITH_BEACON; the game keeps no statistics) */
+  use(level, x, y, z, _st, ctx) {
+    const be = level.world.getBlockEntity(x, y, z);
+    if (!(be instanceof BeaconBlockEntity)) return false;
+    openMenu?.(be, ctx.player);
+    return true;
+  },
   /** vanilla blocks/beacon loot: itself, its name kept (copy_components minecraft:custom_name) */
   drops(_st, _tool, _r, _silk, _fortune, be) {
     const s = new ItemStack(ITEMS.get('beacon')!, 1);
@@ -233,3 +285,7 @@ registerBehavior('beacon', {
     if (BLOCKS[STATE_BLOCK[now]].name !== 'beacon') playBeaconSound(level, x, y, z, 'block.beacon.deactivate');
   },
 });
+
+// vanilla recipes/misc/beacon: unlocked by a nether star alone (has_nether_star), not by its glass or obsidian
+const book = BOOK_BY_ID.get('beacon');
+if (book) book.unlockBy = new Set(['nether_star']);

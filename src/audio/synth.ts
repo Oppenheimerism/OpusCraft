@@ -85,6 +85,8 @@ import { mooshroomSounds } from './gen/mooshroom';
 import { armadilloSounds } from './gen/armadillo';
 // (the wither)
 import { witherSounds } from './gen/wither';
+// (the beacon)
+import { beaconSounds } from './gen/beacon';
 
 export const SAMPLE_RATE = 44100;
 
@@ -181,6 +183,8 @@ Object.assign(SOUNDS, armadilloSounds());
 // blocks is the zombie's breaking a wooden door (vanilla sounds.json entity.wither.break_block: mob/zombie/woodbreak)
 Object.assign(SOUNDS, witherSounds());
 if (SOUNDS['entity.zombie.break_wooden_door']) SOUNDS['entity.wither.break_block'] = SOUNDS['entity.zombie.break_wooden_door'];
+// (the beacon) vanilla sounds.json block.beacon.activate, ambient, deactivate and power_select
+Object.assign(SOUNDS, beaconSounds());
 // (vanilla sounds.json: the snow golem's are the snow's breaking, the bow's and the shears')
 for (const [k, v] of Object.entries({ 'entity.snow_golem.hurt': 'block.snow.break', 'entity.snow_golem.death': 'block.snow.break', 'entity.snow_golem.shoot': 'entity.arrow.shoot', 'entity.snow_golem.shear': 'entity.sheep.shear' })) if (SOUNDS[v]) SOUNDS[k] = SOUNDS[v];
 // (vanilla sounds.json: any mob's swimming, and a monster's, is the player's splashing)
